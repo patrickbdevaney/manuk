@@ -100813,3 +100813,89 @@ whole named gate list costs 0s at this resolution. Harness-owned, recorded in
 ```
 
 WIKI: docs/wiki/forced-reflow-budget.md
+
+## Tick 1409 — the watchdog blamed this engine for every timeout, including the ones where nothing of ours was running (2026-09-04)
+
+TICK SHAPE: instrument-fidelity
+CLASS: the loop's own worklist — `timeout-150s` is the row that decides which engine work the next
+ten ticks buy
+
+### FIRST: PRICING WHAT t1408 BOUGHT, WHICH IS HOW THIS WAS FOUND
+
+The eight `timeout-150s` sites re-measured on the new binary:
+
+```text
+  mangaraw.ac        timeout-150s  ->  SCORED  shape 0.710      ⭐
+  probidas.lt        timeout-150s  ->  SCORED  shape 0.368      ⭐
+  cibnext.icici…     timeout-150s  ->  http-404   (the origin changed; not a win)
+  morikoshi.net      timeout-150s  ->  timeout-150s             ⚠ still, at the HARNESS level
+  swiftspinus.com · www.friulioggi.it · www.netvasco.com.br    still timeout
+```
+
+**Two of eight converted to SCORED.** Neither crosses shape ≥0.75, so the certificate headline does
+not move — but scored/in-scope is the M1 CEILING the board's SCORABILITY-FIRST order exists to raise,
+and it rose by two. Honest, small, and priced rather than claimed.
+
+### ⭐⭐⭐ AND THEN morikoshi STILL TIMED OUT, SO THE NEXT SITE GOT PROBED — AND IT WAS NOT OURS
+
+`swiftspinus.com`, one of the nine rows that sent t1408 hunting an engine bug:
+
+```text
+  our whole load, every phase, from the engine's own log        5.7 s
+  Chromium's headless screenshot of the same URL               8.6 s
+  the process while the site "timed out"        sleeping in hrtimer_nanosleep
+  the row we filed      timeout-150s: "this engine did not finish the site inside its own budget"
+```
+
+**Nothing of ours was slow.** The site-level watchdog fires on a wall clock and hard-codes the
+engine's name into the reason string, for every site it kills.
+
+⚠⚠ **AND THE MACHINERY TO SAY IT HONESTLY ALREADY EXISTED, TWICE.** t861 built
+`Unmeasurable::OracleTimeout` for exactly this — *"the reference browser's hang is not our timeout…
+a row that says otherwise buys engine ticks for a defect in the reference"* — and the per-side timing
+**twenty lines below the watchdog** opens with *"time each engine separately, and attribute the cost
+to whoever actually spent it."* The watchdog consulted neither.
+
+> ⭐⭐⭐ **A GUARD THAT FIRES ON A CLOCK CANNOT NAME A CAUSE, AND WILL NAME WHOEVER THE AUTHOR HAD IN
+> MIND.** This is the third time this session an instrument has been confidently wrong about WHOSE
+> cost it measured (t1405: a live page's churn scored as engine error; t1407: a stale stored row
+> scored as this tick's work; now this). Each was found the same way — by asking the thing itself
+> rather than reading its label.
+
+### THE FIX — one atomic, and a `Drop` guard because the block has four `continue` arms
+
+`SITE_SIDE` publishes which side is running (ours / oracle / scoring-and-probing) and the watchdog
+asks `fidelity::timeout_reason(side, secs)`. The oracle span is closed by a **guard**, not a matching
+store: the oracle block has four `continue` arms, and a store on the happy path alone would leave the
+flag reading ORACLE for the whole of the NEXT site — **the first mis-attribution replaced by a
+second**, which is how this class of fix usually fails.
+
+Measured end to end, both directions:
+
+```text
+  swiftspinus.com  --site-budget 60   ->  oracle-timeout-60s   "the ORACLE was running"
+  morikoshi.net    --site-budget 25   ->  timeout-25s          "this engine did not finish"   ← CONTROL
+```
+
+⚠ **Side 2 — scoring/probing, which is NEITHER engine — is filed AGAINST US on purpose.** There is no
+honest tag for the instrument's own cost yet, and inventing one would let it leave the in-scope
+denominator: the `EXCLUDED-RISING` failure the fixed denominator exists to forbid. It is named in the
+message instead, so the next reader can measure it rather than launder it. Both timeout tags stay IN
+the denominator, and the gate asserts that too — **naming the oracle is a reason to stop blaming the
+engine, never a reason to stop counting the site.**
+
+### THE RECEIPT
+
+```text
+  G_TIMEOUT_NAMES_WHOSE_CLOCK  ok (4 arms)   RED under 3 mutations
+    T1 always ours (the pre-fix behaviour)   T2 the attribution inverted
+    T3 the instrument's cost given the oracle's tag and leaving the denominator
+    ⚠ T4 (the Drop guard removed) is NOT covered: the guard is in `main.rs` and unreachable from a
+      test binary. Named rather than left silent; verified end-to-end on the two real sites above.
+  manuk-wpt, whole crate  108 + 7 + 1 + 1 tests                                          ALL ok
+  Bar 0: no hang, no crash, no panic (the SIGSEGV seen while probing is the tool's own
+         DELIBERATE `exit(0)` after filing a timeout row — it says so in its own log, and
+         reading that line is what kept it from being reported as a Bar 0)
+```
+
+WIKI: docs/wiki/timeout-names-whose-clock.md

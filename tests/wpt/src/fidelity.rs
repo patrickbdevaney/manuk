@@ -2666,6 +2666,33 @@ pub fn sweep_diff_report(a_text: &str, b_text: &str, a_name: &str, b_name: &str)
     }
 }
 
+/// **WHOSE CLOCK BURNED, decided from which side was running — not assumed.**
+///
+/// `side`: `0` = this engine (fetch + load + paint) · `1` = the ORACLE (Chromium) · `2` =
+/// scoring/probing, which is neither engine.
+///
+/// ⚠⚠⚠ The site-level watchdog used to hard-code `Timeout` — *"this engine did not finish the site
+/// inside its own budget"* — for every site it killed, while the per-side timing twenty lines below
+/// it opens with *"time each engine separately, and attribute the cost to whoever actually spent
+/// it"*, and t861 had already built [`Unmeasurable::OracleTimeout`] because *"the reference browser's
+/// hang is not our timeout"*. Neither was consulted.
+///
+/// Measured on `swiftspinus.com`, one of the nine `timeout-150s` rows the t1406 sweep filed against
+/// the engine: our whole load is **5.7 s** (the engine's own phase log, every phase) and Chromium's
+/// screenshot is **8.6 s** — and while the site "timed out", the process sat in `hrtimer_nanosleep`.
+///
+/// ⚠ **`2` (the instrument's own cost) is filed AGAINST US on purpose.** It is neither engine, and
+/// there is no honest tag for it yet; inventing one would let the instrument's own slowness leave the
+/// denominator, which is the `EXCLUDED-RISING` failure §0's fixed denominator exists to forbid. It is
+/// named in the message so the next reader can see it and measure it properly.
+pub fn timeout_reason(side: u8, secs: u64) -> Unmeasurable {
+    if side == 1 {
+        Unmeasurable::OracleTimeout(secs)
+    } else {
+        Unmeasurable::Timeout(secs)
+    }
+}
+
 #[cfg(test)]
 mod shape_tests {
     use super::{certificate, shape_misses, shape_stats, Fidelity};

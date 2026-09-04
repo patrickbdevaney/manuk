@@ -2844,6 +2844,13 @@
   - L4057 · An author line-height is the line box, and a taller face must NOT grow it
   - L4063 · The Latin control arm is free, by construction
 
+## A guard that fires on a clock cannot name a cause — and will name whoever the author had in mind
+`docs/wiki/timeout-names-whose-clock.md`
+
+  - L24 · The fix, and the way this class of fix usually fails
+  - L38 · Two rules that pull in opposite directions, and both are asserted
+  - L48 · The session's third instrument confidently wrong about whose cost it measured
+
 ## The `toggle` event — one interface, three elements, opposite batching to its neighbour
 `docs/wiki/toggle-event.md`
 
@@ -2913,4 +2920,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2640 sections across 67 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2643 sections across 68 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

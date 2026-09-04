@@ -15,6 +15,38 @@ use std::path::PathBuf;
 /// while site B is rendering and file B's row as A's timeout.
 static SITE_GEN: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
+/// **WHICH SIDE IS RUNNING RIGHT NOW — so the site watchdog can name whose clock it burned.**
+///
+/// `0` = ours (fetch + load + paint) · `1` = the ORACLE (Chromium) · `2` = scoring/probing, which is
+/// neither engine.
+///
+/// The oracle span is closed by a GUARD rather than by a matching store, because the block it wraps
+/// has four `continue` arms in it: a store on the happy path only would leave the flag reading
+/// `ORACLE` for the whole of the next site, and the first mis-attribution this fix removes must not
+/// be replaced by a second one.
+///
+/// ⚠⚠⚠ **THE WATCHDOG WAS FILING EVERY SITE TIMEOUT AS OURS, AND THE LINE THAT SAYS SO IS TWENTY
+/// LINES BELOW IT.** t861 built `Unmeasurable::OracleTimeout` precisely because *"the reference
+/// browser's hang is not our timeout"*, and the per-side timing right underneath the watchdog opens
+/// with *"time each engine separately, and attribute the cost to whoever actually spent it."* The
+/// site-level watchdog never consulted either: it fires on a wall clock and hard-codes *"this engine
+/// did not finish the site inside its own budget"*.
+///
+/// Measured on `swiftspinus.com`, one of the nine `timeout-150s` rows in the t1406 sweep that sent
+/// t1408 hunting an engine bug: **our whole load is 5.7 s** (every phase, from the engine's own phase
+/// log) and **Chromium's screenshot is 8.6 s** — and while the site "timed out" the process sat in
+/// `hrtimer_nanosleep`. Nothing of ours was slow. The bucket the ranked backlog reads as *ours* is
+/// not all ours, and one atomic makes the mis-attribution impossible instead of a thing to remember.
+static SITE_SIDE: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+
+/// Closes the ORACLE span on every exit from it, including the `continue` arms. See [`SITE_SIDE`].
+struct OracleSide;
+impl Drop for OracleSide {
+    fn drop(&mut self) {
+        SITE_SIDE.store(2, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
 use manuk_text::FontContext;
 
 /// A `file://` URL for a local path — **absolutized**.
@@ -965,12 +997,23 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                 if SITE_GEN.load(std::sync::atomic::Ordering::SeqCst) != gen {
                     return; // this site finished; the timer belongs to a completed generation
                 }
-                let reason = manuk_wpt::fidelity::Unmeasurable::Timeout(site_budget);
+                // ── ATTRIBUTED, not assumed. See `SITE_SIDE`.
+                let side = SITE_SIDE.load(std::sync::atomic::Ordering::SeqCst);
+                let reason = manuk_wpt::fidelity::timeout_reason(side, site_budget);
                 eprintln!(
                     "  UNMEASURABLE [{}]: {}",
                     reason.tag(),
-                    "this engine did not finish the site inside its own budget — filed as a TIMEOUT by \
-                     us, so it is never recovered as a phantom Bar-0 `crashed` by the next run"
+                    match side {
+                        1 => "the ORACLE (Chromium) was running when the site budget expired — the \
+                              reference browser's hang is not this engine's, and a row that says \
+                              otherwise buys engine ticks for a defect in the reference",
+                        2 => "SCORING/PROBING was running when the site budget expired — neither \
+                              engine was rendering, so this is the instrument's own cost and it is \
+                              filed against us until it is measured properly",
+                        _ => "this engine did not finish the site inside its own budget — filed as a \
+                              TIMEOUT by us, so it is never recovered as a phantom Bar-0 `crashed` \
+                              by the next run",
+                    }
                 );
                 let row = manuk_wpt::fidelity::Fidelity::unmeasured(&name_c, reason);
                 let _ = manuk_wpt::fidelity::append_rows_tsv(&p, std::slice::from_ref(&row));
@@ -1008,6 +1051,7 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
         // make the mis-attribution impossible in code, not a thing to remember. An oracle you are
         // measuring yourself against must never be able to charge its own slowness to your account.
         let t_manuk = std::time::Instant::now();
+        SITE_SIDE.store(0, std::sync::atomic::Ordering::SeqCst);
         // The SECOND silent drop on this path, found by the first honest run of the fix below: a
         // 20-site sweep reported `sites 17`. Three origins failed OUR fetch and "skipped" — leaving
         // no row, hence no denominator entry. `Unreachable` is the honest classification: our own
@@ -1035,6 +1079,9 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
             continue;
         }
         let manuk_ms = t_manuk.elapsed().as_millis();
+        // Our half is done; everything after this belongs to the oracle or to the instrument, and the
+        // watchdog must stop charging it to us.
+        SITE_SIDE.store(2, std::sync::atomic::Ordering::SeqCst);
 
         // …and the FOURTH, which is the one the ORACLE had already been refusing all along.
         //
@@ -1091,6 +1138,8 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
         // is precisely the failure `DAILY-DRIVER-CERTIFICATION.md` §0 names as cause #1 of every past
         // optimistic reading: *dropping the hard sites is what made every past number flattering.*
         // The fixed-denominator rule was built at t583 and this path walked around it.
+        SITE_SIDE.store(1, std::sync::atomic::Ordering::SeqCst);
+        let _oracle_side = OracleSide;
         if let Err(reason) = manuk_wpt::chrome::capture_url_screenshot(url, vw, vh, &cpath) {
             eprintln!("  UNMEASURABLE [{}]: {}", reason.tag(), reason.explain());
             rows.push(manuk_wpt::fidelity::Fidelity::unmeasured(&name, reason));
