@@ -10785,3 +10785,24 @@ session a fixture certified a bug (`width:0` t1424, a symmetric `scale()` t1426,
 
 **Unlocks:** `scrollWidth`/`scrollHeight` on bordered RTL and vertical containers — which is most
 real-world RTL layout, since a bordered card is the common case. (t1429)
+
+## ⭐⭐ A FLEX CONTAINER MOVES ITS OWN SCROLL ORIGIN, TWICE, ON OPPOSITE AXES
+
+The unreachable scrollable overflow region follows the scroll origin, and a flex container moves that
+origin on top of `direction`/`writing-mode`: the first item still starts AT the origin, so reversing
+where the first item goes moves the origin with it.
+
+```text
+  main_is_vertical = (flex-direction is a ROW) == (writing mode is VERTICAL)
+  flex-direction: *-reverse   flips  y_at_end if main_is_vertical else x_at_end   (the MAIN axis)
+  flex-wrap: wrap-reverse     flips  x_at_end if main_is_vertical else y_at_end   (the CROSS axis)
+```
+
+⭐ **The two reversals flip OPPOSITE axes for the same `main_is_vertical`** — one reverses the main
+axis and the other the cross axis. A fix that flips the same axis for both passes every
+`row`/`nowrap` row and fails half the matrix.
+
+**Unlocks:** correct `scrollWidth`/`scrollHeight` inside reversed flex containers — chat logs and
+feeds built on `column-reverse` (the standard "newest at the bottom, scrolled to the end" idiom),
+RTL toolbars on `row-reverse`, and every `scrollTop + clientHeight >= scrollHeight` bottom test run
+inside one. (t1430)

@@ -102645,3 +102645,81 @@ which is observer-owned.
 ```
 
 WIKI: docs/wiki/a-sentinel-that-is-also-a-legal-value.md
+
+## Tick 1430 — a flex container moves its own scroll origin, twice, on opposite axes (2026-09-04)
+
+TICK SHAPE: capability
+CLASS: CSSOM / scrolling area — the flex half of the 600-subtest file
+
+t1429 took `scrollWidthHeight-negative-margin-002` from 410 failures to 300 and left the file still
+the largest single concentration in `css/cssom-view`. Probed in-engine: **210 of its 300
+configurations failed, and every one had a `flex-direction: *-reverse` or `flex-wrap: wrap-reverse`.**
+
+### THE RULE, READ OFF THE TEST RATHER THAN GUESSED
+
+A flex container moves its own scroll origin on top of `direction`/`writing-mode`, because the first
+item still starts AT the origin — so reversing where the first item goes moves the origin with it.
+
+```text
+  main_is_vertical = (flex-direction is a ROW) == (writing mode is VERTICAL)
+  *-reverse     flips  y_at_end if main_is_vertical else x_at_end     (the MAIN axis)
+  wrap-reverse  flips  x_at_end if main_is_vertical else y_at_end     (the CROSS axis)
+```
+
+⭐ **The two reversals flip OPPOSITE axes for the same `main_is_vertical`.** One reverses the main
+axis and the other the cross axis, and a fix that flips the same axis for both passes every
+`row`/`nowrap` row and fails half the matrix — which is mutation N2 of the new gate.
+
+### THE NUMBER
+
+```text
+  css/cssom-view      905/2109 → 1025/2109   +120   42.9% → 48.6%
+  css/css-overflow    555/963  →  587/963     +32   57.6% → 61.0%
+  css/css-flexbox    3167/4693 → 3186/4693    +19   67.5% → 67.9%
+  WPT TOTAL           495,974  →  496,025     +51   (cssom-view is outside the sweep — see t1429)
+  the file's 300 configurations, probed in-engine: 210 failing → 150
+  HANG/CRASH 0 everywhere
+```
+
+⭐ **And the `wrap-reverse` half was PRICED SEPARATELY before being kept**: `css/css-overflow` reads
+587 with it and **571 without**, same binary both ways. +16, so it stays.
+
+### ⚠⚠ THE HALF THAT IS MEASURED AND DELIBERATELY NOT GATED, WITH ITS REASON
+
+The gate holds three rows — `row/nowrap` (control), `row-reverse/nowrap` (the main axis, physically
+x) and `column-reverse/nowrap` (the same main axis, now physically y). The `wrap-reverse` rows are
+**not** gated, and that is a decision rather than an omission:
+
+```text
+  Chrome, a wrap-reverse flex line          our item      Chrome's item
+  100x100 flex > 300x300 child, margin -50    k=[-50,-50]   k=[-50,-150]
+```
+
+**Our flex layout does not place a `wrap-reverse` line at the far CROSS end at all.** Every Chrome
+number for those rows is therefore a statement about the layout gap, not about the origin, and gating
+one would bank a number the flex fix will have to move. *A gate that names what it cannot catch beats
+one that pretends* (t1417). The origin rule for `wrap-reverse` is implemented, priced at +16 and
+named here; `flex-wrap: wrap-reverse` line placement is the ranked next tick.
+
+⚠ The same file's remaining 150 configurations are the same story from the other side: `column` flex
+rows disagree by exactly the main-axis padding (Chrome 181, ours 201 — the file's own `padding` term
+is `paddingBox.width - contentBox.width = 20`), which is a flex MAIN-AXIS sizing difference under a
+negative margin, not a scroll rule.
+
+### THE GATE, PROVEN RED TWO WAYS
+
+```text
+  N1  drop the `*-reverse` flip (pre-tick)              → rr 196/201, cr 216/201; CONTROL green
+  N2  flip x regardless of `main_is_vertical`           → cr 204/201; only the column row sees it
+```
+
+### THE RECEIPT
+
+```text
+  g_flex_moves_the_scroll_origin  NEW, 3 rows (1 control + 2 axes), red under 2 mutations
+  10 scroll / flex / writing-mode gates green
+  three areas up, none down; the wrap-reverse half A/B-priced before it was kept
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/the-unreachable-scrollable-overflow-region.md (revised — the flex half added)

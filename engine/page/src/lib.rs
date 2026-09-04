@@ -2750,8 +2750,56 @@ fn scroll_geometry_of(
         //    END edge when the inline axis runs bottom-to-top, which is `rtl` in a vertical mode.
         let vertical = st.writing_mode.is_vertical();
         let rtl = st.direction == manuk_css::Direction::Rtl;
-        let x_at_end = (!vertical && rtl) || st.writing_mode.is_rl();
-        let y_at_end = vertical && rtl;
+        let mut x_at_end = (!vertical && rtl) || st.writing_mode.is_rl();
+        let mut y_at_end = vertical && rtl;
+        // ── ⚠⚠⚠ **A FLEX CONTAINER MOVES ITS OWN SCROLL ORIGIN, TWICE.** `flex-direction:
+        //    *-reverse` reverses the MAIN axis and `flex-wrap: wrap-reverse` reverses the CROSS one,
+        //    and the scroll origin follows both — the first item still starts at the origin, so
+        //    reversing where the first item goes moves the origin with it. Which physical axis each
+        //    reversal lands on depends on the writing mode: a `row` flex is physically HORIZONTAL in
+        //    `horizontal-tb` and physically VERTICAL in a vertical mode, which is what
+        //    `main_is_vertical` says.
+        //
+        //    This is 210 of the 300 configurations in
+        //    `cssom-view/scrollWidthHeight-negative-margin-002` — the file's whole flex half — and
+        //    the rule is WPT's own, read off the test rather than guessed:
+        //
+        //    ```text
+        //      main_is_vertical = (flex-direction is a ROW) == (writing mode is VERTICAL)
+        //      *-reverse     flips  y_at_end if main_is_vertical else x_at_end
+        //      wrap-reverse  flips  x_at_end if main_is_vertical else y_at_end
+        //    ```
+        //
+        //    ⭐ The two reversals flip OPPOSITE axes for the same `main_is_vertical`, because one
+        //    reverses the main axis and the other the cross axis. A fix that flips the same axis for
+        //    both passes every `row`/`nowrap` row and fails half the matrix.
+        if matches!(
+            st.display,
+            manuk_css::Display::Flex | manuk_css::Display::InlineFlex
+        ) {
+            let row = matches!(
+                st.flex_direction,
+                manuk_css::FlexDirection::Row | manuk_css::FlexDirection::RowReverse
+            );
+            let main_is_vertical = row == vertical;
+            if matches!(
+                st.flex_direction,
+                manuk_css::FlexDirection::RowReverse | manuk_css::FlexDirection::ColumnReverse
+            ) {
+                if main_is_vertical {
+                    y_at_end = !y_at_end;
+                } else {
+                    x_at_end = !x_at_end;
+                }
+            }
+            if st.flex_wrap == manuk_css::FlexWrap::WrapReverse {
+                if main_is_vertical {
+                    x_at_end = !x_at_end;
+                } else {
+                    y_at_end = !y_at_end;
+                }
+            }
+        }
         let (mut min_x, mut min_y) = (0.0f32, 0.0f32);
         if x_at_end || y_at_end {
             let (mx, my) = b.scrollable_overflow_start(&|_| manuk_layout::OverflowContribution {

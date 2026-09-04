@@ -1107,3 +1107,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1427	38b75b96	1788551164	2026-09-04T15:46:04-04:00	2911	capability	465	11	543	54	543	81	3896	6960	0	642	0	the unreachable overflow region follows the scroll origin, and t1425's −12 becomes +41 (2026-09-04)
 1428	20dbb971	1788553175	2026-09-04T16:19:35-04:00	2011	capability	465	12	500	64	544	81	3896	6960	0	642	0	the widening t1425 refused, landed: −12 becomes +38 (2026-09-04)
 1429	d7f8f959	1788558461	2026-09-04T17:47:41-04:00	5286	capability	465	10	327	54	544	81	3896	6960	0	642	0	a sentinel that is also a legal value, and a sign a zero border could not see (2026-09-04)
+1430	5c79a134	1788561947	2026-09-04T18:45:47-04:00	3486	capability	465	10	310	47	545	81	3896	6960	0	642	0	a flex container moves its own scroll origin, twice, on opposite axes (2026-09-04)

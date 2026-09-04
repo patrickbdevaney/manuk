@@ -2925,6 +2925,7 @@
   - L7 · The rule
   - L22 · The measurement, and why it is a scrolling-area rule and not a layout one
   - L51 · What it unblocked, with the number
+  - L70 · The flex half (t1430)
 
 ## A guard that fires on a clock cannot name a cause — and will name whoever the author had in mind
 `docs/wiki/timeout-names-whose-clock.md`
@@ -3002,4 +3003,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2685 sections across 78 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2686 sections across 78 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

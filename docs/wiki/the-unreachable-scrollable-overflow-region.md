@@ -66,3 +66,30 @@ A **53-subtest swing**, and it is the proof that the ratchet's refusal at t1425 
 signal rather than a flaky one. The widening is now unblocked and priced — its gate, fixture and four
 mutations are written verbatim in
 [the-scrolling-area-of-every-element](the-scrolling-area-of-every-element.md).
+
+## The flex half (t1430)
+
+A flex container moves its own origin on top of `direction`/`writing-mode`, because the first item
+still starts AT the origin:
+
+```text
+  main_is_vertical = (flex-direction is a ROW) == (writing mode is VERTICAL)
+  *-reverse     flips  y_at_end if main_is_vertical else x_at_end     (the MAIN axis)
+  wrap-reverse  flips  x_at_end if main_is_vertical else y_at_end     (the CROSS axis)
+```
+
+⭐ **Opposite axes for the same `main_is_vertical`** — one reverses the main axis, the other the
+cross axis. Chrome, the `negative-margin-002` wrapper with `display:flex` and a `300x300` child at
+`margin:-100px`:
+
+```text
+                          chrome sw / sh    before
+  row            nowrap      196 / 201     196 / 201   CONTROL
+  row-reverse    nowrap      184 / 201     196 / 201   ← main axis, physically x
+  column-reverse nowrap      216 / 188     216 / 201   ← main axis, physically y
+```
+
+⚠ **`wrap-reverse` is implemented, priced (+16 `css/css-overflow`, 587 vs 571 same binary) and NOT
+gated**: our flex layout does not place a `wrap-reverse` line at the far cross end at all (Chrome puts
+the item at `k=[-50,-150]`, we put it at `[-50,-50]`), so a Chrome number there would gate the layout
+gap rather than the origin. `flex-wrap: wrap-reverse` line placement is the ranked next tick.
