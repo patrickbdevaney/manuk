@@ -2893,6 +2893,16 @@
   - L41 · The band belongs in the tool
   - L53 · The session's fourth instrument found wrong about its own numbers
 
+## The scrolling area of every element — measured, implemented, and refused
+`docs/wiki/the-scrolling-area-of-every-element.md`
+
+  - L7 · The defect
+  - L16 · The Chrome table — one box, overflow the only variable
+  - L36 · The second mechanism, and it is the one that generalises
+  - L50 · Why it was refused — three implementations, two areas, same binary each way
+  - L79 · The gate, written and proven red before the revert
+  - L92 · The order for the next attempt
+
 ## A guard that fires on a clock cannot name a cause — and will name whoever the author had in mind
 `docs/wiki/timeout-names-whose-clock.md`
 
@@ -2969,4 +2979,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2668 sections across 74 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2674 sections across 75 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

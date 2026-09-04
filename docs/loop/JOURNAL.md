@@ -102106,3 +102106,117 @@ catches it, and it has now caught it twice.
 
 WIKI: docs/wiki/scroll-overflow-the-empty-box-corner.md (new) + a CORRECTION appended to
 docs/wiki/scrollable-overflow-end-margin.md
+
+## Tick 1425 — `scrollWidth`/`scrollHeight` are properties of EVERY element, and the fix is two mechanisms, not one (2026-09-04)
+
+TICK SHAPE: measurement-and-refusal
+CLASS: the scroll area — located, arbitrated against Chrome, implemented, and REVERTED by the ratchet
+
+t1424's survey pointed here: after that tick `css/cssom-view` still had ~1,300 failing subtests, and
+`--show-failures` put a large block of them in one 140-subtest matrix file
+(`scrollWidthHeight-overflow-visible-margin-collapsing`, `overflow ∈ {visible, hidden, auto, scroll,
+clip} × padding × border × 7 displays`). **125 of its 140 failed.**
+
+### THE DEFECT, AND IT IS THAT MOST OF THE DOM NEVER HAD A SCROLLING AREA AT ALL
+
+`scroll_geometry_of` maps only `overflow: auto|scroll|hidden`. CSSOM-View defines `scrollWidth`/
+`scrollHeight` as *"the width/height of the element's scrolling area"* with **no scrollability
+precondition**, so every other element fell through to the binding's fallback — **its own BORDER
+box**. Chrome-measured, one `100x50; padding:10px; border:3px` box, overflow the ONLY variable:
+
+```text
+                                          chrome sh/sw   ours
+  overflow:visible, a 20px child that FITS    70 / 120   76 / 126   ← the BORDER box
+  overflow:visible, a 300x200 child          210 / 310   76 / 126   ← the overflow, unseen
+  overflow:clip,    the same                 210 / 310   76 / 126
+  overflow:hidden,  the same                 220 / 320  220 / 320   CONTROL — already right
+  a bordered <span> (non-replaced inline)      0 / 0      21 / 12
+```
+
+⭐⭐⭐ **`hidden` SITS WITH `scroll`, NOT WITH `clip` — 220 against 210, and that is the whole
+distinction.** The end-padding inflation of CSS Overflow 3 §3.1 belongs to SCROLL CONTAINERS;
+`overflow: hidden` is one (programmatically scrollable) and `clip` is not. Ten pixels separate the two
+halves of "not visibly scrollable", and no fixture in the tree had ever asked.
+
+⭐⭐ **`scrollHeight - clientHeight` is the *"is this overflowing?"* test** every clamped-text widget,
+tooltip placer and read-more toggle runs — and on an ordinary `<div>` it read a constant **zero**: the
+answer that says *nothing ever overflows*.
+
+### AND THE SECOND MECHANISM, FOUND BY THE FIRST ONE FAILING
+
+Widening the map made every element answer from `SCROLL_GEOM` — and the matrix went from 125 failures
+to **140**, with `clientHeight` identical in all 20 configurations. ⭐⭐⭐ **A MAP LOOKUP DOES NOT
+FORCE THE REFLOW THAT A RECT READ DOES.** `layout_rect` calls `force_reflow_if_stale()` on the way in;
+`SCROLL_GEOM` is a published snapshot. While only scroll containers were mapped this was a rare
+staleness; the moment every element is mapped it is the COMMON path, and a loop that writes a style
+then reads `scrollHeight` reads the pre-write layout every time. Forcing it: 140 → **94**.
+
+*A latent bug in a rare path becomes the headline the moment the path stops being rare.*
+
+### THE RATCHET REFUSED BOTH HALVES, AND THE NUMBERS SAY WHY
+
+All measured same-binary against t1424's HEAD (`cssom-view` 792, `css-overflow` 517):
+
+```text
+                                        cssom-view      css-overflow
+  widen the map + FORCE the reflow      825  (+33)      505  (-12)   ← 31 fixed, 40 broken
+  widen the map, do NOT force           727  (-65)      524   (+7)
+  widen + force + skip vertical modes   769  (-23)      508   (-9)
+```
+
+⭐⭐⭐ **THE 40 BROKEN ARE ONE FILE AND ONE AXIS, WITH NO EXCEPTIONS**: every one is a
+`writing-mode: vertical-lr|vertical-rl` row of
+`css-overflow/scrollable-overflow-transform-unreachable-region` (a `flow-root|flex|grid ×
+direction × writing-mode × flex-direction × flex-wrap` matrix over an `overflow:scroll` wrapper with a
+**transformed** child), and **not one `horizontal-tb` row**. The forced reflow is what breaks them —
+without it they pass — so **our re-layout is not idempotent for a transformed child in a vertical
+writing mode**: the first layout and a forced second one disagree. That is a LAYOUT defect the
+binding must not paper over, and the ratchet will not trade 31 for 40.
+
+⚠ **And a scoping attempt failed for a reason worth writing down.** Skipping vertical writing modes
+in the map did not save those 40 — the wrapper is `overflow: scroll`, so it was mapped before this
+tick and is unaffected by any widening clause. The follow-up attempt (*force the reflow only for
+NON-scroll-containers*) failed for a better reason still: ⭐⭐ **the predicate used to decide whether
+to force the reflow — `with_style` — FORCES THE REFLOW ITSELF.** A guard that has to look at the
+thing it is guarding cannot guard it.
+
+### WHAT THE NEXT TICK DOES
+
+1. Fix the layout, not the binding: a `transform`ed child of an `overflow:scroll` wrapper in
+   `writing-mode: vertical-*`, laid out TWICE, must give the same scrollable overflow both times.
+   The 40-row matrix file IS the fixture, and `force_reflow_if_stale()` is how to make it fail on
+   demand.
+2. Then land the widening + the forced reflow together, with the Chrome table above as the gate
+   (nine rows, four mutations, all written and proven red this tick before the revert).
+
+⭐ The gate and its mutations are not lost work: they are reproduced verbatim in
+`docs/wiki/the-scrolling-area-of-every-element.md`, with the mutation matrix that made each row
+discriminating.
+
+### THE HARNESS, ONE PARAGRAPH, FOR THE OBSERVER
+
+t1424 took **six** wall attempts. Two were real (a stale `TOTAL` row; my own duplicate `tick.sh`), and
+**four were the wall reading a gate that had not finished**: `affordance` and `G_INTERACT` REDded
+while `teardown` and `G_RUNTIME_COUNT` — which read the *same* variable — were green. That pattern is
+only possible if `SHELL_FAILED == 0` and the captured output is EMPTY. Timestamped it: the affordance
+gate delivered its verdict **30s into the run while the `manuk-shell` job it reads was still running**
+(and still running 90s later). `_out` does `SHELL_OUT=$(_out shell)` — a **command substitution**, so
+its `wait` for the parent shell's background job is a no-op and `cat` reads a partial file.
+**`CARGO_BUILD_JOBS=1 ./scripts/tick.sh` serialises the launches and the wall went green in 211s** —
+faster than the racing parallel runs, not slower. Harness files untouched, per scope.
+
+⚠ Also reaped **17 orphaned headless-Chrome instances** (PPID 1, oldest 7.7 days, six of them pegging
+a core each) that were holding the box at load ~14 and ~7 GB. Not a harness edit; ordinary hygiene.
+
+### THE RECEIPT
+
+```text
+  the Chrome table above: 5 rows, one variable, measured fresh
+  the 140-cell matrix probed in-engine: 125 fail → 94 with both mechanisms
+  three implementations measured same-binary on TWO areas; every one regressed one of them
+  reverted: engine/page/src/lib.rs, engine/js/src/dom_bindings.rs back to HEAD
+  after the revert: all 15 scroll/geometry gates green
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/the-scrolling-area-of-every-element.md
