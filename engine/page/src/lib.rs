@@ -2759,9 +2759,21 @@ fn scroll_geometry_of(
                 end_padding: (0.0, 0.0),
                 relative_offset: (0.0, 0.0),
             });
-            // The start edges come out relative to the BORDER-box origin, like the extent does.
-            min_x = (mx + bw.left).min(0.0);
-            min_y = (my + bw.top).min(0.0);
+            // ⚠⚠⚠ **THE START EDGES COME OUT IN BORDER-BOX COORDINATES AND THE REGION IS MEASURED
+            //    IN THE PADDING BOX, SO THE START BORDER IS SUBTRACTED — THE SAME `- bw.left` THE
+            //    MAXIMA GET, AND IT WAS WRITTEN `+`.** The sign was invisible to
+            //    `g_unreachable_scrollable_overflow` because that gate's fixture has NO BORDER, so
+            //    the term is zero and both signs agree. ⭐ *A fixture with a zero in the term cannot
+            //    see the term's sign* — the same shape as `width:0` (t1424) and a symmetric
+            //    `scale()` (t1426), and the third time this session that a fixture certified a bug.
+            //    Chrome, `cssom-view/scrollWidthHeight-negative-margin-002`'s wrapper (border-left
+            //    4px, padding-left 16px, a 300px child at `margin:-100px`), `rtl`: `scrollWidth`
+            //    **204**; with `+` it reads 196, with `-` it reads 204.
+            // `.min(0.0)` AFTER the conversion: the walk returns `f32::MAX` when nothing reaches
+            // backwards, and `MAX - border` clamps to 0 exactly as a box sitting on the padding
+            // edge does.
+            min_x = (mx - bw.left).min(0.0);
+            min_y = (my - bw.top).min(0.0);
         }
         // The extent is measured on the ALREADY-SCROLLED tree, so add the offset back: the content did
         // not get shorter because the user scrolled down it.

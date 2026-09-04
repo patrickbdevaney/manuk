@@ -1212,22 +1212,41 @@ impl LayoutBox {
                         walk(k, ox, oy, x, y);
                     }
                 }
-                BoxContent::Inline(frags) => {
-                    for f in frags {
-                        *x = x.min(f.x - ox);
-                        *y = y.min(f.line_top - oy);
-                    }
-                }
+                // ⚠⚠⚠ **INLINE FRAGMENTS ARE DELIBERATELY NOT CONSULTED, AND THAT IS A NARROWING
+                //    WITH A REASON.** A run inside a vertical writing mode keeps its LOGICAL fields
+                //    and carries the axis map instead (`writing_mode::map_subtree` — *"silently
+                //    re-pointing `x`/`width` at a different axis is how a field ends up meaning two
+                //    things"*), so reading `f.x` here as a physical coordinate is reading the inline
+                //    advance of a run that is physically vertical. It cost `css-overflow`'s
+                //    `overflow-outside-padding` — six containers with an 80px left border and a
+                //    text node, where the mis-read produced start overflow that is not there.
+                //    Boxes carry real physical rects after the map; runs do not, and a START edge
+                //    from a run would be a number in the wrong axis. Text that genuinely overflows
+                //    backwards does so inside a box, and that box is measured.
+                BoxContent::Inline(_) => {}
             }
         }
         let _ = contribution;
-        let (mut x, mut y) = (0.0f32, 0.0f32);
+        // ⚠⚠⚠ **THE ACCUMULATOR STARTS AT `MAX`, NOT AT ZERO, AND THE DIFFERENCE IS 80 PIXELS OF
+        //    OVERFLOW THAT IS NOT THERE.** Seeded at 0, "no box reaches backwards" comes out as *the
+        //    BORDER-box origin*, and the caller — which converts to padding-box coordinates by
+        //    subtracting the start border — then reads a container with an 80px left border as
+        //    having 80px of start overflow. It cost `css-overflow/overflow-outside-padding`, whose
+        //    containers are `border-width: 0 0 50px 80px` and whose assertion is exactly
+        //    *"blocks wholly outside padding edges should not contribute to overflow"*.
+        //
+        //    ⭐ The clamp belongs AFTER the conversion, not before it: `MAX - border` is still huge
+        //    and clamps to 0, a box at the padding-box edge converts to exactly 0, and only a box
+        //    that genuinely reaches back past the padding box comes out negative. *A sentinel that
+        //    is also a legal value is not a sentinel* — zero meant both "nothing overflows" and
+        //    "something overflows to exactly here".
+        let (mut x, mut y) = (f32::MAX, f32::MAX);
         if let BoxContent::Block(kids) = &self.content {
             for k in kids {
                 walk(k, self.rect.x, self.rect.y, &mut x, &mut y);
             }
         }
-        (x.min(0.0), y.min(0.0))
+        (x, y)
     }
 
     /// A box that occupies `rect` on behalf of `node` and **paints nothing** — no background, no

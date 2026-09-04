@@ -10761,3 +10761,27 @@ t1427). *A staleness that flatters is not a smaller bug than one that breaks.*
 **Unlocks:** the overflow test every clamped-text widget, tooltip placer, read-more toggle,
 marquee-vs-static decision and `title`-on-truncation heuristic on the web performs — none of which
 could ever fire before. (t1428)
+
+## ⭐⭐⭐ A SENTINEL THAT IS ALSO A LEGAL VALUE IS NOT A SENTINEL
+
+The scrolling area's START edge accumulator was seeded at **0**, meaning *"no box reaches
+backwards"* — but 0 is also a legal answer, *"a box reaches back to exactly the border-box origin"*.
+The caller converts to padding-box coordinates by subtracting the start border, and a container with
+an 80px left border then reports **80px of start overflow that is not there**.
+
+```text
+  six containers, border-width: 0 0 50px 80px     chrome   seeded at 0   seeded at MAX
+    scrollWidth                                     200        280           200
+```
+
+Seed at `f32::MAX` and clamp AFTER the conversion: `MAX − border` is still huge and clamps to 0, a box
+on the padding edge converts to exactly 0, and only a box that genuinely reaches back past the padding
+box comes out negative.
+
+⭐⭐ **AND ITS SIBLING: A FIXTURE WITH A ZERO IN THE TERM CANNOT SEE THE TERM'S SIGN.** The same
+conversion was written `+ bw.left` instead of `- bw.left`, and the gate that shipped the rule one tick
+earlier has `border: 0` on every container — where the two expressions are identical. Third time this
+session a fixture certified a bug (`width:0` t1424, a symmetric `scale()` t1426, a zero border here).
+
+**Unlocks:** `scrollWidth`/`scrollHeight` on bordered RTL and vertical containers — which is most
+real-world RTL layout, since a bordered card is the common case. (t1429)

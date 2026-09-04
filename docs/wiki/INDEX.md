@@ -85,6 +85,14 @@
   - L303 · A frame is a bitmap, so its pixels need explicit refreshing (tick 232)
   - L331 · The agent's click point IS layout geometry, so a containing-block bug is an actuation bug (I3)
 
+## The start edge of the scrolling area — two bugs a fixture with a zero could not see
+`docs/wiki/a-sentinel-that-is-also-a-legal-value.md`
+
+  - L13 · Bug 1 — the sign
+  - L27 · Bug 2 — the sentinel
+  - L49 · Bug 3, found on the way — inline fragments are not in physical coordinates
+  - L58 · The gate now
+
 ## A transform is physical in every writing mode
 `docs/wiki/a-transform-is-physical-in-every-writing-mode.md`
 
@@ -2994,4 +3002,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2681 sections across 77 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2685 sections across 78 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

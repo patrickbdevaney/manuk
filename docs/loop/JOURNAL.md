@@ -102544,3 +102544,104 @@ named gate 0s at this resolution. Two findings:
 ```
 
 WIKI: docs/wiki/the-scrolling-area-of-every-element.md (revised — the refusal became the receipt)
+
+## Tick 1429 — a sentinel that is also a legal value, and a sign a zero border could not see (2026-09-04)
+
+TICK SHAPE: capability
+CLASS: CSSOM / scrolling area — the concentration survey check #136 asked for, and what it found
+
+Check #136's steer #2: *"re-run the `--show-failures` concentration survey on `css/cssom-view`."* Run.
+**410 of its 1,314 failures are in ONE file** — `scrollWidthHeight-negative-margin-002` (600 subtests,
+190 passing), a `display × flex-direction × flex-wrap × direction × writing-mode × overflow` matrix
+over a wrapper whose four borders and four paddings are all different and whose child carries
+`margin: -100px`. Everything below came out of that one file.
+
+### BUG 1 — THE SIGN, AND THE GATE THAT SHIPPED ONE TICK EARLIER COULD NOT SEE IT
+
+The START edges come out in border-box coordinates and the region is measured in the padding box, so
+the start border is **subtracted** — exactly as the maxima's `- bw.left` does. t1427 wrote `+`.
+
+```text
+  the file's wrapper: border-left 4px, padding-left 16px, a 300px child at margin:-100px
+                                       chrome    with `+`    with `-`
+    rtl, scrollWidth                     204        196        204
+```
+
+⭐⭐⭐ **A FIXTURE WITH A ZERO IN THE TERM CANNOT SEE THE TERM'S SIGN.** Every container in
+`g_unreachable_scrollable_overflow` has `border: 0`, where `+ bw.left` and `- bw.left` are the same
+expression. **Third time this session a fixture written by this loop certified a bug** — `width:0`
+(t1424), a symmetric `scale()` (t1426), a zero border (here). All three passed review.
+
+### BUG 2 — THE SENTINEL, FOUND BY THE ONE SUBTEST THE FIX BROKE
+
+The sign fix took `cssom-view` to 905 and `css-overflow` to **554, one below its banked 555**. Two
+repeat runs said 554 both times, so not noise. Diffing the failing NAMES gave exactly one new failure
+and zero fixes: `#target did not trigger scroll overflow`
+(`css-overflow/overflow-outside-padding`, six containers at `border-width: 0 0 50px 80px`).
+
+`scrollable_overflow_start` seeded its accumulator at **0** — *"no box reaches backwards"*. But 0 is
+also a legal answer, *"a box reaches back to exactly the border-box origin"*, and the caller then
+subtracts the start border from it:
+
+```text
+                          chrome   seeded at 0   seeded at MAX
+  scrollWidth               200        280           200
+```
+
+> ⭐⭐⭐ **A SENTINEL THAT IS ALSO A LEGAL VALUE IS NOT A SENTINEL.** Seed at `f32::MAX` and clamp
+> AFTER the conversion: `MAX − border` clamps to 0, a box on the padding edge converts to exactly 0,
+> and only a box that genuinely reaches back past the padding box comes out negative.
+
+⭐⭐ And the method is the one the memory keeps writing down: **DIFF THE FAILING NAMES, NEVER THE
+TOTALS.** A −1 against a +110 is invisible in a percentage and is a one-line answer in a name diff.
+The WPT file's own assertion is the same sentence from the other side — *"blocks wholly outside
+padding edges should not contribute to overflow"*.
+
+### BUG 3, FOUND ON THE WAY — A RUN'S `x` IS NOT A PHYSICAL COORDINATE
+
+The start walk consulted inline fragments. A run inside a vertical writing mode keeps its LOGICAL
+fields and carries the axis map instead (`writing_mode::map_subtree`: *"silently re-pointing
+`x`/`width` at a different axis is how a field ends up meaning two things"*), so `f.x` there is the
+inline advance of a run that is physically vertical. Boxes carry real physical rects after the map;
+runs do not. The walk consults **boxes only**, and text that genuinely overflows backwards does so
+inside a box, which is measured.
+
+### THE GATE GREW FROM 6 ROWS TO 11, AND EACH GROUP IS A CLASS THE OTHERS CANNOT SEE
+
+```text
+  a…f   the six origin combinations                              (t1427)
+  g,h,i asymmetric borders AND padding, WITH start overflow   → catches the SIGN
+  j,k   a flipped origin, a border, NOTHING overflowing back  → catches the SENTINEL
+
+  N1 never flip → c,d,e,f    N2 flip x when VERTICAL → the control b    N3 flip both together → c,d,e
+  N4 add start without dropping end → c    N5 `+ bw.left` → h    N6 seed at 0 → j
+```
+
+### THE NUMBER
+
+```text
+  css/cssom-view    795/2109 → 905/2109   +110   37.7% → 42.9%
+  css/css-overflow  555/963  → 555/963    flat   (the −1 found, named and fixed, not absorbed)
+  css/css-position 1174/1482 →1174/1482   flat
+  the 600-subtest file, probed in-engine: 90 of 90 flow-root/flex/grid configurations EXACT
+  HANG/CRASH 0 everywhere
+```
+
+⚠ **The WPT TOTAL does not move, and that is the aperture, not the work.** `css/cssom-view` is not in
+`docs/loop/WPT-AREAS.tsv` — it is one of the twelve CSS directories t1414 measured for the first time
+and the sweep does not regenerate a row for it. +110 real subtests are invisible to the primary
+metric. Recorded, not worked around: the fix is to widen the CHECKOUT and let the sweep regenerate,
+which is observer-owned.
+
+### THE RECEIPT
+
+```text
+  the 410-failure concentration located by `--show-failures`, and its file read
+  three defects: a sign, a sentinel, and a logical coordinate read as physical
+  g_unreachable_scrollable_overflow  6 rows → 11, red under 6 mutations
+  19 scroll / writing-mode / geometry gates green · manuk-layout 191 green
+  css/cssom-view +110, no area regressed
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/a-sentinel-that-is-also-a-legal-value.md
