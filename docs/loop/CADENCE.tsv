@@ -1099,3 +1099,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1419	f83c7c0e	1788518990	2026-09-04T06:49:50-04:00	627	measurement-and-steer	465	5	202	42	540	81	3896	6960	0	642	0	instruments are validated by consumption, not by inspection (2026-09-04)
 1420	6ca83225	1788522463	2026-09-04T07:47:43-04:00	3473	measurement-and-refusal	465	5	141	41	540	81	3896	6960	0	642	0	the third scroll rule, arbitrated in full, attempted, and REVERTED by the ratchet (2026-09-04)
 1421	c39d8309	1788525082	2026-09-04T08:31:22-04:00	2619	measurement-and-refusal	465	5	131	41	540	81	3896	6960	0	642	0	two Chrome measurements in direct tension, and that is the finding (2026-09-04)
+1422	9014c1cb	1788525507	2026-09-04T08:38:27-04:00	425	measurement	465	4	115	41	540	81	3896	6960	0	642	0	the experiment t1421 demanded, run: positive extends, negative does not shrink (2026-09-04)

@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1100** | ticks 1–1421 |
-| median tick cycle | **32m** | 1099 intervals |
-| median, last 10 | **44m** | 10 intervals |
+| ticks landed | **1101** | ticks 1–1422 |
+| median tick cycle | **32m** | 1100 intervals |
+| median, last 10 | **30m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.83** | 1323.5h elapsed |
-| median verify wall | **67s** | 1039 ticks |
+| **ticks per hour** | **0.83** | 1323.6h elapsed |
+| median verify wall | **67s** | 1040 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**492 of 1100 ticks** (45%) moved a
+**492 of 1101 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **492** capability ticks, median cycle **32m**
-* median diff per tick: **+294 / −34** lines across 8 files
+* median diff per tick: **+293 / −34** lines across 8 files
 
 ## Every tick
 
@@ -1197,5 +1197,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1419** | 2026-09-04 06:49 | 10m | measurement-and-steer | 8m | +202/−42 | 540 | 81 | 56.0% · | instruments are validated by consumption, not by inspection (2026-09-04) |
 | **1420** | 2026-09-04 07:47 | 58m | measurement-and-refusal | 8m | +141/−41 | 540 | 81 | 56.0% · | the third scroll rule, arbitrated in full, attempted, and REVERTED by the ratchet (2026-09 |
 | **1421** | 2026-09-04 08:31 | 44m | measurement-and-refusal | 8m | +131/−41 | 540 | 81 | 56.0% · | two Chrome measurements in direct tension, and that is the finding (2026-09-04) |
+| **1422** | 2026-09-04 08:38 | 7m | measurement | 8m | +115/−41 | 540 | 81 | 56.0% · | the experiment t1421 demanded, run: positive extends, negative does not shrink (2026-09-04 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

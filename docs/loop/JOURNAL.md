@@ -101805,3 +101805,76 @@ margin-box answer differ decides it in a single Chrome run. **Do that before tou
 
 WIKI: none [forced] — no engine source changed; the product is the tension and the experiment that
 resolves it, and both belong beside the two ticks they continue.
+
+## Tick 1422 — the experiment t1421 demanded, run: positive extends, negative does not shrink (2026-09-04)
+
+TICK SHAPE: measurement
+CLASS: the same scroll rule — and this tick replaces inference with a designed experiment
+
+t1421 said: *"design an experiment that separates the fixtures instead of inferring from them,"* and
+named the client floor as the cheapest candidate to falsify. Both were done.
+
+### ⭐⭐⭐ EXPERIMENT 1 — THREE CONTAINERS, ONE VARIABLE, AND IT SETTLES THE MARGIN QUESTION
+
+Three 60×40 `overflow:hidden` scrollers, three 20px children each, differing only in the children's
+`margin-bottom`:
+
+```text
+                  chrome   border-box would be   margin-box would be   client floor
+  margin -5px       50             50                    45                 40
+  margin  0         60             60                    60                 40
+  margin +5px       75             60                    75                 40
+```
+
+**A POSITIVE end margin extends the region (margin box); a NEGATIVE one does not shrink it (border
+box).** That is `end_margin.max(0.0)` — the rule t1420 and t1421 both implemented and both reverted —
+now confirmed by a purpose-built fixture instead of inferred from a confounded one.
+
+### ⭐⭐⭐ EXPERIMENT 2 — AND t1417's `75` WAS NEVER A MARGIN SUBTRACTION
+
+Re-measuring t1417's own fixture with the last child's position printed:
+
+```text
+  last child's bottom, from the container's padding-box top     70
+  clientHeight                                                  75
+  chrome's scrollHeight                                         75
+```
+
+**The content does not overflow the client box at all**, so `scrollHeight == clientHeight` and the
+negative margin never entered Chrome's answer. Our 80 came from adding the container's end padding to
+a direct child's bottom — but that padding is *already inside* `clientHeight`. **The tension t1421
+recorded was not between two Chrome behaviours; it was between one Chrome behaviour and a
+misreading.**
+
+### ⚠⚠ AND A FOURTH CANDIDATE RULE WAS DERIVED, CHECKED AGAINST EVERY MEASUREMENT, AND FAILED
+
+*"The end padding fills up to the padding box and no further"* satisfies t1417 (70→75), t1258
+(110→120) and both t1420 rows (200, 216) — and fails t1418's `w` row, where Chrome gives **150** for
+content at 140 in an 80-tall padding box. Adding t1418's containment test on top fixes `w` and breaks
+t1417 again.
+
+> ⭐⭐ **FOUR RULES, EACH SATISFYING A DIFFERENT SUBSET, IS NOT A RULE THAT NEEDS ONE MORE GUESS.**
+> The remaining variable is whichever term distinguishes `w` (an AUTO-height wrapper whose child's
+> MARGIN carries it past the container) from t1417 (a fixed content box the child stays inside). Both
+> are "contained" by t1418's test and they want opposite answers, so **containment is not the variable
+> either** — and no further inference from these five fixtures can find it.
+
+### WHAT THE NEXT TICK DOES — A MATRIX, NOT A GUESS
+
+Build one Chrome fixture per cell and read the whole table at once:
+`{auto-height, fixed-height} × {content inside, content past the padding box} × {margin +, 0, −} ×
+{padding 0, padding N}`. Twenty-four cells, one page, one run. **Five fixtures accumulated across five
+ticks have now produced four rules and no answer; the matrix is what ends that.**
+
+### THE RECEIPT
+
+```text
+  two purpose-built Chrome experiments, both reported above; no inference from confounded fixtures
+  a fourth candidate rule derived, checked against all five measurements, and refuted on `w`
+  no engine source changed — the walk was not touched after t1421's revert
+  all four scroll gates green (unchanged since t1418)
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: none [forced] — no engine source changed; the product is two experiments and a refuted rule,
+which belong beside the ticks they continue.
