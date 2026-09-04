@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1091** | ticks 1–1412 |
-| median tick cycle | **32m** | 1090 intervals |
+| ticks landed | **1092** | ticks 1–1413 |
+| median tick cycle | **32m** | 1091 intervals |
 | median, last 10 | **66m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.83** | 1317.8h elapsed |
-| median verify wall | **67s** | 1030 ticks |
+| **ticks per hour** | **0.83** | 1318.0h elapsed |
+| median verify wall | **67s** | 1031 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**492 of 1091 ticks** (45%) moved a
+**492 of 1092 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -1188,5 +1188,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1410** | 2026-09-04 00:33 | 79m | instrument-fidelity | 8m | +438/−45 | 537 | 81 | 56.0% · | the headline is an integer, and the same binary does not give the same integer twice (2026 |
 | **1411** | 2026-09-04 01:34 | 61m | capability-mechanism | 8m | +337/−44 | 537 | 81 | 56.0% · | the first thing an agent reads about a page was empty on every page (2026-09-04) |
 | **1412** | 2026-09-04 02:50 | 76m | capability-mechanism | 8m | +386/−46 | 538 | 81 | 56.0% · | the sentence that ended a performance comment was false, and it cost the capability it was |
+| **1413** | 2026-09-04 03:02 | 12m | instrument-fidelity | 8m | +277/−45 | 538 | 81 | 56.0% · | the metric is a percentage over what happens to be checked out, and it was a fifth of the  |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

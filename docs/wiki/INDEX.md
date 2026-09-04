@@ -2852,6 +2852,14 @@
   - L4057 · An author line-height is the line box, and a taller face must NOT grow it
   - L4063 · The Latin control arm is free, by construction
 
+## The metric is a percentage over what happens to be checked out
+`docs/wiki/the-aperture-is-the-metric.md`
+
+  - L19 · Two directories, 14 MB, 828 subtests
+  - L28 · ⭐⭐⭐ A capability that cannot be measured drifts to "missing" in every document that mentions it
+  - L40 · The map, corrected
+  - L48 · Where these numbers live, and why not in WPT-AREAS.tsv
+
 ## The headline is an integer, and the same binary does not give the same integer twice
 `docs/wiki/the-headlines-error-bar.md`
 
@@ -2936,4 +2944,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2651 sections across 70 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2655 sections across 71 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

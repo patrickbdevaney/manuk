@@ -7782,3 +7782,84 @@ ten ticks were events/images/agent work. Status histogram: **343 gated · 175 mi
 5. Carried from #80/#81: `Content-Encoding: zstd` still needs an OWNER dependency decision; the
    gate-execution gap (#78) — and t1403 is a direct instance of it, two gates having gone red
    unnoticed because neither is in `verify.sh`'s `_launch` list.
+
+## Audit #83 — tick 1413 (2026-09-04)
+
+**Sources searched, not recalled:**
+
+* Chrome 145 — https://developer.chrome.com/blog/new-in-chrome-145 (and the release notes / beta post)
+* **The WPT repository's own `css/` directory listing** — `api.github.com/repos/web-platform-tests/wpt/contents/css`
+
+### ⭐⭐⭐ THE FINDING IS NOT A MISSING CAPABILITY. IT IS A MISSING QUESTION.
+
+Audit #82 reconciled the map against Interop 2026 and found zero rows to add. This one asked a
+different question — *what does the INSTRUMENT look at?* — and the answer is the largest aperture gap
+this project has recorded since t1273:
+
+```text
+  WPT's own css/ tree            93 directories (≈78 of them `css-*` test dirs)
+  our sparse checkout            14 `css-*` test dirs  +  CSS2 · cssom · selectors · support
+```
+
+**The loop's primary metric is a percentage over what happens to be checked out**, and the checkout
+carries under a fifth of the CSS suite. Absent entirely, every one shipped and widely used:
+
+```text
+  css-animations · css-transitions · css-easing        the whole animation surface
+  css-writing-modes                                    the subsystem THIS ENGINE BUILT at t1347-1349
+  css-multicol · css-tables · css-break · css-inline · css-box · css-borders · css-align · css-logical
+  css-cascade · css-variables · css-nesting · css-syntax · css-conditional · css-mixins
+  css-shapes · css-masking · filter-effects · compositing · css-motion-path
+  css-scroll-snap · css-scroll-anchoring · css-overscroll-behavior · css-scrollbars · cssom-view
+  css-contain · css-content · css-lists · css-pseudo · css-images · css-counter-styles
+  mediaqueries · geometry · css-text-decor · css-anchor-position · css-view-transitions · css-gaps
+```
+
+### THE EXPERIMENT — TWO DIRECTORIES ADDED, AND 828 SUBTESTS APPEARED
+
+Rather than argue the point, the aperture was widened by two and measured:
+
+```text
+  css/css-writing-modes    96/337  = 28.5%   (80 testharness files of 479)
+  css/css-multicol        732/1616 = 45.3%   (94 testharness files of 532)
+                          ────────
+                          828 passing subtests the primary metric had NEVER COUNTED
+```
+
+⭐⭐⭐ **`css-writing-modes` is the one that hurts.** t1347-1349 built the whole subsystem —
+`engine/layout/src/writing_mode.rs`, orthogonal roots, `transpose_in_place` — and **it has never been
+scored**, because the directory that scores it was not in the checkout. That is very likely why the
+lever board *still* lists writing-mode as *"UNIMPLEMENTED — the biggest single unlock"* (t1412 found
+the same staleness from the other side). **A capability that cannot be measured cannot be known to
+exist, and the map and the board both drifted to the same wrong answer.**
+
+### THE MAP, CORRECTED AND WIDENED
+
+* **`multicol` — the row was a considered REFUSAL with no number.** Its receipt argued (correctly,
+  and Chrome-measured at t1325) that multicol is gated on BOX FRAGMENTATION rather than on the column
+  algorithm. It stays `missing`, because the capability as Chrome implements it is not built — but it
+  now carries **45.3%**, which is how far the parts that ARE built get. The refusal was right; the row
+  was simply blind for 1,188 ticks.
+* **Five rows added**: `Origin API`, `Local Network Access` (the Chrome 145 `local-network` /
+  `loopback-network` split), `Device Bound Session Credentials`, plus two rows that exist to make the
+  aperture itself visible — `multicol measured` and `writing-mode measured`.
+* Status histogram now **343 gated · 178 missing · 46 partial · 24 works · 11 unknown** (602 rows).
+
+### RANKED, from this audit only
+
+1. ⭐⭐⭐ **WIDEN THE WPT CHECKOUT — it is the cheapest unmeasured mass in the project.** Two
+   directories cost 14 MB and 828 subtests of visibility. ⚠ `scripts/wpt-sweep.sh`'s AREAS list is
+   **observer-owned**, so this agent widened the CHECKOUT (additive; it changes no existing area's
+   number) and cannot add the areas to the sweep. **For the observer: add `css/css-writing-modes` and
+   `css/css-multicol` to AREAS, then keep going down the list above.** Until then these numbers live
+   here and in the constellation, not in `WPT-AREAS.tsv` — a row the sweep would delete on its next
+   run is worse than no row.
+2. ⭐⭐ **A CAPABILITY THAT CANNOT BE MEASURED DRIFTS TO "MISSING" IN EVERY DOCUMENT THAT MENTIONS
+   IT.** writing-mode is built, unmeasured, and called unimplemented by the board and unrecorded by
+   the map. *Refutable by:* any other subsystem whose gate exists and whose WPT area is outside the
+   checkout — worth one grep next audit.
+3. ⭐ **Chrome 145's new surface is small and now on the map**: the `Origin` object, the LNA permission
+   split, DBSC. None implemented; all three are now NAMED absences rather than unknowns.
+4. Carried and unchanged: I5's `ORACLE_CRAWLED: 0` (audit #82 and seven constitution checks),
+   AccessKit, `Content-Encoding: zstd`, and the verify wall — whose own audit (#55) is blind to 86% of
+   it.

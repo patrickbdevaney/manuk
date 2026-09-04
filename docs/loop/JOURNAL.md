@@ -101138,3 +101138,87 @@ next candidate instead.
 ```
 
 WIKI: docs/wiki/inline-handler-needs-no-script.md
+
+## Tick 1413 — the metric is a percentage over what happens to be checked out, and it was a fifth of the CSS suite (2026-09-04)
+
+TICK SHAPE: instrument-fidelity
+CLASS: the loop's primary metric — what it is able to ask about at all
+
+Surface audit #83 was due. Audit #82 asked *"does the map know what the platform shipped?"* and found
+zero rows to add. This one asked a different question — **what does the INSTRUMENT look at?**
+
+### ⭐⭐⭐ THE APERTURE
+
+```text
+  WPT's own css/ tree      93 directories (≈78 of them `css-*` test dirs)   [asked GitHub, not memory]
+  our sparse checkout      14 `css-*` test dirs + CSS2 · cssom · selectors · support
+```
+
+Absent entirely: `css-animations` · `css-transitions` · `css-writing-modes` · `css-multicol` ·
+`css-tables` · `css-cascade` · `css-variables` · `css-nesting` · `css-shapes` · `css-masking` ·
+`filter-effects` · `css-scroll-snap` · `css-contain` · `css-lists` · `css-pseudo` · `css-images` ·
+`mediaqueries` · `cssom-view` · `geometry` · `css-break` · `css-inline` · `css-align` · `css-logical`
+… and forty more. **`WPT TOTAL 495,924` is a number over a checkout containing under a fifth of the
+CSS suite.**
+
+### THE EXPERIMENT — TWO DIRECTORIES ADDED, AND 828 SUBTESTS APPEARED
+
+```text
+  css/css-writing-modes    96/337  = 28.5%   (80 testharness files of 479)
+  css/css-multicol        732/1616 = 45.3%   (94 testharness files of 532)
+                          ────────
+                          828 passing subtests the primary metric had NEVER COUNTED
+  cost: 14 MB of checkout
+```
+
+⭐⭐⭐ **`css-writing-modes` is the one that hurts.** t1347-1349 built the whole subsystem —
+`engine/layout/src/writing_mode.rs`, orthogonal roots, `transpose_in_place` — and it has **never been
+scored**, because the directory that scores it is not in the checkout. That is almost certainly why
+the lever board *still* calls writing-mode *"UNIMPLEMENTED — the biggest single unlock"*, which t1412
+found from the other side one tick ago.
+
+> ⭐⭐⭐ **A CAPABILITY THAT CANNOT BE MEASURED DRIFTS TO "MISSING" IN EVERY DOCUMENT THAT MENTIONS
+> IT.** The board says unimplemented; the map said nothing; the engine has had it for 60 ticks. Three
+> records, one blind spot, and the blind spot is the checkout — not any of the three.
+
+### THE MAP, CORRECTED AND WIDENED
+
+* **`multicol`'s row was a considered REFUSAL with no number.** Its receipt argues — correctly, and
+  Chrome-measured at t1325 — that multicol is gated on BOX FRAGMENTATION rather than on the column
+  algorithm. Status stays `missing`, because the capability *as Chrome implements it* is not built.
+  It now carries **45.3%**: how far the parts that ARE built get. The refusal was right and the row
+  was blind for 1,188 ticks.
+* **Five rows added** — `Origin API`, the Chrome 145 `local-network`/`loopback-network` permission
+  split, Device Bound Session Credentials, and two rows that exist to make the aperture itself visible.
+* Histogram: **343 gated · 178 missing · 46 partial · 24 works · 11 unknown** (602 rows).
+
+### ⚠ THE SCOPE LINE, AND WHERE THESE NUMBERS LIVE
+
+`scripts/wpt-sweep.sh`'s AREAS list is **observer-owned**. This tick widened the CHECKOUT — additive,
+and it changes no existing area's number — and did **not** add rows to `WPT-AREAS.tsv`, because the
+sweep regenerates that file from its own list and would delete them. **A number that disappears on the
+next sweep is worse than no number.** They live in the constellation and in audit #83 until the
+observer adds the areas.
+
+**For the observer:** add `css/css-writing-modes` and `css/css-multicol` to AREAS, then keep going
+down the list. Two directories were 14 MB and 828 subtests.
+
+### THE RECEIPT
+
+```text
+  surface audit #83 recorded, LAST_SURFACE_AUDIT 1403 -> 1413
+  constellation 597 -> 602 rows; the `multicol` row's blind receipt corrected
+  css/css-writing-modes  96/337   HANG/CRASH 0      ← first measurement, ever
+  css/css-multicol      732/1616  HANG/CRASH 0      ← first measurement, ever
+  no engine source changed: the aperture was the defect
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/the-aperture-is-the-metric.md
+
+### THE SELF-AUDIT (due at this tick) — ONE OPEN ITEM, AND IT IS STILL NOT MINE
+
+`verify wall: 2193s EXCEEDS the 300s target` — the only prescribed-but-not-executed item, unchanged in
+kind since t1403 (2491s then). Harness-owned per the loop's scope rule, and wall-audit #55 at t1408
+found the wall-time instrument itself blind to 86% of that number, so the four questions the audit is
+allowed to ask cannot reach it. Recorded, not touched. Every other item green.
