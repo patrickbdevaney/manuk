@@ -101734,3 +101734,74 @@ rows while breaking three banked ones is precisely the trade the ratchet exists 
 
 WIKI: none [forced] — no engine source changed; the product is the arbitration and the refusal, and
 both belong in this entry beside the two ticks they continue.
+
+## Tick 1421 — two Chrome measurements in direct tension, and that is the finding (2026-09-04)
+
+TICK SHAPE: measurement-and-refusal
+CLASS: the same 600-subtest scroll rule — and the reason two attempts have now failed
+
+t1420 left a three-step plan. This tick executed all three, got **all four Chrome cases exact**, and
+**all four banked gates red**. Reverted again. What it bought is the thing neither previous tick had:
+the two fixtures are in **direct tension**, and that is why a rule keeps not existing.
+
+### ⭐⭐⭐ THE TENSION, STATED PRECISELY
+
+```text
+  t1417's fixture   4 children, margin:-5px -7px, in an 80-ish overflow:hidden scroller
+      last child's BORDER box bottom     78
+      last child's MARGIN box bottom     73
+      chrome's scrollHeight              75   → the NEGATIVE margin IS applied
+
+  t1420's fixture   one inner, margin:-100px, 300x300, in an 80x80 overflow:hidden wrapper
+      inner's BORDER box right/bottom   200
+      inner's MARGIN box right/bottom   100
+      chrome's scroll extent            200   → the NEGATIVE margin is NOT applied
+```
+
+**Same property, same overflow mode, opposite answers.** Every rule tried so far — *"apply the signed
+margin"*, *"apply only positive margins"*, *"apply it to the box, clamp the subtree"* — satisfies one
+fixture and breaks the other, which is exactly what the two reverts measured:
+
+```text
+  t1420 attempt   own_* / margin_* split                4 Chrome cases: 2 exact   gates: 3 red
+  t1421 attempt   + containment on DIRECT children      4 Chrome cases: 4 EXACT   gates: 4 red
+```
+
+The second attempt is strictly better on Chrome and strictly worse on the gates. **That is the
+signature of a missing variable, not of a wrong constant** — and it is why a third guess would be the
+most expensive move available.
+
+### WHAT THE NEXT TICK MUST DO — AND IT IS NOT ANOTHER RULE
+
+Design an experiment that separates the two fixtures instead of inferring from them. The candidate
+variables, in the order they can be isolated with one fixture each:
+
+1. **Sibling count.** t1417 has four children whose margins interact; t1420 has one.
+2. **Which margin.** t1417's answer turns on `margin-bottom` (block-end); t1420's inner has negative
+   margins on all four sides and Chrome ignores the effect on BOTH axes.
+3. **Whether the container's own content box already absorbed it.** t1417's `clientHeight` is 75 and
+   Chrome's answer is exactly 75 — the client FLOOR, not a margin subtraction. If that is the whole
+   explanation, the rule is about the floor and not about margins at all, and both fixtures collapse
+   into one.
+
+⭐ **(3) is the strongest and the cheapest to falsify**: one fixture where the client floor and the
+margin-box answer differ decides it in a single Chrome run. **Do that before touching the walk.**
+
+> ⭐⭐⭐ **TWO REVERTS ON ONE RULE IS A MEASUREMENT ABOUT THE RULE, NOT ABOUT THE ATTEMPTS.** Each
+> attempt was Chrome-arbitrated, gated and reverted the moment the banked gates went red; between them
+> they narrowed a five-variable combinatorial file to three candidate variables and named the one
+> experiment that separates them. The ratchet refused two fixes and kept four gates honest — which is
+> the system working, not stalling.
+
+### THE RECEIPT
+
+```text
+  attempt 2: both steps of t1420's plan, all four Chrome cases EXACT, four gates RED, REVERTED
+  after the revert: g_negative_margin_scroll_extent · g_scroll_extent_end_padding_containment ·
+                    g_scroll_overflow_end_margin · g_scroll_overflow_alignment_rect       ALL ok
+  no engine source changed
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: none [forced] — no engine source changed; the product is the tension and the experiment that
+resolves it, and both belong beside the two ticks they continue.

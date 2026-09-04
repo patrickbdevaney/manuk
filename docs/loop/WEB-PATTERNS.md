@@ -10642,3 +10642,21 @@ padding+border are both 216x201).
 read the same term. **Reverted.** ⭐⭐ **A REVERT WITH A FULL MEASUREMENT IS NOT A LOST TICK** — the
 next attempt starts with Chrome's answers, the arithmetic, the term at fault, the second term that
 must move with it, and the three gates that will judge it. (t1420)
+
+## ⚠⚠⚠ TWO CHROME MEASUREMENTS IN DIRECT TENSION — THE SIGNATURE OF A MISSING VARIABLE
+
+```text
+  4 children, margin:-5px -7px      border box bottom 78 · margin box 73 · chrome 75  → margin APPLIED
+  1 inner, margin:-100px, 300x300   border box 200      · margin box 100 · chrome 200 → NOT applied
+```
+
+Same property, same `overflow:hidden`, opposite answers. Two attempts at a rule — *"apply the signed
+margin"*, then *"positive-only for the box, signed for the subtree clamp, plus containment on direct
+children"* — went from 2 of 4 Chrome cases exact with 3 gates red, to **4 of 4 exact with 4 gates
+red**. Strictly better on the oracle and strictly worse on the banked gates.
+
+⭐⭐⭐ **THAT IS THE SIGNATURE OF A MISSING VARIABLE, NOT A WRONG CONSTANT** — and a third guess is
+then the most expensive move available. Stop and design an experiment that SEPARATES the fixtures:
+here, whether Chrome's 75 is a margin subtraction at all or simply the CLIENT FLOOR (`clientHeight` is
+also 75), which one fixture decides. **Two reverts on one rule is a measurement about the rule, not
+about the attempts.** (t1417/t1420/t1421)
