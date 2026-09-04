@@ -11762,3 +11762,86 @@ instances, all now controlled.** **I1, I6, I7 — not bent.**
    verify wall (wall-audit #55 found the audit itself blind to 86% of it), and `Content-Encoding: zstd`.
 
 **Next check due: tick 1419.**
+
+## Check #135 — tick 1419 (2026-09-04)
+
+**HORIZON: H0.** **GATE** (PART II): ~83% WPT across categories, oracle-verified across the four
+corpora, a daily-drivable shell, semantic-API coverage of every rendered construct.
+
+### CHECK #134'S STEER WAS *"THE NEXT WINDOW IS TRACK A"*, AND IT WAS — EVENTUALLY
+
+```text
+  1412  inline handler with no <script>      capability   (found while surveying Track A)
+  1413  the aperture: 14 of ~78 css dirs     MEASURE
+  1414  twelve CSS specs measured, +6,999    MEASURE
+  1415  `diag` had never reported non-zero   MEASURE
+  1416  concentration before count           MEASURE
+  1417  the flat overflow walk               ⭐ TRACK A CAPABILITY
+  1418  end padding goes to what is CONTAINED ⭐ TRACK A CAPABILITY
+```
+
+Two Track A layout rules landed, each Chrome-arbitrated on four to eight rows, each with a gate proven
+red. That is the steer executed. But it took **four measurement ticks first**, and #134 had asserted
+*"the instruments are now honest enough to steer it."*
+
+> ⭐⭐⭐ **THAT ASSERTION WAS WRONG, AND THE LOOP COULD NOT HAVE KNOWN IT BY AUDITING.** t1415 found
+> that `diag`'s headline field had answered 0 for every file in its life. t1416 found that the
+> twelve-area table could not be ranked, because a count cannot tell one combinatorial file from one
+> unimplemented feature. **Both were found by USING the instrument for real work, not by inspecting
+> it** — the surface audit at t1413 had just passed over `diag` without touching it.
+>
+> **INSTRUMENTS ARE VALIDATED BY CONSUMPTION, NOT BY INSPECTION.** An audit reads what an instrument
+> claims; only a tick that spends its own hours on the instrument's answer finds out whether the
+> answer was real. Every instrument defect this session — five of them — was found that way.
+
+### GATE OR SCOREBOARD? — gate, and the aperture work is condition 1 itself
+
+t1413/t1414 did not move a percentage; they moved **what the percentage is over**. 6,999 already-passing
+subtests the primary metric had never counted, from twelve of ~64 unmeasured CSS directories. A
+condition-1 number computed over a fifth of its suite is not a conservative estimate — it is a
+different measurement wearing the same name.
+
+### ⭐⭐ AND THE PAYOFF ARRIVED IN THE SAME WINDOW
+
+With honest instruments, t1416 → t1417 → t1418 ran as a chain: **survey names the file, file names the
+rule, rule gets fixed, and the fix makes the previous tick's gate stronger.** t1417 wrote an arm,
+measured it, moved it out rather than ship red, and named the fix that would let it back in; t1418 did
+that fix and restored the arm. That is the loop working as designed, and it is the first time this
+session that two consecutive ticks composed that tightly.
+
+⚠ **And t1418 is the window's methodological lesson**: its first rule — *"only a DIRECT child gets
+the scroller's end padding"* — fitted six of eight fixtures and was refused by an EXISTING gate in one
+run. **A plausible rule that fits every fixture you happened to write is the most expensive kind of
+wrong.** Run the neighbouring gates before believing a new rule.
+
+### PART VI CORRECTIONS
+
+* **VI.3 needs the aperture rule in prose**: *a metric is a percentage over what it can see, and the
+  checkout is part of the instrument.* t1413 measured it; nothing in VI says it.
+* **VI.2's H0.7 (AccessKit) — unchanged. SEVENTH check.**
+* **I5 — `ORACLE_CRAWLED: 0`. EIGHTH check**, still with no lever the loop owns. This has now been
+  carried longer than most capabilities took to build; it needs an owner decision or removal from the
+  exit gate.
+* **NEW:** the lever board's Track A list is stale in both headline items (t1412) and the WPT AREAS
+  list is missing ~64 CSS directories (t1413) — both observer-owned, both named for action.
+
+### THE INVARIANTS
+
+**I3 — held.** **I4 (Pareto) — held**, with t1412's ~0-corpus-weight fix landed under an explicit price
+and an explicit reason. **I2 — held.** **I8 — improving**: five instrument defects found and fixed with
+gates, against four in the previous window found and merely named. **I1, I6, I7 — not bent.**
+
+### STEER
+
+1. ⭐⭐⭐ **STAY IN TRACK A, AND START AT THE PROBE.** `css/cssom-view`'s residue is 1,441 failures with
+   **600 + 125 in two negative-margin files** — a third scroll rule, already localised to its fixture:
+   an 80×80 wrapper with asymmetric padding/borders around a `margin:-100px` 300×300 inner, expecting
+   `scrollWidth 216 / scrollHeight 201` where we give 154/130 (visible) and 120/109 (hidden). *The
+   next tick does not need to search; it needs to arbitrate.*
+2. ⭐⭐ **KEEP THE CONCENTRATION CHECK IN FRONT OF EVERY AREA RANKING** (t1416). Ten of the twelve new
+   areas have not had one, and ranking them by count before that is the mistake t1414 warned about in
+   its own journal entry.
+3. ⭐ Carried and overdue an owner decision: I5's `ORACLE_CRAWLED: 0` (eight checks), AccessKit (seven),
+   the WPT AREAS list, the lever board's stale Track A items, the verify wall, `Content-Encoding: zstd`.
+
+**Next check due: tick 1427.**

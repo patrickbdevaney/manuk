@@ -101581,3 +101581,79 @@ from the containment test came back green, because every other row is vertical.
 ```
 
 WIKI: docs/wiki/scroll-extent-is-composed-not-flat.md
+
+## Tick 1419 — instruments are validated by consumption, not by inspection (2026-09-04)
+
+TICK SHAPE: measurement-and-steer
+CLASS: the loop's own method — and the hand-off that lets the next tick start at the probe
+
+Constitution check #135 was due. Written in full at `docs/loop/CONSTITUTION-CHECK.md`; the finding and
+the evidence are here.
+
+### ⭐⭐⭐ CHECK #134 ASSERTED THE INSTRUMENTS WERE HONEST ENOUGH. THEY WERE NOT, AND ONLY USE FOUND IT
+
+#134 steered *"the next window is TRACK A — the measurement ticks bought exactly the honesty needed to
+steer it."* Two Track A layout rules did land (t1417, t1418), but **four more measurement ticks came
+first**, and each was forced by trying to do the Track A work:
+
+```text
+  t1413  the aperture: the checkout holds 14 of ~78 css-* dirs
+  t1414  twelve specs measured, 6,999 passing subtests never counted
+  t1415  `diag`'s headline field had answered 0 for EVERY file in its life
+  t1416  a count cannot tell one combinatorial file from one unimplemented feature
+```
+
+⚠ **The surface audit at t1413 passed straight over `diag` without touching it.** The defect was found
+one tick later, by pointing `diag` at a real question and disbelieving its answer.
+
+> ⭐⭐⭐ **INSTRUMENTS ARE VALIDATED BY CONSUMPTION, NOT BY INSPECTION.** An audit reads what an
+> instrument *claims*; only a tick that spends its own hours on the instrument's answer finds out
+> whether the answer was real. Every one of this session's five instrument defects was found that
+> way, and none by an audit.
+
+### ⭐⭐ AND THE PAYOFF ARRIVED IN THE SAME WINDOW
+
+t1416 → t1417 → t1418 ran as a chain: **the survey named the file, the file named the rule, the rule
+got fixed, and the fix made the previous tick's gate stronger.** t1417 wrote an arm, measured it,
+moved it out rather than ship red, and named the fix that would let it back in. t1418 did that fix and
+restored it. First time this session two ticks composed that tightly.
+
+⚠ t1418's own lesson, worth carrying: its first rule fitted six of eight fixtures and an EXISTING gate
+refused it in one run. **A plausible rule that fits every fixture you happened to write is the most
+expensive kind of wrong.**
+
+### THE HAND-OFF — THE NEXT TICK DOES NOT NEED TO SEARCH
+
+`css/cssom-view` after the two fixes: **1,441 failures, and the concentration check says where**:
+
+```text
+  600  scrollWidthHeight-negative-margin-002.html        ← A THIRD scroll rule, already localised
+  125  scrollWidthHeight-overflow-visible-margin-collapsing.html
+   96  the three scroll-behavior files (smooth scrolling)
+   40  scrollintoview · 32 cssom-geometryutils-element-types · 24 element-scroll-promises
+```
+
+The fixture and the numbers, so the next tick starts at the arbitration:
+
+```text
+  .wrapper  80x80, padding 1px 4px 8px 16px, border-width 1px 50px 40px 4px
+  .inner    300x300, margin: -100px
+      overflow:visible   chrome  scrollWidth 216 / scrollHeight 201    ours 154 / 130
+      overflow:hidden    chrome  216 / 201                             ours 120 / 109
+```
+
+We are now UNDER, not over — a different shape from the two rules already fixed, and it involves
+negative margins pulling content past the START edge with asymmetric borders. **Arbitrate it on
+simplified fixtures before touching the walk a third time.**
+
+### THE RECEIPT
+
+```text
+  constitution check #135 recorded; LAST_CONSTITUTION_CHECK 1411 -> 1419
+  css/cssom-view re-surveyed with --show-failures after t1417+t1418: 1,441 failures, concentrated
+  no engine source changed
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: none [forced] — this tick changed no engine source; its product is check #135 and a localised
+hand-off, both of which live in `docs/loop/`.
