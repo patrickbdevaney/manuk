@@ -151,7 +151,12 @@ pub fn clear_convergence_state() {
 /// **Set with the measured distribution in hand, not by taste** — see the constant's value and the
 /// gate `G_DRAIN_BUDGET`. `MANUK_MAX_DRAIN_MS` overrides; `0` disables the clock bound entirely,
 /// which is what lets the gate show that this bound and not the count is what changes the outcome.
-pub(crate) fn max_drain_ms() -> u128 {
+/// The drain's own time budget, in ms. `pub` since t1408 so `crate::drain_budget_ms` — which both
+/// build configurations can reach — can forward to it: `Page`'s forced reflow needs the same number,
+/// because the drain only reads its clock on a TASK BOUNDARY and a single task that forces a thousand
+/// reflows never reaches one. Sharing the constant rather than inventing a second one keeps there
+/// being ONE statement of how long a page is worth.
+pub fn max_drain_ms() -> u128 {
     std::env::var("MANUK_MAX_DRAIN_MS")
         .ok()
         .and_then(|v| v.parse().ok())

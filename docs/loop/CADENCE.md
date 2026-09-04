@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1086** | ticks 1–1407 |
-| median tick cycle | **32m** | 1085 intervals |
-| median, last 10 | **77m** | 10 intervals |
+| ticks landed | **1087** | ticks 1–1408 |
+| median tick cycle | **32m** | 1086 intervals |
+| median, last 10 | **72m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.83** | 1312.0h elapsed |
-| median verify wall | **67s** | 1025 ticks |
+| **ticks per hour** | **0.83** | 1313.2h elapsed |
+| median verify wall | **67s** | 1026 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **536**
+* **live gates**: 27 → **537**
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**492 of 1086 ticks** (45%) moved a
+**492 of 1087 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -1183,5 +1183,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1405** | 2026-09-03 17:49 | 50m | capability-mechanism | 8m | +590/−43 | 534 | 81 | 56.0% · | a layout table is not a table, and the metric that said so could not agree with itself (20 |
 | **1406** | 2026-09-03 19:53 | 2.1h | measurement-and-mechanism | 8m | +549/−42 | 535 | 81 | 56.0% · | sixty-one ticks of real work moved the render headline by ONE SITE (2026-09-03) |
 | **1407** | 2026-09-03 21:05 | 73m | capability-mechanism | 8m | +430/−56 | 536 | 81 | 56.0% · | two objects called `HTMLElement.prototype`, and `super.getAttribute()` went through the em |
+| **1408** | 2026-09-03 22:17 | 72m | capability-mechanism | 8m | +515/−44 | 537 | 81 | 56.0% · | one task forced a thousand full re-layouts and neither guard was looking (2026-09-04) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

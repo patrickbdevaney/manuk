@@ -10512,3 +10512,22 @@ stored 56454 (−3, and alarming). The SAME BINARY measured with and without the
 numbers in both areas: the change was neutral and both deltas were the stored rows drifting. Only a
 same-binary control row can say what a change did. (t1407; t1159 "the CONTROL row", t799 "the
 OLD-BINARY CONTROL, same hour")
+
+## ⚠⚠⚠ A PAGE THAT MEASURES AND MUTATES IN A LOOP — AND THE ENGINE NEVER CAME BACK
+
+`measure → mutate → measure` inside one task is the shape every virtualised list, data grid and
+sticky-header library is built out of, and each iteration forces a full re-layout. On `morikoshi.net`
+(one of nine `timeout-150s` sites on the t1406 corpus sweep) **ONE task ran 125 seconds against a
+5-second budget**: `reflow_n=1054`, `reflow_ms=124477` — 99.4% of it — and the site scored ZERO.
+
+⭐⭐⭐ **A BUDGET THAT CAN ONLY BE CHECKED WHERE THE OVERRUN IS NOT IS NOT A BUDGET.** The drain reads
+its clock on a TASK BOUNDARY and this is one task; the script watchdog interrupts JS and this time is
+spent in RUST, inside the native geometry read. Two guards, both correct, both structurally unable to
+see it. When a cost crosses a boundary, ask which side each guard lives on. Bounding the reflow with
+the drain's own number: 191,235 ms → 11,185 ms on that phase, TIMED OUT → COMPLETED, ordinary sites
+bit-identical.
+
+⭐⭐ **AND A FIX WHOSE ONLY WITNESS IS A REAL SITE IS NOT YET GATED.** The first gate passed under FOUR
+mutations including `if false` on the fix, because reflow time is a SUBSET of script time and both
+budgets are the same number — a JS fixture is always killed by the script deadline first. An override
+seam (`MANUK_REFLOW_BUDGET_MS`) made it falsifiable. (t1408 — `g_forced_reflow_budget`)

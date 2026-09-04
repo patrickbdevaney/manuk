@@ -1612,6 +1612,12 @@
   - L103 · How it was proven red
   - L110 · Related
 
+## A budget that can only be checked where the overrun is not
+`docs/wiki/forced-reflow-budget.md`
+
+  - L16 · ⭐⭐⭐ Two guards, both correct, both blind
+  - L42 · ⭐⭐⭐ The gate passed under four mutations first, including deleting the fix
+
 ## FRAMEWORKS — React, Svelte, Next, jQuery: what actually breaks
 `docs/wiki/frameworks.md`
 
@@ -2907,4 +2913,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2638 sections across 66 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2640 sections across 67 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

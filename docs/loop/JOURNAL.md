@@ -100713,3 +100713,103 @@ stale rows are left untouched and named here for the observer rather than edited
 ```
 
 WIKI: docs/wiki/two-htmlelement-prototypes.md
+
+## Tick 1408 — one task forced a thousand full re-layouts and neither guard was looking (2026-09-04)
+
+TICK SHAPE: capability-mechanism
+CLASS: the pages that never finish — `timeout-150s` was the largest engine-owned bucket on the t1406
+sweep, and an unscored site is a ZERO, i.e. the M1 CEILING rather than a point on it
+
+Straight down t1406's own worklist: ~19 of the 95 unscored sites are our engine, and `timeout-150s`
+is 9 of them. `morikoshi.net`, with the phase log the engine already had:
+
+```text
+  load phase "html parse"                             18 ms
+  load phase "external scripts"                    4,233 ms
+  load phase "cascade+layout+blocking scripts"   191,235 ms   ←
+  load phase "deferred scripts"                    4,084 ms
+  ...
+  event loop hit its TIME budget:  count=1  elapsed_ms=125235  budget_ms=5000
+                                   reflow_n=1054  reflow_ms=124477      ← 99.4% of ONE TASK
+  89 x SLOW FORCED REFLOW  ~2,600 ms each   cascade_ms ~550  layout_ms ~2,000   nodes=4375
+```
+
+### ⭐⭐⭐ ONE TASK RAN 125 SECONDS AGAINST A 5-SECOND BUDGET, AND BOTH GUARDS WERE LOOKING ELSEWHERE
+
+* **The drain's time budget** is read on a **task boundary**, and this is ONE task. A single task that
+  forces a thousand reflows never reaches the place the clock is read.
+* **The `ScriptDeadline` watchdog** interrupts **JS** — and this time is spent in **Rust**, inside the
+  native geometry read, where no interrupt point exists.
+
+> ⭐⭐⭐ **A BUDGET THAT CAN ONLY BE CHECKED WHERE THE OVERRUN IS NOT IS NOT A BUDGET.** Two guards,
+> both correct, both armed, both structurally unable to see this. The overrun is not in either's
+> coordinate system — and that is a general shape: when a cost crosses a boundary (JS → Rust, task →
+> within-task), ask which side each guard lives on.
+
+The fix gives the forced reflow the drain's OWN number (`manuk_js::drain_budget_ms`, shared rather than
+re-invented, and exported for both build configurations) as a cumulative per-script-round budget. Past
+it, a geometry read is answered from the layout already published.
+
+```text
+  morikoshi.net                       before        after
+  phase cascade+layout+scripts    191,235 ms   11,185 ms      17x
+  elapsed at the load event       210,019 ms   27,794 ms
+  reflow_ms in the offending task    124,477      5,805
+  the run                          TIMED OUT   COMPLETED
+  news.ycombinator / danluu        unchanged: shape 99.9% / 93.1%, no budget event
+```
+
+⚠ **Not performance bought with capability, and the direction is the argument.** These pages hit the
+harness timeout today and score **zero** — no geometry, no paint, no DOM. The bound turns *"no answer
+after 150 s"* into *"an answer from a layout a few mutations old"*, which is the doctrine the drain
+already states everywhere else. A page inside the budget is bit-identical, and ARM 1 exists to prove it.
+
+### ⭐⭐⭐ THE GATE PASSED UNDER FOUR MUTATIONS FIRST — INCLUDING DELETING THE FIX
+
+The first version drove a tight `measure -> mutate -> measure` loop at the production budget and went
+**green under all four**, including `if false` on the budget check itself. It was measuring the
+`ScriptDeadline`, not the bound: **reflow time is a SUBSET of script time and both budgets are the same
+number**, so a JS loop with frequent interrupt points is always terminated by the deadline first. The
+real site reaches this bound precisely because its task spends its time in Rust — which a fixture
+cannot arrange.
+
+> ⭐⭐ **A FIX WHOSE ONLY WITNESS IS A REAL SITE IS NOT YET GATED.** The bound is now overridable
+> (`MANUK_REFLOW_BUDGET_MS`) so the gate can set it small and the mutations bite. The seam is the
+> deliverable, not a convenience.
+
+And the CONTROL arm had to be strengthened for the same reason: `reads:6` alone still passed with an
+over-eager budget (R4: the override's units wrong, µs for ms), because six answers from ONE stale
+layout are still six answers. Each iteration now changes the padding, and the arm asserts
+**`distinct:6`** — six reads, six DIFFERENT heights. Fourth tick running that a green mutation has
+reported on the arm rather than the code (t1402 hollow arm, t1403 inert guard, t1404 missing arm).
+
+### THE WALL-TIME AUDIT (#55, due at this tick) — THE INSTRUMENT CANNOT SEE 86% OF THE WALL
+
+```text
+  total 1584s · attributed 219s (14%) · UNATTRIBUTED 1365s (86%)
+  T 90s · B 88s · G6 19s · G1 9s · P 6s · F 4s · F4 3s · every named gate 0s
+```
+
+The audit's four admissible questions — redundancy, parallelism, caching, scope — are all asked about
+the 14%. The other 1,365 s is the gate-binary **build and link**, for which the table has no row. The
+underlying fact is known (534 static mozjs gate binaries; disk- and link-bound); what is new is that
+**the periodic instrument built to catch wall bloat is structurally blind to where the wall is** —
+t1257's *"`layout_ms` was never LAYOUT"* one level up. Nothing was trimmed and nothing should be: the
+whole named gate list costs 0s at this resolution. Harness-owned, recorded in
+`docs/loop/WALL-AUDIT.md` #55, not touched.
+
+### THE RECEIPT
+
+```text
+  G_FORCED_REFLOW_BUDGET  ok (3 arms)   RED under all 4 mutations
+    R1 no budget (the pre-fix engine)    R2 the spend never charged
+    R3 the exhausted branch falls through (the early-out itself)
+    R4 the override's units wrong — caught ONLY by the strengthened `distinct:6` control
+  g_forced_reflow · g_drain_budget · g_drain_bounds_the_page · g_load_geometry ·
+  g_lifecycle_preemption · g_inline_script_preemption · g_scroll                       ok
+  cargo check -p manuk-page --no-default-features (the JS-less build)                  ok
+  real sites unchanged: news.ycombinator shape 99.9%, danluu 93.1%, no budget event
+  Bar 0: no hang, no crash, no panic — and one fewer way to hang
+```
+
+WIKI: docs/wiki/forced-reflow-budget.md

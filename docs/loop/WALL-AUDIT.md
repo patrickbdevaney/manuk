@@ -2411,3 +2411,43 @@ thing it is generated FROM.**
 RE-CHECK: falsifiable at audit #55 (tick ~1408) — `grep` the prewarm list in `verify.sh` against the
 `_crate_suite` loop. If the prewarm list is still a strict subset, lever 1 has still not been taken,
 **regardless of what the section percentages say.**
+
+## Audit #55 — tick 1408 (2026-09-04)
+
+```text
+  ══ WALL-TIME AUDIT @ tick 1407 — total 1584s ══
+      90s  T (crate tests)      6%
+      88s  B (build section)    6%
+      19s  G6                   1%
+       9s  G1                   1%
+       6s  P · 4s F · 3s F4     0%
+      0s   every named gate     0%
+  ─────────────────────────────────────────
+     219s  ATTRIBUTED           14%
+    1365s  UNATTRIBUTED         86%
+```
+
+### ⭐⭐⭐ THE INSTRUMENT THAT HUNTS WALL BLOAT CANNOT SEE 86% OF THE WALL
+
+Every question the audit asks — redundancy between gates, parallelism of the slowest SECTION, caching,
+scope — is asked about the 14%. The other 1,365 seconds are the **gate-binary build and link**, and
+the audit has no row for it, so its four admissible optimisations are aimed at a rounding error.
+
+This is not a new fact about the wall; it is a new fact about the audit. `docs/loop/` already records
+the underlying cause (*"the wall is DISK+LINK bound, not compile-bound — 534 static mozjs gate
+binaries; only mold helps"*), and this session watched a cold wall take **2,491 s** where a warm one
+takes ~470 s. What is new is that **the periodic instrument built to catch wall bloat is structurally
+blind to where the wall actually is** — the same shape as t1257's *"`layout_ms` was never LAYOUT"* and
+t1273's *"the metric was reading 60% of the checkout"*, one level up.
+
+⚠ **HARNESS-OWNED, RECORDED AND NOT TOUCHED** (`scripts/` is the observer's). The agent's finding, for
+the observer's decision:
+
+1. The audit's table should carry a **BUILD/LINK row** — otherwise "the wall is lean" is a statement
+   about 14% of it, and every audit since #1 has said it about the wrong quantity.
+2. The self-audit's only open item is the same number from the other side: *"verify wall 2491s exceeds
+   the 300s target"*, with its own suggested levers (mold/lld, cargo-nextest, workspace-hack,
+   risk-based gate scheduling) — all of which act on the UNATTRIBUTED 86%, none of which this audit's
+   four questions would ever have surfaced.
+3. Nothing was trimmed. **No gate is redundant enough to cut and none should be**: the entire named
+   gate list costs 0s at this resolution. The wall is not section-bound.

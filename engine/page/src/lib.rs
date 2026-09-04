@@ -1919,6 +1919,34 @@ struct ReflowCtx {
     /// tree a geometry read answers from and the tree that gets painted cannot disagree.
     sticky_scroll_y: f32,
     has_sticky: bool,
+    /// ⚠⚠⚠ **THE FORCED REFLOW HAD NO BUDGET, AND IT IS WHERE THE TIMEOUT BUCKET LIVES.**
+    ///
+    /// t1408 measured `morikoshi.net`, one of nine `timeout-150s` sites on the t1406 corpus sweep:
+    ///
+    /// ```text
+    ///   load phase "cascade+layout+blocking scripts"   191,235 ms   (everything else: seconds)
+    ///   event loop hit its TIME budget: count=1 elapsed_ms=125235 budget_ms=5000
+    ///                                   reflow_n=1054  reflow_ms=124477      ← 99.4%
+    ///   89 x SLOW FORCED REFLOW  ~2,600 ms each   cascade_ms ~550  layout_ms ~2,000  nodes=4375
+    /// ```
+    ///
+    /// **ONE task ran 125 seconds against a 5-second budget**, because the drain checks its clock
+    /// only on a TASK BOUNDARY — and a single task that forces a thousand reflows never reaches one.
+    /// The `ScriptDeadline` watchdog cannot help either: it interrupts JS, and this time is spent in
+    /// Rust, inside the native geometry read.
+    ///
+    /// So the reflow carries the budget itself: cumulative reflow time for this script round. Past
+    /// it, a geometry read is answered from the layout already published instead of computing a new
+    /// one.
+    ///
+    /// ⚠ **This is not a performance fix bought with capability, and the direction matters.** Today
+    /// these pages hit the harness timeout and score **zero** — no geometry, no paint, no DOM. The
+    /// bound turns "no answer after 150 s" into "an answer from a layout that is a few mutations
+    /// old", which is what the drain's own doctrine already says out loud everywhere else: *painting
+    /// what we have is better than a frozen tab*. A page that finishes inside the budget is
+    /// bit-identical.
+    reflow_us_used: u64,
+    reflow_us_budget: u64,
 }
 
 /// **Every stylesheet the document has, inline and external, in cascade order.**
@@ -1970,6 +1998,29 @@ fn publish_grid_tracks() {
     );
 }
 
+/// The cumulative forced-reflow budget for one script round, in µs.
+///
+/// The drain's OWN number (`manuk_js::drain_budget_ms`) rather than a second invented constant: the
+/// drain's budget is the engine's existing statement of *"how long this page is worth"*, and a script
+/// round that has spent all of it re-laying-out has, by that statement, spent the round.
+///
+/// ⚠⚠⚠ **`MANUK_REFLOW_BUDGET_MS` EXISTS BECAUSE THE BOUND IS OTHERWISE UNFALSIFIABLE FROM JS, AND
+/// A GREEN MUTATION IS WHAT SAID SO.** The first version of `g_forced_reflow_budget` drove a tight
+/// `measure -> mutate -> measure` loop and passed under FOUR mutations — including deleting the
+/// budget check outright. It was measuring the `ScriptDeadline`, not this: reflow time is a SUBSET of
+/// script time and both budgets are the same number, so a JS loop with frequent interrupt points is
+/// always terminated by the deadline first. The real site reaches this bound precisely because its
+/// task spends its time in Rust where no interrupt point exists — which a fixture cannot arrange.
+/// So the budget is overridable, the gate sets it small, and the mutations bite.
+fn reflow_budget_us() -> u64 {
+    if let Ok(v) = std::env::var("MANUK_REFLOW_BUDGET_MS") {
+        if let Ok(ms) = v.trim().parse::<u64>() {
+            return ms.saturating_mul(1000);
+        }
+    }
+    (manuk_js::drain_budget_ms() as u64).saturating_mul(1000)
+}
+
 unsafe fn forced_reflow(ctx: *mut std::ffi::c_void, dom: *mut Dom) {
     let c = unsafe { &mut *(ctx as *mut ReflowCtx) };
     let dom = unsafe { &*dom };
@@ -1980,6 +2031,25 @@ unsafe fn forced_reflow(ctx: *mut std::ffi::c_void, dom: *mut Dom) {
     if dom.mutation_seq() == c.laid_out_at && scroll_seq == c.scrolled_at {
         return;
     }
+    // ── THE BUDGET. See `ReflowCtx::reflow_us_budget`: the drain's clock is only read on a task
+    // boundary, so one task forcing a thousand reflows is unbounded, and the script watchdog cannot
+    // see it because the time is spent in Rust. Reported ONCE per round, at the crossing, because
+    // the interesting event is the crossing and not the thousand reads after it.
+    if c.reflow_us_used >= c.reflow_us_budget {
+        if c.reflow_us_used != u64::MAX {
+            tracing::warn!(
+                used_ms = c.reflow_us_used / 1000,
+                budget_ms = c.reflow_us_budget / 1000,
+                nodes = dom.len(),
+                "FORCED-REFLOW BUDGET EXHAUSTED — this script round has re-laid-out the whole \
+                 document for longer than its whole budget, so further geometry reads are answered \
+                 from the layout already published. The alternative measured 125s in ONE task."
+            );
+            c.reflow_us_used = u64::MAX;
+        }
+        return;
+    }
+    let t_budget = std::time::Instant::now();
     let fonts = unsafe { &*c.fonts };
     // ⚠⚠⚠ **PHASE-SPLIT, because t1236 could see that a forced reflow costs 21 SECONDS on
     // `bhramarah.in` and not what inside it does.** `REFLOW_COST` measures this function from the
@@ -2074,6 +2144,10 @@ unsafe fn forced_reflow(ctx: *mut std::ffi::c_void, dom: *mut Dom) {
 
     c.laid_out_at = dom.mutation_seq();
     c.scrolled_at = scroll_seq;
+    // Charged AFTER the work, and only here, so the accounting is of reflows that actually ran.
+    c.reflow_us_used = c
+        .reflow_us_used
+        .saturating_add(t_budget.elapsed().as_micros() as u64);
     // The box tree is dropped: the read wants rects, and the host's own post-script relayout still
     // produces the tree that gets painted. A forced reflow answers a question; it does not commit.
     let t_pub = std::time::Instant::now();
@@ -2145,6 +2219,12 @@ impl ReflowScope {
             images: images.clone(),
             final_url: final_url as *const String,
             external_css: external_css as *const HashMap<String, String>,
+            reflow_us_used: 0,
+            // The SAME number the event loop gives a whole drain (`max_drain_ms`), spent on ONE
+            // thing. Deliberately not a smaller, invented constant: the drain's budget is the
+            // engine's existing statement of *"how long this page is worth"*, and a forced reflow
+            // that has used all of it has, by that statement, used the round.
+            reflow_us_budget: reflow_budget_us(),
         });
         let p = &mut *ctx as *mut ReflowCtx as *mut std::ffi::c_void;
         let prev_maps = manuk_js::view_maps();

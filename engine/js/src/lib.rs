@@ -1561,6 +1561,24 @@ pub fn load_document(
     Ok((PageContext, 0))
 }
 
+/// **The drain's own time budget, in ms — available in BOTH builds.**
+///
+/// `Page`'s forced reflow needs the same number the event loop uses (t1408: the drain reads its clock
+/// only on a TASK BOUNDARY, so one task forcing a thousand reflows is unbounded). `event_loop` is
+/// compiled out of the JS-less build, so the accessor lives here where both configurations can reach
+/// it, and there is still exactly ONE statement of how long a page is worth.
+#[cfg(feature = "_sm")]
+pub fn drain_budget_ms() -> u128 {
+    crate::event_loop::max_drain_ms()
+}
+
+/// JS-less build: no drain, so the budget is whatever keeps a caller's arithmetic sane. Nothing in
+/// this configuration runs script, so nothing can force a reflow to spend it.
+#[cfg(not(feature = "_sm"))]
+pub fn drain_budget_ms() -> u128 {
+    5_000
+}
+
 /// JS-less build: there is no script to evaluate, so a caller's queued work simply does not exist.
 /// `Ok(())` keeps every call site compiling unchanged — the same contract `dispatch_event`'s stub
 /// below keeps by always permitting the default action.

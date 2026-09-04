@@ -1085,3 +1085,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1405	d82b423c	1788472149	2026-09-03T17:49:09-04:00	2984	capability-mechanism	465	9	590	43	534	81	3896	6960	0	642	0	a layout table is not a table, and the metric that said so could not agree with itself (2026-09-03)
 1406	49b762eb	1788479589	2026-09-03T19:53:09-04:00	7440	measurement-and-mechanism	465	12	549	42	535	81	3896	6960	0	642	0	sixty-one ticks of real work moved the render headline by ONE SITE (2026-09-03)
 1407	0da39389	1788483944	2026-09-03T21:05:44-04:00	4355	capability-mechanism	465	9	430	56	536	81	3896	6960	0	642	0	two objects called `HTMLElement.prototype`, and `super.getAttribute()` went through the empty one (2026-09-03)
+1408	87f3ab3a	1788488259	2026-09-03T22:17:39-04:00	4315	capability-mechanism	465	12	515	44	537	81	3896	6960	0	642	0	one task forced a thousand full re-layouts and neither guard was looking (2026-09-04)
