@@ -812,3 +812,58 @@ pub const TEST_DRIVER_AX_SHIM: &str = r#"<script>
   globalThis.test_driver_internal = ti;
 })();
 </script>"#;
+
+/// **THE `diag` PROBE — one rule, ONE implementation.**
+///
+/// ⚠⚠⚠ `diag` used to count a file's tests itself, with
+/// `(globalThis.tests && globalThis.tests.length) || 0`, and **answered 0 for every file it was ever
+/// pointed at**: testharness.js keeps `tests` inside its own closure and `expose()`s only its public
+/// API, so `globalThis.tests` is `undefined`. Reading `tests.tests` instead — the field the array
+/// actually lives in — still answers 0, which is the part worth remembering: **the field was never
+/// one typo away from working.**
+///
+/// Measured: `css/cssom-view/elementFromPoint.html` scores **8/11** in the real runner while `diag`
+/// reported `testsCreated: 0`. A diagnostic that cannot report a non-zero is worse than none, because
+/// it does not stay silent — it accuses.
+///
+/// ⭐⭐⭐ **THE RUNNER ALREADY HAD THE ANSWER.** `REPORT_JS` (this file) registers an
+/// `add_completion_callback` and emits `<script id="__wpt_results__">` with every test's name and
+/// status — the payload the SCORE is computed from. The probe now reads that, so the diagnostic and
+/// the scorer cannot disagree. `results: null` means the hook was not installed, which is a statement
+/// about the TOOL, not an accusation against the file.
+///
+/// `onloadCalls` was removed rather than fixed: `globalThis.__onCalls` has no writer anywhere in this
+/// repository, so it was a second permanent zero. A field nothing populates is not a measurement.
+pub const DIAG_PROBE_JS: &str = r#"(function(){
+              function rep(o){ try {
+                var s = document.createElement('script'); s.id='__diag__'; s.type='application/json';
+                s.textContent = JSON.stringify(o); document.documentElement.appendChild(s);
+              } catch(e){} }
+              var f = document.querySelector('iframe');
+              var d = null, spans = -1, err = null;
+              try {
+                if (f) { d = f.contentWindow ? f.contentWindow.document : f.contentDocument; }
+                if (d) { spans = d.querySelectorAll('*').length; }
+              } catch (e) { err = String(e); }
+              rep({
+                errors: (globalThis.__errors || []).map(String).slice(0, 6),
+                loadFired: !!globalThis.__loadFired,
+                hasIframe: !!f,
+                frameDoc: d ? 'OK' : String(d),
+                frameNodes: spans,
+                frameErr: err,
+                harness: (typeof add_completion_callback === 'function'),
+                // The SAME payload the runner scores from — `harness.rs` emits it from its
+                // `add_completion_callback`. `null` means the hook was never installed (a bare
+                // `diag` does not install it), which is a statement about THIS TOOL and not about
+                // the file. That distinction is the whole point of the field.
+                results: (function () {
+                  try {
+                    var r = document.getElementById('__wpt_results__');
+                    if (!r) { return null; }
+                    var p = JSON.parse(r.textContent);
+                    return { harness: p.harness, tests: (p.tests || []).length };
+                  } catch (e) { return 'UNREADABLE: ' + e; }
+                })()
+              });
+            })()"#;

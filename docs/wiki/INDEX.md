@@ -14,6 +14,13 @@
   - L67 · How it is plumbed, and why that shape
   - L85 · What is still open in accname
 
+## A diagnostic that cannot report a non-zero is worse than none — it accuses
+`docs/wiki/a-diagnostic-that-accuses.md`
+
+  - L22 · ⚠⚠ The tests.tests spelling still answers 0
+  - L29 · ⭐⭐⭐ The runner already had the answer
+  - L49 · What it cost
+
 ## The agent's click was a second, wrong implementation of the click's activation behaviour
 `docs/wiki/agent-activation-behaviour.md`
 
@@ -2945,4 +2952,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2656 sections across 71 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2659 sections across 72 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

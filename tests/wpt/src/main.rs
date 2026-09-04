@@ -3951,7 +3951,8 @@ fn diag(rel: String, fonts: &manuk_text::FontContext) {
         .unwrap();
     rt.block_on(async move {
         let root = std::path::PathBuf::from(
-            std::env::var("WPT_DIR").unwrap_or_else(|_| format!("{}/wpt", std::env::var("HOME").unwrap())),
+            std::env::var("WPT_DIR")
+                .unwrap_or_else(|_| format!("{}/wpt", std::env::var("HOME").unwrap())),
         );
         let (addr, _h) = manuk_wpt::harness::serve(root).await.expect("serve");
         let url = format!("http://{addr}/{rel}");
@@ -3962,37 +3963,50 @@ fn diag(rel: String, fonts: &manuk_text::FontContext) {
             return;
         };
         let mut page = manuk_page::Page::load_async(&html, &final_url, fonts, 800.0).await;
-        println!("  after load_async : pending iframes = {}", page.pending_iframes().len());
+        println!(
+            "  after load_async : pending iframes = {}",
+            page.pending_iframes().len()
+        );
         page.finish_loading(fonts, 800.0).await;
-        println!("  after finish_load: pending iframes = {}", page.pending_iframes().len());
+        println!(
+            "  after finish_load: pending iframes = {}",
+            page.pending_iframes().len()
+        );
 
         // Ask the page what it experienced. Uncaught errors first — "the async test never completed"
         // is a status, not a finding, and only the exception says why.
-        page.eval_for_test(
-            r#"(function(){
-              function rep(o){ try {
-                var s = document.createElement('script'); s.id='__diag__'; s.type='application/json';
-                s.textContent = JSON.stringify(o); document.documentElement.appendChild(s);
-              } catch(e){} }
-              var f = document.querySelector('iframe');
-              var d = null, spans = -1, err = null;
-              try {
-                if (f) { d = f.contentWindow ? f.contentWindow.document : f.contentDocument; }
-                if (d) { spans = d.querySelectorAll('*').length; }
-              } catch (e) { err = String(e); }
-              rep({
-                errors: (globalThis.__errors || []).map(String).slice(0, 6),
-                loadFired: !!globalThis.__loadFired,
-                hasIframe: !!f,
-                frameDoc: d ? 'OK' : String(d),
-                frameNodes: spans,
-                frameErr: err,
-                testsCreated: (globalThis.tests && globalThis.tests.length) || 0,
-                onloadCalls: globalThis.__onCalls || 0,
-                harness: (typeof add_completion_callback === 'function')
-              });
-            })()"#,
-        );
+        //
+        // ⚠⚠⚠ **`testsCreated` READ `tests.length` AND ANSWERED 0 FOR EVERY FILE IT WAS EVER POINTED
+        // AT.** testharness.js's global is `var tests = new Tests()`, and `Tests` keeps its array at
+        // **`this.tests`** — so `tests.length` is `undefined`, `undefined || 0` is `0`, and the
+        // headline field of the instrument the loop reaches for when a directory reads 0 could not
+        // report anything else. Measured: `css/cssom-view/elementFromPoint.html` scores **8/11** in
+        // the real runner and `diag` said `testsCreated: 0`.
+        //
+        // ⭐⭐⭐ **A DIAGNOSTIC THAT CANNOT REPORT A NON-ZERO IS WORSE THAN NO DIAGNOSTIC**, because
+        // it does not stay silent — it accuses. It sent t1412 hunting `<body onload>` (which found a
+        // real defect, by luck) and it very nearly sent t1414 hunting 1,546 phantom cssom-view bugs.
+        //
+        // `onloadCalls` is deleted rather than fixed: `globalThis.__onCalls` has **no writer anywhere
+        // in this repository**, so it was a second permanent zero. A field nothing populates is not a
+        // measurement; removing it is the honest fix. (`__loadFired` beside it IS written —
+        // `dom_bindings.rs` sets it — and stays.)
+        //
+        // ⚠⚠ **AND `testsCreated` COULD NOT BE FIXED IN PLACE, WHICH IS THE DEEPER FINDING.** Reading
+        // `tests.tests` instead of `tests.length` still answers 0, because **`globalThis.tests` is
+        // `undefined`**: testharness.js keeps `tests` inside its own closure and `expose()`s only its
+        // public API (`add_completion_callback` IS global — `harness: true` — while `tests` is not).
+        // The field was never one typo away from working; it was reading a variable that does not
+        // exist in this scope, and no amount of repair to the expression could have found that out.
+        //
+        // ⭐⭐⭐ **THE RUNNER ALREADY HAD THE ANSWER.** `harness.rs` registers an
+        // `add_completion_callback` and emits `<script id="__wpt_results__">` with every test's name
+        // and status — the payload the score is computed from. `diag` invented a second way to count
+        // the same thing and got a worse one: *one rule, two implementations*, in the diagnostic
+        // itself. It now reads that payload. A bare `diag` does not install the hook, so `results:
+        // null` says **this tool did not instrument the page** rather than accusing the page of
+        // creating nothing.
+        page.eval_for_test(manuk_wpt::harness::DIAG_PROBE_JS);
         let dom = page.dom();
         let hits = manuk_css::query_selector_all(dom, dom.root(), "#__diag__");
         match hits.first() {

@@ -101302,3 +101302,74 @@ would delete them. **For the observer: these twelve are measured, HANG/CRASH-fre
 ```
 
 WIKI: docs/wiki/the-aperture-is-the-metric.md
+
+## Tick 1415 — the diagnostic answered 0 for every file it was ever pointed at (2026-09-04)
+
+TICK SHAPE: instrument-fidelity
+CLASS: the tool the loop reaches for when a directory reads 0 — and it had been accusing
+
+t1414 named this as its next tick: *"`diag` reports `testsCreated: 0` with `errors: []` on three
+`cssom-view` files — that is a PROBE, and it is the next tick."* It was.
+
+### ⭐⭐⭐ THE HEADLINE FIELD COULD NOT REPORT A NON-ZERO
+
+```js
+  testsCreated: (globalThis.tests && globalThis.tests.length) || 0
+```
+
+testharness.js keeps `tests` **inside its own closure** and `expose()`s only its public API — which is
+why the neighbouring field `harness: (typeof add_completion_callback === 'function')` reads `true`
+while `globalThis.tests` is `undefined`. `undefined || 0` is `0`, forever, for every file.
+
+Measured against the thing that actually scores:
+
+```text
+  css/cssom-view/elementFromPoint.html    real runner  8/11 = 72.7%      diag  testsCreated: 0
+```
+
+⚠⚠ **AND READING `tests.tests` — the field the array really lives in — STILL ANSWERS 0.** That was
+the first fix attempted, and it was measured before it was believed: `globalThis.tests` is undefined,
+so nothing rooted there can work. **The field was never one typo away from working**, and an
+expression-level repair could never have discovered that.
+
+> ⭐⭐⭐ **A DIAGNOSTIC THAT CANNOT REPORT A NON-ZERO IS WORSE THAN NO DIAGNOSTIC, BECAUSE IT DOES NOT
+> STAY SILENT — IT ACCUSES.** It sent t1412 hunting `<body onload>` (which found a real defect, by
+> luck) and it very nearly sent t1414 hunting 1,546 phantom `cssom-view` bugs. Three ticks of this
+> session were steered, in part, by a field that had never measured anything.
+
+### ⭐⭐⭐ AND THE RUNNER ALREADY HAD THE ANSWER
+
+`harness.rs`'s `REPORT_JS` registers an `add_completion_callback` and emits
+`<script id="__wpt_results__">` carrying every test's name and status — **the payload the SCORE is
+computed from.** `diag` had invented a second way to count the same thing and got a worse one: *one
+rule, two implementations*, in the diagnostic itself, which is the shape this session has now found in
+the agent's click (t1402), the `<details>` toggle (t1403), `HTMLElement.prototype` (t1407) and here.
+
+```text
+  after:  {"errors":[],"loadFired":true,"hasIframe":true,"frameDoc":"OK","frameNodes":4,
+           "harness":true,"results":{"harness":"OK","tests":11}}
+```
+
+The diagnostic and the scorer now cannot disagree, because there is one payload.
+
+⭐ **`results: null` is a statement about the TOOL.** A bare `diag` need not have installed the hook,
+and *"I did not look"* must not be spelled the same way as *"the file created nothing"* — which is
+exactly the false accusation being removed. The gate asserts `null` remains reachable.
+
+⚠ **`onloadCalls` was deleted rather than fixed.** `globalThis.__onCalls` has **no writer anywhere in
+the repository** — a second permanent zero. **A field nothing populates is not a measurement.**
+(`__loadFired` beside it IS written, by `dom_bindings.rs`, and stays.)
+
+### THE RECEIPT
+
+```text
+  G_DIAG_REPORTS_WHAT_THE_SCORER_REPORTS  ok (4 arms)   RED under all 4 mutations
+    G1 the pre-fix self-count restored     G2 the dead `onloadCalls` field restored
+    G3 `results: null` spelled as `0`      G4 a REAL field (`loadFired`) dropped
+  the probe extracted to `manuk_wpt::harness::DIAG_PROBE_JS` so a gate can hold it at all
+  manuk-wpt, whole crate                                                       ALL ok
+  diag on css/cssom-view/elementFromPoint.html now reports tests: 11 (runner: 8/11)
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/a-diagnostic-that-accuses.md
