@@ -85,3 +85,29 @@ fidelity oracle scores placement with. But it is not yet 1,546 defects: `diag` r
 tick, which made every number look stale. Checked rather than assumed — `cargo build` printed
 `Finished` with no `Compiling`, so the mtime was a preserved hardlink and the artifact was current.
 One command, against a table that would have been wrong in a way nobody could later detect.
+
+
+## t1416 — and a count cannot tell you what KIND of work an area is
+
+The twelve-area table above is ranked by failing count. `--show-failures` (already built — the third
+"already built" of that session) says the counts hide three different work items:
+
+```text
+  css/cssom-view          1,480 failing
+      600  scrollWidthHeight-negative-margin-002.html      ← ONE combinatorial matrix
+      125  scrollWidthHeight-overflow-visible-margin-collapsing.html
+       44  scrollWidthHeight-overflow-visible-negative-margins.html
+
+  css/css-cascade           347 failing
+      235  spread across ~20 `@scope` files                ← ONE unimplemented FEATURE
+      112  everything else
+```
+
+> **A failing count cannot tell one combinatorial file from one unimplemented feature from a genuine
+> spread, and they are three different work items.** Check an area's CONCENTRATION before ranking by
+> its count — one `--show-failures` run and one `awk`.
+
+So `cssom-view` at 26.7% is not 1,546 defects: it is ~769 subtests of one rule (how negative margins
+and margin collapsing contribute to the scrollable overflow region — `scrollHeight expected 90 but got
+80`, short by exactly the negative margin) plus a tail. And `css-cascade` at 20.9% is `@scope`: a
+feature to decide on, not a bug to fix.

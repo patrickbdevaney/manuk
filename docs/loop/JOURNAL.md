@@ -101373,3 +101373,71 @@ the repository** — a second permanent zero. **A field nothing populates is not
 ```
 
 WIKI: docs/wiki/a-diagnostic-that-accuses.md
+
+## Tick 1416 — a failing count cannot tell one combinatorial file from an unimplemented feature (2026-09-04)
+
+TICK SHAPE: instrument-fidelity
+CLASS: how the twelve-area table t1414 produced is allowed to be read
+
+t1414 ranked twelve newly-visible CSS areas by failing count and named `cssom-view` (1,546 failing)
+the alarming one, *"but do not take that as 1,546 defects yet."* This tick took its own warning
+seriously — with the diagnostic t1415 had just made honest.
+
+### ⭐ FIRST: `--show-failures` WAS ALREADY BUILT
+
+The runner has carried a per-file, per-subtest failure dump — file header, test name, message — for
+some time. **Third "already built" of this session**, after `writing-mode` and fuzzy reftest scoring
+at t1412. The pattern is now worth stating as a rule of its own: **grep the code before building the
+instrument the task seems to need.** Every one of the three would have cost a tick.
+
+### ⭐⭐⭐ AND WHAT IT SHOWED — TWO AREAS, TWO COMPLETELY DIFFERENT SHAPES BEHIND SIMILAR NUMBERS
+
+```text
+  css/cssom-view          1,480 failing subtests
+      600  scrollWidthHeight-negative-margin-002.html
+      125  scrollWidthHeight-overflow-visible-margin-collapsing.html
+       44  scrollWidthHeight-overflow-visible-negative-margins.html
+      ───  THREE FILES = 769 of 1,480, and the first is a COMBINATORIAL matrix
+           (display × overflow × direction × writing-mode × flex-direction)
+
+  css/css-cascade           347 failing subtests
+      235  spread across ~20 `@scope` files       ← ONE UNIMPLEMENTED FEATURE (CSS Cascade 6)
+      112  everything else
+       43  the largest single file
+```
+
+By message, 52% of `cssom-view`'s failures read as `scrollWidth`/`scrollHeight` — which looks like a
+population and is one combinatorial file plus its two neighbours. `css-cascade` looks concentrated at
+20.9% and is a coherent **feature decision**: `@scope` is either built or refused, and no amount of
+grinding individual assertions is the right shape of work for it.
+
+> ⭐⭐⭐ **A FAILING COUNT CANNOT TELL ONE COMBINATORIAL FILE FROM ONE UNIMPLEMENTED FEATURE FROM A
+> GENUINE SPREAD, AND THEY ARE THREE DIFFERENT WORK ITEMS.** Check an area's CONCENTRATION before
+> ranking by its count. Same family as t1300's *"an AREA TOTAL that can't resolve a tick"* and
+> t1350's *"failing-COUNT order can't tell a CORE area from a SPEC-FRONTIER one"* — and this is the
+> cheap mechanical check those lessons never got: one `--show-failures` run and one `awk`.
+
+### THE CORRECTED READING OF t1414's TABLE
+
+* **`cssom-view` 26.7%** is NOT 1,546 defects. It is ~769 subtests of **one rule** — how negative
+  margins and margin collapsing contribute to the scrollable overflow region — plus a genuine tail.
+  The rule is real and general (`scrollHeight`/`scrollWidth` are how every infinite scroller and
+  overflow check works) and it is now precisely located:
+  `scrollHeight expected 90 but got 80` — we come up SHORT by exactly the negative margin.
+  ⚠ The engine already handles END margins as a *signed* inflation (`content_extent_with_end_margins`
+  says so, with a Chrome table); the negative-margin matrix is where that stops matching. **Next
+  tick, and it is a Track A layout rule, not a scoreboard grind.**
+* **`css-cascade` 20.9%** is `@scope`, 235 of 347. A feature to decide on, not a bug to fix.
+* The other ten rows have not been concentration-checked, and the table should not be ranked until
+  they are. **One `--show-failures` run each.**
+
+### THE RECEIPT
+
+```text
+  css/cssom-view    --show-failures   1,480 failing, 769 in three scrollWidth/Height files
+  css/css-cascade   --show-failures     347 failing, 235 across ~20 `@scope` files
+  no engine source changed: this tick corrects how a number is READ, which is what t1414 asked for
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/the-aperture-is-the-metric.md

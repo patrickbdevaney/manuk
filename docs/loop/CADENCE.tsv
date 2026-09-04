@@ -1093,3 +1093,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1413	e0be3a6b	1788505357	2026-09-04T03:02:37-04:00	708	instrument-fidelity	465	8	277	45	538	81	3896	6960	0	642	0	the metric is a percentage over what happens to be checked out, and it was a fifth of the CSS suite (2026-09-04)
 1414	0df38036	1788506376	2026-09-04T03:19:36-04:00	1019	instrument-fidelity	465	6	158	42	538	81	3896	6960	0	642	0	twelve CSS specs measured for the first time: 6,999 passing subtests the metric had never counted (2026-09-04)
 1415	e606975e	1788509056	2026-09-04T04:04:16-04:00	2680	instrument-fidelity	465	9	348	70	538	81	3896	6960	0	642	0	the diagnostic answered 0 for every file it was ever pointed at (2026-09-04)
+1416	604f72dd	1788509567	2026-09-04T04:12:47-04:00	511	instrument-fidelity	465	7	161	42	538	81	3896	6960	0	642	0	a failing count cannot tell one combinatorial file from an unimplemented feature (2026-09-04)

@@ -2867,6 +2867,7 @@
   - L40 · The map, corrected
   - L48 · Where these numbers live, and why not in WPT-AREAS.tsv
   - L56 · t1414 — twelve specs, and the number
+  - L90 · t1416 — and a count cannot tell you what KIND of work an area is
 
 ## The headline is an integer, and the same binary does not give the same integer twice
 `docs/wiki/the-headlines-error-bar.md`
@@ -2952,4 +2953,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2659 sections across 72 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2660 sections across 72 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

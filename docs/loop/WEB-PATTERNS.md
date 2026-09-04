@@ -10563,3 +10563,26 @@ The measured replacement, `css/css-grid` by subdirectory: alignment 880 failing 
 42.2%. ⚠ `grid-lanes/*` is Grid Level 3 masonry and several dirs read exactly 0.0% — the SPEC-FRONTIER
 signature, not a mechanism to grind. ⚠ Much of `alignment` is REFTESTS scored by the pixel runner, so
 the 880 is not 880 assertions. (t1412)
+
+## ⚠⚠ A FAILING COUNT CANNOT TELL ONE COMBINATORIAL FILE FROM ONE UNIMPLEMENTED FEATURE
+
+Two newly-visible WPT areas, similar-looking pass rates, three completely different work items behind
+them:
+
+```text
+  css/cssom-view    1480 failing   600 in ONE combinatorial file (display × overflow × direction ×
+                                   writing-mode × flex-direction) + 169 in its two neighbours
+  css/css-cascade    347 failing   235 spread across ~20 `@scope` files = ONE unimplemented FEATURE
+```
+
+By message, 52% of cssom-view reads as `scrollWidth`/`scrollHeight` — which looks like a population
+and is one file. css-cascade looks concentrated and is a FEATURE DECISION (`@scope`: build or refuse),
+where grinding individual assertions is the wrong shape of work entirely.
+
+⭐⭐⭐ **CHECK AN AREA'S CONCENTRATION BEFORE RANKING BY ITS COUNT** — one `--show-failures` run and one
+`awk`. The cheap mechanical check that t1300 ("an AREA TOTAL that can't resolve a tick") and t1350
+("failing-COUNT order can't tell a CORE area from a SPEC-FRONTIER one") both needed and never got.
+
+⭐ And `--show-failures` was ALREADY BUILT — the third "already built" in one session after
+`writing-mode` and fuzzy reftest scoring (t1412). **Grep the code before building the instrument the
+task seems to need.** (t1416)
