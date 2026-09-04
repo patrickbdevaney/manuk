@@ -102723,3 +102723,84 @@ negative margin, not a scroll rule.
 ```
 
 WIKI: docs/wiki/the-unreachable-scrollable-overflow-region.md (revised — the flex half added)
+
+## Tick 1431 — a collapsed end margin is outside the container, and a control that cannot fail is not a control (2026-09-04)
+
+TICK SHAPE: capability
+CLASS: CSSOM / scrolling area — the margin-collapsing file, and one condition measurement refused
+
+The second-largest concentration in `css/cssom-view` after t1430:
+`scrollWidthHeight-overflow-visible-margin-collapsing`, 140 subtests, **94 failing**. Its title is the
+rule: *"scroll{Width,Height} shouldn't account for collapsed margins, in order not to report
+unnecessary overflow."*
+
+### THE LAYOUT WAS ALREADY RIGHT, AGAIN
+
+Two 20px children at `margin: 20px 10px`, `display:block; overflow:visible` — our child rects and
+`clientHeight` are Chrome-exact and were before this tick:
+
+```text
+                     chrome    before
+  clientHeight         60        60     IDENTICAL — the layout was never wrong
+  scrollHeight         60        80     ← the collapsed-out margin, counted
+```
+
+A block container with no BFC, no block-end padding and no block-end border lets its last in-flow
+child's end margin collapse straight through its own edge. The margin is OUTSIDE the container.
+
+⚠ **The block axis only — margins do not collapse in the inline axis.** A first version bundled
+`margin-right` into the same condition and withheld a margin CSS never collapses; which physical edge
+is block-end depends on the writing mode, so the condition is asked of that edge alone.
+
+### ⭐⭐ THE CONDITION MEASUREMENT REFUSED, AND HOW IT WAS CAUGHT
+
+CSS 2.1 §8.3.1 reads as though a **definite block-size** should stop the collapse, so the first
+version carved it out — and the fixture written to control it used `height: 200px`, where the client
+floor is 200 and both answers agree. The gate passed under a mutation that deleted the condition.
+
+> ⭐⭐⭐ **A CONTROL THAT CANNOT FAIL IS NOT A CONTROL.** Re-measured at `height: 50px` — a height the
+> content EXCEEDS — Chrome answers **60**, the last child's border box, where the carve-out answers
+> 80. The condition was invented, and only a fixture whose floor does not hide the answer could say
+> so. It was found by running the mutation and noticing the gate stayed GREEN.
+
+This is the session's fixture lesson a fourth time: `width:0` (t1424), a symmetric `scale()` (t1426),
+a zero border (t1429), and now **a client floor above the number under test**.
+
+### ⚠⚠ THE HALF THAT IS BETTER AND WAS REFUSED, WITH ITS NUMBERS
+
+Judging containment on the child's MARGIN box instead of its border box takes the same matrix from
+**90 failing configurations to 45** — a 20px box with `margin: 20px` inside a 20px-tall flex item ends
+its border box exactly at the item's edge and its margin box 20px past it, so on the border-box test
+it counts as contained and contributes its own trailing margin on top.
+
+**It turns THREE banked gates red** — `g_scroll_overflow_end_margin`,
+`g_scroll_overflow_alignment_rect`, `g_scroll_extent_end_padding_containment` — because a margin that
+collapses THROUGH an auto-height wrapper leaves that wrapper's own `end_margin` at zero, so the
+wrapper's margin box does not cover the child that carries it. ⭐ **The missing input is the wrapper's
+COLLAPSED margin, not a different comparison**: layout knows the used margin and does not publish it.
+The ratchet refuses the trade; the next attempt publishes the post-collapse margin from layout.
+
+### THE NUMBER
+
+```text
+  css/cssom-view    1025/2109 → 1029/2109   +4
+  css/css-overflow   587/963  →  587/963    flat
+  css/css-position  1174/1482 → 1174/1482   flat
+  the 140-cell matrix: 94 failing → 90   (and 45 with the refused half)
+  17 scroll / writing-mode / geometry gates green · HANG/CRASH 0
+```
+
+⭐ **+4 is a small number and the tick is not small**: it is the first correct statement of the
+collapse rule, one invented condition removed by measurement, and the next mechanism localised to a
+single missing value with the three gates that will judge it.
+
+### THE RECEIPT
+
+```text
+  g_collapsed_end_margin_is_outside  NEW, 5 rows (1 defect + 4 controls), red under N1
+  the definite-size carve-out proposed, controlled at a floor that hid it, re-measured, REMOVED
+  the margin-box containment implemented, measured at 45/140, REFUSED by three gates, named
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/a-collapsed-margin-is-outside-the-container.md

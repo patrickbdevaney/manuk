@@ -14,6 +14,13 @@
   - L67 · How it is plumbed, and why that shape
   - L85 · What is still open in accname
 
+## A collapsed end margin is outside the container
+`docs/wiki/a-collapsed-margin-is-outside-the-container.md`
+
+  - L6 · The rule
+  - L27 · ⭐ The condition that measurement refused
+  - L38 · The half that is measured, better, and REFUSED
+
 ## A diagnostic that cannot report a non-zero is worse than none — it accuses
 `docs/wiki/a-diagnostic-that-accuses.md`
 
@@ -3003,4 +3010,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2686 sections across 78 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2689 sections across 79 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

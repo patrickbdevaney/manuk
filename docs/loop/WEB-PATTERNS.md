@@ -10806,3 +10806,19 @@ axis and the other the cross axis. A fix that flips the same axis for both passe
 feeds built on `column-reverse` (the standard "newest at the bottom, scrolled to the end" idiom),
 RTL toolbars on `row-reverse`, and every `scrollTop + clientHeight >= scrollHeight` bottom test run
 inside one. (t1430)
+
+## ⭐⭐ A COLLAPSED END MARGIN IS OUTSIDE THE CONTAINER — and a control that cannot fail is not a control
+
+A block container with no BFC, no block-end padding and no block-end border lets its last child's end
+margin collapse through its own edge, so the margin is OUTSIDE it and counting it reports overflow
+that is not there (Chrome 60, ours 80, on the commonest block on the web).
+
+⭐ **And the condition measurement REFUSED:** CSS 2.1 §8.3.1 reads as though a definite block-size
+should stop the collapse. The first fixture for that carve-out used `height: 200px` — where the client
+floor is 200 and both answers agree. Re-measured at `height: 50px`, a height the content EXCEEDS,
+Chrome answers 60 where the carve-out answers 80. **A CONTROL THAT CANNOT FAIL IS NOT A CONTROL**, and
+a fixture whose floor hides the answer will certify an invented condition.
+
+**Unlocks:** `scrollHeight == clientHeight` on ordinary `overflow: visible` blocks whose last child
+carries a bottom margin — which is nearly every article, card and section on the web, and every
+`sh > ch` "does this overflow?" check run against one. (t1431)

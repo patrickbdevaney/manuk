@@ -2691,6 +2691,47 @@ fn scroll_geometry_of(
             st.overflow,
             Overflow::Auto | Overflow::Scroll | Overflow::Hidden
         );
+        // ── ⚠⚠⚠ **A MARGIN THAT COLLAPSED OUT OF THE CONTAINER IS NOT INSIDE IT**, and the WPT
+        //    file that names this says so in its own title: *"scroll{Width,Height} shouldn't account
+        //    for collapsed margins, in order not to report unnecessary overflow"*
+        //    (`cssom-view/scrollWidthHeight-overflow-visible-margin-collapsing`, 140 subtests).
+        //
+        //    A block container with AUTO height, no end padding, no end border and no BFC lets its
+        //    last in-flow child's end margin collapse straight through its own edge — so the margin
+        //    is OUTSIDE the container, and adding it reports overflow that is not there. Measured,
+        //    four 20px children at `margin: 20px 10px` in a `display:block; overflow:visible` box —
+        //    our child rects and `clientHeight` are already Chrome-exact:
+        //
+        //    ```text
+        //                        chrome    before
+        //      clientHeight        140       140     IDENTICAL — the layout was never wrong
+        //      scrollHeight        140       160     ← the collapsed-out margin, counted
+        //    ```
+        //
+        //    ⭐ All three conditions are load-bearing and each is a row of t1119's battery: a BFC
+        //    (`overflow` other than `visible`) keeps the margin in, END PADDING keeps it in, and a
+        //    DEFINITE height keeps it in. t1119's `c2` — a `100x100; padding:10px 5px;
+        //    overflow:scroll` scroller — has all three and must still read 270.
+        //    ⚠⚠ **AND IT IS THE BLOCK AXIS ONLY — MARGINS DO NOT COLLAPSE IN THE INLINE AXIS.**
+        //    Bundling the inline end (`margin-right` in a horizontal mode) into the same condition
+        //    withheld a margin that CSS never collapses, and fixed 4 rows of the matrix where
+        //    splitting the axes fixes far more. Which physical edge is block-end depends on the
+        //    writing mode, so the condition is asked of that edge and only that edge.
+        let vertical_wm = st.writing_mode.is_vertical();
+        let (block_pad, block_border) = if vertical_wm {
+            (st.padding.right.resolve(b.rect.width, 0.0), bw.right)
+        } else {
+            (st.padding.bottom.resolve(b.rect.width, 0.0), bw.bottom)
+        };
+        //    ⚠⚠ **AND NOT ON A DEFINITE BLOCK-SIZE, WHICH IS WHAT CSS 2.1 §8.3.1 WOULD SUGGEST AND
+        //    CHROME DOES NOT DO.** A `height: 50px` container holding two 20px children at
+        //    `margin: 20px` reads `scrollHeight` **60** in Chrome — the last child's BORDER box —
+        //    where a definite-size carve-out gives 80. The first fixture written for this used
+        //    `height: 200px`, where the client floor is 200 and both answers agree; measuring the
+        //    same row at a height the content EXCEEDS is what showed the condition was invented.
+        //    *A control that cannot fail is not a control.*
+        let collapses_block_end_out =
+            st.overflow == Overflow::Visible && block_pad == 0.0 && block_border == 0.0;
         let end_padding = if scrollable {
             (
                 st.padding.right.resolve(b.rect.width, 0.0),
@@ -2703,10 +2744,15 @@ fn scroll_geometry_of(
             end_margin: styles
                 .get(&n)
                 .map(|s| {
-                    (
+                    let (mr, mb) = (
                         s.margin.right.resolve(b.rect.width, 0.0),
                         s.margin.bottom.resolve(b.rect.width, 0.0),
-                    )
+                    );
+                    match (collapses_block_end_out, vertical_wm) {
+                        (true, true) => (0.0, mb),
+                        (true, false) => (mr, 0.0),
+                        _ => (mr, mb),
+                    }
                 })
                 .unwrap_or((0.0, 0.0)),
             end_padding,

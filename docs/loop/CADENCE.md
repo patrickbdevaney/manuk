@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1109** | ticks 1–1430 |
-| median tick cycle | **32m** | 1108 intervals |
+| ticks landed | **1110** | ticks 1–1431 |
+| median tick cycle | **32m** | 1109 intervals |
 | median, last 10 | **54m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.83** | 1333.7h elapsed |
-| median verify wall | **67s** | 1048 ticks |
+| **ticks per hour** | **0.83** | 1334.5h elapsed |
+| median verify wall | **67s** | 1049 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **545**
+* **live gates**: 27 → **546**
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**498 of 1109 ticks** (45%) moved a
+**499 of 1110 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **498** capability ticks, median cycle **32m**
+* **499** capability ticks, median cycle **32m**
 * median diff per tick: **+294 / −35** lines across 8 files
 
 ## Every tick
@@ -1206,5 +1206,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1428** | 2026-09-04 16:19 | 34m | capability | 8m | +500/−64 | 544 | 81 | 56.0% · | the widening t1425 refused, landed: −12 becomes +38 (2026-09-04) |
 | **1429** | 2026-09-04 17:47 | 88m | capability | 8m | +327/−54 | 544 | 81 | 56.0% · | a sentinel that is also a legal value, and a sign a zero border could not see (2026-09-04) |
 | **1430** | 2026-09-04 18:45 | 58m | capability | 8m | +310/−47 | 545 | 81 | 56.0% · | a flex container moves its own scroll origin, twice, on opposite axes (2026-09-04) |
+| **1431** | 2026-09-04 19:32 | 47m | capability | 8m | +346/−44 | 546 | 81 | 56.0% · | a collapsed end margin is outside the container, and a control that cannot fail is not a c |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

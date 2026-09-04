@@ -1124,6 +1124,17 @@ impl LayoutBox {
                         // A child is CONTAINED when this box is, and the child's own border box does
                         // not spill past this box's MARGIN box. `contained` therefore turns off at
                         // the first ancestor a descendant overflows and stays off below it.
+                        //
+                        // ⚠⚠ **AND IT IS THE CHILD'S BORDER BOX, MEASURED AND KEPT.** Judging it on
+                        // the child's MARGIN box instead takes
+                        // `cssom-view/scrollWidthHeight-overflow-visible-margin-collapsing` from 90
+                        // failing configurations to **45** — and turns THREE banked gates red
+                        // (`g_scroll_overflow_end_margin`, `g_scroll_overflow_alignment_rect`,
+                        // `g_scroll_extent_end_padding_containment`), because a margin that collapses
+                        // THROUGH an auto-height wrapper leaves that wrapper's own `end_margin` at
+                        // zero, so the wrapper's margin box does not cover the child that carries it.
+                        // The ratchet refuses the trade; the missing input is the wrapper's COLLAPSED
+                        // margin, not a different comparison. Measured, named, not taken.
                         let kc = contained
                             && k.rect.y + k.rect.height <= bottom + 0.01
                             && k.rect.x + k.rect.width <= right + 0.01;
