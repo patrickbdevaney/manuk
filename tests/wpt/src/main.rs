@@ -177,12 +177,30 @@ fn run() {
     // The companion to `fidelity --rows-out`: a chunked sweep writes rows, this reads them all and
     // prints one certificate. No engine, no network, no fonts — it is arithmetic over a file.
     if args.first().map(String::as_str) == Some("certificate") {
-        let Some(p) = flag(&args[1..], "--rows") else {
+        // ⭐ `--rows` is REPEATABLE, and that is the whole of t1410. Given the same corpus run more
+        // than once through the same binary, the certificate prints the headline's RUN-TO-RUN BAND
+        // beside it — because it prints an integer and a reader treats an integer as exact. Three
+        // identical 40-site runs gave `shape>=0.75` of 12 / 12 / 13, which scales to about ±5 on the
+        // 200-site corpus, and t1406 reported sixty-one ticks as "+1 site".
+        let files: Vec<String> = args[1..]
+            .windows(2)
+            .filter(|w| w[0] == "--rows")
+            .map(|w| w[1].clone())
+            .collect();
+        let Some(p) = files.first().cloned() else {
             eprintln!(
-                "usage: manuk-wpt certificate --rows FILE   (written by `fidelity --rows-out`)"
+                "usage: manuk-wpt certificate --rows FILE [--rows FILE …]   (written by \
+                 `fidelity --rows-out`; repeat --rows to get the run-to-run band)"
             );
             std::process::exit(2);
         };
+        if files.len() > 1 {
+            let runs: Vec<Vec<manuk_wpt::fidelity::Fidelity>> = files
+                .iter()
+                .filter_map(|f| manuk_wpt::fidelity::rows_from_tsv(std::path::Path::new(f)).ok())
+                .collect();
+            manuk_wpt::fidelity::band_report(&manuk_wpt::fidelity::certificate_band(&runs));
+        }
         match manuk_wpt::fidelity::rows_from_tsv(std::path::Path::new(&p)) {
             Ok(rows) => {
                 eprintln!(

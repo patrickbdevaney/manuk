@@ -2844,6 +2844,14 @@
   - L4057 · An author line-height is the line box, and a taller face must NOT grow it
   - L4063 · The Latin control arm is free, by construction
 
+## The headline is an integer, and the same binary does not give the same integer twice
+`docs/wiki/the-headlines-error-bar.md`
+
+  - L6 · Found because render-failed would not sit still
+  - L19 · The measurement: same 40 sites, same binary, three times
+  - L41 · The band belongs in the tool
+  - L53 · The session's fourth instrument found wrong about its own numbers
+
 ## A guard that fires on a clock cannot name a cause — and will name whoever the author had in mind
 `docs/wiki/timeout-names-whose-clock.md`
 
@@ -2920,4 +2928,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2643 sections across 68 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2647 sections across 69 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

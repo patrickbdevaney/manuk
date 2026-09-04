@@ -2693,6 +2693,97 @@ pub fn timeout_reason(side: u8, secs: u64) -> Unmeasurable {
     }
 }
 
+/// **THE HEADLINE'S RUN-TO-RUN BAND — because the same binary does not give the same number.**
+///
+/// t1410 ran an identical 40-site slice through the same binary three times:
+///
+/// ```text
+///   run1  scored 26   shape>=0.75  12
+///   run2  scored 24   shape>=0.75  12
+///   run3  scored 24   shape>=0.75  13
+///   2 sites flip scored/unscored · 1 site flips the PASS · shape spread up to 0.630 on one site
+/// ```
+///
+/// ⭐⭐⭐ **±1 PASS PER 40 SITES SCALES TO ROUGHLY ±5 ON THE 200-SITE CORPUS — AND t1406 REPORTED THE
+/// LAST SIXTY-ONE TICKS AS "+1 SITE".** That reading is inside the noise, and nothing in the
+/// certificate said so, because the certificate prints one integer and a reader treats an integer as
+/// exact. The band is the correction, and it belongs in the tool rather than in a journal entry that
+/// the next reader will not have.
+///
+/// ⚠ Both scored/unscored flips in that experiment were `oracle-timeout` rows — the REFERENCE
+/// browser's variance, which t1409 taught the watchdog to name. Without that attribution they would
+/// read as the engine getting worse between two runs of the same binary.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CertBand {
+    pub runs: usize,
+    /// `(min, max)` sites with any shape score.
+    pub scored: (usize, usize),
+    /// `(min, max)` sites at or above the shape floor — the headline.
+    pub passes: (usize, usize),
+}
+
+impl CertBand {
+    /// The headline's half-width, in sites. One run has no band and answers `0`, which makes
+    /// [`Self::delta_is_noise`] permissive by construction — an unrepeated sweep cannot refute
+    /// anything, and pretending otherwise would be a worse lie than the missing band.
+    pub fn width(&self) -> usize {
+        self.passes.1.saturating_sub(self.passes.0)
+    }
+
+    /// **Is a claimed movement smaller than the instrument's own scatter?**
+    ///
+    /// The rule this exists to enforce: *a delta no larger than the band is not a movement.* It is
+    /// deliberately `<=` rather than `<` — a delta exactly equal to the observed scatter has been
+    /// produced by doing nothing at all, three times, on this very corpus.
+    pub fn delta_is_noise(&self, delta: i64) -> bool {
+        self.runs > 1 && delta.unsigned_abs() as usize <= self.width()
+    }
+}
+
+/// Compute the band over N runs of the SAME corpus with the SAME binary. Fewer than two runs is not
+/// an error — it is a band of zero width, and [`CertBand::delta_is_noise`] then refuses nothing.
+pub fn certificate_band(runs: &[Vec<Fidelity>]) -> CertBand {
+    if runs.is_empty() {
+        return CertBand {
+            runs: 0,
+            scored: (0, 0),
+            passes: (0, 0),
+        };
+    }
+    let certs: Vec<Cert> = runs.iter().map(|r| certificate(r)).collect();
+    let sc: Vec<usize> = certs.iter().map(|c| c.scored).collect();
+    let ps: Vec<usize> = certs.iter().map(|c| c.shape_ok).collect();
+    CertBand {
+        runs: runs.len(),
+        scored: (*sc.iter().min().unwrap(), *sc.iter().max().unwrap()),
+        passes: (*ps.iter().min().unwrap(), *ps.iter().max().unwrap()),
+    }
+}
+
+/// Print the band beside the headline, and say what it forbids.
+pub fn band_report(band: &CertBand) {
+    if band.runs < 2 {
+        return;
+    }
+    eprintln!(
+        "\n  ══ RUN-TO-RUN BAND over {} identical runs ══",
+        band.runs
+    );
+    eprintln!(
+        "     scored        {}..{}\n     shape >= 0.75 {}..{}   (band width {} site(s))",
+        band.scored.0,
+        band.scored.1,
+        band.passes.0,
+        band.passes.1,
+        band.width()
+    );
+    eprintln!(
+        "  ⚠ A DELTA OF {} SITE(S) OR FEWER IS NOT A MOVEMENT — this instrument produced that much\n\
+         \x20    scatter doing nothing at all. Quote the band with the number, every time.",
+        band.width()
+    );
+}
+
 #[cfg(test)]
 mod shape_tests {
     use super::{certificate, shape_misses, shape_stats, Fidelity};

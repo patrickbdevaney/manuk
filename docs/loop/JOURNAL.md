@@ -100899,3 +100899,82 @@ engine, never a reason to stop counting the site.**
 ```
 
 WIKI: docs/wiki/timeout-names-whose-clock.md
+
+## Tick 1410 — the headline is an integer, and the same binary does not give the same integer twice (2026-09-04)
+
+TICK SHAPE: instrument-fidelity
+CLASS: the loop's PRIMARY Phase-0 number — what may and may not be claimed from a sweep
+
+### HOW IT WAS FOUND: `render-failed` WOULD NOT SIT STILL
+
+Working the sweep's own words — *"`render-failed` is the only reason on this list that is our own bug
+rather than a property of the origin"* — `www.otomoto.pl` was probed three times in a row:
+
+```text
+  run1  SHAPE: 57.0%      run2  render-failed      run3  render-failed
+```
+
+Not a page property. Not a fix. **The reason itself is intermittent**, which is the same shape the
+code already records for `css-starved` (*"a site alternates between its real shape and ~0 across runs,
+which reads exactly like a layout regression and is a standing variance source in the headline"*) —
+written down once, never measured.
+
+### ⭐⭐⭐ SO IT WAS MEASURED. THE SAME 40 SITES, THE SAME BINARY, THREE TIMES, NOTHING CHANGED
+
+```text
+  run1   scored 26   shape>=0.75  12          (raw counts)
+  run2   scored 24   shape>=0.75  12
+  run3   scored 24   shape>=0.75  13
+  the certificate's own headline over the three:   scored 17..19 · shape>=0.75 9..11
+                                                   BAND WIDTH 2 SITES
+  2 sites flip scored/unscored · 1 site flips the PASS
+  www.otomoto.pl        0.000 / 0.000 / 0.630     ← spread 0.630
+  www.mobile.bg         0.432 / 0.443 / 0.106
+  www.puentedemando.com 0.718 / 0.420 / 0.725
+  median spread 0.002 — most sites are rock steady, and the TAIL is what moves the count
+```
+
+> ⭐⭐⭐ **A BAND OF TWO SITES ON A FORTY-SITE SLICE — AND t1406 REPORTED SIXTY-ONE TICKS AS "+1
+> SITE".** The 200-site corpus contains five such slices. **My own headline from four ticks ago is
+> inside the instrument's scatter**, and the honest statement is that the render number did not
+> measurably move. The direction of that finding is unchanged — Track A has been dark and nothing
+> moved the render bar — but *"+1 site"* was a number I should not have quoted without repeats.
+
+⚠ **Both scored/unscored flips were `oracle-timeout` rows** — the REFERENCE browser's variance, which
+t1409 taught the watchdog to name exactly one tick earlier. Without that attribution they read as the
+engine getting worse between two runs of the same binary. **The two ticks compose, and neither is
+complete alone.**
+
+### THE FIX — the band goes in the TOOL, not in a journal entry the next reader will not have
+
+`manuk-wpt certificate --rows A --rows B --rows C` now prints the headline's run-to-run band and the
+rule it implies:
+
+```text
+  ══ RUN-TO-RUN BAND over 3 identical runs ══
+     scored        17..19
+     shape >= 0.75 9..11   (band width 2 site(s))
+  ⚠ A DELTA OF 2 SITE(S) OR FEWER IS NOT A MOVEMENT — this instrument produced that much
+     scatter doing nothing at all. Quote the band with the number, every time.
+```
+
+`<=` and not `<`, deliberately: a delta exactly equal to the observed scatter has been produced by
+doing nothing, three times, on this very corpus. And **one run refuses nothing** — an unrepeated sweep
+has no evidence about its own scatter, and a band that silently dismissed small deltas on no evidence
+would be strictly worse than the missing band it replaces. That is arm 3 of the gate, and it is the
+arm that matters most.
+
+### THE RECEIPT
+
+```text
+  G_CERTIFICATE_BAND  ok (5 arms)   RED under all 4 mutations
+    B1 a single run refuses deltas (the band as a licence to dismiss movement)
+    B2 strict `<` (a delta equal to the measured scatter reads as a movement)
+    B3 the band taken over SCORED rather than over the headline
+    B4 the band collapsed to the first run
+  manuk-wpt, whole crate                                                        ALL ok
+  the band printed above is from the three REAL runs, not a fixture
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/the-headlines-error-bar.md
