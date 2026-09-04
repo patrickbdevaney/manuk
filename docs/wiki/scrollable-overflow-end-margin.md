@@ -119,3 +119,15 @@ auto-height wrapper whose inner child carries the margin) is `f1`, and it is Chr
 - **N2** — clamp the inflation to non-negative: only `d7`, at 220 against Chrome's 190.
 - **N3** — inflate by the START margins too: `c5` reads 320 against 270, its second child's
   `margin-top` counted once in the position and once again here.
+
+## ⚠⚠⚠ CORRECTION (t1424) — `d7` IS A CORNER, AND THE WHOLE BATTERY IS BUILT OUT OF IT
+
+Every row above uses a `width:0` child, and **an empty box contributes no border box to Chrome's
+union** — so `d7`'s 190 is the *flow* term winning because the border term was never there. Give the
+same child one pixel of width and Chrome answers **210**. Five candidate rules across t1420–t1423
+were fitted to this one number and three implementations were reverted because of it.
+
+The rows above are all still correct *for the boxes they describe*; they are simply not the general
+case. The general rule, its 72-cell validation and the two rules it retires are in
+[scroll-overflow-the-empty-box-corner](scroll-overflow-the-empty-box-corner.md). The
+nested-propagation residue named above (`120` vs our `220`) closes there too.

@@ -10660,3 +10660,31 @@ then the most expensive move available. Stop and design an experiment that SEPAR
 here, whether Chrome's 75 is a margin subtraction at all or simply the CLIENT FLOOR (`clientHeight` is
 also 75), which one fixture decides. **Two reverts on one rule is a measurement about the rule, not
 about the attempts.** (t1417/t1420/t1421)
+
+## ⭐⭐⭐ THE MISSING VARIABLE WAS IN THE FIXTURES: `width:0` SELECTS A DIFFERENT CODE PATH
+
+The missing variable the block above predicted was not in the CSS under test. It was in how every
+fixture happened to be **written**: the battery that arbitrated this rule (t1119, fourteen rows) uses
+`width:0` children throughout, because a zero-width box is the tidy way to write *"a 200px-tall
+thing"*. **Chrome unions rectangles, and a rect with a zero dimension is a no-op** — so an empty box
+contributes no border box, and the one fixture that refused every border-box floor (`d7`, 190 against
+a border box of 210) was refusing it *for a box the rule is not about*. One pixel of width and Chrome
+answers 210.
+
+```text
+  width:0    height:200  margin-bottom:-30px     chrome 190   ← d7, and it is a CORNER
+  width:1px  same                                chrome 210
+```
+
+⭐⭐⭐ **A FIXTURE THAT ZEROES A DIMENSION TO KEEP ITSELF SIMPLE IS NOT A SIMPLER CASE OF THE GENERAL
+ONE — IT IS A DIFFERENT CASE.** Five rules, three reverts, and four ticks were spent fitting the
+general rule to a degenerate corner.
+
+⭐⭐ **AND A REFUTING FIXTURE IS AN INSTRUMENT.** When one fixture refuses what every other fixture
+accepts, the cheapest next move is to **re-measure that fixture with one variable moved**, not to
+invent a rule that accommodates it. This one cost four ticks; the re-measurement cost four minutes.
+
+**Unlocks:** correct `scrollHeight`/`scrollWidth` on every scroller with a negative end margin — card
+decks, overlapping-avatar rows, negative-margin gutter grids (Bootstrap `.row`, Tailwind `-mx-*`) —
+and correct *non*-propagation through zero-area wrappers. The `scrollTop + clientHeight >=
+scrollHeight` bottom test every infinite scroller runs reads this pair. (t1424)

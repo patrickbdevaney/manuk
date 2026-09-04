@@ -2586,6 +2586,7 @@
   - L50 · The battery
   - L88 · ⚠ Named, measured, not built — the other half of the 117
   - L116 · How it was proven red
+  - L123 · ⚠⚠⚠ CORRECTION (t1424) — d7 IS A CORNER, AND THE WHOLE BATTERY IS BUILT OUT OF IT
 
 ## The scrollable overflow walk was flat, so a grandchild sailed past its parent's negative margin
 `docs/wiki/scroll-extent-is-composed-not-flat.md`
@@ -2593,6 +2594,14 @@
   - L11 · ⭐⭐⭐ The layout was never wrong
   - L29 · ⚠⚠ The rule underneath, found while building the arms
   - L46 · t1418 — and the end padding belongs to the content the container CONTAINS
+
+## The scrollable overflow region has TWO terms, and `width:0` hides one of them
+`docs/wiki/scroll-overflow-the-empty-box-corner.md`
+
+  - L7 · What five ticks were fitting a rule to
+  - L40 · The rule, and it is two terms
+  - L61 · Two rules it retires
+  - L83 · How it goes red
 
 ## `sizes` — the three tokenizer rules that run before the grammar
 `docs/wiki/sizes-tokenizer.md`
@@ -2960,4 +2969,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2663 sections across 73 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2668 sections across 74 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

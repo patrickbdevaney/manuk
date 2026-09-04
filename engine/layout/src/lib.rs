@@ -1007,6 +1007,27 @@ impl LayoutBox {
                 b.rect.x + b.rect.width + c.end_margin.0,
                 b.rect.y + b.rect.height + c.end_margin.1,
             );
+            // ── ⚠⚠⚠ **A NEGATIVE END MARGIN CANNOT PULL THE REGION IN PAST THE BOX'S OWN BORDER
+            //    BOX — AND THE BATTERY THAT SAID IT COULD WAS BUILT ENTIRELY OUT OF `width:0`
+            //    BOXES.** t1119's `d7` (a `height:200px; margin-bottom:-30px` child in a
+            //    `100x100; padding:10px 5px` scroller) reads 190 in Chrome, below the border box's
+            //    210, and five candidate rules across t1420-t1423 were fitted to that one number.
+            //    Re-measured with the child's WIDTH as the only variable, headless Chrome 145:
+            //
+            //    ```text
+            //                                            chrome   before
+            //      width:0    (this is d7)                 190      190   ← a CORNER, not the rule
+            //      width:1px                               210      190
+            //      width:50px                              210      190
+            //      width:50px, container padding:0         200      170
+            //    ```
+            //
+            //    ⭐⭐⭐ An EMPTY box contributes no border box — Blink unions rectangles and a rect
+            //    with a zero dimension is a no-op — while the FLOW it sits in still extends to its
+            //    margin box. `d7`'s 190 is the flow term winning because the border term was never
+            //    there. *A fixture that zeroes a dimension to keep itself simple is not a simpler
+            //    case of the general one; it is a different one.*
+            let non_empty = b.rect.width > 0.0 && b.rect.height > 0.0;
             // ── ⚠⚠⚠ **THE ALIGNMENT RECTANGLE, AND IT IS THE ONE THE END PADDING BELONGS TO.**
             //    A relatively-positioned box contributes BOTH positions to a scroll container's
             //    region: the one it was painted at, and the one it occupies in the FLOW (Blink's
@@ -1029,24 +1050,42 @@ impl LayoutBox {
             //    to one rectangle and not the other — which is what makes this a per-contribution
             //    rule rather than the single addition at the end of the extent that it used to be.
             let (pr, pb) = if contained { c.end_padding } else { (0.0, 0.0) };
-            if c.relative_offset == (0.0, 0.0) {
-                *w = w.max(right + pr - ox);
-                *h = h.max(bottom + pb - oy);
-            } else {
-                // The painted position, RAW…
-                *w = w.max(right - ox);
-                *h = h.max(bottom - oy);
-                // …and the in-flow position, PADDED.
-                *w = w.max(right - c.relative_offset.0 + pr - ox);
-                *h = h.max(bottom - c.relative_offset.1 + pb - oy);
+            // The IN-FLOW ("alignment") rectangle's end edges — the painted rect with any relative
+            // offset taken back out.
+            let (fx, fy) = (
+                b.rect.x + b.rect.width - c.relative_offset.0,
+                b.rect.y + b.rect.height - c.relative_offset.1,
+            );
+            // ── ⭐⭐⭐ **TWO TERMS, AND ONLY THE FIRST ONE IS THE FLOW.** A box that is CONTAINED
+            //    is part of the scroll container's in-flow content, so the region reaches its
+            //    MARGIN box and the container's end padding goes on the outside of that. A box that
+            //    has escaped its ancestors' margin boxes is not in that flow: it contributes its
+            //    BORDER box and nothing else — no margin, no padding. Measured, a `100x100;
+            //    padding:10px 5px` scroller around a `height:0` wrapper holding a 200px box:
+            //
+            //    ```text
+            //                                                    chrome   before
+            //      the inner box is width:0                        120      220   ← contributes NOTHING
+            //      the inner box is width:5px                      210      220   ← its border box, unpadded
+            //    ```
+            if contained {
+                *w = w.max(fx + c.end_margin.0 + pr - ox);
+                *h = h.max(fy + c.end_margin.1 + pb - oy);
+            }
+            if non_empty {
+                *w = w.max(fx - ox);
+                *h = h.max(fy - oy);
+                // …and the PAINTED position, which is where a relatively-offset box actually is.
+                *w = w.max(b.rect.x + b.rect.width - ox);
+                *h = h.max(b.rect.y + b.rect.height - oy);
             }
             match &b.content {
                 BoxContent::Block(kids) => {
-                    // ── ⚠⚠⚠ **A NEGATIVE END MARGIN CLAMPS THE SUBTREE, AND A FLAT WALK CANNOT SEE
-                    //    THAT.** Every descendant used to be measured directly against the scroll
-                    //    container, so a grandchild sailed straight past its parent's negative
-                    //    margin. Chrome-measured, four `margin:-5px -7px` children each wrapping a
-                    //    20px box, in a `padding:10px 20px; overflow:hidden` scroller:
+                    // ── ⚠⚠⚠ **A DESCENDANT IS MEASURED THROUGH ITS ANCESTORS, NOT DIRECTLY
+                    //    AGAINST THE SCROLL CONTAINER** — a flat walk let a grandchild sail
+                    //    straight past its parent's negative margin (t1417). Chrome-measured, four
+                    //    `margin:-5px -7px` children each wrapping a 20px box, in a
+                    //    `padding:10px 20px; overflow:hidden` scroller:
                     //
                     //    ```text
                     //                                   chrome    before
@@ -1061,30 +1100,35 @@ impl LayoutBox {
                     //    shouldn't account for collapsed margins, in order not to report unnecessary
                     //    overflow"* (`cssom-view/scrollWidthHeight-overflow-visible-negative-margins`).
                     //
-                    //    ⭐ Scoped to NEGATIVE margins on purpose. A positive end margin genuinely
-                    //    extends the region — that is t1119's rule and its gates still hold it — so
-                    //    widening this to every margin would trade one wrong answer for another. A
-                    //    negative one pulls the margin box IN, and the subtree cannot report more
-                    //    overflow than the box that contains it claims to occupy.
-                    let clamp = (
-                        (c.end_margin.0 < 0.0).then_some(right),
-                        (c.end_margin.1 < 0.0).then_some(bottom),
-                    );
+                    //    ⚠⚠⚠ **AND THE CLAMP IS SUPERSEDED — CONTAINMENT DOES ITS JOB, AND DOES IT
+                    //    WITHOUT BOUNDING A SUBTREE BY A BOX IT IS NOT INSIDE.** t1418 made the end
+                    //    padding conditional on containment, measured against the parent's MARGIN
+                    //    box, which is the edge this clamp was drawn at: in the fixture above the
+                    //    inner 20px box ends at 70 and its parent's margin box at 65, so containment
+                    //    already withholds the flow term and the answer is 75 with no clamp at all.
+                    //    Where the two differ, Chrome sides with containment — a `width:60px;
+                    //    padding:10px; overflow:hidden` container around a `height:5px;
+                    //    margin-bottom:-5px` wrapper whose 100px child overflows it:
+                    //
+                    //    ```text
+                    //                                             chrome   with the clamp
+                    //      the escaping grandchild                   110         20
+                    //      an AUTO-height wrapper, margin -5px       115        115   CONTROL
+                    //      the same wrapper with margin +5px         125        125   CONTROL
+                    //    ```
+                    //
+                    //    A subtree that has already escaped its parent's box is not bounded by that
+                    //    box's margin, and the clamp said it was. `g_scroll_overflow_empty_box`
+                    //    holds all three rows.
                     for k in kids {
-                        // A child is CONTAINED when this box is, and the child's own margin box does
-                        // not spill past this box's. `contained` therefore turns off at the first
-                        // ancestor a descendant overflows and stays off below it.
+                        // A child is CONTAINED when this box is, and the child's own border box does
+                        // not spill past this box's MARGIN box. `contained` therefore turns off at
+                        // the first ancestor a descendant overflows and stays off below it.
                         let kc = contained
                             && k.rect.y + k.rect.height <= bottom + 0.01
                             && k.rect.x + k.rect.width <= right + 0.01;
                         let (mut kw, mut kh) = (0.0f32, 0.0f32);
                         walk(k, ox, oy, &mut kw, &mut kh, kc, contribution);
-                        if let Some(rx) = clamp.0 {
-                            kw = kw.min(rx + pr - ox);
-                        }
-                        if let Some(by) = clamp.1 {
-                            kh = kh.min(by + pb - oy);
-                        }
                         *w = w.max(kw);
                         *h = h.max(kh);
                     }

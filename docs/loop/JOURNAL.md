@@ -101977,3 +101977,132 @@ statement about the last RECEIPT, not a claim that the wall got structurally fas
 still says the wall-time instrument cannot see 86% of the wall, and nothing has changed that.
 
 WIKI: none [forced] — no engine source changed; the product is the matrix, the rule and its refutation.
+
+## Tick 1424 — the missing variable was `width:0`, and it was in the fixtures the whole time (2026-09-04)
+
+TICK SHAPE: capability
+CLASS: the scroll rule — CLOSED, by re-measuring the fixture that had been doing the refuting
+
+t1421 wrote down that two Chrome measurements in direct tension are *"the signature of a missing
+variable, not a wrong constant."* That was right, and the variable was not in the CSS under test. It
+was in how every fixture happened to be **written**.
+
+### THE ONE MEASUREMENT THIS TICK NEEDED, AND IT TOOK FOUR MINUTES
+
+`d7` — the row that refuted a border-box floor in t1420, t1422 and t1423, and forced three reverts —
+is a `height:200px; margin-bottom:-30px` child in a `100x100; padding:10px 5px; overflow:scroll`
+container. Chrome says **190**, below the border box's 210. Re-measured today with the child's
+**width** as the only variable and nothing else touched:
+
+```text
+                                                     chrome   ours(before)
+  width:0    height:200  margin-bottom:-30px           190        190   ← d7. A CORNER.
+  width:1px  same                                      210        190
+  width:50px same                                      210        190
+  width:50px same, container padding:0                 200        170
+```
+
+⭐⭐⭐ **EVERY ROW OF THE BATTERY THAT ARBITRATED THIS RULE USES `width:0`** — `c1`, `c2`, `d7`, `f1`,
+all fourteen — because a zero-width box is the tidy way to write *"a 200px-tall thing"* in a fixture.
+Chrome unions rectangles and a rect with a zero dimension is a no-op, so an **empty box contributes
+no border box at all**; `d7`'s 190 is the other term winning because the first one was never there.
+The battery selected a code path Chrome treats specially, and five rules were fitted to it.
+
+> ⭐⭐⭐ **A FIXTURE THAT ZEROES A DIMENSION TO KEEP ITSELF SIMPLE IS NOT A SIMPLER CASE OF THE
+> GENERAL ONE — IT IS A DIFFERENT CASE.**
+>
+> ⭐⭐ **AND A REFUTING FIXTURE IS AN INSTRUMENT.** When ONE fixture refuses what every other fixture
+> accepts, re-measure THAT fixture with one variable moved. Four ticks were spent accommodating it;
+> the re-measurement cost four minutes. This is check #135's *"instruments are validated by
+> consumption"* pointed at a FIXTURE rather than at a diagnostic.
+
+### THE RULE, IN ONE EXPRESSION, AGAINST 72 CHROME CELLS
+
+t1423 demanded the matrix be extended by the axis it had held fixed — the DOM shape. Built: `{no
+wrapper, wrapper == content, wrapper SMALLER than content} × margin {−5,0,+5} × padding {0,10} ×
+container height {auto,fixed} × content {inside, past}` = **72 cells, one page, one Chrome run**.
+
+```text
+  IF the box is CONTAINED   →  its MARGIN box, inflated by the container's end padding
+  IF the box is NON-EMPTY   →  its BORDER box, with NO padding
+  scrollHeight = max(clientHeight, the union of all of those)
+```
+
+**72/72.** And every row of all four banked scroll gates, which is what the previous five rules could
+not do. *Contained* is t1418's rule unchanged — the box's border box does not spill past its parent's
+MARGIN box — and it is what makes the first term *the flow*: a box that has escaped its ancestors is
+not part of the container's in-flow content, so it contributes its painted box and nothing else.
+
+### TWO RULES RETIRED, ONE OF THEM BY ITS OWN SUCCESSOR
+
+⭐⭐ **t1417's negative-margin subtree clamp is SUPERSEDED by t1418's containment.** Containment is
+drawn at the same edge and does the clamp's whole job on every fixture that motivated the clamp — and
+where the two differ, Chrome sides with containment:
+
+```text
+  a `width:60px;padding:10px;overflow:hidden` container       chrome   with the clamp
+  > `height:5px;margin-bottom:-5px` wrapper > 100px box         110         20
+  the same wrapper AUTO-height, margin -5px                     115        115   CONTROL
+  the same with margin +5px                                     125        125   CONTROL
+```
+
+A subtree that has already escaped its parent's box is not bounded by that box's margin, and the
+clamp said it was. ⭐ *A tick that removes the previous tick's mechanism because the tick AFTER it
+made that mechanism redundant is the ratchet working, not a revert.*
+
+⭐ **And the nested-propagation residue t1119 named and could not fix closes for free** — it was the
+same term leaking. A `height:0` wrapper holding a 200px box: Chrome 120, ours 220 → **120**.
+
+### THE GATE, PROVEN RED THREE WAYS
+
+`engine/page/tests/g_scroll_overflow_empty_box.rs`, nine Chrome-145-measured rows.
+
+```text
+  N1  drop the border-box term (the pre-tick state)   → z1 190 (want 210), zw 190, zp0 170   RED
+  N2  drop the EMPTINESS test                          → z0 210 (want 190), zp0w0 200        RED
+  N3  restore t1417's subtree clamp                    → esc 20 (want 110)                   RED
+```
+
+Each mutation fails exactly the rows predicted for it and no others, so the gate discriminates the
+two terms from each other rather than asserting one number in three ways.
+
+### THE NUMBER, SAME BINARY BOTH WAYS
+
+```text
+  css/cssom-view      602/2109  →  792/2109      +190     28.5% → 37.6%
+  css/css-overflow    513/963   →  517/963       +4
+  css/css-position    1166/1482 →  1174/1482     +8       (against a stored row; the sweep is 16h old)
+  HANG/CRASH 0 on all three, both directions
+```
+
+⭐ **+190 subtests on the AGENT'S OWN geometry channel.** t1414 measured `cssom-view` at 26.7% and
+named it as the channel the agent reads the page through (`getBoundingClientRect`, `scroll*`,
+`elementFromPoint`); t1416 found its 1,480 failures concentrated in three `scrollWidthHeight-*` files
+of ONE rule. That is the rule, and it is now right.
+
+### THE RECEIPT
+
+```text
+  72/72 Chrome matrix cells fit by one expression
+  g_scroll_overflow_empty_box                     NEW, 9 rows, red under 3 mutations
+  g_scroll_overflow_end_margin        (t1119)     green  — d7 still 190, and now for the right reason
+  g_scroll_overflow_alignment_rect    (t1421)     green
+  g_negative_margin_scroll_extent     (t1417)     green  — WITHOUT the clamp it was written for
+  g_scroll_extent_end_padding_containment (t1418) green
+  + 7 neighbouring scroll gates                   green
+  Bar 0: no hang, no crash, no panic
+```
+
+⚠ **AND THE WALL CAUGHT THE OTHER HALF OF UPDATING A ROW.** The first attempt to land went RED on
+`g_wpt_areas_total_matches_rows`: refreshing two area rows left the TSV's stored `TOTAL` claiming
+495,924 against its own rows' 495,936. ⭐ *A derived figure that nothing recomputes drifts every time
+one row is refreshed and another is not* — which is exactly why that gate exists, and it is the loop's
+PRIMARY metric it is guarding. Recomputed from the rows.
+
+⚠ **A harness note, not a task:** this session opened with TWO `scripts/tick.sh` processes alive —
+one orphaned from a crashed session, 22 minutes into its wall, holding t1423's docs unlanded. Killed
+the duplicate, let the original land. `ps -eo pid,etimes,cmd` at session start is the check that
+catches it, and it has now caught it twice.
+
+WIKI: docs/wiki/scroll-overflow-the-empty-box-corner.md (new) + a CORRECTION appended to
+docs/wiki/scrollable-overflow-end-margin.md
