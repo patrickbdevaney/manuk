@@ -10733,3 +10733,31 @@ INLINE one — so the rule is keyed on the two directions, never on `writing-mod
 **Unlocks:** correct `scrollWidth`/`scrollHeight`, and therefore correct "am I at the end?"
 arithmetic, in every RTL document (Arabic, Hebrew, Persian) and every vertical CJK layout — the
 carousels, infinite scrollers and virtualised lists on them read this pair. (t1427)
+
+## ⭐⭐ EVERY ELEMENT HAS A SCROLLING AREA — and a plain `<div>` was answering with its border box
+
+`scrollWidth`/`scrollHeight` are defined by CSSOM-View for every element, with no scrollability
+precondition. Mapping only `overflow: auto|scroll|hidden` left most of the DOM answering from a
+fallback that hands back the element's own BORDER box — so `scrollHeight - clientHeight`, the *"is
+this overflowing?"* test, read a constant **zero** on an ordinary element.
+
+```text
+  100x50; padding:10px; border:3px      chrome sh / sw     before
+  overflow:visible, a 20px child FITS       70 / 120      76 / 126
+  overflow:visible, a 300x200 child        210 / 310      76 / 126
+  overflow:clip,    the same               210 / 310      76 / 126
+  overflow:hidden,  the same               220 / 320     220 / 320   CONTROL
+```
+
+⭐⭐⭐ **`hidden` sits with `scroll`, not with `clip`.** The §3.1 end-padding inflation belongs to
+SCROLL CONTAINERS, and `overflow: hidden` is one (programmatically scrollable) while `clip` is not.
+
+⭐⭐⭐ **AND A MAP LOOKUP DOES NOT FORCE THE REFLOW A RECT READ DOES.** `SCROLL_GEOM` is a published
+snapshot; `layout_rect` calls `force_reflow_if_stale()` on the way in. A latent staleness while only
+scroll containers were mapped becomes the COMMON path the moment every element is — and forcing it is
+what exposed two real layout defects that had been hidden behind a flattering stale read (t1426,
+t1427). *A staleness that flatters is not a smaller bug than one that breaks.*
+
+**Unlocks:** the overflow test every clamped-text widget, tooltip placer, read-more toggle,
+marquee-vs-static decision and `title`-on-truncation heuristic on the web performs — none of which
+could ever fire before. (t1428)

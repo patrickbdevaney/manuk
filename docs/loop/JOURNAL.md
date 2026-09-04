@@ -102439,3 +102439,108 @@ its EIGHTH — owner decisions, and naming them again is not measurement.
 ```
 
 WIKI: docs/wiki/the-unreachable-scrollable-overflow-region.md
+
+## Tick 1428 — the widening t1425 refused, landed: −12 becomes +38 (2026-09-04)
+
+TICK SHAPE: capability
+CLASS: CSSOM / scrolling area — the change three ticks in the making, and the arc closes
+
+Check #136's steer #1, executed: *"land t1425's widening next — it is unblocked and priced; the gate,
+its fixture and its four mutations are written verbatim in the wiki. Do not re-derive them."* They
+were not re-derived.
+
+### THE CHANGE, IN TWO HALVES
+
+1. **`scroll_geometry_of` maps every element**, not just `overflow: auto|scroll|hidden`. CSSOM-View
+   defines `scrollWidth`/`scrollHeight` as *"the width/height of the element's scrolling area"* with
+   no scrollability precondition; everything else was falling through to a binding fallback that
+   hands back the element's own BORDER box. The lookup is INDEXED (one traversal, one map) because
+   `LayoutBox::find` walks from the root and is quadratic the moment it runs for every element.
+   Non-scrollable boxes get **no end-padding inflation** — that clause is written for scroll
+   containers, and ⭐⭐⭐ **`hidden` sits with `scroll`, not with `clip`** (220 against 210), which is
+   the whole distinction between the two halves of *"not visibly scrollable"*.
+2. **`force_reflow_if_stale()` in the scroll getters.** A map lookup does not force the reflow a rect
+   read does.
+
+A non-replaced inline reports `0/0` for the scroll pair as well as the client pair, so the fallback
+keeps answering for those and answers zero.
+
+### ⭐⭐⭐ THE NUMBER, AND THE REASON IT IS POSITIVE
+
+```text
+                          t1425 (REFUSED)   t1428 (LANDED)
+  css/css-overflow          505  (−12)        555  (+38)
+  css/cssom-view            825  (+33)        795   (+3)
+  css/css-position         1174  (flat)      1174  (flat)
+  css/css-writing-modes      96  (flat)        96  (flat)
+  WPT TOTAL              495,936          → 495,974
+```
+
+The identical change measured **−12** three ticks ago. The 40 rows it broke were passing on **stale
+reads** over two real defects — a transform that rode the writing-mode axis swap (t1426) and an
+unreachable overflow region pinned to the top-left (t1427). *A staleness that flatters is not a
+smaller bug than one that breaks*, and **the ratchet's refusal is the only reason this tick is a +38
+instead of a +33-and-a-hidden-−12.**
+
+⚠ **AND THE `cssom-view` COLUMN IS AN OPEN QUESTION, WRITTEN DOWN RATHER THAN SMOOTHED.** The same
+widening measured +33 there before t1426/t1427 and **+3** after, while `css-overflow` moved 50 the
+other way. Both are non-negative so the ratchet is satisfied — but *a delta that changes sign under
+two unrelated-looking fixes is a question, not a rounding error.* The `--show-failures` concentration
+survey on `css/cssom-view` is the instrument and it is the next tick's first move.
+
+### THE GATE, PROVEN RED FOUR WAYS
+
+`g_scroll_area_of_every_element`, six claims. Each mutation fails exactly its own rows:
+
+```text
+  N1  map only auto|scroll|hidden (pre-tick)   → v_fit, v_over, c_over all 76/126; h_over GREEN
+  N2  give non-scrollable boxes the end padding → v_over 220/320 against 210/310; h_over GREEN
+  N3  answer the border box for an inline       → sp 21/0/12/0
+  N4  drop force_reflow_if_stale                → restyle 70->70
+```
+
+N1 and N2 both leave `h_over` green, which is what separates *"which elements are mapped"* from
+*"what the extent arithmetic is"* — two mechanisms in one tick, and the gate tells them apart.
+
+### THE ARC, IN ONE PLACE
+
+```text
+  t1420-t1423   five rules for the end-margin term, three reverts, one 24-cell matrix
+  t1424         the refuting fixture was `width:0`; arc closed, cssom-view +190
+  t1425         the scrolling area located, implemented THREE ways, all refused, blocker NAMED
+  t1426         a transform is physical in every writing mode (half the transposition was missing)
+  t1427         the unreachable region follows the SCROLL ORIGIN; the unlock probed at +41
+  t1428         the refused change landed at +38, with the two defects underneath it fixed
+```
+
+⭐⭐ **Nine ticks, four of which landed no engine change, and every one of those four named the next
+one's fixture with numbers.**
+
+### THE WALL-TIME AUDIT (#56, due at this tick)
+
+Recorded in `docs/loop/WALL-AUDIT.md`. Total 509s: **P 275s (54%) · T 125s (25%) · B 96s (19%)**, every
+named gate 0s at this resolution. Two findings:
+
+* ⭐ **Audit #55's headline has a caveat now, not a refutation.** #55 said *"the instrument cannot see
+  86% of the wall"*; here the build row reads 19% and IS attributed — because every wall in this
+  window ran WARM and this session prewarms deliberately before each `tick.sh`. A cold wall in the
+  same window took **2,632s**. ⚠ That is a statement about the last RECEIPT, not a structural change.
+* **The one admissible optimisation visible at this resolution is harness-owned and recorded, not
+  touched:** `P` is 54% of the wall and is 113 probes across 32 pages, each against its own headless
+  Chrome. Batching them onto ONE browser asserts the same 113 probes for one process start instead of
+  32 — no gate dropped, no floor widened.
+* **The price this session pays on purpose, so it is not misread as bloat:** every wall here ran under
+  `CARGO_BUILD_JOBS=1`, the loop-side workaround for the `_out` race, costing ~10-25%. *A premium for
+  a verdict that is about the engine rather than about a race is not bloat.*
+
+### THE RECEIPT
+
+```text
+  g_scroll_area_of_every_element  NEW, 6 claims, red under 4 mutations
+  19 scroll / writing-mode / geometry gates green, incl. all 6 banked scroll gates
+  css/css-overflow 517 → 555 (+38) · WPT TOTAL 495,936 → 495,974
+  no area regressed; HANG/CRASH 0 on all four measured areas
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/the-scrolling-area-of-every-element.md (revised — the refusal became the receipt)

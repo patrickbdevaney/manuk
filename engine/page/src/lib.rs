@@ -2552,14 +2552,54 @@ fn scroll_geometry_of(
 ) -> std::collections::HashMap<manuk_dom::NodeId, [f32; 6]> {
     use manuk_css::Overflow;
     let mut m = std::collections::HashMap::new();
+    // ── ⚠⚠⚠ **`scrollWidth`/`scrollHeight` ARE NOT PROPERTIES OF SCROLL CONTAINERS — THEY ARE
+    //    PROPERTIES OF EVERY ELEMENT**, and mapping only `auto|scroll|hidden` left the majority of
+    //    the DOM answering from the binding's fallback, which hands back the BORDER box.
+    //
+    //    CSSOM-View defines both as *"the width/height of the element's scrolling area"* with no
+    //    scrollability precondition, and the WPT file that names it says so in its own comment —
+    //    *"`clip` is not really scrollable, but should match as well"*. Chrome-measured, one
+    //    `100x50; padding:10px; border:3px` box with the overflow value as the ONLY variable:
+    //
+    //    ```text
+    //                                            chrome sh / sw    before
+    //      overflow:visible, a 20px child FITS       70 / 120      76 / 126   ← the BORDER box
+    //      overflow:visible, a 300x200 child        210 / 310      76 / 126   ← the overflow, unseen
+    //      overflow:clip,    the same               210 / 310      76 / 126
+    //      overflow:hidden,  the same               220 / 320     220 / 320   CONTROL
+    //    ```
+    //
+    //    ⭐ A non-scrollable box still HAS a scrollable overflow region; `overflow: visible` only
+    //    means nothing clips it. `scrollHeight - clientHeight` is the *"is this overflowing?"* test
+    //    every clamped-text widget, tooltip placer and read-more toggle runs, and on a plain `<div>`
+    //    it read a constant zero — the answer that says *nothing ever overflows*.
+    //
+    // ⚠ The lookup is INDEXED, not searched. `LayoutBox::find` walks from the root, which was
+    //   affordable while this loop ran for the handful of scroll containers on a page and is
+    //   quadratic the moment it runs for every element. One traversal, one map.
+    fn index_boxes<'a>(
+        b: &'a manuk_layout::LayoutBox,
+        out: &mut std::collections::HashMap<manuk_dom::NodeId, &'a manuk_layout::LayoutBox>,
+    ) {
+        if let Some(n) = b.node {
+            out.entry(n).or_insert(b);
+        }
+        if let manuk_layout::BoxContent::Block(kids) = &b.content {
+            for k in kids {
+                index_boxes(k, out);
+            }
+        }
+    }
+    let mut boxes = std::collections::HashMap::new();
+    index_boxes(root_box, &mut boxes);
     for (node, st) in styles.iter() {
-        if !matches!(
-            st.overflow,
-            Overflow::Auto | Overflow::Scroll | Overflow::Hidden
-        ) {
+        // A non-replaced INLINE box has no padding box, reports 0/0 for both pairs per CSSOM, and is
+        // answered by the binding's own fallback. Mapping it here would replace that zero with a
+        // plausible number, which is the mistake the fallback exists to avoid.
+        if st.display == manuk_css::Display::Inline {
             continue;
         }
-        let Some(b) = root_box.find(*node) else {
+        let Some(b) = boxes.get(node).copied() else {
             continue;
         };
         let bw = &st.border_width;
@@ -2628,10 +2668,37 @@ fn scroll_geometry_of(
         // inflated by this container's own end padding. See `OverflowContribution` for the Chrome
         // table; `relative_offsets()` is what makes the in-flow position recoverable at all.
         let rel = manuk_layout::relative_offsets();
-        let end_padding = (
-            st.padding.right.resolve(b.rect.width, 0.0),
-            st.padding.bottom.resolve(b.rect.width, 0.0),
+        // ── ⚠⚠⚠ **THE END-PADDING INFLATION BELONGS TO SCROLL CONTAINERS, AND ONLY TO THEM.**
+        //    CSS Overflow 3 §3.1's clause that inflates a descendant's contribution by the
+        //    container's end padding is written for the *scrollable* overflow region. A box with
+        //    `overflow: visible` or `clip` HAS such a region (that is what `scrollHeight` reports)
+        //    but is not a scroll container, and Chrome does not inflate it. Measured, one
+        //    `100x50; padding:10px; border:3px` box holding a 300x200 child, overflow the ONLY
+        //    variable:
+        //
+        //    ```text
+        //                       chrome sh / sw
+        //      visible             210 / 310     ← no end padding
+        //      clip                210 / 310     ← no end padding
+        //      hidden              220 / 320
+        //      scroll              220 / 320
+        //      auto                220 / 320
+        //    ```
+        //
+        //    ⭐ `hidden` sits with `scroll`, not with `clip` — which is the whole distinction:
+        //    `overflow: hidden` IS a scroll container (programmatically scrollable), `clip` is not.
+        let scrollable = matches!(
+            st.overflow,
+            Overflow::Auto | Overflow::Scroll | Overflow::Hidden
         );
+        let end_padding = if scrollable {
+            (
+                st.padding.right.resolve(b.rect.width, 0.0),
+                st.padding.bottom.resolve(b.rect.width, 0.0),
+            )
+        } else {
+            (0.0, 0.0)
+        };
         let (cw, ch) = b.scrollable_overflow_extent(&|n| manuk_layout::OverflowContribution {
             end_margin: styles
                 .get(&n)

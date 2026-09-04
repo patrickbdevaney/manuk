@@ -2903,12 +2903,13 @@
 ## The scrolling area of every element — measured, implemented, and refused
 `docs/wiki/the-scrolling-area-of-every-element.md`
 
-  - L7 · The defect
-  - L16 · The Chrome table — one box, overflow the only variable
-  - L36 · The second mechanism, and it is the one that generalises
-  - L50 · Why it was refused — three implementations, two areas, same binary each way
-  - L79 · The gate, written and proven red before the revert
-  - L92 · The order for the next attempt
+  - L12 · The defect
+  - L21 · The Chrome table — one box, overflow the only variable
+  - L41 · The second mechanism, and it is the one that generalises
+  - L55 · Why it was refused — three implementations, two areas, same binary each way
+  - L84 · The gate, written and proven red before the revert
+  - L97 · The order for the next attempt
+  - L106 · What it measured when it finally landed (t1428)
 
 ## The unreachable scrollable overflow region follows the scroll origin
 `docs/wiki/the-unreachable-scrollable-overflow-region.md`
@@ -2993,4 +2994,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2680 sections across 77 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2681 sections across 77 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

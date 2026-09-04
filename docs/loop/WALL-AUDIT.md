@@ -2451,3 +2451,58 @@ the observer's decision:
    four questions would ever have surfaced.
 3. Nothing was trimmed. **No gate is redundant enough to cut and none should be**: the entire named
    gate list costs 0s at this resolution. The wall is not section-bound.
+
+---
+
+## Audit #56 — tick 1428 (2026-09-04)
+
+```text
+  total 509s      P 275s (54%)   T 125s (25%)   B 96s (19%)   G6 16s   G1 7s   F 4s
+                  every named gate: 0s at this resolution
+```
+
+### THE BUILD ROW EXISTS NOW, AND IT CHANGES THE ANSWER AUDIT #55 GAVE
+
+Audit #55's headline was ⭐⭐⭐ *"the instrument that hunts wall bloat cannot see 86% of the wall"* —
+1,365 s of unattributed build/link against a 14% table. **At this tick the table's `B` row reads 96s
+of a 509s wall**, i.e. the build is 19% and IS attributed. Two things changed and both are worth
+separating:
+
+* The walls in this window ran **warm**, and this session prewarmed deliberately
+  (`cargo test --no-run -q -p manuk-page --features stylo,spidermonkey`, `-p manuk-shell`,
+  `-p manuk-agent`) before each `tick.sh`. A cold wall in the same window took **2,632 s**.
+* ⚠ **That is a statement about the last RECEIPT, not a claim that the wall got structurally faster.**
+  #55's finding stands: the 86% appears whenever the tree is cold, and the audit still has no way to
+  attribute it *then*.
+
+### THE ONE ADMISSIBLE OPTIMISATION VISIBLE AT THIS RESOLUTION — AND IT IS HARNESS-OWNED
+
+**`P` is 54% of the wall and it is 113 probes across 32 pages, each against headless Chrome.** The
+rigor-preserving question (#1, redundancy) applied to it: *does each page need its own browser
+process?* Batching the parity probe onto ONE Chrome with 32 sequential navigations asserts exactly the
+same 113 probes for one process start instead of 32 — no gate dropped, no floor widened, no sampling.
+⚠ `scripts/` is the observer's; recorded, not touched.
+
+### THE PRICE THIS SESSION IS PAYING ON PURPOSE, RECORDED SO IT IS NOT MISREAD AS BLOAT
+
+Every wall in this window ran under **`CARGO_BUILD_JOBS=1`**, which serialises `verify.sh`'s ~25 gate
+launches. That is the loop-side workaround for a race in `_out` (t1425: `SHELL_OUT=$(_out shell)` is a
+command substitution, so its `wait` for the parent shell's background job is a no-op and `cat` reads a
+partial file — the affordance gate delivered a verdict 30 s into a run while the job it reads was
+still running, and it cost four consecutive walls).
+
+```text
+  warm, CARGO_BUILD_JOBS=1, prewarmed      509s  ·  605s      ← this window
+  cold, CARGO_BUILD_JOBS=1                2632s
+  the ratchet's banked mark                465s              ← parallel launches, racy
+```
+
+⭐ **A ~50-140 s premium for a verdict that is about the engine rather than about a race is not
+bloat.** It becomes free the moment the observer fixes `_out`; until then it is the honest cost of a
+green wall meaning something.
+
+### FINDING
+
+**Nothing trimmed, and nothing should be.** The gate list still costs 0 s at this resolution — the
+wall is not section-bound. Two items handed to the observer: the parity probe's 32 browser starts, and
+the `_out` race whose workaround is currently costing every wall in this window ~10-25%.

@@ -7292,6 +7292,19 @@ macro_rules! scroll_getter {
     // return fails them. `scrollTop/scrollLeft` are `double` per CSSOM and must stay fractional.
     ($name:ident, $idx:expr, $fallback:expr, $round:expr) => {
         unsafe extern "C" fn $name(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+            // ⚠⚠⚠ **A MAP LOOKUP DOES NOT FORCE THE REFLOW THAT A RECT READ DOES.** `layout_rect`
+            // calls `force_reflow_if_stale()` on the way in; `SCROLL_GEOM` is a published snapshot,
+            // so consulting it directly answers from the layout BEFORE the script's last style
+            // write. While only scroll containers were mapped this was a rare staleness; now that
+            // every element is mapped it is the COMMON path — a loop that writes a style and reads
+            // `scrollHeight` reads the same number every time.
+            //
+            // ⭐ It is also what made two REAL layout defects visible: t1425 measured this change as
+            // −12 on `css/css-overflow` and refused it; the 40 rows it broke were passing on stale
+            // reads over a transform that rode the writing-mode axis swap (t1426) and an unreachable
+            // overflow region pinned to the top-left (t1427). With both fixed the same change is
+            // **+41**. *A staleness that flatters is not a smaller bug than one that breaks.*
+            force_reflow_if_stale();
             let v = this_node(vp)
                 .map(
                     |(_, n)| match SCROLL_GEOM.with(|c| c.borrow().get(&n).copied()) {
@@ -7313,9 +7326,47 @@ macro_rules! scroll_getter {
 /// As [`scroll_getter`], but the fallback also receives the element's border widths as
 /// `(top, right, bottom, left)` — which is what separates the PADDING box (`client*`) from the
 /// BORDER box (`offset*`). Always rounds: `clientWidth`/`clientHeight` are `long` in CSSOM.
+macro_rules! scroll_getter_inline0 {
+    ($name:ident, $idx:expr, $fallback:expr) => {
+        unsafe extern "C" fn $name(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+            force_reflow_if_stale();
+            let v = this_node(vp)
+                .map(
+                    |(_, n)| match SCROLL_GEOM.with(|c| c.borrow().get(&n).copied()) {
+                        Some(g) => g[$idx],
+                        None => {
+                            if with_style(n, |st| st.display == manuk_css::Display::Inline)
+                                .unwrap_or(false)
+                            {
+                                0.0
+                            } else {
+                                ($fallback)(layout_rect(n).unwrap_or([0.0; 4]))
+                            }
+                        }
+                    },
+                )
+                .unwrap_or(0.0);
+            *vp = mozjs::jsval::DoubleValue((v as f64).round());
+            true
+        }
+    };
+}
 macro_rules! scroll_getter_styled {
     ($name:ident, $idx:expr, $fallback:expr) => {
         unsafe extern "C" fn $name(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+            // ⚠⚠⚠ **A MAP LOOKUP DOES NOT FORCE THE REFLOW THAT A RECT READ DOES.** `layout_rect`
+            // calls `force_reflow_if_stale()` on the way in; `SCROLL_GEOM` is a published snapshot,
+            // so consulting it directly answers from the layout BEFORE the script's last style
+            // write. While only scroll containers were mapped this was a rare staleness; now that
+            // every element is mapped it is the COMMON path — a loop that writes a style and reads
+            // `scrollHeight` reads the same number every time.
+            //
+            // ⭐ It is also what made two REAL layout defects visible: t1425 measured this change as
+            // −12 on `css/css-overflow` and refused it; the 40 rows it broke were passing on stale
+            // reads over a transform that rode the writing-mode axis swap (t1426) and an unreachable
+            // overflow region pinned to the top-left (t1427). With both fixed the same change is
+            // **+41**. *A staleness that flatters is not a smaller bug than one that breaks.*
+            force_reflow_if_stale();
             let v = this_node(vp)
                 .map(
                     |(_, n)| match SCROLL_GEOM.with(|c| c.borrow().get(&n).copied()) {
@@ -7354,8 +7405,13 @@ macro_rules! scroll_getter_styled {
 }
 scroll_getter!(el_get_scroll_top, 0, |_r: [f32; 4]| 0.0, false);
 scroll_getter!(el_get_scroll_left, 1, |_r: [f32; 4]| 0.0, false);
-scroll_getter!(el_get_scroll_height, 2, |r: [f32; 4]| r[3], true);
-scroll_getter!(el_get_scroll_width, 3, |r: [f32; 4]| r[2], true);
+// ⚠ **A non-replaced INLINE box reports 0 for the scroll pair too, not just the client pair.** It
+// has no padding box, so it has no scrolling area — Chrome-verified on a bordered `<span>`:
+// `scrollWidth/Height` **0/0** while `offsetWidth/Height` is `8/21`. These use the `_inline0` variant
+// because `scroll_geometry_of` deliberately does not map inline boxes, so the fallback answers for
+// every one of them, and a border-box number here is the "nothing ever overflows" lie in reverse.
+scroll_getter_inline0!(el_get_scroll_height, 2, |r: [f32; 4]| r[3]);
+scroll_getter_inline0!(el_get_scroll_width, 3, |r: [f32; 4]| r[2]);
 scroll_getter_styled!(
     el_get_client_height,
     4,

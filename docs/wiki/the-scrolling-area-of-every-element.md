@@ -1,8 +1,13 @@
 # The scrolling area of every element — measured, implemented, and refused
 
-> t1425. **No engine source changed** — three implementations were measured against two WPT areas and
-> every one of them regressed one. This file is the arbitration, so the next attempt starts from
-> Chrome's numbers instead of re-deriving them.
+> t1425 arbitrated it and REFUSED it; **t1428 landed it**, after t1426 and t1427 fixed the two layout
+> defects the refusal had found. Gate: `every_element_reports_its_scrolling_area_not_its_border_box`
+> (`engine/page/tests/g_scroll_area_of_every_element.rs`), six claims, red under four mutations.
+>
+> ⭐⭐⭐ **The refusal is why the number is positive.** The same change measured **−12** on
+> `css/css-overflow` at t1425 and **+38** at t1428; the 40 rows it broke were passing on stale reads
+> over a transform that rode the writing-mode axis swap and an unreachable overflow region pinned to
+> the top-left. *A staleness that flatters is not a smaller bug than one that breaks.*
 
 ## The defect
 
@@ -97,3 +102,19 @@ its own rows and no others:
 2. **Then land the widening and the forced reflow together**, gated on the table above. They are one
    change: the widening without the reflow costs `cssom-view` 65 subtests, and the reflow without the
    widening buys nothing.
+
+## What it measured when it finally landed (t1428)
+
+```text
+                          t1425 (refused)   t1428 (landed)
+  css/css-overflow          505  (−12)        555  (+38)
+  css/cssom-view            825  (+33)        795   (+3)
+  css/css-position         1174  (flat)      1174  (flat)
+  css/css-writing-modes      96  (flat)        96  (flat)
+```
+
+⚠ **The `cssom-view` column is an open question and is written down rather than smoothed.** The same
+widening measured +33 there before t1426/t1427 and +3 after, while `css-overflow` went the other way
+by 50. Both are non-negative, so the ratchet is satisfied, but *a delta that changes sign under two
+unrelated-looking fixes is a question, not a rounding error* — the `--show-failures` concentration
+survey on `css/cssom-view` is the instrument, and it is the next tick's first move.

@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1106** | ticks 1–1427 |
-| median tick cycle | **32m** | 1105 intervals |
-| median, last 10 | **54m** | 10 intervals |
+| ticks landed | **1107** | ticks 1–1428 |
+| median tick cycle | **32m** | 1106 intervals |
+| median, last 10 | **49m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.83** | 1330.7h elapsed |
-| median verify wall | **67s** | 1045 ticks |
+| **ticks per hour** | **0.83** | 1331.3h elapsed |
+| median verify wall | **67s** | 1046 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **543**
+* **live gates**: 27 → **544**
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**495 of 1106 ticks** (45%) moved a
+**496 of 1107 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **495** capability ticks, median cycle **32m**
+* **496** capability ticks, median cycle **32m**
 * median diff per tick: **+294 / −34** lines across 8 files
 
 ## Every tick
@@ -1203,5 +1203,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1425** | 2026-09-04 13:47 | 2.2h | measurement-and-refusal | 8m | +266/−42 | 541 | 81 | 56.0% · | `scrollWidth`/`scrollHeight` are properties of EVERY element, and the fix is two mechanism |
 | **1426** | 2026-09-04 14:57 | 70m | capability | 8m | +423/−42 | 542 | 81 | 56.0% · | a transform is physical in every writing mode, and half the transposition was missing (202 |
 | **1427** | 2026-09-04 15:46 | 49m | capability | 8m | +543/−54 | 543 | 81 | 56.0% · | the unreachable overflow region follows the scroll origin, and t1425's −12 becomes +41 (20 |
+| **1428** | 2026-09-04 16:19 | 34m | capability | 8m | +500/−64 | 544 | 81 | 56.0% · | the widening t1425 refused, landed: −12 becomes +38 (2026-09-04) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
