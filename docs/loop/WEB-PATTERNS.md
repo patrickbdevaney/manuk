@@ -10620,3 +10620,25 @@ overflows does not. **A plausible rule that fits every fixture you happened to w
 expensive kind of wrong** — and a gate that refuses it is worth more than the fixtures that agree.
 (t1418 — `g_scroll_extent_end_padding_containment`; closes the gap t1417 named and restores the arm
 t1417 had to move out)
+
+## ⚠⚠ ONE LINE, THREE DIFFERENT TRUTHS — AND THE THIRD ONE WAS REVERTED
+
+`right = rect.x + rect.width + end_margin` in the scrollable-overflow walk has now been the subject of
+three ticks, each right about a different half:
+
+```text
+  t1119   a POSITIVE trailing margin EXTENDS the region        keep adding it
+  t1417   a NEGATIVE margin CLAMPS the subtree below it        the clamp
+  t1420   a NEGATIVE margin must NOT shrink the box ITSELF     ← arbitrated, attempted, REVERTED
+```
+
+The border box already excludes margins, so adding a negative one subtracts it twice: an 80x80
+`overflow:hidden` wrapper around a `margin:-100px` 300x300 inner reads `100x100` here against Chrome's
+`200x200`. ⭐ And the arbitration collapsed a five-variable combinatorial file to one question: **the
+BORDER changes nothing, only the PADDING does** (bare and border-only are both 200x200; padding and
+padding+border are both 216x201).
+
+⚠⚠⚠ The fix fixed two rows and turned THREE banked gates red, because t1119's rule and t1417's clamp
+read the same term. **Reverted.** ⭐⭐ **A REVERT WITH A FULL MEASUREMENT IS NOT A LOST TICK** — the
+next attempt starts with Chrome's answers, the arithmetic, the term at fault, the second term that
+must move with it, and the three gates that will judge it. (t1420)

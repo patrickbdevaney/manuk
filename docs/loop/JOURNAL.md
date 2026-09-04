@@ -101657,3 +101657,80 @@ simplified fixtures before touching the walk a third time.**
 
 WIKI: none [forced] — this tick changed no engine source; its product is check #135 and a localised
 hand-off, both of which live in `docs/loop/`.
+
+## Tick 1420 — the third scroll rule, arbitrated in full, attempted, and REVERTED by the ratchet (2026-09-04)
+
+TICK SHAPE: measurement-and-refusal
+CLASS: the 600-subtest rule under `cssom-view`, handed on with its answer measured and its trap named
+
+t1419 handed this tick the fixture and told it to *"arbitrate on simplified fixtures before touching
+the walk a third time."* It did both. The arbitration is the product; the fix is refused.
+
+### ⭐⭐⭐ THE ARBITRATION — FOUR FIXTURES, AND THE BORDER TURNS OUT TO BE IRRELEVANT
+
+An 80×80 `overflow:hidden` wrapper around a `margin:-100px` 300×300 inner — the shape 600 subtests of
+`scrollWidthHeight-negative-margin-002.html` are built on:
+
+```text
+                                        chrome        ours
+  bare wrapper                          200x200      100x100
+  + padding 1px 4px 8px 16px            216x201      120x109
+  + border-width 1px 50px 40px 4px      200x200      100x100    ⭐ IDENTICAL to the bare case
+  + both                                216x201      120x109    ⭐ IDENTICAL to padding-only
+  clientWidth/Height                    matches exactly in all four
+```
+
+**The BORDER changes nothing and only the PADDING does** — which collapses a five-variable
+combinatorial file (display × overflow × direction × writing-mode × flex-direction, with padding and
+border) to one question, and it is not the one the file's name suggests.
+
+### THE DIAGNOSIS — AND IT IS THE THIRD DIFFERENT TRUTH ABOUT ONE LINE
+
+```text
+  t1119   a POSITIVE trailing margin EXTENDS the region            keep adding it
+  t1417   a NEGATIVE margin CLAMPS the subtree below it            the clamp
+  t1420   a NEGATIVE margin must NOT shrink the box ITSELF         ← this
+```
+
+`right = rect.x + rect.width + end_margin` adds a negative end margin to a **border box that already
+excludes margins**, subtracting it twice — which is exactly the missing 100 in every row above.
+
+### ⚠⚠⚠ AND THE FIX WAS BUILT, MEASURED, AND THE RATCHET REFUSED IT
+
+Splitting the term into `own_*` (positive-only margin, what the box contributes) and `margin_*`
+(signed, what limits its subtree) fixed the bare and border cases exactly — `a` and `c` became
+`200x200` — and turned **three gates red**: `g_negative_margin_scroll_extent` (t1417),
+`g_scroll_overflow_end_margin` and `g_scroll_overflow_alignment_rect` (t1119). The padding cases went
+`220x209` against Chrome's `216x201`, because a direct child that overflows its container is still
+being handed the end padding — t1418's containment rule needs to apply to direct children too.
+
+**Reverted.** Three interacting rules in one walk, three gates red, and a partial fix that improves two
+rows while breaking three banked ones is precisely the trade the ratchet exists to refuse.
+
+> ⭐⭐ **A REVERT WITH A FULL MEASUREMENT IS NOT A LOST TICK.** t1419 handed this tick a fixture; this
+> tick hands the next one Chrome's answers, the arithmetic, the exact term at fault, the second term
+> that must move with it, and the three gates that will judge it. The next attempt starts where this
+> one ended rather than where it began.
+
+### WHAT THE NEXT TICK MUST DO, IN ORDER
+
+1. Separate `own_*` (end margin clamped at 0) from `margin_*` (signed) — `own_*` for the box's own
+   contribution, `margin_*` for the subtree clamp only.
+2. Extend t1418's containment test to DIRECT children: a child spilling past the container's own box
+   is not in-flow content and gets no end padding.
+3. **Run all three neighbouring gates before believing it** — that is what caught the depth proxy at
+   t1418 and what caught this at t1420.
+
+### THE RECEIPT
+
+```text
+  Chrome arbitration: 4 simplified fixtures, both axes, client boxes confirmed identical
+  the fix: written, measured, THREE gates red, REVERTED (`git checkout -- engine/layout/src/lib.rs`)
+  after the revert: g_negative_margin_scroll_extent · g_scroll_extent_end_padding_containment ·
+                    g_scroll_overflow_end_margin · g_scroll_overflow_alignment_rect      ALL ok
+  no engine source changed
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: none [forced] — no engine source changed; the product is the arbitration and the refusal, and
+both belong in this entry beside the two ticks they continue.
