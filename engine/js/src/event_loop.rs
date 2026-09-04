@@ -6122,6 +6122,7 @@ const PRELUDE: &str = r#"
       // the members read the reflected content attributes (`required`/`pattern`/`type`/`min`/`max`/
       // `minLength`/`maxLength`, all live via G_REFLECT) plus the current `value`.
       var __HP = globalThis.__protoHTMLElement;
+
       // `<img>.currentSrc` — the READ-ONLY URL of the image resource actually being displayed. Lazy-load,
       // lightbox, gallery and analytics libraries read it constantly to learn WHICH file loaded (and to
       // avoid re-fetching one already shown). It was absent — `'currentSrc' in img` was false — so those
@@ -7438,20 +7439,13 @@ const PRELUDE: &str = r#"
         // this whole API, was FALSE while every element in the page had the members. Mirror the four
         // descriptors onto the constructor's prototype so both reads agree. They are functions of
         // `this`, so calling one through either object behaves identically.
-        // (Residue: the two prototypes being different objects at all is a broader divergence than
-        // this tick — every `'x' in HTMLElement.prototype` detection has the same blind spot.)
-        try {
-          var __ctorProto = globalThis.HTMLElement && globalThis.HTMLElement.prototype;
-          if (__ctorProto && __ctorProto !== __HP) {
-            ['showPopover', 'hidePopover', 'togglePopover', 'popover',
-             'show', 'showModal', 'close', 'returnValue'].forEach(function(k) {
-              var d = Object.getOwnPropertyDescriptor(__HP, k);
-              if (d && !Object.getOwnPropertyDescriptor(__ctorProto, k)) {
-                Object.defineProperty(__ctorProto, k, d);
-              }
-            });
-          }
-        } catch (e) {}
+        // ⭐ **THE EIGHT-NAME MIRROR THAT USED TO LIVE HERE IS GONE, AND ITS OWN RESIDUE NOTE IS
+        // WHY.** t1395 wrote: *"the two prototypes being different objects at all is a broader
+        // divergence than this tick — every `'x' in HTMLElement.prototype` detection has the same
+        // blind spot"*, and then hand-listed eight names, which is the t1351 shape: a plural that
+        // asserts a SAMPLE and reads as a POPULATION. It is now done ONCE, DERIVED, and at the END
+        // of the prelude where `__HP` is finished — search `HTMLELEMENT.PROTOTYPE IS NOT THE
+        // PROTOTYPE`.
       }
 
       // `contenteditable` — the editability QUERY surface (Tier-1 rich-editing subsystem, brick 1).
@@ -8043,6 +8037,61 @@ const PRELUDE: &str = r#"
           });
         } catch (e) {}
       })();
+
+      // ── ⭐⭐⭐ **`HTMLELEMENT.PROTOTYPE` IS NOT THE PROTOTYPE ELEMENTS USE, AND `super.x()` GOES
+      //    THROUGH THE ONE NOBODY FILLED IN.** ──────────────────────────────────────────────────
+      //
+      // Found by the t1406 sweep's throw histogram (`TypeError: super.getAttribute is not a
+      // function`, 5 hits) and reproduced in four lines:
+      //
+      // ```text
+      //                                                        chrome     before
+      //   this.getAttribute('data-x')       inside a CE         'hello'    'hello'
+      //   super.getAttribute('data-x')      ← THE IDIOM         'hello'    THREW: not a function
+      //   super.setAttribute / super.closest                    works      THREW
+      //   typeof HTMLElement.prototype.getAttribute             function   undefined
+      //   a <div>'s chain:  instance -> __HP -> Element.prototype -> Node.prototype -> EventTarget
+      //                     ...and HTMLElement.prototype IS NOT IN IT
+      // ```
+      //
+      // The custom-elements shim gives the `HTMLElement` CONSTRUCTOR a fresh prototype on purpose (an
+      // upgrade grafts members onto the host object, because a reflector's prototype cannot be
+      // swapped). So there are two objects both entitled to the name, and everything this engine has
+      // spent ticks adding — `currentSrc`, `complete`, `naturalWidth`, `checkValidity`, `showModal`,
+      // the popover four — went on `__HP`, while `class X extends HTMLElement` and every
+      // `'feature' in HTMLElement.prototype` detection read the OTHER one.
+      //
+      // `super.<method>()` is the ordinary way a custom element extends a DOM method: every Lit,
+      // Stencil and vanilla component that overrides `getAttribute`/`setAttribute`/`addEventListener`
+      // and calls through to the base does exactly this. It throws inside `connectedCallback`, so the
+      // element never upgrades and its whole subtree stays inert.
+      //
+      // ⭐⭐⭐ **AND THE FIX IS A JOIN, NOT A MIRROR.** The first attempt copied names across, and it
+      // was wrong twice over: a hand-kept list is the t1351 shape (a plural asserting a sample, which
+      // is exactly what t1395's eight names were), and even a DERIVED copy misses the members that are
+      // not `__HP`'s OWN — `getAttribute` lives on `Element.prototype`, two links further up, so
+      // `'getAttribute' in __HP` is true and no copy of `__HP`'s own names ever carries it. The
+      // constructor's prototype was not missing a LIST; it was missing a CHAIN. One
+      // `Object.setPrototypeOf(HTMLElement.prototype, __HP)` gives it every member of `__HP`,
+      // `Element.prototype`, `Node.prototype` and `EventTarget.prototype` at once, forever, including
+      // everything added after this line ever runs.
+      //
+      // Installed HERE, last, because the constructor's prototype must exist and `__HP` must be
+      // finished; a join taken early is harmless but the guard below reads a half-built chain.
+      try {
+        var __hp2 = globalThis.__protoHTMLElement;
+        var __cp = globalThis.HTMLElement && globalThis.HTMLElement.prototype;
+        if (__hp2 && __cp && __cp !== __hp2) {
+          // The cycle guard, and it is not decoration: if `__HP` ever came to chain THROUGH the
+          // constructor's prototype, joining them the other way makes an infinite chain and every
+          // property lookup on any element hangs — a Bar 0 from one line.
+          var __cyc = false, __w = __hp2, __n = 0;
+          while (__w && __n++ < 32) { if (__w === __cp) { __cyc = true; break; } __w = Object.getPrototypeOf(__w); }
+          if (!__cyc) {
+            Object.setPrototypeOf(__cp, __hp2);
+          }
+        }
+      } catch (e) {}
 
       // ── **THE INERT INTERFACE SURFACE, INSTALLED LAST.** ────────────────────────────────────
       // Everything real has had its chance to define itself by now. Whatever is still `undefined`

@@ -2850,6 +2850,13 @@
   - L148 · The arm that was measured and removed rather than shipped
   - L163 · The two gates that were red, and had different owners
 
+## Two objects called `HTMLElement.prototype`, and `super.x()` goes through the empty one
+`docs/wiki/two-htmlelement-prototypes.md`
+
+  - L31 · ⭐⭐⭐ The fix is a JOIN, not a MIRROR — and two derived attempts failed first
+  - L54 · ⭐⭐ The control row: both apparent WPT movements were the STORED number
+  - L66 · Named non-claims, measured
+
 ## CONSTITUTION VI.2's residual layout gap — re-measured, banked, and narrowed to one row
 `docs/wiki/vi2-residual-layout-gap.md`
 
@@ -2900,4 +2907,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2635 sections across 65 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2638 sections across 66 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

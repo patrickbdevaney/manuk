@@ -10485,3 +10485,30 @@ bar as its Phase-0 headline while spending its ticks elsewhere. ~19 of the 95 un
 own engine (timeout x9, render-failed x4, shell-only x3, css-starved x2, crashed x1) and are the
 largest available lever on the certificate. (t1406; the sweep cadence rule says "don't let it grow far
 past ~6 unmeasured" and it had grown to 61)
+
+## ⚠⚠⚠ A CUSTOM ELEMENT CALLING `super.getAttribute(...)` — AND IT THREW
+
+Every Lit, Stencil and vanilla web component that overrides a DOM method and calls through to the base
+does `super.<method>()`. It threw `TypeError: super.getAttribute is not a function`, **inside
+`connectedCallback`, so the element never upgraded and its whole subtree stayed inert.** The chain was
+fine (`getPrototypeOf(MyEl.prototype) === HTMLElement.prototype` was `true`) — the OBJECT was empty:
+the custom-elements shim gives the constructor a fresh prototype, so `globalThis.HTMLElement.prototype`
+is not in the chain elements actually use, and everything the engine had added (`currentSrc`,
+`showModal`, `checkValidity`, the popover four) went on the OTHER one. Found in t1406's throw histogram
+(5 hits) and reproduced in four lines.
+
+⭐⭐⭐ **THE CONSTRUCTOR'S PROTOTYPE WAS NOT MISSING A LIST — IT WAS MISSING A CHAIN.** Two DERIVED-list
+fixes failed first (a per-instance forwarder set, then a mirror of the other prototype's own names —
+`getAttribute` is not its own property, it lives two links further up on `Element.prototype`). One
+`Object.setPrototypeOf` fixed all of it forever, including members added later. *Derived* was not the
+property that mattered. t1395 hit this same wall, hand-mirrored EIGHT names, and wrote the residue note
+itself; that note was right and unactioned for twelve ticks. (t1407 —
+`g_htmlelement_prototype_join`; t1351 "a plural asserts a sample and reads as a population")
+
+## ⚠⚠ A FRESH NUMBER DIFFED AGAINST A STORED ONE ATTRIBUTES SOMEONE ELSE'S WORK TO THIS TICK
+
+`dom` read 8173 fresh against a stored 8170 (+3, and tempting) and `html/dom` read 56451 against a
+stored 56454 (−3, and alarming). The SAME BINARY measured with and without the change gave **identical**
+numbers in both areas: the change was neutral and both deltas were the stored rows drifting. Only a
+same-binary control row can say what a change did. (t1407; t1159 "the CONTROL row", t799 "the
+OLD-BINARY CONTROL, same hour")

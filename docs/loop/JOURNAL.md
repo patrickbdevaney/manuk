@@ -100615,3 +100615,101 @@ and no security consequence follows. Named rather than half-built in silence.
 ```
 
 WIKI: docs/wiki/document-domain.md
+
+## Tick 1407 — two objects called `HTMLElement.prototype`, and `super.getAttribute()` went through the empty one (2026-09-03)
+
+TICK SHAPE: capability-mechanism
+CLASS: every web component — Lit, Stencil, and every vanilla custom element that overrides a DOM
+method and calls through to the base
+
+Taken from t1406's own throw histogram, and taken **with a probe rather than from the signature**
+(t1391's rule): `TypeError: super.getAttribute is not a function`, 5 hits across the sweep. Four lines
+reproduced it.
+
+### ⭐⭐⭐ THE CHAIN WAS RIGHT AND THE OBJECT WAS EMPTY
+
+```text
+                                                       chrome     before
+  this.getAttribute('data-x')        inside a CE       'hello'    'hello'     ← worked
+  super.getAttribute('data-x')       ← THE IDIOM       'hello'    THREW: not a function
+  super.setAttribute / super.closest / super.addEventListener  work  THREW
+  typeof HTMLElement.prototype.getAttribute            function   undefined
+  Object.getPrototypeOf(MyEl.prototype)===HTMLElement.prototype   true  true  ← the chain was FINE
+  a <div>'s chain: instance -> __protoHTMLElement -> Element.prototype -> Node.prototype -> EventTarget
+                   ...and globalThis.HTMLElement.prototype IS NOT IN IT
+```
+
+**There are two objects both entitled to the name.** The custom-elements shim gives the `HTMLElement`
+CONSTRUCTOR a fresh prototype on purpose — an upgrade grafts members onto the host object, because a
+reflector's prototype cannot be swapped — so everything this engine has spent ticks adding
+(`currentSrc`, `complete`, `naturalWidth`, `checkValidity`, `showModal`, the popover four) went on
+`__protoHTMLElement`, while `class X extends HTMLElement` and every `'feature' in
+HTMLElement.prototype` detection read the other one.
+
+⚠⚠ **AND THE ENGINE ALREADY KNEW.** t1395 hit the same wall for `'popover' in HTMLElement.prototype`,
+hand-mirrored **eight names** across, and wrote its own residue note:
+
+> *"the two prototypes being different objects at all is a broader divergence than this tick — every
+> `'x' in HTMLElement.prototype` detection has the same blind spot."*
+
+That note was correct, it was never actioned, and the eight-name list is the t1351 shape exactly: **a
+plural that asserts a SAMPLE and reads as a POPULATION.** It is deleted by this tick.
+
+### ⭐⭐⭐ AND THE FIX IS A JOIN, NOT A MIRROR — THE FIRST TWO ATTEMPTS WERE BOTH WRONG
+
+1. **Forwarders derived from a probe element**, installed on `__HP`. Green in the probe's own terms —
+   `__HP.getAttribute` became a function — and `super.getAttribute` STILL threw.
+2. **A derived mirror** of `__HP`'s own names onto the constructor's prototype. Also failed, and the
+   reason is the interesting one: `getAttribute` is not `__HP`'s own property. It lives on
+   `Element.prototype`, **two links further up**, so `'getAttribute' in __HP` is `true` and no copy of
+   `__HP`'s OWN names can ever carry it.
+
+> ⭐⭐⭐ **THE CONSTRUCTOR'S PROTOTYPE WAS NOT MISSING A LIST. IT WAS MISSING A CHAIN.** One
+> `Object.setPrototypeOf(HTMLElement.prototype, __protoHTMLElement)` gives it every member of `__HP`,
+> `Element.prototype`, `Node.prototype` and `EventTarget.prototype` at once — including everything
+> added after that line ever runs. Two derived-list attempts failed where one link succeeded, and
+> *derived* was not the property that mattered.
+
+A cycle guard walks first and refuses the join if `__HP` ever comes to chain through the constructor's
+prototype: that would be an infinite chain, every property lookup on every element hangs, and it is a
+Bar 0 from one line. The gate asserts the chain still terminates.
+
+### ⭐⭐ THE CONTROL ROW SAID BOTH "MOVEMENTS" WERE THE STORED ROW, NOT THE CHANGE
+
+```text
+                  WPT-AREAS.tsv   measured, join OFF   measured, join ON
+  dom                      8170                 8173                8173
+  html/dom                56454                56451               56451
+  html/semantics           6296                 6296                6296
+```
+
+The fresh numbers differ from the stored ones in BOTH directions, and the same binary measured with
+and without the join gives **identical** results. ⭐ **A fresh number diffed against a STORED one
+attributes someone else's work — or the instrument's drift — to this tick**; only the same-binary
+control can say what a change did. The join is WPT-neutral; its value is the capability. The two
+stale rows are left untouched and named here for the observer rather than edited: lowering
+`html/dom` would trip a ratchet over a regression this tick did not cause.
+
+### ⚠ AND TWO ARMS THAT WERE WRITTEN, MEASURED, AND NOT SHIPPED
+
+* `HTMLElement.prototype.getAttribute.call({}, 'x')` throws `TypeError: Illegal invocation` in Chrome
+  and returns quietly here — the native binding does not brand-check its `this`. Pre-existing and
+  orthogonal; asserting OUR answer would pin the engine to a bug (t1004), so the arm was removed.
+* `'checkValidity' in HTMLElement.prototype` now reads `true` where Chrome says `false` (it is a
+  form-control member). That is the pre-existing consequence of this engine putting form-control
+  members on the shared `__protoHTMLElement` — `'checkValidity' in div` was already `true` — and the
+  join only makes the constructor's prototype agree with the engine's own instances.
+
+### THE RECEIPT
+
+```text
+  G_HTMLELEMENT_PROTOTYPE_JOIN  ok (11 rows)   RED under all 4 mutations
+    J1 no join (the pre-fix engine)      J2 join to Element.prototype (loses everything __HP carries)
+    J3 the cycle guard inverted          J4 t1395's eight-name mirror restored INSTEAD of the join
+  g_popover · g_toggle_event_and_popover_open · g_toggle_event_details_dialog · g_form ·
+  g_probe_capabilities · g_globals                                                        ok
+  WPT dom 8173 (=) · html/dom 56451 (=) · html/semantics 6296 (=), all same-binary controlled
+  Bar 0: no hang, no crash, no panic; the chain terminates (asserted)
+```
+
+WIKI: docs/wiki/two-htmlelement-prototypes.md
