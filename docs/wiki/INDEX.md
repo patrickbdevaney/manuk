@@ -2859,6 +2859,7 @@
   - L28 · ⭐⭐⭐ A capability that cannot be measured drifts to "missing" in every document that mentions it
   - L40 · The map, corrected
   - L48 · Where these numbers live, and why not in WPT-AREAS.tsv
+  - L56 · t1414 — twelve specs, and the number
 
 ## The headline is an integer, and the same binary does not give the same integer twice
 `docs/wiki/the-headlines-error-bar.md`
@@ -2944,4 +2945,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2655 sections across 71 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2656 sections across 71 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

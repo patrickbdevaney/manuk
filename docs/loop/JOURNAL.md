@@ -101222,3 +101222,83 @@ WIKI: docs/wiki/the-aperture-is-the-metric.md
 kind since t1403 (2491s then). Harness-owned per the loop's scope rule, and wall-audit #55 at t1408
 found the wall-time instrument itself blind to 86% of that number, so the four questions the audit is
 allowed to ask cannot reach it. Recorded, not touched. Every other item green.
+
+## Tick 1414 — twelve CSS specs measured for the first time: 6,999 passing subtests the metric had never counted (2026-09-04)
+
+TICK SHAPE: instrument-fidelity
+CLASS: the loop's primary metric — acting on t1413's own ranked #1
+
+Audit #83 ranked *"widen the WPT checkout — it is the cheapest unmeasured mass in the project"* first,
+and priced it at two directories for 828 subtests. This tick took that at its word and widened by ten
+more, then measured every one.
+
+### ⭐⭐⭐ TWELVE CSS SPECS, NONE OF THEM EVER SCORED BY THIS PROJECT
+
+```text
+  css/css-transitions         638/2664    23.9%     2026 failing
+  css/cssom-view              563/2109    26.7%     1546 failing
+  css/css-images             2160/3582    60.3%     1422 failing
+  css/mediaqueries            757/1766    42.9%     1009 failing
+  css/css-multicol            732/1616    45.3%      884 failing
+  css/css-animations          503/1305    38.5%      802 failing
+  css/css-lists               448/959     46.7%      511 failing
+  css/css-pseudo              134/615     21.8%      481 failing
+  css/css-cascade             110/526     20.9%      416 failing
+  css/css-tables              512/899     57.0%      387 failing
+  css/css-writing-modes        96/337     28.5%      241 failing
+  css/css-variables           346/542     63.8%      196 failing
+  ───────────────────────────────────────────────────────────────
+  TOTAL                      6999/16920   41.4%     9921 failing        cost: 31 MB of checkout
+```
+
+**6,999 already-passing subtests the primary metric had never counted, and 9,921 failing ones it had
+never seen.** Twelve directories of roughly sixty-four still outside the aperture. HANG/CRASH 0 in
+every one — no Bar 0 anywhere in seventeen thousand newly-visible subtests, which is its own result.
+
+### ⭐⭐ AND THE CONTROL ROW CAUGHT ME ABOUT TO PUBLISH THEM AGAINST A STALE BINARY
+
+The release binary's mtime read **01:57** and t1412 landed at **03:02** — so every one of these
+numbers looked like it had been taken with a binary predating t1412's inline-handler fix. Checked
+rather than assumed: `cargo build -p manuk-wpt --release` printed `Finished` in 0.57s with **no
+`Compiling` line**, so the artifact was current and the mtime was a preserved hardlink. The numbers
+stand.
+
+> ⭐⭐ **This session has now caught five instruments mid-lie and one near-miss of its own.** t1405 a
+> live page's churn as engine error · t1407 a stale stored row as this tick's work · t1409 a clock as
+> the engine's · t1410 an integer for a ±2 quantity · t1413 a metric over a fifth of its suite · and
+> here, nearly, a table of twelve first-ever numbers taken from the wrong build. **The check costs one
+> command and the alternative is a table that is wrong in a way nobody could later detect.**
+
+### THE RANKED CONSEQUENCE
+
+1. **`css-transitions` 23.9% (2,026 failing)** and **`css-animations` 38.5% (802)** — the animation
+   surface is on nearly every modern site and has never been scored.
+2. ⚠ **`cssom-view` 26.7% (1,546 failing) is the one that should alarm**, because it is
+   `getBoundingClientRect`, `scroll*`, `elementFromPoint`, `matchMedia` — **the channel the AGENT
+   reads geometry through and the channel the fidelity oracle scores placement with.** The loop's own
+   measurement surface is 27% verified.
+   ⚠⚠ **But do not take that as 1,546 defects yet.** `diag` reports `testsCreated: 0` with
+   `errors: []` on `elementFromPoint.html`, `scrollingElement.html` and
+   `getBoundingClientRect-shy.html` — three files that bootstrap with `setup()`/`async_test()`, not
+   with t1412's `<body onload>`. Either those files register their tests in a way `diag` cannot see,
+   or a whole class never registers at all. **That is a PROBE, and it is the next tick** — a
+   signature histogram names the tests, not the mechanism (t1391).
+3. `css-cascade` 20.9% and `css-pseudo` 21.8% are the next lowest.
+
+### ⚠ WHERE THESE NUMBERS LIVE — UNCHANGED FROM t1413
+
+`scripts/wpt-sweep.sh`'s AREAS list is observer-owned. The CHECKOUT was widened (additive; no existing
+area's number moves) and **no row was added to `WPT-AREAS.tsv`**, because the sweep regenerates it and
+would delete them. **For the observer: these twelve are measured, HANG/CRASH-free, and ready to add.**
+
+### THE RECEIPT
+
+```text
+  12 areas measured, first time ever: 6999/16920 = 41.4%,  HANG/CRASH 0 in all twelve
+  checkout 305M -> 336M
+  release binary confirmed CURRENT before publishing (cargo Finished, no Compiling)
+  no engine source changed: the aperture was the defect, again
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/the-aperture-is-the-metric.md
