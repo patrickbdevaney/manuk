@@ -1017,8 +1017,45 @@ impl LayoutBox {
             }
             match &b.content {
                 BoxContent::Block(kids) => {
+                    // ── ⚠⚠⚠ **A NEGATIVE END MARGIN CLAMPS THE SUBTREE, AND A FLAT WALK CANNOT SEE
+                    //    THAT.** Every descendant used to be measured directly against the scroll
+                    //    container, so a grandchild sailed straight past its parent's negative
+                    //    margin. Chrome-measured, four `margin:-5px -7px` children each wrapping a
+                    //    20px box, in a `padding:10px 20px; overflow:hidden` scroller:
+                    //
+                    //    ```text
+                    //                                   chrome    before
+                    //      the children's rects         identical to ours ([13,33][28,48][43,63][58,78])
+                    //      clientHeight                    75        75      identical
+                    //      scrollHeight                    75        80      ← the grandchild's 78,
+                    //                                                          unclamped by its
+                    //                                                          parent's -5px
+                    //    ```
+                    //
+                    //    The WPT file that names it says so in its title: *"scroll{Width,Height}
+                    //    shouldn't account for collapsed margins, in order not to report unnecessary
+                    //    overflow"* (`cssom-view/scrollWidthHeight-overflow-visible-negative-margins`).
+                    //
+                    //    ⭐ Scoped to NEGATIVE margins on purpose. A positive end margin genuinely
+                    //    extends the region — that is t1119's rule and its gates still hold it — so
+                    //    widening this to every margin would trade one wrong answer for another. A
+                    //    negative one pulls the margin box IN, and the subtree cannot report more
+                    //    overflow than the box that contains it claims to occupy.
+                    let clamp = (
+                        (c.end_margin.0 < 0.0).then_some(right),
+                        (c.end_margin.1 < 0.0).then_some(bottom),
+                    );
                     for k in kids {
-                        walk(k, ox, oy, w, h, contribution);
+                        let (mut kw, mut kh) = (0.0f32, 0.0f32);
+                        walk(k, ox, oy, &mut kw, &mut kh, contribution);
+                        if let Some(rx) = clamp.0 {
+                            kw = kw.min(rx + pr - ox);
+                        }
+                        if let Some(by) = clamp.1 {
+                            kh = kh.min(by + pb - oy);
+                        }
+                        *w = w.max(kw);
+                        *h = h.max(kh);
                     }
                 }
                 BoxContent::Inline(frags) => {

@@ -2587,6 +2587,12 @@
   - L88 · ⚠ Named, measured, not built — the other half of the 117
   - L116 · How it was proven red
 
+## The scrollable overflow walk was flat, so a grandchild sailed past its parent's negative margin
+`docs/wiki/scroll-extent-is-composed-not-flat.md`
+
+  - L11 · ⭐⭐⭐ The layout was never wrong
+  - L29 · ⚠⚠ The rule underneath, found while building the arms
+
 ## `sizes` — the three tokenizer rules that run before the grammar
 `docs/wiki/sizes-tokenizer.md`
 
@@ -2953,4 +2959,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2660 sections across 72 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2662 sections across 73 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

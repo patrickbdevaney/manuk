@@ -101441,3 +101441,79 @@ grinding individual assertions is the right shape of work for it.
 ```
 
 WIKI: docs/wiki/the-aperture-is-the-metric.md
+
+## Tick 1417 — the layout was right, the overflow walk was flat, and a grandchild sailed past its parent's negative margin (2026-09-04)
+
+TICK SHAPE: capability-mechanism
+CLASS: every scroll container — `scrollHeight`/`scrollWidth` are how infinite scroll, virtualised
+lists and every *"is this overflowing?"* check work
+
+t1416 located this precisely and this tick took it: `cssom-view`'s failures are not 1,546 defects but
+769 subtests of one rule, and the WPT file names it in its own title — *"scroll{Width,Height}
+shouldn't account for collapsed margins, in order not to report unnecessary overflow."*
+
+### ⭐⭐⭐ THE LAYOUT WAS NEVER WRONG
+
+Headless Chrome 145.0.7632.116, four `margin:-5px -7px` children each wrapping a 20px box in a
+`width:20px; padding:10px 20px; overflow:hidden` scroller:
+
+```text
+                        chrome                          before
+  children's rects      [13,33][28,48][43,63][58,78]    IDENTICAL
+  clientHeight          75                              75          IDENTICAL
+  scrollHeight          75                              80          ← 5px of overflow that is not there
+```
+
+Every box in the right place, the client box right, and the scrollable extent wrong. **The walk was
+FLAT**: every descendant was measured directly against the scroll container, so the inner 20px box
+contributed its own bottom (78) and its parent's `margin-bottom: -5px` never applied to it. The
+parent's margin box ends at 73 — exactly the content-box bottom — which is why Chrome reports no
+overflow at all.
+
+The fix clamps a subtree's contribution to its parent's margin box **when that parent's end margin is
+NEGATIVE**. Scoped on purpose: a positive end margin genuinely extends the region (t1119's rule, held
+by `g_scroll_overflow_end_margin`), and widening this would trade one wrong answer for another.
+
+**Same binary, both ways** — the control this session has made routine:
+
+```text
+  css/cssom-view      563 -> 602   (+39)     attributable
+  css/css-position   1174 -> 1174  (0)       ⚠ its apparent +8 is the STORED row drifting, not this
+  css/css-overflow    513 -> 513   (0)
+  the whole scroll/layout gate neighbourhood + 191 manuk-layout unit tests: green
+```
+
+### ⚠⚠⚠ AND THE GATE IS RED UNDER ONLY 2 OF 4 MUTATIONS, WHICH IS SAID OUT LOUD
+
+Building the arms found a **separate, older rule** underneath: a grandchild that overflows its parent
+gets the container's END PADDING added on top, and Chrome does not add it.
+
+```text
+  height:30px; padding:10px scroller > a 10px child > a 60px box
+      chrome  sh=70    ours  sh=80        (and 70 vs 80 again with a positive parent margin)
+```
+
+That is the only shape that distinguishes *"clamp only NEGATIVE margins"* from *"clamp EVERY margin"*
+— so the arm this gate most wants cannot be written yet: asserting Chrome's answer would make it red
+for a defect this tick does not fix (t1004), and asserting ours would pin the engine to a bug.
+**Three things were written, measured against Chrome, and moved out rather than shipped red**, and the
+gate says so in its own body.
+
+> ⭐⭐ **A GATE THAT NAMES WHAT IT CANNOT CATCH IS WORTH MORE THAN ONE THAT PRETENDS.** Two green
+> mutations here are not a failure of diligence — they are the measurement that says which fix comes
+> next, and the end-padding rule is now a located, Chrome-measured work item rather than a suspicion.
+
+### THE RECEIPT
+
+```text
+  G_NEGATIVE_MARGIN_SCROLL_EXTENT  ok (3 arms)   RED under 2 of 4 mutations (M1 no clamp, M4 max-not-min)
+    ⚠ M2 (clamp every margin) and M3 (drop the end padding) are GREEN and CANNOT be caught until the
+      grandchild end-padding rule above is fixed — named in the gate body, not hidden
+  g_scroll_overflow_alignment_rect · g_scroll_overflow_end_margin · g_scroll ·
+  g_table_cell_content_geometry · g_flex_grid_item_margin · g_float_line_reflow          ok
+  manuk-layout 191 unit tests                                                            ok
+  WPT cssom-view 563 -> 602 (+39, same-binary controlled)
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/scroll-extent-is-composed-not-flat.md

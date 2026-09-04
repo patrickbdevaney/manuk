@@ -10586,3 +10586,21 @@ where grinding individual assertions is the wrong shape of work entirely.
 ⭐ And `--show-failures` was ALREADY BUILT — the third "already built" in one session after
 `writing-mode` and fuzzy reftest scoring (t1412). **Grep the code before building the instrument the
 task seems to need.** (t1416)
+
+## ⚠⚠ A SCROLL CONTAINER REPORTED OVERFLOW THAT IS NOT THERE, WITH EVERY BOX IN THE RIGHT PLACE
+
+`scrollHeight`/`scrollWidth` are how infinite scroll, virtualised lists and every "is this
+overflowing?" check work. On four `margin:-5px -7px` children each wrapping a 20px box, Chrome and
+this engine produced IDENTICAL child rects and an IDENTICAL `clientHeight` — and `scrollHeight` 75 vs
+**80**. The scrollable-overflow walk was FLAT: each descendant was measured directly against the
+scroll container, so a grandchild contributed its own bottom and its parent's NEGATIVE margin never
+applied to it. Fixed by clamping a subtree's contribution to its parent's margin box when that
+parent's end margin is negative — scoped to negative on purpose, because a positive end margin
+genuinely extends the region. WPT `css/cssom-view` 563 → 602, same binary both ways.
+
+⭐⭐ **A GATE THAT NAMES WHAT IT CANNOT CATCH IS WORTH MORE THAN ONE THAT PRETENDS.** Two of four
+mutations stay GREEN because the only fixture that would distinguish them exposes an OLDER rule (a
+grandchild that already overflows gets the container's end padding added on top; Chrome 70, ours 80).
+Asserting Chrome there would make the gate red for a defect the tick does not fix; asserting ours
+would pin the engine to a bug. Both are written into the gate body as located, Chrome-measured work
+items. (t1417)

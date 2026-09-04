@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1095** | ticks 1–1416 |
-| median tick cycle | **32m** | 1094 intervals |
+| ticks landed | **1096** | ticks 1–1417 |
+| median tick cycle | **32m** | 1095 intervals |
 | median, last 10 | **59m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.83** | 1319.2h elapsed |
-| median verify wall | **67s** | 1034 ticks |
+| **ticks per hour** | **0.83** | 1320.6h elapsed |
+| median verify wall | **67s** | 1035 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **538**
+* **live gates**: 27 → **539**
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**492 of 1095 ticks** (45%) moved a
+**492 of 1096 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -1192,5 +1192,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1414** | 2026-09-04 03:19 | 17m | instrument-fidelity | 8m | +158/−42 | 538 | 81 | 56.0% · | twelve CSS specs measured for the first time: 6,999 passing subtests the metric had never  |
 | **1415** | 2026-09-04 04:04 | 45m | instrument-fidelity | 8m | +348/−70 | 538 | 81 | 56.0% · | the diagnostic answered 0 for every file it was ever pointed at (2026-09-04) |
 | **1416** | 2026-09-04 04:12 | 9m | instrument-fidelity | 8m | +161/−42 | 538 | 81 | 56.0% · | a failing count cannot tell one combinatorial file from an unimplemented feature (2026-09- |
+| **1417** | 2026-09-04 05:40 | 88m | capability-mechanism | 8m | +341/−43 | 539 | 81 | 56.0% · | the layout was right, the overflow walk was flat, and a grandchild sailed past its parent' |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
