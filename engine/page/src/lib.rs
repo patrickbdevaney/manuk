@@ -2652,19 +2652,67 @@ fn scroll_geometry_of(
         let cw = (cw - bw.left).max(0.0);
         let ch = (ch - bw.top).max(0.0);
         let (sx, sy) = offsets.get(node).copied().unwrap_or((0.0, 0.0));
+        // ── ⚠⚠⚠ **THE UNREACHABLE SCROLLABLE OVERFLOW REGION — AND WHICH SIDE IS UNREACHABLE IS
+        //    NOT A CONSTANT.** A scroll container can only be scrolled AWAY from its scroll origin,
+        //    so overflow on the origin side is unreachable and is not in `scrollWidth`/
+        //    `scrollHeight` (CSS Overflow 3 §unreachable-scrollable-overflow-region). The extent
+        //    above hard-codes the origin at the TOP-LEFT, which is `horizontal-tb` + `ltr` and
+        //    nothing else.
+        //
+        //    Chrome-measured, `100x200; overflow:scroll; scrollbar-width:none` around a 100x200
+        //    child at `translate(-3px,-6px) scale(1.10)` — the child's rect is **identical in all
+        //    six** (`[-8,-16,102,204]`), and only the origin moves:
+        //
+        //    ```text
+        //                            chrome sw / sh    ours(before)
+        //      ltr  horizontal-tb       102 / 204       102 / 204   ✓
+        //      ltr  vertical-lr         102 / 204       102 / 204   ✓
+        //      ltr  vertical-rl         108 / 204       102 / 204
+        //      rtl  horizontal-tb       108 / 204       102 / 204
+        //      rtl  vertical-lr         102 / 216       102 / 204
+        //      rtl  vertical-rl         108 / 216       102 / 204
+        //    ```
+        //
+        //    `108 = 100 + |−8|`, `216 = 200 + |−16|`: with the origin at the far edge the START
+        //    overflow becomes reachable and is added to the padding box, and the END overflow stops
+        //    counting. ⭐ Only the ORIGIN differs across those six rows, which is what makes this a
+        //    scrolling-area rule rather than a layout one — the layout was already exact.
+        //
+        //    The x origin is at the END edge when the INLINE axis runs that way (`rtl` in a
+        //    horizontal mode) or when the BLOCK axis does (`vertical-rl`); the y origin is at the
+        //    END edge when the inline axis runs bottom-to-top, which is `rtl` in a vertical mode.
+        let vertical = st.writing_mode.is_vertical();
+        let rtl = st.direction == manuk_css::Direction::Rtl;
+        let x_at_end = (!vertical && rtl) || st.writing_mode.is_rl();
+        let y_at_end = vertical && rtl;
+        let (mut min_x, mut min_y) = (0.0f32, 0.0f32);
+        if x_at_end || y_at_end {
+            let (mx, my) = b.scrollable_overflow_start(&|_| manuk_layout::OverflowContribution {
+                end_margin: (0.0, 0.0),
+                end_padding: (0.0, 0.0),
+                relative_offset: (0.0, 0.0),
+            });
+            // The start edges come out relative to the BORDER-box origin, like the extent does.
+            min_x = (mx + bw.left).min(0.0);
+            min_y = (my + bw.top).min(0.0);
+        }
         // The extent is measured on the ALREADY-SCROLLED tree, so add the offset back: the content did
         // not get shorter because the user scrolled down it.
-        m.insert(
-            *node,
-            [
-                sy,
-                sx,
-                (ch + sy).max(client_h),
-                (cw + sx).max(client_w),
-                client_h,
-                client_w,
-            ],
-        );
+        //
+        // ⚠ `.abs()`, because on a flipped axis the content moves the other way under a scroll and
+        //   the sign convention for `scrollLeft` in `rtl` is itself an open question here. Named
+        //   residue: every row above is measured unscrolled, where the term is zero either way.
+        let sw = if x_at_end {
+            client_w + (-min_x) + sx.abs()
+        } else {
+            (cw + sx).max(client_w)
+        };
+        let sh = if y_at_end {
+            client_h + (-min_y) + sy.abs()
+        } else {
+            (ch + sy).max(client_h)
+        };
+        m.insert(*node, [sy, sx, sh, sw, client_h, client_w]);
     }
 
     // ⚠⚠⚠ **THE ROOT ELEMENT'S `clientWidth`/`clientHeight` ARE THE VIEWPORT, NOT ITS OWN BOX — AND

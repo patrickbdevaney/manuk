@@ -102331,3 +102331,111 @@ and t1425's widening is blocked behind it.
 ```
 
 WIKI: docs/wiki/a-transform-is-physical-in-every-writing-mode.md
+
+## Tick 1427 — the unreachable overflow region follows the scroll origin, and t1425's −12 becomes +41 (2026-09-04)
+
+TICK SHAPE: capability
+CLASS: layout / scrolling area — the second of the two mechanisms t1425 named, and the unlock measured
+
+t1426 fixed the first (a transform rode the writing-mode axis swap) and left every remaining error in
+one file to a single rule that is not a transform rule. This is that rule.
+
+### THE RULE
+
+A scroll container can only be scrolled **away** from its scroll origin, so overflow on the origin
+side cannot be reached and is not in `scrollWidth`/`scrollHeight` (CSS Overflow 3
+§unreachable-scrollable-overflow-region). Our extent expressed that as `.max(0.0)` on the maxima —
+**which is the origin at the top-left, and nothing else.**
+
+```text
+  x origin at the END edge   when  (horizontal mode AND rtl)  OR  writing-mode: vertical-rl
+  y origin at the END edge   when  (vertical mode AND rtl)
+
+  origin at START:  extent = max(padding box, END overflow)
+  origin at END:    extent = padding box + |START overflow|
+```
+
+### THE MEASUREMENT — SIX ROWS, ONE VARIABLE, AND THE LAYOUT HOLDS STILL
+
+Chrome 145, `100x200; overflow:scroll; scrollbar-width:none` around a `100x200` child at
+`translate(-3px,-6px) scale(1.10)`. ⭐ **The child's physical rect is identical in all six rows**
+(`[-8,-16,102,204]`, asserted in the gate's vacuity arm), so nothing about layout varies:
+
+```text
+                         chrome sw / sh   before      after     origin
+  ltr  horizontal-tb        102 / 204    102 / 204   102 / 204  top-left      CONTROL
+  ltr  vertical-lr          102 / 204    102 / 204   102 / 204  top-left      CONTROL
+  ltr  vertical-rl          108 / 204    102 / 204   108 / 204  top-RIGHT
+  rtl  horizontal-tb        108 / 204    102 / 204   108 / 204  top-RIGHT
+  rtl  vertical-lr          102 / 216    102 / 204   102 / 216  BOTTOM-left
+  rtl  vertical-rl          108 / 216    102 / 204   108 / 216  BOTTOM-RIGHT
+```
+
+`108 = 100 + |−8|`, `216 = 200 + |−16|`. ⭐⭐ **Two routes reach the same 108** — `vertical-rl` moves
+the origin along the BLOCK axis and `rtl` moves it along the INLINE one — which is why the rule is
+keyed on the two directions and never on `writing-mode` alone, and why `ltr vertical-lr` is a
+CONTROL rather than a fifth flipped row.
+
+### THE GATE, PROVEN RED FOUR WAYS
+
+`g_unreachable_scrollable_overflow`. Each mutation fails a different row, which is what makes the six
+rows a discrimination rather than one number asserted six times:
+
+```text
+  N1  never flip (the pre-tick state)              → c, d, e, f all 102/204; both CONTROLS green
+  N2  flip x whenever the mode is VERTICAL         → the CONTROL b reads 108 against 102
+  N3  flip both axes together whenever either does → c, d read 108/216; e reads 108/216
+  N4  add the start overflow WITHOUT dropping the end → c reads 110 against 108
+```
+
+### ⭐⭐⭐ THE UNLOCK, MEASURED — t1425's −12 IS NOW +41
+
+t1425 refused to widen `scrollWidth`/`scrollHeight` to every element because the forced reflow the
+widening requires turned **40 `css/css-overflow` subtests red**, every one a `writing-mode:
+vertical-*` row of `scrollable-overflow-transform-unreachable-region`. Those 40 were passing on
+**stale reads**; the reflow exposed two real defects, and t1426 and t1427 are exactly those two.
+Probed by re-applying the forced reflow on top of this tick and reverting it immediately:
+
+```text
+  css/css-overflow, forced reflow, at t1425   505 / 963   (−12)
+  css/css-overflow, forced reflow, at t1427   558 / 963   (+41)
+```
+
+**A 53-subtest swing.** ⭐ *The ratchet's refusal at t1425 was reading a real signal, not a flaky one*
+— and the cost of obeying it was two ticks that each bought a Chrome-exact capability, instead of one
+tick that banked +33 in one area while quietly breaking 40 rows of another.
+
+### THE NUMBERS THIS TICK, AND THEY ARE FLAT ON PURPOSE
+
+```text
+  css/css-overflow      517/963   → 517/963    unchanged
+  css/cssom-view        792/2109  → 792/2109   unchanged
+  css/css-writing-modes  96/337   →  96/337    unchanged
+```
+
+The rows that will move still read STALE geometry, because the forced reflow is not in the tree yet —
+that is the next tick, and it is the whole point of the +41 probe. Landing the reflow here as well
+would be one tick carrying three mechanisms and one number; the loop has just spent four ticks
+learning what that costs.
+
+### CONSTITUTION CHECK #136 (due at this tick)
+
+Recorded in `docs/loop/CONSTITUTION-CHECK.md`. The honest answer to *gate or scoreboard* is GATE, with
+an unusual receipt: **three of the last eight ticks landed no engine change at all, and the window is
+the session's strongest.** ⭐⭐⭐ *The measurement ticks were not overhead; they were the mechanism.*
+PART VI gains a correction that this window earned twice over — **a FIXTURE is part of the instrument**
+(t1424's `width:0`, t1426's symmetric `scale()`); both fixtures were written by this loop, both
+passed review, and both certified a bug. ⚠ `I5 ORACLE_CRAWLED:0` is at its NINTH check and AccessKit
+its EIGHTH — owner decisions, and naming them again is not measurement.
+
+### THE RECEIPT
+
+```text
+  6 Chrome rows, one variable (the scroll origin), all 6 exact after
+  g_unreachable_scrollable_overflow  NEW, 6 claims + a shared-rect vacuity arm, red under 4 mutations
+  17 scroll / writing-mode / geometry gates green, incl. all 4 banked scroll gates
+  the unlock probed and reverted: css/css-overflow 505 (t1425) → 558 (t1427) under a forced reflow
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/the-unreachable-scrollable-overflow-region.md

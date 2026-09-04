@@ -1167,6 +1167,69 @@ impl LayoutBox {
         (w.max(0.0), h.max(0.0))
     }
 
+    /// The **START edges** of the scrollable overflow region — the most negative left and top any
+    /// descendant reaches, relative to this box's border-box origin, or `(0, 0)` when nothing
+    /// overflows backwards.
+    ///
+    /// ⚠⚠⚠ **THE START SIDE IS THE HALF THE EXTENT THROWS AWAY, AND WHICH HALF IS UNREACHABLE
+    /// DEPENDS ON THE WRITING MODE.** CSS Overflow 3's *unreachable scrollable overflow region*: a
+    /// scroll container can only be scrolled AWAY from its scroll origin, so overflow on the origin
+    /// side is unreachable and is not in `scrollWidth`/`scrollHeight`. With the origin at the
+    /// top-left — `horizontal-tb` + `ltr`, which is what `scrollable_overflow_extent`'s
+    /// `.max(0.0)` hard-codes — that is the left and top. Move the origin and the OTHER side
+    /// becomes the reachable one.
+    ///
+    /// Chrome-measured, `100x200; overflow:scroll; scrollbar-width:none` around a 100x200 child at
+    /// `transform: translate(-3px,-6px) scale(1.10)` — the child's rect is **identical in all six**
+    /// (`[-8,-16,102,204]`), and only the origin moves:
+    ///
+    /// ```text
+    ///                              chrome sw / sh      origin
+    ///   ltr  horizontal-tb            102 / 204        top-left
+    ///   ltr  vertical-lr              102 / 204        top-left
+    ///   ltr  vertical-rl              108 / 204        top-RIGHT
+    ///   rtl  horizontal-tb            108 / 204        top-RIGHT
+    ///   rtl  vertical-lr              102 / 216        BOTTOM-left
+    ///   rtl  vertical-rl              108 / 216        BOTTOM-RIGHT
+    /// ```
+    ///
+    /// `108 = 100 + |−8|` and `216 = 200 + |−16|`: with the origin at the far edge the START
+    /// overflow becomes reachable and is added to the padding box, and the END overflow stops
+    /// counting. ⭐ Only the ORIGIN differs across those six rows — which is what makes this a
+    /// scrolling-area rule and not a layout one.
+    pub fn scrollable_overflow_start(
+        &self,
+        contribution: &dyn Fn(NodeId) -> OverflowContribution,
+    ) -> (f32, f32) {
+        fn walk(b: &LayoutBox, ox: f32, oy: f32, x: &mut f32, y: &mut f32) {
+            if b.rect.width > 0.0 && b.rect.height > 0.0 {
+                *x = x.min(b.rect.x - ox);
+                *y = y.min(b.rect.y - oy);
+            }
+            match &b.content {
+                BoxContent::Block(kids) => {
+                    for k in kids {
+                        walk(k, ox, oy, x, y);
+                    }
+                }
+                BoxContent::Inline(frags) => {
+                    for f in frags {
+                        *x = x.min(f.x - ox);
+                        *y = y.min(f.line_top - oy);
+                    }
+                }
+            }
+        }
+        let _ = contribution;
+        let (mut x, mut y) = (0.0f32, 0.0f32);
+        if let BoxContent::Block(kids) = &self.content {
+            for k in kids {
+                walk(k, self.rect.x, self.rect.y, &mut x, &mut y);
+            }
+        }
+        (x.min(0.0), y.min(0.0))
+    }
+
     /// A box that occupies `rect` on behalf of `node` and **paints nothing** — no background, no
     /// border, no text, no children.
     ///

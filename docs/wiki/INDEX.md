@@ -2910,6 +2910,13 @@
   - L79 · The gate, written and proven red before the revert
   - L92 · The order for the next attempt
 
+## The unreachable scrollable overflow region follows the scroll origin
+`docs/wiki/the-unreachable-scrollable-overflow-region.md`
+
+  - L7 · The rule
+  - L22 · The measurement, and why it is a scrolling-area rule and not a layout one
+  - L51 · What it unblocked, with the number
+
 ## A guard that fires on a clock cannot name a cause — and will name whoever the author had in mind
 `docs/wiki/timeout-names-whose-clock.md`
 
@@ -2986,4 +2993,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2677 sections across 76 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2680 sections across 77 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

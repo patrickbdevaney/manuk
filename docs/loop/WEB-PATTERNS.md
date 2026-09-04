@@ -10715,3 +10715,21 @@ architecture rather than an approximation.
 **Unlocks:** correct geometry for every transformed box inside a vertical writing mode — CJK and
 Mongolian pages, vertical-text sidebars and rotated table headers, and every
 `getBoundingClientRect`/hit-test/a11y-tree read of one. (t1426)
+
+## ⭐⭐ A SCROLL CONTAINER IS SCROLLED AWAY FROM ITS ORIGIN, AND THE ORIGIN IS NOT ALWAYS TOP-LEFT
+
+Overflow on the scroll-origin side is **unreachable** and is not in `scrollWidth`/`scrollHeight`. The
+engine expressed that as `.max(0.0)` — the origin at the top-left, hard-coded. Chrome, the same
+transformed child in six direction/writing-mode combinations, **identical physical rect in all six**:
+
+```text
+  ltr horizontal-tb 102/204 · ltr vertical-lr 102/204 · ltr vertical-rl 108/204
+  rtl horizontal-tb 108/204 · rtl vertical-lr 102/216 · rtl vertical-rl 108/216
+```
+
+Two routes to the same flip — `vertical-rl` moves the origin along the BLOCK axis, `rtl` along the
+INLINE one — so the rule is keyed on the two directions, never on `writing-mode` alone.
+
+**Unlocks:** correct `scrollWidth`/`scrollHeight`, and therefore correct "am I at the end?"
+arithmetic, in every RTL document (Arabic, Hebrew, Persian) and every vertical CJK layout — the
+carousels, infinite scrollers and virtualised lists on them read this pair. (t1427)

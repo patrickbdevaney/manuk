@@ -11845,3 +11845,75 @@ gates, against four in the previous window found and merely named. **I1, I6, I7 
    the WPT AREAS list, the lever board's stale Track A items, the verify wall, `Content-Encoding: zstd`.
 
 **Next check due: tick 1427.**
+
+---
+
+## Check #136 — tick 1427 (2026-09-04)
+
+**HORIZON:** Phase 0 — the daily-driver checklist. **GATE:** M1 render fidelity on the in-scope CrUX
+corpus, and behind it the agent's own geometry channel (`getBoundingClientRect`, `scroll*`,
+`elementFromPoint`).
+
+### GATE OR SCOREBOARD? — GATE, and this window says so with an unusual receipt
+
+Eight ticks (t1420–t1427). Three of them landed **no engine change at all**, and the window is
+nonetheless the strongest in this session. The reason is worth stating plainly:
+
+> ⭐⭐⭐ **THE MEASUREMENT TICKS WERE NOT OVERHEAD; THEY WERE THE MECHANISM.** t1423 built a 24-cell
+> Chrome matrix and REVERTED the rule it produced. t1424 re-measured the ONE fixture that had been
+> doing the refuting and found it was `width:0` — a corner Chrome treats specially — which closed a
+> five-rule, three-revert arc in one tick (+190 cssom-view). t1425 implemented the next mechanism
+> three ways, measured every one on two areas, refused all three, and NAMED its blocker. t1426 and
+> t1427 fixed exactly that blocker, and the probe that closes this check turns t1425's **−12** into
+> **+41**.
+
+A tick that lands nothing but names the next tick's fixture with numbers is on the gate. A tick that
+lands a rule fitted to fixtures nobody re-measured is on the scoreboard, however green it looks.
+
+### WHAT MOVED
+
+* **t1424** — `css/cssom-view` 602 → **792** (+190), same binary both ways. One expression fits 72
+  Chrome cells and all four banked scroll gates; t1417's clamp retired as superseded.
+* **t1426** — a `transform` is physical in every writing mode (half the transposition was missing).
+  WPT flat, Chrome-exact on five rows, gate red under three mutations.
+* **t1427** — the unreachable scrollable overflow region follows the SCROLL ORIGIN, not a hard-coded
+  top-left. Six Chrome rows, all exact; gate red under four mutations.
+* **The unlock, measured:** with the forced reflow that t1425 could not ship, `css/css-overflow` now
+  reads **558/963 (+41)** where t1425 measured **505 (−12)**. A 53-subtest swing, and it is the proof
+  that the 40 rows t1425 refused to trade were failing on two REAL defects rather than on a race.
+
+### PART VI CORRECTIONS
+
+* **VI.3 — the aperture rule is still not in prose.** Carried from check #135. *A metric is a
+  percentage over what it can see, and the checkout is part of the instrument.*
+* **NEW, and it belongs in VI.3 beside the aperture rule:** *a FIXTURE is part of the instrument
+  too.* Two ticks in this window turned on the fixture rather than the engine — `width:0` (t1424) and
+  a symmetric `scale()` that cannot see an axis swap (t1426). Both were written by this loop, both
+  passed review, and both certified a bug.
+* **VI.2's H0.7 (AccessKit) — unchanged. EIGHTH check.**
+* **I5 — `ORACLE_CRAWLED: 0`. NINTH check.** Still no lever the loop owns. Owner decision or removal
+  from the exit gate; naming it a ninth time is not measurement.
+* **NEW, observer-owned:** `scripts/verify.sh`'s `_out` is a race — `SHELL_OUT=$(_out shell)` is a
+  command substitution, so its `wait` for the parent shell's background job is a no-op and `cat`
+  reads a partial file. Timestamped at t1425: the affordance gate delivered a verdict 30s into the
+  run while the job it reads was still running, and it cost four consecutive walls.
+  `CARGO_BUILD_JOBS=1` is the loop-side workaround and it also serialises cargo (211s warm, 2632s
+  cold), so prewarm first.
+
+### THE INVARIANTS
+
+**I2 — held, and exercised harder than usual**: four implementations refused across t1420–t1425, each
+with its own same-binary two-area measurement. **I3 — held** (every capability tick exposed its rule
+in `docs/wiki`). **I4 — held.** **I8 — improving**: the fixtures themselves are now treated as
+instruments, which is a level the loop had not audited before. **I1, I6, I7 — not bent.**
+
+### STEER
+
+1. ⭐⭐⭐ **LAND t1425's WIDENING NEXT — IT IS UNBLOCKED AND PRICED.** `scrollWidth`/`scrollHeight` for
+   every element + `force_reflow_if_stale()` in the scroll getters. Expected `css/css-overflow` +41
+   and `css/cssom-view` +33; the gate, its fixture and its four mutations are written verbatim in
+   `docs/wiki/the-scrolling-area-of-every-element.md`. **Do not re-derive them.**
+2. Then re-run the `--show-failures` concentration survey on `css/cssom-view`: the 140-cell
+   margin-collapsing matrix was at 94 failures with both mechanisms in place, and the residue there
+   is the COLLAPSED-margin rule the file is named for.
+3. ⚠ Do not start a third scroll mechanism before (1) lands. It is measured, gated and waiting.
