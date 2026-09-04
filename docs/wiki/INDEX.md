@@ -1696,6 +1696,13 @@
   - L67 · Both entrances
   - L73 · How it was proven red
 
+## A document whose only JavaScript is an attribute got no JavaScript at all
+`docs/wiki/inline-handler-needs-no-script.md`
+
+  - L20 · ⭐⭐⭐ The empty script is the whole proof
+  - L35 · Priced, small, and said so
+  - L42 · How it was found, and two things found first
+
 ## What `input.value` MEANS, as opposed to what is stored
 `docs/wiki/input-value-sanitization.md`
 
@@ -2929,4 +2936,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2648 sections across 69 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2651 sections across 70 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

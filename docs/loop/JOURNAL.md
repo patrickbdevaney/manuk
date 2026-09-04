@@ -101047,3 +101047,94 @@ honesty needed to steer it, and no further instrument work will move the render 
 ```
 
 WIKI: docs/wiki/name-from-content-depends-on-context.md
+
+## Tick 1412 — the sentence that ended a performance comment was false, and it cost the capability it was excusing (2026-09-04)
+
+TICK SHAPE: capability-mechanism
+CLASS: every page whose only JavaScript is an attribute — `<body onload>`, `<button onclick>`,
+`<form onsubmit>`, `<img onerror>`
+
+Check #134's steer was **Track A**, so this tick started there. It found two things before it found a
+defect, and the first two are worth as much as the third.
+
+### ⭐⭐ FINDING 1 — THE BOARD'S TRACK A LIST IS STALE, IN BOTH OF ITS HEADLINE ITEMS
+
+```text
+  "writing-mode / logical geometry [UNIMPLEMENTED — the biggest single unlock]"
+      -> engine/layout/src/writing_mode.rs exists: plan / map_subtree / transpose_in_place,
+         orthogonal roots, VerticalRun. BUILT (t1347-1349).
+  "FUZZY reftest scoring — the runner is byte-exact RGBA"
+      -> tests/wpt/src/reftest.rs: parse_fuzzy, parse_fuzzy_value, maxDifference per CHANNEL,
+         the test's OWN declared allowance. BUILT.
+```
+
+Both of the board's named "unbuilt, high-leverage" Track A items are built. **A tick that had trusted
+the board would have re-implemented one of them.** Recorded here rather than only in a diff, because
+the board is what the next session reads first.
+
+### FINDING 2 — THE MEASURED TRACK A RANKING, SINCE THE BOARD CANNOT SUPPLY ONE
+
+`css/css-grid` is the largest ★ layout row (4,329 failing). Surveyed by subdirectory rather than
+ground into:
+
+```text
+  880  42.0%   638/1518   (257 files)  alignment              ← the biggest bucket
+  700  22.3%   201/901    ( 34 files)  grid-items             ← the LOWEST pass rate
+  538   0.0%     0/538    ( 16 files)  grid-lanes/items       ⚠ a whole dir at ZERO
+  426  73.3%  1172/1598   ( 60 files)  parsing
+  305  42.2%   223/528    ( 31 files)  layout-algorithm
+```
+
+⚠ **`grid-lanes/*` is CSS Grid Level 3 masonry/lanes** — several of its directories read 0.0%, which
+is the *spec-frontier* signature (t1350: `domparsing` 730 = APIs Chrome lacks = REFUSED), not a
+mechanism to grind. And ⚠ **much of `alignment` is REFTESTS**, scored by the pixel runner rather than
+by the testharness totals above — so the 880 is not 880 assertions to fix.
+
+### FINDING 3 — AND THE DEFECT, WHICH THE SURVEY WALKED INTO
+
+`grid-items-minimum-width-001.html` creates **zero** tests: `testsCreated: 0`, `errors: []`,
+`loadFired: true`. It bootstraps the way most CSS-WG layout tests do — `<body onload="checkLayout(…)">`.
+Probing that:
+
+```text
+  <body onload="…document.getElementById('out').textContent='X'">   NO <script> anywhere   ->  DID NOT RUN
+  the same document plus an EMPTY <script></script>                                        ->  RAN
+  <div onclick> on a script-free document                                                  ->  DID NOT RUN
+```
+
+> ⭐⭐⭐ **THE EMPTY SCRIPT IS THE WHOLE PROOF.** It adds no behaviour, so it cannot be what fixed it —
+> the only thing it changed is whether a JS context existed.
+
+The context was stood up only for documents containing a `<script>` ELEMENT, under a comment ending:
+
+> *"With no initial script, no listener can ever be registered, so there is nothing to lose."*
+
+**That sentence is false.** An inline event-handler attribute IS a listener registration and needs no
+`<script>` element. Same class as t1303's *"a workaround's COMMENT is a checkable claim that dies
+SILENTLY"* — here the claim was excusing a performance optimisation that had silently removed a
+capability, which is the one trade the ratchet exists to refuse.
+
+⚠ **Priced, and small, and said so** (t1367): **0 of 53** freshly-fetched CrUX pages carry an inline
+handler with no `<script>`, against **27 of 400** sampled WPT `css/` files. A CORRECTNESS tick with ~0
+corpus weight — the same honest position as t1405's layout tables. It lands because the comment was
+false, not because a number moved.
+
+⚠ **And an arm that was written, measured and moved out:** `<img onerror>` was to be the rendering
+consequence (the author's fallback never loads). It still fails after this fix, **and it fails with a
+`<script>` present too** — so it is a different mechanism (the `error` event for a failed image fetch),
+not this one. Asserting it here would have made the gate red for a reason it does not own. Named as the
+next candidate instead.
+
+### THE RECEIPT
+
+```text
+  G_INLINE_HANDLER_WITHOUT_SCRIPT  ok (4 arms)   RED under all 3 mutations
+    H1 script elements only (the pre-fix engine)   H2 the `on…` predicate broken
+    H3 the scan looks at the ROOT only, not descendants
+  g_load_document · g_globals · g_click_activation · g_details · g_form · g_defer ·
+  g_load_geometry · g_first_paint · g_probe_capabilities                                 ok
+  WPT html/semantics 6296 (=)  HANG/CRASH 0
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/inline-handler-needs-no-script.md

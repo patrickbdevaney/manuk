@@ -10531,3 +10531,35 @@ bit-identical.
 mutations including `if false` on the fix, because reflow time is a SUBSET of script time and both
 budgets are the same number — a JS fixture is always killed by the script deadline first. An override
 seam (`MANUK_REFLOW_BUDGET_MS`) made it falsifiable. (t1408 — `g_forced_reflow_budget`)
+
+## ⚠⚠⚠ A PAGE WHOSE ONLY JAVASCRIPT IS AN ATTRIBUTE — `<body onload>`, `<button onclick>`, `<img onerror>`
+
+The JS context was stood up only for documents containing a `<script>` ELEMENT, under a comment
+ending *"With no initial script, no listener can ever be registered, so there is nothing to lose."*
+**That sentence is false**: an inline event-handler attribute IS a listener registration and needs no
+`<script>`. Every inline handler was dead on a script-free document — not just `onload`.
+
+⭐⭐⭐ **THE EMPTY SCRIPT IS THE WHOLE PROOF.** The same document plus an EMPTY `<script></script>`
+worked. An empty script adds no behaviour, so it cannot be what fixed it — the only thing it changed
+is whether a context existed. **When a no-op addition fixes something, it names the missing
+precondition.**
+
+⚠ Priced and small and said so: **0 of 53** CrUX pages carry an inline handler with no `<script>`,
+against **27 of 400** sampled WPT `css/` files. It lands because a comment asserting something false
+is a defect in its own right, and because an optimisation that silently removes a capability is the
+one trade the ratchet exists to refuse — not because a number moved.
+(t1412 — `g_inline_handler_without_script`; t1303 "a workaround's COMMENT is a checkable claim")
+
+## ⚠⚠ THE LEVER BOARD'S TRACK A LIST IS STALE IN BOTH OF ITS HEADLINE ITEMS
+
+`writing-mode / logical geometry` is described as *"UNIMPLEMENTED — the biggest single unlock"* and is
+BUILT (`engine/layout/src/writing_mode.rs`: plan / map_subtree / transpose_in_place, orthogonal roots,
+t1347-1349). `FUZZY reftest scoring` is described as unbuilt and is BUILT
+(`tests/wpt/src/reftest.rs`: `parse_fuzzy`, per-CHANNEL `maxDifference`, the test's own declared
+allowance). **A tick that trusted the board would have re-implemented one of them.**
+
+The measured replacement, `css/css-grid` by subdirectory: alignment 880 failing / 42.0% · grid-items
+700 / 22.3% (lowest pass rate) · grid-lanes/items 0/538 · parsing 426 / 73.3% · layout-algorithm 305 /
+42.2%. ⚠ `grid-lanes/*` is Grid Level 3 masonry and several dirs read exactly 0.0% — the SPEC-FRONTIER
+signature, not a mechanism to grind. ⚠ Much of `alignment` is REFTESTS scored by the pixel runner, so
+the 880 is not 880 assertions. (t1412)

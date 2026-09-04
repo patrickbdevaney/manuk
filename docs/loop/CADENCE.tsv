@@ -1089,3 +1089,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1409	7845b742	1788491690	2026-09-03T23:14:50-04:00	3431	instrument-fidelity	465	9	356	45	537	81	3896	6960	0	642	0	the watchdog blamed this engine for every timeout, including the ones where nothing of ours was running (2026-09-04)
 1410	7abd0b7e	1788496439	2026-09-04T00:33:59-04:00	4749	instrument-fidelity	465	9	438	45	537	81	3896	6960	0	642	0	the headline is an integer, and the same binary does not give the same integer twice (2026-09-04)
 1411	d6e3d0fd	1788500082	2026-09-04T01:34:42-04:00	3643	capability-mechanism	465	9	337	44	537	81	3896	6960	0	642	0	the first thing an agent reads about a page was empty on every page (2026-09-04)
+1412	8784e0d3	1788504649	2026-09-04T02:50:49-04:00	4567	capability-mechanism	465	9	386	46	538	81	3896	6960	0	642	0	the sentence that ended a performance comment was false, and it cost the capability it was excusing (2026-09-04)

@@ -7431,10 +7431,44 @@ impl Page {
         if !inline_frames.is_empty() {
             publish_pre_script_frame_docs(&mut inline_frames, fonts);
         }
-        // Only stand up a JS context for documents that actually have a script — a static page
-        // needs no engine spin-up (faster load, and no persistent global to keep alive). With
-        // no initial script, no listener can ever be registered, so there is nothing to lose.
-        let js = if dom.find_first("script").is_none() {
+        // Only stand up a JS context for documents that actually have script — a static page needs
+        // no engine spin-up (faster load, and no persistent global to keep alive).
+        //
+        // ⚠⚠⚠ **THE SENTENCE THAT USED TO END THIS COMMENT WAS FALSE, AND IT COST THE CAPABILITY IT
+        // WAS EXCUSING.** It read: *"With no initial script, no listener can ever be registered, so
+        // there is nothing to lose."* An **inline event-handler attribute IS a listener
+        // registration**, and it needs no `<script>` element at all:
+        //
+        // ```text
+        //   <body onload="…">                    how the CSS-WG's own layout tests bootstrap
+        //   <button onclick> <a onclick> <form onsubmit>     ordinary legacy markup
+        //   <img onerror="this.src='fallback.png'">          a RENDERING consequence: no fallback
+        // ```
+        //
+        // Measured: `<body onload>` on a script-free document did not run, and adding an EMPTY
+        // `<script></script>` made it run — which is the whole proof, because an empty script adds
+        // no behaviour and cannot be what fixed it. An `onclick` control behaved the same way, so it
+        // was never `load`-specific: **no inline handler at all worked on a script-free document.**
+        //
+        // ⚠ **Priced, and small, and said so** (t1367's rule): **0 of 53** freshly-fetched CrUX pages
+        // have an inline handler and no `<script>`, against **27 of 400** sampled WPT `css/` files.
+        // This is a CORRECTNESS fix with ~0 corpus weight — landed because a comment asserting
+        // something false is a defect in its own right (t1303), and because an optimisation that
+        // silently removes a capability is the one trade the ratchet exists to refuse.
+        //
+        // The predicate is the same one `dom_bindings::inline_handler_nodes` uses to FIND those
+        // handlers — an attribute named `on…` of at least three characters — so the decision to
+        // build a context and the decision to wire the handlers cannot disagree.
+        let has_inline_handler = dom.descendants(dom.root()).any(|n| {
+            dom.element(n).is_some_and(|el| {
+                el.attrs.iter().any(|a| {
+                    a.name.len() >= 3
+                        && a.name.as_bytes()[0] == b'o'
+                        && a.name.as_bytes()[1] == b'n'
+                })
+            })
+        });
+        let js = if dom.find_first("script").is_none() && !has_inline_handler {
             None
         } else {
             manuk_js::set_scroll_geometry(scroll_geometry_of(
