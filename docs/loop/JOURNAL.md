@@ -101878,3 +101878,102 @@ ticks have now produced four rules and no answer; the matrix is what ends that.*
 
 WIKI: none [forced] — no engine source changed; the product is two experiments and a refuted rule,
 which belong beside the ticks they continue.
+
+## Tick 1423 — the 24-cell matrix, the rule it produced, and the one row that refuted it (2026-09-04)
+
+TICK SHAPE: measurement-and-refusal
+CLASS: the scroll rule — third attempt, and the first one to fail on NEW evidence rather than old
+
+t1422 said *"build a matrix, not a guess."* Built, run, and it did produce a rule that satisfied every
+measurement in hand — and then a gate row that the matrix did not cover refuted it.
+
+### THE MATRIX — 24 CELLS, ONE PAGE, ONE CHROME RUN
+
+`{auto,fixed} height × {content inside, past the box} × {margin −5, 0, +5} × {padding 0, 10}`. The six
+discriminating rows (fixed height, content past the box), as `scrollHeight`:
+
+```text
+  margin  padding   child bottom   chrome   margin box + pad   border box
+   -5        0          100         100           95              100
+    0        0          100         100          100              100
+   +5        0          100         105          105              100
+   -5       10          110         115          115              110
+    0       10          110         120          120              110
+   +5       10          110         125          125              110
+```
+
+`max(border box, margin box + end padding)` fits all 24 cells **and** every older fixture: t1417
+`65+10=75` over a floor of 70 → 75 · t1258 `110+10=120` · t1418's `w` `140+10=150` · t1420 bare `100`
+under a floor of 200 → 200 · t1420 padded `116+4=120` under 216 → 216. Implemented, and **t1417's and
+t1418's gates both went green**.
+
+### ⚠⚠⚠ AND `#d7` REFUTED IT — A ROW THE MATRIX DID NOT CONTAIN
+
+`g_scroll_overflow_end_margin`'s `d7`: a `height:100px; padding:10px 5px; overflow:scroll` container
+with a single `height:200px; margin-bottom:-30px` child.
+
+```text
+  child's border-box bottom, from the padding-box top   210
+  margin box + end padding                              180 + 10 = 190
+  chrome                                                190     ← BELOW the border box
+```
+
+**The floor does not bind here and it does bind in the matrix's `-5/padding 0` row (100, not 95).**
+Chasing that produced a further candidate — *"there is no floor; the matrix's 100 comes from the
+GRANDCHILD, and containment is measured against the parent's MARGIN box"* — which fits d7, both t1418
+rows, t1417, t1258 and five of six matrix rows, **and then fails t1420's bare case** (Chrome 200, that
+rule gives 100).
+
+> ⭐⭐⭐ **FIVE RULES NOW, EACH REFUTED BY EXACTLY ONE FIXTURE THE OTHERS DO NOT CONTAIN.** That is no
+> longer a search for a constant; it is evidence that the real rule involves a term none of these
+> fixtures varies. The matrix was the right instrument and it was **too small** — it varied margin,
+> padding, height mode and overflow amount, and held the DOM SHAPE fixed (always a wrapper with one
+> inner box), which is precisely the axis `d7` (no wrapper) and `t1420` (a wrapper far larger than its
+> container) differ on.
+
+### WHAT THE NEXT TICK DOES
+
+Extend the matrix by the axis it held fixed: **`{no wrapper, wrapper == content, wrapper smaller than
+content}`** crossed with the existing cells, and read `d7`, `t1417`, `t1418-w` and `t1420` as cells of
+it rather than as separate fixtures. 72 cells, still one page and one Chrome run. **Do not implement
+anything until a single expression reproduces all 72.**
+
+⚠ **This is the third revert on this rule** (t1420, t1421, t1423), and each was cheap: the change is
+four lines, the gates answer in under a second, and the ratchet has kept four banked gates honest
+throughout. The expensive move would have been landing any one of the five rules.
+
+### THE RECEIPT
+
+```text
+  24-cell Chrome matrix built and read; the rule it produced implemented and REVERTED on `d7`
+  a fifth candidate derived from d7 and refuted on t1420 before it was written
+  after the revert: all four scroll gates green
+  no engine source changed
+  Bar 0: no hang, no crash, no panic
+```
+
+### THE SURFACE AUDIT (#84, due at this tick)
+
+Recorded in `docs/loop/SURFACE-AUDIT.md`. Two findings, one small and one that changes something:
+
+* **A correction to this project's own record, from the primary source.** A launch post described
+  Interop 2026 as *"nineteen focus areas, three cleanup areas"*; the README says **20 focus areas, 4
+  investigations, and 5 CARRYOVER items living inside the focus areas**. Audit #82's count was right.
+  ⭐ *A number from a blog post about a spec is not the spec.*
+* ⭐⭐⭐ **Interop 2026's accessibility-testing investigation is building the oracle this loop
+  hand-built.** Its stated aim is *"generating consistent accessibility trees from the same DOM and
+  CSS across browsers, and improving the WPT testing infrastructure for accessibility testing"* —
+  exactly the absence check #131 named and t1404 covered with a `/tmp` CDP rig to take the first
+  real-site node match (75.0% → 97.0%). **A WATCH, not a task:** when those tests land, the a11y
+  number becomes sweep-bankable instead of session-local, and the hand-built oracle retires. Re-check
+  at the next audit.
+
+### ⭐ THE SELF-AUDIT (also due) — `METHODOLOGY AND REALITY AGREE`, WITH ZERO OPEN ITEMS
+
+For the first time in this session the self-audit reports no prescribed-but-not-executed item at all.
+The one that had stood since t1403 — *"verify wall 2491s EXCEEDS the 300s target"* — is gone, because
+the walls in this window have been running warm rather than paying cold rebuilds. ⚠ That is a
+statement about the last RECEIPT, not a claim that the wall got structurally faster: wall-audit #55
+still says the wall-time instrument cannot see 86% of the wall, and nothing has changed that.
+
+WIKI: none [forced] — no engine source changed; the product is the matrix, the rule and its refutation.

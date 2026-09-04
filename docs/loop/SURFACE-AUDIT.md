@@ -7863,3 +7863,57 @@ exist, and the map and the board both drifted to the same wrong answer.**
 4. Carried and unchanged: I5's `ORACLE_CRAWLED: 0` (audit #82 and seven constitution checks),
    AccessKit, `Content-Encoding: zstd`, and the verify wall — whose own audit (#55) is blind to 86% of
    it.
+
+## Audit #84 — tick 1423 (2026-09-04)
+
+**Sources searched, not recalled:** the Interop 2026 README
+(`api.github.com/.../interop/blob/main/2026/README.md`) and the launch posts (web.dev, WebKit, Mozilla
+Hacks, Igalia, Microsoft Edge).
+
+### THE RECONCILIATION — AND A CORRECTION TO THIS FILE'S OWN RECORD
+
+A secondary source described Interop 2026 as *"nineteen focus areas, three cleanup areas, and four
+investigation areas."* Checked against the README rather than accepted: **20 focus areas, 4
+investigation efforts, and 5 CARRYOVER items that live INSIDE the focus areas** (CSS anchor
+positioning, CSS zoom, Navigation API, View transitions, WebRTC) rather than beside them. Audit #82's
+count of 20 + 4 was right, and the "19 + 3" framing is a different slicing of the same list.
+
+⭐ Recorded because the correction is the audit doing its job in the small: **a number from a blog post
+about a spec is not the spec**, and this file exists so the map is reconciled against the primary
+source. Zero rows to add or change from the focus-area list itself — all 24 were already reconciled
+one at a time at #82 and re-checked at #83.
+
+### ⭐⭐⭐ AND THE ONE FINDING THAT CHANGES SOMETHING: THE a11y INVESTIGATION IS BUILDING OUR ORACLE
+
+Interop 2026's **Accessibility testing** investigation states its aim as *"working towards generating
+consistent accessibility trees from the same DOM and CSS across browsers, and improving the WPT
+testing infrastructure for accessibility testing"* — continuing the Interop 2024 foundation.
+
+That is precisely the gap this loop has been paying to cover by hand:
+
+```text
+  check #131   "Interop lists a11y testing as an INVESTIGATION — no suite can decide this yet",
+               and named CDP `Accessibility.getFullAXTree` as the oracle
+  t1404        stood up that oracle in /tmp and took the first real-site node-match: 75.0% -> 97.0%
+  t1405        found the metric had no self-agreement control; t1411 the root was nameless
+```
+
+**Consequence, and it is a WATCH rather than a task:** when WPT gains a11y-tree tests from this
+investigation, the `/tmp` CDP rig stops being the only instrument and the numbers become
+sweep-bankable instead of session-local. Nothing to build now — this is exactly the *"an exclusion must
+carry a re-check"* rule (t1273) pointed at an ABSENCE we have been working around. **Re-check at the
+next audit whether `wpt/accname`, `wai-aria` or a new a11y-tree directory has grown tree-comparison
+tests**, and if it has, point the sweep at them and retire the hand-built oracle.
+
+### RANKED, from this audit only
+
+1. ⭐⭐⭐ **WATCH the Interop a11y-testing investigation for landed WPT infrastructure.** It would
+   convert this project's most hand-built instrument into a checked-out directory — the same
+   transformation t1413/t1414 performed for twelve CSS specs, but for the one metric that currently
+   has no suite at all. *Refutable by:* a WPT directory of a11y-tree comparison tests existing at the
+   next audit and the sweep not being pointed at it.
+2. ⭐ **The map's Interop rows are correct and were verified against the primary source**, against a
+   secondary source that disagreed. No changes.
+3. Carried, unchanged, and each now overdue an OWNER decision rather than a ninth mention: I5's
+   `ORACLE_CRAWLED: 0`, AccessKit, the WPT AREAS list (still 14 of ~78 css dirs in the sweep even
+   though the checkout now has 26), the lever board's stale Track A items, the verify wall.

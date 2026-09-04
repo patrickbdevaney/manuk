@@ -1100,3 +1100,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1420	6ca83225	1788522463	2026-09-04T07:47:43-04:00	3473	measurement-and-refusal	465	5	141	41	540	81	3896	6960	0	642	0	the third scroll rule, arbitrated in full, attempted, and REVERTED by the ratchet (2026-09-04)
 1421	c39d8309	1788525082	2026-09-04T08:31:22-04:00	2619	measurement-and-refusal	465	5	131	41	540	81	3896	6960	0	642	0	two Chrome measurements in direct tension, and that is the finding (2026-09-04)
 1422	9014c1cb	1788525507	2026-09-04T08:38:27-04:00	425	measurement	465	4	115	41	540	81	3896	6960	0	642	0	the experiment t1421 demanded, run: positive extends, negative does not shrink (2026-09-04)
+1423	0a613fa4	1788528465	2026-09-04T09:27:45-04:00	2958	measurement-and-refusal	465	5	197	43	540	81	3896	6960	0	642	0	the 24-cell matrix, the rule it produced, and the one row that refuted it (2026-09-04)
