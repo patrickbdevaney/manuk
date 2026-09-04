@@ -102220,3 +102220,114 @@ a core each) that were holding the box at load ~14 and ~7 GB. Not a harness edit
 ```
 
 WIKI: docs/wiki/the-scrolling-area-of-every-element.md
+
+## Tick 1426 — a transform is physical in every writing mode, and half the transposition was missing (2026-09-04)
+
+TICK SHAPE: capability
+CLASS: layout / writing modes — the first of the two mechanisms t1425 named, fixed
+
+t1425 refused its own fix because forcing a reflow turned 40 `css/css-overflow` subtests red, every
+one a `writing-mode: vertical-*` row of one matrix file, and named the cause: *our re-layout is not
+idempotent for a transformed child in a vertical writing mode.* Probed on FRESH PAGES (one
+`Page::load` per configuration, so no stale-read luck), five of six shapes were wrong — and the
+mechanism was not idempotency at all.
+
+### THE DEFECT — `transform-origin` WAS TRANSPOSED AND THE TRANSFORM WAS NOT
+
+An orthogonal run is laid out in a **transposed style space** and mapped back by
+`writing_mode::map_subtree`. `transpose_in_place` ends with
+`std::mem::swap(&mut s.transform_origin.0, &mut s.transform_origin.1)` — and never touches
+`s.transform`, `s.translate`, `s.rotate` or `s.scale`. So a transform applied inside that space rode
+the swap out of it. Chrome-measured, a `100x200` child of a `100x200` container:
+
+```text
+                                       chrome              before
+  horizontal-tb  translate(-3px,-6px)  [-3,-6,97,194]   [-3,-6,97,194]   ✓ CONTROL
+  vertical-lr    the same              [-3,-6,97,194]   [-6,-3,94,197]   ← x and y swapped
+  vertical-rl    the same              [-3,-6,97,194]   [ 6,-3,106,197]  ← swapped AND mirrored
+  horizontal-tb  scale(1.10)           [-5,-10,105,210] [-5,-10,105,210] ✓ CONTROL
+  vertical-lr    scale(1.10)           [-5,-10,105,210] [-5,-10,105,210] ✓ and THIS is why it hid
+```
+
+> ⭐⭐⭐ **A SYMMETRIC FUNCTION CANNOT SEE A SWAP.** Every `scale()` row was already exact in both
+> writing modes, because a uniform scale is invariant under transposition — as is a rotation about
+> the centre, and as is any function on a SQUARE box. **When the mechanism under test is an AXIS MAP,
+> the input must be asymmetric in the axes**, or the fixture certifies the bug.
+
+### THE RULE, AND WHY PER-FUNCTION TRANSPOSITION IS EXACT
+
+The conjugation **distributes** over the function list (`J⁻¹ABCJ = (J⁻¹AJ)(J⁻¹BJ)(J⁻¹CJ)`), so each
+function is transposed on its own and the composition still comes out right. The axis map is
+`x_phys = f(ey)`, `y_phys = by + ex` — a swap for `vertical-lr` (determinant −1, a reflection, which
+REVERSES a rotation) and a swap-plus-mirror for `vertical-rl` (determinant +1, a quarter turn, which
+preserves it).
+
+```text
+  Translate(tx, ty) -> Translate(ty,  tx) / Translate(ty, -tx)     lr / rl
+  Scale(sx, sy)     -> Scale(sy, sx)                                both
+  Rotate(r)         -> Rotate(-r) / Rotate(r)                       lr / rl
+  Skew(ax, ay)      -> Skew(ay, ax)                                 lr only
+```
+
+⚠ **Named residue:** `matrix()` in either mode and `skew()` under `vertical-rl`. The general
+conjugation of a raw matrix by the quarter turn is not expressible as any function form the enum
+holds, and an approximate one is worse than a value wrong in a findable way.
+
+### THE GATE, PROVEN RED THREE WAYS
+
+`g_transform_is_physical_in_vertical_modes`, four claims, two of them the `scale` controls that
+explain the hiding.
+
+```text
+  N1  drop the transpose_transform call (pre-tick)   → vlr [-6,-3,94,197], vrl [6,-3,106,197]   RED
+  N2  transpose the axes but not the SIGN under rl   → vrl wrong, vlr GREEN                     RED
+  N3  transpose the sign but not the axes            → both wrong, both controls GREEN          RED
+```
+
+N2 and N3 each fail a different half, which is what makes the gate discriminate the swap from the
+mirror rather than asserting one number twice.
+
+### THE NUMBER — FLAT, AND THAT IS THE HONEST READING
+
+```text
+  css/css-overflow      517/963   → 517/963    unchanged
+  css/css-writing-modes  96/337   →  96/337    unchanged
+  css/css-transforms   4796/5500  → 4796/5500  unchanged
+  manuk-layout 191 tests, 8 writing-mode/geometry gates: green
+```
+
+⭐ **A capability tick with a flat WPT total is exactly what the observer's retarget asked for** — the
+discriminating tests here are REFTESTS, and `css-writing-modes` is 337 subtests of a sparse checkout.
+The fix is banked on Chrome, not on a count. What it *does* move is the shape below.
+
+### AND IT HALVED THE REMAINING GAP IN THE FILE THAT CAUSED IT
+
+`scrollable-overflow-transform-unreachable-region`, measured on fresh pages, 1 of 6 shapes exact → 2:
+
+```text
+                       want          before        after
+  ltr/horizontal-tb   102 / 204     102 / 204     102 / 204   ✓
+  ltr/vertical-lr     102 / 204      99 / 207     102 / 204   ✓ this tick
+  ltr/vertical-rl     108 / 204      96 / 207      87 / 204
+  rtl/horizontal-tb   108 / 204      87 / 204      87 / 204
+  rtl/vertical-lr     102 / 216      99 / 192     102 / 189
+  rtl/vertical-rl     108 / 216      96 / 192      87 / 189
+```
+
+⭐⭐ **EVERY REMAINING ERROR IS ONE RULE AND IT IS NOT A TRANSFORM RULE:** the **unreachable
+scrollable overflow region**. When the scroll origin is at the right or the bottom (`rtl`,
+`vertical-rl`), overflow on the *start* side becomes reachable and overflow on the *end* side does
+not — and our extent hard-codes the `horizontal-tb ltr` case as `w.max(0.0)`. That is the next tick,
+and t1425's widening is blocked behind it.
+
+### THE RECEIPT
+
+```text
+  5 Chrome rows, one variable (the writing mode), all 5 exact after
+  g_transform_is_physical_in_vertical_modes  NEW, 4 claims, red under 3 mutations
+  manuk-layout 191 · g_writing_mode · g_abspos_in_vertical_cb · 5 scroll gates · g_viewport  green
+  3 WPT areas re-measured: none moved, none regressed
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/a-transform-is-physical-in-every-writing-mode.md

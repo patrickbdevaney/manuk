@@ -10688,3 +10688,30 @@ invent a rule that accommodates it. This one cost four ticks; the re-measurement
 decks, overlapping-avatar rows, negative-margin gutter grids (Bootstrap `.row`, Tailwind `-mx-*`) —
 and correct *non*-propagation through zero-area wrappers. The `scrollTop + clientHeight >=
 scrollHeight` bottom test every infinite scroller runs reads this pair. (t1424)
+
+## ⭐⭐⭐ A SYMMETRIC FIXTURE CANNOT SEE A SWAP — half a transposition survives behind `scale()`
+
+An orthogonal (vertical) run is laid out in a transposed style space and mapped back. The
+`transform-origin` was transposed with it and **the transform itself was not**, so `translate(-3px,
+-6px)` moved a box by `(-6, -3)` in `writing-mode: vertical-lr` and by `(+6, -3)` in `vertical-rl`.
+
+```text
+                                    chrome              ours
+  horizontal-tb  translate(-3,-6)   [-3,-6,97,194]   [-3,-6,97,194]   ✓ CONTROL
+  vertical-lr    the same           [-3,-6,97,194]   [-6,-3,94,197]
+  vertical-rl    the same           [-3,-6,97,194]   [ 6,-3,106,197]
+  ANY mode       scale(1.10)        [-5,-10,105,210] IDENTICAL — invariant under the swap
+```
+
+⭐⭐⭐ **EVERY `scale()` ROW WAS ALREADY EXACT, IN BOTH WRITING MODES**, because a uniform scale is
+invariant under transposition — as is a rotation about the centre, and as is any function on a
+SQUARE box. A fixture built from any of those reports a clean bill of health for an axis map that is
+broken. **When the mechanism under test is an AXIS MAP, the input must be asymmetric in the axes.**
+
+⭐ And the conjugation DISTRIBUTES over a function list (`J⁻¹ABCJ = (J⁻¹AJ)(J⁻¹BJ)(J⁻¹CJ)`), so each
+function transposes on its own — which is what makes "transpose the style, then lay out" a legitimate
+architecture rather than an approximation.
+
+**Unlocks:** correct geometry for every transformed box inside a vertical writing mode — CJK and
+Mongolian pages, vertical-text sidebars and rotated table headers, and every
+`getBoundingClientRect`/hit-test/a11y-tree read of one. (t1426)

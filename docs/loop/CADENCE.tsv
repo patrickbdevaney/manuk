@@ -1103,3 +1103,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1423	0a613fa4	1788528465	2026-09-04T09:27:45-04:00	2958	measurement-and-refusal	465	5	197	43	540	81	3896	6960	0	642	0	the 24-cell matrix, the rule it produced, and the one row that refuted it (2026-09-04)
 1424	d9c918b9	1788536334	2026-09-04T11:38:54-04:00	7869	capability	465	11	515	78	541	81	3896	6960	0	642	0	the missing variable was `width:0`, and it was in the fixtures the whole time (2026-09-04)
 1425	38ea2bb3	1788544076	2026-09-04T13:47:56-04:00	7742	measurement-and-refusal	465	6	266	42	541	81	3896	6960	0	642	0	`scrollWidth`/`scrollHeight` are properties of EVERY element, and the fix is two mechanisms, not one (2026-09-04)
+1426	30f33b0f	1788548253	2026-09-04T14:57:33-04:00	4177	capability	465	9	423	42	542	81	3896	6960	0	642	0	a transform is physical in every writing mode, and half the transposition was missing (2026-09-04)

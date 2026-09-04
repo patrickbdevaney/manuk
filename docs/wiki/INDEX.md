@@ -85,6 +85,13 @@
   - L303 · A frame is a bitmap, so its pixels need explicit refreshing (tick 232)
   - L331 · The agent's click point IS layout geometry, so a containing-block bug is an actuation bug (I3)
 
+## A transform is physical in every writing mode
+`docs/wiki/a-transform-is-physical-in-every-writing-mode.md`
+
+  - L7 · The defect
+  - L30 · The rule
+  - L56 · What it did NOT fix, with the numbers
+
 ## The end of the accessible-name chain, in the right order
 `docs/wiki/ax-name-fallback-chain.md`
 
@@ -2979,4 +2986,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2674 sections across 75 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2677 sections across 76 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

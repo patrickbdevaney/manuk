@@ -233,6 +233,72 @@ fn transpose_in_place(s: &mut ComputedStyle, m: WritingMode) {
         }
     }
     std::mem::swap(&mut s.transform_origin.0, &mut s.transform_origin.1);
+    // ── ⚠⚠⚠ **THE TRANSFORM-ORIGIN WAS TRANSPOSED AND THE TRANSFORM ITSELF WAS NOT, AND A
+    //    TRANSFORM IS PHYSICAL IN EVERY WRITING MODE.** `translate(-3px, -6px)` on a child of a
+    //    `writing-mode: vertical-*` box moved it by (-6, -3) here and by (-3, -6) in every other
+    //    engine — the run is laid out in transposed space and `map_subtree` swaps the geometry back,
+    //    so a transform applied *inside* that space rides the swap. Chrome-measured, one
+    //    `100x200` child with `transform: translate(-3px,-6px)`, rect relative to its container:
+    //
+    //    ```text
+    //                          chrome              before
+    //      horizontal-tb   [-3,-6,97,194]     [-3,-6,97,194]   ✓ CONTROL
+    //      vertical-lr     [-3,-6,97,194]     [-6,-3,94,197]   ← x and y swapped
+    //      vertical-rl     [-3,-6,97,194]     [ 6,-3,106,197]  ← swapped AND mirrored
+    //      a uniform scale(1.10), any mode  IDENTICAL in both — which is exactly why this
+    //                                       survived: a symmetric function cannot see a swap.
+    //    ```
+    //
+    //    ⭐ The conjugation DISTRIBUTES over the function list (`J⁻¹ABCJ = (J⁻¹AJ)(J⁻¹BJ)(J⁻¹CJ)`),
+    //    so each function is transposed on its own and the composition still comes out right. The
+    //    map is `x_phys = f(ey)`, `y_phys = by + ex`: a swap for `vertical-lr` (a reflection,
+    //    determinant −1, which REVERSES a rotation) and a swap-plus-mirror for `vertical-rl` (a
+    //    quarter turn, determinant +1, which preserves it).
+    transpose_transform(&mut s.transform, m.is_rl());
+    if let Some((x, y)) = s.translate {
+        s.translate = Some(if m.is_rl() { (y, neg_dim(x)) } else { (y, x) });
+    }
+    if let Some(manuk_css::TransformFn::Rotate(r)) = s.rotate {
+        s.rotate = Some(manuk_css::TransformFn::Rotate(if m.is_rl() {
+            r
+        } else {
+            -r
+        }));
+    }
+    if let Some((sx, sy)) = s.scale {
+        s.scale = Some((sy, sx));
+    }
+}
+
+/// Negate a `Dim`, preserving its kind — a `%` translate resolves against the transposed box, so
+/// the percentage travels with the axis and only its SIGN depends on the block direction.
+fn neg_dim(d: manuk_css::Dim) -> manuk_css::Dim {
+    use manuk_css::Dim as D;
+    match d {
+        D::Auto => D::Auto,
+        D::Px(v) => D::Px(-v),
+        D::Percent(p) => D::Percent(-p),
+        D::Calc { px, pct } => D::Calc { px: -px, pct: -pct },
+    }
+}
+
+/// Rewrite a physical `transform` function list into the transposed engine's axes.
+///
+/// ⚠ `matrix()` and — under `vertical-rl` — `skew()` are NAMED RESIDUE, not handled: the general
+/// conjugation of a raw matrix by the quarter-turn is a different expression from any of the
+/// function forms this enum can hold, and inventing an approximate one is worse than a value that
+/// is wrong in a way the next reader can find. Every other function is exact.
+fn transpose_transform(fns: &mut [manuk_css::TransformFn], rl: bool) {
+    use manuk_css::TransformFn as T;
+    for f in fns.iter_mut() {
+        *f = match *f {
+            T::Translate(tx, ty) => T::Translate(ty, if rl { neg_dim(tx) } else { tx }),
+            T::Scale(sx, sy) => T::Scale(sy, sx),
+            T::Rotate(r) => T::Rotate(if rl { r } else { -r }),
+            T::Skew(ax, ay) if !rl => T::Skew(ay, ax),
+            other => other,
+        };
+    }
 }
 
 #[derive(Clone, Copy, PartialEq)]
