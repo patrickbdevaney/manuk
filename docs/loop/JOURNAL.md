@@ -100978,3 +100978,72 @@ arm that matters most.
 ```
 
 WIKI: docs/wiki/the-headlines-error-bar.md
+
+## Tick 1411 — the first thing an agent reads about a page was empty on every page (2026-09-04)
+
+TICK SHAPE: capability-mechanism
+CLASS: every page — the root node's name is *"which page am I on"*, asked before anything else
+
+Straight off t1404's ranked remainder, the entry that is small in count and first in reading order:
+**5 misses across 6 corpus pages, one per page, because there is exactly one root.**
+
+```text
+  chrome 145.0.7632.116, via CDP Accessibility.getFullAXTree      ours
+  <title>nfc</title>                    RootWebArea 'nfc'         document ''
+  <title>  Padded Title  </title>       RootWebArea 'Padded Title' ← trimmed
+  no <title> at all                     RootWebArea ''
+```
+
+The root's accessible name is the **first** thing an assistive technology announces and the first
+thing an agent reads out of `observe()`. Every document answered `""`.
+
+⭐ Only ONE production site builds the root (four more are `#[cfg(test)]` fixtures), so this is one
+edit rather than the five-implementations shape the last several ticks kept finding.
+
+⚠ **One measurement is recorded and deliberately NOT emulated.** A `<title>` containing a NEWLINE came
+back from Chrome as the page's **URL** rather than as its text, while a single-line title with the
+same leading and trailing spaces trims correctly — so the newline changes the answer and nothing here
+explains why. Inventing a URL-fallback rule from one unexplained data point is how a gate pins the
+engine to a guess (t1004), and a URL is not a useful name for an agent. The observation lives in
+`document_name`'s doc comment so the next reader has it without re-taking it.
+
+### ⭐⭐ A FIFTH GREEN MUTATION IN FIVE TICKS, AND THIS ONE WAS INVISIBLE BY CONSTRUCTION
+
+The control arm was a title-less document containing a `<p>`. The mutation *"read the first `<title>`
+**or** `<h1>`"* passed it — and could not have failed any arm above it either, because **in a document
+that HAS a title the title is in `<head>` and therefore always earlier in document order.** No fixture
+with a title can tell the two rules apart. The discriminating one is the fixture with a heading and NO
+title, and the control now carries it.
+
+> ⭐⭐ **THE MUTATION PASS IS THE MOST PRODUCTIVE INSTRUMENT THIS LOOP OWNS.** t1402 a hollow arm ·
+> t1403 an inert guard · t1404 a missing arm · t1408 a gate measuring the wrong deadline · t1411 a
+> control that could not discriminate. Five ticks, five reports about the ARM rather than the code.
+
+### CONSTITUTION CHECK #134 (due at this tick)
+
+Written in full at `docs/loop/CONSTITUTION-CHECK.md`. The window's finding in one line: **three of
+seven ticks were MEASUREMENT, each forced by the previous one's evidence — and the measurement work
+retroactively demoted its own headline.** t1406 reported *"61 ticks moved the render bar by +1 site"*;
+t1410 measured that bar's run-to-run band at **±2 sites on a 40-site slice**. The +1 was inside the
+noise. The direction survives; the number should never have been quoted without repeats, and **the
+loop's primary Phase-0 number had gone 1,400 ticks without an error bar.**
+
+I8 is bent by a HABIT rather than a defect — quoting an instrument's output without a control row —
+and this window found four more instances (t1405 page churn as engine error · t1407 a stale stored row
+as this tick's work · t1409 a clock as the engine's · t1410 an integer for a ±2 quantity). All four now
+have controls. **STEER: the next window is TRACK A. The three measurement ticks bought exactly the
+honesty needed to steer it, and no further instrument work will move the render number.**
+
+### THE RECEIPT
+
+```text
+  G_A11Y_DOCUMENT_ROOT_NAME  ok (4 arms)   RED under all 3 mutations
+    N1 the root has no name (the pre-fix engine)
+    N2 the title not normalised (the author's whitespace in a name agents match on)
+    N3 the first `<title>` OR `<h1>` — caught ONLY by the strengthened control
+  g_a11y_name_from_content_context · g_a11y_layout_table_is_not_a_table · g_a11y_role_vocabulary ·
+  g_ax_tree_excludes_display_none · g_agent_activation_behaviour                            ok
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/name-from-content-depends-on-context.md

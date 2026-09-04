@@ -3024,13 +3024,41 @@ pub fn build_tree_generated(
     A11yNode {
         node: root,
         role: Role::Document,
-        name: String::new(),
+        name: document_name(dom),
         bbox: None,
         z: 0,
         hittable: true,
         state: A11yState::default(),
         children,
     }
+}
+
+/// **THE ROOT'S ACCESSIBLE NAME IS THE DOCUMENT TITLE, AND OURS WAS EMPTY.**
+///
+/// It is the FIRST thing an assistive technology announces about a page and the first thing an agent
+/// reads out of `observe()` — *"which page am I on"* — and every document answered `""`. Found in the
+/// ranked remainder of t1404's real-site node-match survey (5 misses across 6 corpus pages, one per
+/// page, because there is exactly one root).
+///
+/// Headless Chrome 145.0.7632.116, one fixture per row:
+///
+/// ```text
+///   <title>nfc</title>                    RootWebArea name='nfc'
+///   <title>  Padded Title  </title>       RootWebArea name='Padded Title'      ← trimmed
+///   no <title> at all                     RootWebArea name=''
+/// ```
+///
+/// ⚠ **One measurement is recorded and NOT emulated**, because it is not understood: a `<title>`
+/// containing a NEWLINE came back as the page's URL rather than as its text. A single-line title with
+/// the same leading and trailing spaces trims correctly, so it is the newline that changes the answer
+/// and nothing here explains why. Guessing at a URL fallback would be inventing a rule from one
+/// unexplained data point; a URL is also not a useful name for an agent. Written down so the next
+/// reader has the observation rather than having to re-take it.
+fn document_name(dom: &Dom) -> String {
+    dom.descendants(dom.root())
+        .find(|&n| dom.element(n).is_some_and(|e| e.name == "title"))
+        .map(|n| normalize(&dom.text_content(n)))
+        .unwrap_or_default()
 }
 
 /// As [`build_tree_with_geometry`], plus the **focused** node — which the host owns (the shell

@@ -2307,6 +2307,7 @@
   - L45 · ⭐⭐ But row is not simply wrong — its answer depends on where the row is
   - L76 · The arm a GREEN mutation asked for
   - L83 · The ranked remainder — and the first ranking of it was WRONG
+  - L113 · The root's own name (t1411)
 
 ## A name fragment hidden by a CSS RULE — the prune that only read the `style=` attribute
 `docs/wiki/name-hidden-by-stylesheet.md`
@@ -2928,4 +2929,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2647 sections across 69 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2648 sections across 69 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

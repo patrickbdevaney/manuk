@@ -11665,3 +11665,100 @@ ratchet green, and two gates in mutual contradiction. **I1, I6, I7 — not bent.
    rebuilds after the hygiene cron's full purge), and `Content-Encoding: zstd`.
 
 **Next check due: tick 1411.**
+
+## Check #134 — tick 1411 (2026-09-04)
+
+**HORIZON: H0.** **GATE** (PART II, four binary conditions): ~83% WPT across categories,
+oracle-verified across the four corpora, a daily-drivable shell, and semantic-API coverage of every
+rendered construct.
+
+### ⭐ CHECK #133'S STEER FIRED AGAIN, AND TWICE
+
+#133 steered: *"the next tick that is not mid-subsystem should be Track B's a11y tree."* **t1404 and
+t1405** are both Track B, and t1404 produced the largest single measured gain of the window (real-site
+node match **75.0% → 97.0%**). #133's steer #2 — *"a tick that lands a gate should run its
+NEIGHBOURS"* — was obeyed in every one of the seven ticks since. **Three consecutive checks whose
+steer was executed by the next tick.** The pattern that separates them from #131 (whose steer did not
+fire) is unchanged: the steer named a FILE.
+
+### GATE OR SCOREBOARD? — NEITHER, AND THAT IS THIS WINDOW'S FINDING
+
+```text
+  1404  a11y name-from-content context   Track B  condition 4   real-site 75.0 -> 97.0%
+  1405  layout tables are not tables     Track B  condition 4   + the self-agreement control
+  1406  the 61-tick-stale sweep          MEASURE  the headline itself
+  1407  HTMLElement.prototype join       Track A  condition 1/4  web components could not upgrade
+  1408  the forced-reflow budget         Track A  condition 3    191s -> 11s, TIMED OUT -> COMPLETED
+  1409  the timeout's attribution        MEASURE  whose clock burned
+  1410  the headline's error bar         MEASURE  ±2 sites on 40
+```
+
+**Three of seven ticks were MEASUREMENT, and each was forced by the previous one's evidence.** t1406's
+sweep produced a worklist; t1408 worked it and t1409 discovered the worklist was mis-attributed; t1409
+led to t1410, which found the headline itself has a ±2-site band. That is a chain, not drift — but it
+is also the loop spending three of seven ticks sharpening the instruments rather than the browser.
+
+> ⭐⭐⭐ **AND THE MEASUREMENT WORK RETROACTIVELY DEMOTED ITS OWN HEADLINE.** t1406 reported *"61 ticks
+> moved the render bar by +1 site."* t1410 measured the bar's run-to-run band at **±2 sites on a
+> 40-site slice**. The +1 was inside the noise. The DIRECTION survives — Track A was dark and nothing
+> moved the render number — but **the loop's primary Phase-0 number had never had an error bar, and
+> for 1,400 ticks every delta quoted from it was unqualified.** That is the largest instrument finding
+> of the session and it is now in the tool, not just in a journal entry.
+
+### ⚠⚠⚠ THE INVARIANT AT RISK IS I8, AND THE COUNT IS NOW FOUR
+
+Check #133 named I8 bent (a count of gate FILES is not a count of EXECUTED gates). This window found
+**four more instruments confidently wrong about their own numbers**:
+
+```text
+  t1405   a live page's churn scored as engine error      (chrome-vs-chrome on that page: 85.3%)
+  t1407   a stale stored WPT row scored as this tick's work (same binary both ways: identical)
+  t1409   a wall-clock timeout scored as the engine's      (our load 5.7s, Chrome's 8.6s, us idle)
+  t1410   an integer printed for a ±2 quantity
+```
+
+Every one was found the same way — **by repeating the measurement instead of reading its label** — and
+every one had been reporting confidently for many ticks. I8 is not bent by a single defect; it is bent
+by a *habit*, and the habit is quoting an instrument's output without a control row. All four now have
+one.
+
+### ⭐⭐ AND A FIFTH GREEN MUTATION IN FIVE TICKS
+
+t1402 hollow arm · t1403 inert guard · t1404 missing arm · t1408 a gate measuring the wrong deadline
+AND an over-eager-budget blind spot · t1411 a control arm that could not distinguish `<title>` from
+`<h1>` because the title is always earlier in document order. **The mutation pass is now the single
+most productive instrument the loop owns**, and it earns its cost every time.
+
+### PART VI CORRECTIONS
+
+* **VI.1's I3 — HELD.** Track B took two ticks and moved the a11y tree further than any window since
+  t1254. t1404's own gate observes through the semantic channel.
+* **VI.2's H0.7 (AccessKit) — unchanged, not started. SIXTH check.** t1404/t1405 moved the a11y tree
+  itself; the AccessKit ADOPTION is still untouched. ⚠ And a scope note the roadmap needs:
+  `docs/loop/V1-SCOPE.md` frames a11y as *the AGENT's* first-class queryable state measured on the
+  real-site corpus — **screen-reader/AT-SPI platform integration is not named there at all**, so an
+  AccessKit tick must be justified on the agent channel or the roadmap row should say so.
+* **I5 — unchanged. `ORACLE_CRAWLED: 0`. SEVENTH check**, still with no lever the loop owns.
+* **NEW for VI.3:** the aperture discipline needs a companion — **a number quoted without its band is
+  not a measurement.** t1410 put that in the tool; VI.3 should say it in prose.
+
+### THE INVARIANTS
+
+**I3 — held.** **I4 (Pareto) — held**, with one honest exception recorded in its own tick: t1405's
+layout-table rule is 1.9% of corpus pages and says so out loud. **I2 — held.** **I8 — BENT, four more
+instances, all now controlled.** **I1, I6, I7 — not bent.**
+
+### STEER
+
+1. ⭐⭐⭐ **THE NEXT WINDOW IS TRACK A, AND THE INSTRUMENTS ARE NOW HONEST ENOUGH TO STEER IT.** Three
+   measurement ticks bought exactly this: a fresh sweep, an attributed worklist, and an error bar. The
+   render number has not moved in 61+ ticks and no further instrument work will move it. *Refutable
+   by:* a sweep whose `shape>=0.75` count rises by MORE than the band, with the band printed beside it.
+2. ⭐⭐ **NO SWEEP DELTA MAY BE QUOTED WITHOUT REPEATS FROM NOW ON.** `manuk-wpt certificate --rows A
+   --rows B --rows C` exists as of t1410 and prints the refusal line itself. This is the one process
+   change this window earns.
+3. ⭐ **Carried, and now overdue an owner decision rather than an eighth mention:** I5's
+   `ORACLE_CRAWLED: 0` (seven checks), AccessKit (six checks, plus the scope question above), the
+   verify wall (wall-audit #55 found the audit itself blind to 86% of it), and `Content-Encoding: zstd`.
+
+**Next check due: tick 1419.**

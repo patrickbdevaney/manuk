@@ -108,3 +108,30 @@ silently"* story wrote itself. **It was false.** One fixture through the same `a
    4   role `Abbr` (<abbr>)                    absent from the vocabulary
   35   [RECLASSIFIED, not a11y] a11yproject's text-transform never reaches its links/headings
 ```
+
+
+## The root's own name (t1411)
+
+The ranked remainder above listed *"the ROOT's name is the document TITLE"* at 5 misses. It is one
+miss per page — there is exactly one root — and it is the **first** thing an assistive technology
+announces and the first thing an agent reads out of `observe()`: *which page am I on*. Every document
+answered `""`.
+
+```text
+  chrome                                                          ours, before
+  <title>nfc</title>                 RootWebArea 'nfc'            document ''
+  <title>  Padded Title  </title>    RootWebArea 'Padded Title'   ← trimmed
+  no <title> at all                  RootWebArea ''
+```
+
+⚠ **Recorded and not emulated:** a `<title>` containing a NEWLINE came back from Chrome as the page's
+URL rather than its text, while a single-line title with the same leading and trailing spaces trims
+correctly. The newline changes the answer and nothing here explains why; a URL is also not a useful
+name for an agent. Guessing a rule from one unexplained data point is how a gate pins the engine to a
+guess.
+
+⭐⭐ **The control arm could not have failed.** It was a title-less document with a `<p>`, and the
+mutation *"read the first `<title>` **or** `<h1>`"* passed — and no fixture that HAS a title could
+have caught it either, because the title is in `<head>` and therefore always earlier in document
+order. The discriminating fixture is a heading with NO title. Gate:
+`g_a11y_document_root_name.rs`.

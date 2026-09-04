@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1089** | ticks 1–1410 |
-| median tick cycle | **32m** | 1088 intervals |
-| median, last 10 | **72m** | 10 intervals |
+| ticks landed | **1090** | ticks 1–1411 |
+| median tick cycle | **32m** | 1089 intervals |
+| median, last 10 | **66m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.83** | 1315.5h elapsed |
-| median verify wall | **67s** | 1028 ticks |
+| **ticks per hour** | **0.83** | 1316.5h elapsed |
+| median verify wall | **67s** | 1029 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**492 of 1089 ticks** (45%) moved a
+**492 of 1090 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -1186,5 +1186,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1408** | 2026-09-03 22:17 | 72m | capability-mechanism | 8m | +515/−44 | 537 | 81 | 56.0% · | one task forced a thousand full re-layouts and neither guard was looking (2026-09-04) |
 | **1409** | 2026-09-03 23:14 | 57m | instrument-fidelity | 8m | +356/−45 | 537 | 81 | 56.0% · | the watchdog blamed this engine for every timeout, including the ones where nothing of our |
 | **1410** | 2026-09-04 00:33 | 79m | instrument-fidelity | 8m | +438/−45 | 537 | 81 | 56.0% · | the headline is an integer, and the same binary does not give the same integer twice (2026 |
+| **1411** | 2026-09-04 01:34 | 61m | capability-mechanism | 8m | +337/−44 | 537 | 81 | 56.0% · | the first thing an agent reads about a page was empty on every page (2026-09-04) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
