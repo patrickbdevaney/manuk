@@ -2592,6 +2592,7 @@
 
   - L11 · ⭐⭐⭐ The layout was never wrong
   - L29 · ⚠⚠ The rule underneath, found while building the arms
+  - L46 · t1418 — and the end padding belongs to the content the container CONTAINS
 
 ## `sizes` — the three tokenizer rules that run before the grammar
 `docs/wiki/sizes-tokenizer.md`
@@ -2959,4 +2960,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2662 sections across 73 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2663 sections across 73 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

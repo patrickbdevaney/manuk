@@ -1095,3 +1095,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1415	e606975e	1788509056	2026-09-04T04:04:16-04:00	2680	instrument-fidelity	465	9	348	70	538	81	3896	6960	0	642	0	the diagnostic answered 0 for every file it was ever pointed at (2026-09-04)
 1416	604f72dd	1788509567	2026-09-04T04:12:47-04:00	511	instrument-fidelity	465	7	161	42	538	81	3896	6960	0	642	0	a failing count cannot tell one combinatorial file from an unimplemented feature (2026-09-04)
 1417	1a65d746	1788514838	2026-09-04T05:40:38-04:00	5271	capability-mechanism	465	9	341	43	539	81	3896	6960	0	642	0	the layout was right, the overflow walk was flat, and a grandchild sailed past its parent's negative margin (2026-09-04)
+1418	52dc1e6c	1788518363	2026-09-04T06:39:23-04:00	3525	capability-mechanism	465	10	317	59	540	81	3896	6960	0	642	0	the end padding belongs to the content the container CONTAINS, and depth was a proxy that fitted three fixtures (2026-09-04)

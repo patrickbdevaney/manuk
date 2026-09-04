@@ -10604,3 +10604,19 @@ grandchild that already overflows gets the container's end padding added on top;
 Asserting Chrome there would make the gate red for a defect the tick does not fix; asserting ours
 would pin the engine to a bug. Both are written into the gate body as located, Chrome-measured work
 items. (t1417)
+
+## ⚠⚠ A SCROLL CONTAINER'S END PADDING WAS HANDED TO EVERY DESCENDANT, NOT ONLY THE ONES IT CONTAINS
+
+A `padding:10px; overflow:scroll` scroller around a 100px filler reports 120 when the filler is a
+DIRECT child (10 + 100 + 10, correct) and Chrome reports **110** when the filler is a grandchild of a
+fixed-height wrapper it overflows — we reported 120 in both. Eight Chrome-measured rows, both axes.
+
+⭐⭐⭐ **AND THE RULE IS NOT DEPTH — AN EXISTING GATE REFUSED THAT IN ONE RUN.** *"Only a DIRECT child
+gets the end padding"* fits six of the eight rows and turns `g_scroll_overflow_end_margin` red on a
+counterexample that had been in the tree since t1119 (an AUTO-height wrapper whose inner child carries
+the margin: Chrome 270, depth gives 260). **The discriminator is CONTAINMENT**: an auto-height wrapper
+grows to contain its child, so the padding applies through it; a fixed-height wrapper whose child
+overflows does not. **A plausible rule that fits every fixture you happened to write is the most
+expensive kind of wrong** — and a gate that refuses it is worth more than the fixtures that agree.
+(t1418 — `g_scroll_extent_end_padding_containment`; closes the gap t1417 named and restores the arm
+t1417 had to move out)

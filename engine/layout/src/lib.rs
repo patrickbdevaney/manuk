@@ -975,6 +975,31 @@ impl LayoutBox {
             oy: f32,
             w: &mut f32,
             h: &mut f32,
+            // ── ⚠⚠⚠ **THE CONTAINER'S END PADDING BELONGS TO ITS DIRECT CHILDREN AND TO NOBODY
+            //    ELSE**, and a flat walk applied it to every descendant. Chrome-measured at three
+            //    depths, a `100x100; padding:10px; overflow:scroll` scroller around a 100px filler:
+            //
+            //    ```text
+            //                                          chrome   before
+            //      the filler is the DIRECT CHILD        120      120     10 + 100 + 10  ✓
+            //      the filler is a GRANDCHILD            110      120     ← the +10 again
+            //      the filler is a GREAT-GRANDCHILD      110      120     ← and again
+            //    ```
+            //
+            //    ⚠⚠⚠ **AND IT IS NOT DEPTH — THAT WAS THE FIRST RULE TRIED AND `g_scroll_overflow_end_margin`
+            //    REFUSED IT.** That gate holds a Chrome-measured counterexample already in the tree:
+            //    *"the realistic nested shape — an auto-height wrapper whose inner child carries the
+            //    margin"* expects **270**, and a depth rule gives 260. So a grandchild sometimes DOES
+            //    get the padding.
+            //
+            //    ⭐⭐⭐ **THE DISCRIMINATOR IS CONTAINMENT.** In the gate's fixture the wrapper is
+            //    AUTO-HEIGHT: it grows to contain its child, so the child is part of the scroller's
+            //    in-flow content and the end padding applies. In the cases above the wrapper has a
+            //    FIXED height and its child overflows it — the overflowing part is not in-flow
+            //    content of the scroller, and Chrome gives it no padding. Depth was a proxy that
+            //    happened to fit three fixtures; containment fits all of them, and the gate that
+            //    refused the proxy is why.
+            contained: bool,
             contribution: &dyn Fn(NodeId) -> OverflowContribution,
         ) {
             let c = b.node.map(contribution).unwrap_or_default();
@@ -1003,7 +1028,7 @@ impl LayoutBox {
             //    The `+10` in row 1 and its absence in rows 2 and 3 are the same padding, applied
             //    to one rectangle and not the other — which is what makes this a per-contribution
             //    rule rather than the single addition at the end of the extent that it used to be.
-            let (pr, pb) = c.end_padding;
+            let (pr, pb) = if contained { c.end_padding } else { (0.0, 0.0) };
             if c.relative_offset == (0.0, 0.0) {
                 *w = w.max(right + pr - ox);
                 *h = h.max(bottom + pb - oy);
@@ -1046,8 +1071,14 @@ impl LayoutBox {
                         (c.end_margin.1 < 0.0).then_some(bottom),
                     );
                     for k in kids {
+                        // A child is CONTAINED when this box is, and the child's own margin box does
+                        // not spill past this box's. `contained` therefore turns off at the first
+                        // ancestor a descendant overflows and stays off below it.
+                        let kc = contained
+                            && k.rect.y + k.rect.height <= bottom + 0.01
+                            && k.rect.x + k.rect.width <= right + 0.01;
                         let (mut kw, mut kh) = (0.0f32, 0.0f32);
-                        walk(k, ox, oy, &mut kw, &mut kh, contribution);
+                        walk(k, ox, oy, &mut kw, &mut kh, kc, contribution);
                         if let Some(rx) = clamp.0 {
                             kw = kw.min(rx + pr - ox);
                         }
@@ -1070,7 +1101,15 @@ impl LayoutBox {
         match &self.content {
             BoxContent::Block(kids) => {
                 for k in kids {
-                    walk(k, self.rect.x, self.rect.y, &mut w, &mut h, contribution);
+                    walk(
+                        k,
+                        self.rect.x,
+                        self.rect.y,
+                        &mut w,
+                        &mut h,
+                        true,
+                        contribution,
+                    );
                 }
             }
             BoxContent::Inline(frags) => {

@@ -101517,3 +101517,67 @@ gate says so in its own body.
 ```
 
 WIKI: docs/wiki/scroll-extent-is-composed-not-flat.md
+
+## Tick 1418 — the end padding belongs to the content the container CONTAINS, and depth was a proxy that fitted three fixtures (2026-09-04)
+
+TICK SHAPE: capability-mechanism
+CLASS: every scroll container with padding — and it closes the rule t1417 had to leave named
+
+t1417 ended by naming this exactly: *"a grandchild that already overflows gets the container's END
+PADDING added on top, and Chrome does not add it… that is the next tick."* It was.
+
+### THE MEASUREMENT, EIGHT ROWS, ALL CHROME
+
+```text
+                                                         chrome   before
+  the filler is the DIRECT CHILD                           120      120     10 + 100 + 10  ✓
+  the filler is a GRANDCHILD of a 10px-tall wrapper        110      120     ← the +10 again
+  the filler is a GREAT-GRANDCHILD, same shape             110      120     ← and again
+  height:30px; padding:10px > 10px wrapper > 60px box       70       80     t1417's moved-out arm
+  the same with padding:0                          CONTROL  60       60
+  the same with a 5px box that FITS                CONTROL  50       50
+  an AUTO-HEIGHT wrapper > 100px child + 30px margin       150      150     ⭐ the padding DOES apply
+  the HORIZONTAL axis: 10px wrapper > an 80px box           90      100
+```
+
+### ⭐⭐⭐ AND THE RULE IS NOT DEPTH — AN EXISTING GATE REFUSED THAT IN ONE RUN
+
+The first fix was *"only a DIRECT child gets the end padding."* It satisfied the first six rows and
+`g_scroll_overflow_end_margin` went **red**, on a Chrome-measured counterexample that had been sitting
+in the tree since t1119: *"the realistic nested shape — an auto-height wrapper whose inner child
+carries the margin"*, expecting **270**, where depth gives 260. **A grandchild sometimes DOES get the
+padding.**
+
+> ⭐⭐⭐ **THE DISCRIMINATOR IS CONTAINMENT, AND DEPTH WAS A PROXY THAT HAPPENED TO FIT THREE
+> FIXTURES.** An AUTO-height wrapper grows to contain its child, so the child is the scroller's
+> in-flow content and the padding applies. A FIXED-height wrapper whose child overflows it is a
+> different thing: the overflowing part is not in-flow content of the scroller and gets nothing.
+> **The gate that refused the proxy is the only reason the right rule was found** — a plausible rule
+> that fits every fixture you happened to write is the most expensive kind of wrong.
+
+### ⭐⭐ AND IT MAKES t1417's GATE STRONGER
+
+t1417 wrote an arm, measured it, and moved it out rather than ship red, recording *"fixing that is
+what makes the other mutations catchable."* It was fixed here, so **the arm is back in
+`g_negative_margin_scroll_extent`** — which is now red under the `clamp EVERY end margin` mutation it
+previously could not see. A named gap, closed by the tick that was pointed at it.
+
+⭐ The horizontal arm exists for the same reason one level down: a mutation that dropped the `x` term
+from the containment test came back green, because every other row is vertical.
+
+### THE RECEIPT
+
+```text
+  G_SCROLL_EXTENT_END_PADDING_CONTAINMENT  ok (8 rows)  RED under all 4 mutations
+    E1 everyone gets the padding (the pre-fix walk)   E2 DEPTH instead of containment
+    E3 containment ignores the horizontal axis        E4 nobody gets the padding
+  G_NEGATIVE_MARGIN_SCROLL_EXTENT  ok (4 arms now)   — t1417's moved-out arm restored
+  g_scroll_overflow_alignment_rect · g_scroll_overflow_end_margin · g_scroll · g_load_geometry ·
+  g_first_paint · g_table_cell_content_geometry · g_flex_grid_item_margin · g_float_line_reflow   ok
+  manuk-layout 191 unit tests                                                                     ok
+  WPT css/cssom-view 602 (=) · css/css-overflow 513 (=)  — a CORRECTNESS fix with no measured
+     WPT movement in the areas checked, and it says so rather than hunting for a number
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/scroll-extent-is-composed-not-flat.md

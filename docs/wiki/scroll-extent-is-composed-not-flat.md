@@ -42,3 +42,29 @@ engine to a bug.
 > ⭐⭐ **A gate that names what it cannot catch is worth more than one that pretends.** Two green
 > mutations here are the measurement that says which fix comes next — the end-padding rule is now a
 > located, Chrome-measured work item rather than a suspicion.
+
+## t1418 — and the end padding belongs to the content the container CONTAINS
+
+```text
+                                                         chrome   before
+  the filler is the DIRECT CHILD                           120      120     ✓ t1258's rule
+  a GRANDCHILD of a 10px-tall wrapper                      110      120     ← the +10 again
+  a GREAT-GRANDCHILD, same shape                           110      120
+  an AUTO-HEIGHT wrapper > 100px child + 30px margin       150      150     ⭐ the padding DOES apply
+  the HORIZONTAL axis: 10px wrapper > an 80px box           90      100
+```
+
+⭐⭐⭐ **The rule is not DEPTH, and an existing gate refused that in one run.** The first fix was
+*"only a direct child gets the end padding"*; it satisfied six rows and turned
+`g_scroll_overflow_end_margin` red on a Chrome-measured counterexample that had been in the tree since
+t1119 — *"an auto-height wrapper whose inner child carries the margin"*, expecting 270 where depth
+gives 260.
+
+**The discriminator is containment.** An auto-height wrapper grows to contain its child, so the child
+is the scroller's in-flow content and the padding applies; a fixed-height wrapper whose child
+overflows it is a different thing, and the overflowing part gets nothing. **A plausible rule that fits
+every fixture you happened to write is the most expensive kind of wrong, and the gate that refused the
+proxy is the only reason the right rule was found.**
+
+This also closed the gap t1417 named: the arm t1417 had to move out is back, and
+`g_negative_margin_scroll_extent` is now red under the mutation it previously could not see.

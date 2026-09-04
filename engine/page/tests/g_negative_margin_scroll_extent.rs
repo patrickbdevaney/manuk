@@ -98,19 +98,22 @@ fn a_negative_end_margin_clamps_its_subtrees_scroll_contribution() {
          it would trade one wrong answer for another."
     );
 
-    // ⚠⚠⚠ **THREE THINGS WRITTEN, MEASURED, AND MOVED OUT RATHER THAN SHIPPED RED — INCLUDING THE
-    // ARM THIS GATE MOST WANTS.**
+    // ── 4. ⭐⭐ THE ARM t1417 HAD TO MOVE OUT, ADDED BY t1418.
     //
-    // 1. **A grandchild overflowing its parent, no margins at all.** Chrome: `sh=70 ch=50` for a
-    //    `height:30px; padding:10px` scroller > a 10px child > a 60px box. We say **80** — we add the
-    //    container's END PADDING to a descendant that already overflows, and Chrome does not. A
-    //    SEPARATE pre-existing rule, and it is the next tick.
-    // 2. The same shape with a POSITIVE `margin-bottom: 5px` on the parent: Chrome `70`, we `80`.
-    //    Same root cause as (1).
-    // 3. Because of (1), **the mutation "clamp EVERY end margin, not only negative ones" cannot be
-    //    caught by this gate.** The only shape that distinguishes it is the grandchild overflow —
-    //    and we are already wrong there, so an arm asserting Chrome's answer would be red for a
-    //    reason this tick does not own (t1004), while an arm asserting OUR answer would pin the
-    //    engine to a bug. Stated plainly instead of papered over: **this gate is red under 2 of 4
-    //    mutations, and fixing (1) is what makes the other two catchable.**
+    // t1417 wrote this arm, measured it, and removed it rather than ship red: a grandchild
+    // overflowing its parent read `80` here against Chrome's `70`, because the container's END
+    // PADDING was being added to a descendant that already overflows. t1417's own note said *"fixing
+    // that is what makes the other mutations catchable"*, and t1418 fixed it — so the arm is back,
+    // and with it this gate is red under the `clamp EVERY end margin` mutation that it could not
+    // previously see.
+    //
+    // Chrome: a `height:30px; padding:10px` scroller > a 10px child (no margin) > a 60px box gives
+    // `gc_sh=70 gc_ch=50` — the 60px box is fully in the region, unclamped. A blanket clamp cuts it
+    // to the parent's box and reports far less, while passing arms 1-3.
+    assert!(
+        got.contains("gc_sh=70") && got.contains("gc_ch=50"),
+        "CONTROL: a grandchild overflowing its parent is NOT clamped when there is no negative margin \
+         (Chrome: `gc_sh=70 gc_ch=50`) — got {got:?}. Clamping EVERY end margin instead of only \
+         negative ones passes arms 1-3 and destroys this."
+    );
 }
