@@ -135,6 +135,14 @@
   - L92 · ⚠ And one more gap the gate's own control found
   - L100 · How it was proven red
 
+## A container's BLOCK extent is its CSS `width` in a vertical writing mode — 274 subtests on one predicate
+`docs/wiki/block-extent-is-the-logical-one.md`
+
+  - L7 · The defect
+  - L36 · The shape, and it is this file's most-repeated one
+  - L46 · Why it moved two areas
+  - L52 · Gate
+
 ## The board's ranked anchor sites, re-measured — five of six already clear the bar
 `docs/wiki/board-anchor-sites-remeasured.md`
 
@@ -3105,4 +3113,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2740 sections across 90 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2744 sections across 91 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

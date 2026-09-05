@@ -104051,3 +104051,83 @@ while the largest RULE this window was spread across four directories and collap
 §12.5.
 
 WIKI: docs/wiki/self-alignment-is-the-items-own.md
+
+## Tick 1445 — one of the pair was mapped and the other was not (2026-09-05)
+
+TICK SHAPE: capability
+CLASS: CSS layout / orthogonal container sizing — the residue t1438 named, priced two ticks later
+
+### THE RESIDUE, AND WHAT IT WAS ACTUALLY WORTH
+
+t1438 wrote it down and moved on: *"`cross_size` is still read from `solved_h`, and for an orthogonal
+container that is the CSS `height` — a physical length pinned as if it were the logical block size."*
+It looked like a corner: one non-square fixture, two rows.
+
+⭐⭐⭐ **IT WAS 274 SUBTESTS ACROSS TWO AREAS.** `css/css-grid` **−137** and `css/css-flexbox` **−137**,
+from a five-line predicate. *A residue's size is not the size of the fixture that found it* — and this
+one was written down precisely because the fixture that found it was too small to be worth a tick.
+
+### THE DEFECT
+
+Everything `solve_subtree` is handed is in the container's own LOGICAL space: `cw` is already the
+logical INLINE size — the physical HEIGHT for a vertical container — and the block size beside it was
+read straight off the CSS `height`. So an orthogonal grid distributed its rows down 300px of physical
+height while Chrome distributed them across 400px of physical width.
+
+```text
+  width:400px; height:300px; grid-auto-rows:40px      Chrome    before    after
+  vertical-lr   align-content: space-between           360,0     260,0     360,0
+  vertical-lr   align-content: center                  200,0     150,0     200,0
+  vertical-lr   align-content: end                     360,0     260,0     360,0
+  vertical-rl   align-content: space-between             0,0     100,0       0,0
+  vertical-lr   FLEX column, justify-content: s-b      360,0     260,0     360,0
+  horizontal-tb align-content            CONTROL        0,260     0,260     0,260  ✓
+  vertical-lr   JUSTIFY-content          CONTROL       80,0      80,0      80,0    ✓
+```
+
+⭐⭐ **`260 = 300 − 40` and `360 = 400 − 40`: `end` was wrong by the whole difference between the two
+extents and `center` by exactly half of it.** One arithmetic tell across three alignment values is one
+cause, not three — and it is readable off the failure list before any code is opened.
+
+⭐ **ONE OF THE PAIR WAS MAPPED AND THE OTHER WAS NOT.** The `justify-content` control in the *same*
+vertical container was already exact: the INLINE size had been transposed correctly for as long as
+orthogonal layout has existed here. That is this file's most-repeated shape and the fourth instance
+this session (t1435 lengths, t1436 direction, t1438 space, t1445 extent).
+
+### THE NUMBER
+
+```text
+                     HEAD control   after       read by NAME
+  css/css-grid       failing 3566   3429        138 fixed, 1 swapped in an unchanged file
+  css/css-flexbox    failing 1328   1191        138 fixed, 1 swapped in an unchanged file
+  css/css-sizing     failing 1358   1358        flat
+  css/cssom-view     1314/2109      1314/2109   flat
+  css/css-writing-modes  96/337     96/337      flat
+```
+
+Both "new" rows are index shifts inside files whose score is identical before and after (4/11 and
+2/4).
+
+### THE GATE
+
+`g_block_extent_is_the_logical_one` — 8 rows, 3 controls. Red under X1 (read `height` unconditionally
+→ six rows), X2 (read `width` unconditionally → the horizontal control ALONE) and X3 (key on
+`is_rl()` instead of `is_vertical()` → every `vertical-lr` row fails while `vertical-rl` passes,
+because `vertical-lr` IS vertical and is NOT rl — exactly the pair that separates the predicates).
+
+⚠ The `width: auto` control is load-bearing: an indefinite block size must stay indefinite, or the
+container collapses instead of sizing to its content. ⚠ The FLEX row had to be re-chosen: the first
+one (`align-content` on a wrapped row) was Chrome-exact under the mutation too, so it could not
+support the cross-area claim. `flex-direction: column` in `vertical-lr` puts the MAIN axis on the
+block axis and does.
+
+### THE RECEIPT
+
+```text
+  g_block_extent_is_the_logical_one  NEW, 8 rows (3 controls), red under 3 of 3 mutations
+  15 neighbouring grid/flex/writing-mode gates + manuk-layout's 191 unit tests green
+  css/css-grid −137 · css/css-flexbox −137 · sizing, cssom-view, writing-modes flat
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/block-extent-is-the-logical-one.md

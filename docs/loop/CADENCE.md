@@ -13,9 +13,9 @@
 |---|---|---|
 | ticks landed | **1121** | ticks 1–1444 |
 | median tick cycle | **32m** | 1120 intervals |
-| median, last 10 | **85m** | 10 intervals |
+| median, last 10 | **87m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.83** | 1352.6h elapsed |
+| **ticks per hour** | **0.83** | 1353.8h elapsed |
 | median verify wall | **67s** | 1060 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -27,7 +27,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **557**
+* **live gates**: 27 → **558**
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
@@ -1217,6 +1217,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1440** | 2026-09-05 10:34 | 75m | capability | 8m | +429/−51 | 555 | 81 | 56.0% · | 458 subtests on one sentence of the specification, and three candidates measured before th |
 | **1441** | 2026-09-05 11:56 | 82m | capability | 8m | +424/−52 | 556 | 81 | 56.0% · | the clamp had only its upper half (2026-09-05) |
 | **1442** | 2026-09-05 12:09 | 13m | capability | 8m | +195/−42 | 556 | 81 | 56.0% · | `load` fired before the images, and half a file split by axis is what said so (2026-09-05) |
-| **1444** | 2026-09-05 13:38 | 88m | capability | 8m | +547/−49 | 557 | 81 | 56.0% · | the axis is the container's, the side is the item's (2026-09-05) |
+| **1444** | 2026-09-05 14:51 | 2.7h | capability | 8m | +353/−45 | 558 | 81 | 56.0% · | the axis is the container's, the side is the item's (2026-09-05) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

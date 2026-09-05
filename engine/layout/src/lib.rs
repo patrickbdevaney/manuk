@@ -12591,9 +12591,42 @@ impl Ctx<'_> {
         if block_kids.is_empty() && !empty_grid_with_tracks {
             return (BoxContent::Block(vec![]), 0.0);
         }
-        let container_h = match self.style_of(node).height {
-            Dim::Px(p) => Some(p),
-            _ => None,
+        // ── ⚠⚠⚠ **A FLEX/GRID CONTAINER'S BLOCK EXTENT IS ITS CSS `width` IN A VERTICAL WRITING
+        //    MODE, AND THIS READ `height` UNCONDITIONALLY.** Everything `solve_subtree` is handed is
+        //    in the container's own LOGICAL space (t1438): `cw` is already the logical INLINE size —
+        //    the physical HEIGHT for a vertical container — and the block size beside it was still
+        //    the physical one. So an orthogonal grid distributed its rows down 300px of physical
+        //    height while Chrome distributed them across 400px of physical width.
+        //
+        //    Chrome-measured, `display:grid; width:400px; height:300px; grid-auto-rows:40px`, three
+        //    single-column rows; the number is the LAST item's offset from the container:
+        //
+        //    ```text
+        //                                                  Chrome    before    after
+        //      vertical-lr  align-content: space-between     360,0    260,0     360,0
+        //      vertical-lr  align-content: center            200,0    150,0     200,0
+        //      vertical-lr  align-content: end               360,0    260,0     360,0
+        //      vertical-rl  align-content: space-between       0,0    100,0       0,0
+        //      horizontal-tb align-content: space-between  CONTROL  0,260    0,260  ✓
+        //      vertical-lr  JUSTIFY-content: space-between CONTROL   80,0     80,0   ✓
+        //    ```
+        //
+        //    ⭐ `260 = 300 − 40` and `360 = 400 − 40`: the free space was being measured against the
+        //    wrong physical extent, so every distribution value was short by the difference between
+        //    the two. The `justify-content` control is unmoved because the INLINE size was already
+        //    being transposed correctly — **one of the pair was mapped and the other was not**, which
+        //    is this file's most-repeated shape.
+        let container_h = {
+            let s = self.style_of(node);
+            let block = if s.writing_mode.is_vertical() {
+                s.width
+            } else {
+                s.height
+            };
+            match block {
+                Dim::Px(p) => Some(p),
+                _ => None,
+            }
         };
         // Charged as one region: the measure closure below re-enters this file, so taffy's own solve
         // and the item measures it drives are ONE cost from the caller's point of view. See

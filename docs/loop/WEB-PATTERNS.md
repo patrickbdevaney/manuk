@@ -10996,3 +10996,20 @@ is known.
 `vertical-rl` child reverses on the INLINE axis with no `direction` involved at all.
 
 **Unlocks:** mixed-writing-mode grids — RTL content in LTR pages and vice versa. (t1444)
+
+## ⭐⭐ IN A VERTICAL WRITING MODE, A CONTAINER'S "HEIGHT" FOR LAYOUT PURPOSES IS ITS CSS `width`
+
+Every CJK vertical-script page, and every `writing-mode: vertical-*` panel in an otherwise horizontal
+document, has its block axis running across the screen. A grid or flex container there distributes its
+rows/lines over its **width** — and ours distributed them over its height, so every
+`align-content`/`justify-content` distribution landed short by the difference between the two.
+
+⭐ The tell is arithmetic: `end` was wrong by the whole difference between the extents and `center` by
+exactly half of it. **One arithmetic tell across three alignment values is one cause, not three.**
+
+⚠ And the shape is the recurring one: the INLINE size had been transposed correctly for as long as
+orthogonal layout existed here, and the BLOCK size beside it never was. **One of the pair was mapped
+and the other was not.**
+
+**Unlocks:** vertical-writing-mode grid and flex alignment — 274 WPT subtests across two areas from one
+predicate. (t1445)
