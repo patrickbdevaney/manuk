@@ -13105,8 +13105,22 @@ impl Ctx<'_> {
                     s.flex_direction,
                     manuk_css::FlexDirection::Row | manuk_css::FlexDirection::RowReverse
                 );
-                let main_is_y = row == s.writing_mode.is_vertical();
-                !main_is_y
+                // ⚠⚠⚠ **THE WRITING MODE MUST NOT BE CONSULTED HERE, AND FOR ONE TICK IT WAS.**
+                // Every quantity this predicate is used with — `Placed::slot`, and the `cw` /
+                // `solved_h` the container reports — is in the container's own LOGICAL space: an
+                // orthogonal subtree is laid out on SWAPPED AXES (t1347) and mapped back to physical
+                // coordinates afterwards. Measured, a `vertical-lr` `row` flex box 80 wide and 120
+                // tall around a 300x50 item: `cw` prints **120** (the physical HEIGHT) and the
+                // slot's x extent prints **50** (the physical height of the item). So `x` here is
+                // already the INLINE axis whatever the writing mode is, and a `row` flex's main axis
+                // is the inline axis by definition.
+                //
+                // `row == is_vertical()` is the correct expression for a PHYSICAL question — it is
+                // what the scroll origin uses (t1427), and that one really is physical. Reusing it
+                // on logical quantities transposed the answer for every vertical writing mode, which
+                // is 80 of the 90 rows still failing in
+                // `cssom-view/scrollWidthHeight-negative-margin-002` when t1437 landed.
+                row
             }
             _ => false,
         }

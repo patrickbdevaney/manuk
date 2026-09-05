@@ -10906,3 +10906,17 @@ move with it.
 
 **Unlocks:** reversed wrapping toolbars, tag/chip rows and footer link groups that overflow their
 container — the layouts `wrap-reverse` exists for in the first place. (t1437)
+
+## ⭐⭐ A FLEX CONTAINER IN A VERTICAL WRITING MODE HAS ITS CROSS AXIS ON THE OTHER SCREEN AXIS
+
+`flex-direction: row` means "along the inline axis", and in `vertical-lr`/`vertical-rl` the inline
+axis runs **down the screen** — so a row flex is physically vertical and its cross axis is physically
+horizontal. Any rule written as "rows are horizontal" is wrong for every CJK and vertical-script
+layout on the web, and wrong silently: the geometry is plausible, just on the wrong axis.
+
+⭐ The trap is that the engine's own layout is done in LOGICAL space and mapped to physical
+coordinates afterwards, so a predicate written in physical terms and applied to logical numbers
+transposes the answer exactly once — invisible on a SQUARE box, wrong on every other.
+
+**Unlocks:** vertical-writing-mode flex layout — Japanese/Chinese vertical text pages, and any
+`writing-mode` panel in an otherwise horizontal document. (t1438)

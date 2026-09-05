@@ -103402,3 +103402,107 @@ run directly on the same tree is **77/77 + 2/2 green**, and `G_RUNTIME_COUNT` in
 *"shell suite green"* while the two gates that read the same output reported a regression. ⚠ Note for
 the observer: `CARGO_BUILD_JOBS=1` did NOT prevent it this time — the documented workaround is not
 sufficient.
+
+## Tick 1438 — the cross axis is a LOGICAL question, and the predicate had been asking a physical one (2026-09-05)
+
+TICK SHAPE: capability
+CLASS: CSS layout / flexbox axis resolution in orthogonal subtrees — Track A, the board's ★ CSS-LAYOUT row
+
+### THE SURVEY POINTED AT ITS OWN RESIDUE
+
+After t1437, `scrollWidthHeight-negative-margin-002` had **90** failing rows left, and the histogram
+was total:
+
+```text
+  90 of 90 say  display: flex  AND  flex-wrap: wrap-reverse
+  80 of them say a VERTICAL writing-mode
+  10 of them say direction: rtl + flex-direction: column   (a different, still-open rule)
+```
+
+The 80 are exactly the residue t1437 named and did not fix. It took one tick to close because the
+tick before it had written the number down.
+
+### THE DEFECT — ONE EXPRESSION, THE WRONG SPACE
+
+t1436 and t1437 both needed *"is the y axis the flex CROSS axis?"* and both wrote
+`row == writing_mode.is_vertical()`. That is the correct expression for a **physical** question — it
+is what the scroll origin uses (t1427), and the scroll origin really is physical. But every quantity
+it is used with is in the container's own **LOGICAL** space. Measured, a `vertical-lr` `row` flex box
+80 wide and 120 tall around a 300x50 item:
+
+```text
+  cw                    prints 120     ← the physical HEIGHT
+  slot.x + slot.width   prints  50     ← the physical HEIGHT of the item
+```
+
+⭐⭐⭐ **`x` IS THE INLINE AXIS WHATEVER THE WRITING MODE IS**, because an orthogonal subtree is laid
+out on swapped axes (t1347) and mapped back afterwards — so a `row` flex's main axis is the x axis by
+definition and the predicate is `cross_is_y = row`, full stop. The writing mode must not appear.
+
+*The same sentence, in the same file, is right in one function and wrong in another, because the two
+read different coordinate spaces. A predicate is not portable just because its words are true.*
+
+### THE FIXTURE THAT HID IT — THE FIFTH OF THIS SHAPE
+
+`scrollWidthHeight-negative-margin-002`'s wrapper is **80×80**. On a square container the two
+candidate cross sizes are EQUAL, so the wrong axis still reads the right number.
+
+⚠⚠ **A SQUARE FIXTURE CANNOT TELL TWO AXES APART.** The gate's `b3` row is 80×120 for exactly that
+reason: the wrong axis reads −220 there instead of −180. This is the fifth instrument of this shape
+this loop has paid for — `width:0` (t1424), a symmetric `scale()` (t1426), a zero border (t1424),
+zero cross-axis margins (t1437), and now a square box. **Every one is a fixture whose own symmetry
+hid the term under test**, and the class is now large enough to be a checklist item rather than a
+recurring surprise.
+
+### THE HONEST REPORT THAT TURNED OUT TO BE RIGHT
+
+t1436's gate reported mutation **M5 — replace `row == is_vertical()` with `!row` — as GREEN**, and
+said plainly that its writing-mode row was PINNED but not DISCRIMINATED.
+
+⭐⭐⭐ **THAT REPORT WAS CORRECT, AND IN A STRONGER WAY THAN IT KNEW: the expression was not merely
+undiscriminated, it was WRONG.** The discriminating fixture — an overflowing `wrap-reverse` line —
+arrived one tick later and cost nothing to find, because the previous tick had recorded which term
+was unguarded instead of quietly claiming it. *A gate that names what it cannot catch beats one that
+pretends, and this time the thing it could not catch was a live bug.*
+
+### THE NUMBER
+
+```text
+                     base (t1437)   after       read by NAME
+  css/cssom-view     1208/2109      1268/2109   +60, all in the negative-margin matrix
+  css/css-flexbox    3210/4693      3213/4693   +3
+  css/css-grid       failing 4183   4183        flat
+  css/css-sizing     failing 1360   1360        flat
+```
+
+⭐ `css/cssom-view` is **602 → 1268 across sixteen ticks** — 28.5% → 60.1%. The matrix file that
+opened this session at 420/600 is now 510/600, and its flex half went from 0 to 240 of 300.
+
+### THE GATE
+
+`g_flex_cross_axis_is_logical` — 10 rows, 4 horizontal controls plus a vertical row whose line FITS.
+Red under P1 (restore the physical expression) and P2 (invert to `!row`), and **the two failure sets
+are DISJOINT** — the vertical rows break under one, the horizontal controls under the other — so no
+single-axis constant passes this fixture.
+
+### NAMED RESIDUE, MEASURED
+
+* A NON-SQUARE orthogonal `row` container: `cross_size` still comes from `solved_h`, which for an
+  orthogonal container is the CSS `height` — a physical length pinned as the logical block size.
+  `80x120 vertical-lr row`: Chrome −220, ours −180 (`= 120 − 300`, where the logical block size is
+  the container's physical WIDTH, 80). `vertical-rl`: Chrome 0, ours −40. That is the
+  orthogonal-root sizing seam (t1347), not this predicate.
+* The last 10 rows of the matrix file: `direction: rtl` + `flex-direction: column` + `wrap-reverse`,
+  `scrollWidth` 216 vs 196. `map_direction`'s own comment already names it — *"RTL does flip a
+  column's cross-axis start edge, which taffy cannot express"* — and it is now the whole remainder.
+
+### THE RECEIPT
+
+```text
+  g_flex_cross_axis_is_logical  NEW, 10 rows (5 controls), red under 2 of 2 mutations, disjointly
+  12 neighbouring flex/grid/scroll gates + manuk-layout's 191 unit tests green
+  css/cssom-view +60 · css/css-flexbox +3 · css/css-grid flat · css/css-sizing flat
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/flex-cross-axis-is-logical.md

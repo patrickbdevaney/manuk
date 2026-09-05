@@ -1634,6 +1634,15 @@
   - L73 · Named residue — the auto half, with its fixture
   - L90 · Gate
 
+## The flex cross axis is a LOGICAL question, and the predicate was asking a physical one
+`docs/wiki/flex-cross-axis-is-logical.md`
+
+  - L6 · The defect
+  - L34 · What made it hard to see, and it is the fixture again
+  - L47 · The honest report that turned out to be right
+  - L58 · Named residue — a NON-SQUARE orthogonal row container
+  - L73 · Gate
+
 ## A flex or grid item establishes an independent formatting context
 `docs/wiki/flex-grid-item-margin-collapse.md`
 
@@ -3056,4 +3065,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2715 sections across 84 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2720 sections across 85 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
