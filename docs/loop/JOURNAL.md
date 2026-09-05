@@ -103595,3 +103595,102 @@ naming a composition, not a value.*
 ```
 
 WIKI: docs/wiki/flex-wrap-reverse-rtl-order.md
+
+## Tick 1440 — 458 subtests on one sentence of the specification, and three candidates measured before the narrow one (2026-09-05)
+
+TICK SHAPE: capability
+CLASS: CSS layout / grid track sizing — Track A, the board's ★ CSS-LAYOUT row
+
+### LEAVING THE VEIN ON PURPOSE
+
+Check #137 named an I4 tension: *"thirteen consecutive ticks in `css/cssom-view` and its neighbours is
+a lot of one directory."* It is now eighteen. So this tick ran the concentration survey on the board's
+biggest genuinely-core ★ row instead — `css/css-grid`, 4183 failing.
+
+```text
+  by top directory:  grid-lanes 1164 (Grid L3 masonry — spec frontier, skipped)
+                     alignment  874 · grid-items 676 · parsing 426 · layout-algorithm 299
+  by RULE:           the `minimum-size` family = 847 subtests, ~20% of the area's failing mass
+```
+
+⭐ **A directory ranking and a RULE ranking are different rankings**, and the second one is the useful
+one: `grid-items/` is fourth by directory and the family inside it is first by mechanism.
+
+### THE DEFECT — ONE SENTENCE
+
+CSS Grid §12.5: *"if the growth limit is less than the base size, increase the growth limit to match
+the base size."* A **zero** maximum therefore never caps anything. Taffy applies that flooring when
+the base comes from a FIXED minimum and not when it comes from the items, so every
+`minmax(auto, 0px)` track collapsed.
+
+```text
+                                                   Chrome     before      after
+  minmax(60px, 0px)                    CONTROL     60px       60px        60px  ✓
+  minmax(auto, 0px)   item width:60px              60px        0px        60px
+  minmax(auto, 0px)   in a 40px grid               60px        0px        60px
+  minmax(min-content, 0px)  8-char word            92.4375px   0px        92.4375px
+  minmax(0px,  0px)   item width:60px  CONTROL     0px         0px        0px   ✓
+```
+
+⭐⭐ **`minmax(60px, 0px)` LOCALISED IT IN ONE ROW.** The same violation with a fixed minimum was
+already exact, so the flooring rule exists and only the content-derived base misses it — and the 40px
+grid, which has no free space to confuse the picture, reads 60, so the base is computed perfectly
+well. *It is the flooring that is missing, not the measurement.* **A rule that is correct for declared
+values and wrong for content-derived ones is an ordering bug, not a sizing one.**
+
+### THREE CANDIDATES BUILT AND MEASURED BEFORE THE ONE THAT SHIPPED
+
+```text
+  1. floor the ITEM's min_size by its definite width   INERT — an item already declaring
+     (literally Grid §12.5.1's minimum contribution)    `min-width:60px` still produced a 0px track,
+                                                        so taffy is not consulting the item minimum
+                                                        for this track at all
+  2. map the maximum to `auto()`                        `minmax(auto,0px)` in a 100px grid reads
+                                                        100px — it absorbs the free space
+  3. map every fixed maximum to `fit_content(L)`        `minmax(auto,100px)` with a 60px item reads
+                                                        60; Chrome 100 — the growth is lost
+  4. `fit_content(0)` for a ZERO maximum only           SHIPPED
+```
+
+⭐⭐⭐ **THE BOUND IS THE WHOLE FIX.** The general rule needs the base size, which is not known until
+taffy has run. **A limit of zero can never exceed a base**, so flooring it is unconditional and there
+is no growth to lose — the spec's own arithmetic, restricted to the one case that needs no unknown.
+Candidate 1 is the one worth remembering: it is what the specification literally says, it was built,
+and it changed nothing — *the spec names the rule, not the layer that implements it.*
+
+### THE NUMBER
+
+```text
+                     base (t1439)   after       read by NAME
+  css/css-grid       failing 4183   3725        474 fixed, 16 shifted, NO file regressed
+  css/css-sizing     failing 1360   1360        flat
+  css/css-flexbox    3215/4693      3215/4693   flat
+  css/cssom-view     1298/2109      1298/2109   flat
+```
+
+The 16 "new" rows are index shifts inside four files that all improved sharply
+(`grid-minimum-size-grid-items-022..025`: 30→42, 36→50, 30→42, 36→52).
+
+### THE GATE
+
+`g_grid_zero_max_track_is_its_minimum` — 9 rows, 3 controls. Red under R1 (drop the remap → six rows
+collapse, all three controls hold), R2 (`auto()` maximum → 100px) and R3 (`fit_content` for any fixed
+maximum → the growth control reads 60). **Each mutation is one of the refused candidates**, so the
+gate does not merely protect the fix — it protects the three decisions that produced it.
+
+### NAMED RESIDUE
+
+A **non-zero** too-small maximum: `minmax(auto, 20px)` with a 60px item is **60px** in Chrome and
+**20px** here. Same rule, in the case that needs the unknown; the honest next step is a second solve,
+on the model of `solve_subtree`'s auto-margin re-solve.
+
+### THE RECEIPT
+
+```text
+  g_grid_zero_max_track_is_its_minimum  NEW, 9 rows (3 controls), red under 3 of 3 mutations
+  15 neighbouring grid/flex gates + manuk-layout's 191 unit tests green
+  css/css-grid −458 failing · sizing, flexbox, cssom-view all flat
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/grid-zero-max-track.md

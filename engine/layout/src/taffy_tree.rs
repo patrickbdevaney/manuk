@@ -189,7 +189,49 @@ fn track(t: &CssTrackSize) -> TrackSizingFunction {
         CssTrackSize::Auto => auto(),
         CssTrackSize::MinContent => min_content(),
         CssTrackSize::MaxContent => max_content(),
-        CssTrackSize::MinMax(lo, hi) => minmax(track_min(*lo), track_max(*hi)),
+        // ── ⚠⚠⚠ **`minmax(<content-based>, 0px)` IS `minmax(min, min)`, AND TAFFY ONLY FLOORS A
+        //    GROWTH LIMIT BY A *FIXED* BASE.** CSS Grid §12.5: *"if the growth limit is less than
+        //    the base size, increase the growth limit to match the base size"* — so a zero maximum
+        //    never actually caps anything; the track ends up at whatever the items contribute.
+        //
+        //    Chrome-measured used `grid-template-columns`, a 100px grid holding one item:
+        //
+        //    ```text
+        //                                                        Chrome   before   after
+        //      minmax(60px, 0px)                  CONTROL         60px     60px     60px  ✓
+        //      minmax(auto,  0px)  item width:60px                60px      0px     60px
+        //      minmax(auto,  0px)  item min-width:60px            60px      0px     60px
+        //      minmax(min-content, 0px)  8-char word              92.44px   0px     92.44px
+        //      minmax(auto,  0px) 30px   item width:60px          60px 30px 0px 30px  60px 30px
+        //      minmax(0px,   0px)  item width:60px    CONTROL      0px      0px      0px  ✓
+        //    ```
+        //
+        //    ⭐⭐ **The `minmax(60px, 0px)` control is what localises it.** Taffy floors the growth
+        //    limit correctly when the base comes from a FIXED minimum and not when it comes from the
+        //    items — and it computes that content-based base perfectly well (`minmax(auto, 0px)` in
+        //    a 40px container reads 60px once the limit stops capping it). It is the flooring that
+        //    is missing, not the measurement.
+        //
+        //    ⚠⚠ **ONLY A ZERO MAXIMUM, and that bound is the whole reason this is shippable.** The
+        //    general rule needs the base size, which is not known until taffy has run. Two wider
+        //    remappings were measured and REFUSED here: `auto` as the maximum lets the track absorb
+        //    all the free space (`minmax(auto,0px)` in a 100px grid read **100px**), and
+        //    `fit-content(L)` for a general `L` loses the growth the fixed limit is there to permit
+        //    (`minmax(auto,100px)` with a 60px item is **100** in Chrome and **60** under the
+        //    remap). A limit of ZERO can never exceed a base, so flooring it is unconditional and
+        //    there is no growth to lose — the same arithmetic the spec describes, restricted to the
+        //    one case where it needs no unknown.
+        CssTrackSize::MinMax(lo, hi) => {
+            let content_min = matches!(
+                lo,
+                TrackUnit::Auto | TrackUnit::MinContent | TrackUnit::MaxContent
+            );
+            if content_min && matches!(hi, TrackUnit::Px(p) if *p == 0.0) {
+                minmax(track_min(*lo), fit_content(length(0.0)))
+            } else {
+                minmax(track_min(*lo), track_max(*hi))
+            }
+        }
         // taffy implements the §7.2.2 clamp itself; it was simply never asked, because the cascade
         // handed it `Auto`.
         CssTrackSize::FitContent(p) => fit_content(length(*p)),

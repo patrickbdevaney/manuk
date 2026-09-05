@@ -1753,6 +1753,15 @@
   - L50 · Proven red
   - L63 · t1377 — the drift table's other two layout rows, priced and withdrawn
 
+## `minmax(<content-based>, 0px)` is `minmax(min, min)` — 458 subtests on one sentence of the spec
+`docs/wiki/grid-zero-max-track.md`
+
+  - L6 · The defect
+  - L29 · Two candidates measured and refused
+  - L44 · The fix, and why the bound is the point
+  - L55 · Named residue
+  - L62 · Gate
+
 ## The `<img>` loading state — numbers the engine had and never published
 `docs/wiki/img-loading-state.md`
 
@@ -3073,4 +3082,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2724 sections across 86 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2729 sections across 87 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -10933,3 +10933,18 @@ written in the library's own coordinates has to run before any transform that le
 
 **Unlocks:** RTL (Arabic/Hebrew) pages that use wrapping column flex — and, more usefully, it is the
 rule that makes two independently-correct corrections stop fighting. (t1439)
+
+## ⭐⭐ A ZERO TRACK MAXIMUM DOES NOT MAKE A ZERO TRACK
+
+`grid-template-columns: minmax(auto, 0px)` looks like "this column is zero wide" and is not: CSS Grid
+floors a track's growth limit by its base size, so the column ends up as wide as its items need. The
+idiom appears wherever an author wants a column that never *grows* — sidebars, gutters, collapsible
+panes — and ours collapsed every one of them to nothing, taking the content with it.
+
+⭐ The tell that it was not a measurement bug: the same violation written with a FIXED minimum
+(`minmax(60px, 0px)`) was already right, and the content-based one read correctly whenever the
+container was too narrow to have free space. **A rule that is correct for declared values and wrong
+for content-derived ones is a flooring/ordering bug, not a sizing one.**
+
+**Unlocks:** grid layouts using a zero or too-small track maximum — 474 WPT subtests, ~20% of
+`css/css-grid`'s entire failing mass. (t1440)
