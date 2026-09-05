@@ -5312,6 +5312,9 @@ unsafe fn doc_element_from_point(cx: *mut RawJSContext, argc: u32, vp: *mut Valu
                 if styles.is_null() {
                     return true;
                 }
+                if svg_shape_is_unpainted(&*dom, node) {
+                    return false;
+                }
                 (*styles).get(&node).map_or(true, |cs| {
                     cs.pointer_events != manuk_css::PointerEvents::None
                 })
@@ -5364,6 +5367,36 @@ unsafe fn doc_element_from_point(cx: *mut RawJSContext, argc: u32, vp: *mut Valu
 /// and on equal area the later element in document order paints on top. Sharing the ordering matters
 /// more than sharing the filter — `elementsFromPoint(x,y)[0]` must equal `elementFromPoint(x,y)` for
 /// every point, and a library that checks that invariant will find any drift immediately.
+/// ⚠⚠⚠ **AN SVG SHAPE WITH `fill: none` IS NOT HIT INSIDE ITS BOUNDING BOX.** `pointer-events`
+/// defaults to `visiblePainted`, and for an SVG shape "painted" means the FILL region when `fill` is
+/// not `none` and the STROKE region when `stroke` is not `none` — never the bounding box. A
+/// `<path fill="none">` is a curve with a hole the size of its own bbox, and hit-testing it as a
+/// rectangle puts it in the way of everything behind it.
+///
+/// ⭐ `cssom-view/elementsFromPoint.html` samples the CENTRE of a 500x98 squiggle whose `<path>` has
+/// `fill="none"` and a 4.3px stroke: Chrome returns `[svg, body, html]`, and we returned those plus
+/// the path — four elements where three were asked for.
+///
+/// ⚠⚠ **BOUND, STATED RATHER THAN GLOSSED: this declines the bbox hit, it does not implement the
+/// stroke.** A point that really is ON the stroke of a `fill:none` path IS hit in Chrome and is not
+/// hit here. Doing that properly needs path geometry this seam does not have; refusing a hit we know
+/// is wrong beats claiming one we cannot verify, and the gap is one-directional — we under-hit and
+/// never over-hit. Recorded rather than approximated.
+///
+/// Only the SVG SHAPE elements, and only when `fill` is explicitly `none`: the initial `fill` is
+/// black, so an unspecified fill still paints its interior and still hits.
+unsafe fn svg_shape_is_unpainted(dom: &manuk_dom::Dom, node: NodeId) -> bool {
+    if !matches!(
+        dom.tag_name(node),
+        Some("path" | "circle" | "ellipse" | "line" | "polyline" | "polygon")
+    ) {
+        return false;
+    }
+    dom.element(node)
+        .and_then(|e| e.attr("fill"))
+        .is_some_and(|v| v.trim().eq_ignore_ascii_case("none"))
+}
+
 unsafe fn doc_elements_from_point(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let arr_ptr = NewArrayObject1(&mut wrap_cx(cx), 0);
     rooted!(in(cx) let arr = arr_ptr);
@@ -5407,6 +5440,9 @@ unsafe fn doc_elements_from_point(cx: *mut RawJSContext, argc: u32, vp: *mut Val
         let hittable = |node: NodeId| -> bool {
             if styles.is_null() {
                 return true;
+            }
+            if svg_shape_is_unpainted(&*dom, node) {
+                return false;
             }
             (*styles).get(&node).map_or(true, |cs| {
                 cs.pointer_events != manuk_css::PointerEvents::None

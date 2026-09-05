@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1118** | ticks 1–1440 |
-| median tick cycle | **32m** | 1117 intervals |
-| median, last 10 | **83m** | 10 intervals |
+| ticks landed | **1119** | ticks 1–1441 |
+| median tick cycle | **32m** | 1118 intervals |
+| median, last 10 | **87m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.83** | 1349.5h elapsed |
-| median verify wall | **67s** | 1057 ticks |
+| **ticks per hour** | **0.83** | 1350.9h elapsed |
+| median verify wall | **67s** | 1058 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **555**
+* **live gates**: 27 → **556**
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**506 of 1118 ticks** (45%) moved a
+**507 of 1119 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **506** capability ticks, median cycle **32m**
+* **507** capability ticks, median cycle **32m**
 * median diff per tick: **+296 / −35** lines across 8 files
 
 ## Every tick
@@ -1215,5 +1215,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1438** | 2026-09-05 07:47 | 49m | capability | 8m | +353/−48 | 553 | 81 | 56.0% · | the cross axis is a LOGICAL question, and the predicate had been asking a physical one (20 |
 | **1439** | 2026-09-05 09:19 | 1.5h | capability | 8m | +389/−43 | 554 | 81 | 56.0% · | two reversals that cancel, and the order the compensations run in (2026-09-05) |
 | **1440** | 2026-09-05 10:34 | 75m | capability | 8m | +429/−51 | 555 | 81 | 56.0% · | 458 subtests on one sentence of the specification, and three candidates measured before th |
+| **1441** | 2026-09-05 11:56 | 82m | capability | 8m | +424/−52 | 556 | 81 | 56.0% · | the clamp had only its upper half (2026-09-05) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

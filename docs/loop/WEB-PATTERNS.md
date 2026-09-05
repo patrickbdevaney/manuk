@@ -10962,3 +10962,21 @@ already worked. **When a clamp is right at one end and absent at the other, look
 discards a box's own size — the discarded value usually had one real term in it.**
 
 **Unlocks:** placeholder and reserved-space layout in every shrink-to-fit context. (t1441)
+
+## ⭐⭐⭐ `window.onload` MUST NOT RUN BEFORE THE IMAGES HAVE DECODED
+
+`load` is where a very large fraction of the web measures itself: gallery and carousel scripts read
+image sizes, sticky headers measure their own height, chart libraries size to their container, and
+"above the fold" logic reads geometry. All of it ran here against a document whose images had no
+natural size — so every ratio-derived height was **zero** and every layout computed from one was
+wrong.
+
+⭐ The signature from outside is unmistakable once you have seen it: **one axis wholly right and the
+other wholly wrong.** A declared width passes and the height derived from it through the intrinsic
+ratio fails, in file after file, at exactly 50%.
+
+⚠ The safety property is a budget, not patience: the subresource phase is already deadline-bounded, so
+a page with a dead image still fires `load` on time with whatever arrived.
+
+**Unlocks:** every `onload` measurement on the web, and the image half of grid/flex intrinsic sizing.
+(t1442)

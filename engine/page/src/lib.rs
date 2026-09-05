@@ -4362,16 +4362,6 @@ impl Page {
             &mut nav_accounted_ms,
             &mut nav_hits,
         );
-        // The subresource phases have not run yet, but the document and its frames are ready, which is
-        // what `load` waits for. The call is idempotent, so `finish_loading` firing it again is harmless.
-        page.fire_lifecycle("load", fonts, viewport_width);
-        nav_phase(
-            "load event",
-            &mut nav_at,
-            &mut nav_accounted_ms,
-            &mut nav_hits,
-        );
-
         // **The enhancement phases run under the load budget, exactly as they do in `finish_loading`.**
         //
         // They did not, and the omission is a Bar 0 hole rather than a slow path: `finish_loading` was
@@ -4408,6 +4398,33 @@ impl Page {
             &mut nav_hits,
         );
         page.load_deadline = None;
+        // ── ⚠⚠⚠ **`load` FIRES AFTER THE SUBRESOURCES, AND IT USED TO FIRE BEFORE THEM.** The
+        //    comment this replaces said *"the subresource phases have not run yet, but the document
+        //    and its frames are ready, which is what `load` waits for"* — and that is not what
+        //    `load` waits for. HTML's *"stop parsing"* / *"the end"* steps run the load event only
+        //    once the document's list of in-flight fetches is empty, and IMAGES are on that list.
+        //
+        //    ⭐ **The symptom is that every `window.onload` handler measured an undecoded image.**
+        //    An `<img>` whose natural size has not arrived has `naturalWidth === 0`, so its
+        //    intrinsic ratio is unavailable and any height derived from a declared width comes out
+        //    ZERO. `css-grid/grid-items/grid-minimum-size-grid-items-021` scored **exactly half** its
+        //    subtests for that reason — every WIDTH assertion passed, because the width is declared,
+        //    and every HEIGHT assertion failed, because the height is a transfer through a ratio
+        //    that did not exist yet. That signature — one axis wholly right and the other wholly
+        //    wrong — is what a missing intrinsic size looks like from the outside.
+        //
+        //    ⚠ The budget is unchanged and is what keeps this safe: the enhancement block above
+        //    already runs under `load_budget()`, so a page with a dead image still fires `load` on
+        //    schedule with whatever arrived. That is the same promise `finish_loading` makes two
+        //    hundred lines below, in the same words — *"`load` fires either way"* — and this call
+        //    site is now the other half of that pair rather than its contradiction.
+        page.fire_lifecycle("load", fonts, viewport_width);
+        nav_phase(
+            "load event",
+            &mut nav_at,
+            &mut nav_accounted_ms,
+            &mut nav_hits,
+        );
         // **THE SUBTRACTION, PRINTED.** The parts must sum to the whole, and the only way that claim
         // stays true is if the instrument computes the difference itself and says so on every load.
         // `unaccounted_ms` above a few milliseconds means a phase exists that this ledger does not

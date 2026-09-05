@@ -2251,6 +2251,13 @@
   - L78 · Deferred
   - L81 · Terminal gate — reasonable security sweep
 
+## `load` fired before the images — so every `window.onload` handler measured an unfinished document
+`docs/wiki/load-waits-for-subresources.md`
+
+  - L6 · The defect
+  - L31 · The repair the reordering demanded
+  - L46 · Gate
+
 ## MEDIA PIPELINE — MSE, the attachment handshake, and the decode registry
 `docs/wiki/media-pipeline.md`
 
@@ -3090,4 +3097,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2733 sections across 88 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2736 sections across 89 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

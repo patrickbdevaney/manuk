@@ -103793,3 +103793,87 @@ witnesses.**
 ```
 
 WIKI: docs/wiki/min-width-floors-intrinsic.md
+
+## Tick 1442 — `load` fired before the images, and half a file split by axis is what said so (2026-09-05)
+
+TICK SHAPE: capability
+CLASS: HTML lifecycle / document load ordering — and the SVG hit-test repair it demanded
+
+### THE RESIDUE t1441 NAMED, AND IT WAS A ONE-LINE MOVE
+
+t1441 recorded a suspect it could not reduce: `grid-minimum-size-grid-items-021` is **72/144**, every
+failing row a HEIGHT and every passing row a WIDTH, and the same shape with `<canvas>`, with
+`aspect-ratio` and with a `data:` URL image is Chrome-exact on all six rows. The conclusion it drew —
+*the ratio transfer is fine and the image's NATURAL SIZE is not arriving* — is what made this tick a
+code read rather than a bisect.
+
+⭐⭐⭐ **THE CODE SAID IT OUT LOUD.** `Page::load_async`:
+
+```text
+  // The subresource phases have not run yet, but the document and its frames are ready, which is
+  // what `load` waits for.
+  page.fire_lifecycle("load", fonts, viewport_width);
+```
+
+That is not what `load` waits for. HTML's *"the end"* steps run the load event once the document's
+list of in-flight fetches is empty, and IMAGES are on that list. *A comment that states the rule it is
+breaking is the cheapest possible bug report, and it sat there until a measurement asked the question
+it answers.*
+
+### THE SIGNATURE WORTH KEEPING
+
+⭐⭐ **HALF A FILE, SPLIT CLEANLY BY AXIS, IS A MISSING INTRINSIC SIZE SEEN FROM THE OUTSIDE.** An
+`<img>` with no natural size has `naturalWidth === 0`, so its ratio is unavailable and every height
+derived from a declared width is ZERO — while every declared width passes. Exactly 50%, and the split
+is by AXIS rather than by feature. That is a different diagnosis from "the layout is wrong", and it is
+readable straight off a failure list.
+
+### THE REPAIR THE REORDERING DEMANDED
+
+Firing `load` late made `cssom-view/elementsFromPoint.html` fail one row it had been passing — **for
+the wrong reason**: the `<path fill="none">` it samples had simply had no layout box yet at the old
+firing time. With the box present our hit test returned it, four elements where Chrome returns three.
+
+`pointer-events` defaults to `visiblePainted`: an SVG shape is hit where it is PAINTED — the fill
+region when `fill` is not `none`, the stroke region when `stroke` is not `none` — never the bounding
+box. ⚠⚠ **BOUND, STATED: this declines the bbox hit and does not implement the stroke.** A point that
+really is on the stroke of a `fill:none` path IS hit in Chrome and is not here; that needs path
+geometry this seam does not have, and the gap is one-directional — we under-hit, never over-hit.
+
+⭐ **A row that was passing for the wrong reason is a debt the ratchet collects the moment the reason
+changes.** The ratchet refused the reordering on a single subtest, and the refusal was right: the row
+had been green because the document was unfinished.
+
+### THE NUMBER
+
+```text
+                     base (t1441)   after       read by NAME
+  css/css-grid       failing 3725   3636        −89 (58 of them in grid-minimum-size-021)
+  css/css-sizing     failing 1360   1358        −2
+  css/cssom-view     1314/2109      1314/2109   flat — the SVG row repaired
+  html/semantics     6296/11398     6296/11398  flat
+  grid-minimum-size-grid-items-021.html          72/144 → 126/144
+```
+
+### THE GATE
+
+`g_load_waits_for_subresources` — four rows through `Page::load_async`. Red under T1 (fire `load`
+early → the filled `<rect>` row loses its box, 4 → 3), T2 (disable the `fill:none` rule → the path
+reappears, 3 → 4) and T3 (drop the shape-tag list → the `<svg fill="none">` CONTAINER disappears from
+its own hit list, 4 → 3). **Each mutation moves a different row and leaves the others green**, which
+is what says the two mechanisms are separable even though one was only reachable because of the other.
+
+⚠ **NAMED, because the fixture cannot do it:** a `data:` URL image decodes during parse, so
+`naturalWidth` cannot discriminate the ordering in a fixture. The filled-rect row is what sees it, and
+the WPT file is what measures the image half. Said rather than implied.
+
+### THE RECEIPT
+
+```text
+  g_load_waits_for_subresources  NEW, 4 rows, red under 3 of 3 mutations, each on a different row
+  14 neighbouring load/lifecycle/hit-test gates green
+  css/css-grid −89 · css/css-sizing −2 · cssom-view and html/semantics flat
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/load-waits-for-subresources.md
