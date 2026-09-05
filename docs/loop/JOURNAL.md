@@ -104216,3 +104216,82 @@ custom-ident line name has no representation at all — `GridLine` is `Auto | Li
 ```
 
 WIKI: docs/wiki/grid-placement-is-readable.md
+
+## Tick 1447 — the slot carries the alignment and the abspos pass carries the area (2026-09-05)
+
+TICK SHAPE: measurement-and-refusal
+CLASS: CSS layout / abspos grid children — REFUSED, reverted, and the measurement is the product
+
+### THE RULE, AND THREE LAYERS EACH HIDING THE NEXT
+
+CSS Grid §9.1 makes a definitely-placed abspos child's **grid area** its containing block — and its
+static position. A 400x200 grid with tracks `100px 50px / 70px 30px` and a child at
+`grid-column:1/2; grid-row:1/2`:
+
+```text
+                                        Chrome            ours
+  justify/align-content: start          0,0    100x70     0,0    100x70   ✓
+  the second track                      100,70  50x30     100,70  50x30   ✓
+  direction: rtl                        300,0  100x70     300,0  100x70   ✓
+  justify/align-content: center         125,50 100x70     0,0    225x120  ✗
+```
+
+**1.** Taffy's abspos grid area **ignores content alignment**: `loc 0,0`, size stretched to the aligned
+FAR edge (`225 = 125 + 100`, `120 = 50 + 70`). ⭐ **The far edge is right in every row and only the near
+edge is wrong**, so the missing quantity is recoverable without patching taffy (I2) — solve the same
+probe tree again with the content-alignment properties removed to get the true SPAN, then
+`near = far − span`. **Measured working.**
+
+**2.** The probe tree **never gets the RTL mirror** the placed slots get: taffy has no `direction`, the
+mirror happens on the way out of `layout_flex_or_grid`, and `grid_area_containing_block` is a separate
+solve. It answered x=0 for a column Chrome puts at 300.
+
+**3.** Neither was visible, because **the element has TWO boxes and `node_rects` reports their UNION** —
+`0,0 225x120` is the near edge of the wrong copy and the far edge of the right one. *Fixing the
+containing block alone changes nothing observable*, which is why layers 1 and 2 had survived.
+
+⭐⭐ **THREE DEFECTS IN ONE ELEMENT, EACH INVISIBLE UNTIL THE ONE ABOVE IT WAS FIXED.** The union is the
+mechanism that hid the other two, and a union is exactly the shape that hides things: it can only ever
+be *right about one edge*.
+
+### THE REFUSAL
+
+Suppressing the taffy-slot box — and letting the corrected area serve as the static position — makes
+all six probe rows Chrome-exact and reads **+66 failing** on `css/css-grid`:
+
+```text
+  FIXED  22  abspos/grid-positioned-items-content-alignment-rtl-001
+         14  abspos/grid-positioned-items-content-alignment-001
+  NEW    12  abspos/grid-positioned-items-content-alignment-001
+          4× alignment/grid-{row,column}-axis-alignment-positioned-items-005/009/011 …
+  net    39 fixed, 105 new
+```
+
+⭐⭐⭐ **THE SLOT CARRIES THE ITEM'S ALIGNMENT AND THE ABSPOS PASS CARRIES THE AREA — AND THE CODE
+ALREADY SAID SO.** The comment guarding that box reads *"the slot is not worthless, and deleting it
+outright was the WRONG fix — it is where the alignment lives"*, with its own measurement behind it.
+This tick re-derived that the hard way.
+
+*A comment that records a REFUSED alternative is the cheapest thing in this repository and I paid full
+price for ignoring it.* The lesson is not "read the comments" — it is that **a guard with a
+measurement attached is a result, and re-running the experiment it already answered is the one kind of
+work that cannot pay.**
+
+### WHAT THE NEXT TICK DOES
+
+Correct the **slot** instead of suppressing it: apply the same `near = far − span` recovery and the RTL
+mirror to the out-of-flow child's slot in `layout_flex_or_grid`, so the two boxes AGREE rather than one
+being deleted. Then the union is harmless and the alignment survives. The recovery technique is
+measured and working; what it needs is a second container solve at that seam — the same shape as
+`solve_subtree`'s existing auto-margin re-solve.
+
+### THE RECEIPT
+
+```text
+  engine reverted to HEAD; manuk-layout 191 unit tests green on the reverted tree
+  css/css-grid unchanged at failing 3405 (the +66 was measured, not banked)
+  no gate added — there is nothing green to gate
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/grid-abspos-area-and-alignment.md

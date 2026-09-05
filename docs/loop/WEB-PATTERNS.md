@@ -11029,3 +11029,16 @@ branch on it, but one that gets a real value for `grid-column-start` and `undefi
 `grid-area: auto / auto / 3` keeps the leading pair, because dropping them names a different cell.
 
 **Unlocks:** grid layout editors and any script that round-trips an item's placement. (t1446)
+
+## ⚠ AN ABSOLUTELY-POSITIONED GRID CHILD IS POSITIONED BY ITS GRID AREA — AND ALIGNED INSIDE IT
+
+Overlays, badges, drag handles and focus rings are absolutely positioned inside a grid cell and expect
+that cell to be their containing block (CSS Grid §9.1) — including when the grid itself is centred or
+RTL. Two separate facts are needed and this engine has them in two different places: the AREA (from
+the abspos pass) and the item's `justify-self`/`align-self` WITHIN it (from the layout slot).
+
+⚠ Measured and refused at t1447: deleting either one trades the other. The area alone loses the
+alignment (105 new failures); the slot alone loses the content-alignment offset and the RTL mirror.
+**They have to agree, not compete.**
+
+**Status:** open, with the mechanism and the recovery technique measured. (t1447)

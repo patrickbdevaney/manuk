@@ -1752,6 +1752,14 @@
   - L70 · ⚠ The wall does not run this gate
   - L77 · ⚠ Named, measured, not built
 
+## The grid area and the item's alignment are two answers, and neither alone is the containing block
+`docs/wiki/grid-abspos-area-and-alignment.md`
+
+  - L6 · What CSS Grid §9.1 asks for
+  - L14 · What is actually there — three layers, and each hid the next
+  - L41 · Why suppressing the duplicate is not the fix — and this is the refusal
+  - L60 · The next tick, named
+
 ## `grid-area` — the shorthand that placed nothing, and auto-placement that hid it
 `docs/wiki/grid-area-shorthand.md`
 
@@ -3121,4 +3129,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2748 sections across 92 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2752 sections across 93 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
