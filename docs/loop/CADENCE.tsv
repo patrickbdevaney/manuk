@@ -1112,3 +1112,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1432	16eaeefe	1788571654	2026-09-04T21:27:34-04:00	6914	capability	465	11	388	56	547	81	3896	6960	0	642	0	the used end margin: the input three refusals were pointing at (2026-09-04)
 1433	715e2315	1788572292	2026-09-04T21:38:12-04:00	638	measurement-and-refusal	465	5	194	43	547	81	3896	6960	0	642	0	the audits, and ten ticks of rules meet the specification for the first time (2026-09-04)
 1434	e62f0820	1788590347	2026-09-05T02:39:07-04:00	18055	capability	465	10	571	52	549	81	3896	6960	0	642	0	`scrollIntoView` ignored its argument, and the default is not what it was doing (2026-09-04)
+1436	d3968624	1788598165	2026-09-05T04:49:25-04:00	7818	capability	465	9	594	49	550	81	3896	6960	0	642	0	`align-items: stretch` sometimes SHRINKS a box, and the adoption could only grow one (2026-09-05)

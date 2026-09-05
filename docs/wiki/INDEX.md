@@ -1641,6 +1641,18 @@
   - L30 · ⭐⭐⭐ How it was found — five refused hypotheses, then the site's own stylesheet
   - L63 · The receipt
 
+## `align-items: stretch` sometimes SHRINKS a box, and the adoption could only grow one
+`docs/wiki/flex-stretch-can-shrink.md`
+
+  - L6 · The defect
+  - L26 · The half that must NOT be adopted, and it cost ten rows to learn
+  - L60 · And a replaced element is not stretched — the wall taught the fixture
+  - L79 · A term measured and removed
+  - L86 · The number, and how it was read
+  - L101 · An instrument finding, and it is bigger than this tick
+  - L113 · Named residues
+  - L122 · Gate
+
 ## A float written into a line RE-FLOWS that line — in both directions
 `docs/wiki/float-line-reflow.md`
 
@@ -3033,4 +3045,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2700 sections across 82 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2708 sections across 83 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

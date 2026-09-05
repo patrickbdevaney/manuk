@@ -103180,3 +103180,127 @@ cross-start (`e` above: Chrome −220, taffy 0, so this one is NOT an extraction
 ```
 
 WIKI: docs/wiki/flex-column-shrink.md
+
+## Tick 1436 — `align-items: stretch` sometimes SHRINKS a box, and the adoption could only grow one (2026-09-05)
+
+TICK SHAPE: capability
+CLASS: CSS layout / flex + grid cross-axis sizing — Track A, the board's ★ CSS-LAYOUT row
+
+Check #137's steer, taken verbatim: the fixture and the Chrome numbers were written at t1435 and not
+re-derived.
+
+### THE DEFECT — THE SECOND HALF OF THE SAME ASYMMETRY
+
+At the end of `extract_placed`, taffy's slot height was taken for an `auto`-height item **only when
+it was larger** than the height the item measured for itself. `align-items: stretch` is the initial
+value, and it sets an `auto` CROSS size to the **line's** cross size while letting the content
+overflow — so when the content is taller than the line, taffy's slot is SMALLER, and the `>`
+declined it.
+
+⭐⭐⭐ **t1435 FIXED WHICH LENGTHS COUNT; t1436 FIXES WHICH DIRECTION COUNTS — SAME FUNCTION, SAME
+ASYMMETRY, ONE PROPERTY APART.** The inline axis takes taffy's verdict unconditionally. The block
+axis took it only for a percentage (t1435), and then only when it agreed (t1436).
+
+### THE TEN ROWS THAT BOUGHT THE AXIS TEST
+
+Dropping the comparison outright read `css/css-flexbox` **−3**, and diffing the failing NAME lists
+put all of it in one file:
+
+```text
+  flex-basis-013.html   10 new failures   "height expected 50 but got 0"
+```
+
+That file is `flex-direction: column`, where the height is the **MAIN** axis — and taffy's slot comes
+back **0** there.
+
+⭐⭐⭐ **A SLOT SMALLER THAN THE CONTENT IS A VERDICT ON THE CROSS AXIS AND A MISSING MEASUREMENT ON
+THE MAIN ONE.** The same number means opposite things depending on which axis it is on, and no amount
+of care about the *value* can separate them — only the axis can. So the rule carries
+`container_stretches_y`, and its flex arm is `row == writing_mode.is_vertical()`, the same expression
+the scroll origin uses (t1427).
+
+### A TERM MEASURED AND REMOVED — THE SECOND TICK RUNNING
+
+The first version also carved out `height: stretch` (it shares `Dim::Auto`'s representation and is a
+definite fill, not an auto height). Once the axis test existed that carve-out was **inert**: same
+gate rows, `css/css-flexbox` 3209 either way, `css/css-grid` failing 4183 either way. It is not in
+the tree. *t1435 removed a `parent_is_flex` guard the same way; two ticks, two guards, both measured
+rather than argued.*
+
+### THE NUMBER — AND THE INSTRUMENT LESSON GOT SHARPER
+
+```text
+                     base (t1435)   after       read BY NAME
+  css/css-grid       failing 4245   4183        63 fixed, 1 swapped inside one file
+  css/css-flexbox    3206/4693      3209/4693   3 fixed, 0 new
+  css/css-sizing     1331 failing   1331        name lists IDENTICAL
+  css/cssom-view     1178/2109      1178/2109   flat
+```
+
+⚠⚠ **`css/css-sizing` read 1360 then 1361 failing off the SUMMARY line while its failing NAME LISTS
+are byte-identical (1331 both).** t1435 learned that the pass total is unsafe because the denominator
+churns; this tick learns that **the failing count off the same summary churns with it.** Only the
+name list holds still. *Diff the names* — the sentence this loop has written before (t1351) and had
+not yet applied to its own area totals.
+
+### THE THIRD NARROWING — AND THE WALL FOUND IT, NOT THE FIXTURE
+
+The first wall came back RED on `manuk_layout::tests::replaced_constraint_violation_table_per_
+formatting_context`: two cells that had been green (`j/flex`, `j/grid`) now read `150.0x148.1` where
+Chrome reads `150.0x148.4`.
+
+⭐⭐⭐ **A REPLACED ELEMENT IS NOT STRETCHED.** `align-items: stretch` on an `<img>`/`<canvas>` with an
+intrinsic ratio does not hand it the line's cross size — the RATIO decides — so adopting taffy's slot
+published taffy's ratio arithmetic over ours. **The 0.3px is not the point:** a replaced box's cross
+size is a TRANSFER, not an alignment, and an alignment verdict does not apply to it whatever the
+number.
+
+⚠ **Second tick running, the WALL found what the tick's own fixture could not** — and the reason is
+embarrassingly simple: every row in the fixture was a `<div>`. The gate now carries `s11` (a
+`<canvas>` in a flex row) and `s12` (the same canvas in a block), which must agree.
+
+### AN INSTRUMENT FINDING BIGGER THAN THIS TICK
+
+`css/css-grid`'s first post-fix run read failing **4246** — +1 against base, i.e. a REGRESSION. The
+name diff put **63 of the 64 new failures in ONE file**,
+`grid-lanes/animation/grid-template-columns-interpolation.html`. The same binary re-run gave **4183**
+(−62) with that file back to normal, and `grid-lanes/animation` alone read 1105 then 1108 on
+consecutive runs.
+
+⚠⚠⚠ **ONE WPT FILE CAN FLAKE BY 63 SUBTESTS — more than this tick's entire real signal, and enough to
+FALSE-RED THE RATCHET on an area total.** It is an animation-interpolation file, so it is
+timing-dependent by construction. *No area delta smaller than that file's swing is readable from a
+single run.* This is the third instrument correction in two ticks, and the first that can break a
+wall rather than a journal number.
+
+### THE GATE
+
+`g_flex_stretch_can_shrink` — 10 rows, 7 of them controls or regression arms. RED under M1 (the
+pre-tick comparison: `s1`/`s6` read 200), M2 (drop the axis test: `s9=50x0`, the ten-row
+`flex-basis-013` regression reproduced in ONE row), M4 (grid arm off: `s6` reads 200, flex rows
+unmoved) and M6 (drop `!replaced`: `s11` reads 148.1 while `s12` stays 148.4 — the flex context
+disagreeing with the block for the same canvas).
+
+⚠ **M5 IS REPORTED GREEN.** Replacing `row == writing_mode.is_vertical()` with `!row` moves no row —
+taffy's slot agrees on `s7` either way. The term is kept because it is the correct expression, not
+because this gate defends it, and saying so is cheaper than a fixture that pretends.
+
+### NAMED RESIDUES
+
+* `grid-item-minimum-size-single-axis-scroll-container.html` is 2/4 before and after: `.item 3` and
+  `.item 4` **trade places** (`expected 0 but got 100` ↔ `expected 100 but got 0`). One file, no net
+  change, and the rule underneath is the minimum size of a single-axis scroll container.
+* The `s9` shape in a VERTICAL writing mode (`vertical-lr`, `<canvas>` at `height:100%`): Chrome
+  **5**, ours **0**. Pre-existing — this tick's branch is inactive there — and it is the same
+  un-measured main axis, one writing mode over.
+
+### THE RECEIPT
+
+```text
+  g_flex_stretch_can_shrink  NEW, 10 rows (7 controls), red under 4 of 5 named mutations
+  19 neighbouring flex/grid/scroll gates + manuk-layout's 191 unit tests green
+  css/css-grid −62 failing · css/css-flexbox +3 · css/css-sizing flat · css/cssom-view flat
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/flex-stretch-can-shrink.md

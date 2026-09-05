@@ -12664,7 +12664,10 @@ impl Ctx<'_> {
         let boxes: Vec<LayoutBox> = placed
             .iter()
             .filter(|p| !self.placed_static_position_only(p, is_grid, cx + p.slot.x, cy + p.slot.y))
-            .map(|p| self.extract_placed(p, cx, cy).0)
+            .map(|p| {
+                self.extract_placed(p, cx, cy, self.container_stretches_y(node))
+                    .0
+            })
             .collect();
         // ⚠⚠⚠ **THE CONTAINER'S HEIGHT IS THE FORMATTING CONTEXT'S ANSWER, NOT ITS CHILDREN'S
         // BOTTOM EDGE.** `max_h` — how far down the lowest child reaches — was the returned height
@@ -12945,7 +12948,45 @@ impl Ctx<'_> {
     /// [`Self::layout_block`] at the assigned rect, exactly as before, so its content (text,
     /// floats, its own separate flex subtrees) is produced. Returns the box and its bottom
     /// extent relative to `base_y` (for the container's content-height).
-    fn extract_placed(&self, p: &taffy_tree::Placed, base_x: f32, base_y: f32) -> (LayoutBox, f32) {
+    /// **Does this flex/grid container set its items' PHYSICAL height by ALIGNMENT?** — i.e. is the
+    /// y axis the one `align-items: stretch` acts on, so that a slot height SMALLER than the item's
+    /// own content is a verdict rather than a miss.
+    ///
+    /// ⚠⚠⚠ **THE ANSWER IS NOT "IS IT A FLEX CONTAINER" — IT IS WHICH AXIS THE MAIN AXIS LANDS ON.**
+    /// `stretch` acts on the CROSS axis only; along the MAIN axis an item's `auto` size is its
+    /// content size floored by `min-height: auto`, and a slot smaller than that is taffy failing to
+    /// measure rather than taffy aligning. Measured: `css-flexbox/flex-basis-013.html` is ten
+    /// `flex-direction: column` rows whose flex base size depends on the cross size, taffy's slot
+    /// height comes back **0**, and adopting it published `height expected 50 but got 0` on rows
+    /// that were green.
+    ///
+    /// A `row` flex is physically horizontal in a horizontal writing mode and physically VERTICAL in
+    /// a vertical one, so the question has to carry the writing mode — the same `row == vertical`
+    /// expression the scroll origin uses (`manuk_page`, t1427). A GRID always qualifies: both of its
+    /// axes are track axes and `align-self` stretches the block one.
+    fn container_stretches_y(&self, container: NodeId) -> bool {
+        let s = self.style_of(container);
+        match s.display {
+            Display::Grid | Display::InlineGrid => true,
+            Display::Flex | Display::InlineFlex => {
+                let row = matches!(
+                    s.flex_direction,
+                    manuk_css::FlexDirection::Row | manuk_css::FlexDirection::RowReverse
+                );
+                let main_is_y = row == s.writing_mode.is_vertical();
+                !main_is_y
+            }
+            _ => false,
+        }
+    }
+
+    fn extract_placed(
+        &self,
+        p: &taffy_tree::Placed,
+        base_x: f32,
+        base_y: f32,
+        parent_stretches_y: bool,
+    ) -> (LayoutBox, f32) {
         let abs_x = base_x + p.slot.x;
         let abs_y = base_y + p.slot.y;
         if let Some(ps) = p.pseudo {
@@ -12963,7 +13004,10 @@ impl Ctx<'_> {
                         abs_y + c.slot.y,
                     )
                 })
-                .map(|c| self.extract_placed(c, abs_x, abs_y).0)
+                .map(|c| {
+                    self.extract_placed(c, abs_x, abs_y, self.container_stretches_y(p.dom))
+                        .0
+                })
                 .collect();
             let s = self.style_of(p.dom);
             let boxx = LayoutBox {
@@ -13136,10 +13180,63 @@ impl Ctx<'_> {
             self.taffy_item_width.borrow_mut().remove(&p.dom);
             self.taffy_item_height.borrow_mut().remove(&p.dom);
             let mut boxx = r.boxx;
-            // Taffy sized the item (grow/stretch/track height); when its own height is `auto`,
-            // adopt taffy's slot height so it fills its flex line / grid cell.
-            if self.style_of(p.dom).height == Dim::Auto && p.slot.height > boxx.rect.height {
-                boxx.rect.height = p.slot.height;
+            // ── ⚠⚠⚠ **THIS ADOPTION COULD ONLY EVER *GROW* A BOX, AND `align-items: stretch` IS A
+            //    RULE THAT SOMETIMES SHRINKS ONE.** Taffy sized the item (grow / stretch / track
+            //    height) and its verdict was taken only when it was LARGER than the height the item
+            //    measured for itself. `stretch` — the initial value of `align-items`, so the case on
+            //    nearly every page — sets an `auto` cross size to the **line's** cross size and lets
+            //    the content overflow; when the content is taller than the line, taffy's slot is
+            //    SMALLER than the content and the `>` declined it.
+            //
+            //    ⭐ **It is the same asymmetry t1435 fixed one property earlier, in the same
+            //    function:** the inline axis takes taffy's verdict unconditionally, and the block
+            //    axis took it only when it agreed. Taffy's slot height was measured directly on all
+            //    six rows below and is Chrome-exact in every one, including the two that need a
+            //    SHRINK — so there is nothing left for the comparison to protect.
+            //
+            //    Chrome-measured, an 80x80 box, item `width:50px` around a 200px-tall block:
+            //
+            //    ```text
+            //                                                 Chrome   taffy slot   before   after
+            //      s1  row flex, item auto, 200px content        80         80       200      80
+            //      s6  GRID, 80px row track, item auto, 200px    80         80       200      80
+            //      s2  row flex, item auto, 30px content         80         80        80      80  ✓
+            //      s3  column flex, flex-grow:1, 30px content    80         80        80      80  ✓
+            //      s4  COLUMN flex, item auto, 200px  CONTROL   200        200       200     200  ✓
+            //      s5  row flex, align-items:flex-start CONTROL 200        200       200     200  ✓
+            //    ```
+            //
+            //    ⭐ `s4` and `s5` are what make this safe rather than merely smaller: in a COLUMN
+            //    container the height is the MAIN axis, where `min-height: auto` floors an item at
+            //    its content, and `align-items: flex-start` does not stretch at all — taffy returns
+            //    200 for both, so an unconditional adoption leaves them exactly where they were. The
+            //    rows that move are only the ones where a stretch verdict was being ignored.
+            //    ⚠⚠⚠ **AND `height: stretch` HAD TO BE CARVED BACK OUT, BECAUSE IT SHARES
+            //    `Dim::Auto`'s REPRESENTATION AND IS NOT AN AUTO HEIGHT AT ALL.**
+            //    `-webkit-fill-available` / `stretch` is a DEFINITE fill that merely has no
+            //    `Dim` variant of its own here (see `specified_definite_h`, which spells the same
+            //    distinction out with `Dim::Auto if s.height_stretch`). Taffy's slot for such an
+            //    item comes back **0** on `css-flexbox/flex-basis-013.html` — a flex base size that
+            //    depends on the cross size — and an unconditional adoption published that zero,
+            //    turning ten green rows red (`height expected 50 but got 0`). It keeps the
+            //    grow-only rule it has always had, and the true-`auto` items get the verdict.
+            if self.style_of(p.dom).height == Dim::Auto {
+                //    ⚠⚠⚠ **AND A REPLACED ELEMENT IS NOT STRETCHED, WHICH THE WALL CAUGHT AND THIS
+                //    FIXTURE COULD NOT.** `align-items: stretch` on an `<img>` with an intrinsic
+                //    ratio does not give it the line's cross size — the ratio does. Chrome's answer
+                //    for `box-sizing:border-box; padding:10px; max-width:150px` on a 480x474 image
+                //    is **150.0x148.4** in a flex or grid container, exactly as in a block, and
+                //    adopting taffy's slot published its own ratio arithmetic (148.1) over ours.
+                //    `replaced_constraint_violation_table_per_formatting_context` is the gate that
+                //    said so, and it was RED for two cells (`j/flex`, `j/grid`) that had been green.
+                //    ⭐ The 0.3px is not the point — the point is that a replaced box's cross size is
+                //    a TRANSFER, not an alignment, so the alignment verdict does not apply to it.
+                let replaced = is_replaced_tag(self.dom, p.dom);
+                if parent_stretches_y && !replaced {
+                    boxx.rect.height = p.slot.height;
+                } else if p.slot.height > boxx.rect.height {
+                    boxx.rect.height = p.slot.height;
+                }
             }
             // `p.slot.y` is taffy's placement, which ALREADY has the item's top margin in it — so this
             // must not add `r.margin_top` on top (t823: `layout_block` no longer does either). The

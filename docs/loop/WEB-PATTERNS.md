@@ -10875,3 +10875,20 @@ written once per axis rather than once per rule.*
 
 **Unlocks:** fixed-height vertical flex columns — pinned-header/footer panels, sidebars, modals,
 chat/message lists, dashboard tiles. (t1435)
+
+## ⭐⭐ A STRETCHED FLEX/GRID ITEM TAKES ITS LINE'S CROSS SIZE — INCLUDING WHEN THAT IS SMALLER
+
+`align-items: stretch` is the INITIAL value, so this is the sizing rule on nearly every page: an
+`auto` cross size becomes the flex line's (or the grid track's) cross size, and content taller than
+that **overflows** rather than growing the box. A fixed-height row of cards, a grid of tiles, a
+toolbar with an over-tall child — the box is the line, not the content.
+
+⭐ Ours only ever adopted the line's size when it made the box BIGGER, so any item whose content
+exceeded its row grew the row instead of overflowing it, and everything below was pushed down.
+
+⚠ **The mirror rule is the trap:** along the MAIN axis a slot smaller than the content is not an
+alignment verdict at all — it is a measurement that did not happen. The same number, read on the
+other axis, must be ignored.
+
+**Unlocks:** fixed-height card rows, grid tiles with over-tall content, any `overflow:hidden` cell
+whose child is bigger than its cell. (t1436)
