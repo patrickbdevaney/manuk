@@ -12660,6 +12660,12 @@ impl Ctx<'_> {
         for p in placed.iter_mut() {
             self.mirror_rtl_inline_descendants(p);
         }
+        // `wrap-reverse` overflow, applied AFTER the RTL mirror because a `column` container's cross
+        // axis is the same physical x the mirror works on.
+        self.shift_wrap_reverse_overflow(node, &mut placed, cw, solved_h);
+        for p in placed.iter_mut() {
+            self.shift_wrap_reverse_descendants(p);
+        }
         let is_grid = self.is_grid_container(node);
         let boxes: Vec<LayoutBox> = placed
             .iter()
@@ -12948,6 +12954,132 @@ impl Ctx<'_> {
     /// [`Self::layout_block`] at the assigned rect, exactly as before, so its content (text,
     /// floats, its own separate flex subtrees) is produced. Returns the box and its bottom
     /// extent relative to `base_y` (for the container's content-height).
+    /// ⚠⚠⚠ **`flex-wrap: wrap-reverse` PACKS OVERFLOWING LINES FROM THE WRONG EDGE, AND ONLY WHEN
+    /// `align-content` IS THE DEFAULT.** With `wrap-reverse` the cross axis is reversed, so the
+    /// lines' start edge is the container's PHYSICAL END; when the lines together are TALLER than
+    /// the container, CSS Box Alignment §5.3 makes `stretch` (and `space-between`) behave as
+    /// `flex-start` — which, reversed, anchors the lines at that physical end and lets them overflow
+    /// **backwards**. Taffy packs them forwards from the physical start instead.
+    ///
+    /// ⭐ **Taffy is right about everything else here, which is what makes this a shift and not a
+    /// mirror.** Measured against headless Chrome on an 80x80 `wrap-reverse` box (item offset
+    /// relative to the container):
+    ///
+    /// ```text
+    ///                                                  Chrome    before    after
+    ///   c1  one line, 40px item (FITS)                    0,40      0,40     0,40   ✓
+    ///   c2  one line, 80px item (EXACT)                   0,0       0,0      0,0    ✓
+    ///   c3  one line, 100px item                          0,-20     0,0      0,-20
+    ///   c4  one line, 300px item                          0,-220    0,0      0,-220
+    ///   c5  TWO lines, 60+60 in 80                     0,20/0,-40  0,60/0,0  0,20/0,-40
+    ///   c7  align-content:flex-start, 300px  CONTROL      0,-220    0,-220   0,-220 ✓
+    ///   d2  align-content:center, 300px      CONTROL      0,-110    0,-110   0,-110 ✓
+    ///   d3  align-content:flex-end, 300px    CONTROL      0,0       0,0      0,0    ✓
+    ///   d5  align-content:space-around, 300px CONTROL     0,0       0,0      0,0    ✓
+    ///   c8  COLUMN wrap-reverse, 300px wide item         -220,0     0,0     -220,0
+    ///   d6  vertical-lr row, 300px wide item             -220,0     0,0     -220,0
+    /// ```
+    ///
+    /// ⭐⭐ **A GENERAL MIRROR WOULD HAVE BROKEN THE FOUR ROWS THAT WERE ALREADY RIGHT.** `c1`, `c2`,
+    /// `c7`, `d2`, `d3` and `d5` are Chrome-exact before this correction — taffy's `wrap-reverse`
+    /// handles line ORDER and every explicit `align-content` correctly, including the multi-line
+    /// cases. The defect is exactly the overflow fallback of the DEFAULT value, which is why this is
+    /// a bounded translation of the cross axis and not a re-implementation of the alignment.
+    ///
+    /// The shift is `content_cross - max(slot cross end)`, clamped to be negative — the negative free
+    /// space, which is the same number the spec's fallback describes. `c1` yields zero because the
+    /// stretched line already ends exactly at the container's edge, so the FITTING cases are excluded
+    /// by arithmetic rather than by a second predicate.
+    ///
+    /// ⚠ Taffy is a sanctioned dependency and is never patched (CONSTITUTION I2), so the
+    /// compensation lands on the placed slots on the way OUT — the same seam and the same reasoning
+    /// as [`Self::mirror_rtl_inline`], which exists because taffy has no `direction` either.
+    fn shift_wrap_reverse_overflow(
+        &self,
+        container: NodeId,
+        placed: &mut [taffy_tree::Placed],
+        content_w: f32,
+        content_h: f32,
+    ) {
+        let s = self.style_of(container);
+        if !matches!(s.display, Display::Flex | Display::InlineFlex)
+            || s.flex_wrap != manuk_css::FlexWrap::WrapReverse
+        {
+            return;
+        }
+        // `normal` (which `stretch` also parses to) and `space-between` are the two whose overflow
+        // fallback taffy gets wrong; `center`, `flex-start`, `flex-end` and `space-around` are
+        // Chrome-exact already and must not be touched.
+        if !matches!(
+            s.align_content,
+            manuk_css::JustifyContent::Normal | manuk_css::JustifyContent::SpaceBetween
+        ) {
+            return;
+        }
+        // For a flex container this predicate is exactly "the y axis is the CROSS axis".
+        let cross_is_y = self.container_stretches_y(container);
+        let cross_size = if cross_is_y { content_h } else { content_w };
+        // ⚠⚠⚠ **THE LINES ARE PACKED BY MARGIN BOX, AND EVERY PROBE FIXTURE HAD ZERO CROSS-AXIS
+        //    MARGINS, SO BORDER BOX AND MARGIN BOX AGREED IN ALL TEN OF THEM.** The first version
+        //    measured `slot + size` and was exact on every hand-written row and **80 subtests worse**
+        //    on `cssom-view/scrollWidthHeight-negative-margin-002`, whose item carries
+        //    `margin: -100px`: it over-shifted by the margins it did not subtract. *A fixture with a
+        //    zero in a term cannot see that term* — the fourth time this loop has paid for that.
+        // ⚠⚠ **AN OUT-OF-FLOW CHILD IS NOT IN A FLEX LINE, so the line-packing overflow does not
+        //    move it.** Flexbox §4.1 takes an abspos child out of the formatting context and leaves
+        //    taffy's slot as its STATIC POSITION only; shifting it read `-3` where Chrome reads `-1`
+        //    across the `flex-abspos-staticpos-align-self-*` family.
+        let max_end = placed
+            .iter()
+            .filter(|p| !is_out_of_flow_positioned(self.style_of(p.dom)))
+            .map(|p| {
+                let s = self.style_of(p.dom);
+                if cross_is_y {
+                    p.slot.y + p.slot.height + s.margin.bottom.resolve(content_w, 0.0)
+                } else {
+                    p.slot.x + p.slot.width + s.margin.right.resolve(content_w, 0.0)
+                }
+            })
+            .fold(f32::MIN, f32::max);
+        let shift = cross_size - max_end;
+        if !(shift < 0.0) {
+            return;
+        }
+        for p in placed.iter_mut() {
+            if is_out_of_flow_positioned(self.style_of(p.dom)) {
+                continue;
+            }
+            if cross_is_y {
+                p.slot.y += shift;
+            } else {
+                p.slot.x += shift;
+            }
+        }
+    }
+
+    /// Apply [`Self::shift_wrap_reverse_overflow`] to every `wrap-reverse` container nested inside an
+    /// already-placed subtree, against its OWN content box — the recursive twin of
+    /// [`Self::mirror_rtl_inline_descendants`], and for the same reason.
+    fn shift_wrap_reverse_descendants(&self, p: &mut taffy_tree::Placed) {
+        if p.container {
+            let s = self.style_of(p.dom);
+            let fw = s.padding.left.resolve(p.slot.width, 0.0)
+                + s.padding.right.resolve(p.slot.width, 0.0)
+                + s.border_width.left
+                + s.border_width.right;
+            let fh = s.padding.top.resolve(p.slot.width, 0.0)
+                + s.padding.bottom.resolve(p.slot.width, 0.0)
+                + s.border_width.top
+                + s.border_width.bottom;
+            let (cw, ch) = ((p.slot.width - fw).max(0.0), (p.slot.height - fh).max(0.0));
+            let dom = p.dom;
+            self.shift_wrap_reverse_overflow(dom, &mut p.children, cw, ch);
+        }
+        for c in p.children.iter_mut() {
+            self.shift_wrap_reverse_descendants(c);
+        }
+    }
+
     /// **Does this flex/grid container set its items' PHYSICAL height by ALIGNMENT?** — i.e. is the
     /// y axis the one `align-items: stretch` acts on, so that a slot height SMALLER than the item's
     /// own content is a verdict rather than a miss.

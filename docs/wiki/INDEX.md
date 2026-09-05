@@ -1653,6 +1653,17 @@
   - L113 · Named residues
   - L122 · Gate
 
+## `wrap-reverse` packs overflowing lines from the wrong edge — and only the default `align-content`
+`docs/wiki/flex-wrap-reverse-overflow.md`
+
+  - L6 · The defect
+  - L14 · What made this a SHIFT and not a MIRROR
+  - L35 · The two narrowings, and both were found by something other than the fixture
+  - L49 · Where the compensation lives, and why
+  - L65 · The number
+  - L75 · Named residue
+  - L82 · Gate
+
 ## A float written into a line RE-FLOWS that line — in both directions
 `docs/wiki/float-line-reflow.md`
 
@@ -3045,4 +3056,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2708 sections across 83 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2715 sections across 84 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

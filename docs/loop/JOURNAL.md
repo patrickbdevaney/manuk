@@ -103304,3 +103304,101 @@ because this gate defends it, and saying so is cheaper than a fixture that prete
 ```
 
 WIKI: docs/wiki/flex-stretch-can-shrink.md
+
+## Tick 1437 — `wrap-reverse` overflows BACKWARDS, and running the neighbours first is what stopped a mirror (2026-09-05)
+
+TICK SHAPE: capability
+CLASS: CSS layout / flexbox cross-axis line packing — Track A, the board's ★ CSS-LAYOUT row
+
+Check #137's steer item 2, and it named the question rather than the answer: *"taffy returns a
+cross-START slot, Chrome places the line at the cross-END. Since taffy is not patched, the question is
+WHERE the compensation belongs, and that must be answered before code."*
+
+### THE ANSWER THE STEER ASKED FOR — AND IT WAS NOT THE ONE THE STEER EXPECTED
+
+Chrome's `wrap-reverse` layout is exactly the MIRROR of its `wrap` layout — `y' = cross − y − size`,
+verified on six rows. A mirror on the way out is the obvious implementation and there is a precedent
+for it in the file (`mirror_rtl_inline`, which exists because taffy has no `direction`).
+
+⭐⭐⭐ **RUNNING OUR OWN ENGINE ON THOSE SAME ROWS FIRST IS WHAT STOPPED IT.**
+
+```text
+                                             Chrome        ours (before)
+  two lines that FIT, wrap-reverse           0,60 / 0,15   0,60 / 0,15   ✓
+  the same two lines, `wrap`                 0,0  / 0,35   0,0  / 0,35   ✓
+  COLUMN wrap-reverse, two lines             60,0 / 15,0   60,0 / 15,0   ✓
+  align-content:flex-start, overflowing      0,-220        0,-220        ✓
+  center / flex-end / space-around           exact         exact         ✓
+  ONE line that OVERFLOWS                    0,-220        0,0           ✗
+```
+
+Taffy's `wrap-reverse` is right about line ORDER, about every case that FITS, and about every
+explicit `align-content`. **A general mirror would have broken all of it.** The defect is exactly the
+overflow fallback of the DEFAULT value — CSS Box Alignment §5.3 sends `stretch` and `space-between` to
+`flex-start` when the free space is negative, and reversed that means the lines anchor at the physical
+END and overflow backwards. So the fix is a bounded translation by the negative free space, not a
+re-implementation of the alignment.
+
+*The steer said "decide where the compensation belongs before writing code". The more useful question
+turned out to be "how much of this is already right".*
+
+### TWO NARROWINGS, AND NEITHER CAME FROM THE FIXTURE
+
+**1. ⚠⚠⚠ THE FREE SPACE IS MEASURED ON MARGIN BOXES.** Flex lines are packed by margin box. Every one
+of the ten hand-written rows has zero cross-axis margins, so border box and margin box AGREED in all
+of them — the first version was exact on all ten and read **80 subtests WORSE** on
+`cssom-view/scrollWidthHeight-negative-margin-002`, whose item carries `margin: -100px`. *A fixture
+with a zero in a term cannot see that term* — the fourth time this loop has paid for that exact shape
+(`width:0` t1424, a symmetric `scale()` t1426, a zero border t1424). The WPT file was the instrument
+the fixture could not be.
+
+**2. AN OUT-OF-FLOW CHILD IS NOT IN A FLEX LINE.** Flexbox §4.1 leaves taffy's slot as an abspos
+child's STATIC POSITION only, so the line-packing overflow must not move it. Chrome keeps it at 70
+while the in-flow item goes to −220; shifting it cost three subtests across
+`flex-abspos-staticpos-align-self-*`.
+
+### THE NUMBER
+
+```text
+                     base (t1436)   after       read by NAME
+  css/cssom-view     1178/2109      1208/2109   +30, all in scrollWidthHeight-negative-margin-002
+  css/css-flexbox    3209/4693      3210/4693   +1
+  css/css-grid       failing 4183   4183        flat
+  css/css-sizing     failing 1360   1360        flat
+```
+
+⭐ `css/cssom-view` is **602 → 1208 across fifteen ticks** — 28.5% → 57.3%, and the file this session
+has been mining is now 480/600 where it was 420 three ticks ago and 0 of its flex half worked.
+
+### THE GATE
+
+`g_flex_wrap_reverse_overflow` — 15 rows, 7 of them controls. **RED under all five named mutations**,
+and each one moves a DIFFERENT row: N1 no shift (six rows), N2 border boxes (`m1` alone), N3 shift
+out-of-flow too (`ap` alone), N4 no align-content filter (`d2`/`d3`/`d5`, the three taffy already gets
+right), N5 wrong cross axis (`c8` alone). *Five mutations, five disjoint witnesses — the first gate
+this session where every term is separately discriminated.*
+
+### NAMED RESIDUE
+
+The same overflow in a VERTICAL writing mode (`vertical-lr`, a `row` flex whose cross axis is physical
+x) reads Chrome **−220** and ours **0**, before this tick and after it. The predicate resolves the
+axis correctly; the slots in an orthogonal subtree are not in the space this correction assumes.
+
+### THE RECEIPT
+
+```text
+  g_flex_wrap_reverse_overflow  NEW, 15 rows (7 controls), red under 5 of 5 mutations
+  20 neighbouring flex/grid/scroll gates + manuk-layout's 191 unit tests green
+  css/cssom-view +30 · css/css-flexbox +1 · css/css-grid flat · css/css-sizing flat
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/flex-wrap-reverse-overflow.md
+
+⚠ HARNESS (observer-owned, one line): t1437's first wall came back RED on `affordance` and
+`G_INTERACT` — the known `_out` race in `scripts/verify.sh` (a `$(_out …)` command substitution whose
+`wait` is a no-op, so `cat` reads a partial file). It is a FALSE red: `cargo test -q -p manuk-shell`
+run directly on the same tree is **77/77 + 2/2 green**, and `G_RUNTIME_COUNT` in the same run printed
+*"shell suite green"* while the two gates that read the same output reported a regression. ⚠ Note for
+the observer: `CARGO_BUILD_JOBS=1` did NOT prevent it this time — the documented workaround is not
+sufficient.

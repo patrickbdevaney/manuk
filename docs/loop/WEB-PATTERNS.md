@@ -10892,3 +10892,17 @@ other axis, must be ignored.
 
 **Unlocks:** fixed-height card rows, grid tiles with over-tall content, any `overflow:hidden` cell
 whose child is bigger than its cell. (t1436)
+
+## ⭐⭐ `flex-wrap: wrap-reverse` OVERFLOWS BACKWARDS, OFF THE EDGE IT IS ANCHORED TO
+
+`wrap-reverse` reverses the cross axis, so lines start at the container's physical END. When they do
+not fit, they overflow **backwards** — up out of the top of a row container, left out of a column
+one. Ours packed them forwards from the physical start, so an overflowing reversed wrap put its
+content on the wrong side of the box entirely.
+
+⭐ The correction is one number — the negative free space — and it is measured on **margin** boxes,
+because that is what a flex line is packed with. An out-of-flow child is not in a line and does not
+move with it.
+
+**Unlocks:** reversed wrapping toolbars, tag/chip rows and footer link groups that overflow their
+container — the layouts `wrap-reverse` exists for in the first place. (t1437)
