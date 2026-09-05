@@ -102881,3 +102881,82 @@ geometry channel.
 ```
 
 WIKI: docs/wiki/the-used-end-margin.md
+
+## Tick 1433 — the audits, and ten ticks of rules meet the specification for the first time (2026-09-04)
+
+TICK SHAPE: measurement-and-refusal
+CLASS: the instruments — self-audit #N and surface audit #85, both due at this tick
+
+### THE SURFACE AUDIT (#85) — AND IT FOUND SOMETHING
+
+The frame it left: **ten consecutive ticks derived the scrollable-overflow rules from headless Chrome
+measurements alone.** Chrome is the CEILING on capability by the north star, but it is not the
+specification, and a rule fitted to one implementation is a map of that implementation. This audit
+read CSS Overflow 3 §scrollable — the document Chrome is implementing — for the first time.
+
+⭐⭐⭐ **TWO RULES GAINED THE REASON WE DID NOT HAVE.**
+
+> *"Additional padding added to the scrollable overflow rectangle as necessary to enable scroll
+> positions that satisfy the requirements of both `place-content: start` and `place-content: end`
+> alignment"* … *"typically ends up being exactly the same size as the box's own padding."*
+
+t1428 measured that `overflow: hidden|scroll|auto` get this padding and `visible|clip` do not, and
+banked it as *"the inflation belongs to scroll containers."* The spec says WHY: it exists to enable
+SCROLL POSITIONS, and a box that is not a scroll container has none. The rule was right; the reason
+was missing. The unreachable region is the spec's own sentence too — *"the area beyond the scroll
+origin in either axis"* — which is t1427 verbatim.
+
+⚠ **And the same sentences name residue we have never measured:** the padding is *"as necessary"* and
+only *"typically"* the box's own, and the unreachable region is *"unless otherwise adjusted (e.g. by
+content alignment)"*. **`place-content` on a scroll container changes both, and we hard-code both.**
+
+⭐⭐⭐ **AND ONE PLACE WHERE THE SPEC AND CHROME APPEAR TO DISAGREE, AND WE FOLLOWED CHROME.**
+
+> *"…the **border boxes** of all boxes for which it is the containing block … the **margin areas of
+> grid item and flex item boxes** for which the box establishes a containing block."*
+
+The spec admits a margin area only for GRID and FLEX items; an ordinary in-flow BLOCK child
+contributes its BORDER box. **t1119's entire fourteen-row battery — the foundation everything since
+t1420 was fitted to — says otherwise** (`c2`: 270 = 10 + 200 + 50 + 10, a block child's trailing
+margin extending the region), and it is Chrome-measured.
+
+Not a defect to fix today, and the ratchet would refuse a change made on a spec reading alone: Chrome
+and the WPT tests we score against behave as we do, and the north star makes Chrome the capability
+target. But **ten ticks of rules rest on a battery whose central row the spec text does not obviously
+license, and nobody had read the spec.** *Refutable by:* the sentence that admits block-child margins,
+or a Firefox/WebKit measurement that disagrees with Chrome on `c2`.
+
+⚠ **The collapsed-margin rule (t1431, t1432) is SPEC-UNDEFINED** — the spec says nothing about
+collapsed margins in this calculation. It was implemented from Mozilla's WPT tests and Chrome's
+agreement: two implementations agreeing is not a specification, and that is a weaker footing than any
+other rule this session landed.
+
+> ⭐⭐⭐ **READ THE SPEC FOR A RULE BEFORE THE TENTH TICK OF FITTING IT, NOT AFTER.** Two rules gained
+> their reason and one gained a documented doubt, for the cost of one fetch. The loop measures Chrome
+> exhaustively and had not once opened the document Chrome is implementing.
+
+### THE SELF-AUDIT — ONE OPEN ITEM, AND IT IS THIS SESSION'S OWN FOOTPRINT
+
+`verify wall: 2761s EXCEEDS the 300s target`. Diagnosed, not inherited:
+
+* Every wall in this window runs under `CARGO_BUILD_JOBS=1`, the loop-side workaround for the `_out`
+  race (t1425). That costs ~10-25% on a warm tree and is the price of a verdict about the engine
+  rather than about a race.
+* **t1432's 2761s is my own prewarm order.** Prewarming `-p manuk-agent` (no features) AFTER
+  `-p manuk-page --features stylo,spidermonkey` re-resolves the shared dependencies, so the wall
+  rebuilt them at ONE job: 47 minutes in a step that is normally seconds. ⭐ *Prewarm in the wall's
+  own feature set, and END with it.* The same tree lands in 300-600s when the order is right.
+
+### THE ARC THIS AUDIT SITS ON
+
+```text
+  css/cssom-view    602 → 1074 subtests over eleven ticks   28.5% → 50.9%
+  css/css-overflow  513 →  588                              53.3% → 61.1%
+  and the primary metric can see NONE of the cssom-view half: it is not a row in the sweep
+```
+
+⚠ That last line is the audit's third carried item and it is now expensive: **472 subtests landed this
+session are invisible to the WPT TOTAL.** Widening the sweep is observer-owned (`WPT-AREAS.tsv` is
+regenerated), and it has been named at three consecutive audits.
+
+WIKI: none [forced] — no engine source changed; the product is the two audits and the spec reading.

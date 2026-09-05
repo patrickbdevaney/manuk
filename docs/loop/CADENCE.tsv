@@ -1110,3 +1110,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1430	5c79a134	1788561947	2026-09-04T18:45:47-04:00	3486	capability	465	10	310	47	545	81	3896	6960	0	642	0	a flex container moves its own scroll origin, twice, on opposite axes (2026-09-04)
 1431	2843b57d	1788564740	2026-09-04T19:32:20-04:00	2793	capability	465	10	346	44	546	81	3896	6960	0	642	0	a collapsed end margin is outside the container, and a control that cannot fail is not a control (2026-09-04)
 1432	16eaeefe	1788571654	2026-09-04T21:27:34-04:00	6914	capability	465	11	388	56	547	81	3896	6960	0	642	0	the used end margin: the input three refusals were pointing at (2026-09-04)
+1433	715e2315	1788572292	2026-09-04T21:38:12-04:00	638	measurement-and-refusal	465	5	194	43	547	81	3896	6960	0	642	0	the audits, and ten ticks of rules meet the specification for the first time (2026-09-04)

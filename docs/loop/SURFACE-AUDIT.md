@@ -7917,3 +7917,74 @@ tests**, and if it has, point the sweep at them and retire the hand-built oracle
 3. Carried, unchanged, and each now overdue an OWNER decision rather than a ninth mention: I5's
    `ORACLE_CRAWLED: 0`, AccessKit, the WPT AREAS list (still 14 of ~78 css dirs in the sweep even
    though the checkout now has 26), the lever board's stale Track A items, the verify wall.
+
+---
+
+## Audit #85 — tick 1433 (2026-09-04)
+
+**THE FRAME THIS LEAVES:** ten consecutive ticks derived the scrollable-overflow rules from **headless
+Chrome measurements alone**. Chrome is the CEILING on capability by the north star — but it is not the
+specification, and a rule fitted to one implementation is a map of that implementation. This audit
+reads the primary source: **CSS Overflow 3 §scrollable**, `drafts.csswg.org`.
+
+### ⭐⭐⭐ THE SPEC CONFIRMS TWO RULES BY GIVING THE REASON WE DID NOT HAVE
+
+> *"Additional padding added to the scrollable overflow rectangle as necessary to enable scroll
+> positions that satisfy the requirements of both `place-content: start` and `place-content: end`
+> alignment"* … which *"typically ends up being exactly the same size as the box's own padding."*
+
+t1428 measured that `overflow: hidden|scroll|auto` get this padding and `visible|clip` do not, and
+banked it as *"the inflation belongs to scroll containers"*. **The spec says WHY**: it exists to enable
+SCROLL POSITIONS, and a box that is not a scroll container has none to enable. The rule was right and
+the reason was missing.
+
+⚠ **And the same sentence names residue we have not measured:** the amount is *"as necessary"* and only
+*"typically"* the box's own padding. **With `place-content` set it is a different number, and we
+hard-code the padding.** Not a defect anyone has shown us; a named, unmeasured edge.
+
+> *"Unless otherwise adjusted (e.g. by content alignment), the area beyond the scroll origin in either
+> axis is considered the unreachable scrollable overflow region."*
+
+t1427's rule, in the spec's own words — including *"unless otherwise adjusted by content alignment"*,
+which is the same `place-content` residue from the other side.
+
+### ⭐⭐⭐ AND ONE PLACE WHERE THE SPEC AND CHROME APPEAR TO DISAGREE, AND WE FOLLOWED CHROME
+
+> *"The scrollable overflow area of a box is the union of: its own padding box; all line boxes it
+> directly contains; the **border boxes** of all boxes for which it is the containing block … **the
+> margin areas of grid item and flex item boxes** for which the box establishes a containing block."*
+
+The spec admits a **margin area only for GRID and FLEX items**. An ordinary in-flow BLOCK child
+contributes its **border box**. t1119's entire fourteen-row battery — the foundation everything since
+t1420 was fitted to — is Chrome-measured and says a block child's trailing margin DOES extend the
+region (`c2`: 270, which is `10 + 200 + 50 + 10`).
+
+**This is not a defect to fix today**, and the ratchet would refuse changing it on a spec reading
+alone: Chrome, Firefox and the WPT tests we score against all behave as we do, and the north star
+makes Chrome the capability target. But it is exactly the kind of thing this audit exists to surface —
+**ten ticks of rules rest on a battery whose central row the spec text does not obviously license**,
+and nobody had read the spec.
+
+*Refutable by:* finding the spec sentence that admits block-child margins (an `@else` clause, an
+erratum, or a newer ED), or by a Firefox/WebKit measurement that disagrees with Chrome on `c2`.
+
+### ⚠ THE COLLAPSED-MARGIN RULE IS SPEC-UNDEFINED
+
+> *The specification contains no explicit discussion of how collapsed margins are handled within
+> scrollable overflow calculations.*
+
+t1431 and t1432 implemented it from Mozilla's WPT tests (`bugzilla 1936156`) and Chrome's agreement.
+That is two implementations agreeing, not a specification — a weaker footing than any other rule this
+session landed, and worth saying out loud rather than discovering later.
+
+### RANKED, from this audit only
+
+1. ⭐⭐⭐ **READ THE SPEC FOR A RULE BEFORE THE TENTH TICK OF FITTING IT, NOT AFTER.** Two rules gained
+   their *reason* here and one gained a documented doubt — for the cost of one fetch. The loop measures
+   Chrome exhaustively and had not once opened the document Chrome is implementing.
+2. ⭐ **`place-content` on a scroll container is unmeasured residue in two of our rules** (the padding
+   amount and the unreachable region's adjustment). Cheap to probe, and named now.
+3. Carried, each overdue an OWNER decision rather than another mention: I5's `ORACLE_CRAWLED: 0`
+   (tenth), AccessKit (ninth), the WPT AREAS list (`css/cssom-view` gained **472 subtests this
+   session** and is still not a row in the sweep, so the primary metric cannot see any of it), the
+   `_out` race in `verify.sh`.
