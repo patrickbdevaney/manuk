@@ -103506,3 +103506,92 @@ single-axis constant passes this fixture.
 ```
 
 WIKI: docs/wiki/flex-cross-axis-is-logical.md
+
+## Tick 1439 — two reversals that cancel, and the order the compensations run in (2026-09-05)
+
+TICK SHAPE: capability
+CLASS: CSS layout / composition of taffy compensations — Track A, the board's ★ CSS-LAYOUT row
+
+### THE LAST TEN ROWS, AND THE PROBE FOUND ONE DEFECT WHERE IT EXPECTED A MISSING FEATURE
+
+t1438 left ten rows: `direction: rtl` + `flex-direction: column` + `wrap-reverse`. `map_direction`'s
+own comment names them — *"RTL does flip a column's cross-axis start edge, which taffy cannot
+express"* — so the expected shape of this tick was **implementing a missing rule**.
+
+The eight-row probe said otherwise:
+
+```text
+                                                  Chrome     ours (before)
+  column, rtl, 50px item                          30,0       30,0    ✓
+  column, rtl, wrap-reverse, 50px item             0,0        0,0    ✓
+  column, rtl, wrap, TWO 30px lines               50,0/10,0  same    ✓
+  column, rtl, `wrap`, 300px item                -220,0     -220,0   ✓
+  row,    rtl, 20px item                          60,0       60,0    ✓
+  column, rtl, wrap-reverse, 300px item            0,0      -220,0   ✗   ← ONE row
+```
+
+⭐⭐⭐ **THE RTL CROSS-START RULE WAS ALREADY THERE.** Seven of eight rows were exact, including the
+multi-line one. The single failure is not a missing rule at all — it is **t1437's own shift running on
+the wrong side of the RTL mirror.**
+
+*A comment that says a feature is unimplemented is a claim with a date on it. This one was written
+before the two ticks that implemented it, and it would have bought a re-implementation.*
+
+### THE DEFECT — AN ORDERING BETWEEN TWO CORRECT COMPENSATIONS
+
+Two taffy compensations act on the same physical axis: `mirror_rtl_inline` (taffy has no `direction`)
+and `shift_wrap_reverse_overflow` (t1437). The shift is expressed in **taffy's own un-mirrored logical
+space**, where a reversed cross axis always overflows toward negative — so running it AFTER the mirror
+subtracts on an axis that has already been flipped.
+
+⭐ **It only goes wrong when BOTH reversals are present**: `rtl` puts a column flex's cross start at
+the RIGHT edge and `wrap-reverse` flips it back to the LEFT, so the two together are the un-reversed
+case and the box must not move at all. `80 − (−220) − 300 = 0` is the mirror doing exactly the right
+arithmetic once the shift speaks taffy's coordinates.
+
+⭐⭐ **THE INVARIANT, and it is worth more than the fix:** *every taffy compensation is a coordinate
+transform on the placed slots; they compose, and composition has an order.* The rule that decides it:
+**a compensation is written in the space taffy produced, so it runs before any transform that leaves
+that space.** `mirror_rtl_inline` leaves it; the wrap-reverse shift does not. This is the first tick
+where two of this engine's compensations were found fighting, and there are now four of them.
+
+### THE GATE, AND THE TWO MUTATIONS DISAGREE ABOUT EVERYTHING EXCEPT THE ROW THEY BOTH GET WRONG
+
+`g_flex_wrap_reverse_rtl_order` — 10 rows, **9 of them controls**, including the FITTING twin of each
+of the four reversal combinations (a line that fits must be untouched however many reversals are
+stacked on it).
+
+```text
+  Q1  restore t1437's order       -> e6 alone reads -220,0; all nine controls green
+  Q2  delete the shift entirely   -> e9 and ea lose it, AND e6 also reads -220,0
+```
+
+⭐ **Q2 is the one worth writing down.** "No shift" is not the right answer for `e6` either — the
+mirror alone puts it at −220. The right answer is a shift that the mirror then undoes, which no
+single-transform implementation can produce. *A row that two opposite mutations both get wrong is
+naming a composition, not a value.*
+
+### THE NUMBER
+
+```text
+                     base (t1438)   after       read by NAME
+  css/cssom-view     1268/2109      1298/2109   +30
+  css/css-flexbox    3213/4693      3215/4693   +2
+  css/css-grid       failing 4183   4183        flat
+  css/css-sizing     failing 1360   1360        flat
+```
+
+⭐⭐⭐ **`cssom-view/scrollWidthHeight-negative-margin-002.html` IS 600/600.** It opened this session at
+420/600 with 180 failures, all of them `display: flex`; five ticks later its flex half is complete.
+`css/cssom-view` is **602 → 1298 across seventeen ticks** — 28.5% → 61.5%.
+
+### THE RECEIPT
+
+```text
+  g_flex_wrap_reverse_rtl_order  NEW, 10 rows (9 controls), red under 2 of 2 mutations
+  10 neighbouring flex/grid/scroll gates + manuk-layout's 191 unit tests green
+  css/cssom-view +30 · css/css-flexbox +2 · css/css-grid flat · css/css-sizing flat
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/flex-wrap-reverse-rtl-order.md

@@ -12651,6 +12651,29 @@ impl Ctx<'_> {
         // and it is applied recursively so a grid nested inside a grid gets its own mirror — against
         // its own CONTENT width, which is why the padding/border frame is subtracted here.
         let mut placed = placed;
+        // ── ⚠⚠⚠ **THE `wrap-reverse` OVERFLOW SHIFT RUNS BEFORE THE RTL MIRROR, AND t1437 PUT IT
+        //    AFTER.** The shift is expressed in taffy's own un-mirrored logical space, where a
+        //    reversed cross axis always overflows toward NEGATIVE; the mirror then carries it to the
+        //    right physical side for free. Running it afterwards subtracts on an axis that has
+        //    already been flipped, so it moves the box the wrong way — and it does so only when BOTH
+        //    reversals are present, which is why it survived t1437's ten-row fixture.
+        //
+        //    Chrome-measured, an 80x80 `flex-direction: column; direction: rtl` box, item 300 wide:
+        //
+        //    ```text
+        //                                            Chrome   after-mirror   before-mirror
+        //      flex-wrap: wrap           CONTROL      -220,0     -220,0         -220,0  ✓
+        //      flex-wrap: wrap-reverse                 0,0       -220,0          0,0
+        //    ```
+        //
+        //    ⭐ `direction: rtl` puts a COLUMN flex's cross start at the RIGHT edge and
+        //    `wrap-reverse` flips it back to the LEFT, so the two together are the un-reversed case
+        //    and the box must not move at all. `80 − (−220) − 300 = 0` is the mirror doing exactly
+        //    that arithmetic, once the shift is on the side of it that speaks taffy's coordinates.
+        self.shift_wrap_reverse_overflow(node, &mut placed, cw, solved_h);
+        for p in placed.iter_mut() {
+            self.shift_wrap_reverse_descendants(p);
+        }
         if self.container_inline_axis_is_mirrored(node) {
             let frame = 0.0; // the root's slots are already relative to its content origin
             for p in placed.iter_mut() {
@@ -12660,12 +12683,7 @@ impl Ctx<'_> {
         for p in placed.iter_mut() {
             self.mirror_rtl_inline_descendants(p);
         }
-        // `wrap-reverse` overflow, applied AFTER the RTL mirror because a `column` container's cross
-        // axis is the same physical x the mirror works on.
-        self.shift_wrap_reverse_overflow(node, &mut placed, cw, solved_h);
-        for p in placed.iter_mut() {
-            self.shift_wrap_reverse_descendants(p);
-        }
+
         let is_grid = self.is_grid_container(node);
         let boxes: Vec<LayoutBox> = placed
             .iter()

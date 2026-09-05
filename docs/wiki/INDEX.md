@@ -1673,6 +1673,14 @@
   - L75 · Named residue
   - L82 · Gate
 
+## Two reversals that cancel — and the order the compensations run in
+`docs/wiki/flex-wrap-reverse-rtl-order.md`
+
+  - L6 · The defect
+  - L27 · Why the fix is an ORDERING and not a rule
+  - L46 · The general rule this is an instance of
+  - L54 · Gate
+
 ## A float written into a line RE-FLOWS that line — in both directions
 `docs/wiki/float-line-reflow.md`
 
@@ -3065,4 +3073,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2720 sections across 85 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2724 sections across 86 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

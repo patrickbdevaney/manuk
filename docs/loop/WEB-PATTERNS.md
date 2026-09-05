@@ -10920,3 +10920,16 @@ transposes the answer exactly once — invisible on a SQUARE box, wrong on every
 
 **Unlocks:** vertical-writing-mode flex layout — Japanese/Chinese vertical text pages, and any
 `writing-mode` panel in an otherwise horizontal document. (t1438)
+
+## ⭐ `direction: rtl` AND `flex-wrap: wrap-reverse` ON A COLUMN FLEX CANCEL EACH OTHER
+
+A column flex's cross axis is the INLINE axis, so `direction: rtl` moves its start to the right edge —
+and `wrap-reverse` moves it back to the left. The two together are the un-reversed layout, and an
+overflowing item must not move at all. Ours applied both corrections and moved it twice.
+
+⭐ The general shape: an engine that compensates for a missing feature in its layout library
+accumulates coordinate transforms on the same axis, and **they compose in an order**. A compensation
+written in the library's own coordinates has to run before any transform that leaves them.
+
+**Unlocks:** RTL (Arabic/Hebrew) pages that use wrapping column flex — and, more usefully, it is the
+rule that makes two independently-correct corrections stop fighting. (t1439)

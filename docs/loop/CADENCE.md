@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1115** | ticks 1–1437 |
-| median tick cycle | **32m** | 1114 intervals |
+| ticks landed | **1116** | ticks 1–1438 |
+| median tick cycle | **32m** | 1115 intervals |
 | median, last 10 | **73m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.83** | 1345.9h elapsed |
-| median verify wall | **67s** | 1054 ticks |
+| **ticks per hour** | **0.83** | 1346.7h elapsed |
+| median verify wall | **67s** | 1055 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **552**
+* **live gates**: 27 → **553**
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**503 of 1115 ticks** (45%) moved a
+**504 of 1116 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **503** capability ticks, median cycle **32m**
+* **504** capability ticks, median cycle **32m**
 * median diff per tick: **+295 / −35** lines across 8 files
 
 ## Every tick
@@ -1212,5 +1212,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1434** | 2026-09-05 02:39 | 5.0h | capability | 8m | +571/−52 | 549 | 81 | 56.0% · | `scrollIntoView` ignored its argument, and the default is not what it was doing (2026-09-0 |
 | **1436** | 2026-09-05 04:49 | 2.2h | capability | 8m | +594/−49 | 550 | 81 | 56.0% · | `align-items: stretch` sometimes SHRINKS a box, and the adoption could only grow one (2026 |
 | **1437** | 2026-09-05 06:58 | 2.2h | capability | 8m | +393/−44 | 552 | 81 | 56.0% · | `wrap-reverse` overflows BACKWARDS, and running the neighbours first is what stopped a mir |
+| **1438** | 2026-09-05 07:47 | 49m | capability | 8m | +353/−48 | 553 | 81 | 56.0% · | the cross axis is a LOGICAL question, and the predicate had been asking a physical one (20 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
