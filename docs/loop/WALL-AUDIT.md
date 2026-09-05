@@ -2506,3 +2506,81 @@ green wall meaning something.
 **Nothing trimmed, and nothing should be.** The gate list still costs 0 s at this resolution — the
 wall is not section-bound. Two items handed to the observer: the parity probe's 32 browser starts, and
 the `_out` race whose workaround is currently costing every wall in this window ~10-25%.
+
+## Audit #57 — tick 1448 (2026-09-05), total 2296s
+
+```text
+  242s  T · crate tests        11%
+  216s  P · parity (72 pages)   9%
+   87s  B · workspace build     4%
+   17s  G6 · clickability       1%
+    8s  G1 · fidelity           0%
+   ~0s  every one of the 60+ named gates
+  ────
+  547s  attributed        24%
+ 1749s  UNATTRIBUTED      76%
+```
+
+### THE UNATTRIBUTED 76% IS COMPILATION, AND THE INSTRUMENT CANNOT SEE IT BY CONSTRUCTION
+
+Every gate reads **0s**, and that is not a rounding artifact — the per-gate timer measures a gate's
+**run**, and a gate's run really is free. What costs the wall is producing the binary it runs in:
+
+```text
+  578 integration-test targets in the workspace
+  each statically links mozjs + Stylo (~150 MB apiece — the same figure the disk audit found)
+  578 × ~3s of link  ≈  1734s   vs   1749s unattributed
+```
+
+> ⭐ **A wall that is link-bound reports every section at zero.** The audit asks "which gate is
+> expensive?" and the honest answer is *none of them* — the expense is one binary per gate, and the
+> instrument has never had a column for it. That is why four consecutive audits have found "nothing to
+> trim" while the wall went 465s → 605s → 2296s.
+
+The lever is the one `scripts/self-audit.sh` already names and it is observer-owned: **cargo-nextest
+shares one test binary across targets**, and a workspace-hack collapses the dependency permutations.
+At 578 targets this is not an optimisation, it is the whole wall.
+
+### ⭐⭐⭐ AND THE COMPILE CACHE IS REPORTING A 100% HIT RATE OVER 0.9% OF THE WORK
+
+```text
+  $ sccache --show-stats
+  Compile requests                     663
+  Compile requests executed              6
+  Cache hits                             6
+  Cache hits rate                   100.00 %
+```
+
+**Six of 663.** The other 657 were never handed to the cache at all, so the headline rate is computed
+over the 0.9% of the build sccache agreed to look at. The cause is in the rustc command line the
+build actually issues:
+
+```text
+  -C incremental=/home/patrickd/manuk/target/debug/incremental
+```
+
+sccache does not cache incremental compilations — by design. So the wrapper is installed
+(`RUSTC_WRAPPER=…/sccache`, 598 MB of cache on disk), adds a process hop to every one of 663
+invocations, and caches essentially nothing.
+
+> ⭐ **This is the session's own recurring shape, one layer down: a RATE over the wrong DENOMINATOR.**
+> t1435 found it in a WPT pass total, t1436 in a failing count — and here it is in the build cache,
+> reporting perfect health while doing no work. *An instrument that divides by what it agreed to
+> measure cannot report the work it declined.*
+
+Observer-owned, and the two options are one line each: set `CARGO_INCREMENTAL=0` for wall builds (a
+full-rebuild wall gets nothing from incremental anyway, and it is what makes sccache effective), or
+drop the wrapper and stop paying the hop.
+
+### FINDING
+
+**Nothing trimmed, and nothing should be.** No gate's assertion costs measurable time; the wall is
+compilation, and both levers are observer-owned:
+
+1. **578 test binaries, one per gate** — cargo-nextest / a shared binary. This is ~76% of the wall.
+2. **sccache is inert under `-C incremental`** — 6 of 663 requests executed, and the 100% hit rate is
+   computed over those six.
+
+⚠ Carried from the last audit and still true: the `_out` race forces `CARGO_BUILD_JOBS=1` on every
+launch, and it false-red one wall in this window **under** that workaround — so the workaround is not
+sufficient either.

@@ -1122,3 +1122,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1444	6e7382ae	1788634276	2026-09-05T14:51:16-04:00	9679	capability	465	9	353	45	558	81	3896	6960	0	642	0	the axis is the container's, the side is the item's (2026-09-05)
 1445	f2401930	1788638782	2026-09-05T16:06:22-04:00	4506	capability	465	9	387	42	559	81	3896	6960	0	642	0	one of the pair was mapped and the other was not (2026-09-05)
 1446	4e969118	1788643186	2026-09-05T17:19:46-04:00	4404	capability	465	7	209	42	559	81	3896	6960	0	642	0	the fifth axis asymmetry, and this one was in the readout (2026-09-05)
+1447	e7b108b8	1788643895	2026-09-05T17:31:35-04:00	709	measurement-and-refusal	465	5	191	42	559	81	3896	6960	0	642	0	the slot carries the alignment and the abspos pass carries the area (2026-09-05)

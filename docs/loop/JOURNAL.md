@@ -104295,3 +104295,73 @@ measured and working; what it needs is a second container solve at that seam —
 ```
 
 WIKI: docs/wiki/grid-abspos-area-and-alignment.md
+
+## Tick 1448 — wall audit #57: a link-bound wall reports every section at zero (2026-09-05)
+
+TICK SHAPE: measurement-and-refusal
+CLASS: process — wall-time audit (due every 20 ticks)
+
+### THE NUMBER, AND THE 76% THE INSTRUMENT CANNOT SEE
+
+```text
+  242s  T · crate tests    ·  216s  P · parity  ·  87s  B · build  ·  17s G6  ·  8s G1
+  547s attributed (24%)    ·    1749s UNATTRIBUTED (76%)   ·   total 2296s
+```
+
+Every one of the 60+ named gates reads **0s**, and that is not rounding: the per-gate timer measures a
+gate's **run**, and a gate's run really is free. What costs the wall is producing the binary it runs in.
+
+```text
+  578 integration-test targets, each statically linking mozjs + Stylo (~150 MB apiece)
+  578 × ~3s of link  ≈  1734s      vs      1749s unattributed
+```
+
+⭐⭐⭐ **A WALL THAT IS LINK-BOUND REPORTS EVERY SECTION AT ZERO.** The audit asks *"which gate is
+expensive?"* and the honest answer is **none of them** — and that is exactly why four consecutive
+audits have found "nothing to trim" while the wall went 465s → 605s → 2296s. *An instrument that
+attributes cost per SECTION cannot see a cost that is per TARGET.*
+
+### ⭐⭐⭐ AND THE COMPILE CACHE IS REPORTING A 100% HIT RATE OVER 0.9% OF THE WORK
+
+```text
+  Compile requests            663
+  Compile requests executed     6
+  Cache hits                    6
+  Cache hits rate          100.00 %
+```
+
+**Six of 663.** The other 657 were never handed to sccache at all, so the headline is computed over the
+0.9% it agreed to look at. The cause is in the command line the build actually issues —
+`-C incremental=…` — and sccache does not cache incremental compilations by design. The wrapper is
+installed, holds 598 MB of cache, adds a process hop to every one of 663 invocations, and caches
+essentially nothing.
+
+⭐⭐ **THIS IS THIS SESSION'S OWN RECURRING SHAPE, ONE LAYER DOWN: A RATE OVER THE WRONG DENOMINATOR.**
+t1435 found it in a WPT pass total, t1436 in a failing count, and here it is in the build cache —
+*reporting perfect health while doing no work*. **An instrument that divides by what it agreed to
+measure cannot report the work it declined**, and "100%" is the most reassuring possible way to say
+"I looked at almost nothing".
+
+### FINDING — NOTHING TRIMMED, AND NOTHING SHOULD BE
+
+No gate's assertion costs measurable time. Both levers are observer-owned and both now have a number:
+
+1. **578 test binaries, one per gate** — `cargo-nextest` shares one binary across targets, which
+   `scripts/self-audit.sh` has been naming for some time. At 578 targets this is not an optimisation,
+   it is ~76% of the wall.
+2. **sccache is inert under `-C incremental`** — either set `CARGO_INCREMENTAL=0` for wall builds (a
+   full-rebuild wall gets nothing from incremental anyway, and it is what makes the cache work) or drop
+   the wrapper and stop paying the hop.
+
+⚠ Carried: the `_out` race forces `CARGO_BUILD_JOBS=1` on every launch, and it false-red one wall in
+this window **under** that workaround — so the documented workaround is not sufficient either.
+
+### THE RECEIPT
+
+```text
+  wall audit #57 appended; no gate cut, no floor widened, no check moved to CI
+  no engine source changed
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: none [forced] — no engine source changed; the product is the audit.

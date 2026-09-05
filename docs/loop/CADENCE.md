@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1123** | ticks 1–1446 |
-| median tick cycle | **32m** | 1122 intervals |
-| median, last 10 | **79m** | 10 intervals |
+| ticks landed | **1124** | ticks 1–1447 |
+| median tick cycle | **32m** | 1123 intervals |
+| median, last 10 | **75m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.83** | 1356.3h elapsed |
-| median verify wall | **67s** | 1062 ticks |
+| **ticks per hour** | **0.83** | 1356.5h elapsed |
+| median verify wall | **67s** | 1063 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**511 of 1123 ticks** (46%) moved a
+**511 of 1124 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -1220,5 +1220,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1444** | 2026-09-05 14:51 | 2.7h | capability | 8m | +353/−45 | 558 | 81 | 56.0% · | the axis is the container's, the side is the item's (2026-09-05) |
 | **1445** | 2026-09-05 16:06 | 75m | capability | 8m | +387/−42 | 559 | 81 | 56.0% · | one of the pair was mapped and the other was not (2026-09-05) |
 | **1446** | 2026-09-05 17:19 | 73m | capability | 8m | +209/−42 | 559 | 81 | 56.0% · | the fifth axis asymmetry, and this one was in the readout (2026-09-05) |
+| **1447** | 2026-09-05 17:31 | 12m | measurement-and-refusal | 8m | +191/−42 | 559 | 81 | 56.0% · | the slot carries the alignment and the abspos pass carries the area (2026-09-05) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
