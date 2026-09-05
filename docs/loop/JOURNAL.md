@@ -104365,3 +104365,67 @@ this window **under** that workaround — so the documented workaround is not su
 ```
 
 WIKI: none [forced] — no engine source changed; the product is the audit.
+
+## Tick 1449 — two Chrome batteries that cannot both be satisfied (2026-09-05)
+
+TICK SHAPE: measurement-and-refusal
+CLASS: CSSOM-View / scrollable overflow end padding — REFUSED, reverted
+
+### THE SURVEY, AND A DEFECT THAT IS REAL
+
+`css/css-flexbox`'s largest coherent rule is the `negative-overflow-*` family — 191 subtests across
+three files, a 5-variable matrix over `writing-mode × direction × flex-direction × flex-wrap` whose
+expected answers are only two numbers (130 and 370). The failing deltas histogram to a single value:
+
+```text
+  26 rows  scrollWidth  short by 10        ← the container's padding is 10px
+   7 rows  scrollHeight short by 10
+```
+
+`compute_scroll_metrics` takes the end padding as `(padding-right, padding-bottom)` **unconditionally**
+— the axis end only while the scroll origin is top-left. Reverse either axis and the region's end is
+the LEFT or TOP edge, so the padding that belongs there is `padding-left`/`padding-top`, and the one
+that was added lands on the unreachable side where it is discarded.
+
+⭐ **The simplest witness is not a flex box at all:** `display:block; writing-mode:vertical-rl;
+overflow:scroll` 100x100 with `padding:10px` around one 350px child reads **370** in Chrome and **360**
+here. t1428 established that a scroll container's region gains its own end padding; **it never asked
+which edge that is.** Sixth axis asymmetry of the session.
+
+### THE REFUSAL — AND IT IS A DIFFERENT KIND FROM t1447's
+
+The correction makes eight of ten probe rows Chrome-exact and gains `css/css-flexbox` **+26**. It also
+takes `cssom-view/scrollWidthHeight-negative-margin-002` — the 600-subtest matrix this session drove
+from 420/600 to **600/600** across ticks 1434–1439 — down to **426/600**. All 174 regressions are in
+that one file.
+
+⭐⭐⭐ **BOTH BATTERIES ARE CHROME-MEASURED AND THEY CANNOT BOTH BE SATISFIED BY THIS RULE.** t1447's
+refusal was a trade (the fix bought one thing and sold another). This one is not a trade — it is a
+**contradiction**, and a contradiction between two correct measurements is a statement about the
+MODEL: *the end-padding term depends on something neither battery varies, and the rule as written is
+under-determined.*
+
+### WHAT THE NEXT TICK MUST DO FIRST — AND IT IS NOT IMPLEMENT
+
+Find the variable the two fixtures hold constant in different places. Two candidates, one probe each:
+
+1. The negative-margin matrix reaches its far edge through a CHILD's box; the flexbox matrix overflows
+   past the padding-box floor. The end padding may attach to one and not the other.
+2. ⭐⭐ **`negative-margin-002`'s padding is ASYMMETRIC (`1px 4px 8px 16px`) and the flexbox matrix's is
+   UNIFORM (`10px`).** An asymmetric fixture can tell `padding-left` from `padding-right`; a uniform
+   one cannot — **so the flexbox battery cannot say WHICH padding it needs, only that it needs ten.**
+
+*That is the session's own recurring lesson wearing a new hat* — a uniform fixture cannot tell two
+sides apart, the sixth degenerate-fixture finding in fifteen ticks, and this time it is the fixture
+that **agreed** with me that could not have disagreed.
+
+### THE RECEIPT
+
+```text
+  engine reverted to HEAD; css/cssom-view back to 1314/2109 on the reverted tree
+  the defect is localised and the witness is a BLOCK box; the rule is not yet determined
+  no gate added — there is nothing green to gate
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/two-chrome-batteries-that-disagree.md

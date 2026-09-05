@@ -11042,3 +11042,18 @@ alignment (105 new failures); the slot alone loses the content-alignment offset 
 **They have to agree, not compete.**
 
 **Status:** open, with the mechanism and the recovery technique measured. (t1447)
+
+## ⚠ A SCROLL CONTAINER'S END PADDING BELONGS AT THE AXIS'S END, NOT THE PHYSICAL ONE
+
+A `direction: rtl` or `writing-mode: vertical-rl` scroller's scrollable overflow ends at its LEFT (or
+TOP) edge, so that is where its own end padding belongs. Ours adds `padding-right`/`padding-bottom`
+regardless, and on a reversed axis that lands on the unreachable side and is silently discarded — the
+scrollable area comes out one padding short on every RTL and vertical-script scroller.
+
+⚠ Measured and REFUSED at t1449: the obvious correction gains 26 flexbox subtests and loses 174 in the
+`cssom-view` negative-margin matrix, which is also Chrome-measured. **Two batteries, both right,
+cannot both be satisfied by the rule as written** — the term depends on something neither varies. The
+prime suspect is that the flexbox fixture's padding is UNIFORM (`10px`), so it cannot say *which*
+padding it needs.
+
+**Status:** open, defect localised, rule under-determined. (t1449)

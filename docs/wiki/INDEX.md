@@ -3072,6 +3072,14 @@
   - L148 · The arm that was measured and removed rather than shipped
   - L163 · The two gates that were red, and had different owners
 
+## Two Chrome-measured batteries that cannot both be satisfied by one end-padding rule
+`docs/wiki/two-chrome-batteries-that-disagree.md`
+
+  - L6 · The defect that is real
+  - L21 · The fix that works, and the battery it breaks
+  - L44 · What the next tick must do FIRST
+  - L60 · Status
+
 ## Two objects called `HTMLElement.prototype`, and `super.x()` goes through the empty one
 `docs/wiki/two-htmlelement-prototypes.md`
 
@@ -3129,4 +3137,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2752 sections across 93 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2756 sections across 94 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
