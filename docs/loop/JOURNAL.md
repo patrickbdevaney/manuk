@@ -103694,3 +103694,102 @@ on the model of `solve_subtree`'s auto-margin re-solve.
 ```
 
 WIKI: docs/wiki/grid-zero-max-track.md
+
+## Tick 1441 — the clamp had only its upper half (2026-09-05)
+
+TICK SHAPE: capability
+CLASS: CSS layout / intrinsic sizing — Track A, the board's ★ CSS-LAYOUT row
+
+### A SURVEY THAT WALKED THROUGH TWO WRONG SUSPECTS FIRST, AND BOTH ARE WORTH THE ENTRY
+
+The next file in the `css/cssom-view` survey is
+`scrollWidthHeight-overflow-visible-margin-collapsing` (45 failing, 20 of them `display:inline-block`).
+The name says margin collapsing; the reduction said otherwise:
+
+```text
+  inline-block, children with `margin: 20px 10px`     Chrome cw=60   ours cw=20
+```
+
+⭐ **The file is named for the RULE IT IS TESTING, not for the rule that breaks it.** The
+margin-collapsing arithmetic was right; the inline-block's shrink-to-fit width was wrong. That is the
+same lesson as t1435's (*the area a test lives in is not the subsystem it measures*), one level
+finer — the FILE name is no better a guide than the DIRECTORY name.
+
+⚠ **AND THE SUSPECT BEFORE THAT WAS ALSO WRONG, WITH A FINDING WORTH BANKING.** The tick opened on
+`css/css-grid`'s largest remaining file, `grid-minimum-size-grid-items-021` (72 failing, exactly half
+its subtests). Every failing row is a HEIGHT and every passing row a WIDTH — an `<img>` whose declared
+width is 200px and whose height should follow the intrinsic ratio. **The reduction does not
+reproduce**: the same shape with a `<canvas>`, with `aspect-ratio`, and with a `data:` URL image is
+Chrome-exact on all six rows. So the ratio transfer is fine and the image's NATURAL SIZE is not
+arriving by the time the test measures. That is a load-ordering question about network subresources,
+it is worth a tick of its own, and it is recorded here rather than guessed at.
+
+### THE DEFECT — ONE HALF OF ONE CLAMP
+
+CSS Sizing §5.1: a box's intrinsic contributions are its outer size **clamped by its min and max
+sizes**. We had only the upper half.
+
+```text
+                                                        Chrome    before    after
+  inline-block > div{min-width:20px}                       20        0        20
+  inline-block > div{min-width:20px; margin:0 10px}        40       10        40
+  float / abspos / flex item                               20        0        20
+  table cell                                               26        6        26
+  inline-block > span[inline-block]{min-width}  CONTROL    20       20        20  ✓
+  inline-block > div{width:20px; max-width:5px} CONTROL     5        5         5  ✓
+```
+
+⭐⭐ **THE TWO CONTROLS ARE WHAT SAY THIS IS A MISSING HALF RATHER THAN A MISSING CLAMP.** An
+inline-level child already carried its `min-width` into the line box, and `max-width` already reached
+the used width — so only the block child's LOWER bound was unrepresented, and it was unrepresented in
+six shrink-to-fit contexts at once because they all consume the same walk.
+
+### WHERE IT LIVED, AND THE SENTENCE THAT FINDS THIS CLASS AGAIN
+
+`content_right_extent` lays a subtree out at a 1e6 available width and **discards a block box's own
+`rect.width`** as an artifact — it is ~1e6 and meaningless — recursing to the inline text that carries
+the real extent.
+
+⭐⭐⭐ **A DECLARED `min-width` IS THE ONE PART OF THAT WIDTH THAT WAS NEVER A FUNCTION OF THE MEASURING
+WIDTH, AND IT WENT OUT WITH THE ARTIFACT.** *When a clamp is right at one end and absent at the other,
+look for the branch that discards a box's own size — the discarded value usually had one real term in
+it.*
+
+The floor deliberately does NOT `return`: the box's content may still exceed it, and the walk below is
+what finds it.
+
+### THE NUMBER
+
+```text
+                     base (t1440)   after       read by NAME
+  css/cssom-view     1298/2109      1314/2109   +16, all of it in the margin-collapsing file
+                                                (95/140 -> 111/140)
+  css/css-sizing     failing 1360   1360        flat
+  css/css-flexbox    3215/4693      3215/4693   flat
+  css/css-grid       failing 3725   3725        flat
+  css/css-text       2900/4515      2900/4515   flat
+  css/CSS2           2128/2243      2128/2243   flat
+```
+
+⚠ **+16 is a small number for a change this broad, and that is the honest reading of it.** Six
+formatting contexts were wrong and WPT scores sixteen subtests for it; the value is on real pages —
+`min-width` is how an author reserves space for something that has not arrived yet, and every one of
+those reservations was contributing zero.
+
+### THE GATE
+
+`g_min_width_floors_intrinsic` — 12 rows, 3 controls. Red under S1 (drop the floor: nine rows
+collapse, the three controls hold), S2 (skip the box-sizing frame: the content-box row ALONE) and S3
+(`return` after the floor: the content-wider-than-floor row ALONE). **Three mutations, three disjoint
+witnesses.**
+
+### THE RECEIPT
+
+```text
+  g_min_width_floors_intrinsic  NEW, 12 rows (3 controls), red under 3 of 3 mutations
+  15 neighbouring layout/table/flex/grid gates + manuk-layout's 191 unit tests green
+  css/cssom-view +16 · five other areas flat
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/min-width-floors-intrinsic.md

@@ -4018,6 +4018,10 @@ fn content_right_extent(
     // i[width:24px]`: **48 against Chrome's 72**, the icon lost entirely. Every step is a heuristic
     // working as designed; the composition drops a real item.
     flex_max_content: &dyn Fn(Option<NodeId>) -> Option<f32>,
+    // A box's own BORDER-box `min-width`, when it declares one as a length. See the FILLED branch in
+    // `visit`: a block box that filled the measuring width has its own right edge discarded as an
+    // artifact, and its declared minimum is the one part of that width that is NOT an artifact.
+    min_width_floor: &dyn Fn(Option<NodeId>) -> Option<f32>,
 ) -> f32 {
     // `shrink_to_fit` lays the subtree out at a very large available width (1e6) to read its
     // *max-content* width. Two artifacts of that absurd width must be discarded, or the measurement
@@ -4088,6 +4092,7 @@ fn content_right_extent(
         rel: &dyn Fn(f32) -> f32,
         ins: &dyn Fn(Option<NodeId>) -> (f32, f32),
         fmc: &dyn Fn(Option<NodeId>) -> Option<f32>,
+        mwf: &dyn Fn(Option<NodeId>) -> Option<f32>,
         // The right-edge insets of every FILLED ancestor between this box and the box being
         // measured. See the `else` branch: a skipped box's right insets are real content extent
         // that nothing else in this walk can account for.
@@ -4103,6 +4108,17 @@ fn content_right_extent(
                 // carries its left margin, so only the right margin is still outstanding.
                 *max_r = max_r.max(rel(b.rect.x) + w + mr + pending);
                 return;
+            }
+            // ⚠⚠⚠ **A FILLED BOX'S OWN WIDTH IS AN ARTIFACT, BUT ITS DECLARED `min-width` IS NOT.**
+            // The branch below discards a block box's `rect.width` because at a 1e6 measuring width
+            // it is ~1e6 and meaningless — and that threw away the one part of it that was never a
+            // function of the measuring width. CSS Sizing §5.1 clamps a box's intrinsic
+            // contributions by its min and max sizes; `max-width` already reached the used width and
+            // `min-width` reached nothing, so `div { min-width: 20px }` with no content contributed
+            // **0** to every shrink-to-fit ancestor. NOT a `return`: the box's content may still
+            // exceed the floor, and the walk below is what finds it.
+            if let Some(m) = mwf(b.node) {
+                *max_r = max_r.max(rel(b.rect.x) + m + mr + pending);
             }
         }
         if b.rect.width < FILL_SENTINEL {
@@ -4125,7 +4141,7 @@ fn content_right_extent(
         match &b.content {
             BoxContent::Block(kids) => {
                 for k in kids {
-                    visit(k, fonts, max_r, rel, ins, fmc, pending_kids);
+                    visit(k, fonts, max_r, rel, ins, fmc, mwf, pending_kids);
                 }
             }
             BoxContent::Inline(frags) => {
@@ -4143,6 +4159,7 @@ fn content_right_extent(
                     &rel,
                     right_insets,
                     flex_max_content,
+                    min_width_floor,
                     0.0,
                 );
             }
@@ -6123,6 +6140,7 @@ impl Ctx<'_> {
                         0.0,
                         &|n| self.px_right_insets(n),
                         &|n| self.flex_container_max_content(n),
+                        &|n| self.min_width_floor_border(n),
                     )
                     .min(manuk_css::values::viewport_size().1)
                     .max(0.0)
@@ -6263,6 +6281,7 @@ impl Ctx<'_> {
                         0.0,
                         &|n| self.px_right_insets(n),
                         &|n| self.flex_container_max_content(n),
+                        &|n| self.min_width_floor_border(n),
                     )
                     .min(manuk_css::values::viewport_size().1)
                     .max(0.0)
@@ -8472,6 +8491,57 @@ impl Ctx<'_> {
     /// The result is a CONTENT width because that is what every caller consumes (`shrink_to_fit`
     /// hands it straight to `layout_children`), so a `border-box` width has its own padding and
     /// border removed — the same `bs_extra` term `layout_block` adds in the other direction.
+    /// **A box's own `min-width` FLOORS its intrinsic contribution** — CSS Sizing §5.1: the
+    /// min-content and max-content contributions of a box are its outer size *clamped by its min and
+    /// max sizes*. Returns that floor as a CONTENT width, or `None` when there is nothing to floor
+    /// by, so it composes with [`Self::definite_content_width`]'s box-sizing convention.
+    ///
+    /// ⚠⚠⚠ **THE CLAMP HAD ONLY ITS UPPER HALF.** `max-width` was already reaching the used width
+    /// downstream and `min-width` reached nothing at all, so a block child with `min-width: 20px`
+    /// and no content contributed **0** to every shrink-to-fit ancestor. Chrome-measured, an
+    /// `.k { height: 10px }` child inside each shrink-to-fit context:
+    ///
+    /// ```text
+    ///                                                        Chrome   before   after
+    ///   inline-block > div{min-width:20px}                      20       0       20
+    ///   inline-block > div{min-width:20px; margin:0 10px}       40      10       40
+    ///   float        > div{min-width:20px}                      20       0       20
+    ///   abspos       > div{min-width:20px}                      20       0       20
+    ///   flex item    > div{min-width:20px}                      20       0       20
+    ///   table cell   > div{min-width:20px}                      26       6       26
+    ///   inline-block > div{min-width:20px}text                  20       8       20
+    ///   inline-block > span[inline-block]{min-width:20px} CTRL   20      20       20  ✓
+    ///   inline-block > div{width:20px; max-width:5px}     CTRL    5       5        5  ✓
+    /// ```
+    ///
+    /// ⭐ **The two controls are what say this is the missing HALF of a clamp rather than a missing
+    /// clamp.** An INLINE-level child already carried its `min-width` into the line box, and
+    /// `max-width` already reached the used width — so only the block child's lower bound was
+    /// unrepresented, in every context that asks for an intrinsic width.
+    ///
+    /// Only `Dim::Px`: a percentage `min-width` resolves against a containing block this measurement
+    /// does not have, and guessing a basis is worse than declining (the same reasoning as
+    /// `definite_content_width`, and as the percentage bound in `taffy_tree`'s conflict seam).
+    fn min_width_floor_border(&self, node: Option<NodeId>) -> Option<f32> {
+        let node = node?;
+        if !self.dom.is_element(node) {
+            return None;
+        }
+        let s = self.style_of(node);
+        let Dim::Px(m) = s.min_width else { return None };
+        // `content_right_extent` measures BORDER boxes (`rect.width`), so a content-box `min-width`
+        // has to gain the frame the used width would give it.
+        let frame = if s.box_sizing == BoxSizing::BorderBox {
+            0.0
+        } else {
+            s.padding.left.resolve(0.0, 0.0)
+                + s.padding.right.resolve(0.0, 0.0)
+                + s.border_width.left
+                + s.border_width.right
+        };
+        Some((m + frame).max(0.0))
+    }
+
     fn definite_content_width(&self, node: NodeId) -> Option<f32> {
         if !self.dom.is_element(node) {
             return None;
@@ -8593,6 +8663,7 @@ impl Ctx<'_> {
                 0.0,
                 &|n| self.px_right_insets(n),
                 &|n| self.flex_container_max_content(n),
+                &|n| self.min_width_floor_border(n),
             ) + self.native_widget_width(node),
         );
         // ⚠ Each rule writes its OWN map. Below the definite-width short-circuit the two compute
@@ -8870,6 +8941,7 @@ impl Ctx<'_> {
             0.0,
             &|n| self.px_right_insets(n),
             &|n| self.flex_container_max_content(n),
+            &|n| self.min_width_floor_border(n),
         ) + self.native_widget_width(node);
         // See `MANUK_TRACE_INTRINSIC` in `measure_intrinsic`: max-content is the OTHER place an
         // intrinsic width is decided (inline-block / inline-flex / float / abs), and a box that
@@ -10552,16 +10624,24 @@ impl Ctx<'_> {
         // Chrome pins nothing there (`colspan=2` + `width:300px` in a 400px table is still 200/200).
         let mut fc_max = FloatContext::new(0.0, 1.0e6);
         let (cmax, _) = self.layout_children(cell, 0.0, 0.0, 1.0e6, None, &mut fc_max);
-        let max =
-            content_right_extent(&cmax, self.fonts, 0.0, &|n| self.px_right_insets(n), &|n| {
-                self.flex_container_max_content(n)
-            });
+        let max = content_right_extent(
+            &cmax,
+            self.fonts,
+            0.0,
+            &|n| self.px_right_insets(n),
+            &|n| self.flex_container_max_content(n),
+            &|n| self.min_width_floor_border(n),
+        );
         let mut fc_min = FloatContext::new(0.0, 0.0);
         let (cmin, _) = self.layout_children(cell, 0.0, 0.0, 0.0, None, &mut fc_min);
-        let min =
-            content_right_extent(&cmin, self.fonts, 0.0, &|n| self.px_right_insets(n), &|n| {
-                self.flex_container_max_content(n)
-            });
+        let min = content_right_extent(
+            &cmin,
+            self.fonts,
+            0.0,
+            &|n| self.px_right_insets(n),
+            &|n| self.flex_container_max_content(n),
+            &|n| self.min_width_floor_border(n),
+        );
         (
             taffy_tree::ceil_to_layout_unit(min + frame),
             taffy_tree::ceil_to_layout_unit(max + frame),
@@ -11962,6 +12042,7 @@ impl Ctx<'_> {
                         0.0,
                         &|n| self.px_right_insets(n),
                         &|n| self.flex_container_max_content(n),
+                        &|n| self.min_width_floor_border(n),
                     )
                     .min(manuk_css::values::viewport_size().1)
                     .max(0.0)

@@ -10948,3 +10948,17 @@ for content-derived ones is a flooring/ordering bug, not a sizing one.**
 
 **Unlocks:** grid layouts using a zero or too-small track maximum — 474 WPT subtests, ~20% of
 `css/css-grid`'s entire failing mass. (t1440)
+
+## ⭐⭐ `min-width` ON A BLOCK CHILD MUST WIDEN ITS SHRINK-TO-FIT PARENT
+
+`min-width` is how authors reserve space for something that has not arrived yet — an empty
+placeholder cell, a lazy-loaded thumbnail, a button that will get a label, a chart canvas. Inside any
+shrink-to-fit box (inline-block, float, absolutely-positioned, flex item, table cell) that reservation
+has to widen the parent, and ours contributed **zero**: the parent collapsed and the child overflowed
+it.
+
+⭐ The tell that it was one bug and not six: `max-width` already worked, and an inline-level child
+already worked. **When a clamp is right at one end and absent at the other, look for the branch that
+discards a box's own size — the discarded value usually had one real term in it.**
+
+**Unlocks:** placeholder and reserved-space layout in every shrink-to-fit context. (t1441)

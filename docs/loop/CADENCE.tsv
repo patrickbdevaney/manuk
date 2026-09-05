@@ -1116,3 +1116,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1437	cbbe91a3	1788605925	2026-09-05T06:58:45-04:00	7760	capability	465	9	393	44	552	81	3896	6960	0	642	0	`wrap-reverse` overflows BACKWARDS, and running the neighbours first is what stopped a mirror (2026-09-05)
 1438	d238745b	1788608850	2026-09-05T07:47:30-04:00	2925	capability	465	9	353	48	553	81	3896	6960	0	642	0	the cross axis is a LOGICAL question, and the predicate had been asking a physical one (2026-09-05)
 1439	68ef3b8f	1788614343	2026-09-05T09:19:03-04:00	5493	capability	465	9	389	43	554	81	3896	6960	0	642	0	two reversals that cancel, and the order the compensations run in (2026-09-05)
+1440	b609a53f	1788618848	2026-09-05T10:34:08-04:00	4505	capability	465	9	429	51	555	81	3896	6960	0	642	0	458 subtests on one sentence of the specification, and three candidates measured before the narrow one (2026-09-05)

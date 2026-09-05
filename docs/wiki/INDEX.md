@@ -2384,6 +2384,14 @@
   - L86 · ⚠⚠⚠ Why a MinimalCascade-only bug is more than a rendering bug
   - L101 · ⚠⚠ And the instrument finding that came with it
 
+## `min-width` never reached the intrinsic contribution — the clamp had only its upper half
+`docs/wiki/min-width-floors-intrinsic.md`
+
+  - L7 · The defect
+  - L31 · Where it lived
+  - L43 · Three details the fixture had to carry
+  - L52 · Gate
+
 ## CSS multi-column layout — and the pref that made it look unimplemented
 `docs/wiki/multi-column-layout.md`
 
@@ -3082,4 +3090,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2729 sections across 87 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2733 sections across 88 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

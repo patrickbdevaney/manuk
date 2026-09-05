@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1117** | ticks 1–1439 |
-| median tick cycle | **32m** | 1116 intervals |
-| median, last 10 | **90m** | 10 intervals |
+| ticks landed | **1118** | ticks 1–1440 |
+| median tick cycle | **32m** | 1117 intervals |
+| median, last 10 | **83m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.83** | 1348.3h elapsed |
-| median verify wall | **67s** | 1056 ticks |
+| **ticks per hour** | **0.83** | 1349.5h elapsed |
+| median verify wall | **67s** | 1057 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **554**
+* **live gates**: 27 → **555**
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**505 of 1117 ticks** (45%) moved a
+**506 of 1118 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **505** capability ticks, median cycle **32m**
-* median diff per tick: **+295 / −35** lines across 8 files
+* **506** capability ticks, median cycle **32m**
+* median diff per tick: **+296 / −35** lines across 8 files
 
 ## Every tick
 
@@ -1214,5 +1214,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1437** | 2026-09-05 06:58 | 2.2h | capability | 8m | +393/−44 | 552 | 81 | 56.0% · | `wrap-reverse` overflows BACKWARDS, and running the neighbours first is what stopped a mir |
 | **1438** | 2026-09-05 07:47 | 49m | capability | 8m | +353/−48 | 553 | 81 | 56.0% · | the cross axis is a LOGICAL question, and the predicate had been asking a physical one (20 |
 | **1439** | 2026-09-05 09:19 | 1.5h | capability | 8m | +389/−43 | 554 | 81 | 56.0% · | two reversals that cancel, and the order the compensations run in (2026-09-05) |
+| **1440** | 2026-09-05 10:34 | 75m | capability | 8m | +429/−51 | 555 | 81 | 56.0% · | 458 subtests on one sentence of the specification, and three candidates measured before th |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
