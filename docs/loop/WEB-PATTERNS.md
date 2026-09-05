@@ -11057,3 +11057,16 @@ prime suspect is that the flexbox fixture's padding is UNIFORM (`10px`), so it c
 padding it needs.
 
 **Status:** open, defect localised, rule under-determined. (t1449)
+
+## ⭐ THE SCROLLABLE OVERFLOW'S EXTRA PADDING IS "AS NECESSARY", NOT A CONSTANT
+
+CSS Overflow 3 adds padding to a scroll container's scrollable region *"as necessary to enable scroll
+positions that satisfy both `place-content: start` and `place-content: end`"* — and "as necessary" is
+load-bearing. Measured against Chrome: the padding attaches to a child's **margin box**, and where the
+child's **border box** already reaches further, nothing is added at all. A container whose child has
+negative margins therefore gets no extra padding, and one whose child has none gets all of it.
+
+⚠ Treating it as a constant term is what makes an RTL or vertical-script scroller come out one padding
+short — or one padding long, depending on which fixture you fitted to.
+
+**Status:** model measured and fitted (t1450); the reversed-axis implementation is the next tick.

@@ -104429,3 +104429,70 @@ that **agreed** with me that could not have disagreed.
 ```
 
 WIKI: docs/wiki/two-chrome-batteries-that-disagree.md
+
+## Tick 1450 — the contradiction was not real, and the record was wrong (2026-09-05)
+
+TICK SHAPE: measurement-and-refusal
+CLASS: CSSOM-View / scrollable overflow — t1449's steer executed, model resolved, record corrected
+
+### THE STEER SAID "DO NOT IMPLEMENT — FIND THE VARIABLE THE TWO BATTERIES HOLD CONSTANT"
+
+It was neither of the two candidates t1449 nominated. Measuring the **child's own rect** beside each
+scroll extent — the one quantity neither battery had ever printed — resolved it in one run:
+
+```text
+  A. padding 1/4/8/16, no border, one 350x10 child, no margins
+     ltr   kid[16,1 350x10]      scrollWidth 370
+     rtl   kid[-234,1 350x10]    scrollWidth 370
+  B. the negative-margin-002 wrapper (border 1/50/40/4), one 300x300 child at margin:-100px
+     ltr   kid[-84,-99 300x300]  scrollWidth 216
+     rtl   kid[-104,-99 300x300] scrollWidth 204
+```
+
+⭐⭐⭐ **THE END PADDING ATTACHES TO THE CHILD'S MARGIN BOX, AND THE REGION IS THE UNION OF THAT WITH ITS
+BORDER BOX.** Where the border box already reaches further, no padding is added:
+
+```text
+  A ltr   margin-box right 366 + 4 = 370   border-box right 366   → 370  ✓
+  B ltr   margin-box right 116 + 4 = 120   border-box right 216   → 216  ✓
+  A rtl   margin-box left −234 − 16 = −250 border-box left −234   → 120+250 = 370  ✓
+  B rtl   margin-box left   −4 − 16 =  −20 border-box left −104   → 100+104 = 204  ✓
+```
+
+That is the specification's own *"additional padding **as necessary** to enable scroll positions that
+satisfy both `place-content: start` and `place-content: end`"* — the clause surface audit #85 named as
+unmeasured residue and check #136 carried. **This is it, measured.**
+
+### ⚠⚠⚠ AND THE RECORD WAS WRONG — A HAND-DERIVED COORDINATE BECAME A RULE
+
+t1434's journal derived the RTL child's position **by hand** as `x = −84` and concluded Chrome's 204
+must be `184 + 20`, where 20 is *both* of the container's paddings. Chrome's actual child position is
+**−104**, and `100 + 104 = 204` exactly. **There is no `+20` and there never was.**
+
+⭐⭐ **THE WRONG NUMBER THEN MADE A CORRECT FIX LOOK LIKE A REGRESSION.** t1449 localised a real defect,
+implemented it correctly, watched 174 subtests fail, and refused — because the battery it appeared to
+contradict was being read through a coordinate nobody had measured. *The refusal was right and the
+contradiction was not.*
+
+The lesson is not "derive more carefully". It is that **a coordinate is a measurement, and this loop
+has a Chrome to measure it with** — the same instrument that produced every other row in that table.
+Every `[x,y w×h]` in a Chrome table this session is measured; the one number that was reasoned to is
+the one that cost two ticks.
+
+### WHAT THE NEXT TICK IMPLEMENTS
+
+`compute_scroll_metrics`'s reversed-axis branch needs the **margin-box** start extent alongside the
+border-box one it already computes, and takes the further of `border_box_start` and
+`margin_box_start − end_padding`. `OverflowContribution` already carries per-contribution margins and
+padding; what it does not expose is the START-side pair.
+
+### THE RECEIPT
+
+```text
+  no engine change; the tree is HEAD
+  model fitted to 4 measured rows; t1434's derivation corrected in the wiki
+  the defect t1449 localised is unchanged and still real
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/the-end-padding-attaches-to-the-margin-box.md

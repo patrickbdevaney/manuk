@@ -3019,6 +3019,15 @@
   - L56 · t1414 — twelve specs, and the number
   - L90 · t1416 — and a count cannot tell you what KIND of work an area is
 
+## The end padding attaches to the MARGIN box — the model that resolves t1449's contradiction
+`docs/wiki/the-end-padding-attaches-to-the-margin-box.md`
+
+  - L7 · The four measurements, with the child's own rect
+  - L22 · The rule that fits all four
+  - L39 · ⚠ THE RECORD WAS WRONG, AND THE WRONG NUMBER BECAME A RULE
+  - L53 · What the next tick implements
+  - L60 · Status
+
 ## The headline is an integer, and the same binary does not give the same integer twice
 `docs/wiki/the-headlines-error-bar.md`
 
@@ -3137,4 +3146,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2756 sections across 94 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2761 sections across 95 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
