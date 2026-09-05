@@ -7988,3 +7988,73 @@ session landed, and worth saying out loud rather than discovering later.
    (tenth), AccessKit (ninth), the WPT AREAS list (`css/cssom-view` gained **472 subtests this
    session** and is still not a row in the sweep, so the primary metric cannot see any of it), the
    `_out` race in `verify.sh`.
+
+## SURFACE AUDIT #86 — tick 1443 (2026-09-05)
+
+Nine capability ticks (1434–1442), all of them CSS layout, all of them landed. The audit's job is the
+frame around them.
+
+### ⭐⭐⭐ THE LOAD EVENT FIRED BEFORE THE IMAGES FOR THE ENGINE'S ENTIRE HISTORY — AND THE FIRST QUESTION IS WHAT ELSE THAT NUMBER TOUCHED
+
+t1442 found that `Page::load_async` fired `load` before the subresource phases. Every
+`window.onload` handler on every page this engine has ever rendered ran against a document whose
+images had **no natural size**. Given how much of the web sizes itself at `onload` — galleries,
+carousels, sticky headers, chart libraries, "above the fold" logic — the immediate audit question is
+whether the loop's own headline numbers were measured that way.
+
+**They were not, and the reason is worth recording rather than assuming.** Every measurement path in
+`tests/wpt/src` calls `load_async` and then `finish_loading`, and `finish_loading` runs the subresource
+phases and fires `load` again (idempotently). So the RENDER the fidelity sweep scores was always
+measured with images present.
+
+> ⚠ **But the PAGE's own load handler still ran image-less, in every one of those measurements.** The
+> pixels were fine and anything the page computed for itself was not. That is a plausible, unquantified
+> contribution to real-site shape divergence across ~1,400 ticks, and it is now fixed — **so the next
+> fidelity sweep is not comparable to the stored rows for a reason that has nothing to do with layout.**
+> Whoever reads that sweep needs to know this happened.
+
+*Refutable by:* a sweep re-run showing no movement on the sites whose scripts measure at `load`.
+
+### ⚠⚠ `css/cssom-view` GAINED 696 SUBTESTS THIS SESSION AND THE PRIMARY METRIC CANNOT SEE ONE OF THEM
+
+602 → 1298 (28.5% → 61.5%) across seventeen ticks, and `css/cssom-view` is still not a row in
+`docs/loop/WPT-AREAS.tsv`. This is the **fourth consecutive audit** to name it. It is now the largest
+invisible gain in the loop's recorded history, and the metric the loop steers by — the monotonic WPT
+TOTAL — has been flat across a session that moved a subsystem by 33 percentage points.
+
+Observer-owned (`scripts/wpt-sweep.sh` regenerates the file from its own AREAS list). Naming it a
+fourth time is not measurement; it is an owner decision.
+
+### ⚠ THE `css/css-grid` TOTAL HAS A FLOOR, AND A THIRD OF IT IS SPEC FRONTIER
+
+Of the 3,636 subtests still failing after t1442, **1,164 (32%) are `grid-lanes/`** — Grid Level 3
+masonry, a spec still in flux. The area percentage therefore cannot approach 100 by any amount of
+correct work, and a tick that ranks by area total will keep being pointed at it. The next coherent
+RULE in that area is the `alignment/` **baseline** cluster (621 subtests across a dozen files), which
+no tick has ever touched.
+
+### ⚠ THE WALL IS 1934s AGAINST A 300s TARGET — AND THIS SESSION KNOWS WHY
+
+`scripts/self-audit.sh`'s one unmet item. The session's own data names the mechanism: the mem-guard
+picked `CARGO_BUILD_JOBS=1` on **every** wall of the last nine ticks, reporting ~22 GB available with
+**swap at 98–99%**. `CARGO_BUILD_JOBS=1` is also the documented loop-side workaround for the `_out`
+race, so the two compound: the build phase is serialised for both reasons at once. Observer-owned
+(`scripts/wall-audit.sh` is due at t1448), and recorded here because the *cause* is now measured
+rather than suspected.
+
+⚠ Also observer-owned, and it explains a recurring cost: `disk-hygiene.sh`'s deps prune keeps *"the
+newest per name"* test binary. **Cargo preserves timestamps through its hardlinks, so mtime does not
+order two artifacts by freshness** — this session reclaimed 44 GB with exactly that heuristic and the
+next build spent exactly 44 GB putting the files back, because the ones kept were the stale ones.
+
+### RANKED, from this audit only
+
+1. ⭐⭐⭐ **A LIFECYCLE ORDERING DEFECT INVALIDATES COMPARISONS, NOT JUST RESULTS.** The `load` fix means
+   the next fidelity sweep differs from the stored rows for a reason that is not layout. Say so before
+   the number is read, not after it is attributed.
+2. ⚠⚠ `css/cssom-view` — fourth mention, 696 invisible subtests. Owner decision.
+3. ⚠ `css/css-grid`'s remaining mass is 32% spec-frontier; rank that area by RULE, never by total.
+4. Carried, each overdue an owner decision rather than another mention: I5's `ORACLE_CRAWLED: 0`
+   (eleventh), AccessKit (tenth), the `_out` race in `verify.sh` — which false-red one wall this
+   session even under the documented `CARGO_BUILD_JOBS=1` workaround, so the workaround is not
+   sufficient.

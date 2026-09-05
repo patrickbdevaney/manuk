@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1119** | ticks 1–1441 |
-| median tick cycle | **32m** | 1118 intervals |
+| ticks landed | **1120** | ticks 1–1442 |
+| median tick cycle | **32m** | 1119 intervals |
 | median, last 10 | **87m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.83** | 1350.9h elapsed |
-| median verify wall | **67s** | 1058 ticks |
+| **ticks per hour** | **0.83** | 1351.1h elapsed |
+| median verify wall | **67s** | 1059 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**507 of 1119 ticks** (45%) moved a
+**508 of 1120 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **507** capability ticks, median cycle **32m**
+* **508** capability ticks, median cycle **32m**
 * median diff per tick: **+296 / −35** lines across 8 files
 
 ## Every tick
@@ -1216,5 +1216,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1439** | 2026-09-05 09:19 | 1.5h | capability | 8m | +389/−43 | 554 | 81 | 56.0% · | two reversals that cancel, and the order the compensations run in (2026-09-05) |
 | **1440** | 2026-09-05 10:34 | 75m | capability | 8m | +429/−51 | 555 | 81 | 56.0% · | 458 subtests on one sentence of the specification, and three candidates measured before th |
 | **1441** | 2026-09-05 11:56 | 82m | capability | 8m | +424/−52 | 556 | 81 | 56.0% · | the clamp had only its upper half (2026-09-05) |
+| **1442** | 2026-09-05 12:09 | 13m | capability | 8m | +195/−42 | 556 | 81 | 56.0% · | `load` fired before the images, and half a file split by axis is what said so (2026-09-05) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

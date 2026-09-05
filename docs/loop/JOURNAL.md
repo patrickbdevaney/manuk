@@ -103877,3 +103877,82 @@ the WPT file is what measures the image half. Said rather than implied.
 ```
 
 WIKI: docs/wiki/load-waits-for-subresources.md
+
+## Tick 1443 — the audits: nine layout ticks, and the one that invalidated a comparison (2026-09-05)
+
+TICK SHAPE: measurement-and-refusal
+CLASS: process — self-audit + surface audit #86
+
+Nine capability ticks landed since the last audit (1434–1442), every one CSS layout, every one gated.
+The audit's job is the frame around them, and this window's frame has one item that outranks the rest.
+
+### ⭐⭐⭐ A LIFECYCLE ORDERING DEFECT INVALIDATES COMPARISONS, NOT JUST RESULTS
+
+t1442 found `load` firing before the subresource phases — so every `window.onload` handler this engine
+has ever run measured a document whose images had no natural size. The audit's first question was
+whether the loop's own headline was measured that way.
+
+**It was not, and checking beat assuming:** every measurement path in `tests/wpt/src` calls
+`load_async` and then `finish_loading`, and `finish_loading` re-runs the subresource phases and fires
+`load` again. The RENDER the fidelity sweep scores always had its images.
+
+⚠ **But the PAGE's own load handler ran image-less inside every one of those measurements.** The
+pixels were right and anything the page computed for itself was not — a plausible, unquantified
+contribution to real-site shape divergence across ~1,400 ticks.
+
+⭐⭐⭐ **So the next fidelity sweep is not comparable to the stored rows, for a reason that has nothing
+to do with layout.** That is the finding: a lifecycle fix does not just change results, it changes what
+a comparison means — and the loop's whole method is comparison. *Say it before the number is read, not
+after it has been attributed to somebody's tick.*
+
+### THE SELF-AUDIT — ONE UNMET ITEM, AND THIS SESSION MEASURED ITS CAUSE
+
+`scripts/self-audit.sh`: 49 process defects recorded, every gate declares how to break it, every
+enforcement mechanical. **One item fails — the verify wall at 1934s against a 300s target.**
+
+The session's own data names the mechanism rather than restating the target: the mem-guard picked
+`CARGO_BUILD_JOBS=1` on **every** wall of the last nine ticks, reporting ~22 GB available with **swap
+at 98–99%**. `CARGO_BUILD_JOBS=1` is also the documented workaround for the `_out` race, so the two
+compound and the build phase is serialised twice over for different reasons. Observer-owned; recorded
+because the cause is now measured.
+
+### THREE PROCESS DEFECTS BANKED (#50, #51, #52)
+
+* **#50 — the FAILING count churns too, and only the NAME LIST holds still.** t1435 learned the pass
+  total was unsafe; t1436 corrected it — `css/css-sizing` read failing 1360 then 1361 across builds
+  whose failing name lists were byte-identical. Two ticks came within one arithmetic step of reverting
+  a correct fix, and a third saw a **63-subtest one-run spike in a single file** — enough to false-red
+  the ratchet on an area mark.
+* **#51 — a fixture's own SYMMETRY certified two more bugs**, bringing that class to five (`width:0`,
+  a symmetric `scale()`, a zero border, zero cross-axis margins, a square box). The rule is now asked
+  **per TERM**: name the fixture dimension that would have to be non-degenerate to see it.
+* **#52 — a gate reported a mutation GREEN and said its coverage was incomplete, and that honest
+  report was worth more than the arm would have been.** Two ticks later the expression it declined to
+  defend turned out to be *wrong*, and the discriminating fixture cost nothing to find.
+
+### SURFACE AUDIT #86 — WHAT THE FRAME IS NOT LOOKING AT
+
+* ⚠⚠ **`css/cssom-view` gained 696 subtests this session (602 → 1298, 28.5% → 61.5%) and is still not
+  a row in `WPT-AREAS.tsv`.** Fourth consecutive audit. The largest invisible gain in the loop's
+  recorded history, and the metric the loop steers by was flat across a session that moved a subsystem
+  by 33 points.
+* ⚠ **`css/css-grid`'s remaining mass has a floor: 1,164 of 3,636 (32%) is `grid-lanes/`** — Grid L3
+  masonry, a spec still in flux. Rank that area by RULE, never by total. The next coherent rule is the
+  `alignment/` **baseline** cluster, 621 subtests, never touched.
+* ⚠ `disk-hygiene.sh` prunes *"the newest per name"* test binary — and **cargo preserves timestamps
+  through its hardlinks**, so mtime does not order two artifacts by freshness. This session reclaimed
+  44 GB with that exact heuristic and the next build spent exactly 44 GB putting them back.
+* Carried: I5's `ORACLE_CRAWLED: 0` (eleventh), AccessKit (tenth), and the `_out` race — which
+  false-red one wall this session **under** the documented `CARGO_BUILD_JOBS=1` workaround, so the
+  workaround is not sufficient.
+
+### THE RECEIPT
+
+```text
+  self-audit: 49 defects recorded → 52; 1 prescribed-but-unmet item, cause measured
+  surface audit #86 appended
+  no engine source changed
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: none [forced] — no engine source changed; the product is the two audits.
