@@ -10980,3 +10980,19 @@ a page with a dead image still fires `load` on time with whatever arrived.
 
 **Unlocks:** every `onload` measurement on the web, and the image half of grid/flex intrinsic sizing.
 (t1442)
+
+## ⭐ `self-start` / `self-end` ALIGN TO THE ITEM'S OWN EDGE, NOT THE CONTAINER'S
+
+The `self-` keywords exist precisely for mixed-direction content: an Arabic or Hebrew card inside an
+English grid, a vertical-script caption in a horizontal page. They say *"my own start edge"*, and an
+engine that resolves them in the container's writing mode puts every such item on the wrong side of
+its cell — the exact layouts the keyword was added for.
+
+⭐ The rule is a pair, not a property: **the AXIS is chosen by the container and the SIDE by the item.**
+Neither box's style answers it alone, so it cannot be resolved in the cascade — only where the parent
+is known.
+
+⚠ And it is not a `direction` rule: a `vertical-lr` child reverses on the BLOCK axis under `rtl`, and a
+`vertical-rl` child reverses on the INLINE axis with no `direction` involved at all.
+
+**Unlocks:** mixed-writing-mode grids — RTL content in LTR pages and vice versa. (t1444)

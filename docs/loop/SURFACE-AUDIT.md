@@ -7989,7 +7989,7 @@ session landed, and worth saying out loud rather than discovering later.
    session** and is still not a row in the sweep, so the primary metric cannot see any of it), the
    `_out` race in `verify.sh`.
 
-## SURFACE AUDIT #86 — tick 1443 (2026-09-05)
+## Audit #86 — tick 1443 (2026-09-05)
 
 Nine capability ticks (1434–1442), all of them CSS layout, all of them landed. The audit's job is the
 frame around them.

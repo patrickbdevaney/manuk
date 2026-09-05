@@ -1937,6 +1937,17 @@ pub struct ComputedStyle {
     /// of [`Self::align_self`], and it was the missing half: `align-self` reached taffy and this
     /// did not, so a `justify-self: end` item sat at the START of its track.
     pub justify_self: Option<AlignItems>,
+    /// **`self-start` / `self-end` were written as `start` / `end`, and the difference is WHOSE
+    /// writing mode decides.** CSS Box Alignment §4: `start`/`end` resolve in the ALIGNMENT
+    /// CONTAINER's writing mode, `self-start`/`self-end` in the ALIGNMENT SUBJECT's own. These two
+    /// flags record which spelling the author used, because the enum cannot: the resolution needs the
+    /// container, which the cascade does not have.
+    ///
+    /// ⚠ Before this they were not parsed at all — both fell through to `auto`, so a `self-end` item
+    /// deferred to its container's `align-items` and sat at the START of its track.
+    pub align_self_logical: bool,
+    /// The inline-axis twin of [`Self::align_self_logical`].
+    pub justify_self_logical: bool,
     /// `transform` — an ordered list of transform functions (translate/scale/rotate/skew/
     /// matrix), resolved to an affine matrix at layout time (translate `%` is the box's own
     /// size). Empty = `none`.
@@ -2210,6 +2221,8 @@ impl ComputedStyle {
             flex_shrink: 1.0,
             flex_basis: Dim::Auto,
             align_self: None,
+            align_self_logical: false,
+            justify_self_logical: false,
             justify_self: None,
             transform: Vec::new(),
             translate: None,
@@ -7024,11 +7037,12 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
         // the flex spellings (`flex-start`/`flex-end`) are accepted alongside the logical ones
         // because authors write both, and a grid item styled by a flex-era design token is common.
         "justify-self" => {
+            s.justify_self_logical = matches!(v.trim(), "self-start" | "self-end");
             s.justify_self = match v.trim() {
                 "auto" => None,
                 "center" => Some(AlignItems::Center),
-                "flex-end" | "end" | "right" => Some(AlignItems::FlexEnd),
-                "flex-start" | "start" | "left" => Some(AlignItems::FlexStart),
+                "flex-end" | "end" | "right" | "self-end" => Some(AlignItems::FlexEnd),
+                "flex-start" | "start" | "left" | "self-start" => Some(AlignItems::FlexStart),
                 "baseline" => Some(AlignItems::Baseline),
                 "stretch" => Some(AlignItems::Stretch),
                 "normal" => Some(AlignItems::Normal),
@@ -7036,11 +7050,12 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
             };
         }
         "align-self" => {
+            s.align_self_logical = matches!(v.trim(), "self-start" | "self-end");
             s.align_self = match v.trim() {
                 "auto" => None,
                 "center" => Some(AlignItems::Center),
-                "flex-end" | "end" => Some(AlignItems::FlexEnd),
-                "flex-start" | "start" => Some(AlignItems::FlexStart),
+                "flex-end" | "end" | "self-end" => Some(AlignItems::FlexEnd),
+                "flex-start" | "start" | "self-start" => Some(AlignItems::FlexStart),
                 "baseline" => Some(AlignItems::Baseline),
                 "stretch" => Some(AlignItems::Stretch),
                 "normal" => Some(AlignItems::Normal),

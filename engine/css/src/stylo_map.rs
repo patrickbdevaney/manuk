@@ -1149,6 +1149,14 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
         // half can still carry the bare `legacy` keyword, which the computed half has already
         // resolved away.
         s.justify_items = map_ai(av(cv.clone_justify_items().computed.0 .0));
+        // ⚠⚠ **`self-start` / `self-end` ARE STYLO'S 12 AND 13, and `map_ai` folds them onto
+        // `FlexStart`/`FlexEnd` — which is right about the EDGE and silent about WHOSE writing mode
+        // picks it.** CSS Box Alignment §4: `start`/`end` resolve in the alignment CONTAINER's
+        // writing mode and `self-start`/`self-end` in the SUBJECT's own. The enum cannot carry that
+        // distinction because the resolution needs the container, which the cascade does not have —
+        // so the SPELLING is recorded here and resolved in `taffy_tree`'s grid-item pass, where the
+        // parent is known.
+        s.align_self_logical = matches!(av(cv.clone_align_self().0), 12 | 13);
         s.align_self = match av(cv.clone_align_self().0) {
             0 => None,
             v => Some(map_ai(v)),
@@ -1156,6 +1164,7 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
         // `justify-self` — the same shape one axis over, and the half that was missing. `align_self`
         // reached taffy and this did not, so a grid item asking for `justify-self: end` sat at the
         // START of its track: Chrome x=140 in a 200px track against our x=0.
+        s.justify_self_logical = matches!(av(cv.clone_justify_self().0), 12 | 13);
         s.justify_self = match av(cv.clone_justify_self().0) {
             0 => None,
             v => Some(map_ai(v)),

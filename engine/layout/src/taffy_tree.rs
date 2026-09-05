@@ -119,6 +119,64 @@ fn map_direction(d: CssDir, rtl: bool) -> FlexDirection {
     }
 }
 
+/// **Which PHYSICAL side is the start of this box's inline and block axes** — `(x_start_is_left,
+/// y_start_is_top)`, read off `writing-mode` and `direction` together.
+///
+/// ```text
+///   horizontal-tb  inline is x (ltr → left, rtl → right)   block is y → top
+///   vertical-lr    block  is x → left                      inline is y (ltr → top, rtl → bottom)
+///   vertical-rl    block  is x → right                     inline is y (ltr → top, rtl → bottom)
+/// ```
+fn axis_starts(cs: &ComputedStyle) -> (bool, bool) {
+    let rtl = cs.direction == manuk_css::Direction::Rtl;
+    if cs.writing_mode.is_vertical() {
+        (!cs.writing_mode.is_rl(), !rtl)
+    } else {
+        (!rtl, true)
+    }
+}
+
+/// ⚠⚠⚠ **`self-start` / `self-end` RESOLVE IN THE ITEM'S OWN WRITING MODE, AND WE RESOLVED THEM IN
+/// THE CONTAINER'S.** CSS Box Alignment §4 is explicit: `start`/`end` are relative to the alignment
+/// CONTAINER's axes, `self-start`/`self-end` to the alignment SUBJECT's. Stylo hands both spellings
+/// to `map_ai` as `FlexStart`/`FlexEnd` — right about the EDGE, silent about whose axes name it — so
+/// an item whose own `direction` or `writing-mode` differs from its grid's was aligned to the wrong
+/// side of its cell. (The hand-rolled cascade did worse: it did not parse the keywords at all, so
+/// they fell through to `auto`.)
+///
+/// Returns `true` when the item's start side on the physical axis this alignment acts on is the
+/// OPPOSITE of the container's — i.e. when `FlexStart` and `FlexEnd` must be exchanged.
+///
+/// ⭐ **The AXIS is chosen by the container and the SIDE is chosen by the item.** That is the whole
+/// rule in one sentence, and it is why neither box's style is enough on its own. Chrome-measured, a
+/// 20x20 `horizontal-tb; ltr` grid holding a 10x10 child at
+/// `align-self: self-start; justify-self: self-start`:
+///
+/// ```text
+///   child writing-mode / direction        Chrome (x, y)    before
+///     horizontal-tb  ltr    CONTROL          0, 0           0, 0   ✓
+///     horizontal-tb  rtl                    10, 0           0, 0
+///     vertical-lr    ltr    CONTROL          0, 0           0, 0   ✓
+///     vertical-lr    rtl                     0,10           0, 0
+///     vertical-rl    ltr                    10, 0           0, 0
+/// ```
+fn self_alignment_is_reversed(
+    container: &ComputedStyle,
+    item: &ComputedStyle,
+    inline: bool,
+) -> bool {
+    let (cx, cy) = axis_starts(container);
+    let (ix, iy) = axis_starts(item);
+    // Which PHYSICAL axis does the container's inline (resp. block) axis land on?
+    let vertical = container.writing_mode.is_vertical();
+    let acts_on_x = if inline { !vertical } else { vertical };
+    if acts_on_x {
+        cx != ix
+    } else {
+        cy != iy
+    }
+}
+
 fn map_wrap(w: CssWrap) -> FlexWrap {
     match w {
         CssWrap::NoWrap => FlexWrap::NoWrap,
@@ -1126,6 +1184,49 @@ impl<'m> TaffyDom<'m> {
                 }
                 if cs.justify_items == CssAlign::Normal && ccs.justify_self.is_none() {
                     n.style.justify_self = Some(AlignItems::START);
+                }
+            }
+        }
+
+        // ── `self-start` / `self-end` resolve in the ITEM's writing mode — see
+        //    [`self_alignment_is_reversed`]. Done here rather than in the cascade because the
+        //    resolution needs BOTH styles, and only the parent knows the pair.
+        if container && matches!(cs.display, CssDisplay::Grid | CssDisplay::InlineGrid) {
+            for &child in &children {
+                let (cdom, cps) = {
+                    let n = &self.nodes[usize::from(child)];
+                    (n.dom, n.pseudo)
+                };
+                let ccs = match cps {
+                    Some(ps) => match ps.style_in(&styles[&cdom]) {
+                        Some(s) => s,
+                        None => continue,
+                    },
+                    None => &styles[&cdom],
+                };
+                if !(ccs.align_self_logical || ccs.justify_self_logical) {
+                    continue;
+                }
+                let flip = |a: Option<AlignItems>, rev: bool| -> Option<AlignItems> {
+                    if !rev {
+                        return a;
+                    }
+                    match a {
+                        Some(v) if v == AlignItems::FLEX_START => Some(AlignItems::FLEX_END),
+                        Some(v) if v == AlignItems::FLEX_END => Some(AlignItems::FLEX_START),
+                        other => other,
+                    }
+                };
+                let (arev, jrev) = (
+                    self_alignment_is_reversed(cs, ccs, false),
+                    self_alignment_is_reversed(cs, ccs, true),
+                );
+                let n = &mut self.nodes[usize::from(child)];
+                if ccs.align_self_logical {
+                    n.style.align_self = flip(n.style.align_self, arev);
+                }
+                if ccs.justify_self_logical {
+                    n.style.justify_self = flip(n.style.justify_self, jrev);
                 }
             }
         }

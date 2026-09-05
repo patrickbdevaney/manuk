@@ -11994,3 +11994,83 @@ repeating.
    slot; Chrome places the line at the cross-END (`e`: Chrome −220, taffy 0). Since taffy is not
    patched, the question is where the compensation belongs, and that must be answered before code.
 3. ⚠ Do not start a third flex mechanism before (1) lands. Two are already measured and waiting.
+
+## Check #138 — tick 1444 (2026-09-05)
+
+**HORIZON:** 0 — Pareto Web Parity. **GATE:** M1 render fidelity on the in-scope CrUX corpus; the
+subsystem under the knife this window is CSS box alignment and intrinsic sizing, plus one HTML
+lifecycle defect that turned out to sit under all of it.
+
+### GATE OR SCOREBOARD? — GATE, and this window is the first in a long time that CHANGED VEIN
+
+Nine ticks (t1436–t1444). The first five continued `css/cssom-view`'s flex matrix to **600/600**; the
+last four left it deliberately. Check #137 named an I4 tension — *"thirteen consecutive ticks in one
+directory is a lot of one directory"* — and t1440 acted on it by surveying `css/css-grid` instead.
+
+> ⭐⭐⭐ **A DIRECTORY RANKING AND A *RULE* RANKING ARE DIFFERENT RANKINGS, and only the second one is
+> actionable.** `grid-lanes/` is `css/css-grid`'s largest directory (1,164 subtests) and is Grid L3
+> masonry — spec frontier, unwinnable. The largest *rule* was the `minimum-size` family: **847
+> subtests spread across four directories**, and it collapsed to one sentence of §12.5. The tick that
+> ranks by folder takes the frontier; the tick that ranks by rule takes the win.
+
+### WHAT MOVED
+
+* **t1436–t1439** — flex stretch/shrink, the wrap-reverse overflow, the logical cross axis, and the
+  compensation ORDER. `cssom-view/scrollWidthHeight-negative-margin-002` **420/600 → 600/600**;
+  `css/cssom-view` 1178 → 1298.
+* **t1440** — `minmax(<content-based>, 0px)` is `minmax(min, min)`. `css/css-grid` **−458 failing**.
+* **t1441** — `min-width` never reached the intrinsic contribution; six shrink-to-fit contexts at once.
+* **t1442** — `load` fired before the images. `css/css-grid` **−89**, and
+  `grid-minimum-size-grid-items-021` 72/144 → 126/144.
+* **t1444** — `self-start`/`self-end` resolve in the ITEM's writing mode. `css/css-grid` **−70**,
+  `grid-self-alignment.html` 20/72 → 72/72.
+* **Cumulative:** `css/css-grid` failing **4245 → 3566 (−16%)** and `css/cssom-view` **602 → 1314**
+  across this session.
+
+### PART VI CORRECTIONS
+
+* **NEW, and it is the sharpest thing this window produced — VI.3:** *a fixture's own SYMMETRY is an
+  instrument defect, and the class is now large enough to be a checklist item.* Five instances:
+  `width:0` (t1424), a symmetric `scale()` (t1426), a zero border (t1424), **zero cross-axis margins**
+  (t1437, cost 80 subtests) and **a square container** (t1438, hid a transposed axis through a full
+  gate). The rule is now asked per TERM: *name the fixture dimension that would have to be
+  non-degenerate to see it.*
+* **NEW:** *the FAILING count off a summary line churns as freely as the pass total; only the failing
+  NAME LIST holds still.* Recorded as process defect #50 with its recipe. Three ticks in this window
+  came within one arithmetic step of reverting a correct fix on it.
+* **NEW:** *an audit whose own record is unparseable did not happen.* t1443's surface-audit entry was
+  headed `## SURFACE AUDIT #86` where `status-update.sh` parses `^## Audit #N`; `LAST_SURFACE_AUDIT`
+  silently reverted and the hook refused the next tick. Caught in ONE tick because the hook is
+  mechanical — which is the enforcement principle (Part 28.2) working exactly as designed.
+* **VI.3 — the aperture rule is STILL not in prose.** Fourth check.
+* **VI.2's H0.7 (AccessKit) — unchanged. TENTH check.**
+* **I5 — `ORACLE_CRAWLED: 0`. ELEVENTH check.**
+
+### THE INVARIANTS
+
+**I2 — held, and load-bearing rather than decorative this window.** Three separate defects were
+*taffy's* (the `wrap-reverse` cross-start, the un-floored growth limit, the collapsed `self-*`
+spelling) and none of them was patched there: each landed as a compensation on the placed slots or on
+the style handed in. t1439 then found two of those compensations **fighting**, which produced the rule
+that makes the boundary maintainable rather than merely respected:
+
+> ⭐⭐ **Every compensation is a coordinate transform, they compose, and a compensation written in the
+> space taffy PRODUCED runs before any transform that leaves it.**
+
+**I3 — held**: the geometry the agent reads moved 33 points this session. **I4 — held, and the tension
+check #137 raised is now RESOLVED**: the loop left the vein under its own steer. **I8 — held.**
+**I1, I6, I7 — not bent.**
+
+### STEER
+
+1. ⭐⭐⭐ **RE-RUN THE FIDELITY SWEEP AND SAY WHY IT IS NOT COMPARABLE.** t1442 changed when `load`
+   fires; for ~1,400 ticks every page's own load handler measured an image-less document. The RENDER
+   was always scored after `finish_loading`, so the stored geometry is sound — but any site whose
+   scripts size themselves at `load` will move for a reason that is not layout. **The next sweep needs
+   that sentence attached to it before anybody attributes the delta.**
+2. `css/css-grid`'s next coherent RULE is the `alignment/` **baseline** cluster (621 subtests, a dozen
+   files, never touched). Rank that area by rule; its total has a 32% spec-frontier floor.
+3. ⚠ Two measured, fixtured residues are waiting and neither needs re-derivation: a NON-SQUARE
+   orthogonal `row` container (`solved_h` is the CSS `height` pinned as a logical block size — the
+   t1347 seam), and a non-zero too-small track maximum (`minmax(auto, 20px)`: Chrome 60, ours 20 —
+   wants taffy's base size, so a second solve).

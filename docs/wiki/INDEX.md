@@ -2705,6 +2705,14 @@
   - L61 · Two rules it retires
   - L83 · How it goes red
 
+## `self-start` / `self-end` resolve in the ITEM's writing mode — the axis is the container's, the side is the item's
+`docs/wiki/self-alignment-is-the-items-own.md`
+
+  - L6 · The defect
+  - L27 · The rule, in one sentence
+  - L38 · Why it is not a direction rule
+  - L48 · Gate
+
 ## `sizes` — the three tokenizer rules that run before the grammar
 `docs/wiki/sizes-tokenizer.md`
 
@@ -3097,4 +3105,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2736 sections across 89 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2740 sections across 90 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

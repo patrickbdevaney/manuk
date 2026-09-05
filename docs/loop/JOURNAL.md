@@ -103956,3 +103956,98 @@ because the cause is now measured.
 ```
 
 WIKI: none [forced] — no engine source changed; the product is the two audits.
+
+## Tick 1444 — the axis is the container's, the side is the item's (2026-09-05)
+
+TICK SHAPE: capability
+CLASS: CSS layout / box alignment — the `alignment/` rule surface audit #86 named
+
+### THE AUDIT NAMED THE DIRECTORY; THE FILE NAMED THE RULE
+
+Surface audit #86 ranked `css/css-grid`'s `alignment/` (874 subtests) as the next coherent surface and
+pointed at BASELINE. Its largest single file turned out to be something else entirely and much
+cheaper: `grid-self-alignment.html`, **20/72**, and its failures are a SWAP — `offsetLeft expected 10
+but got 0` sitting next to `expected 0 but got 10`.
+
+⭐ *A swap in a failure list is a coordinate-system disagreement, not an arithmetic one*, and it says
+so before you open the file.
+
+### THE DEFECT — A DISTINCTION THE PIPELINE ERASED
+
+CSS Box Alignment §4: `start`/`end` resolve in the alignment **container's** writing mode;
+`self-start`/`self-end` in the alignment **subject's** own. Stylo hands both spellings to our mapper as
+`FlexStart`/`FlexEnd` — right about the EDGE, silent about WHOSE AXES NAME IT. (The hand-rolled cascade
+did worse: it did not parse the keywords at all, so they fell through to `auto` and the item deferred
+to its container.)
+
+⭐⭐⭐ **THE AXIS IS CHOSEN BY THE CONTAINER AND THE SIDE IS CHOSEN BY THE ITEM.** That is the whole rule
+in one sentence, and it is why the resolution cannot live in the cascade: **the cascade sees one box at
+a time.** The cascade's job shrinks to recording which SPELLING the author wrote, because the enum
+cannot carry it; the resolution happens in `taffy_tree`'s grid-item pass, where the parent is known —
+the same seam the replaced-item alignment rule already uses.
+
+*A property whose value depends on two boxes has no correct home in a per-box cascade. Recording the
+spelling and resolving later is not a workaround; it is where the information actually is.*
+
+### WHY IT IS NOT A `direction` RULE — AND THE TWO ROWS THAT SAY SO
+
+```text
+  child vertical-lr + rtl   flips the BLOCK  axis  — its INLINE axis runs DOWN the screen
+  child vertical-rl + ltr   flips the INLINE axis  — its BLOCK axis runs right-to-left, no `direction`
+```
+
+A fix written as *"flip when the child is rtl"* passes both horizontal rows and gets **both** vertical
+rows wrong — measured, as mutation V2. The predicate reads `writing-mode` and `direction` together, on
+both boxes.
+
+### THE NUMBER, AND A CONTROL THAT CAUGHT A MIS-ATTRIBUTION
+
+```text
+                     HEAD control   after       read by NAME
+  css/css-grid       failing 3636   3566        70 fixed, 0 new
+  css/css-flexbox    3365/4693      3365/4693   flat
+  css/css-sizing     failing 1358   1358        flat
+  css/cssom-view     1314/2109      1314/2109   flat
+  grid-self-alignment.html                       20/72 → 72/72
+```
+
+⚠ **The first reading claimed `css/css-flexbox` +150, and it was t1442's.** The baseline to hand was
+t1441's binary, and t1442's `load`-ordering fix had moved flexbox in between — an area this tick had
+not re-measured. Building a HEAD control put it back where it belonged. *t1407's rule, collected
+again: a fresh number diffed against a stored row attributes someone else's work* — and this time the
+stored row was two ticks old rather than sixty.
+
+### THE GATE
+
+`g_self_alignment_is_the_items_own` — 12 rows, **7 of them controls**. Red under V1 (never reverse →
+the four `self-*` rows), V2 (`direction` alone → both vertical rows), V3 (flip regardless of the
+spelling → a plain `start` dragged to the item's own edge) and V4 (choose the acting axis from the
+ITEM instead of the container → the two vertical rows swap axes).
+
+⭐ **`rb` is the row that keeps the spelling load-bearing**: the same RTL child asking for plain
+`start` must NOT move. Without it the rule could be written as "an RTL child in an LTR grid is
+reversed" and pass everything else.
+
+### THE RECEIPT
+
+```text
+  g_self_alignment_is_the_items_own  NEW, 12 rows (7 controls), red under 4 of 4 mutations
+  15 neighbouring grid/flex/layout gates + manuk-layout's 191 unit tests green
+  css/css-grid −70 failing, 0 new · flexbox, sizing, cssom-view flat
+  Bar 0: no hang, no crash, no panic
+```
+
+⚠ HARNESS-ADJACENT, one line: t1443's surface-audit entry was headed `## SURFACE AUDIT #86 — tick
+1443` and `scripts/status-update.sh` parses `^## Audit #N — tick N`, so `LAST_SURFACE_AUDIT` reverted
+to 1433 and the hook refused this tick's first landing as *"surface audit overdue"*. Header corrected
+here. ⭐ *An audit whose own record is unparseable did not happen, as far as every instrument
+downstream is concerned* — and the hook is the only reason it was noticed within one tick rather than
+ten.
+
+⚠ Constitution check #138 is in this tick too (it came due at 1443 and the hook said so). Its
+correction worth carrying: **a directory ranking and a RULE ranking are different rankings, and only
+the second is actionable** — `grid-lanes/` is `css/css-grid`'s largest directory and is spec frontier,
+while the largest RULE this window was spread across four directories and collapsed to one sentence of
+§12.5.
+
+WIKI: docs/wiki/self-alignment-is-the-items-own.md
