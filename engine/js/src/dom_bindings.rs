@@ -12514,15 +12514,104 @@ unsafe fn host_scroll_to(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bo
     true
 }
 
-/// `element.scrollIntoView()` — resolve the element's box from the layout snapshot and ask the host
-/// to put it at the top of the viewport.
-unsafe fn el_scroll_into_view(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
-    if let Some((_, node)) = this_node(vp) {
-        if let Some(r) = layout_rect(node) {
-            PENDING_SCROLLS.with(|q| q.borrow_mut().push((r[0], r[1])));
+/// `element.scrollIntoView(arg)` — resolve the element's box from the layout snapshot and ask the
+/// host to bring it into the viewport **at the requested alignment**.
+///
+/// ⚠⚠⚠ **THE ARGUMENT WAS IGNORED, SO EVERY CALL SCROLLED THE ELEMENT'S TOP-LEFT TO THE VIEWPORT
+/// ORIGIN.** That is `{block: "start", inline: "start"}`, and it is not the default: CSSOM-View
+/// defaults `inline` to **`"nearest"`**, so even `el.scrollIntoView()` with no argument was wrong on
+/// the horizontal axis. `css/cssom-view/scrollintoview.html` scored **0 of 40**.
+///
+/// ```text
+///   arg                     block     inline
+///   omitted / undefined     start     nearest
+///   true                    start     nearest
+///   false                   end       nearest
+///   null / {} / {…}         start     nearest    (per-key overrides)
+/// ```
+///
+/// ⭐ `"nearest"` is the one that needs the CURRENT scroll position, and it is why the default form
+/// could not be right by accident: it scrolls the MINIMUM amount — nothing at all if the box is
+/// already fully visible on that axis, otherwise just enough to bring the nearer edge in. It is also
+/// the alignment an agent wants by default, because it does not throw away the reader's context.
+///
+/// The result is a REQUEST, exactly as `window.scrollTo` is: the host owns the viewport and clamps.
+unsafe fn el_scroll_into_view(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    // ── The alignment arguments, in the spec's own resolution order.
+    #[derive(Clone, Copy, PartialEq)]
+    enum Align {
+        Start,
+        Center,
+        End,
+        Nearest,
+    }
+    fn parse(s: &str) -> Option<Align> {
+        match s {
+            "start" => Some(Align::Start),
+            "center" => Some(Align::Center),
+            "end" => Some(Align::End),
+            "nearest" => Some(Align::Nearest),
+            _ => None,
         }
     }
-    let _ = cx;
+    let (mut block, mut inline) = (Align::Start, Align::Nearest);
+    if argc > 0 {
+        let arg = *vp.add(2);
+        if arg.is_boolean() {
+            // `false` means "align to the bottom", which is `block: "end"`. `true` is the default.
+            if !arg.to_boolean() {
+                block = Align::End;
+            }
+        } else if arg.is_object() {
+            rooted!(in(cx) let obj = arg.to_object());
+            if let Some(a) = error_field(cx, obj.handle(), c"block")
+                .as_deref()
+                .and_then(parse)
+            {
+                block = a;
+            }
+            if let Some(a) = error_field(cx, obj.handle(), c"inline")
+                .as_deref()
+                .and_then(parse)
+            {
+                inline = a;
+            }
+        }
+    }
+
+    if let Some((_, node)) = this_node(vp) {
+        if let Some(r) = layout_rect(node) {
+            let (vw, vh) = manuk_css::values::viewport_size();
+            let (sx, sy) = SCROLL.with(|c| c.get());
+            // `nearest` scrolls the MINIMUM: nothing if the box already fits in the viewport on that
+            // axis, otherwise to whichever edge is nearer. Everything else is arithmetic on the
+            // box's DOCUMENT position, which is what `layout_rect` returns.
+            let resolve = |a: Align, pos: f32, size: f32, view: f32, cur: f32| -> f32 {
+                match a {
+                    Align::Start => pos,
+                    Align::End => pos - view + size,
+                    Align::Center => pos - view / 2.0 + size / 2.0,
+                    Align::Nearest => {
+                        if pos >= cur && pos + size <= cur + view {
+                            cur
+                        } else if (pos - cur).abs() <= (pos + size - cur - view).abs() {
+                            pos
+                        } else {
+                            pos - view + size
+                        }
+                    }
+                }
+            };
+            let x = resolve(inline, r[0], r[2], vw, sx).max(0.0);
+            let y = resolve(block, r[1], r[3], vh, sy).max(0.0);
+            PENDING_SCROLLS.with(|q| q.borrow_mut().push((x, y)));
+            // The same optimistic update `__scrollTo` performs, and for the same reason: an INSTANT
+            // programmatic scroll moves `scrollY` synchronously, and the host's application
+            // overwrites with the clamped truth.
+            SCROLL.with(|c| c.set((x, y)));
+            SCROLL_SEQ.with(|c| c.set(c.get().wrapping_add(1)));
+        }
+    }
     *vp = UndefinedValue();
     true
 }

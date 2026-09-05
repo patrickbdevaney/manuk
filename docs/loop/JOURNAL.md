@@ -102960,3 +102960,87 @@ session are invisible to the WPT TOTAL.** Widening the sweep is observer-owned (
 regenerated), and it has been named at three consecutive audits.
 
 WIKI: none [forced] — no engine source changed; the product is the two audits and the spec reading.
+
+## Tick 1434 — `scrollIntoView` ignored its argument, and the default is not what it was doing (2026-09-04)
+
+TICK SHAPE: capability
+CLASS: CSSOM-View / the agent's own actuation surface
+
+Surface audit #85 named a residue to probe and the cssom-view survey named the next file. Both are in
+this tick.
+
+### THE RESIDUE THE AUDIT NAMED, CLOSED WITH A RECEIPT
+
+The spec's end-padding clause is *"as necessary to enable scroll positions that satisfy both
+`place-content: start` and `place-content: end`"*, and the unreachable region applies *"unless
+otherwise adjusted (e.g. by content alignment)"* — so `place-content` on a scroll container could
+change both, and we hard-code both. **Measured, six rows, flex and grid × `start|end|center`:**
+
+```text
+  place-content:start    chrome 320/120  ours 320/120     ✓
+  place-content:end      chrome 120/120  ours 120/120     ✓
+  place-content:center   chrome 220/120  ours 220/120     ✓   (and identical for `display:grid`)
+```
+
+**Exact on all six.** A named residue closed by measurement rather than left open — the audit was
+right to name it and the engine was already right.
+
+### THE DEFECT — `scrollIntoView` IGNORED ITS ARGUMENT
+
+`el_scroll_into_view` pushed the element's document top-left as the scroll request, full stop. That is
+`{block: "start", inline: "start"}`, and it is **not the default**: CSSOM-View defaults `inline` to
+**`nearest`**, so even `el.scrollIntoView()` with no argument was wrong on the horizontal axis.
+`css/cssom-view/scrollintoview.html` scored **0 of 40**.
+
+⭐ **`nearest` is the only alignment that needs the CURRENT scroll position** — it moves the minimum,
+nothing at all if the box already fits on that axis. That is why the no-argument form could not be
+right by accident, and it is the pair `omit_tl` / `omit_right` in the gate: the same call on the same
+element, from a page scrolled left vs scrolled right, must give different answers.
+
+It is also the alignment an agent wants by default: it brings the target into view **without throwing
+away the reader's context**.
+
+### THE NUMBER
+
+```text
+  css/cssom-view    1074/2109 → 1118/2109   +44   50.9% → 53.0%
+  css/css-overflow   588/963  →  588/963    flat
+  scrollintoview.html: 0/40 → the file's alignment rows
+  8 scroll gates green · HANG/CRASH 0
+```
+
+⭐ `css/cssom-view` is now **602 → 1118 across twelve ticks** — 28.5% → 53.0%, and it is the agent's
+own geometry and actuation channel.
+
+### THE GATE, PROVEN RED THREE WAYS
+
+```text
+  N1  ignore the argument (the pre-tick state)   → every row but `startstart` reads 4000/4000
+  N2  default `inline` to `start`                → both `omit_*` rows read 4000 on x
+  N3  implement `nearest` as "always the start edge" → omit_tl fails, omit_right stays green
+```
+
+N3 is the one that matters: it passes every row that does not vary the starting scroll position, and
+only the PAIR catches it.
+
+### THE RECEIPT
+
+```text
+  g_scroll_into_view_alignment  NEW, 6 rows (2 controls), red under 3 mutations
+  the `place-content` residue from surface audit #85: 6 rows measured, all exact, closed
+  css/cssom-view +44, no area regressed
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/scroll-into-view-alignment.md
+
+⚠ HARNESS (observer-owned, one line per the scope rule): this tick's landing was blocked by `/home`
+at **100% full** — `target/debug/deps` alone held **152 GB** across ~993 debug test binaries at
+~150 MB each, and `mold` failed every link with *"failed to write to an output file. Disk full?"*.
+The janitor cleared `target/debug` outright (297 G → 42% used) and the tick was rebuilt cold. Noted,
+not fixed: artifact-size/GC policy is observer territory.
+⚠ AND A TRAP WORTH BANKING, because this loop has now paid for it twice: **`mtime` cannot rank two
+cargo artifacts by freshness.** Deleting "the older duplicate per basename" reclaimed 44 GB and the
+very next build spent exactly 44 GB re-creating them — the files kept were the stale ones. Cargo
+preserves timestamps through its hardlinks; ask cargo, never the filesystem (t1414 said the same
+thing about a binary that *looked* stale).

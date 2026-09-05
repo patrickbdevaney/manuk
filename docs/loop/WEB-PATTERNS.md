@@ -10841,3 +10841,18 @@ not have — not a rule you got wrong.*
 
 **Unlocks:** correct `scrollHeight` for the wrapper-with-margined-child shape, which is what every
 card, list item and article body in a CSS framework is. (t1432)
+
+## ⭐⭐ `scrollIntoView`'s DEFAULT IS NOT `start` ON BOTH AXES — and `nearest` needs the current scroll
+
+`el.scrollIntoView()` defaults to `{block: "start", inline: "nearest"}`. Ignoring the argument and
+scrolling the element's top-left to the viewport origin is `{start, start}` — an alignment nobody
+asked for, and wrong even for the no-argument form. `css/cssom-view/scrollintoview.html` scored 0/40.
+
+⭐ **`nearest` is the only alignment that reads the CURRENT scroll position**: it moves the minimum —
+nothing if the box already fits, otherwise just enough to bring the nearer edge in. Two calls
+differing only in where the page was already scrolled must give different answers, which is what
+catches a fix that hard-codes either edge.
+
+**Unlocks:** every "jump to this section" link, anchor navigation, form-error focus, carousel step and
+agent `scroll_to(element)` — and specifically the *centered* variant (`{block:"center"}`) that
+docs sites, tables of contents and search-result highlighting all use. (t1434)

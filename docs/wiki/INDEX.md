@@ -2617,6 +2617,12 @@
   - L29 · ⚠⚠ The rule underneath, found while building the arms
   - L46 · t1418 — and the end padding belongs to the content the container CONTAINS
 
+## `scrollIntoView` honours block and inline alignment
+`docs/wiki/scroll-into-view-alignment.md`
+
+  - L7 · The defect
+  - L22 · Why the no-argument form could not be right by accident
+
 ## The scrollable overflow region has TWO terms, and `width:0` hides one of them
 `docs/wiki/scroll-overflow-the-empty-box-corner.md`
 
@@ -3017,4 +3023,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2692 sections across 80 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2694 sections across 81 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
