@@ -2934,6 +2934,13 @@
   - L51 · What it unblocked, with the number
   - L70 · The flex half (t1430)
 
+## The used end margin — the input three refusals were pointing at
+`docs/wiki/the-used-end-margin.md`
+
+  - L7 · What was missing
+  - L21 · Why it matters: the refusal it unblocked
+  - L40 · Two scopings, each with a number
+
 ## A guard that fires on a clock cannot name a cause — and will name whoever the author had in mind
 `docs/wiki/timeout-names-whose-clock.md`
 
@@ -3010,4 +3017,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2689 sections across 79 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2692 sections across 80 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

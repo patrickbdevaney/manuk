@@ -102804,3 +102804,80 @@ single missing value with the three gates that will judge it.
 ```
 
 WIKI: docs/wiki/a-collapsed-margin-is-outside-the-container.md
+
+## Tick 1432 — the used end margin: the input three refusals were pointing at (2026-09-04)
+
+TICK SHAPE: capability
+CLASS: layout → CSSOM — the value layout computed on every block box and threw away
+
+t1431 measured *"judge containment on the child's MARGIN box, not its border box"* at **90 failing
+configurations → 45** and the ratchet refused it: three banked gates went red, **all on the same
+shape** — an auto-height wrapper whose child carries the margin.
+
+> ⭐⭐⭐ **WHEN A FIX IS REFUSED BY GATES THAT ALL FAIL ON THE SAME SHAPE, THE SHAPE IS NAMING AN
+> INPUT YOU DO NOT HAVE — NOT A RULE YOU GOT WRONG.**
+
+### THE INPUT
+
+```html
+<div><div style="margin-bottom:50px">…</div></div>
+```
+
+The inner child's margin collapses through the wrapper, so the **wrapper's margin box ends 50px below
+its border box** while `getComputedStyle(wrapper).marginBottom` is `0px`. `manuk_layout::
+used_end_margins()` publishes the used value — it is `BlockResult::margin_bottom`, computed on every
+block box since long before this session and discarded at the door.
+
+With it published, t1431's refused comparison is correct and all three gates stay green:
+
+```text
+                                                            chrome sh/ch   before
+  a 20px box at `margin:20px` inside a 20px-tall FLEX ITEM,
+  in an `overflow: auto` flex container                        60 / 60     80 / 60
+  an auto-height wrapper whose child carries margin 50           270         270   CONTROL
+```
+
+### ⭐⭐ AND THE GATE'S FIRST ROW COULD NOT FAIL, AGAIN
+
+The row was written with `overflow: visible` — where t1431's collapsed-margin rule already produces
+60, so it passed with AND without the fix. Found by running the mutation and watching the gate stay
+GREEN, then **diffing the 140-cell matrix under the mutation** to find a configuration that actually
+discriminates: `auto/0/0/flex`. *A control that cannot fail is not a control* — twice in two ticks,
+and both times the mutation is what said so.
+
+### TWO SCOPINGS, EACH WITH A NUMBER
+
+* **Only for a box with HEIGHT.** A zero-height box's `effective_mb` is its collapse-THROUGH value and
+  contains its own TOP margin, which is already in its position — publishing it makes
+  `g_scroll_overflow_end_margin`'s `c5` read 320 against Chrome's 270.
+* **Only in a HORIZONTAL writing mode.** `USED_END_MARGINS` is recorded in the transposed space an
+  orthogonal run is laid out in, so for a box inside a `writing-mode: vertical-*` run the engine's
+  "block end" is physically HORIZONTAL. ⭐⭐ *A value computed in transposed space is not physical* —
+  the second mechanism this session caught by that rule (t1426 was `transform`). Priced:
+  `css/css-overflow` **586 without the scoping, 588 with**, and the failing-NAME diff (6 new, 5 fixed,
+  net −1) is what separated it from the containment change measured in the same tick.
+
+### THE NUMBER
+
+```text
+  css/cssom-view    1029/2109 → 1074/2109   +45   48.8% → 50.9%
+  css/css-overflow   587/963  →  588/963     +1
+  css/css-position  1174/1482 → 1174/1482   flat
+  WPT TOTAL          496,025  →  496,026
+  the 140-cell matrix: 90 failing → 45
+  22 page gates + 2 agent gates + manuk-layout's 191 — all green · HANG/CRASH 0
+```
+
+⭐ `css/cssom-view` has gone **602 → 1074 in nine ticks** (28.5% → 50.9%), and it is the agent's own
+geometry channel.
+
+### THE RECEIPT
+
+```text
+  manuk_layout::used_end_margins()  NEW, published from BlockResult::margin_bottom
+  g_used_end_margin  NEW, 2 rows, red under 3 mutations — after the first row was found unable to fail
+  the containment comparison t1431 refused, landed with every gate green
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/the-used-end-margin.md

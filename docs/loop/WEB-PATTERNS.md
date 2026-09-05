@@ -10822,3 +10822,22 @@ a fixture whose floor hides the answer will certify an invented condition.
 **Unlocks:** `scrollHeight == clientHeight` on ordinary `overflow: visible` blocks whose last child
 carries a bottom margin — which is nearly every article, card and section on the web, and every
 `sh > ch` "does this overflow?" check run against one. (t1431)
+
+## ⭐⭐⭐ THE USED MARGIN IS NOT THE STYLE MARGIN, AND LAYOUT WAS THROWING IT AWAY
+
+`<div><div style="margin-bottom:50px">…</div></div>` — the inner child's margin collapses through the
+auto-height wrapper, so the WRAPPER's margin box ends 50px below its border box while its computed
+`margin-bottom` is `0px`. Any comparison of a child against its parent's margin box taken from the
+STYLE map reads the parent as smaller than it is.
+
+⭐⭐⭐ **THREE REFUSALS IN A ROW WERE POINTING AT ONE MISSING VALUE.** t1431 measured the containment
+fix at 90 failing configurations → 45 and the ratchet refused it on three banked gates, all on that
+wrapper shape. The missing input was never a different comparison — it was
+`BlockResult::margin_bottom`, computed on every block box and discarded. Publishing it makes the same
+comparison correct and every gate green (`css/cssom-view` +45).
+
+*When a fix is refused by gates that all fail on the same SHAPE, the shape is naming an input you do
+not have — not a rule you got wrong.*
+
+**Unlocks:** correct `scrollHeight` for the wrapper-with-margined-child shape, which is what every
+card, list item and article body in a CSS framework is. (t1432)

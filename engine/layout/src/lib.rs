@@ -590,6 +590,24 @@ thread_local! {
     /// Same lifetime rule as [`GRID_TRACKS`]: overwritten wholesale at the end of every
     /// `layout_document`, so a box that stops being relatively positioned stops having an offset.
     static RELATIVE_OFFSETS: RefCell<HashMap<NodeId, (f32, f32)>> = RefCell::new(HashMap::new());
+
+    /// The **used** block-end margin of every block box in the most recent `layout_document` — the
+    /// margin AFTER collapsing, which is not recoverable from the style.
+    ///
+    /// ⚠⚠⚠ **A MARGIN THAT COLLAPSED THROUGH A WRAPPER BELONGS TO THE WRAPPER, AND ITS STYLE SAYS
+    /// ZERO.** `<div><div style="margin-bottom:50px">…</div></div>` — the inner child's margin
+    /// collapses through the auto-height wrapper, so the WRAPPER's margin box ends 50px below its
+    /// border box while `getComputedStyle(wrapper).marginBottom` is `0px`. Anything that compares a
+    /// child against its parent's margin box from the STYLE map therefore reads the parent as
+    /// smaller than it is, and concludes the child escapes a box it is inside. Three banked gates
+    /// caught exactly that at t1431, which is why this map exists.
+    static USED_END_MARGINS: RefCell<HashMap<NodeId, f32>> = RefCell::new(HashMap::new());
+}
+
+/// The **used** (post-collapse) block-end margin of every block box in the most recent
+/// [`layout_document`] on this thread — see [`USED_END_MARGINS`]. Cloned, like [`relative_offsets`].
+pub fn used_end_margins() -> HashMap<NodeId, f32> {
+    USED_END_MARGINS.with(|g| g.borrow().clone())
 }
 
 /// The relative-positioning offsets applied by the most recent [`layout_document`] on this thread —
@@ -1125,19 +1143,26 @@ impl LayoutBox {
                         // not spill past this box's MARGIN box. `contained` therefore turns off at
                         // the first ancestor a descendant overflows and stays off below it.
                         //
-                        // ⚠⚠ **AND IT IS THE CHILD'S BORDER BOX, MEASURED AND KEPT.** Judging it on
-                        // the child's MARGIN box instead takes
-                        // `cssom-view/scrollWidthHeight-overflow-visible-margin-collapsing` from 90
-                        // failing configurations to **45** — and turns THREE banked gates red
-                        // (`g_scroll_overflow_end_margin`, `g_scroll_overflow_alignment_rect`,
-                        // `g_scroll_extent_end_padding_containment`), because a margin that collapses
-                        // THROUGH an auto-height wrapper leaves that wrapper's own `end_margin` at
-                        // zero, so the wrapper's margin box does not cover the child that carries it.
-                        // The ratchet refuses the trade; the missing input is the wrapper's COLLAPSED
-                        // margin, not a different comparison. Measured, named, not taken.
+                        // ⚠⚠⚠ **THE CHILD'S MARGIN BOX, NOT ITS BORDER BOX — OTHERWISE A BOX WHOSE
+                        //    MARGIN SPILLS OUT OF ITS PARENT GETS THAT MARGIN COUNTED ANYWAY.** A
+                        //    20px box with `margin: 20px` inside a 20px-tall FLEX ITEM ends its
+                        //    border box exactly at the item's edge and its MARGIN box 20px past it.
+                        //    Judged on the border box it is "contained" and contributes its own
+                        //    trailing margin on top; judged on the margin box it is not, and
+                        //    contributes only its border box — which is what Chrome reports.
+                        //
+                        //    ⭐⭐⭐ **t1431 MEASURED THIS EXACT CHANGE AT 90 FAILING CONFIGURATIONS
+                        //    → 45 AND THE RATCHET REFUSED IT**, because three banked gates went red:
+                        //    a margin that collapses THROUGH an auto-height wrapper leaves that
+                        //    wrapper's *style* margin at zero, so the wrapper's margin box did not
+                        //    cover the child carrying it. The missing input was never a different
+                        //    comparison — it was the wrapper's USED margin, which layout knew and
+                        //    did not publish. `USED_END_MARGINS` publishes it, and the same
+                        //    comparison is now correct with all three gates green.
+                        let km = k.node.map(contribution).unwrap_or_default().end_margin;
                         let kc = contained
-                            && k.rect.y + k.rect.height <= bottom + 0.01
-                            && k.rect.x + k.rect.width <= right + 0.01;
+                            && k.rect.y + k.rect.height + km.1 <= bottom + 0.01
+                            && k.rect.x + k.rect.width + km.0 <= right + 0.01;
                         let (mut kw, mut kh) = (0.0f32, 0.0f32);
                         walk(k, ox, oy, &mut kw, &mut kh, kc, contribution);
                         *w = w.max(kw);
@@ -1833,6 +1858,8 @@ struct Ctx<'a> {
     grid_tracks: RefCell<HashMap<NodeId, GridTracks>>,
     /// Per-node relative-positioning offsets, published through [`relative_offsets`].
     relative_offsets: RefCell<HashMap<NodeId, (f32, f32)>>,
+    /// Per-node USED block-end margins, published through [`used_end_margins`].
+    used_end_margins: RefCell<HashMap<NodeId, f32>>,
     /// **The elements whose CHILDREN are laid out in a transposed coordinate space** — the
     /// orthogonal roots of `writing_mode`. Empty (and the whole mechanism dormant) for any document
     /// with no vertical writing mode, which is very nearly all of them.
@@ -2083,6 +2110,7 @@ pub fn layout_document(
         counters: RefCell::new(None),
         intrinsic_probe: std::cell::Cell::new(false),
         relative_offsets: RefCell::new(HashMap::new()),
+        used_end_margins: RefCell::new(HashMap::new()),
         fallback_style: ComputedStyle::initial(),
         min_content_cache: RefCell::new(HashMap::new()),
         min_content_of_content_cache: RefCell::new(HashMap::new()),
@@ -2214,6 +2242,7 @@ pub fn layout_document(
     // class this engine keeps catching (t1120's poisoned `pre_transform_rect`, t1242's counter).
     GRID_TRACKS.with(|g| *g.borrow_mut() = ctx.grid_tracks.take());
     RELATIVE_OFFSETS.with(|g| *g.borrow_mut() = ctx.relative_offsets.take());
+    USED_END_MARGINS.with(|g| *g.borrow_mut() = ctx.used_end_margins.take());
     out
 }
 
@@ -6807,6 +6836,23 @@ impl Ctx<'_> {
             boxx.transform_affine(&m);
         }
 
+        // The used block-end margin — after collapsing with this box's own last child — published
+        // for the scrollable-overflow walk, which cannot get it from the style. See
+        // [`USED_END_MARGINS`].
+        //
+        // ⚠⚠⚠ **ONLY FOR A BOX WITH HEIGHT, BECAUSE A COLLAPSE-THROUGH BOX'S `effective_mb`
+        //    CONTAINS ITS OWN TOP MARGIN.** When a zero-height box's margins collapse through it,
+        //    `margin_top` and `margin_bottom` are the SAME collapsed value — so publishing it makes
+        //    the scrollable-overflow walk add a margin that is already in the box's POSITION, which
+        //    is precisely the double-count t1119's `d3`/`d4` controls exist to refuse. It was caught
+        //    by `g_scroll_overflow_end_margin`'s `c5` — a 0-height sibling with `margin-top: 50px`
+        //    after a 200px child — reading 320 against Chrome's 270. *A start margin is already in
+        //    the position; an end margin is not, and a collapse-through box's used margin is both.*
+        if !self.intrinsic_probe.get() && boxx.rect.height > 0.0 {
+            self.used_end_margins
+                .borrow_mut()
+                .insert(node, effective_mb);
+        }
         BlockResult {
             boxx,
             margin_top: effective_mt,

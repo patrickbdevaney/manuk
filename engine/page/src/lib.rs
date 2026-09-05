@@ -2668,6 +2668,10 @@ fn scroll_geometry_of(
         // inflated by this container's own end padding. See `OverflowContribution` for the Chrome
         // table; `relative_offsets()` is what makes the in-flow position recoverable at all.
         let rel = manuk_layout::relative_offsets();
+        // ⭐ The USED (post-collapse) block-end margin, which the style map cannot supply: a margin
+        //   that collapses THROUGH an auto-height wrapper belongs to the wrapper and its style says
+        //   zero. See `manuk_layout::USED_END_MARGINS`.
+        let used_mb = manuk_layout::used_end_margins();
         // ── ⚠⚠⚠ **THE END-PADDING INFLATION BELONGS TO SCROLL CONTAINERS, AND ONLY TO THEM.**
         //    CSS Overflow 3 §3.1's clause that inflates a descendant's contribution by the
         //    container's end padding is written for the *scrollable* overflow region. A box with
@@ -2748,6 +2752,25 @@ fn scroll_geometry_of(
                         s.margin.right.resolve(b.rect.width, 0.0),
                         s.margin.bottom.resolve(b.rect.width, 0.0),
                     );
+                    // The block axis uses the USED margin; the inline axis never collapses, so
+                    // its style value is already the used one.
+                    //
+                    // ⚠⚠⚠ **AND ONLY IN A HORIZONTAL WRITING MODE, BECAUSE `USED_END_MARGINS` IS
+                    //    RECORDED IN THE TRANSPOSED SPACE AN ORTHOGONAL RUN IS LAID OUT IN.** For a
+                    //    box inside a `writing-mode: vertical-*` run the engine's "block end" is
+                    //    physically HORIZONTAL, so feeding that number into the physical bottom
+                    //    margin is the same class of mistake t1426 fixed in `transform`. It cost six
+                    //    `css/css-overflow` subtests — the
+                    //    `scrollable-overflow-height-with-flex-item-margin-inline-end*` family,
+                    //    where a flex item's `margin-inline-end: 950px` in a `vertical-lr; rtl`
+                    //    scroller is physically a TOP margin — and the failing-NAME diff (6 new, 5
+                    //    fixed, net −1) is what separated it from the containment change measured in
+                    //    the same tick. *A value computed in transposed space is not physical.*
+                    let mb = if styles.get(&n).is_some_and(|s| s.writing_mode.is_vertical()) {
+                        mb
+                    } else {
+                        used_mb.get(&n).copied().unwrap_or(mb)
+                    };
                     match (collapses_block_end_out, vertical_wm) {
                         (true, true) => (0.0, mb),
                         (true, false) => (mr, 0.0),
