@@ -103044,3 +103044,139 @@ cargo artifacts by freshness.** Deleting "the older duplicate per basename" recl
 very next build spent exactly 44 GB re-creating them — the files kept were the stale ones. Cargo
 preserves timestamps through its hardlinks; ask cargo, never the filesystem (t1414 said the same
 thing about a binary that *looked* stale).
+
+## Tick 1435 — `flex-direction: column` never shrank an item, and the width axis three lines above it always did (2026-09-05)
+
+TICK SHAPE: capability
+CLASS: CSS layout / flexbox main-axis sizing — Track A, the board's ★ CSS-LAYOUT row
+
+### THE SURVEY, AND IT NAMED THE FILE BEFORE IT NAMED THE MECHANISM
+
+Check #136's steer was *"re-run the `--show-failures` concentration survey on `css/cssom-view`"*.
+It concentrates harder than the steer expected:
+
+```text
+  scrollWidthHeight-negative-margin-002.html          180 failing   ← 420/600
+  scrollWidthHeight-overflow-visible-margin-collapsing 45
+  scroll-behavior-subframe-root                        37
+```
+
+And inside that file the concentration is total:
+
+```text
+  180 of 180 failing rows say  display: flex
+  150 of them also say         flex-wrap: wrap-reverse
+   30 of them say              flex-direction: column   (and NO flex-wrap)
+```
+
+⭐ **A file named for negative margins in the scrolling area turned out to be measuring FLEX
+LAYOUT.** Ten ticks of scrolling-area rules had been derived from this file's neighbours; this one
+was never about the scrolling area at all. *The area a test lives in is not the subsystem it
+measures* — the same shape as t1416's "a failing count cannot tell one combinatorial file from one
+unimplemented feature", one level down.
+
+### THE ARBITRATION — CHROME, ONE FIXTURE, SEVEN ROWS
+
+Both clusters were ±20px, in OPPOSITE directions, which is what said they were two mechanisms and
+not one. Reduced to an 80×80 box with one child and measured against headless Chrome:
+
+```text
+                                                     Chrome     ours(before)
+  a  column, child height:300px                       50x80       50x300     ✗
+  b  column, child height:300px; margin:-100px 0      50x280      50x300     ✗
+  c  row,    child width:300px            CONTROL     80x50       80x50      ✓
+  d  row,    child width:300px; margin:0 -100px       280x50      280x50     ✓
+  e  row wrap-reverse, 50x300 child                   top -220    top 0      ✗  (SECOND mechanism)
+  f  row wrap,         50x300 child       CONTROL     top 0       top 0      ✓
+```
+
+`c`/`d` are the whole diagnosis: **the row axis was already exact and the column axis was not**, on
+the same fixture, with the same negative margin.
+
+### THE DEFECT — ONE WORD, ONE AXIS
+
+`extract_placed` records taffy's used border-box **width** for every item unconditionally. It
+recorded the **height** only when the item's own `height` was a PERCENTAGE. And taffy was never
+wrong — printing the slots:
+
+```text
+  column, child height:300px          taffy slot 50x80    our box 50x300
+  column, child 300px + margin -100   taffy slot 50x280   our box 50x300
+  row,    child width:300px           taffy slot 80x50    our box 80x50   ✓
+```
+
+⭐⭐⭐ **THE SLOT'S WIDTH WAS USED AND THE SLOT'S HEIGHT WAS THROWN AWAY, IN THE SAME FUNCTION, THREE
+LINES APART.** The main axis is the width in a `row` container and the height in a `column` one, so
+one `matches!` arm discarded exactly one direction's `flex-shrink` and nothing else — which is why
+every `row` fixture in the suite passed before this tick and passes after it. The field's own doc
+comment already carries the sentence: *the forgotten copy is never the main path, it is the other
+axis.* It had been true of this field since the field was created.
+
+### THE GUARD THAT WAS MEASURED AND NOT SHIPPED
+
+The first version carried a `parent_is_flex` scope, on the reasonable worry that a GRID item with a
+definite height should overflow a short track rather than be clamped to it. Measured instead of
+assumed:
+
+```text
+  grid-template-rows:80px, item height:300px   taffy's slot height = 300, NOT the 80px track
+  css/css-grid failing subtests    with the scope 4245    without it 4245   (643 files)
+```
+
+⭐⭐ **The guard was inert, so it is not in the tree**, and `grd=50x300` in the gate is the row that
+says why. *An inert guard is not free — it is a claim the next reader has to re-derive.*
+
+### THE NUMBER, WITH A SAME-BINARY CONTROL AND ITS BAND
+
+```text
+                       control        after      delta
+  css/css-flexbox     3186/4693    3206/4693      +20
+  css/cssom-view      1118/2109    1178/2109      +60
+  css/css-sizing      failing 1364 failing 1360    +4
+  css/css-grid        failing 4245 failing 4245    flat
+```
+
+⚠ **css-grid and css-sizing are quoted as FAILING counts because their DENOMINATOR churns between
+runs of the same binary** (grid 13985 / 14134 across two control runs; the failing count was 4245 in
+both). Diffing the pass totals would have read −336 on grid and called a flat area a regression —
+t1410's band, arriving on an axis nobody had watched: *it is the denominator that moves here, not the
+numerator.*
+
+### THE GATE
+
+`g_flex_column_shrinks_its_item` — 7 rows, 4 of them controls or regression arms. RED under N1 (the
+pre-tick condition: `col`/`colm` read 50x300, every control green) and N3 (drop the percentage arm:
+`pct` reads **50x20** = 0.5² × 80, the squaring this project fixed on the WIDTH axis at tick 14).
+
+⚠ **N2 IS REPORTED GREEN.** Widening the condition to include `Dim::Auto` moves none of the seven
+rows, so this gate cannot catch it and says so rather than pretending. The measurement that came out
+of chasing it is worth more than the arm would have been:
+
+```text
+  Chrome-measured, same 80x80 box                        Chrome    ours
+  s1  row flex, item height:auto, 200px content            80       200   ← align-items:stretch
+  s6  grid, 80px row track, item auto, 200px content       80       200
+  s4  COLUMN flex, item auto, 200px content   CONTROL     200       200  ✓
+  s5  row flex, align-items:flex-start        CONTROL     200       200  ✓
+```
+
+`stretch` sets an auto cross size to the LINE's cross size and lets the content overflow; the
+adoption at the end of `extract_placed` is written `slot > box`, so it can only ever GROW a box.
+**That is the next tick and s1/s4/s5/s6 is its fixture.**
+
+### THE SECOND MECHANISM, NAMED AND NOT TAKEN
+
+`flex-wrap: wrap-reverse` must place the line at the cross-END; taffy 0.12.1 returns a slot at the
+cross-start (`e` above: Chrome −220, taffy 0, so this one is NOT an extraction bug). That is the
+150-row half of the file and it is one mechanism, not this one.
+
+### THE RECEIPT
+
+```text
+  g_flex_column_shrinks_its_item  NEW, 7 rows (4 controls), red under 2 of 4 named mutations
+  17 neighbouring flex/grid/scroll gates re-run green
+  css/css-flexbox +20 · css/cssom-view +60 · css/css-sizing +4 · css/css-grid flat
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/flex-column-shrink.md

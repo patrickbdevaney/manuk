@@ -11917,3 +11917,80 @@ instruments, which is a level the loop had not audited before. **I1, I6, I7 — 
    margin-collapsing matrix was at 94 failures with both mechanisms in place, and the residue there
    is the COLLAPSED-margin rule the file is named for.
 3. ⚠ Do not start a third scroll mechanism before (1) lands. It is measured, gated and waiting.
+
+## Check #137 — tick 1435 (2026-09-05)
+
+**HORIZON:** 0 — Pareto Web Parity. **GATE:** M1 render fidelity on the in-scope CrUX corpus, and
+behind it the two subsystems the last window has been paying into — the agent's own geometry channel
+(`cssom-view`) and, since this tick, flex main-axis sizing.
+
+### GATE OR SCOREBOARD? — GATE, and this window changes WHICH gate
+
+Eight ticks (t1428–t1435). Seven of them worked the scrolling area. The eighth followed the same
+survey one level further and came out somewhere else entirely:
+
+> ⭐⭐⭐ **THE FILE THAT HAD BEEN TEACHING US SCROLLING RULES FOR TEN TICKS WAS MEASURING FLEX
+> LAYOUT.** `scrollWidthHeight-negative-margin-002.html` is 180 failing subtests, **180 of them
+> `display: flex`** — a `column` container that never applied `flex-shrink`, and a `wrap-reverse`
+> that never moved the line to the cross end. Neither is a scrolling-area rule. **The area a test
+> lives in is not the subsystem it measures**, and ten ticks of correct work in one directory is
+> exactly the condition under which that stops being noticed.
+
+That is the gate working, not the scoreboard: the survey was run because check #136 asked for it, and
+it re-aimed the loop off the vein it had been mining. A tick that keeps grinding the area it is
+already good at is the scoreboard, however green.
+
+### WHAT MOVED
+
+* **t1434** — `scrollIntoView` ignored its argument; the default is `{start, nearest}`, not
+  `{start, start}`. `css/cssom-view` 1074 → 1118.
+* **t1435** — `flex-direction: column` never shrank an item: the block axis recorded taffy's verdict
+  only for a PERCENTAGE height while the width axis recorded it unconditionally, three lines above.
+  `css/css-flexbox` +20, `css/cssom-view` +60, `css/css-sizing` +4, `css/css-grid` flat.
+* **Cumulative:** `css/cssom-view` 602 → 1178 across thirteen ticks (28.5% → 55.9%).
+
+### PART VI CORRECTIONS
+
+* **NEW, and it is the strongest thing this window produced — VI.3, beside the aperture and fixture
+  rules:** *the DENOMINATOR is part of the instrument too.* `css/css-grid` re-run twice on the SAME
+  binary gave 9740/13985 and 9889/14134 — a 149-subtest swing in the numerator and an identical
+  **4245** failing count in both. Diffing the pass totals against a banked mark would have read
+  **−336** and called a flat area a regression, which is how a correct fix gets reverted. **Quote the
+  FAILING count, or quote a pass total only after showing the denominator held.**
+* **NEW:** *an inert guard is not free.* The first version of t1435's fix carried a `parent_is_flex`
+  scope against a plausible grid hazard. Measured: taffy's slot height for a definite-height grid
+  item is the item's own 300px, not the 80px track, and css-grid's failing count was 4245 with the
+  scope and 4245 without it. The guard is not shipped, and the gate carries the row that says why.
+* **VI.3 — the aperture rule is STILL not in prose.** Carried from #135 and #136. Third check.
+* **VI.2's H0.7 (AccessKit) — unchanged. NINTH check.** Track B has had no engine tick since t1411.
+* **I5 — `ORACLE_CRAWLED: 0`. TENTH check.** Naming it a tenth time is not measurement; it is an
+  owner decision or a removal from the exit gate.
+* **NEW, observer-owned (one line, per the scope rule):** `/home` reached 100% during t1434's wall
+  and the janitor purged `target/debug` mid-build, so nine gates reported RED with ENOSPC build
+  failures that are not verdicts about the engine. The wall passed on a clean retry.
+
+### THE INVARIANTS
+
+**I2 — held, and tested unusually directly.** The wrap-reverse half of this file is a **taffy**
+defect (its slot is at the cross-start where Chrome is at the cross-end). Taffy is sanctioned and
+never patched internally, so that residue is recorded as a mapping/compensation question and not as a
+patch — which is the invariant behaving as designed rather than as an obstacle. **I3 — held**: the
+fix is in the geometry the agent reads. **I4 — held**: flex column sizing is representative-web, not
+tail. **I8 — held.** **I1, I6, I7 — not bent.**
+
+⚠ **I4 tension, named:** thirteen consecutive ticks in `css/cssom-view` and its neighbours is a lot of
+one directory. It has been justified each time (it is the agent's own geometry channel), and t1435 is
+the first that left it — but the justification is now old enough to need re-earning rather than
+repeating.
+
+### STEER
+
+1. ⭐⭐⭐ **TAKE THE `auto` HALF NEXT — IT IS MEASURED AND ITS FIXTURE IS WRITTEN.** `align-items:
+   stretch` sets an auto cross size to the LINE's cross size; our adoption is written `slot > box` so
+   it can only GROW a box. Chrome 80 / ours 200 on `s1` (row flex) and `s6` (grid track), with `s4`
+   and `s5` as controls that must not move. Rows are in `docs/wiki/flex-column-shrink.md`.
+   **Do not re-derive them.**
+2. Then `flex-wrap: wrap-reverse` — the 150-row half of the same file. Taffy returns a cross-START
+   slot; Chrome places the line at the cross-END (`e`: Chrome −220, taffy 0). Since taffy is not
+   patched, the question is where the compensation belongs, and that must be answered before code.
+3. ⚠ Do not start a third flex mechanism before (1) lands. Two are already measured and waiting.

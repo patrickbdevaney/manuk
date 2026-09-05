@@ -1624,6 +1624,16 @@
   - L1892 · Four causes eliminated, so the next probe is a bisect and not a guess
   - L1908 · THE SWEEP RUNNER MUST RE-SPAWN — fidelity EXITS ITS OWN PROCESS ON PURPOSE (t1344)
 
+## `flex-direction: column` never shrank an item — one word, one axis
+`docs/wiki/flex-column-shrink.md`
+
+  - L5 · The defect
+  - L32 · The measurement that localised it
+  - L46 · The fix
+  - L58 · The guard that was measured and NOT shipped
+  - L73 · Named residue — the auto half, with its fixture
+  - L90 · Gate
+
 ## A flex or grid item establishes an independent formatting context
 `docs/wiki/flex-grid-item-margin-collapse.md`
 
@@ -3023,4 +3033,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2694 sections across 81 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2700 sections across 82 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

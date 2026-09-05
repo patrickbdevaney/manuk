@@ -10856,3 +10856,22 @@ catches a fix that hard-codes either edge.
 **Unlocks:** every "jump to this section" link, anchor navigation, form-error focus, carousel step and
 agent `scroll_to(element)` — and specifically the *centered* variant (`{block:"center"}`) that
 docs sites, tables of contents and search-result highlighting all use. (t1434)
+
+## ⭐⭐⭐ A FIXED-HEIGHT `flex-direction: column` NEVER SHRANK ITS ITEMS
+
+`display:flex; flex-direction:column` on a box with a definite height is the layout of a sidebar, a
+modal, a chat panel, a card with a pinned footer, a dashboard tile — anything where a header and a
+footer are pinned and the middle scrolls. `flex-shrink` is `1` by default, so an over-tall child is
+*supposed* to be compressed into the container. Ours was not: the child kept its own `height`, ran
+out of the box, and every sibling below it was displaced by the overflow.
+
+⭐ **The row axis was always right.** The used size taffy solves is recorded unconditionally for the
+WIDTH and was recorded only for a PERCENTAGE height — and the main axis is the width in a `row`
+container and the height in a `column` one, so precisely one direction's `flex-shrink` was discarded.
+A `row` fixture cannot see it; only a `column` one can.
+
+*When one axis of a two-axis rule is exact and the other is not, look for the condition that is
+written once per axis rather than once per rule.*
+
+**Unlocks:** fixed-height vertical flex columns — pinned-header/footer panels, sidebars, modals,
+chat/message lists, dashboard tiles. (t1435)

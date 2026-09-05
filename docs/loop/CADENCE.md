@@ -15,7 +15,7 @@
 | median tick cycle | **32m** | 1112 intervals |
 | median, last 10 | **64m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.83** | 1340.3h elapsed |
+| **ticks per hour** | **0.83** | 1341.6h elapsed |
 | median verify wall | **67s** | 1052 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -27,7 +27,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **548**
+* **live gates**: 27 → **549**
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
@@ -1209,6 +1209,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1431** | 2026-09-04 19:32 | 47m | capability | 8m | +346/−44 | 546 | 81 | 56.0% · | a collapsed end margin is outside the container, and a control that cannot fail is not a c |
 | **1432** | 2026-09-04 21:27 | 1.9h | capability | 8m | +388/−56 | 547 | 81 | 56.0% · | the used end margin: the input three refusals were pointing at (2026-09-04) |
 | **1433** | 2026-09-04 21:38 | 11m | measurement-and-refusal | 8m | +194/−43 | 547 | 81 | 56.0% · | the audits, and ten ticks of rules meet the specification for the first time (2026-09-04) |
-| **1434** | 2026-09-05 01:21 | 3.7h | capability | 8m | +386/−48 | 548 | 81 | 56.0% · | `scrollIntoView` ignored its argument, and the default is not what it was doing (2026-09-0 |
+| **1434** | 2026-09-05 02:39 | 5.0h | capability | 8m | +571/−52 | 549 | 81 | 56.0% · | `scrollIntoView` ignored its argument, and the default is not what it was doing (2026-09-0 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

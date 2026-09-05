@@ -13083,17 +13083,43 @@ impl Ctx<'_> {
             self.taffy_item_width
                 .borrow_mut()
                 .insert(p.dom, p.slot.width);
-            // The block-axis twin, and it is only recorded when the item asked for a PERCENTAGE
-            // height: taffy's slot is authoritative there because it already resolved that
-            // percentage against the real containing block. For an `auto`-height item the slot is a
-            // stretch verdict, not a resolution, and the item must still size to its content — that
-            // case is handled after the layout by the `height == Dim::Auto` adoption below, and
-            // overriding it here would freeze every stretched item at its line's height.
-            let pct_h = matches!(
+            // ── ⚠⚠⚠ **THE BLOCK-AXIS TWIN WAS RECORDED ONLY FOR A *PERCENTAGE* HEIGHT, AND THAT
+            //    ONE WORD IS WHY `flex-direction: column` NEVER SHRANK AN ITEM.** The width above is
+            //    recorded UNCONDITIONALLY — taffy's verdict is the used border-box width, full stop.
+            //    The height was recorded only when the item's own height was a percentage, on the
+            //    reasoning that a percentage is the only case taffy has *resolved* rather than
+            //    *stretched*. That reasoning is right about `auto` and wrong about a LENGTH: a
+            //    `height: 300px` flex item in a `height: 80px` COLUMN container has been SHRUNK by
+            //    taffy (`flex-shrink` is 1 by default, and negative free space is what it is for),
+            //    and dropping that verdict re-resolved the item at its own 300px.
+            //
+            //    ⭐ **The main axis is the width in a `row` container and the height in a `column`
+            //    one — so this discarded exactly one direction's flex-shrink and nothing else.**
+            //    Every `row` fixture in the suite passes and always did, which is what kept a defect
+            //    this size invisible: the forgotten copy is never the main path, it is the other
+            //    axis (the same sentence this field's own doc comment already carries).
+            //
+            //    Chrome-measured, `.b { width:80px; height:80px; display:flex }`, one child:
+            //
+            //    ```text
+            //                                                        Chrome    before    after
+            //      flex-direction:column, child height:300px          50x80     50x300    50x80
+            //      flex-direction:column, child height:300px m:-100    50x280    50x300    50x280
+            //      flex-direction:row,    child width:300px  CONTROL   80x50     80x50     80x50
+            //      flex-direction:row,    child width:300px m:-100     280x50    280x50    280x50
+            //    ```
+            //
+            //    ⚠ `auto` STAYS OUT, and the original reason is untouched: for an `auto`-height item
+            //    the slot is a STRETCH verdict rather than a resolution, the item must still size to
+            //    its content, and that case is handled after the layout by the `height == Dim::Auto`
+            //    adoption below. Overriding it here would freeze every stretched item at its line's
+            //    height. `height: stretch` shares `Dim::Auto`'s representation and is excluded with
+            //    it, deliberately.
+            let definite_h = matches!(
                 self.style_of(p.dom).height,
-                Dim::Percent(_) | Dim::Calc { .. }
+                Dim::Px(_) | Dim::Percent(_) | Dim::Calc { .. }
             );
-            if pct_h {
+            if definite_h {
                 self.taffy_item_height
                     .borrow_mut()
                     .insert(p.dom, p.slot.height);
