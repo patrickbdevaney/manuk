@@ -1120,3 +1120,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1441	162e42f3	1788623793	2026-09-05T11:56:33-04:00	4945	capability	465	10	424	52	556	81	3896	6960	0	642	0	the clamp had only its upper half (2026-09-05)
 1442	1a26ce33	1788624597	2026-09-05T12:09:57-04:00	804	capability	465	6	195	42	556	81	3896	6960	0	642	0	`load` fired before the images, and half a file split by axis is what said so (2026-09-05)
 1444	6e7382ae	1788634276	2026-09-05T14:51:16-04:00	9679	capability	465	9	353	45	558	81	3896	6960	0	642	0	the axis is the container's, the side is the item's (2026-09-05)
+1445	f2401930	1788638782	2026-09-05T16:06:22-04:00	4506	capability	465	9	387	42	559	81	3896	6960	0	642	0	one of the pair was mapped and the other was not (2026-09-05)

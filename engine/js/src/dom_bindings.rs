@@ -2093,6 +2093,27 @@ fn blend_mode_css(m: manuk_css::BlendMode) -> &'static str {
 /// that kills the caller's frame (t596). Every property here already has a true computed value in
 /// `ComputedStyle`; the engine was rendering them and refusing to say so.
 /// A `grid-column-start` / `-end` line, serialised the way `getComputedStyle` reports it.
+/// **The `grid-row` / `grid-column` / `grid-area` shorthands, serialised the way `getComputedStyle`
+/// reports them** — the components in order, `/`-separated, with TRAILING `auto`s dropped and at
+/// least one component always kept.
+///
+/// Chrome-measured (`--headless --dump-dom`):
+///
+/// ```text
+///   grid-row-start:2; grid-row-end:span 2   grid-row  = "2 / span 2"
+///   nothing declared                        grid-row  = "auto"          (not "auto / auto")
+///   grid-area:1/2/3/4                       grid-area = "1 / 2 / 3 / 4"
+///   grid-row-start:2; grid-column:1/3       grid-area = "2 / 1 / span 2 / 3"
+///   nothing declared                        grid-area = "auto"
+/// ```
+fn grid_shorthand_css(parts: &[String]) -> String {
+    let mut end = parts.len();
+    while end > 1 && parts[end - 1] == "auto" {
+        end -= 1;
+    }
+    parts[..end].join(" / ")
+}
+
 fn grid_line_css(l: &manuk_css::GridLine) -> String {
     match l {
         manuk_css::GridLine::Auto => "auto".to_string(),
@@ -2649,6 +2670,57 @@ fn extra_computed_props(
         // holds here (`auto`, or the line number), so publishing them is faithful.
         ("grid-column-start", grid_line_css(&cs.grid_column.0)),
         ("grid-column-end", grid_line_css(&cs.grid_column.1)),
+        // ── ⚠⚠⚠ **THE COLUMN AXIS WAS PUBLISHED AND THE ROW AXIS WAS NOT.** The two lines above have
+        //    been here since t901; `grid-row-start`/`-end` read `undefined` beside them, and so did
+        //    every one of the four shorthands. A grid library that reads back an item's placement got
+        //    half an answer on one axis and `undefined` on the other — and `undefined.split('/')` is
+        //    a TypeError, so the half-answer is the more dangerous of the two.
+        //
+        //    ⭐ Fifth instance this session of *one of the pair was mapped and the other was not*
+        //    (t1435 which lengths, t1436 which direction, t1438 which space, t1445 which extent).
+        //
+        //    Chrome-measured; `grid-auto-flow` carries its `dense` half in the same string:
+        //
+        //    ```text
+        //      grid-row-start:2; grid-row-end:span 2   grid-row-start "2"  grid-row "2 / span 2"
+        //      nothing declared                        grid-row "auto"     grid-area "auto"
+        //      grid-area:1/2/3/4                       grid-area "1 / 2 / 3 / 4"
+        //      grid-auto-flow:column dense             "column dense"
+        //    ```
+        ("grid-row-start", grid_line_css(&cs.grid_row.0)),
+        ("grid-row-end", grid_line_css(&cs.grid_row.1)),
+        (
+            "grid-row",
+            grid_shorthand_css(&[grid_line_css(&cs.grid_row.0), grid_line_css(&cs.grid_row.1)]),
+        ),
+        (
+            "grid-column",
+            grid_shorthand_css(&[
+                grid_line_css(&cs.grid_column.0),
+                grid_line_css(&cs.grid_column.1),
+            ]),
+        ),
+        // `grid-area` is ROW-start / COLUMN-start / ROW-end / COLUMN-end — the two axes interleaved,
+        // which is the one ordering in this family that is not simply "start then end".
+        (
+            "grid-area",
+            grid_shorthand_css(&[
+                grid_line_css(&cs.grid_row.0),
+                grid_line_css(&cs.grid_column.0),
+                grid_line_css(&cs.grid_row.1),
+                grid_line_css(&cs.grid_column.1),
+            ]),
+        ),
+        (
+            "grid-auto-flow",
+            match cs.grid_auto_flow {
+                manuk_css::GridAutoFlow::Row => "row",
+                manuk_css::GridAutoFlow::Column => "column",
+                manuk_css::GridAutoFlow::RowDense => "row dense",
+                manuk_css::GridAutoFlow::ColumnDense => "column dense",
+            }
+            .to_string(),
+        ),
         // ⚠ **`grid-template-columns` WAS the most instructive omission in the t901 batch, and it
         // was closed at t1270 by the route this comment named: layout's own track list.** The
         // measurement that justified the absence still stands as the SPEC READING — Chrome reports

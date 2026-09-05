@@ -1761,6 +1761,14 @@
   - L50 · Proven red
   - L63 · t1377 — the drift table's other two layout rows, priced and withdrawn
 
+## `grid-column-start` was published and `grid-row-start` was not — the fifth axis asymmetry
+`docs/wiki/grid-placement-is-readable.md`
+
+  - L6 · The defect
+  - L19 · The serialisation rules, measured rather than assumed
+  - L38 · Named residue
+  - L46 · Gate
+
 ## `minmax(<content-based>, 0px)` is `minmax(min, min)` — 458 subtests on one sentence of the spec
 `docs/wiki/grid-zero-max-track.md`
 
@@ -3113,4 +3121,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2744 sections across 91 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2748 sections across 92 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

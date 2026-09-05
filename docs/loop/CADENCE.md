@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1121** | ticks 1–1444 |
-| median tick cycle | **32m** | 1120 intervals |
+| ticks landed | **1122** | ticks 1–1445 |
+| median tick cycle | **32m** | 1121 intervals |
 | median, last 10 | **87m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.83** | 1353.8h elapsed |
-| median verify wall | **67s** | 1060 ticks |
+| **ticks per hour** | **0.83** | 1355.1h elapsed |
+| median verify wall | **67s** | 1061 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **558**
+* **live gates**: 27 → **559**
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**509 of 1121 ticks** (45%) moved a
+**510 of 1122 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **509** capability ticks, median cycle **32m**
+* **510** capability ticks, median cycle **32m**
 * median diff per tick: **+296 / −35** lines across 8 files
 
 ## Every tick
@@ -1218,5 +1218,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1441** | 2026-09-05 11:56 | 82m | capability | 8m | +424/−52 | 556 | 81 | 56.0% · | the clamp had only its upper half (2026-09-05) |
 | **1442** | 2026-09-05 12:09 | 13m | capability | 8m | +195/−42 | 556 | 81 | 56.0% · | `load` fired before the images, and half a file split by axis is what said so (2026-09-05) |
 | **1444** | 2026-09-05 14:51 | 2.7h | capability | 8m | +353/−45 | 558 | 81 | 56.0% · | the axis is the container's, the side is the item's (2026-09-05) |
+| **1445** | 2026-09-05 16:06 | 75m | capability | 8m | +387/−42 | 559 | 81 | 56.0% · | one of the pair was mapped and the other was not (2026-09-05) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

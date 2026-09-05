@@ -11013,3 +11013,19 @@ and the other was not.**
 
 **Unlocks:** vertical-writing-mode grid and flex alignment — 274 WPT subtests across two areas from one
 predicate. (t1445)
+
+## ⭐ AN ITEM'S GRID PLACEMENT MUST READ BACK ON BOTH AXES
+
+Every drag-and-drop grid builder, dashboard layout editor and CSS-in-JS grid helper reads an item's
+placement back with `getComputedStyle` before it moves it. Ours answered on the column axis and
+returned `undefined` on the row axis — and the shorthands (`grid-row`, `grid-column`, `grid-area`)
+did not exist at all.
+
+⚠ **Half an answer is worse than none here**: a library that gets `undefined` for a property can
+branch on it, but one that gets a real value for `grid-column-start` and `undefined` for
+`grid-row-start` calls `.split("/")` on the second and dies.
+
+⭐ And the serialisation has a rule worth knowing: only *trailing* `auto`s are dropped —
+`grid-area: auto / auto / 3` keeps the leading pair, because dropping them names a different cell.
+
+**Unlocks:** grid layout editors and any script that round-trips an item's placement. (t1446)

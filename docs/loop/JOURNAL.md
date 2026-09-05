@@ -104131,3 +104131,88 @@ block axis and does.
 ```
 
 WIKI: docs/wiki/block-extent-is-the-logical-one.md
+
+## Tick 1446 — the fifth axis asymmetry, and this one was in the readout (2026-09-05)
+
+TICK SHAPE: capability
+CLASS: CSSOM / grid placement readback — the agent's own channel
+
+### THE SURVEY POINTED AT A NUMBER AND THE NUMBER WAS A TYPE
+
+`grid-layout-properties.html` was `css/css-grid`'s largest remaining non-frontier file (54 failing),
+and its failures are not geometry:
+
+```text
+  47 subtests in css/css-grid read  "expected (string) … but got (undefined) undefined"
+```
+
+⭐ *A failure whose "got" is `undefined` is not a wrong answer — it is an absent property*, and the
+two want completely different work. Grouping the failing names by their leading token named the
+missing surface in one command: `grid-area` 10, `grid-row-start` 9, `grid-row-end` 9, `grid-row` 4,
+`grid-column*` 8, `grid-auto-flow` 2.
+
+### THE DEFECT
+
+`getComputedStyle` published `grid-column-start` and `grid-column-end` — in the table since t901 — and
+served `undefined` for `grid-row-start`, `grid-row-end` and every one of the four shorthands.
+
+⭐⭐⭐ **FIFTH INSTANCE THIS SESSION OF *ONE OF THE PAIR WAS MAPPED AND THE OTHER WAS NOT***: t1435
+(which lengths count), t1436 (which direction), t1438 (which coordinate space), t1445 (which extent),
+t1446 (which axis reads back). The class is no longer a curiosity — **when this engine gets a two-axis
+rule right on one axis, the other axis is where the next bug is**, and it has now paid five times in
+nine ticks.
+
+⚠ **And half an answer is worse than none.** A library that gets `undefined` can branch on it; one
+that gets a real `grid-column-start` and an `undefined` `grid-row-start` calls `.split("/")` on the
+second and dies.
+
+### TWO SERIALISATION RULES, MEASURED
+
+```text
+  nothing declared        grid-row  = "auto"             NOT "auto / auto"
+  grid-row-end:3          grid-area = "auto / auto / 3"  leading autos KEPT
+  grid-row-start:2; grid-column:1/3   grid-area = "2 / 1 / span 2 / 3"
+```
+
+* **Only TRAILING `auto`s are dropped.** A serializer that filters every `auto` reads `3` where Chrome
+  says `auto / 3` — *a different placement, silently*. That is mutation Y3 and `e` is the only row
+  that sees it.
+* **`grid-area` interleaves the axes** — row-start / column-start / row-end / column-end, the one
+  ordering in this family that is not "start then end". Only a row whose four values are all distinct
+  catches getting it wrong, which is why `c` (`1 / 2 / 3 / 4`) cannot serve: it is symmetric under the
+  swap.
+
+### THE NUMBER
+
+```text
+                     base (t1445)   after       read by NAME
+  css/css-grid       failing 3429   3405        24 fixed, 0 new
+  css/cssom-view     1314/2109      1314/2109   flat
+```
+
+Modest and clean. The remaining `undefined`s are `grid-template` and `grid-lanes`, both deliberately
+left.
+
+### THE GATE
+
+`g_grid_placement_is_readable` — 8 assertions over 6 elements. Red under Y1 (drop the row longhands →
+`undefined` while `gridColumnStart` stays green, which IS the asymmetry), Y2 (never drop trailing
+`auto`s), Y3 (drop every `auto`) and Y4 (order `grid-area` start/end/start/end).
+
+### NAMED RESIDUE
+
+`grid-template` still reads `undefined`, and it is not a join of the two track lists: it serialises the
+EXPLICIT template (`"50px 50px / 100px"`) where `grid-template-rows` reports the USED tracks. And a
+custom-ident line name has no representation at all — `GridLine` is `Auto | Line(n) | Span(n)`, so
+`grid-row-start: foo` cannot round-trip. Both are cascade-side gaps, not serialisation ones.
+
+### THE RECEIPT
+
+```text
+  g_grid_placement_is_readable  NEW, 8 assertions (1 control), red under 4 of 4 mutations
+  11 neighbouring grid/CSSOM gates green
+  css/css-grid −24 failing, 0 new · cssom-view flat
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/grid-placement-is-readable.md
