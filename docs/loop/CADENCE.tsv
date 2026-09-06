@@ -1130,3 +1130,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1453	464837d1	1788660774	2026-09-05T22:12:54-04:00	1301	capability	465	5	182	43	562	81	3896	6960	0	642	0	a required field with a plausible default (2026-09-05)
 1454	234635e5	1788662795	2026-09-05T22:46:35-04:00	2021	measurement-and-refusal	465	10	512	42	563	81	3896	6960	0	642	0	eight crates, 98 tests, six seconds, none of them in the wall (2026-09-05)
 1455	96f84a37	1788666933	2026-09-05T23:55:33-04:00	4138	capability	465	7	190	42	563	81	3896	6960	0	642	0	Track C: the loop closed, and closing it found three defects (2026-09-05)
+1457	793f7cc8	1788672577	2026-09-06T01:29:37-04:00	5644	capability	465	10	383	45	564	81	3896	6960	0	642	0	the fields were printed instead of reasoned about, and the frame turned out to be MIXED (2026-09-06)

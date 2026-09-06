@@ -106,6 +106,14 @@
   - L303 · A frame is a bitmap, so its pixels need explicit refreshing (tick 232)
   - L331 · The agent's click point IS layout geometry, so a containing-block bug is an actuation bug (I3)
 
+## A rotated run's fields are a mixed frame
+`docs/wiki/a-rotated-runs-fields-are-a-mixed-frame.md`
+
+  - L27 · Why a flat transposition is worse than no fix
+  - L34 · What those two files are actually asserting
+  - L54 · The degenerate rows
+  - L62 · The area named for the mechanism cannot see it
+
 ## A rotated run's `x` is the pen's starting *y* — and the extent walk read it as an x
 `docs/wiki/a-rotated-runs-x-is-a-y.md`
 
@@ -3186,4 +3194,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2785 sections across 99 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2789 sections across 100 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

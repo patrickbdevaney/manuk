@@ -58,3 +58,6 @@ the child rect that dissolved t1449's contradiction.
 ## Status
 
 Open. Defect proven, cause named, the naive fix refuted with a measurement.
+
+**RESOLVED at t1457** — the fields were printed instead of reasoned about, and the answer was a
+MIXED frame rather than a clean swap: see [[a-rotated-runs-fields-are-a-mixed-frame]].

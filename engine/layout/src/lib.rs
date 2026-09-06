@@ -1172,6 +1172,21 @@ impl LayoutBox {
                         *h = h.max(kh);
                     }
                 }
+                // ── ⭐⭐⭐ **A SIDEWAYS RUN'S FIELDS ARE IN A MIXED FRAME: `x` IS ABSOLUTE,
+                //    `baseline` AND `line_top` ARE LINE-LOCAL.** Printing the two runs of an
+                //    identical `width=231` — one horizontal in a box at y=400, one `vertical-lr`
+                //    in a box at y=200 — showed `baseline=415/line_top=400` for the first and
+                //    `baseline=15/line_top=0` for the second: the rotated run's block-axis
+                //    coordinates were never translated into the box's frame, while its `x` was.
+                //    So for `sideways` the three fields mean:
+                //      `x`        — the run's absolute **x** (the same slot `translate` shifts by `dx`)
+                //      `baseline` — an offset **along x** *inside* the line (the ideographic
+                //                   centering, ~15 for a 20px line), NOT a y
+                //      `width`    — the advance, which physically runs **down y**
+                //    A flat transposition of the horizontal formula therefore feeds an absolute x
+                //    into a y and understates by the box's y-origin; that is what cost the earlier
+                //    attempt −14 on `css/css-flexbox`. The block-axis origin has to come from the
+                //    box's own rect instead.
                 BoxContent::Inline(frags) => {
                     for f in frags {
                         *w = w.max(f.x + f.width + pr - ox);
@@ -1195,11 +1210,19 @@ impl LayoutBox {
                     );
                 }
             }
+            // See the `sideways` note in the descendant walk above: a rotated run's `baseline`
+            // and `line_top` are line-local, so the block extent is measured from this box's own
+            // top rather than by subtracting `self.rect.y` from an already-relative number.
             BoxContent::Inline(frags) => {
                 let c = self.node.map(contribution).unwrap_or_default();
                 for f in frags {
-                    w = w.max(f.x + f.width + c.end_padding.0 - self.rect.x);
-                    h = h.max(f.baseline + c.end_padding.1 - self.rect.y);
+                    if f.style.sideways {
+                        w = w.max(f.x + f.baseline + c.end_padding.0 - self.rect.x);
+                        h = h.max(f.line_top + f.width + c.end_padding.1);
+                    } else {
+                        w = w.max(f.x + f.width + c.end_padding.0 - self.rect.x);
+                        h = h.max(f.baseline + c.end_padding.1 - self.rect.y);
+                    }
                 }
             }
         }

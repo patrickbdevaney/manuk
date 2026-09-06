@@ -11143,3 +11143,30 @@ is at fault rather than layout.
 
 **Status:** open; localised to one expression and the naive transposition measured and refused
 (t1456).
+
+---
+
+## A rotated text run's coordinates are a MIXED frame, and only the box's own content may use them
+
+**Pattern.** When a struct reuses the same fields for two coordinate conventions, the *slots* stay
+physical while the *values* diverge. A `sideways` run keeps its `x` absolute but leaves `baseline`
+and `line_top` **line-local** — the block-axis translation never reaches it. Reading all three as
+physical reports a vertical box's scrollable overflow on the wrong axis.
+
+**How it is found.** Print the fields for two runs of *identical width*, one rotated and one not, in
+boxes at *different* block offsets. The horizontal run carries the box's `y` in `baseline` and
+`line_top`; the rotated one carries it in neither. Two ticks of reasoning about a doc comment
+produced two wrong transpositions; one `eprintln!` produced the rule.
+
+**The trap.** The obvious repair — swap which field feeds which axis — is worse than no fix, because
+it feeds an absolute x into a y. Measured **−14**, then **−22**, both times entirely inside
+`css/css-flexbox`'s `negative-overflow-002.html` and `-004-no-padding.html`. Those files derive every
+expectation from a formula over four properties, so their numbers are pure box geometry and the text
+must contribute nothing. **Scope the correction to the scroll container's OWN content**; a
+descendant's run is already covered by its box rect.
+
+**Fixture requirement.** A square overflow region cannot see a transposition. The discriminating row
+overflows on exactly one axis, and its horizontal mirror must not move.
+
+**Status:** landed t1457, gated by `g_a_vertical_run_advances_down` under four mutations; the
+descendant-walk half measured and refused in the same tick.

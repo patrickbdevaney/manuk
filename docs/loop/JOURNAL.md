@@ -104929,3 +104929,108 @@ one.**
 ```
 
 WIKI: docs/wiki/a-rotated-runs-x-is-a-y.md
+
+## Tick 1457 — the fields were printed instead of reasoned about, and the frame turned out to be MIXED (2026-09-06)
+
+TICK SHAPE: capability
+
+t1456 ended by naming its own next move: *"establish what `f.x`, `f.baseline` and `f.width` MEAN for a
+sideways run by printing them"* — the move that dissolved t1449's contradiction at t1450, and it worked
+because it printed a number instead of reasoning about one. It worked again.
+
+### THE MEASUREMENT
+
+Two runs of an **identical `width = 231.19`**, one horizontal in a box at `y = 400`, one `vertical-lr`
+in a box at `y = 200`:
+
+```text
+                   rect.y      x   baseline   line_top
+  sideways=false      400      0     415        400      ← both carry the box's y
+  sideways=true       200      0      15          0      ← neither does
+```
+
+⭐⭐⭐ **THE FRAME IS MIXED, NOT SWAPPED.** The rotated run's block-axis coordinates were never
+translated into the box's frame while its `x` was. `translate()` settles the slots for free — it does
+`f.x += dx` and `f.baseline += dy` for every run alike, so the *slots* are physical and only the
+*values* diverge. For `sideways`: `x` is an absolute physical **x**; `baseline` is an offset along
+**x** *inside the line* (~15 for a 20px line), not a y; `line_top` is 0; `width` is the advance, and
+it runs **down y**.
+
+That is why two ticks of transposition failed. A flat swap feeds an **absolute x into a y**.
+
+### THE FIXTURE THAT COULD SEE IT — AND THE THREE THAT COULD NOT
+
+Five 100×100 `overflow:scroll` boxes, Chrome-measured, as `scrollWidth`/`scrollHeight`:
+
+```text
+                                          Chrome    before    after
+  v3  vertical-lr   24 chars of text      100/231   231/100   100/231
+  v1  vertical-lr   "AB"                  100/100   100/100   100/100  ✓
+  v2  vertical-rl   "AB"                  100/100   100/100   100/100  ✓
+  h1  horizontal-tb "AB"         CONTROL  100/100   100/100   100/100  ✓
+  h2  horizontal-tb 24 chars      MIRROR  231/100   231/100   231/100  ✓
+```
+
+⭐⭐ **A SQUARE OVERFLOW REGION CANNOT SEE A TRANSPOSITION.** `v1` and `v2` are vertical writing modes
+with the axes fully swapped and they read `100/100` either way. Only `v3` — overflowing on exactly one
+axis — discriminates. This is the seventh degenerate-fixture finding of the session and the fourth of
+this exact shape (`width:0`, a symmetric `scale()`, a zero border, and now a square).
+
+### THE HALF THAT WAS MEASURED AND REFUSED
+
+The correction has two sites: the scroll container's **own** inline content, and the recursive walk
+over **descendants**. Applied to both, `css/css-flexbox` reads **−22**; dropping just the block-axis
+term in the walk still reads **−8**; the walk left alone reads **net zero** (1 fixed / 1 new, and both
+are one stray `@import` WARN line the failure grep catches, not a subtest).
+
+⭐⭐⭐ **THE REFUSED HALF NAMED ITS OWN REASON, AND IT WAS IN THE TEST FILE.** All 22 losses sit in
+`negative-overflow-002.html` and `-004-no-padding.html` — the same two files that took t1456's −14.
+Reading them resolves it in one line: they build 72 containers over writing-mode × direction ×
+flex-direction × wrap and compute every expectation from a `bias` formula over those four properties
+alone (`130`/`370` = 3×110 items + 2×10 gap + 2×10 padding). **The expectations are pure box
+geometry**, and each item holds one 8px digit that must contribute nothing. A descendant's run is
+already covered by the walk's painted-position arm (`b.rect.y + b.rect.height - oy`); measuring it
+again under the mixed frame can only overstate. The correction belongs *only* where the run is the
+container's own content.
+
+Two ticks read this pair as a verdict on the fix. It was a verdict on the fix's **scope**.
+
+### THE AREA NAMED FOR THE MECHANISM CANNOT SEE IT
+
+```text
+  css/css-writing-modes    241 failing   ->  241    0 fixed / 0 new   (byte-identical list)
+  css/css-grid            3405 failing   -> 3405    0 fixed / 0 new
+  css/css-flexbox         1166 failing   -> 1166    1 fixed / 1 new   (both a WARN line)
+```
+
+⚠ A vertical-writing-mode scroll bug, fixed against Chrome, and `css-writing-modes` does not move by
+one subtest. The only area that reacts is `css-flexbox`, and it reacts by *refusing the over-broad
+version*. An area name is a directory, not a cause — the suite that exercises a feature is not
+necessarily the suite that can measure a bug in it, and here WPT's aperture holds the arbiter for the
+scope question and nothing at all for the capability.
+
+### LANDED
+
+```
+  engine/layout/src/lib.rs  scrollable_overflow_extent: a `sideways` branch on the box's OWN content
+  gate  g_a_vertical_run_advances_down   RED under 4 named mutations, green restored
+        1. drop the branch                       -> v3 reads 231/100
+        2. `line_top + baseline` for the block   -> v3 reads 100/100 (understates)
+        3. `x + width` for the inline            -> v3 reads 231/231
+        4. take the branch for every run         -> h2 reads 100/231 (the mirror moves)
+  vacuity arm: h2 must already read 231/100, or the vertical rows measure whether text
+               contributes to overflow at all rather than WHICH AXIS
+  WPT: net zero across css-flexbox / css-writing-modes / css-grid, same-hour HEAD control
+  Bar 0: no hang, no crash, no panic
+```
+
+⚠ INSTRUMENT: `manuk-wpt wpt cssom-view` reports **0 runnable testharness files** under that spelling,
+so the area that most directly owns `scrollWidth`/`scrollHeight` was not measurable this tick. Not
+investigated — one line here per the harness rule.
+
+NEXT: the descendant walk is now *proven* to need no sideways term for `negative-overflow`'s box
+geometry, but nothing yet shows what happens when a rotated run genuinely **overflows its own box**
+inside a scroller. Build that row — a vertical item with `min-height` smaller than its text — and read
+it against Chrome before adding anything back.
+
+WIKI: docs/wiki/a-rotated-runs-fields-are-a-mixed-frame.md
