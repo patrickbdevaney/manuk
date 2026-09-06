@@ -105132,3 +105132,96 @@ should diff wikipedia's two bags directly (`a11y-score` has both in hand) and na
 extra nodes ARE, rather than assuming they are the `generic` wrappers this comparison already drops.
 
 WIKI: docs/wiki/recall-is-not-node-match.md
+
+## Tick 1459 — Track C: the drive loop's ADDRESS fails on a fifth of the real web, and 99% of it is one thing (2026-09-06)
+
+TICK SHAPE: capability
+
+Board rule: A ran t1457, B ran t1458, **C was last at t1455**. C, then. And `g_agent_drive_loop`
+had already written this tick's brief into its own doc comment: *"what this does not prove is that a
+real page's markup is reachable this way. `agent-run` is where that measurement belongs."*
+
+### THE MEASUREMENT
+
+`drive-probe` (new) classifies every actionable, named node in our own tree. An agent drives by
+role + name, aims at a box, and clicks a coordinate; each step fails differently and only the
+conjunction is a drive.
+
+```text
+                          targets  drivable  ungrounded  ambiguous  mis-hit    rate  +landmark
+  martinfowler.com            225       143           2         80        0   63.6%      67.1%
+  news.ycombinator.com        198       142           0         56        0   71.7%      71.7%
+  blog.rust-lang.org          416       403           0         13        0   96.9%      96.9%
+  www.a11yproject.com          67        41           0         23        3   61.2%      77.6%
+  danluu.com                  208       208           0          0        0  100.0%     100.0%
+  en.wikipedia.org/…         1229       885           0        344        0   72.0%      76.9%
+  TOTAL                      2343      1822           2        516        3   77.8%      81.1%
+```
+
+⭐⭐⭐ **516 OF 521 NON-DRIVABLE TARGETS — 99% — ARE AMBIGUOUS.** Grounding is essentially solved
+(2 of 2,343) and occlusion is rare (3). Every instinct said the hard part would be geometry: whether
+the boxes are right, whether the click lands. The geometry is fine. **The addressing scheme is the
+bottleneck.**
+
+### AND THE DUPLICATES ARE NOT OUR BUG
+
+Listing them named the mechanism in one run — this is the survey-then-probe discipline, and the
+probe took a minute:
+
+```text
+  Ambiguous  link  "Posts"        Ambiguous  link  "GitHub"
+  Ambiguous  link  "Spotlight"    Ambiguous  link  "Sitemap"
+  Ambiguous  link  "About"        Ambiguous  link  "Back to top"
+```
+
+Every one appears **twice: once in the header nav, once in the footer.** Chrome's tree contains the
+same twins. So this is not a projection defect to fix — it is an addressing scheme that cannot
+express what a human says without thinking about it: *the `Posts` link **in the navigation***.
+
+### THE LANDMARK IS THE MISSING TERM, PRICED BEFORE IT IS BUILT
+
+Re-keying the address as `(landmark, role, name)` lifts the corpus **77.8% → 81.1%**, and much more
+where the duplication is header-vs-footer (a11yproject 61.2 → 77.6, wikipedia 72.0 → 76.9).
+
+⚠ And it is priced HONESTLY, which is the point of pricing it: **news.ycombinator.com does not move
+at all** — it has no landmarks — and blog.rust-lang.org's remaining 13 are duplicates *within one
+landmark*. The term after the landmark has to separate siblings sharing a container.
+
+### TWO DEFECTS THE PROBE FOUND ON ITS WAY, BOTH IN OTHER TRACKS
+
+⚠⚠ **`inset: 0` DOES NOT SIZE AN ABSOLUTELY POSITIONED BOX.** An `position:absolute; inset:0`
+overlay lays out `0x0` and its sibling link came out 96×22 instead of 200×30. Found because the
+gate's overlay row refused to go red, i.e. by the fixture failing to fail — had I not chased it, that
+row would have passed for the wrong reason. Track A, named for a later tick.
+
+⚠⚠ **A POSITIONED ELEMENT WITH `z-index: auto` DOES NOT WIN A CLICK AGAINST WHAT IT COVERS.**
+`A11yNode::z` models only an *explicit* `z-index` — `0` for "not positioned" and `0` for "positioned,
+auto" alike — so the tie-break between unrelated subtrees falls through to SMALLER AREA and a 200×30
+link beats the 300×60 banner on top of it. **A cookie banner is exactly this markup.** Asserted in
+the gate rather than fixed, because `z` is set where the computed styles live and the change reaches
+every coordinate click in the engine; the row carries an instruction to delete itself when fixed.
+
+### LANDED
+
+```
+  agent/src/drivability.rs      the classification
+  agent/src/bin/drive-probe.rs  the corpus runner, with --list
+  gate  g_a_perceived_target_is_an_actionable_one   7 tests, red under 4 named mutations
+    1. in_subtree by identity only   -> the nested-span row becomes MisHit
+    2. no duplicate check            -> the twin rows become Drivable
+    3. accept a zero-area bbox       -> the collapsed row becomes Drivable
+    4. every role actionable         -> the paragraph reaches the target list
+  vacuity arm: the plainest possible button must be Drivable
+  Bar 0: no hang, no crash, no panic
+```
+
+⚠ FIXTURE NOTE, twice earned: a hit on a DESCENDANT is a success (a button's centre lands on its
+inner `<span>` and bubbles) — without that row this reports a catastrophe on every well-built page.
+And an occlusion row needs the overlay LARGER than its target: at equal area the document-order
+tie-break decides and the row passes for the wrong reason. Both were found by rows refusing to move.
+
+NEXT: implement landmark-scoped resolution in `AgentBrowser::resolve` — the 3.3 points are already
+measured, and `resolve_handle` picking the wrong element is a defect this loop has recorded before.
+Then measure the term after the landmark on the 13 that share one.
+
+WIKI: docs/wiki/role-plus-name-is-not-an-address.md

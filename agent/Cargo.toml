@@ -34,6 +34,11 @@ path = "src/bin/a11y-dump.rs"
 name = "a11y-score"
 path = "src/bin/a11y-score.rs"
 
+# Of the targets an agent can PERCEIVE on a real page, how many can it ACT on?
+[[bin]]
+name = "drive-probe"
+path = "src/bin/drive-probe.rs"
+
 [dependencies]
 manuk-page.workspace = true
 manuk-a11y.workspace = true

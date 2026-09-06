@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1133** | ticks 1–1458 |
-| median tick cycle | **32m** | 1132 intervals |
+| ticks landed | **1134** | ticks 1–1459 |
+| median tick cycle | **32m** | 1133 intervals |
 | median, last 10 | **62m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.83** | 1365.4h elapsed |
-| median verify wall | **67s** | 1072 ticks |
+| **ticks per hour** | **0.83** | 1365.6h elapsed |
+| median verify wall | **67s** | 1073 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**516 of 1133 ticks** (46%) moved a
+**517 of 1134 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **516** capability ticks, median cycle **32m**
+* **517** capability ticks, median cycle **32m**
 * median diff per tick: **+296 / −35** lines across 8 files
 
 ## Every tick
@@ -1230,5 +1230,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1455** | 2026-09-05 23:55 | 69m | capability | 8m | +190/−42 | 563 | 81 | 56.0% · | Track C: the loop closed, and closing it found three defects (2026-09-05) |
 | **1457** | 2026-09-06 01:29 | 1.6h | capability | 8m | +383/−45 | 564 | 81 | 56.0% · | the fields were printed instead of reasoned about, and the frame turned out to be MIXED (2 |
 | **1458** | 2026-09-06 02:24 | 55m | capability | 8m | +915/−42 | 564 | 81 | 56.0% · | Track B: the node-match bar was recall, computed by a script that is not in the repo (2026 |
+| **1459** | 2026-09-06 02:40 | 16m | capability | 8m | +755/−42 | 564 | 81 | 56.0% · | Track C: the drive loop's ADDRESS fails on a fifth of the real web, and 99% of it is one t |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

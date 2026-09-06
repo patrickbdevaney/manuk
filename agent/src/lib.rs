@@ -24,6 +24,10 @@ pub mod forms;
 /// bar, reporting precision and F1 rather than recall alone. Driven by the `a11y-score` binary.
 pub mod a11y_score;
 
+/// Whether the targets an agent PERCEIVES are ones it can actually ACT on — grounded, unambiguous,
+/// and reachable by a coordinate click. The real-site half `g_agent_drive_loop` deferred.
+pub mod drivability;
+
 /// N5 — per-invocation permission scoping (capability value, enforced at the
 /// action boundary alongside the E6 risk heuristic).
 pub mod capabilities;

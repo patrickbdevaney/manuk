@@ -2736,6 +2736,13 @@
   - L27 · DON'T use it for
   - L31 · HOW
 
+## Role + name is not an address
+`docs/wiki/role-plus-name-is-not-an-address.md`
+
+  - L27 · The failure is almost entirely ambiguity
+  - L45 · The landmark is the missing term, and it is worth 3.3 points
+  - L56 · Two defects this probe found on its way
+
 ## The alignment rectangle — a relatively-positioned box contributes BOTH positions
 `docs/wiki/scrollable-overflow-alignment-rect.md`
 
@@ -3203,4 +3210,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2794 sections across 101 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2797 sections across 102 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

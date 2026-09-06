@@ -11196,3 +11196,28 @@ mutation comes back green.
 **Status:** landed t1458 as `a11y-score` + `manuk_agent::a11y_score`, gated by
 `g_a11y_score_counts_phantoms` under four mutations (one of which was green first time and named a
 hole in the fixture).
+
+---
+
+## Measure the ADDRESS, not just the perception — a target you cannot name uniquely is not actionable
+
+**Pattern.** An agent that reads a page by role + accessible name has an *addressing* problem
+distinct from its perception problem. Perceiving a control, aiming at it, and clicking it fail
+separately, and only the conjunction is a drive. Measured on six real sites: **77.8% drivable, and
+99% of the failures are ambiguity** — not geometry (2 ungrounded of 2,343) and not occlusion (3).
+
+**How it is found.** Classify every actionable named node into `Drivable` / `Ungrounded` /
+`Ambiguous` / `MisHit` and *list* the failures. The list names the mechanism immediately: the
+duplicates are the same links in the header nav and the footer, and the oracle's tree has them too.
+
+**What it buys.** Re-keying the address as `(landmark, role, name)` lifts the corpus to **81.1%** —
+priced before a line of resolution code was written, and priced honestly: a site with no landmarks
+does not move at all.
+
+**Fixture requirement.** A hit on a **descendant** is a success — clicking a `<button>`'s centre
+usually lands on its inner `<span>` and bubbles. Without that row the measurement reports a
+catastrophe on every well-built page. And an occlusion row needs the overlay to be *larger* than its
+target: at equal area the tie-break decides and the row passes for the wrong reason.
+
+**Status:** landed t1459 as `drive-probe` + `manuk_agent::drivability`, gated by
+`g_a_perceived_target_is_an_actionable_one` under four mutations.

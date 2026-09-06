@@ -1132,3 +1132,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1455	96f84a37	1788666933	2026-09-05T23:55:33-04:00	4138	capability	465	7	190	42	563	81	3896	6960	0	642	0	Track C: the loop closed, and closing it found three defects (2026-09-05)
 1457	793f7cc8	1788672577	2026-09-06T01:29:37-04:00	5644	capability	465	10	383	45	564	81	3896	6960	0	642	0	the fields were printed instead of reasoned about, and the frame turned out to be MIXED (2026-09-06)
 1458	8b759add	1788675889	2026-09-06T02:24:49-04:00	3312	capability	465	13	915	42	564	81	3896	6960	0	642	0	Track B: the node-match bar was recall, computed by a script that is not in the repo (2026-09-06)
+1459	18017e00	1788676835	2026-09-06T02:40:35-04:00	946	capability	465	12	755	42	564	81	3896	6960	0	642	0	Track C: the drive loop's ADDRESS fails on a fifth of the real web, and 99% of it is one thing (2026-09-06)
