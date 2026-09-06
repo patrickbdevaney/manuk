@@ -84,6 +84,10 @@ cssparser = "0.34"
 
 # --- layout (Reuse + build) ---
 taffy = "0.12"
+# ⭐ TRACK B — the standard Rust accessibility-tree crate (the one servo/ uses). We already compute a
+# richer tree than most toolkits ever will; what was missing was the INTEROP shape every screen
+# reader and a11y test harness already speaks. Adopted, never forked (CONSTITUTION I2).
+accesskit = "0.24"
 
 # --- text (Reuse) ---
 fontdb = "0.23"

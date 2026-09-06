@@ -12074,3 +12074,77 @@ check #137 raised is now RESOLVED**: the loop left the vein under its own steer.
    orthogonal `row` container (`solved_h` is the CSS `height` pinned as a logical block size — the
    t1347 seam), and a non-zero too-small track maximum (`minmax(auto, 20px)`: Chrome 60, ours 20 —
    wants taffy's base size, so a second solve).
+
+## Check #139 — tick 1452 (2026-09-05)
+
+**HORIZON:** 0 — Pareto Web Parity. **GATE:** the exit is a CONJUNCTION (M1 render AND a11y ≥90% AND
+an M2 drive), and this check is the one where the loop stopped optimising the term it was already good
+at.
+
+### GATE OR SCOREBOARD? — THE OBSERVER HAD TO SAY IT, AND THAT IS THE FINDING
+
+Eight ticks (t1445–t1452). Six were CSS layout, one was a wall audit, one was a refusal. Mid-session
+the observer amended the board:
+
+> *"single-axis NARROWING returned: recent 35 commits = 30 layout/cssom/grid, 1 a11y, 0 M2-driving —
+> Tracks B and C have been DARK ~35 ticks, violating THIS board's own '>5 ticks dark' rule … the cost
+> shows in the EXIT metric, not WPT: CrUX M2 PLATEAUED 24.8→29.3→27.6 and M1 42.9→42.5, while all
+> recent energy moved WPT subtests on layout."*
+
+⭐⭐⭐ **THE LOOP'S OWN INSTRUMENTS ALL READ GREEN WHILE THIS WAS TRUE.** Every tick was gated,
+measured, Chrome-arbitrated and monotone; the ratchet held; the audits passed; the WPT total climbed.
+**None of that can see a conjunction with a dark term** — a maximiser of one term is indistinguishable
+from a healthy loop when you only read that term. Check #137 raised this as an "I4 tension", check
+#138 recorded it as "resolved" because one tick had left `cssom-view` for `css-grid` — *and that was
+the wrong resolution: it rotated within Track A.*
+
+**The cadence rule was in the board the whole time and the loop was not reading it as a constraint.**
+
+### WHAT MOVED
+
+* **t1445** block extent — `css/css-grid` −137 and `css/css-flexbox` −137 from one predicate.
+* **t1446** grid placement readback (the fifth axis asymmetry).
+* **t1447, t1449** two refusals, both reverted, both with their measurement banked.
+* **t1450** the coordinate that made t1449's refusal look necessary, measured — and t1434's
+  hand-derived number corrected.
+* **t1451** *"as necessary"* implemented: flexbox +26, overflow +17.
+* **t1452** ⭐ **TRACK B STARTED.** The a11y tree now projects into **AccessKit** — the shape servo
+  emits and every screen reader, OS bridge and Rust a11y harness already speaks. Named at TEN
+  consecutive checks as the fastest greenfield win and never begun until the observer made it an
+  order.
+
+### PART VI CORRECTIONS
+
+* **NEW, and it is the most valuable thing this check produces:** *a conjunction cannot be audited one
+  term at a time.* Every mechanism this loop owns — the ratchet, the gates, the surface audit, the
+  constitution check — is a **per-term** instrument. The board's `>5 ticks dark` rule is the only
+  cross-term one, it is prose, and prose is what the loop skipped for 35 ticks. **It should be
+  mechanical**, and that is observer-owned.
+* **NEW:** *a test outside the wall is a test that can be red indefinitely.* `manuk-a11y`'s unit tests
+  are not in `verify.sh`'s crate list. Running them for the first time this tick found the crate
+  **RED**, on two assertions that went stale when the engine got MORE correct — the root gained its
+  title (t1411, ~40 ticks red) and `listitem` correctly stopped taking a name from its content (t1404,
+  ~47 ticks red). Both are the t1344 shape. 21/21 green now.
+* **VI.3 — the aperture rule is STILL not in prose.** Fifth check.
+* **VI.2's H0.7 (AccessKit) — STARTED at last.** Ten checks named it; the eleventh can measure it.
+* **I5 — `ORACLE_CRAWLED: 0`. TWELFTH check.**
+
+### THE INVARIANTS
+
+**I3 — this is the one that was quietly bending.** *"The agent surface is core, not a layer … built and
+maintained at every horizon, never allowed to rot, lag the renderer, or become 'the automation
+module'."* The a11y tree has been frozen at ~64% node match since t1254 while the renderer moved every
+day. **That is precisely "lagging the renderer", and it took an outside instruction to see it.** I2 —
+held (AccessKit adopted, not forked). I4, I8 — held. I1, I6, I7 — not bent.
+
+### STEER
+
+1. ⭐⭐⭐ **ALTERNATE A/B/C, AND TREAT THE BOARD'S `>5 ticks dark` AS A HARD RULE.** The next tick is
+   Track B or C, not layout — regardless of how good the next layout lever looks. *The quality of the
+   available Track A work is exactly why this happened.*
+2. **Track B next step, concrete:** the projection exists and is gated; now measure it. `a11y-dump`
+   plus the CDP oracle already produce Chrome's tree — score the AccessKit projection against it and
+   publish the number, so the ≥90% exit term stops being an estimate.
+3. **Track C, unassembled:** hit-test → dispatch → actuate → observe on ONE real site. Every piece
+   exists (`Page::dispatch_click`, the a11y hit-test, BiDi `script.evaluate`); nothing has ever been
+   wired end to end.

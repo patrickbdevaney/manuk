@@ -11084,3 +11084,16 @@ negative margins therefore gets none of it, and a child with none gets all of it
 
 **Unlocks:** correct scroll extents on RTL and vertical-writing-mode scrollers — Arabic, Hebrew, and
 CJK vertical layouts. (t1451)
+
+## ⭐⭐⭐ THE ACCESSIBILITY TREE IS NOW IN A SHAPE ASSISTIVE TECHNOLOGY CAN READ
+
+A browser's accessibility tree is worth nothing to a screen reader that cannot consume it. Manuk has
+computed roles, names, states and bounds for a thousand ticks, all of it reachable only through its own
+Rust types. It now projects into **AccessKit** — the interop shape servo emits and every Rust a11y
+harness, OS bridge and screen-reader adapter already speaks.
+
+⭐ The node ids are the DOM arena's own, so a consumer that reports a node can be taken straight back
+to the element. That is what makes the tree useful to an AGENT and not only to a screen reader.
+
+**Unlocks:** screen-reader and OS accessibility-bridge consumption of a Manuk page, and the standard
+harnesses that score an a11y tree. (t1452)

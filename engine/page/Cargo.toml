@@ -11,6 +11,9 @@ manuk-net.workspace = true
 manuk-html.workspace = true
 manuk-dom.workspace = true
 manuk-a11y.workspace = true
+# TRACK B: the gate asserts the ACCESSKIT projection, not Manuk's own types — a projection that is
+# only ever read through the thing it projects from cannot be shown to be wrong.
+accesskit.workspace = true
 manuk-css.workspace = true
 manuk-layout.workspace = true
 manuk-text.workspace = true

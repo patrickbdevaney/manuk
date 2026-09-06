@@ -4043,7 +4043,23 @@ mod tests {
 
         // <title>/<style> live in <head> and must not appear; the hidden button is gone;
         // the decorative <img alt=""> produced no node. Exactly one `document` root.
-        assert_eq!(lines.iter().filter(|l| *l == "document").count(), 1);
+        // ⚠⚠⚠ **THIS ASSERTION WENT STALE AT t1411 AND NOBODY SAW IT FOR ~40 TICKS.** That tick
+        // gave the a11y ROOT the document's title (Chrome names it from `<title>`), so the root's
+        // observation line became `document "Shop"` and an equality test against the bare
+        // `"document"` counted ZERO. **The engine got more correct and the test held a literal** —
+        // the same shape as the four red gates of t1344.
+        //
+        // ⭐ It stayed red because `manuk-a11y`'s unit tests are NOT in `verify.sh`'s crate list, so
+        // the wall never ran them. *A test outside the wall is a test that can be red indefinitely*,
+        // and this one was. Matching the PREFIX keeps the assertion (exactly one document root)
+        // while letting the root carry the name it is now supposed to have.
+        assert_eq!(
+            lines
+                .iter()
+                .filter(|l| *l == "document" || l.starts_with("document \""))
+                .count(),
+            1
+        );
         assert!(!lines.iter().any(|l| l.contains("Secret")));
         assert!(!lines.iter().any(|l| l.contains("color:red")));
 
@@ -4059,7 +4075,11 @@ mod tests {
         assert!(lines.contains(&"textbox \"Search products\"".to_string()));
         assert!(lines.contains(&"button \"Go\"".to_string()));
         assert!(lines.contains(&"list".to_string()));
-        assert!(lines.contains(&"listitem \"One\"".to_string()));
+        // ⚠⚠ **AND THE SAME SHAPE ONE ASSERTION LATER, STALE SINCE t1404.** That tick measured
+        // against Chrome that a `listitem` does NOT take its name from its content (the expression
+        // was 94% of the a11y tree's whole error on a real corpus, 75.0% → 97.0%), so a list item
+        // is correctly UNNAMED here. The literal `listitem "One"` is the pre-t1404 engine.
+        assert_eq!(lines.iter().filter(|l| *l == "listitem").count(), 2);
 
         // Exactly one image node (the decorative one was dropped).
         assert_eq!(lines.iter().filter(|l| l.starts_with("image")).count(), 1);
@@ -4265,5 +4285,186 @@ mod tests {
             Some(Role::Navigation),
             "…and its landmark neighbours are untouched"
         );
+    }
+}
+
+// ══ ACCESSKIT — THE INTEROP SHAPE ═══════════════════════════════════════════════════════════════
+
+/// ⭐⭐⭐ **THE TREE WAS ALWAYS RICHER THAN THE THING THAT COULD READ IT.** This crate has computed
+/// roles, accessible names, interaction state and border boxes for a thousand ticks, and every one of
+/// those facts was reachable only through Manuk's own types. **AccessKit is the shape a screen
+/// reader, an OS accessibility bridge and every Rust a11y test harness already speak** — it is what
+/// servo emits, and adopting it is the difference between "we have an accessibility tree" and "an
+/// assistive technology can read this page".
+///
+/// The board has named this Track B at ten consecutive constitution checks. It is not a rewrite: the
+/// tree is built, correct and measured (~64% node match against Chrome); this is a projection of it.
+///
+/// ⚠ **A PROJECTION, NOT A SECOND SOURCE OF TRUTH.** Nothing here computes a role, a name or a state
+/// — every field is read from the [`A11yNode`] the existing builder produced, so the two can never
+/// disagree. That is deliberate: *one rule, one implementation* is this project's most-repeated
+/// lesson, and an a11y tree that is computed twice would be the largest possible instance of it.
+///
+/// ⚠ Roles AccessKit does not name (`Suggestion`, `Definition` under some spellings, `Search` as a
+/// landmark) map to the nearest thing it does, and the mapping says which rather than inventing a
+/// variant. `Generic` → `GenericContainer` is the honest default and is what an unnamed `<div>` is.
+pub mod accesskit_bridge {
+    use super::{A11yNode, Checked, Role};
+
+    /// Map one Manuk role onto AccessKit's vocabulary.
+    ///
+    /// ⚠ The four inexact rows are named rather than hidden: AccessKit has no `Suggestion`,
+    /// `Marquee`, `TreeGrid`-distinct-from-`Grid` gap here — where it does have the role we use it,
+    /// and where it does not the nearest structural equivalent is used and recorded.
+    pub fn role(r: &Role) -> accesskit::Role {
+        use accesskit::Role as A;
+        match r {
+            Role::Document => A::Document,
+            Role::Article => A::Article,
+            Role::Banner => A::Banner,
+            Role::Complementary => A::Complementary,
+            Role::ContentInfo => A::ContentInfo,
+            Role::Form => A::Form,
+            Role::Main => A::Main,
+            Role::Navigation => A::Navigation,
+            Role::Region => A::Region,
+            Role::Search => A::Search,
+            Role::Heading { .. } => A::Heading,
+            Role::Paragraph => A::Paragraph,
+            Role::Separator => A::Splitter,
+            Role::Link => A::Link,
+            Role::Button => A::Button,
+            Role::TextBox => A::TextInput,
+            Role::CheckBox => A::CheckBox,
+            Role::Radio => A::RadioButton,
+            Role::ComboBox => A::ComboBox,
+            Role::Switch => A::Switch,
+            Role::Slider => A::Slider,
+            Role::SpinButton => A::SpinButton,
+            Role::Tab => A::Tab,
+            Role::MenuItem => A::MenuItem,
+            Role::Option => A::ListBoxOption,
+            Role::TreeItem => A::TreeItem,
+            Role::Image => A::Image,
+            Role::List => A::List,
+            Role::ListItem => A::ListItem,
+            Role::Table => A::Table,
+            Role::Row => A::Row,
+            Role::Cell => A::Cell,
+            Role::ColumnHeader => A::ColumnHeader,
+            Role::RowHeader => A::RowHeader,
+            Role::Blockquote => A::Blockquote,
+            Role::Caption => A::Caption,
+            Role::Code => A::Code,
+            Role::Definition => A::Definition,
+            Role::Deletion => A::ContentDeletion,
+            Role::Insertion => A::ContentInsertion,
+            Role::Emphasis => A::Emphasis,
+            Role::Strong => A::Strong,
+            // AccessKit has no `subscript`/`superscript` role — it carries them as the
+            // `vertical_offset` PROPERTY instead, which this projection does not yet set. Recorded:
+            // the distinction survives in Manuk's own tree and is lost in the projection.
+            Role::Subscript | Role::Superscript => A::GenericContainer,
+            Role::Mark => A::Mark,
+            Role::Suggestion => A::Suggestion,
+            Role::Term => A::Term,
+            Role::Time => A::Time,
+            Role::Figure => A::Figure,
+            Role::Note => A::Note,
+            Role::Application => A::Application,
+            Role::Math => A::Math,
+            Role::Log => A::Log,
+            Role::Marquee => A::Marquee,
+            Role::Timer => A::Timer,
+            Role::Grid => A::Grid,
+            Role::GridCell => A::GridCell,
+            Role::RowGroup => A::RowGroup,
+            Role::TreeGrid => A::TreeGrid,
+            Role::Meter => A::Meter,
+            Role::ScrollBar => A::ScrollBar,
+            Role::SearchBox => A::SearchInput,
+            Role::MenuItemCheckBox => A::MenuItemCheckBox,
+            Role::MenuItemRadio => A::MenuItemRadio,
+            Role::SectionHeader => A::SectionHeader,
+            Role::SectionFooter => A::SectionFooter,
+            Role::Menu => A::Menu,
+            Role::MenuBar => A::MenuBar,
+            Role::TabList => A::TabList,
+            Role::TabPanel => A::TabPanel,
+            Role::ListBox => A::ListBox,
+            Role::Toolbar => A::Toolbar,
+            Role::Tree => A::Tree,
+            Role::Group => A::Group,
+            Role::RadioGroup => A::RadioGroup,
+            Role::Dialog => A::Dialog,
+            Role::AlertDialog => A::AlertDialog,
+            Role::Tooltip => A::Tooltip,
+            Role::Alert => A::Alert,
+            Role::Status => A::Status,
+            Role::ProgressBar => A::ProgressIndicator,
+            Role::Generic => A::GenericContainer,
+        }
+    }
+
+    /// Project a Manuk accessibility tree into an AccessKit [`accesskit::TreeUpdate`].
+    ///
+    /// The node ids are the arena's own — an AccessKit consumer that reports a node can be taken
+    /// straight back to the DOM element it came from, which is what makes this useful to an AGENT
+    /// and not only to a screen reader.
+    ///
+    /// ⚠ A heading's LEVEL is carried as AccessKit's `level` property, because `Role::Heading` there
+    /// is level-less. Dropping it would announce every heading as an `<h1>`.
+    pub fn tree_update(root: &A11yNode) -> accesskit::TreeUpdate {
+        let mut nodes = Vec::new();
+        emit(root, &mut nodes);
+        accesskit::TreeUpdate {
+            nodes,
+            tree: Some(accesskit::Tree::new(accesskit::NodeId(root.node.0))),
+            tree_id: accesskit::TreeId::ROOT,
+            focus: accesskit::NodeId(root.node.0),
+        }
+    }
+
+    fn emit(n: &A11yNode, out: &mut Vec<(accesskit::NodeId, accesskit::Node)>) {
+        let mut node = accesskit::Node::new(role(&n.role));
+        if !n.name.is_empty() {
+            node.set_label(n.name.clone());
+        }
+        if let Role::Heading { level } = n.role {
+            node.set_level(level.max(1) as usize);
+        }
+        if let Some(b) = n.bbox {
+            node.set_bounds(accesskit::Rect {
+                x0: b.x as f64,
+                y0: b.y as f64,
+                x1: (b.x + b.width) as f64,
+                y1: (b.y + b.height) as f64,
+            });
+        }
+        match n.state.checked {
+            Some(Checked::True) => node.set_toggled(accesskit::Toggled::True),
+            Some(Checked::False) => node.set_toggled(accesskit::Toggled::False),
+            Some(Checked::Mixed) => node.set_toggled(accesskit::Toggled::Mixed),
+            None => {}
+        }
+        if let Some(e) = n.state.expanded {
+            node.set_expanded(e);
+        }
+        if let Some(s) = n.state.selected {
+            node.set_selected(s);
+        }
+        if n.state.disabled {
+            node.set_disabled();
+        }
+        node.set_children(
+            n.children
+                .iter()
+                .map(|c| accesskit::NodeId(c.node.0))
+                .collect::<Vec<_>>(),
+        );
+        out.push((accesskit::NodeId(n.node.0), node));
+        for c in &n.children {
+            emit(c, out);
+        }
     }
 }

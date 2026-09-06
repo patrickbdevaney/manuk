@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1127** | ticks 1–1450 |
-| median tick cycle | **32m** | 1126 intervals |
-| median, last 10 | **72m** | 10 intervals |
+| ticks landed | **1128** | ticks 1–1452 |
+| median tick cycle | **32m** | 1127 intervals |
+| median, last 10 | **70m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.83** | 1359.0h elapsed |
-| median verify wall | **67s** | 1066 ticks |
+| **ticks per hour** | **0.83** | 1360.2h elapsed |
+| median verify wall | **67s** | 1067 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **560**
+* **live gates**: 27 → **561**
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**511 of 1127 ticks** (45%) moved a
+**512 of 1128 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **511** capability ticks, median cycle **32m**
-* median diff per tick: **+295 / −35** lines across 8 files
+* **512** capability ticks, median cycle **32m**
+* median diff per tick: **+296 / −35** lines across 8 files
 
 ## Every tick
 
@@ -1224,5 +1224,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1448** | 2026-09-05 18:41 | 70m | measurement-and-refusal | 8m | +192/−42 | 559 | 81 | 56.0% · | wall audit #57: a link-bound wall reports every section at zero (2026-09-05) |
 | **1449** | 2026-09-05 18:53 | 12m | measurement-and-refusal | 8m | +195/−42 | 559 | 81 | 56.0% · | two Chrome batteries that cannot both be satisfied (2026-09-05) |
 | **1450** | 2026-09-05 20:04 | 71m | measurement-and-refusal | 8m | +416/−55 | 560 | 81 | 56.0% · | the contradiction was not real, and the record was wrong (2026-09-05) |
+| **1452** | 2026-09-05 21:12 | 68m | capability | 8m | +688/−45 | 561 | 81 | 56.0% · | Track B, at the eleventh time of asking (2026-09-05) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

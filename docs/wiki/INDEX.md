@@ -14,6 +14,15 @@
   - L67 · How it is plumbed, and why that shape
   - L85 · What is still open in accname
 
+## The tree was always richer than the thing that could read it
+`docs/wiki/accesskit-the-interop-shape.md`
+
+  - L7 · What was and was not missing
+  - L18 · A projection, not a second source of truth
+  - L26 · What the mapping costs, said out loud
+  - L37 · ⚠ And running a crate the wall does not run found it RED
+  - L54 · Gate
+
 ## A collapsed end margin is outside the container
 `docs/wiki/a-collapsed-margin-is-outside-the-container.md`
 
@@ -3155,4 +3164,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2766 sections across 96 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2771 sections across 97 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

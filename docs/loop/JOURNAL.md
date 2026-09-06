@@ -104574,3 +104574,89 @@ exactly that padding.
 ```
 
 WIKI: docs/wiki/end-padding-is-as-necessary.md
+
+## Tick 1452 — Track B, at the eleventh time of asking (2026-09-05)
+
+TICK SHAPE: capability
+CLASS: a11y / AccessKit adoption — Track B, plus constitution check #139
+
+### THE BOARD CHANGED MID-SESSION AND THE STEER WAS ABOUT THIS LOOP
+
+Re-running `lever-board.sh` at the top of this tick — which the loop does every tick precisely because
+the observer steers mid-invocation — returned a nudge dated today:
+
+> *"single-axis NARROWING returned: recent 35 commits = 30 layout/cssom/grid, 1 a11y, 0 M2-driving …
+> Tracks B and C have been DARK ~35 ticks, violating THIS board's own '>5 ticks dark' rule. The cost
+> shows in the EXIT metric, not WPT … the NEXT non-mid-port tick MUST start Track B."*
+
+⭐⭐⭐ **EVERY INSTRUMENT THIS LOOP OWNS READ GREEN WHILE THAT WAS TRUE.** Each tick was gated,
+Chrome-arbitrated, monotone; the ratchet held; three audits passed; the WPT total climbed all session.
+**None of them can see a conjunction with a dark term.** The exit is `M1 AND a11y ≥90% AND an M2
+drive`, and a maximiser of one term looks exactly like a healthy loop when you only read that term.
+
+⚠ Check #137 raised this as an "I4 tension" and check #138 recorded it **resolved** because a tick had
+left `cssom-view` for `css-grid`. *That was the wrong resolution — it rotated within Track A.* The
+`>5 ticks dark` rule was in the board the whole time, in prose, and prose is what got skipped.
+
+### TRACK B — THE TREE WAS ALWAYS RICHER THAN THE THING THAT COULD READ IT
+
+`manuk-a11y` has computed 79 roles, accname-spec names, tri-state `checked`, `expanded`, `selected`,
+`disabled`, `pressed`, absolute border boxes and occlusion-aware hit testing for a thousand ticks —
+**and every one of those facts was reachable only through Manuk's own types.** AccessKit is the shape a
+screen reader, an OS bridge and every Rust a11y harness already speak; it is what servo emits.
+
+⚠ **A PROJECTION, NOT A SECOND SOURCE OF TRUTH.** Nothing in the bridge computes a role, a name or a
+state — every field is read off the `A11yNode` the existing builder produced. *One rule, one
+implementation*, and an accessibility tree computed twice would be the largest possible instance of
+the thing this project keeps catching.
+
+What the mapping costs is said out loud: `Heading` carries its level as a separate PROPERTY (AccessKit's
+role is level-less, and dropping it announces every heading as an `<h1>`), and `Subscript`/`Superscript`
+land on `GenericContainer` because AccessKit carries those as a `vertical_offset` this bridge does not
+yet set — **the distinction survives in Manuk's tree and is lost in the projection.**
+
+### ⚠⚠ AND RUNNING A CRATE THE WALL DOES NOT RUN FOUND IT RED
+
+`manuk-a11y`'s unit tests are not in `verify.sh`'s crate list. Running them for the first time here:
+
+```text
+  t1411  the a11y root gained the document's title   "document" → "document \"Shop\""   ~40 ticks red
+  t1404  `listitem` correctly stopped taking a name  "listitem \"One\"" → "listitem"    ~47 ticks red
+         from its content (94% of the tree's error
+         on a real corpus, 75.0% → 97.0%)
+```
+
+⭐⭐ **BOTH WENT RED BECAUSE THE ENGINE GOT MORE CORRECT AND THE TEST HELD A LITERAL** — the t1344 shape,
+twice, in a crate nothing was watching. *A test outside the wall is a test that can be red
+indefinitely*, and these two were, for forty-odd ticks each. 21/21 green now.
+
+### THE GATE
+
+`g_accesskit_tree` — role, name, heading level, `disabled`, tri-state `toggled`, `selected`, bounds,
+and the tree/child-id contract an AccessKit consumer would otherwise **panic** on rather than degrade.
+Red under five mutations: drop the label, drop the level, map `Checked::False` to nothing, drop the
+bounds, emit dangling child ids.
+
+⭐ Deleting the `Some(Checked::False)` arm outright **does not compile** — the match is exhaustive, so
+the type system already forbids half of that mutation. The gate covers the half it cannot: mapping the
+arm to the WRONG thing rather than forgetting it. *Worth knowing which half of a guarantee the compiler
+is already holding.*
+
+### THE RECEIPT
+
+```text
+  accesskit 0.24 adopted (not forked — I2); manuk-a11y projects into TreeUpdate
+  g_accesskit_tree  NEW, 9 assertions, red under 5 of 5 mutations
+  manuk-a11y 21/21 (was 20/21 on the CLEAN tree, unseen by the wall)
+  6 neighbouring a11y gates green
+  constitution check #139
+  Bar 0: no hang, no crash, no panic
+```
+
+⚠ HARNESS (observer-owned, one line): this tick's first wall came back RED on `G2 · JS conformance`.
+FALSE — `cargo test -p manuk-page --features stylo,spidermonkey -- --ignored js_conformance` on the
+same tree is **1 passed**. That is the **second** `_out` race false-red this session (t1437 was
+`affordance`/`G_INTERACT`), and both were **under** the documented `CARGO_BUILD_JOBS=1` workaround. The
+wall audit #57 recorded the workaround as insufficient; this is the second datum.
+
+WIKI: docs/wiki/accesskit-the-interop-shape.md

@@ -12,6 +12,7 @@ manuk-dom.workspace = true
 # contributes a space separator, and `text-transform` applies to the name because the name is the
 # text a user is READ. No cycle — `manuk-css` does not depend on this crate.
 manuk-css.workspace = true
+accesskit.workspace = true
 
 [dev-dependencies]
 manuk-html.workspace = true
