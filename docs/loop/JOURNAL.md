@@ -104660,3 +104660,61 @@ same tree is **1 passed**. That is the **second** `_out` race false-red this ses
 wall audit #57 recorded the workaround as insufficient; this is the second datum.
 
 WIKI: docs/wiki/accesskit-the-interop-shape.md
+
+## Tick 1453 — a required field with a plausible default (2026-09-05)
+
+TICK SHAPE: capability
+CLASS: a11y / AccessKit projection completeness — Track B, second tick
+
+### AUDITING THE THING I SHIPPED YESTERDAY
+
+t1452 stood the AccessKit bridge up and projected `checked`, `expanded`, `selected` and `disabled`.
+The tree computes **ten** state fields. The projection dropped `pressed`, `required`, `readonly`,
+`invalid` and `value`, and set `TreeUpdate::focus` to the document root on every page.
+
+⭐⭐⭐ **`focus` IS A REQUIRED FIELD, SO NAMING THE ROOT IS AN ANSWER RATHER THAN AN ABSTENTION.**
+AccessKit's contract is that every update names the focused node; there is no `None`. The root tells a
+screen reader *"the document has focus"* while the caret sits in a text field, and tells an agent
+reading its own tree back that its `focus()` call went nowhere.
+
+**A required field with a plausible default is the most dangerous shape a projection has** — the
+consumer cannot distinguish *"we computed the root"* from *"we did not compute"*. Nothing is missing,
+so nothing looks wrong. *An `Option` that has been flattened to a default is a lie with a type
+signature.*
+
+⭐⭐ **AND `pressed` IS THE FIELD THIS CRATE'S OWN DOC COMMENT CALLS A TOGGLE BUTTON'S ONLY OBSERVABLE
+STATE.** `Follow`, `Bold`, `Mute`, a filter chip, a "show password" eye are `<button aria-pressed>` and
+never checkboxes — so the projected tree read `button "Follow"` before and after a click, identically.
+**That is the exact failure the accessibility tree was built to prevent, reintroduced one layer out**,
+by me, one tick after adopting the layer.
+
+### THE TWO NARROWINGS, RECORDED RATHER THAN GUESSED
+
+* `checked` and `pressed` are two ARIA sources for **one** AccessKit property. A node carries at most
+  one meaningfully; `checked` wins where both appear, because an element that is both a checkbox and a
+  toggle button is an authoring error and the checkbox reading is the actionable one.
+* `invalid` is a **bool** here and an **enum** there (`True | Grammar | Spelling`).
+  `aria-invalid="spelling"` is a real authored value this tree does not distinguish, so it maps to
+  `True`.
+
+### THE GATE
+
+`g_accesskit_state_complete` — 8 assertions. Red under B1 (drop `pressed` → both button rows, form and
+focus rows green), B2 (focus at the root → the two focus rows alone) and B3 (drop the four form setters
+→ one row each).
+
+⚠ **B4 IS REPORTED GREEN.** Preferring `pressed` over `checked` moves nothing here, because no element
+in the fixture carries both — and an element that carries both is an authoring error, so a fixture
+that contains one would be asserting against invalid markup. The precedence is stated in the source
+and is **not gated**; said rather than implied.
+
+### THE RECEIPT
+
+```text
+  six state fields + the focus target now reach the projection
+  g_accesskit_state_complete  NEW, 8 assertions, red under 3 of 4 mutations (B4 reported green)
+  manuk-a11y 21/21 · 7 neighbouring a11y gates green
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/accesskit-the-interop-shape.md

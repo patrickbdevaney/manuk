@@ -4417,12 +4417,31 @@ pub mod accesskit_bridge {
     pub fn tree_update(root: &A11yNode) -> accesskit::TreeUpdate {
         let mut nodes = Vec::new();
         emit(root, &mut nodes);
+        // ── ⚠⚠⚠ **`focus` IS A REQUIRED FIELD, SO POINTING IT AT THE ROOT IS AN ANSWER, NOT AN
+        //    ABSTENTION.** AccessKit's contract is that every update names the focused node; there is
+        //    no `None`. t1452's projection named the ROOT unconditionally, which tells a screen
+        //    reader *"the document has focus"* while the caret sits in a text field — and an agent
+        //    reading its own tree back cannot see where its `focus()` call landed.
+        //
+        //    ⭐ A required field with a plausible default is the most dangerous shape a projection
+        //    has: the consumer cannot tell "we computed the root" from "we did not compute". The
+        //    tree already carries `state.focused` (host-owned, filled by `build_tree_with_focus`);
+        //    this reads it.
+        let focus = find_focused(root).unwrap_or(root.node.0);
         accesskit::TreeUpdate {
             nodes,
             tree: Some(accesskit::Tree::new(accesskit::NodeId(root.node.0))),
             tree_id: accesskit::TreeId::ROOT,
-            focus: accesskit::NodeId(root.node.0),
+            focus: accesskit::NodeId(focus),
         }
+    }
+
+    /// The first node the tree marks focused, in document order, or `None`.
+    fn find_focused(n: &A11yNode) -> Option<u64> {
+        if n.state.focused {
+            return Some(n.node.0);
+        }
+        n.children.iter().find_map(find_focused)
     }
 
     fn emit(n: &A11yNode, out: &mut Vec<(accesskit::NodeId, accesskit::Node)>) {
@@ -4441,7 +4460,20 @@ pub mod accesskit_bridge {
                 y1: (b.y + b.height) as f64,
             });
         }
-        match n.state.checked {
+        // ── ⚠⚠⚠ **`checked` AND `pressed` ARE TWO SOURCES FOR ONE ACCESSKIT PROPERTY, AND ONLY ONE
+        //    OF THEM CAN BE RIGHT PER NODE.** AccessKit has a single `toggled`; ARIA has
+        //    `aria-checked` (checkboxes, radios, switches) and `aria-pressed` (toggle buttons), and
+        //    a given element carries at most one of them meaningfully. `checked` wins where both are
+        //    somehow present, because a control that is both a checkbox and a toggle button is an
+        //    authoring error and the checkbox reading is the one a consumer can act on.
+        //
+        //    ⭐ **`pressed` was dropped entirely by t1452's projection, and it is the field this
+        //    crate's own doc comment calls a toggle button's ONLY observable state**: `Follow`,
+        //    `Bold`, `Mute`, a filter chip, a "show password" eye are all `<button aria-pressed>`,
+        //    never checkboxes. Without it the projected tree reads `button "Follow"` before and after
+        //    a click — identical — which is precisely the failure the tree was built to prevent.
+        let toggled = n.state.checked.or(n.state.pressed);
+        match toggled {
             Some(Checked::True) => node.set_toggled(accesskit::Toggled::True),
             Some(Checked::False) => node.set_toggled(accesskit::Toggled::False),
             Some(Checked::Mixed) => node.set_toggled(accesskit::Toggled::Mixed),
@@ -4455,6 +4487,28 @@ pub mod accesskit_bridge {
         }
         if n.state.disabled {
             node.set_disabled();
+        }
+        // ── **THE FOUR REMAINING STATE FIELDS, AND THEY ARE THE ONES A FORM IS MADE OF.** t1452's
+        //    projection carried `checked`, `expanded`, `selected` and `disabled` and dropped
+        //    `required`, `readonly`, `invalid` and `value` — so a projected form told a consumer
+        //    nothing about which field is mandatory, which is uneditable, which one the page is
+        //    complaining about, or what any of them currently contain.
+        //
+        //    ⚠ `invalid` is a BOOL here and an ENUM in AccessKit (`True | Grammar | Spelling`). The
+        //    two are not the same fact: `aria-invalid="spelling"` is a real authored value this
+        //    crate does not yet distinguish, so it maps to `True` and the narrowing is recorded
+        //    rather than guessed at.
+        if n.state.required {
+            node.set_required();
+        }
+        if n.state.readonly {
+            node.set_read_only();
+        }
+        if n.state.invalid {
+            node.set_invalid(accesskit::Invalid::True);
+        }
+        if let Some(v) = &n.state.value {
+            node.set_value(v.clone());
         }
         node.set_children(
             n.children

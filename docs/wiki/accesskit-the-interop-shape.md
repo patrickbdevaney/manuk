@@ -61,3 +61,44 @@ emit dangling child ids).
 ⭐ Deleting the `Some(Checked::False)` arm outright does not compile — the match is exhaustive, so the
 type system already forbids half of that mutation. The gate covers the half it cannot: mapping the arm
 to the *wrong* thing rather than forgetting it.
+
+---
+
+## t1453 — the projection carried four of ten state fields, and named the root as focused
+
+t1452 stood the bridge up and projected `checked`, `expanded`, `selected` and `disabled`. It dropped
+`pressed`, `required`, `readonly`, `invalid` and `value`, and set `TreeUpdate::focus` to the document
+root on every page.
+
+### ⭐⭐⭐ A required field with a plausible default
+
+AccessKit's `focus` is not optional — every update must name the focused node, and there is no `None`.
+Pointing it at the root tells a screen reader *"the document has focus"* while the caret sits in a text
+field, and tells an agent reading its own tree back that its `focus()` call went nowhere.
+
+> **A required field with a plausible default is the most dangerous shape a projection has**: the
+> consumer cannot tell *"we computed the root"* from *"we did not compute"*. Nothing is missing, so
+> nothing looks wrong.
+
+### ⭐⭐ `pressed` is a toggle button's only observable state
+
+`Follow`, `Bold`, `Mute`, a filter chip, a "show password" eye — all `<button aria-pressed>`, never
+checkboxes. This crate's own `A11yState` doc says so in a ⭐⭐⭐ comment, and the projection dropped it,
+so the tree read `button "Follow"` before and after a click. **Identical** — the exact failure the
+accessibility tree was built to prevent, reintroduced one layer out.
+
+### The two narrowings, recorded
+
+* `checked` and `pressed` are two ARIA sources for **one** AccessKit property (`toggled`). A node
+  carries at most one meaningfully; `checked` wins where both somehow appear, because an element that
+  is both a checkbox and a toggle button is an authoring error.
+* `invalid` is a **bool** here and an **enum** in AccessKit (`True | Grammar | Spelling`).
+  `aria-invalid="spelling"` is a real authored value this tree does not yet distinguish, so it maps to
+  `True`.
+
+### Gate
+
+`engine/page/tests/g_accesskit_state_complete.rs` — red under B1 (drop `pressed` → both button rows),
+B2 (focus at the root → the two focus rows) and B3 (drop the four form setters → one row each). **B4
+is reported green**: preferring `pressed` over `checked` moves nothing in this fixture, because no
+element carries both — the precedence is asserted in the source and is not gated.

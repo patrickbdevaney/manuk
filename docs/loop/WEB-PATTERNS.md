@@ -11097,3 +11097,17 @@ to the element. That is what makes the tree useful to an AGENT and not only to a
 
 **Unlocks:** screen-reader and OS accessibility-bridge consumption of a Manuk page, and the standard
 harnesses that score an a11y tree. (t1452)
+
+## ⭐⭐ A TOGGLE BUTTON'S `aria-pressed` IS ITS ONLY OBSERVABLE STATE
+
+`Follow`, `Bold`, `Mute`, a filter chip, a "show password" eye — the web builds these as
+`<button aria-pressed>`, never as checkboxes. An accessibility tree that drops `aria-pressed` reads
+`button "Follow"` before a click and `button "Follow"` after it: a screen-reader user is never told the
+state changed, and an agent cannot verify its own action.
+
+⚠ The same tick found the exported tree naming the document ROOT as focused on every page, because
+AccessKit's `focus` is a REQUIRED field with no `None`. **A required field with a plausible default is
+the most dangerous shape in a projection** — nothing is missing, so nothing looks wrong.
+
+**Unlocks:** toggle-button state, form `required`/`readonly`/`invalid`/`value`, and a truthful focus
+target in the exported accessibility tree. (t1453)

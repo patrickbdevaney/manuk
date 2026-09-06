@@ -22,6 +22,11 @@
   - L26 · What the mapping costs, said out loud
   - L37 · ⚠ And running a crate the wall does not run found it RED
   - L54 · Gate
+  - L67 · t1453 — the projection carried four of ten state fields, and named the root as focused
+  - L73 · ⭐⭐⭐ A required field with a plausible default
+  - L83 · ⭐⭐ pressed is a toggle button's only observable state
+  - L90 · The two narrowings, recorded
+  - L99 · Gate
 
 ## A collapsed end margin is outside the container
 `docs/wiki/a-collapsed-margin-is-outside-the-container.md`
@@ -3164,4 +3169,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2771 sections across 97 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2776 sections across 97 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
