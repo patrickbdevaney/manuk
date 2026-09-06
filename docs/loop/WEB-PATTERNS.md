@@ -11070,3 +11070,17 @@ negative margins therefore gets no extra padding, and one whose child has none g
 short — or one padding long, depending on which fixture you fitted to.
 
 **Status:** model measured and fitted (t1450); the reversed-axis implementation is the next tick.
+
+## ⭐⭐ AN RTL OR VERTICAL SCROLLER'S SCROLLABLE AREA WAS ONE PADDING SHORT
+
+`scrollWidth`/`scrollHeight` on a `direction: rtl` or `writing-mode: vertical-rl` scroll container came
+up one padding short of Chrome — so `scrollLeft + clientWidth >= scrollWidth` (the "am I at the end?"
+test behind every infinite scroll, carousel and sticky footer) fired one padding early on every
+right-to-left and vertical-script page.
+
+⭐ The rule is the specification's own word: the extra padding is added **"as necessary"** — it
+attaches to a child's MARGIN box and loses to a BORDER box that already reaches further. A child with
+negative margins therefore gets none of it, and a child with none gets all of it.
+
+**Unlocks:** correct scroll extents on RTL and vertical-writing-mode scrollers — Arabic, Hebrew, and
+CJK vertical layouts. (t1451)

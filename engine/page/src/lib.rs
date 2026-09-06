@@ -2780,6 +2780,7 @@ fn scroll_geometry_of(
                 .unwrap_or((0.0, 0.0)),
             end_padding,
             relative_offset: rel.get(&n).copied().unwrap_or((0.0, 0.0)),
+            start_margin: (0.0, 0.0),
         });
         // `content_extent` measures from the BORDER-box origin; the scrollable overflow region is
         // measured in the PADDING box, so drop the start border and add the end padding.
@@ -2871,11 +2872,21 @@ fn scroll_geometry_of(
         }
         let (mut min_x, mut min_y) = (0.0f32, 0.0f32);
         if x_at_end || y_at_end {
-            let (mx, my) = b.scrollable_overflow_start(&|_| manuk_layout::OverflowContribution {
-                end_margin: (0.0, 0.0),
-                end_padding: (0.0, 0.0),
-                relative_offset: (0.0, 0.0),
-            });
+            let (mx, my, mmx, mmy) =
+                b.scrollable_overflow_start(&|n| manuk_layout::OverflowContribution {
+                    end_margin: (0.0, 0.0),
+                    end_padding: (0.0, 0.0),
+                    relative_offset: (0.0, 0.0),
+                    start_margin: styles
+                        .get(&n)
+                        .map(|s| {
+                            (
+                                s.margin.left.resolve(b.rect.width, 0.0),
+                                s.margin.top.resolve(b.rect.width, 0.0),
+                            )
+                        })
+                        .unwrap_or((0.0, 0.0)),
+                });
             // ⚠⚠⚠ **THE START EDGES COME OUT IN BORDER-BOX COORDINATES AND THE REGION IS MEASURED
             //    IN THE PADDING BOX, SO THE START BORDER IS SUBTRACTED — THE SAME `- bw.left` THE
             //    MAXIMA GET, AND IT WAS WRITTEN `+`.** The sign was invisible to
@@ -2889,8 +2900,35 @@ fn scroll_geometry_of(
             // `.min(0.0)` AFTER the conversion: the walk returns `f32::MAX` when nothing reaches
             // backwards, and `MAX - border` clamps to 0 exactly as a box sitting on the padding
             // edge does.
-            min_x = (mx - bw.left).min(0.0);
-            min_y = (my - bw.top).min(0.0);
+            // ── ⚠⚠⚠ **THE SPEC'S EXTRA PADDING IS "AS NECESSARY", SO IT ATTACHES TO THE MARGIN
+            //    BOX AND LOSES TO A BORDER BOX THAT ALREADY REACHES FURTHER.** CSS Overflow 3:
+            //    *"additional padding … as necessary to enable scroll positions that satisfy the
+            //    requirements of both `place-content: start` and `place-content: end`"*. Surface
+            //    audit #85 named that clause as unmeasured residue; t1450 measured it.
+            //
+            //    Chrome, `overflow: scroll`, coordinates relative to the padding box:
+            //
+            //    ```text
+            //      padding 1/4/8/16, no border, one 350x10 child, NO margins
+            //        rtl  kid[-234]  margin −234 − 16 = −250   border −234   → 120+250 = 370
+            //      the negative-margin-002 wrapper, 300x300 child at `margin: -100px`
+            //        rtl  kid[-104]  margin   −4 − 16 =  −20   border −104   → 100+104 = 204
+            //    ```
+            //
+            //    ⭐ **The two rows disagree about which term wins**, so neither alone is the rule:
+            //    the first needs the padding and the second must not have it. The negative margin is
+            //    what makes the border box the answer in the second — and it is why a fixture
+            //    without margins (or without a border) cannot tell these two rules apart.
+            let start_pad = if scrollable {
+                (
+                    st.padding.left.resolve(b.rect.width, 0.0),
+                    st.padding.top.resolve(b.rect.width, 0.0),
+                )
+            } else {
+                (0.0, 0.0)
+            };
+            min_x = (mx - bw.left).min(mmx - bw.left - start_pad.0).min(0.0);
+            min_y = (my - bw.top).min(mmy - bw.top - start_pad.1).min(0.0);
         }
         // The extent is measured on the ALREADY-SCROLLED tree, so add the offset back: the content did
         // not get shorter because the user scrolled down it.

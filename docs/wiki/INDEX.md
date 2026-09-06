@@ -1530,6 +1530,15 @@
   - L102 · The third inert guard in one arc
   - L111 · Not built yet
 
+## "As necessary" is load-bearing — the scrollable region's extra padding attaches to the margin box
+`docs/wiki/end-padding-is-as-necessary.md`
+
+  - L6 · The clause
+  - L15 · The rule
+  - L31 · What was actually wrong
+  - L39 · The history this closes
+  - L51 · Gate
+
 ## THE FIDELITY INSTRUMENT — what it can and cannot see
 `docs/wiki/fidelity-instrument.md`
 
@@ -3146,4 +3155,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2761 sections across 95 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2766 sections across 96 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

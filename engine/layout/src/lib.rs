@@ -337,6 +337,9 @@ pub struct OverflowContribution {
     /// The relative-positioning offset already applied to this box's rect, so the in-flow
     /// ("alignment") rectangle can be recovered by subtracting it. `(0, 0)` for an ordinary box.
     pub relative_offset: (f32, f32),
+    /// The box's own START margins `(left, top)` — the mirror of [`Self::end_margin`], and the term
+    /// the REVERSED-axis branch needs. See [`LayoutBox::scrollable_overflow_start`].
+    pub start_margin: (f32, f32),
 }
 
 /// Sets [`Ctx::intrinsic_probe`] for the duration of an intrinsic measurement and restores whatever
@@ -1233,19 +1236,57 @@ impl LayoutBox {
     /// overflow becomes reachable and is added to the padding box, and the END overflow stops
     /// counting. ⭐ Only the ORIGIN differs across those six rows — which is what makes this a
     /// scrolling-area rule and not a layout one.
+    /// ⚠⚠⚠ **RETURNS TWO STARTS, BECAUSE THE SPEC'S EXTRA PADDING IS "AS NECESSARY" AND THEREFORE
+    /// ATTACHES TO THE MARGIN BOX.** CSS Overflow 3 adds padding to the scrollable region *"as
+    /// necessary to enable scroll positions that satisfy the requirements of both `place-content:
+    /// start` and `place-content: end`"* — and "as necessary" is load-bearing: where a child's BORDER
+    /// box already reaches further back than its MARGIN box plus that padding, nothing is added.
+    ///
+    /// Chrome-measured, `overflow: scroll`, coordinates relative to the padding box:
+    ///
+    /// ```text
+    ///   padding 1/4/8/16, no border, 350x10 child, no margins
+    ///     rtl  kid[-234]   margin start −234 − 16 = −250   border start −234   → 120+250 = 370
+    ///   the negative-margin-002 wrapper, 300x300 child at margin:-100px
+    ///     rtl  kid[-104]   margin start   −4 − 16 =  −20   border start −104   → 100+104 = 204
+    /// ```
+    ///
+    /// ⭐ The two rows disagree about WHICH term wins, which is why one number cannot serve: the
+    /// caller takes the further of the two, and the negative margin is what makes the border box the
+    /// answer in the second row. Returns `(border_x, border_y, margin_x, margin_y)`.
     pub fn scrollable_overflow_start(
         &self,
         contribution: &dyn Fn(NodeId) -> OverflowContribution,
-    ) -> (f32, f32) {
-        fn walk(b: &LayoutBox, ox: f32, oy: f32, x: &mut f32, y: &mut f32) {
+    ) -> (f32, f32, f32, f32) {
+        fn walk(
+            b: &LayoutBox,
+            ox: f32,
+            oy: f32,
+            x: &mut f32,
+            y: &mut f32,
+            mx: &mut f32,
+            my: &mut f32,
+            contribution: &dyn Fn(NodeId) -> OverflowContribution,
+        ) {
             if b.rect.width > 0.0 && b.rect.height > 0.0 {
                 *x = x.min(b.rect.x - ox);
                 *y = y.min(b.rect.y - oy);
+                // The MARGIN-box start: `rect` is the border box and `rect.x` already carries the
+                // used left margin, so the margin edge is one margin further back — and a NEGATIVE
+                // margin pulls it FORWARD, which is exactly the case the second row above measures.
+                let c = b.node.map(&*contribution).unwrap_or(OverflowContribution {
+                    end_margin: (0.0, 0.0),
+                    end_padding: (0.0, 0.0),
+                    relative_offset: (0.0, 0.0),
+                    start_margin: (0.0, 0.0),
+                });
+                *mx = mx.min(b.rect.x - ox - c.start_margin.0);
+                *my = my.min(b.rect.y - oy - c.start_margin.1);
             }
             match &b.content {
                 BoxContent::Block(kids) => {
                     for k in kids {
-                        walk(k, ox, oy, x, y);
+                        walk(k, ox, oy, x, y, mx, my, contribution);
                     }
                 }
                 // ⚠⚠⚠ **INLINE FRAGMENTS ARE DELIBERATELY NOT CONSULTED, AND THAT IS A NARROWING
@@ -1262,7 +1303,6 @@ impl LayoutBox {
                 BoxContent::Inline(_) => {}
             }
         }
-        let _ = contribution;
         // ⚠⚠⚠ **THE ACCUMULATOR STARTS AT `MAX`, NOT AT ZERO, AND THE DIFFERENCE IS 80 PIXELS OF
         //    OVERFLOW THAT IS NOT THERE.** Seeded at 0, "no box reaches backwards" comes out as *the
         //    BORDER-box origin*, and the caller — which converts to padding-box coordinates by
@@ -1277,12 +1317,22 @@ impl LayoutBox {
         //    is also a legal value is not a sentinel* — zero meant both "nothing overflows" and
         //    "something overflows to exactly here".
         let (mut x, mut y) = (f32::MAX, f32::MAX);
+        let (mut mx, mut my) = (f32::MAX, f32::MAX);
         if let BoxContent::Block(kids) = &self.content {
             for k in kids {
-                walk(k, self.rect.x, self.rect.y, &mut x, &mut y);
+                walk(
+                    k,
+                    self.rect.x,
+                    self.rect.y,
+                    &mut x,
+                    &mut y,
+                    &mut mx,
+                    &mut my,
+                    contribution,
+                );
             }
         }
-        (x, y)
+        (x, y, mx, my)
     }
 
     /// A box that occupies `rect` on behalf of `node` and **paints nothing** — no background, no

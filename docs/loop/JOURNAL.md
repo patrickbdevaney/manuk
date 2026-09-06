@@ -104496,3 +104496,81 @@ padding; what it does not expose is the START-side pair.
 ```
 
 WIKI: docs/wiki/the-end-padding-attaches-to-the-margin-box.md
+
+## Tick 1451 — "as necessary" is load-bearing, and three ticks to land two words (2026-09-05)
+
+TICK SHAPE: capability
+CLASS: CSSOM-View / scrollable overflow — the rule t1450 measured, implemented and gated
+
+### THE CLAUSE THE AUDIT NAMED
+
+CSS Overflow 3 adds padding to a scroll container's region *"as necessary to enable scroll positions
+that satisfy the requirements of both `place-content: start` and `place-content: end`"*, which
+*"typically ends up being exactly the same size as the box's own padding"*. **Surface audit #85 named
+"as necessary" and "typically" as unmeasured residue** — two words the engine had hard-coded past.
+
+⭐⭐⭐ **THE PADDING ATTACHES TO A CHILD'S MARGIN BOX AND LOSES TO A BORDER BOX THAT ALREADY REACHES
+FURTHER.**
+
+```text
+  A  padding 1/4/8/16, no border, one 350x10 child, NO margins
+     rtl   margin start −234 − 16 = −250   border start −234   → 120 + 250 = 370   padding WINS
+  B  the negative-margin-002 wrapper, 300x300 child at margin:-100px
+     rtl   margin start   −4 − 16 =  −20   border start −104   → 100 + 104 = 204   border WINS
+```
+
+**The two rows disagree about which term wins, and that is the whole rule.** A fixture without margins
+— or without a border — cannot tell them apart, which is exactly how the engine came to have half of
+it.
+
+### WHAT WAS WRONG
+
+The reversed-axis branch took only the BORDER-box start, so a scroller whose content had no margins
+came out one padding short on every reversed axis: `direction: rtl` and every `vertical-rl` block
+axis. `scrollable_overflow_start` already took a contribution callback **and ignored it**
+(`let _ = contribution;`); it now returns both starts and the caller takes the further of
+`border_start` and `margin_start − start_padding`.
+
+### THREE TICKS FOR TWO WORDS, AND THE MIDDLE ONE IS THE POINT
+
+t1449 localised this defect, implemented it correctly, watched 174 `cssom-view` subtests fail and
+**refused**. The refusal was right; the contradiction it reported was not. It rested on a coordinate
+t1434 had derived **by hand** (`x = −84`) where Chrome's is **−104**. t1450 printed the child rect and
+the contradiction evaporated.
+
+⭐⭐ **One tick to find the defect and refuse it, one to measure the number that made the refusal look
+necessary, one to land it — and the middle tick's entire content was printing a coordinate nobody had
+printed.** The rows that broke at t1449 are regression arms `b2`/`b3` in this gate, and they hold.
+
+### THE NUMBER
+
+```text
+                     base (t1450)   after       read by NAME
+  css/css-flexbox    3502/4693      3528/4693   +26
+  css/css-overflow   588/963        605/963     +17
+  css/cssom-view     failing 730    729         +1, no file regressed
+  css/css-grid       failing 3405   3405        flat
+```
+
+### THE GATE
+
+`g_end_padding_is_as_necessary` — 9 rows over THREE batteries (a plain block, the negative-margin
+wrapper, a flex container), 3 controls and 2 regression arms. Red under Z1 (drop the margin-box term →
+the four no-margin reversed rows), Z2 (drop the `min` against the border box → `b2`/`b3` read 120),
+Z3 (use `padding-right` as the start padding → `a2`/`a3` read 358 — **only an ASYMMETRIC padding can
+show this**) and Z4 (drop `start_margin` → `b2`/`b3` read 220, the same failure by the other route).
+
+⭐ Z3 is the row that pays back the session's degenerate-fixture lesson directly: a uniform `10px`
+padding cannot distinguish left from right, and the flexbox battery that first exposed this defect has
+exactly that padding.
+
+### THE RECEIPT
+
+```text
+  g_end_padding_is_as_necessary  NEW, 9 rows (5 controls/arms), red under 4 of 4 mutations
+  13 neighbouring scroll/overflow gates + manuk-layout's 191 unit tests green
+  css/css-flexbox +26 · css/css-overflow +17 · css/cssom-view +1 · css/css-grid flat
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/end-padding-is-as-necessary.md
