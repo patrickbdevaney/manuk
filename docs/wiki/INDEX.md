@@ -3184,6 +3184,12 @@
   - L43 · The limits, asserted rather than implied
   - L51 · A test that asserts the right thing about a link it cannot follow
 
+## The refusing oracle runs in two seconds
+`docs/wiki/the-refusing-oracle-runs-in-two-seconds.md`
+
+  - L31 · What it unblocks
+  - L38 · The other half of this tick: five hypotheses ruled out
+
 ## The scrolling area of every element — measured, implemented, and refused
 `docs/wiki/the-scrolling-area-of-every-element.md`
 
@@ -3301,4 +3307,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2840 sections across 114 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2842 sections across 115 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

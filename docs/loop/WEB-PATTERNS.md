@@ -11558,3 +11558,30 @@ page of identical links.
 
 **Status:** landed t1471 as `targeting::resolve_target_at` + `AgentBrowser::click_by_name_at`, gated
 by `g_the_third_edit_link` under three mutations; `drive-probe` now prints all four columns.
+
+---
+
+## The gate that refuses you is usually a command — read the harness before paying for the wall
+
+**Pattern.** A change refused by one line at the end of a ~50-minute wall costs a whole tick per
+attempt. But a wall gate is almost always a single command against a cached input. G6's clickability
+check — the one that refused t1468's paint-order work at *62 links* — is:
+
+```sh
+./target/release/manuk-wpt hittest --html /tmp/manuk-g6.html --url <page>
+```
+
+**Two seconds.** The scope rule forbids *editing* `scripts/`; it has never forbidden *reading* it,
+and reading it paid twice in one session: this, and finding that `manuk-page` is absent from the
+crate-suite loop so 548 of its gates never run.
+
+**Use it as a pre-flight for the class of change the gate guards.** A hit-testing or paint-order
+change now gets a two-second verdict between attempts instead of a fifty-minute one.
+
+**And write down what you ruled OUT.** Five candidate mechanisms for one site's a11y excess were each
+built as a fixture and measured against Chrome through `a11y-score --diff`; all five came back 100%
+Chrome-exact. That is not a wasted tick — the next attempt starts from a narrowed field, and each
+negative is a small confirmation that a general rule the tree depends on is correct.
+
+**Status:** t1472 — the local clickability baseline is `100.0%, 0 missed of 477 links`; five
+hypotheses for martinfowler's 81.7% precision ruled out and recorded.

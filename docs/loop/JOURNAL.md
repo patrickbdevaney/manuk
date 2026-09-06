@@ -106275,3 +106275,75 @@ computes exactly that grouping and nothing exposes it to a caller. Publishing th
 alongside a resolve failure turns 21 points of dead end into a question the agent can answer.
 
 WIKI: docs/wiki/the-whole-gap-is-addressing.md
+
+## Tick 1472 — the oracle that refused a tick runs in two seconds (2026-09-06)
+
+TICK SHAPE: measurement
+
+Rotation → A. Before re-attempting t1468's refused paint-order work I wanted the check that refused
+it. It cost one `grep` of `verify.sh`.
+
+### ⭐⭐⭐ THE FIFTY-MINUTE REFUSAL WAS A TWO-SECOND COMMAND
+
+t1468 was built, gated, documented and reverted because a single line at the end of a ~50-minute wall
+said `✗ clickability 83.2% — 62 links the browser cannot find`. G6 is one `manuk-wpt` subcommand
+against one cached page:
+
+```sh
+curl -sL https://en.wikipedia.org/wiki/Terrier -o /tmp/manuk-g6.html
+./target/release/manuk-wpt hittest --html /tmp/manuk-g6.html --url https://en.wikipedia.org/wiki/Terrier
+#   links on page: 477   MISSED (unclickable): 0   CLICKABILITY: 100.0%
+```
+
+**Baseline established: 100.0%, 0 of 477.** The step-8 peer case can now be attempted with a
+two-second verdict between tries instead of a fifty-minute one.
+
+⭐ **The scope rule forbids EDITING `scripts/`; it has never forbidden READING it** — and reading it
+paid twice in one session. t1469 found `manuk-page` absent from the crate-suite loop (548 gates never
+run); this tick found that the gate which refuses hit-testing changes is a command I can run myself.
+*A wall gate that refuses you is almost always a command against a cached input.*
+
+### THE OTHER HALF: FIVE HYPOTHESES RULED OUT
+
+`martinfowler.com` is the corpus's second-worst site (81.7% precision) and its excess is
+concentrated: **32 unnamed `paragraph`** plus a duplicated navigation region. Probing found the
+shape —
+
+```text
+  nav0[top-menu]       d=block  870x24    ← the one Chrome exposes
+  nav1[top-navmenu]    d=none   0x0       ← correctly hidden
+  nav2[navmenu]        d=block  0x0       ← INSIDE nav1, and in OUR tree
+  nav3[bottom-navmenu] d=none   0x0
+  nav4[navmenu]        d=block  0x0       ← INSIDE nav3, and in OUR tree
+```
+
+— and then five candidate mechanisms, each built as a fixture and measured against Chrome through
+`a11y-score --diff`. **All five came back 100% Chrome-exact:**
+
+```text
+  a display:none SUBTREE leaks into the tree        100%  — correctly excluded
+  a subtree hidden by a MEDIA QUERY leaks           100%  — correctly excluded
+  XHTML `<button …/>` re-nests the document         identical (betaParent=BUTTON, bodyKids=4)
+  Chrome drops empty <p> and we keep them           Chrome keeps them too
+  zero-area nodes excluded by Chrome only           not separable from the above
+```
+
+⚠ **The mechanism is narrowed, not found, and that is the honest report.** Five negatives are worth
+writing down: the next tick on this site starts from a narrowed field instead of repeating them, and
+each negative is a small confirmation that a general rule the a11y tree depends on is correct.
+
+### LANDED
+
+```
+  no engine change — the deliverable is the local oracle and the narrowing
+  clickability baseline 100.0% (0 of 477), reproducible in two seconds
+  Bar 0: no hang, no crash, no panic
+```
+
+NEXT: with the oracle local, retry the step-8 peer case — but as an Appendix E **in-flow model**, not
+a tie-break swap. The failure t1468 measured is specifically that inline content (step 7) must paint
+above a later block's background (step 4), which a single equal-layer ordering cannot express. Model
+the four in-flow steps as sub-ranks under each stacking layer, and check clickability after every
+attempt rather than after the wall.
+
+WIKI: docs/wiki/the-refusing-oracle-runs-in-two-seconds.md
