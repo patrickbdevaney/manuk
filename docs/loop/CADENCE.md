@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1142** | ticks 1–1467 |
-| median tick cycle | **33m** | 1141 intervals |
-| median, last 10 | **52m** | 10 intervals |
+| ticks landed | **1143** | ticks 1–1468 |
+| median tick cycle | **33m** | 1142 intervals |
+| median, last 10 | **55m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.83** | 1372.9h elapsed |
-| median verify wall | **67s** | 1081 ticks |
+| **ticks per hour** | **0.83** | 1375.8h elapsed |
+| median verify wall | **67s** | 1082 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**524 of 1142 ticks** (46%) moved a
+**524 of 1143 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -91,7 +91,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 ## What a capability costs
 
 * **524** capability ticks, median cycle **33m**
-* median diff per tick: **+297 / −35** lines across 8 files
+* median diff per tick: **+297 / −35** lines across 9 files
 
 ## Every tick
 
@@ -1239,5 +1239,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1465** | 2026-09-06 08:07 | 73m | capability | 8m | +411/−43 | 567 | 81 | 56.0% · | a banner wins the click: the `auto` spelling of a working feature (2026-09-06) |
 | **1466** | 2026-09-06 09:21 | 74m | capability | 8m | +420/−62 | 568 | 81 | 56.0% · | one hit-test, not two (2026-09-06) |
 | **1467** | 2026-09-06 09:55 | 34m | measurement-and-refusal | 8m | +240/−42 | 568 | 81 | 56.0% · | one phase short, and the next phase costs more than it buys (2026-09-06) |
+| **1468** | 2026-09-06 12:50 | 2.9h | measurement-and-refusal | 8m | +370/−44 | 568 | 81 | 56.0% · | the area tie-break was a proxy, and it was LOAD-BEARING (2026-09-06) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

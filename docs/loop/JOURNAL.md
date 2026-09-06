@@ -105910,3 +105910,117 @@ class is applied and nothing hides — testable by asking whether the collapsed 
 `display` is `none` after `finish_loading`. That is one probe, and it is the whole blocker.
 
 WIKI: docs/wiki/one-phase-short-and-the-price-of-the-next-one.md
+
+## Tick 1468 — the area tie-break was a proxy, and it was LOAD-BEARING (2026-09-06)
+
+TICK SHAPE: measurement-and-refusal
+
+Rotation → C. t1466's NEXT: the step-8 **peer** case. Wall audit #58 and constitution check #141 were
+also due and are recorded below.
+
+### THE HYPOTHESIS, AND IT WAS WRONG IN ITS PREMISE
+
+Both hit-tests break an equal-layer tie by **smaller area**. That reads as a proxy for two questions,
+right about one:
+
+```text
+  an ancestor and its descendant        the smaller box IS the deeper element     agrees with CSS
+  two unrelated POSITIONED peers        Appendix E paints them in TREE ORDER      disagrees
+```
+
+And `across` only compares candidates from **different subtrees** — ancestor/descendant is resolved
+structurally by `go`, the whole point of the t853 rewrite. So the area term looked deletable outright.
+
+### EVERY FIXTURE AGREED, AND WPT AGREED
+
+```text
+                                          Chrome     before      after
+  deep <a> under a later big overlay       late/late  inner/…    late/late
+  overlay declared FIRST, link after       b8/b8      l8/l8      b8/b8
+  two positioned peers (a11y path)         b5         l5         b5
+
+  WPT css/cssom-view    727 failing -> 724   3 fixed / 0 new   (1316 -> 1319 of 2109)
+      css/css-position  285 failing -> 285   0 fixed / 0 new
+```
+
+Eight Chrome-exact rows across three gates, three WPT subtests fixed, nothing broken. Two gates even
+carried delete-me instructions predicting this moment, and both fired exactly as written.
+
+### THE WALL REFUSED IT
+
+```text
+  ✗ clickability 83.2% — 62 links the browser cannot find
+```
+
+⭐⭐⭐ **THIS IS THE t853 REGRESSION, AND t853's OWN COMMENT PREDICTS IT** — *"16 links on the G6 page
+became unclickable, because the shell walks up from whatever was hit looking for an `<a href>` and an
+ancestor `<li>` has no link above it."*
+
+The premise was wrong. `across` does not only see positioned peers; most pairs it sees are
+**in-flow**, and in-flow painting is *not* one tree-ordered layer. Appendix E splits it: block
+backgrounds are step 4, floats step 5, **inline content step 7**. An inline link inside an earlier
+block must paint above a later block's background — and "later tree order wins" hands the click to
+the later block.
+
+⭐⭐ **AREA WAS NOT A PROXY FOR DEPTH. IT WAS A PROXY FOR THE WHOLE OF STEPS 4-7**, which happen to
+order small-inside-large the same way. Replacing it needs those steps modelled, not a tie-break
+swapped.
+
+### AND THE INERT GUARD WAS THE TELL, READ BACKWARDS
+
+⚠⚠ I wrote a `depth` term first; two mutations proved it **inert** and I removed it, reading that as
+*"document order subsumes depth"*. The wall's reading is better: **neither** term distinguished the
+in-flow cases, so no fixture could see the difference between them. *An inert guard sometimes means
+the fixture cannot see the case, not that the guard is redundant.* Eight hand-built rows and one WPT
+directory could not see it; a clickability metric over real pages could.
+
+⭐ **This is the third time this session a real-corpus instrument caught what a fixture suite could
+not** (t1404's a11y corpus, t1456's negative-overflow matrix, and now the wall's clickability). The
+fixture suite falsifies the rule you wrote; only the corpus finds the clause you did not.
+
+### REVERTED
+
+```
+  engine/a11y/src/lib.rs          restored — area tie-break back
+  engine/js/src/dom_bindings.rs   restored — area tie-break back
+  the three gates                 restored to their pre-tick expectations, all green
+  no gate added — there is nothing green to gate
+  Bar 0: no hang, no crash, no panic
+```
+
+⚠ **WHAT SURVIVES, AND IT IS MOST OF THE THREAD.** t1465's layer term and t1466's join only ever
+*added* an ordering above in-flow content; neither touched the tie-break, so both are unaffected and
+still landed. The step-8 peer case stays open — now with a price: **−62 clickable links** if closed
+by tie-break alone.
+
+### WALL AUDIT #58 (due at 1468)
+
+```text
+  total 256s   T 116s (45%)   B 42s (16%)   G6 22s (9%)   G1 8s   P 7s   F 4s
+```
+
+⚠⚠ `self-audit.sh` reports the wall at **2034s**; this audit attributes **256s** — **12.6%**. Audit
+#55 recorded 86% unattributed; it is ~87% now. Two instruments disagreeing by 8× about the same
+number is the finding: every ranking this audit produces covers one-eighth of the cost. Nothing
+trimmed; harness-owned, reported not acted on.
+
+### CONSTITUTION CHECK #141 (also due at 1468)
+
+Gate, not scoreboard: Track B's `>=90%` bar is **met** (94.8% F1), Track C has a real-site number
+(80.7% drivable). All three of check #140's steers were executed.
+
+⭐⭐⭐ **PART VI CORRECTION — a phase boundary is a capability boundary.** Two ticks found what looked
+like missing engine features and were missing **calls**: `Page::load` → `load_async` (+18 F1,
+adopted) and `load_async` → `finish_loading` (−12 F1, refused). ⚠ And **strictly more browser is not
+strictly better at a given fidelity**.
+
+I2 held and was *tested* — the `option` and `audio` corrections went into our UA sheet on the way
+out, never into Stylo. I3 is repaired and instrumented. VI.3's aperture rule is unwritten for a
+seventh check; I5 `ORACLE_CRAWLED: 0` for a fourteenth.
+
+NEXT: the peer case needs Appendix E's in-flow steps, not a tie-break. Before attempting it again,
+**add the clickability check to the local loop** — this tick's fixtures could not see a −62 and the
+wall took ~50 minutes to say so. And `g_constellation_unknowns` is still red on the clean tree, now
+four ticks carried.
+
+WIKI: docs/wiki/the-area-tie-break-was-a-proxy.md

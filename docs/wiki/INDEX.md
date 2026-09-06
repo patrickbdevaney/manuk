@@ -3137,6 +3137,14 @@
   - L56 · t1414 — twelve specs, and the number
   - L90 · t1416 — and a count cannot tell you what KIND of work an area is
 
+## The area tie-break was a proxy — and it was load-bearing
+`docs/wiki/the-area-tie-break-was-a-proxy.md`
+
+  - L14 · What the fix looked like, and why it was so appealing
+  - L28 · The wall refused it: 62 links the browser cannot find
+  - L48 · Two mutations had already said the shape was wrong
+  - L57 · What still stands
+
 ## The end padding attaches to the MARGIN box — the model that resolves t1449's contradiction
 `docs/wiki/the-end-padding-attaches-to-the-margin-box.md`
 
@@ -3272,4 +3280,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2827 sections across 110 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2831 sections across 111 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

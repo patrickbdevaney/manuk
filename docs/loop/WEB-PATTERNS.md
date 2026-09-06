@@ -11444,3 +11444,31 @@ table written into the call site and the blocker named.**
 
 **Status:** t1467, measurement-and-refusal. `AgentBrowser::load_url` carries the comment; the call
 goes in once the collapse survives the module's own JavaScript.
+
+---
+
+## A proxy can be standing in for MORE than you enumerated — and an inert guard may mean a blind fixture
+
+**Pattern.** A tie-break that looks like a proxy for one structural fact may be carrying several. The
+equal-layer "smaller area wins" rule looked like a proxy for *depth* (ancestor vs descendant), wrong
+only for unrelated positioned peers, where CSS orders by tree order. Replacing it with tree order was
+Chrome-exact on eight hand-built rows across three gates and bought **cssom-view 1316 -> 1319** with
+`css/css-position` flat.
+
+**The wall refused it: `clickability 83.2% — 62 links the browser cannot find`** — the exact t853
+regression, whose own comment predicts it. `across` does not only see positioned peers; most pairs it
+sees are **in-flow**, and in-flow painting is not one tree-ordered layer: Appendix E splits block
+backgrounds (step 4), floats (5) and **inline content (7)**. An inline link inside an earlier block
+must beat a later block's background. **Area was a proxy for the whole of steps 4-7, not for depth.**
+
+**⚠ And the inert guard was the tell, read backwards.** A `depth` term written first was proved inert
+by two mutations, which was read as "document order subsumes depth". The truth was that *neither*
+term distinguished the in-flow cases, so no fixture could see the difference. **An inert guard
+sometimes means the fixture cannot see the case, not that the guard is redundant.**
+
+**What survives:** the layer term itself (t1465, t1466) only ever *added* an ordering above in-flow
+content and never touched the tie-break, so it is unaffected. The step-8 peer case stays open with a
+priced cost: -62 clickable links if closed by tie-break alone.
+
+**Status:** t1468, measurement-and-refusal. Engine reverted; the three gates restored to their
+pre-tick expectations.

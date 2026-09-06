@@ -2584,3 +2584,34 @@ compilation, and both levers are observer-owned:
 ⚠ Carried from the last audit and still true: the `_out` race forces `CARGO_BUILD_JOBS=1` on every
 launch, and it false-red one wall in this window **under** that workaround — so the workaround is not
 sufficient either.
+
+## Audit #58 — tick 1468
+
+```text
+  total 256s   T 116s (45%)   B 42s (16%)   G6 22s (9%)   G1 8s   P 7s   F 4s   F4 3s
+```
+
+**Nothing trimmed, and the reason is the same one #55 gave.**
+
+⚠⚠ **THE AUDIT STILL CANNOT SEE MOST OF THE WALL IT AUDITS.** `self-audit.sh` reports the verify
+wall at **2034s** and this audit attributes **256s** — **12.6%**. Audit #55 recorded 86%
+unattributed; it is ~87% now, so the gap has not closed and has slightly widened. Two instruments
+disagreeing by 8× about the same number is the finding, not a footnote: every ranking this audit
+produces is a ranking of one-eighth of the cost.
+
+Of what it *can* see, the two dominant sections are `T` (crate tests, 45%) and `B` (build, 16%).
+Neither is reducible without dropping coverage, and this audit refuses that trade by construction.
+The four admissible questions were asked:
+
+* **REDUNDANCY** — `cargo-nextest` (shares the test binary, parallelises harder) is still the named
+  candidate; it is a harness change and remains observer-owned. Fourth mention.
+* **PARALLELISM** — gates launch concurrently; the perf floors are deliberately serial. Unchanged.
+* **CACHING** — incrementals are in RAM, fetches snapshot-cached. Nothing new found.
+* **SCOPE** — the section breakdown cannot answer this while 87% is unattributed, which is exactly
+  the argument for attributing it first.
+
+⚠ Eight crates and 120 tests remain outside the wall entirely (surface audit #88, ranked #1 twice).
+They cost seconds and would *add* coverage rather than cost it — the only change here that is
+strictly positive on both axes.
+
+**Harness-owned; reported, not acted on**, per the loop's scope rule.

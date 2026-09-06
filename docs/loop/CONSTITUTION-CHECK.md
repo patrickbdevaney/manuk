@@ -12218,3 +12218,81 @@ move when it becomes real.
    nodes ARE before assuming they are wrappers.
 3. **Track C: implement landmark-scoped resolution.** The 3.3 points are already measured; the code
    is `AgentBrowser::resolve`.
+
+## Check #141 — tick 1468
+
+Re-read `CONSTITUTION.MD` (PART VII, the invariants) and `docs/loop/V1-SCOPE.md` against ticks
+1461-1468.
+
+### GATE OR SCOREBOARD?
+
+**Gate — and for the first time the loop can say which gate, with a number that was not there
+before.**
+
+```text
+  Track B  a11y node match >=90%     76.6% F1 (t1458)  ->  94.8% F1 (t1461)   MET
+  Track C  an agent DRIVES a site    hermetic fixture  ->  80.7% of real targets drivable (t1459)
+  Track A  layout/CSS fidelity       cssom-view 1314 -> 1319; css-position, forms, display flat
+```
+
+Check #140's three steers were all executed and two of them changed a bar rather than a decimal.
+Nothing in this window was a scoreboard tick: every WPT number moved as a *consequence* of a
+capability, and the two ticks that moved no number at all (t1467, and the refusals inside t1461 and
+t1463) were refusals carrying measurements.
+
+### WHAT CHECK #140's STEER ASKED FOR
+
+1. **"Decide whether the agent crate should build with `stylo`."** ⚠ **Still open, but it is now a
+   decision with a priced list instead of a preference.** Three blockers were named by *trying it*:
+   the collapsed `<select>` (cleared t1463), a pseudo-element's own `counter-increment` on the Stylo
+   path (open), and — separately — that `spidermonkey` was missing too, which was adopted alone at
+   t1461 for **+18 F1**.
+2. **"Track B is precision-bound and concentrated — name what the excess IS."** ✅ Done at t1461 and
+   t1464. The excess was Wikipedia's unrun JavaScript, not a projection defect.
+3. **"Track C: landmark-scoped resolution."** ✅ Landed t1462, priced before it was built.
+
+### PART VI CORRECTIONS
+
+* **NEW, and it is the most valuable thing this check produces:** *a phase boundary is a capability
+  boundary.* Two ticks found what looked like missing engine features and were missing **calls** —
+  `Page::load` → `load_async` (t1461, +18 F1) and `load_async` → `finish_loading` (t1467, −12 F1,
+  refused). **Which browser the agent is was decided by a line in `load_url`, and nothing in the
+  constitution or the board described it.** PART VII says the agentic surface is one of four v1
+  components; it does not say the surface must run the *same* browser the renderer does. It should.
+* **NEW:** *strictly more browser is not strictly better at a given fidelity.* t1467 is the proof —
+  `finish_loading` fixes 42 accessible names and re-expands 486 hidden list items. A capability that
+  is unambiguously correct in isolation can still be a regression in composition, which is exactly
+  what the ratchet is for and why F1 (not recall) had to be the steering term.
+* **VI.3 — the aperture rule is STILL not in prose.** Seventh check.
+* **I5 — `ORACLE_CRAWLED: 0`. FOURTEENTH check.**
+
+### THE INVARIANTS
+
+**I2 — held, and tested.** `accesskit`, `tokio-tungstenite`, `stylo` all adopted at published
+versions; the `option` and `audio` corrections went into **our** UA sheet on the way out, never into
+Stylo. That is I2 working exactly as written.
+
+**I3 — held and now instrumented.** Check #139 found it bending (the agent surface lagging the
+renderer). It now has three instruments under it — `a11y-score`, `drive-probe`, `--diff` — and two of
+the three numbers cleared their bars in this window.
+
+**I4, I8 — held. I1, I6, I7 — not bent.**
+
+### PART VII / V1-SCOPE
+
+Every tick since #140 is pure browser capability or the instrument that measures one. Nothing touched
+`scripts/` or the harness; four harness findings (CI never finishing, the wall's 87% unattributed,
+the missing eight crates, the `_out` race) were reported and left alone, per the scope rule.
+
+### STEER
+
+1. ⭐⭐⭐ **The next Track B tick is the collapse, not the names.** t1467 priced `finish_loading`
+   exactly and named one blocker: the collapsed navbox content returns. One probe answers it — is the
+   collapsed container's computed `display` `none` after `finish_loading`? — and adopting the phase is
+   worth +1.5 recall and a whole class of module-loader behaviour.
+2. ⚠ **`g_constellation_unknowns` has been red on the clean tree for three ticks while the wall is
+   green.** A gate that disagrees with the wall about its own tree cannot be trusted in either
+   direction. One tick to find out which is lying.
+3. **Track A's shared stacking rule is now the model for the rest.** `stacking_layer` joined two
+   implementations that had drifted; `box-sizing`, margins and font-weight also live in both cascades
+   and have no such gate.
