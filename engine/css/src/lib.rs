@@ -2725,6 +2725,50 @@ fn element_sibling_position(dom: &Dom, node: NodeId) -> (usize, usize) {
 /// `input:disabled { opacity:.5 }` rule now greys out a control disabled via its fieldset, not just one
 /// with its own attribute. (The first-`<legend>` exception — controls in a disabled fieldset's first
 /// legend stay enabled — is a niche edge we do not model, matching `is_disabled`.)
+/// The **top layer** — the stacking level a modal `<dialog>` or an open popover is promoted to,
+/// above every author `z-index`. Deliberately far above any number a stylesheet would plausibly
+/// write (the web's "just make it win" idiom tops out around `z-index: 2147483647`, but real sheets
+/// live in the hundreds), and below `i32::MAX` so nothing that adds to it overflows.
+///
+/// ⚠ It lives here, beside [`stacking_layer`], rather than in `manuk_page`: `elementFromPoint` is
+/// implemented in `manuk_js`, which cannot see `manuk_page`, and a constant only one of two
+/// implementations can reach is how they drift apart in the first place.
+pub const TOP_LAYER_Z: i32 = 1_000_000_000;
+
+/// **The painting layer one node adds to its parent's, from CSS 2.1 Appendix E.**
+///
+/// ⭐⭐⭐ **THIS RULE HAD TWO IMPLEMENTATIONS AND THEY DISAGREED.** `Page::z_index_map` (which feeds
+/// `paint()` and the accessibility tree's hit-test) computed a layer per node;
+/// `document.elementFromPoint` was a flat scan over layout rects resolving by **smallest area
+/// only**, consulting `pointer-events` and SVG paintedness but never a layer at all. So an overlay
+/// with an explicit `z-index: 5` took the click in the agent's tree and did not in the web API, on
+/// the same page.
+///
+/// Appendix E orders a stacking context: in-flow blocks, floats and inlines are steps 3-7, and
+/// **positioned descendants with `z-index: auto` or `0` are step 8** — strictly later, so strictly
+/// on top. Hence:
+///
+/// | node | layer |
+/// |---|---|
+/// | not positioned | its parent's — it paints in the same in-flow band |
+/// | positioned, explicit `z-index: n` | `n * 1024 + 1` |
+/// | positioned, `z-index: auto` | `parent + 1` — above in-flow content, below any explicit z |
+///
+/// The `1024` scale means 1023 levels of nested `auto` positioning still sit below `z-index: 1`,
+/// and the `+ 1` means an explicit `z-index: 0` — also step 8 — still clears in-flow content.
+///
+/// ⚠ Callers own the **top layer** (`showModal()`, an open popover): that is a DOM-attribute fact,
+/// not a style one, and it overrides whatever this returns.
+pub fn stacking_layer(style: Option<&ComputedStyle>, parent_layer: i32) -> i32 {
+    match style {
+        Some(s) if s.position != Position::Static => match s.z_index {
+            Some(n) => n.saturating_mul(1024).saturating_add(1),
+            None => parent_layer.saturating_add(1),
+        },
+        _ => parent_layer,
+    }
+}
+
 pub(crate) fn is_disabled_control(dom: &Dom, node: NodeId) -> bool {
     let Some(el) = dom.element(node) else {
         return false;

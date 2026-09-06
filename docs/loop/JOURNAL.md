@@ -105756,3 +105756,77 @@ same map — one rule, one implementation, and it fixes the explicit-z case for 
 same move.
 
 WIKI: docs/wiki/a-banner-wins-the-click.md
+
+## Tick 1466 — one hit-test, not two (2026-09-06)
+
+TICK SHAPE: capability
+
+Rotation → A. t1465's NEXT, verbatim: *"join the two hit-tests. `doc_element_from_point` should
+resolve by layer then area, using the same map — one rule, one implementation."*
+
+### THE TWO ANSWERS
+
+```text
+                                     Chrome    a11y hit_test    elementFromPoint
+  auto-z overlay over in-flow link     b1           b1 (t1465)        l1   ✗
+  z-index:5 overlay                    b2           b2                l2   ✗
+```
+
+⭐⭐⭐ **THE A11Y PATH CONSULTED A LAYER MAP; `elementFromPoint` WAS A FLAT SCAN BY SMALLEST AREA
+THAT NEVER CONSULTED A LAYER AT ALL** — it checked `pointer-events` and SVG paintedness and nothing
+else. So an overlay with an *explicit* `z-index: 5` took the click in the agent's tree and did not in
+the web API, on the same page. *The tests of each implementation are evidence about that one only* —
+t1402's activation behaviour, t1403's `<summary>` toggle, t1356's CSSOM views, and now this.
+
+### THE FIX IS A JOIN, AND THE CONSTANT HAD TO MOVE WITH IT
+
+`manuk_css::stacking_layer` is the single definition now, folded down the ancestor chain by both
+callers. ⚠ `TOP_LAYER_Z` had to move from `manuk_page` to `manuk_css` because `elementFromPoint`
+lives in `manuk_js`, which cannot see `manuk_page`: **a constant only one of two implementations can
+reach is how they drift apart in the first place.** `manuk_page` re-exports it, so no caller changed.
+
+```text
+                                         Chrome     before      after
+  l1  auto-z overlay over in-flow link    b1/b1      l1/l1      b1/b1
+  l2  z-index:5 overlay                   b2/b2      l2/l2      b2/b2
+  l3  z-index:-1 underlay                 l3/l3      l3/l3      l3/l3   ✓
+  l4  no overlay             CONTROL      l4/l4      l4/l4      l4/l4   ✓
+  l6  4-deep auto chain vs z-index:1      z1/z1      l6/l6      z1/z1
+```
+
+⭐⭐ **THE PLURAL IS HALF THE POINT.** `doc_elements_from_point`'s own doc comment states the
+contract — *"`elementsFromPoint(x,y)[0]` must equal `elementFromPoint(x,y)`"* — so teaching only the
+singular about layers would have broken the invariant the plural was written to hold. Every row is
+measured as a **pair**, and both functions now sort by layer, then area, then document order.
+
+### LANDED
+
+```
+  engine/css/src/lib.rs           pub fn stacking_layer + TOP_LAYER_Z (moved here)
+  engine/page/src/lib.rs          z_index_map calls it; TOP_LAYER_Z re-exported
+  engine/js/src/dom_bindings.rs   stacking_layer_of() + the layer term in BOTH functions
+  gate  g_one_hit_test_not_two    RED under 3 named mutations (singular, plural, shared rule)
+  vacuity arm: the no-overlay control must resolve to itself
+  WPT css/cssom-view    729 failing -> 727   2 fixed / 0 new   (1314 -> 1316 of 2109)
+      css/css-position  285 failing -> 285   0 fixed / 0 new
+  both fixes in elementsFromPoint-simple.html
+  Bar 0: no hang, no crash, no panic
+```
+
+### ⚠ THE AREA NAME WAS WRONG FOR TWO TICKS
+
+`manuk-wpt wpt cssom-view` reports **0 runnable testharness files**; the area is `css/cssom-view`.
+t1457 and t1465 both recorded "not measurable" on that basis — and cssom-view is *the agent's own
+geometry channel* (`getBoundingClientRect`, `scroll*`, `elementFromPoint`). **A zero from an
+instrument is a claim about the instrument until the spelling is checked.** It is also still absent
+from `WPT-AREAS.tsv`, which surface audit #88 counted for the sixth time.
+
+⚠ INSTRUMENT (carried): `g_constellation_unknowns` remains RED on the clean tree, unchanged by this
+tick and identical at HEAD. Reported at t1465, still not investigated.
+
+NEXT: the step-8 **peer** case is the last known gap in this rule — when both sides are positioned
+with `z-index: auto` the spec orders them by tree order and both hit-tests still use area. It needs a
+`positioned` bit on `A11yNode` and the same term in the `elementFromPoint` comparator; now that the
+rule is shared, that is one change in two call sites rather than two rules.
+
+WIKI: docs/wiki/one-hit-test-not-two.md

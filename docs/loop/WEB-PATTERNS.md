@@ -11388,3 +11388,32 @@ encodings order differently.
 `css/css-position` flat against a clean same-hour control. The step-8 **peer** case (both sides
 positioned) and `document.elementFromPoint`'s separate z-blind flat scan are named in the gate and
 left for a later tick.
+
+---
+
+## Join two implementations of one rule at a place BOTH can reach
+
+**Pattern.** When one question has two answering paths, they drift — and the tests of each are
+evidence about that one only. `A11yNode::hit_test` consulted a stacking-layer map;
+`document.elementFromPoint` was a flat scan by smallest area that never consulted a layer, so an
+explicit `z-index: 5` overlay took the click in the agent's tree and lost it in the web API.
+
+**The fix is a join, not a mirror.** Extract the rule to a crate BOTH callers depend on and have
+each fold it. Mirroring the logic reproduces the drift one release later — the failure this repo has
+recorded under `HTMLElement.prototype` (t1407), the click's activation behaviour (t1402) and the
+`<summary>` toggle (t1403).
+
+**⚠ And move the CONSTANTS with it.** `TOP_LAYER_Z` lived in `manuk_page`, which `manuk_js` cannot
+see. *A constant only one of two implementations can reach is how they drift apart in the first
+place.*
+
+**Check the sibling that shares the contract.** `elementsFromPoint`'s doc comment states
+*"`[0]` must equal `elementFromPoint`"* — teaching only the singular would have broken the invariant
+the plural exists to hold. Assert both as a pair in every row.
+
+**⚠ A zero from an instrument is a claim about the instrument.** `manuk-wpt wpt cssom-view` reports
+0 runnable files; the area is `css/cssom-view`. Two ticks recorded "not measurable" over a missing
+path prefix, on the suite that covers the agent's own geometry channel.
+
+**Status:** landed t1466, gated by `g_one_hit_test_not_two` under three mutations; WPT
+`css/cssom-view` **1314 → 1316**, `css/css-position` flat, clean same-hour control.

@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1140** | ticks 1–1465 |
-| median tick cycle | **32m** | 1139 intervals |
+| ticks landed | **1141** | ticks 1–1466 |
+| median tick cycle | **33m** | 1140 intervals |
 | median, last 10 | **59m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.83** | 1371.1h elapsed |
-| median verify wall | **67s** | 1079 ticks |
+| **ticks per hour** | **0.83** | 1372.3h elapsed |
+| median verify wall | **67s** | 1080 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **567**
+* **live gates**: 27 → **568**
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**523 of 1140 ticks** (46%) moved a
+**524 of 1141 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **523** capability ticks, median cycle **32m**
-* median diff per tick: **+297 / −35** lines across 8 files
+* **524** capability ticks, median cycle **33m**
+* median diff per tick: **+297 / −35** lines across 9 files
 
 ## Every tick
 
@@ -1237,5 +1237,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1463** | 2026-09-06 05:20 | 62m | capability | 8m | +344/−43 | 566 | 81 | 56.0% · | the fix was written one line above the bug (2026-09-06) |
 | **1464** | 2026-09-06 06:55 | 1.6h | capability | 8m | +438/−45 | 566 | 81 | 56.0% · | a lockstep gate that enforced one value, and the two drifts it was not watching (2026-09-0 |
 | **1465** | 2026-09-06 08:07 | 73m | capability | 8m | +411/−43 | 567 | 81 | 56.0% · | a banner wins the click: the `auto` spelling of a working feature (2026-09-06) |
+| **1466** | 2026-09-06 09:21 | 74m | capability | 8m | +420/−62 | 568 | 81 | 56.0% · | one hit-test, not two (2026-09-06) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -5330,6 +5330,44 @@ unsafe fn doc_query(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     true
 }
 
+/// **The painting layer of `node`, by the SAME rule `Page::z_index_map` uses.**
+///
+/// ⭐⭐⭐ `elementFromPoint` and the accessibility tree's `hit_test` are two implementations of one
+/// question — *what is on top at this point?* — and they disagreed. The a11y path consulted a layer
+/// map; this path was a flat scan resolving by **smallest area only**, so an overlay with an
+/// explicit `z-index: 5` won the click in the agent's tree and lost it in the web API, on the same
+/// page. Both now fold `manuk_css::stacking_layer` down the ancestor chain, so they cannot drift.
+///
+/// ⚠ The **top layer** is a DOM fact, not a style one: a `showModal()` dialog and an open popover
+/// paint above everything regardless of z-index, which is what makes them modal.
+unsafe fn stacking_layer_of(dom: &Dom, node: NodeId) -> i32 {
+    let styles = STYLES_PTR.with(|c| c.get());
+    // Root-most first, so each node folds onto its parent's layer.
+    let mut chain = Vec::new();
+    let mut cur = Some(node);
+    while let Some(n) = cur {
+        chain.push(n);
+        cur = dom.parent(n);
+    }
+    let mut layer = 0i32;
+    for n in chain.iter().rev() {
+        if dom.element(*n).is_some_and(|e| {
+            (e.name == "dialog" && e.attr("data-manuk-modal").is_some())
+                || e.attr("data-manuk-popover-open").is_some()
+        }) {
+            layer = manuk_css::TOP_LAYER_Z;
+            continue;
+        }
+        let st = if styles.is_null() {
+            None
+        } else {
+            (*styles).get(n)
+        };
+        layer = manuk_css::stacking_layer(st, layer);
+    }
+    layer
+}
+
 /// `document.elementFromPoint(x, y)` → the topmost ELEMENT whose border box contains the client point,
 /// or `null`. Bridges to the layout-rect snapshot: among laid-out element boxes containing the point, the
 /// deepest wins (smallest area, later document order on a tie) — children paint over their parents.
@@ -5391,7 +5429,7 @@ unsafe fn doc_element_from_point(cx: *mut RawJSContext, argc: u32, vp: *mut Valu
                     cs.pointer_events != manuk_css::PointerEvents::None
                 })
             };
-            let mut best: Option<(NodeId, f32)> = None; // (node, border-box area)
+            let mut best: Option<(NodeId, i32, f32)> = None; // (node, layer, area)
             for (&node, r) in rects.iter() {
                 let (rx, ry, rw, rh) = (r[0], r[1], r[2], r[3]);
                 if x >= rx
@@ -5402,17 +5440,22 @@ unsafe fn doc_element_from_point(cx: *mut RawJSContext, argc: u32, vp: *mut Valu
                     && hittable(node)
                 {
                     let area = rw * rh;
+                    // ⭐ LAYER FIRST, then depth. A positioned overlay paints above in-flow content
+                    //   whatever its size, so area is only the right question WITHIN one layer.
+                    let layer = stacking_layer_of(&*dom, node);
                     let better = match best {
                         None => true,
-                        // Smaller box = deeper element; equal area = later in document paints on top.
-                        Some((bn, ba)) => area < ba || (area == ba && node.0 > bn.0),
+                        Some((bn, bl, ba)) => {
+                            layer > bl
+                                || (layer == bl && (area < ba || (area == ba && node.0 > bn.0)))
+                        }
                     };
                     if better {
-                        best = Some((node, area));
+                        best = Some((node, layer, area));
                     }
                 }
             }
-            best.map(|(n, _)| n)
+            best.map(|(n, _, _)| n)
         })
     } else {
         None
@@ -5535,10 +5578,13 @@ unsafe fn doc_elements_from_point(cx: *mut RawJSContext, argc: u32, vp: *mut Val
         }
         out
     });
-    // Topmost first: smaller area first, and on a tie the later element in document order.
+    // Topmost first: HIGHER LAYER first, then smaller area, then the later element in document
+    // order. The layer term is what keeps `elementsFromPoint(x,y)[0] == elementFromPoint(x,y)` —
+    // the contract this function's own doc comment states — now that the singular consults it.
     hits.sort_by(|a, b| {
-        a.1.partial_cmp(&b.1)
-            .unwrap_or(std::cmp::Ordering::Equal)
+        let (la, lb) = unsafe { (stacking_layer_of(&*dom, a.0), stacking_layer_of(&*dom, b.0)) };
+        lb.cmp(&la)
+            .then_with(|| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
             .then(b.0 .0.cmp(&a.0 .0))
     });
     let mut idx: u32 = 0;

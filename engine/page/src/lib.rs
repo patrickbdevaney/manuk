@@ -2468,11 +2468,11 @@ fn drain_ceiling_hits_or_zero() -> usize {
 pub const MIN_ZOOM: f32 = 0.25;
 pub const MAX_ZOOM: f32 = 5.0;
 
-/// The **top layer** — the stacking level a modal `<dialog>` is promoted to, above every author
-/// `z-index`. Deliberately far above any number a stylesheet would plausibly write (the web's
-/// "just make it win" idiom tops out around `z-index: 2147483647`, but real sheets live in the
-/// hundreds), and below `i32::MAX` so nothing that adds to it overflows.
-pub const TOP_LAYER_Z: i32 = 1_000_000_000;
+/// The **top layer** — re-exported from `manuk_css`, where it sits beside
+/// [`manuk_css::stacking_layer`] so the two hit-tests and the painter share one definition.
+/// Moved there when `elementFromPoint` was joined to the same layer rule (t1466): a constant that
+/// only one of two implementations can reach is how they drift apart.
+pub use manuk_css::TOP_LAYER_Z;
 
 /// **Bar 0 containment (METHODOLOGY Part 23.2): a panic kills the PAGE, not the process.**
 ///
@@ -10546,13 +10546,9 @@ impl Page {
             //    so 1023 levels of nested `auto` positioning still sit below `z-index: 1`, and an
             //    explicit `z-index: 0` (also step 8) still clears in-flow content at 1. `TOP_LAYER_Z`
             //    (1e9) is unreachable by any z-index a page would write.
-            let z = match self.styles.get(&node) {
-                Some(s) if s.position != Position::Static => match s.z_index {
-                    Some(n) => n.saturating_mul(1024).saturating_add(1),
-                    None => parent_z.saturating_add(1),
-                },
-                _ => parent_z,
-            };
+            // The shared rule — see `manuk_css::stacking_layer`, which `elementFromPoint`
+            // also calls so the two hit-tests cannot drift apart again.
+            let z = manuk_css::stacking_layer(self.styles.get(&node), parent_z);
             // **The top layer.** A modal dialog paints above the whole document regardless of where it
             // sits in the tree or what z-index the page gave anything else — that is what makes it
             // modal. Without this, `showModal()` on a dialog declared early in the body renders BEHIND

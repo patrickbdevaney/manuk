@@ -2649,6 +2649,13 @@
   - L2049 · What the rewrite covers
   - L2061 · ⚠⚠⚠ One histogram bar, two mechanisms — the rank was right and the price was wrong
 
+## One hit-test, not two
+`docs/wiki/one-hit-test-not-two.md`
+
+  - L20 · The fix is a join, not a mirror
+  - L36 · The plural is half the point
+  - L51 · ⚠ The area name was wrong for two ticks
+
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
 
@@ -3258,4 +3265,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2821 sections across 108 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2824 sections across 109 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
