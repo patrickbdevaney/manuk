@@ -12148,3 +12148,73 @@ held (AccessKit adopted, not forked). I4, I8 — held. I1, I6, I7 — not bent.
 3. **Track C, unassembled:** hit-test → dispatch → actuate → observe on ONE real site. Every piece
    exists (`Page::dispatch_click`, the a11y hit-test, BiDi `script.evaluate`); nothing has ever been
    wired end to end.
+
+## Check #140 — tick 1460
+
+Re-read `CONSTITUTION.MD` (PART VII, the invariants) and `docs/loop/V1-SCOPE.md` against ticks
+1453-1460.
+
+### WHAT CHECK #139's STEER ASKED FOR, AND WHETHER IT HAPPENED
+
+1. **"Alternate A/B/C, and treat `>5 ticks dark` as a hard rule."** ✅ **Held, and mechanically.**
+   t1457 A, t1458 B, t1459 C, t1460 A. Each tick began by re-running `lever-board.sh` and reading
+   the rotation off the journal before choosing work. No track has been dark more than two ticks
+   since the steer.
+2. **"Track B next step: score the projection against Chrome and publish the number."** ✅ **Done at
+   t1458** — and it found more than a number. There was **no instrument at all**: every value ever
+   quoted for the `>=90% node match` bar came from a `/tmp` script that no longer exists, and the
+   half it computed was **recall**. The honest figures are **63.5% precision / 96.4% recall / 76.6%
+   F1**. The bar was not nearly met; it was being read off the term that cannot see a phantom.
+3. **"Track C: hit-test → dispatch → actuate → observe on ONE real site."** ✅ **Measured at t1459**
+   on six, via `drive-probe`: **77.7% of perceivable targets are actually drivable**, and 99% of the
+   failures are a single cause — `(role, name)` is not a unique address on the real web.
+
+### PART VI CORRECTIONS
+
+* **NEW, and it is this check's most valuable finding:** *a crate that omits a feature does not
+  omit a capability — it substitutes a different implementation of one, silently.* `manuk-agent`
+  depends on `manuk-page` **without `stylo`**, so every `agent/tests/` fixture carrying a `<style>`
+  block is cascaded by `MinimalCascade` while WPT and every `engine/page/tests/` gate run Stylo.
+  A property present in one and missing in the other is **correct everywhere the suites look and
+  wrong everywhere the agent looks**. `inset` was exactly that: the four longhands implemented, the
+  shorthand absent, so `position:absolute; inset:0` laid out `0x0` in the agent's world and
+  perfectly under WPT. It cost t1459 a mis-attributed defect ("`inset` does not size an abspos
+  box" — false; layout was never involved) and was only resolved by running one fixture under both
+  cascades and watching them disagree.
+* **NEW:** *the fix for a mis-measurement is a control, not an apology.* t1459's corpus numbers were
+  taken under the same MinimalCascade. Re-running the whole corpus under both gives **77.7% either
+  way** (81.1% vs 81.0% landmark-scoped) — the site-level metric is robust to the cascade even
+  though individual fixtures are not. The number stands; it now stands on evidence.
+* **VI.3 — the aperture rule is STILL not in prose.** Sixth check.
+* **I5 — `ORACLE_CRAWLED: 0`. THIRTEENTH check.** Owner decision, restated not re-argued.
+
+### THE INVARIANTS
+
+**I3 — repaired, and this check can say so with a number for the first time.** Check #139 recorded
+I3 "quietly bending": the agent surface *"never allowed to rot, lag the renderer, or become 'the
+automation module'."* Three consecutive ticks have now put instruments under it — the a11y tree's
+real score (t1458) and the drive loop's real score (t1459) — and both came back **below** their
+bars. That is the invariant working: the surface is being held to the same standard as the renderer
+and is currently failing it honestly, rather than passing on an unrecomputable number.
+
+**I2 — held.** `accesskit`, `tokio-tungstenite` adopted at their published versions; nothing forked
+or patched. **I4, I8 — held.** **I1, I6, I7 — not bent.**
+
+### PART VII / V1-SCOPE
+
+Every tick since #139 is pure browser capability or the instrument that measures one. Nothing
+touched `scripts/` or the harness. The two exit terms that were estimates are now measurements, and
+both are **worse than the estimates were** — which is the correct direction for a certification to
+move when it becomes real.
+
+### STEER
+
+1. ⭐⭐⭐ **DECIDE WHETHER THE AGENT CRATE SHOULD BUILD WITH `stylo`.** It is a one-line dependency
+   change with a large build-time cost and it decides whether ~30 `agent/tests/` gates test the
+   production cascade or a second one. Until it is decided, **every new agent gate should be run
+   under both** — the check takes one command and it is how this tick's defect was found.
+2. **Track B is precision-bound, and it is concentrated.** wikipedia scores 25.9% precision against
+   four sites above 84%. `a11y-score` holds both bags; diff them and name what the ~1,900 extra
+   nodes ARE before assuming they are wrappers.
+3. **Track C: implement landmark-scoped resolution.** The 3.3 points are already measured; the code
+   is `AgentBrowser::resolve`.

@@ -105225,3 +105225,97 @@ measured, and `resolve_handle` picking the wrong element is a defect this loop h
 Then measure the term after the landmark on the 13 that share one.
 
 WIKI: docs/wiki/role-plus-name-is-not-an-address.md
+
+## Tick 1460 — the agent's tests run a DIFFERENT CASCADE, and that is where `inset` was missing (2026-09-06)
+
+TICK SHAPE: capability
+
+Rotation: A t1457, B t1458, C t1459 → A. Constitution check also due (last 1452, cadence 8); both in
+this tick.
+
+### THE TICK STARTED BY REFUTING ITS OWN PREMISE
+
+t1459 named a defect for this tick: *"`inset: 0` does not size an absolutely positioned box."* The
+first thing I did was reproduce it against Chrome. It reproduced — and then it didn't:
+
+```text
+                                      Chrome    ours(spidermonkey,stylo)
+  inset: 0        inline style        200x30    200x30  ✓
+  inset: 10px     inline style        180x40    180x40  ✓
+  top/right/…     stylesheet          200x60    200x60  ✓
+```
+
+Every row Chrome-exact. The engine was never wrong. ⚠ **THE CLAIM WAS AN ARTIFACT OF THE BUILD THE
+DIAGNOSTIC RAN IN** — t1459's dump ran under `cargo test -p manuk-agent`, and:
+
+### `manuk-agent` DEPENDS ON `manuk-page` WITHOUT `stylo`
+
+⭐⭐⭐ **A CRATE THAT OMITS A FEATURE DOES NOT OMIT A CAPABILITY — IT SUBSTITUTES A DIFFERENT
+IMPLEMENTATION OF ONE.** Every `agent/tests/` fixture carrying a `<style>` block is cascaded by
+`MinimalCascade`; WPT and every `engine/page/tests/` gate asking for `--features stylo` run Stylo. A
+property present in one and missing in the other is **correct everywhere the suites look and wrong
+everywhere the agent looks.**
+
+The same fixture under both:
+
+```text
+                                            Chrome    Minimal    Stylo
+  .sh  { inset: 0 }              stylesheet  200x30       0x0    200x30
+  .sh2 { inset: 5px 10px }       stylesheet  180x20       0x0    180x20
+  style="inset: 0"               inline      200x30       0x0    200x30
+  .lh  { top/right/bottom/left } CONTROL     200x30    200x30    200x30  ✓
+```
+
+⭐⭐ **THE CONTROL ROW NAMES THE BUG.** The four longhands were already correct, from the same
+stylesheet, on the same element — so this was never "absolute positioning is broken" or "the parser
+drops the rule". **Exactly one arm was missing from one `match`**, three lines below the four that
+were there. The two-value row is in the fixture because a `0` cannot tell `Sides::all` from a
+function that only ever sets `top`.
+
+It presented not as a CSS failure but as an inexplicable `0x0` box in an **accessibility tree**, two
+crates away, and cost a whole tick of mis-attribution.
+
+### THE FIX FOR A MIS-MEASUREMENT IS A CONTROL, NOT AN APOLOGY
+
+t1459's corpus numbers were taken by a binary in that same crate. Re-running all six sites under
+both cascades:
+
+```text
+                    rate   +landmark
+  Stylo            77.7%       81.1%
+  MinimalCascade   77.7%       81.0%
+```
+
+⭐ **The site-level metric is robust to the cascade even though individual fixtures are not.**
+t1459's headline stands, and now stands on evidence rather than on not having checked. (a11yproject
+moves by one target; nothing else moves at all.)
+
+### LANDED
+
+```
+  engine/css/src/lib.rs   one arm: "inset" => set_shorthand(&mut s.inset, …, allow_auto: true)
+  gate  g_inset_is_a_shorthand   RED under 3 named mutations, green restored
+        1. remove the arm                  -> a, c, d read 0x0
+        2. allow_auto: false               -> the `inset: auto 0 0 auto` row collapses
+        3. expand only the first value     -> c reads 180x30, losing the second
+  vacuity arm: the longhand CONTROL must already fill its parent
+  ⚠ the gate runs WITHOUT `stylo` on purpose — under Stylo every row already passed
+  constitution check #140 appended
+  Bar 0: no hang, no crash, no panic
+```
+
+### CHECK #140, IN ONE LINE EACH
+
+All three of check #139's steers were executed (A/B/C alternation held mechanically; Track B scored
+at t1458; Track C measured at t1459). **I3 is repaired and can be said with a number for the first
+time** — the agent surface now has instruments under it and both came back *below* their bars, which
+is the invariant working rather than failing. I2 held (accesskit, tokio-tungstenite adopted, not
+forked). VI.3's aperture rule is unwritten for a sixth check; I5 `ORACLE_CRAWLED: 0` for a
+thirteenth.
+
+NEXT (check #140's steer 1): **decide whether `manuk-agent` should build with `stylo`.** One line,
+large build cost, and it decides whether ~30 agent gates test the production cascade or a second
+one. Until decided, run every new agent gate under both — one extra command, and it is how this
+tick's defect was found.
+
+WIKI: docs/wiki/a-crate-that-omits-a-feature-substitutes-an-engine.md

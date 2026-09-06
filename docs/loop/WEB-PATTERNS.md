@@ -11221,3 +11221,30 @@ target: at equal area the tie-break decides and the row passes for the wrong rea
 
 **Status:** landed t1459 as `drive-probe` + `manuk_agent::drivability`, gated by
 `g_a_perceived_target_is_an_actionable_one` under four mutations.
+
+---
+
+## A crate that omits a feature substitutes an implementation — check which engine your fixture ran
+
+**Pattern.** A cargo feature that swaps an implementation (`stylo` vs `MinimalCascade`) does not
+make the capability absent in the crates that omit it — it makes them run *the other one*. A rule
+present in one and missing in the other is correct everywhere the suites look and wrong everywhere
+the omitting crate looks, and cargo's feature unification means the answer can depend on **how the
+test was invoked**.
+
+**How it is found.** Run the same fixture under both and watch them disagree. `inset: 0` on an
+absolutely positioned box: `200x30` under Stylo and Chrome, `0x0` under MinimalCascade, while the
+four longhands were correct under both — one missing `match` arm, presenting as an inexplicable
+zero-size box in an accessibility tree two crates away.
+
+**The trap.** A defect found in the omitting crate will be mis-attributed to whatever subsystem the
+symptom belongs to (here: layout, for a whole tick). Suspect the feature set before the code when a
+fixture in one crate contradicts a fixture in another.
+
+**And when a number was taken under the wrong one, re-take it under both.** The drive corpus read
+77.7% either way — robust at the site level even though individual fixtures were not. A control
+turns a compromised number into a supported one.
+
+**Status:** `inset` landed t1460, gated by `g_inset_is_a_shorthand` (which runs WITHOUT `stylo` on
+purpose) under three mutations. Whether `manuk-agent` should build with `stylo` is an open owner
+decision recorded in constitution check #140.

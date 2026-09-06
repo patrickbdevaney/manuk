@@ -6824,6 +6824,17 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 _ => Position::Static,
             }
         }
+        // ── ⭐⭐⭐ **THE FOUR LONGHANDS WERE HERE AND THE SHORTHAND WAS NOT**, so `inset: 0` set
+        //    nothing at all and an `position:absolute; inset:0` box laid out `0x0` while
+        //    `top/right/bottom/left: 0` on the same element laid out correctly. `auto` is allowed —
+        //    it is `inset`'s initial value and the whole point of `inset: auto 0`.
+        //
+        //    ⚠ This was found through a Track C agent probe, not a CSS one, and only because
+        //    `manuk-agent` builds `manuk-page` WITHOUT the `stylo` feature: every `agent/tests/`
+        //    fixture with a `<style>` block is cascaded by this function rather than by Stylo, so a
+        //    gap here is invisible to WPT (which runs under Stylo) and shows up as an inexplicable
+        //    zero-size box in an accessibility tree.
+        "inset" => set_shorthand(&mut s.inset, v, s.font_size, true),
         "top" => s.inset.top = values::parse_dim(v, s.font_size),
         "right" => s.inset.right = values::parse_dim(v, s.font_size),
         "bottom" => s.inset.bottom = values::parse_dim(v, s.font_size),

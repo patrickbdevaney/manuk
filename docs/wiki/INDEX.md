@@ -35,6 +35,13 @@
   - L27 · ⭐ The condition that measurement refused
   - L38 · The half that is measured, better, and REFUSED
 
+## A crate that omits a feature substitutes an engine
+`docs/wiki/a-crate-that-omits-a-feature-substitutes-an-engine.md`
+
+  - L11 · The instance
+  - L27 · How it presented, and how much it cost
+  - L39 · The fix for a mis-measurement is a control, not an apology
+
 ## A diagnostic that cannot report a non-zero is worse than none — it accuses
 `docs/wiki/a-diagnostic-that-accuses.md`
 
@@ -3210,4 +3217,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2797 sections across 102 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2800 sections across 103 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
