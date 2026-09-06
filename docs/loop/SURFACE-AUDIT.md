@@ -8058,3 +8058,72 @@ next build spent exactly 44 GB putting the files back, because the ones kept wer
    (eleventh), AccessKit (tenth), the `_out` race in `verify.sh` — which false-red one wall this
    session even under the documented `CARGO_BUILD_JOBS=1` workaround, so the workaround is not
    sufficient.
+
+## Audit #87 — tick 1454 (2026-09-05)
+
+Ten ticks (t1444–t1453). Seven CSS layout, two refusals, and — after the observer amended the board
+mid-session — two on Track B. The audit's job is the frame, and this window the frame moved.
+
+### ⭐⭐⭐ THE APERTURE DIFF: EIGHT CRATES, 98 UNIT TESTS, 6.25 SECONDS, NONE OF THEM IN THE WALL
+
+t1452 ran `manuk-a11y`'s unit tests for the first time and found the crate **RED** — on two assertions
+that had gone stale ~40 and ~47 ticks earlier *because the engine got more correct*. That prompted the
+obvious question nobody had asked: **which crates does the wall actually test?**
+
+```text
+  workspace members                18
+  `verify.sh`'s crate loop          7   manuk-css layout paint dom net agent shell
+  tested only via integration       2   manuk-page (its g_* gates), tests/wpt
+  NEVER RUN BY THE WALL             8   a11y html text media js compositor bidi store
+```
+
+Run here, all eight now pass — **98 tests in 6.25 seconds**:
+
+```text
+  manuk-a11y 21 · manuk-html 17 · manuk-store 17 · manuk-text 11 · manuk-bidi 11
+  manuk-js 9 · manuk-compositor 8 · manuk-media 4
+```
+
+> ⭐ **The wall is 1609–2296 s and these are six seconds.** There is no throughput argument for the
+> exclusion; there never was. `manuk-js`, `manuk-html` and `manuk-bidi` are load-bearing engine crates
+> — the JS bindings, the parser sink, and the agent's own protocol — and their unit tests have been
+> advisory for as long as the loop has existed.
+
+*A test outside the wall is a test that can be red indefinitely*, and one of them was for forty-seven
+ticks. Observer-owned: `for c in manuk-css manuk-layout …` needs eight more names.
+
+*Refutable by:* a reason these eight are excluded that is not throughput. If one exists it should be in
+the script, and it is not.
+
+### ⚠⚠ TRACK C IS STILL DARK, AND ITS PIECES ALL EXIST
+
+The observer's nudge named **two** dark tracks. B is started (t1452, t1453). **C has had zero ticks in
+~37**, and it is not blocked on anything:
+
+```text
+  hit-test        `A11yTree::hit_test(x, y)`            built, occlusion-aware, gated
+  dispatch        `Page::dispatch_click`                built, gated (t1403 named its callers)
+  observe         the a11y tree + now an AccessKit projection with focus and state
+  protocol        `bidi/src/protocol.rs` `script.evaluate`   built
+```
+
+**Every component of the M2 drive demo is built and gated, and no tick has ever composed them.** The
+board asks for one real site, end to end. That is an assembly job, not a construction one — which is
+exactly the kind that stays undone because no single piece of it looks like a tick.
+
+### ⚠ CARRIED, AND EACH NOW OVERDUE AN OWNER DECISION RATHER THAN A MENTION
+
+* `css/cssom-view` gained **712 subtests this session** (602 → 1314) and is still not a row in
+  `WPT-AREAS.tsv`. **Fifth consecutive audit.**
+* The `_out` race false-red **twice this session** (t1437, t1452), both under the documented
+  `CARGO_BUILD_JOBS=1` workaround. Wall audit #57 called the workaround insufficient; this is the
+  second datum.
+* `ORACLE_CRAWLED: 0` — twelfth.
+
+### RANKED, from this audit only
+
+1. ⭐⭐⭐ **Eight crates and 98 tests cost six seconds and are not in the wall.** One was red for 47
+   ticks. This is the cheapest rigor available anywhere in the loop.
+2. ⚠⚠ **Track C: assemble, do not build.** Every piece exists; the gap is a composition nobody has
+   been asked to own.
+3. ⚠ `WPT-AREAS.tsv` — fifth mention; `_out` — insufficient workaround, twice measured.

@@ -104718,3 +104718,72 @@ and is **not gated**; said rather than implied.
 ```
 
 WIKI: docs/wiki/accesskit-the-interop-shape.md
+
+## Tick 1454 — eight crates, 98 tests, six seconds, none of them in the wall (2026-09-05)
+
+TICK SHAPE: measurement-and-refusal
+CLASS: process — self-audit + surface audit #87
+
+### THE QUESTION t1452 FORCED
+
+t1452 ran `manuk-a11y`'s unit tests for the first time and found the crate **RED** — two assertions
+stale by ~40 and ~47 ticks, both because the *engine got more correct*. That prompted the obvious
+question nobody had asked in 1,400 ticks: **which crates does the wall actually test?**
+
+```text
+  workspace members                18
+  `verify.sh`'s crate loop          7   manuk-css layout paint dom net agent shell
+  tested only via integration       2   manuk-page (its g_* gates), tests/wpt
+  NEVER RUN BY THE WALL             8   a11y html text media js compositor bidi store
+```
+
+Run here, all eight pass — **98 tests in 6.25 seconds**:
+
+```text
+  manuk-a11y 21 · manuk-html 17 · manuk-store 17 · manuk-text 11 · manuk-bidi 11
+  manuk-js 9 · manuk-compositor 8 · manuk-media 4
+```
+
+⭐⭐⭐ **THE WALL IS 1609–2296 SECONDS AND THESE ARE SIX.** There is no throughput argument for the
+exclusion and there never was — and `manuk-js`, `manuk-html` and `manuk-bidi` are the JS bindings, the
+parser sink and the agent's own protocol. Their unit tests have been *advisory* for the whole life of
+the project.
+
+*A test outside the wall is a test that can be red indefinitely*, and one of them was for forty-seven
+ticks. **The aperture question is not "is the instrument accurate" — it is "what is it pointed at",
+and this loop keeps finding that the answer is smaller than it assumed** (t1273 the WPT checkout at
+60%, t1413 fourteen of seventy-eight css dirs, t1416 concentration, and now seven of eighteen crates).
+
+### ⚠⚠ TRACK C IS STILL DARK AND EVERY PIECE OF IT EXISTS
+
+The observer named two dark tracks. B is started; **C has had zero ticks in ~37** and is blocked on
+nothing:
+
+```text
+  hit-test    A11yTree::hit_test(x, y)      built, occlusion-aware, gated
+  dispatch    Page::dispatch_click          built, gated
+  observe     the a11y tree + the AccessKit projection with focus and state
+  protocol    bidi script.evaluate          built
+```
+
+⭐ **Every component of the M2 drive demo is built and gated and no tick has ever composed them.** That
+is an ASSEMBLY job, not a construction one — *and assembly is exactly the kind of work that stays
+undone, because no single piece of it looks like a tick.* Naming that is the point of this entry.
+
+### THE SELF-AUDIT
+
+49 → 52 process defects, every gate declares how to break it, every enforcement mechanical. **One item
+unmet: the wall at 1609s against a 300s target** — fully characterised by wall audit #57 two ticks ago
+(578 test binaries; sccache inert under `-C incremental`). Nothing to add; it is observer-owned and
+already carries its numbers.
+
+### THE RECEIPT
+
+```text
+  surface audit #87 appended; self-audit clean but for the known wall item
+  8 crates run for the first time: 98 tests, 6.25s, all green
+  no engine source changed
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: none [forced] — no engine source changed; the product is the audits.

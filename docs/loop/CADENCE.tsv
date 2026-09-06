@@ -1127,3 +1127,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1449	e4e371bf	1788648803	2026-09-05T18:53:23-04:00	731	measurement-and-refusal	465	7	195	42	559	81	3896	6960	0	642	0	two Chrome batteries that cannot both be satisfied (2026-09-05)
 1450	0ad24005	1788653076	2026-09-05T20:04:36-04:00	4273	measurement-and-refusal	465	10	416	55	560	81	3896	6960	0	642	0	the contradiction was not real, and the record was wrong (2026-09-05)
 1452	f9d881b5	1788659473	2026-09-05T21:51:13-04:00	6397	capability	465	9	359	44	562	81	3896	6960	0	642	0	Track B, at the eleventh time of asking (2026-09-05)
+1453	464837d1	1788660774	2026-09-05T22:12:54-04:00	1301	capability	465	5	182	43	562	81	3896	6960	0	642	0	a required field with a plausible default (2026-09-05)
