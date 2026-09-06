@@ -105319,3 +105319,102 @@ one. Until decided, run every new agent gate under both — one extra command, a
 tick's defect was found.
 
 WIKI: docs/wiki/a-crate-that-omits-a-feature-substitutes-an-engine.md
+
+## Tick 1461 — Track B: the agent's browser had no JavaScript, and the ≥90% bar is met (2026-09-06)
+
+TICK SHAPE: capability
+
+Rotation → B. Check #140's steer 2, verbatim: *"wikipedia scores 25.9% precision against four sites
+above 84%. `a11y-score` holds both bags; diff them and name what the ~1,900 extra nodes ARE before
+assuming they are wrappers."* So I added `--diff` and read them.
+
+### THE EXCESS WAS ONE THING, AND IT NAMED ITSELF FROM BOTH SIDES
+
+```text
+  OURS IN EXCESS                     CHROME IN EXCESS
+    681  listitem  ""                   4  button  "[show]"
+     90  list      ""                   1  columnheader "[show] v · t · e Timeline of web browsers"
+     71  row       ""                  42  link    "Jump up"
+     42  link      "↑"
+```
+
+⭐⭐⭐ **THE TWO COLUMNS ARE THE SAME FACT.** Chrome has `[show]` buttons that MediaWiki's
+`jquery.makeCollapsible` **creates**; we hold exactly the content those buttons hide. Our tree
+contains **zero** nodes named "show". We had not run the script. **An accessibility precision defect
+was a JavaScript-execution gap**, and the area it was filed under could not have said so.
+
+### TWO LINES, IN TWO FILES, NEITHER OF WHICH READS AS A DEFECT
+
+```text
+  agent/Cargo.toml   manuk-page.workspace = true   — `spidermonkey` is opt-in and was not taken
+  agent/src/lib.rs   Page::load(...)               — the synchronous constructor: parses, lays out,
+                                                     stops. No subresources, no lifecycle.
+```
+
+A manifest line that omits a feature looks like a smaller build. `Page::load` looks like loading a
+page. Together they are **a browser that never finishes loading** — and it is the browser
+`a11y-score`, `drive-probe`, `a11y-dump`, `agent-run` and ~30 `agent/tests/` gates all ran on. Every
+number Tracks B and C have ever reported was measured on static HTML.
+
+### WHAT IT WAS WORTH
+
+```text
+                     precision   recall     F1        drivable  +landmark
+  before                 63.5%    96.4%   76.6%          77.7%      81.1%
+  after                  93.2%    96.4%   94.8%          80.7%      82.4%
+
+  per site, precision:  wikipedia 25.9 -> 77.5   a11yproject 84.4 -> 97.5
+                        martinfowler 68.2 -> 81.7   rust-lang 99.6 -> 99.9
+```
+
+⭐⭐⭐ **TRACK B'S `>=90% NODE MATCH` BAR IS MET FOR THE FIRST TIME — 94.8% F1.** It was reported as
+already met at ~97% for a year; t1458 showed that was recall; this tick earned the real number.
+`drive-probe`'s `ungrounded` count also went 2 → 0.
+
+⚠ Wikipedia's *drive rate* **FELL**, 72.0% → 61.9%, and that is correct: its target count dropped
+**1229 → 501** as the phantoms vanished, so the surviving duplicates are a larger share of a smaller,
+truer denominator. **A rate can worsen because its denominator got honest** — worth saying out loud,
+because the next reader of `drive-probe` will see a red arrow on the biggest site in the corpus.
+
+### THE REFUSAL
+
+⚠⚠⚠ **`stylo` WAS PART OF THIS CHANGE AND WAS REVERTED.** Enabling it with `spidermonkey` turned
+`g_ax_tree_excludes_display_none` red: under Stylo's UA sheet a collapsed `<select>`'s `<option>`s
+are hidden, and Chrome exposes both. That gate's `Option` row was written for exactly this and says
+so — *"if the UA sheet hid them the way it hides a closed `<dialog>`, this tick would have deleted
+every dropdown from the agent's perception."* **The ratchet refuses a capability bought with a
+regression.** Only the JavaScript half landed; the cascade half now has a named blocker instead of a
+preference, which is a better position than it was in this morning.
+
+### THE GATE NEEDED TWO FIXTURES AND THE FIRST MUTATION PASS PROVED IT
+
+⚠⚠ Reverting `load_async` → `load` left the inline-script arm **GREEN**. `Page::load` runs an inline
+`<script>` perfectly well once SpiderMonkey is compiled in; what it never does is **fetch** one. One
+fixture could not tell "has a JS engine" from "finishes loading", and a gate written without the
+second would have shipped an unproven change. The discriminating arm uses an external
+`<script src>` — the shape every real site uses.
+
+⚠⚠⚠ **AND IT MUST BE ITS OWN BINARY.** Putting both tests in one file aborted on drop with *"There
+are outstanding JS engine handles"*, reported as a **SIGSEGV** — a self-inflicted Bar 0, caught
+before landing. One SpiderMonkey context per test binary.
+
+### LANDED
+
+```
+  agent/Cargo.toml        manuk-page features = ["spidermonkey"]
+  agent/src/lib.rs        load_url -> Page::load_async
+  agent/src/a11y_score.rs `excess()` — the multiset difference, ranked
+  agent/src/bin/a11y-score.rs  --diff
+  gates  g_the_agents_browser_runs_the_page       (inline script + its effect on the tree)
+         g_the_agents_browser_fetches_a_script    (EXTERNAL script — the discriminating arm)
+         both red under: Page::load, and dropping the spidermonkey feature
+  50 agent test binaries green, 0 failures
+  Bar 0: no hang, no crash, no panic
+```
+
+NEXT: **the `stylo` half now has one named blocker.** A collapsed `<select>`'s options must survive
+the UA sheet; fix that and the agent gets the production cascade too. And Track C's remaining
+ambiguity is now concentrated on a smaller, truer denominator — wikipedia's 190 duplicates of 501
+targets — so landmark-scoped resolution is worth more than the 3.3 points t1459 priced.
+
+WIKI: docs/wiki/the-agents-browser-had-no-javascript.md

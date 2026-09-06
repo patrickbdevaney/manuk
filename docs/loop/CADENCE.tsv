@@ -1134,3 +1134,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1458	8b759add	1788675889	2026-09-06T02:24:49-04:00	3312	capability	465	13	915	42	564	81	3896	6960	0	642	0	Track B: the node-match bar was recall, computed by a script that is not in the repo (2026-09-06)
 1459	18017e00	1788676835	2026-09-06T02:40:35-04:00	946	capability	465	12	755	42	564	81	3896	6960	0	642	0	Track C: the drive loop's ADDRESS fails on a fifth of the real web, and 99% of it is one thing (2026-09-06)
 1460	05c9a7ad	1788679725	2026-09-06T03:28:45-04:00	2890	capability	465	10	396	43	565	81	3896	6960	0	642	0	the agent's tests run a DIFFERENT CASCADE, and that is where `inset` was missing (2026-09-06)
+1461	bc3fcb55	1788681658	2026-09-06T04:00:58-04:00	1933	capability	465	13	502	46	565	81	3896	6960	0	642	0	Track B: the agent's browser had no JavaScript, and the ≥90% bar is met (2026-09-06)

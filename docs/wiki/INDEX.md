@@ -3080,6 +3080,14 @@
   - L56 · Gate
   - L64 · What this does NOT prove
 
+## The agent's browser had no JavaScript
+`docs/wiki/the-agents-browser-had-no-javascript.md`
+
+  - L15 · How it was found
+  - L34 · What it was worth
+  - L50 · stylo was part of this change and was refused
+  - L59 · Two fixtures, because one could not tell the halves apart
+
 ## The metric is a percentage over what happens to be checked out
 `docs/wiki/the-aperture-is-the-metric.md`
 
@@ -3217,4 +3225,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2800 sections across 103 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2804 sections across 104 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

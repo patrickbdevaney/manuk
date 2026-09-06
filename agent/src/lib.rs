@@ -428,7 +428,13 @@ impl AgentBrowser {
     /// Fetch + lay out `url`, without touching the history stack.
     async fn load_url(&mut self, url: &str) -> Result<()> {
         let (html, final_url) = fetch_html(url).await?;
-        let page = Page::load(&html, &final_url, &self.fonts, self.width as f32);
+        // ── ⚠⚠⚠ **`load`, NOT `load_async`, WAS A BROWSER THAT NEVER FINISHED LOADING.** The
+        //    synchronous constructor parses and lays out and stops: no subresources, no lifecycle,
+        //    no scripts. An agent driving the real web needs the page the user would see, and on a
+        //    modern site that page does not exist until its script has run — Wikipedia's navboxes
+        //    are collapsed by `jquery.makeCollapsible`, and without it the accessibility tree
+        //    carried 681 phantom list items that Chrome does not expose.
+        let page = Page::load_async(&html, &final_url, &self.fonts, self.width as f32).await;
         self.scroll_y = 0.0;
         self.page = Some(page);
         Ok(())

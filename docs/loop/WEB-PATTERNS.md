@@ -11248,3 +11248,33 @@ turns a compromised number into a supported one.
 **Status:** `inset` landed t1460, gated by `g_inset_is_a_shorthand` (which runs WITHOUT `stylo` on
 purpose) under three mutations. Whether `manuk-agent` should build with `stylo` is an open owner
 decision recorded in constitution check #140.
+
+---
+
+## Ask what the excess IS — a precision gap can be a defect in another subsystem entirely
+
+**Pattern.** A percentage names a size, never a mechanism. When one side of a comparison has far
+more items than the other, **print the multiset difference and read it**: the excess is usually one
+thing, and that thing is often owned by a different subsystem than the metric's name suggests.
+
+**How it is found.** Wikipedia's a11y tree scored 25.9% precision. The difference was `681 listitem
+"" / 90 list "" / 71 row ""` on our side and `4 button "[show]"` on Chrome's — **the same fact from
+both sides**: Chrome had the buttons MediaWiki's collapsible script *creates*, we had exactly the
+content those buttons hide. An "accessibility precision defect" was a JavaScript-execution gap. The
+agent's browser had SpiderMonkey compiled out and used the synchronous `Page::load`, so it never
+fetched or ran a page script.
+
+**What it was worth.** Precision 63.5% → **93.2%**, F1 76.6% → **94.8%** — Track B's `>=90%` bar met
+for the first time. And a rate can *worsen* honestly: wikipedia's drive rate fell 72.0% → 61.9%
+because its denominator lost 728 phantom targets.
+
+**The refusal.** Enabling `stylo` in the same change hid every collapsed `<select>`'s options — a
+regression a gate's own control row had been written to catch. Only the JavaScript half landed.
+
+**Fixture requirement.** One fixture could not separate "has a JS engine" from "finishes loading":
+`Page::load` runs an *inline* script fine and simply never fetches one. The discriminating arm uses
+an EXTERNAL `<script src>`, and it must be in its own test binary — two SpiderMonkey contexts in one
+binary abort on drop.
+
+**Status:** landed t1461, gated by `g_the_agents_browser_runs_the_page` +
+`g_the_agents_browser_fetches_a_script` under two mutations each.

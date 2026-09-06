@@ -257,9 +257,13 @@ async fn main() -> Result<()> {
         .with_writer(std::io::stderr)
         .init();
 
-    let urls: Vec<String> = std::env::args().skip(1).collect();
+    let mut urls: Vec<String> = std::env::args().skip(1).collect();
+    let diff = urls.first().map(|a| a == "--diff").unwrap_or(false);
+    if diff {
+        urls.remove(0);
+    }
     if urls.is_empty() {
-        bail!("usage: a11y-score <url>...");
+        bail!("usage: a11y-score [--diff] <url>...");
     }
 
     println!(
@@ -315,6 +319,24 @@ async fn main() -> Result<()> {
             manuk.1,
             chrome.1,
         );
+        if diff {
+            // ⭐ The phantoms, named and ranked — precision is the binding half and a percentage
+            //    cannot say what to fix.
+            println!("  ── OURS IN EXCESS OF CHROME (top 25 of the multiset difference)");
+            for (n, role, name) in a11y_score::excess(&manuk.0, &chrome.0).into_iter().take(25) {
+                println!(
+                    "     {n:>5}  {role:<16} {:?}",
+                    name.chars().take(60).collect::<String>()
+                );
+            }
+            println!("  ── CHROME IN EXCESS OF OURS (top 15)");
+            for (n, role, name) in a11y_score::excess(&chrome.0, &manuk.0).into_iter().take(15) {
+                println!(
+                    "     {n:>5}  {role:<16} {:?}",
+                    name.chars().take(60).collect::<String>()
+                );
+            }
+        }
         pooled_hit += hit;
         pool_m.extend(manuk.0);
         pool_c.extend(chrome.0);

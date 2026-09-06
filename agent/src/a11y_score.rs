@@ -152,3 +152,29 @@ fn walk(n: &manuk_a11y::A11yNode, out: &mut Vec<Key>, dropped: &mut usize) {
         walk(c, out, dropped);
     }
 }
+
+/// The multiset DIFFERENCE `ours - theirs`, as `(count, role, name)` ranked by count.
+///
+/// ⭐ Precision is the binding half of the Track B bar (63.5% pooled against 96.4% recall), and a
+/// percentage cannot say what to fix. This is what turns it into work: the phantoms, named and
+/// ranked, so a tick can start from *what those nodes are* rather than from a guess that they are
+/// wrappers.
+pub fn excess(ours: &[Key], theirs: &[Key]) -> Vec<(usize, String, String)> {
+    let mut have: HashMap<&Key, i64> = HashMap::new();
+    for k in theirs {
+        *have.entry(k).or_insert(0) += 1;
+    }
+    let mut extra: HashMap<&Key, usize> = HashMap::new();
+    for k in ours {
+        match have.get_mut(k) {
+            Some(c) if *c > 0 => *c -= 1,
+            _ => *extra.entry(k).or_insert(0) += 1,
+        }
+    }
+    let mut v: Vec<(usize, String, String)> = extra
+        .into_iter()
+        .map(|(k, n)| (n, k.0.clone(), k.1.clone()))
+        .collect();
+    v.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2)));
+    v
+}

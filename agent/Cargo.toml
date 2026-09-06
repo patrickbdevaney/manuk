@@ -40,7 +40,11 @@ name = "drive-probe"
 path = "src/bin/drive-probe.rs"
 
 [dependencies]
-manuk-page.workspace = true
+# ⭐⭐⭐ **THE AGENT'S BROWSER HAD NO JAVASCRIPT AND NOT THE REAL CASCADE.** `manuk-page`'s `stylo`
+# and `spidermonkey` features are opt-in, and this line took neither — so `AgentBrowser` cascaded
+# with `MinimalCascade` and never executed a page script. Every `agent/tests/` fixture and both
+# corpus instruments (`a11y-score`, `drive-probe`) were measuring a static-HTML browser.
+manuk-page = { workspace = true, features = ["spidermonkey"] }
 manuk-a11y.workspace = true
 manuk-dom.workspace = true
 manuk-html.workspace = true
