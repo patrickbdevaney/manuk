@@ -105034,3 +105034,101 @@ inside a scroller. Build that row — a vertical item with `min-height` smaller 
 it against Chrome before adding anything back.
 
 WIKI: docs/wiki/a-rotated-runs-fields-are-a-mixed-frame.md
+
+## Tick 1458 — Track B: the node-match bar was recall, computed by a script that is not in the repo (2026-09-06)
+
+TICK SHAPE: capability
+
+Board rule: *"ENFORCE A/B/C alternation; no track >5 ticks dark."* A ran t1456-1457, C ran t1455,
+**B was last at t1453**. B, then.
+
+Track B's gate is *">=90% node match against Chrome's a11y tree."* Before picking a defect to fix I
+went looking for the instrument that produces that number.
+
+### THERE ISN'T ONE
+
+⭐⭐⭐ **EVERY VALUE THE LOOP HAS QUOTED FOR TRACK B — 63.8%, 75.0%, 97.0%, AND THE PER-SITE ROWS IN
+`g_a11y_name_from_content_context` — CAME OUT OF A SCRIPT UNDER `/tmp` THAT NO LONGER EXISTS.**
+There is no CDP client anywhere in the tree: `a11y-dump` emits our side only, and every
+`agent/tests/g_ax_*.rs` gate carries Chrome's answer as a *constant in a doc comment*, taken by hand.
+A gate whose number cannot be recomputed is a memory of a gate.
+
+### AND THE HALF IT COMPUTED WAS THE ONE THAT CANNOT SEE A PHANTOM
+
+A multiset match taken over **the oracle's** nodes answers only *how many of Chrome's nodes did we
+produce*. It is blind to nodes we invent, and it **improves as the projection gets noisier** — the
+wrong direction for a bar to move under a mistake.
+
+`a11y-score` (new; `agent/src/bin/a11y-score.rs`, arithmetic in `manuk_agent::a11y_score`) launches
+headless Chrome, reads `Accessibility.getFullAXTree` over CDP, builds our tree through
+`AgentBrowser`, and prints both halves:
+
+```text
+                                manuk  chrome  match     prec   recall      F1
+  martinfowler.com                425     297    290    68.2%    97.6%   80.3%
+  news.ycombinator.com            479     497    478    99.8%    96.2%   98.0%
+  blog.rust-lang.org             1678    1673   1672    99.6%    99.9%   99.8%
+  www.a11yproject.com             173     158    146    84.4%    92.4%   88.2%
+  danluu.com                      414     416    414   100.0%    99.5%   99.8%
+  en.wikipedia.org/wiki/…        2629     779    682    25.9%    87.5%   40.0%
+  TOTAL (pooled)                 5798    3820   3682    63.5%    96.4%   76.6%
+```
+
+⭐⭐ **`96.4%` IS THE NUMBER THE LOOP HAS BEEN REPORTING.** Precision is `63.5%` and F1 is `76.6%`
+against a `>=90%` bar — so Track B is **not** near its gate, it is 13 points short of it, and the
+whole gap is phantoms. Wikipedia publishes **2,629 nodes where Chrome publishes 779**: an agent
+resolving a target there chooses from a list that is three-quarters noise, and a screen reader reads
+every one aloud.
+
+⭐ **THE INSTRUMENT REPRODUCES THE ONLY HAND-COMPUTED DATA POINT THAT EXISTED** — martinfowler at
+`68.2% / 97.6%` against the remembered `67.7% / 97.3%`. That agreement is what licenses the rest of
+the table; without it this would be a new number rather than a corrected one.
+
+### THE GATE, AND ITS OWN GREEN MUTATION
+
+The corpus rows need a browser and a network, so they are recorded as the measurement they are. The
+gate checks the **arithmetic**, on bags computed by hand — a scorer whose own sums are untested is
+the exact class of instrument this loop keeps catching.
+
+```
+  g_a11y_score_counts_phantoms   4 tests
+    1. set intersection instead of multiset  -> the dup MIRROR row scores 3, not 2
+    2. precision and recall swapped          -> the phantom row reports 100%/50%
+    3. f1 as the arithmetic mean             -> 75.0% instead of 66.7%
+    4. is_structural drops nothing           -> `generic` survives into the bag
+```
+
+⚠⚠ **MUTATION 1 CAME BACK GREEN THE FIRST TIME, AND IT NAMED A HOLE IN MY OWN FIXTURE.**
+`multiset_overlap` iterates its SECOND argument against counts built from the first, so with the
+extra duplicates on OUR side both a multiset and a set answer 2. The duplicates have to sit on the
+ORACLE'S side to discriminate. The fixture had the same blind spot as the metric it was testing —
+a one-sided test of a one-sided match. Fixed by adding the mirror row; all four now red.
+
+### TWO INSTRUMENT LESSONS THE PLUMBING COST
+
+⚠⚠ **AN UNBOUNDED READ INSIDE A BOUNDED CALL REPORTS THE DEADLINE, NEVER THE REASON.** Chrome's
+DevTools HTTP server ignores `Connection: close` and never closes the socket, so `read_to_end` blocks
+forever. Wrapped in a `tokio::time::timeout` that presented as a *connect* failure, and sent several
+attempts chasing stray Chrome processes and port collisions before the body was read by
+`Content-Length`. The timeout was the right thing to add and it made the diagnosis worse.
+
+⚠ **THE PORT IN `Host:` IS LOAD-BEARING.** Chrome builds each target's `webSocketDebuggerUrl` by
+echoing back the request's `Host` header, so `Host: 127.0.0.1` yields `ws://127.0.0.1/devtools/...`
+with no port at all.
+
+### LANDED
+
+```
+  agent/src/a11y_score.rs        the arithmetic, as a library so a gate can reach it
+  agent/src/bin/a11y-score.rs    the CDP oracle + the corpus runner
+  agent/Cargo.toml               tokio-tungstenite (already a dep of engine/net and engine/page)
+  gate  g_a11y_score_counts_phantoms   4 tests, red under 4 named mutations
+  Bar 0: no hang, no crash, no panic
+```
+
+NEXT: the number now has a direction. **Precision, not recall, is Track B's binding constraint**,
+and it is concentrated — wikipedia at 25.9% against four sites above 84%. The next Track B tick
+should diff wikipedia's two bags directly (`a11y-score` has both in hand) and name what those ~1,900
+extra nodes ARE, rather than assuming they are the `generic` wrappers this comparison already drops.
+
+WIKI: docs/wiki/recall-is-not-node-match.md

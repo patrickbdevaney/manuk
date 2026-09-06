@@ -28,6 +28,12 @@ path = "src/bin/ag5-latency.rs"
 name = "a11y-dump"
 path = "src/bin/a11y-dump.rs"
 
+# The versioned instrument for Track B's ">=90% node match" bar — precision AND recall, not
+# whichever half a throwaway script happened to compute.
+[[bin]]
+name = "a11y-score"
+path = "src/bin/a11y-score.rs"
+
 [dependencies]
 manuk-page.workspace = true
 manuk-a11y.workspace = true
@@ -48,6 +54,7 @@ base64.workspace = true
 async-trait.workspace = true
 futures-util = { workspace = true, features = ["std"] }
 tracing-subscriber.workspace = true
+tokio-tungstenite = { version = "0.24", default-features = false, features = ["handshake"] }
 
 # ── DEV-ONLY. `g_a11y_generated_name_entry` composes exactly what `host_ax_role_name` composes —
 # `manuk_layout::generated_text(dom, styles)` handed to `manuk_a11y::accessible_name_generated` — so

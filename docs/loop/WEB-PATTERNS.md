@@ -11170,3 +11170,29 @@ overflows on exactly one axis, and its horizontal mirror must not move.
 
 **Status:** landed t1457, gated by `g_a_vertical_run_advances_down` under four mutations; the
 descendant-walk half measured and refused in the same tick.
+
+---
+
+## A one-sided match is a one-sided claim — score the phantoms, not just the omissions
+
+**Pattern.** When an engine's output is compared against an oracle's by matching over **the
+oracle's** items, the result is *recall*. It answers "how much of theirs did we produce" and is
+structurally blind to anything we produce that they do not. It also **rises as the output gets
+noisier**, so a bar set on it moves the wrong way under exactly the mistakes it exists to catch.
+
+**How it is found.** Compute the other half. Manuk's a11y tree scores **96.4% recall** and **63.5%
+precision** on a six-site corpus — F1 `76.6%` against a `>=90%` bar — and one page publishes 2,629
+nodes where Chrome publishes 779.
+
+**The deeper defect underneath it.** The number had been quoted for eleven months by an instrument
+that was never in the repository. A value nothing can recompute is a value nothing can question.
+Put the scorer in the tree, and put its arithmetic in a library so a gate can check the sums against
+hand-computed bags without a browser.
+
+**Fixture requirement.** A bag-intersection test only discriminates a multiset from a set when the
+extra duplicates sit on the side the implementation **iterates**. Put them on the other side and the
+mutation comes back green.
+
+**Status:** landed t1458 as `a11y-score` + `manuk_agent::a11y_score`, gated by
+`g_a11y_score_counts_phantoms` under four mutations (one of which was green first time and named a
+hole in the fixture).

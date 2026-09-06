@@ -2719,6 +2719,15 @@
   - L69 · The topics
   - L87 · Retrieval and enforcement (tick 92) — the wiki is now mechanically load-bearing
 
+## Recall is not node match
+`docs/wiki/recall-is-not-node-match.md`
+
+  - L10 · 1. A gate whose number cannot be recomputed is a memory of a gate
+  - L17 · 2. The half it computed was recall
+  - L43 · The drops are listed because they flatter
+  - L52 · Two things this cost, both worth remembering
+  - L63 · And the gate's own fixture had the same shape as the bug
+
 ## Reference Index — a second oracle over shipping-engine source (Chromium / Firefox / Servo / WebKit)
 `docs/wiki/reference-index.md`
 
@@ -3194,4 +3203,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2789 sections across 100 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2794 sections across 101 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -20,6 +20,10 @@ use manuk_page::{fetch_html, Link, Page};
 /// §4b — HTML form model (find form, read fields, build a GET submission URL).
 pub mod forms;
 
+/// Scoring the a11y tree against Chrome's — the versioned instrument behind Track B's node-match
+/// bar, reporting precision and F1 rather than recall alone. Driven by the `a11y-score` binary.
+pub mod a11y_score;
+
 /// N5 — per-invocation permission scoping (capability value, enforced at the
 /// action boundary alongside the E6 risk heuristic).
 pub mod capabilities;
