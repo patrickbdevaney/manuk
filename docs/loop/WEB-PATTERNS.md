@@ -11304,3 +11304,29 @@ would satisfy.
 
 **Status:** landed t1462 as `targeting::resolve_target_in` + `AgentBrowser::click_by_name_in`, gated
 by `g_the_posts_link_in_the_navigation` under three mutations.
+
+---
+
+## A structural non-render is not `display: none` — and the lesson is usually already written nearby
+
+**Pattern.** An element that produces no box because its **parent consumes it** (a `<select>`'s
+`<option>`, a `<picture>`'s `<source>`) must not be hidden with a UA `display: none`. That produces
+the right box and the wrong answer: `getComputedStyle` is web-observable, and the accessibility tree
+prunes on it, so the element vanishes from every consumer that is not the painter.
+
+**How it is found.** Ask what Chrome computes. `option` → `block`, ours → `none`. Then check whether
+the rule is load-bearing by deleting it and measuring the geometry it was protecting: the select
+stayed 19px and the following paragraph stayed 54px down, both Chrome-exact, because the widget
+draws its own text through a different path entirely.
+
+**⭐ Look one paragraph up.** The same sheet already carried the `<source>` version of this lesson,
+in prose, immediately above the offending line. **The same bug survived one line below its own
+fix** — when a file records a principle, grep the rest of that file for other instances before
+looking anywhere else.
+
+**The lockstep corollary.** This project keeps its UA defaults in two cascades. When only one lists
+an element, *which build you ran* decides whether it exists — here, whether an agent could see any
+dropdown's contents. A divergence like that is invisible to a suite that only exercises one of them.
+
+**Status:** landed t1463, gated by `g_an_option_is_not_hidden_by_a_stylesheet` under three
+mutations; WPT `html/semantics/forms` and `css/css-display` both flat against a same-hour control.

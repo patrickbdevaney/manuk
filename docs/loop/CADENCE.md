@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1137** | ticks 1–1462 |
-| median tick cycle | **32m** | 1136 intervals |
+| ticks landed | **1138** | ticks 1–1463 |
+| median tick cycle | **32m** | 1137 intervals |
 | median, last 10 | **41m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.83** | 1367.2h elapsed |
-| median verify wall | **67s** | 1076 ticks |
+| **ticks per hour** | **0.83** | 1368.3h elapsed |
+| median verify wall | **67s** | 1077 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **565**
+* **live gates**: 27 → **566**
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**520 of 1137 ticks** (46%) moved a
+**521 of 1138 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **520** capability ticks, median cycle **32m**
+* **521** capability ticks, median cycle **32m**
 * median diff per tick: **+297 / −35** lines across 8 files
 
 ## Every tick
@@ -1234,5 +1234,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1460** | 2026-09-06 03:28 | 48m | capability | 8m | +396/−43 | 565 | 81 | 56.0% · | the agent's tests run a DIFFERENT CASCADE, and that is where `inset` was missing (2026-09- |
 | **1461** | 2026-09-06 04:00 | 32m | capability | 8m | +502/−46 | 565 | 81 | 56.0% · | Track B: the agent's browser had no JavaScript, and the ≥90% bar is met (2026-09-06) |
 | **1462** | 2026-09-06 04:18 | 17m | capability | 8m | +469/−49 | 565 | 81 | 56.0% · | Track C: the landmark is the missing term, and it was priced before it was built (2026-09- |
+| **1463** | 2026-09-06 05:20 | 62m | capability | 8m | +344/−43 | 566 | 81 | 56.0% · | the fix was written one line above the bug (2026-09-06) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

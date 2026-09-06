@@ -105492,3 +105492,90 @@ NEXT: the term after the landmark, for duplicates that share one — `blog.rust-
 way the landmark was: the candidates are an ordinal and the nearest preceding heading.
 
 WIKI: docs/wiki/the-landmark-is-the-missing-term.md
+
+## Tick 1463 — the fix was written one line above the bug (2026-09-06)
+
+TICK SHAPE: capability
+
+Rotation → A. t1461's named blocker: enabling `stylo` for `manuk-agent` deleted every dropdown's
+options, so the production cascade stayed off. This is that blocker.
+
+⚠ HARNESS (one line, per the rule): CI run 34020686428 for t1461 was **cancelled at 17m31s** by
+t1462's push — the tick cadence outruns CI's concurrency group, so most runs never finish. Not
+investigated; observer-owned.
+
+### THE COMMENT DIRECTLY ABOVE THE OFFENDING LINE ALREADY RECORDED THE FIX
+
+`option, optgroup { display: none; }` in the Stylo UA sheet. One paragraph earlier, in the same
+file, about `<source>`/`<picture>`:
+
+> *"Hiding them here produced the right box and the wrong answer, and
+> `getComputedStyle(source).display` is exactly what a responsive-image shim reads. The structural
+> rule now lives in `layout::never_rendered`…"*
+
+⭐⭐⭐ **AN `<option>` IS THE SAME SHAPE, AND THE SAME BUG SURVIVED ONE LINE BELOW ITS OWN LESSON.**
+It is not hidden by a stylesheet; a `<select>` draws its own text instead of its children
+(`control_text`), which is a structural fact about the widget. *When a file records a principle,
+grep the rest of that file for other instances before looking anywhere else.*
+
+### AND THE TWO CASCADES DISAGREED — THE EXACT FAILURE THE LOCKSTEP NOTE NAMES
+
+`apply_ua_defaults`' MinimalCascade never listed `option`; only the Stylo sheet did. Its own comment:
+*"The two cascades disagreeing about which elements render at all is how a `<source>` ends up with
+19px of height in one configuration and none in the other."*
+
+⭐⭐ So the accessibility tree held every dropdown's options under one build and **none** under the
+other, and **which one you got depended on a cargo feature**. That is how it stayed invisible: WPT
+runs Stylo and never asks an a11y question; the agent asks the a11y question and was running
+MinimalCascade. Neither instrument could see the other's half.
+
+### MEASURED
+
+```text
+                                            Chrome    before    after
+  getComputedStyle(option).display           block      none     block
+  the <select>'s height                       19px      19px      19px  ✓
+  gap between the paragraphs around it        54px      54px      54px  ✓
+  options in the accessibility tree              3         0         3
+
+  WPT html/semantics/forms   1225 failing -> 1225   0 fixed / 0 new   (same-hour HEAD control)
+  WPT css/css-display         211 failing ->  211   0 fixed / 0 new
+```
+
+⭐ **THE TWO GEOMETRY ROWS ARE THE WHOLE RISK AND THEY DO NOT MOVE.** The rule was added for a real
+reason the sheet still records — *"the inline collector recurses into a `<select>`'s `<option>`s and
+paints every one of them into the surrounding line — rust-lang.org's language picker rendered as a
+row of twelve language names"*. So the gate measures the select's height and the flow around it, not
+only the computed value: if options ever start generating boxes, the gap moves from 54 to something
+much larger and these rows say so before a corpus sweep would.
+
+### ONE BLOCKER CLEARED, A SECOND ONE NAMED
+
+With this landed, `g_ax_tree_excludes_display_none` passes under Stylo. I re-enabled `stylo` for
+`manuk-agent` to check, and **a second blocker appeared**: `g_counter_set_and_pseudo_counters` fails
+there — a pseudo-element's own `counter-increment` is ignored on the Stylo path, so the counter never
+passes 9 and item 10 renders one digit instead of two.
+
+⚠⚠ **REFUSED, SAME AS t1461.** The ratchet does not trade a regression for a capability, so `stylo`
+is still off for the agent. What changed is that the blocker list is **one item long and named**
+rather than unknown — which is the whole value of having tried it twice.
+
+### LANDED
+
+```
+  engine/css/src/stylo_engine.rs   option, optgroup { display: none } -> { display: block }
+  gate  g_an_option_is_not_hidden_by_a_stylesheet   RED under 3 named mutations
+        1. back to `display: none`   -> 0 options in the tree; display reads `none`
+        2. delete the rule entirely  -> display reads `inline`, not Chrome's `block`
+        3. `display: inline`         -> same as 2, and the a11y rows still pass
+  vacuity arm: the probe script must have run
+  ⚠ the gate needs `--features stylo` — under MinimalCascade every row already passed, and that
+    asymmetry IS the defect
+  Bar 0: no hang, no crash, no panic
+```
+
+NEXT: the second blocker. `counter-increment` on a pseudo-element under Stylo — a real CSS
+capability gap in its own right, gated already by `g_counter_set_and_pseudo_counters`, and the last
+thing standing between the agent and the production cascade.
+
+WIKI: docs/wiki/an-option-is-not-hidden-by-a-stylesheet.md

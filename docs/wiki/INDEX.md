@@ -88,6 +88,14 @@
   - L38 · ⚠ A low-confidence winner is returned, not refused
   - L48 · The gate
 
+## An option is not hidden by a stylesheet
+`docs/wiki/an-option-is-not-hidden-by-a-stylesheet.md`
+
+  - L7 · The comment directly above the offending line already recorded the fix
+  - L20 · And the two cascades disagreed, which is the failure the lockstep note warns about
+  - L33 · Measured
+  - L53 · What it unblocks, and what still blocks it
+
 ## ARCHITECTURE — concurrency, process model, memory, and the REASONING
 `docs/wiki/architecture.md`
 
@@ -3233,4 +3241,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2808 sections across 105 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2812 sections across 106 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -294,7 +294,18 @@ param, datalist, basefont, noembed, noframes, rp { display: none; }
    language names instead of a dropdown. A control shows ITS OWN text (the selected option, the
    value, the placeholder); its children are its data, not its content. */
 input, select, textarea, button, meter, progress { display: inline-block; }
-option, optgroup { display: none; }
+/**** THIS LINE USED TO READ `display: none`, AND THE COMMENT ABOVE ALREADY SAID WHY THAT WAS WRONG.
+   The `<source>`/`<picture>` note one paragraph earlier records the same lesson: hiding a
+   structurally-unrendered element HERE produces the right box and the wrong answer, because
+   `getComputedStyle` is what a page reads. An `<option>` is not hidden by a stylesheet; a `<select>`
+   draws its own text instead of its children (`control_text`), which is a STRUCTURAL fact.
+   Chrome computes `block`, and so does the MinimalCascade -- this sheet was the odd one out, which
+   is exactly the divergence the `apply_ua_defaults` lockstep note warns about.
+   Measured with the rule gone: the select is still 19px and the following paragraph still 54px
+   down, both Chrome-exact, so nothing paints the options into the line. What changes is that the
+   accessibility tree can finally see them -- under `display: none` a collapsed `<select>` exposed
+   NO options at all, which is every dropdown on the web missing from an agent's perception. */
+option, optgroup { display: block; }
 /* Form controls are WIDGETS: a browser draws them, the page does not. Without a border, a
    background and an intrinsic size, a checkbox is nothing at all — every form on the web rendered
    its labels next to empty space. (These are UA rules, lowest specificity: any author styling
