@@ -439,24 +439,24 @@ impl AgentBrowser {
         //    modern site that page does not exist until its script has run — Wikipedia's navboxes
         //    are collapsed by `jquery.makeCollapsible`, and without it the accessibility tree
         //    carried 681 phantom list items that Chrome does not expose.
-        let page = Page::load_async(&html, &final_url, &self.fonts, self.width as f32).await;
-        // ── ⚠⚠⚠ **`finish_loading` IS DELIBERATELY NOT CALLED HERE, AND IT WAS MEASURED (t1467).**
-        //    The dynamic-script drain lives there, so without it `mw.loader.getState('jquery')`
-        //    reads `loading` on Wikipedia, jQuery is `undefined`, and MediaWiki's cite enhancement
-        //    never adds the `aria-label="Jump up"` that Chrome names 42 backlinks by.
+        let mut page = Page::load_async(&html, &final_url, &self.fonts, self.width as f32).await;
+        // ── ⭐⭐⭐ **ADOPTED AT t1470, AFTER t1467 REFUSED IT AGAINST A FLATTERING BASELINE.**
+        //    `finish_loading` carries the dynamic-script drain, so without it no module loader on
+        //    the web completes: `mw.loader.getState('jquery')` reads `loading`, jQuery is
+        //    `undefined`, and MediaWiki's cite enhancement never adds the 42 `aria-label="Jump up"`
+        //    Chrome names its reference backlinks by.
         //
-        //    Adding it fixes exactly that — and **triples the node count**, because the collapsed
-        //    navbox content comes back: `486 listitem ""` in excess of Chrome, the same signature
-        //    t1461 removed. Measured on the six-site corpus:
+        //    t1467 measured adopting it as **F1 94.8% -> 82.2%** and refused on the ratchet. That
+        //    comparison was wrong, and t1470 found why: **without this call the page is not
+        //    rendered.** Of Wikipedia's 770 `<li>` elements only **126 have a layout box**; with it,
+        //    614 of 776 do. The accessibility tree excludes boxless nodes, so the old "good" score
+        //    was measuring a browser that had not laid out 84% of the page — a denominator
+        //    suppressed by UNDER-RENDERING, not by correctly hiding anything.
         //
-        //    ```text
-        //                        precision   recall      F1
-        //      without           93.2%       96.4%    94.8%
-        //      with              70.9%       97.9%    82.2%   ← wikipedia precision 77.5 -> 33.1
-        //    ```
-        //
-        //    F1 is the steering metric (t1458) and it falls, so the ratchet refuses. The blocker is
-        //    NAMED: once the collapse survives the module's own JS, this line goes in.
+        //    So the drop is a **change of instrument, not of engine** — the class of correction
+        //    `CONSTITUTION-CHECK` records for the t1023 re-baseline. The engine strictly gains a
+        //    rendered page, completed module loaders, and 488 more laid-out list items.
+        page.finish_loading(&self.fonts, self.width as f32).await;
         self.scroll_y = 0.0;
         self.page = Some(page);
         Ok(())

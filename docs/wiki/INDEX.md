@@ -3161,6 +3161,13 @@
   - L53 · What the next tick implements
   - L60 · Status
 
+## The good score was an unrendered page
+`docs/wiki/the-good-score-was-an-unrendered-page.md`
+
+  - L12 · The measurement that settles it
+  - L40 · So the drop is a change of instrument, not of engine
+  - L57 · Where the remaining gap actually is
+
 ## The headline is an integer, and the same binary does not give the same integer twice
 `docs/wiki/the-headlines-error-bar.md`
 
@@ -3287,4 +3294,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2834 sections across 112 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2837 sections across 113 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

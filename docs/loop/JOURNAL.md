@@ -106113,3 +106113,89 @@ wall (surface audit #88, ranked #1 twice) — 120 tests, all green when I ran th
 is one reading and nothing re-reads it.
 
 WIKI: docs/wiki/nineteen-of-five-hundred-and-sixty-seven.md
+
+## Tick 1470 — the good score was an unrendered page (2026-09-06)
+
+TICK SHAPE: capability (and a withdrawal)
+
+Rotation → B. Check #141's steer 1: *"the next Track B tick is the collapse, not the names… one probe
+answers it — is the collapsed container's computed `display` `none` after `finish_loading`?"*
+
+The probe answered a different and much more important question.
+
+### THE COLLAPSE HYPOTHESIS WAS FALSE IN BOTH DIRECTIONS
+
+```text
+  ready=complete | jq=function | mkc=function | mkcState=ready | citeState=ready | hook=yes
+  navbox=3 | collapsible=13 | collapsed=13 | content=0 | toggles=0
+```
+
+`jQuery.fn.makeCollapsible` **exists and its module is `ready`** — and there are **zero**
+`.mw-collapsible-content` wrappers and zero toggles, so it was never *called*. The `mw-collapsed`
+class is server-side and hides nothing by itself. And the DOM is nearly identical with and without
+`finish_loading` (770 vs 776 `<li>`), so nothing was "undone" either.
+
+### THE MEASUREMENT THAT SETTLES IT
+
+```text
+                          <li> in DOM    with a box    zero-size
+  without finish_loading      770            126           644
+  with finish_loading         776            614           162
+```
+
+⭐⭐⭐ **WITHOUT `finish_loading` THE PAGE IS NOT RENDERED — 84% OF ITS LIST ITEMS HAVE NO BOX.** The
+a11y tree excludes boxless nodes, so the score that looked good was measuring a browser that had not
+laid out most of the document. **A metric that excludes what is not rendered rewards a browser that
+renders nothing.**
+
+### WHAT THIS WITHDRAWS
+
+```text
+                     precision   recall      F1
+  t1458 (no JS)          63.5%    96.4%    76.6%
+  t1461 (JS, unrendered) 93.2%    96.4%    94.8%   ← WITHDRAWN
+  t1470 (rendered)       70.9%    97.2%    82.0%   ← the honest number
+```
+
+⚠⚠⚠ **TRACK B'S `>=90%` BAR IS NOT MET, AND I REPORTED IT AS MET FOR NINE TICKS.** t1461's headline,
+constitution check #141's "gate not scoreboard" answer, and the board's Track B row all rest on
+94.8%. The correct figure is **82.0%**.
+
+⚠⚠ **AND IT MADE t1467's REFUSAL WRONG.** That tick measured `finish_loading` at 94.8% → 82.2% and
+refused it on the ratchet — a correct change rejected because it was compared against a flattering
+baseline. *A refusal is only as good as the baseline it is measured against.* `finish_loading` is
+adopted here.
+
+The drop is a **change of instrument, not of engine** — the class of correction this project already
+requires labelling for the t1023 sweep re-baseline. The engine strictly gains: a rendered page,
+completed module loaders, 488 more laid-out list items, and the 42 `aria-label="Jump up"` names.
+
+### WHERE THE GAP ACTUALLY IS
+
+```text
+  blog.rust-lang.org   99.9%      danluu.com          99.8%
+  news.ycombinator     97.9%      www.a11yproject     97.5%
+  martinfowler.com     89.5%      en.wikipedia.org    48.5%   ← the whole gap
+
+  drive-probe TOTAL   78.1% / 81.4% scoped   (ungrounded 0; wikipedia's targets 501 -> 1016)
+```
+
+⭐ Five of six sites are 89.5-99.9% F1. **One site is 48.5%**, and one named mechanism —
+`makeCollapsible` loaded, ready, never invoked — stands between 82.0% and something near the pooled
+rest. That is a far better position than a 94.8% nobody could act on.
+
+### LANDED
+
+```
+  agent/src/lib.rs   finish_loading adopted, with the 126-of-770 measurement at the call site
+  53 agent test binaries green, 0 failures
+  no gate added — the deliverable is the corrected number and the adopted phase
+  Bar 0: no hang, no crash, no panic
+```
+
+NEXT: invoke the collapsible. `mediawiki.page.ready` reaches `ready` and `jQuery.fn.makeCollapsible`
+exists, so the missing step is whatever fires it over `$content` — most likely a `mw.hook`
+subscription that never receives its payload. One eval lists the registered hook members; that is the
+whole remaining Wikipedia gap and, on this corpus, the whole Track B gap.
+
+WIKI: docs/wiki/the-good-score-was-an-unrendered-page.md

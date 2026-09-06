@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1144** | ticks 1–1469 |
-| median tick cycle | **33m** | 1143 intervals |
+| ticks landed | **1145** | ticks 1–1470 |
+| median tick cycle | **33m** | 1144 intervals |
 | median, last 10 | **57m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.83** | 1376.7h elapsed |
-| median verify wall | **67s** | 1083 ticks |
+| **ticks per hour** | **0.83** | 1377.5h elapsed |
+| median verify wall | **67s** | 1084 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**525 of 1144 ticks** (46%) moved a
+**526 of 1145 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **525** capability ticks, median cycle **33m**
+* **526** capability ticks, median cycle **33m**
 * median diff per tick: **+297 / −35** lines across 9 files
 
 ## Every tick
@@ -1241,5 +1241,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1467** | 2026-09-06 09:55 | 34m | measurement-and-refusal | 8m | +240/−42 | 568 | 81 | 56.0% · | one phase short, and the next phase costs more than it buys (2026-09-06) |
 | **1468** | 2026-09-06 12:50 | 2.9h | measurement-and-refusal | 8m | +370/−44 | 568 | 81 | 56.0% · | the area tie-break was a proxy, and it was LOAD-BEARING (2026-09-06) |
 | **1469** | 2026-09-06 13:43 | 53m | capability | 8m | +257/−46 | 568 | 81 | 56.0% · | nineteen of five hundred and sixty-seven (2026-09-06) |
+| **1470** | 2026-09-06 14:35 | 52m | capability | 8m | +253/−58 | 568 | 81 | 56.0% · | the good score was an unrendered page (2026-09-06) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

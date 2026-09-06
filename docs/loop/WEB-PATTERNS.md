@@ -11502,3 +11502,31 @@ package the wall does not sweep, run the package sweep yourself.
 
 **Status:** t1469 — both stale gates repaired against headless Chrome, `CONSTELLATION.tsv` updated in
 the same tick as its gate requires; 570 binaries / 595 tests green.
+
+---
+
+## A metric that excludes what is not rendered rewards a browser that renders nothing
+
+**Pattern.** When a score counts only nodes with a layout box, an incompletely loaded page scores
+*better* than a complete one — it emits fewer phantoms and the omissions are invisible to precision.
+The Track B node-match F1 read **94.8%** on a page where **126 of 770 list items had a box**, and
+**82.0%** once the page was actually rendered (614 of 776 boxed). The higher number was the browser
+not having laid out 84% of the document.
+
+**How it is found.** Count the denominator's own health, not just the score. One probe —
+`getBoundingClientRect()` over every element of the class that dominates the excess — separates "we
+correctly hid it" from "we never laid it out". The two are indistinguishable in the metric and
+opposite in meaning.
+
+**The trap it set for the next tick.** Because the flattering baseline was believed, the *correct*
+change (adding `finish_loading`) measured as a regression and was refused on the ratchet. **A
+refusal is only as good as the baseline it is measured against** — re-derive the baseline before
+trusting a refusal that says "more browser is worse".
+
+**Label the re-baseline.** The drop is a change of instrument, not of engine: the engine strictly
+gained a rendered page, completed module loaders and 488 laid-out list items. This project already
+requires that labelling for sweep re-baselines (t1023); it applies to any metric whose denominator
+moves.
+
+**Status:** t1470 — `finish_loading` adopted, F1 re-baselined 94.8% → **82.0%**, Track B's `>=90%`
+bar explicitly **not met**. Five of six corpus sites are 89.5-99.9%; Wikipedia alone is 48.5%.
