@@ -106347,3 +106347,81 @@ the four in-flow steps as sub-ranks under each stacking layer, and check clickab
 attempt rather than after the wall.
 
 WIKI: docs/wiki/the-refusing-oracle-runs-in-two-seconds.md
+
+## Tick 1473 — the residue's diagnosis was at the wrong level (2026-09-06)
+
+TICK SHAPE: capability
+
+Rotation → B. Most of this tick was spent on Track B's martinfowler gap and produced six negatives;
+the capability that landed is t1464's named residue.
+
+### SIX HYPOTHESES RULED OUT, AND ONE MEASUREMENT THAT COULD NOT ANSWER
+
+`martinfowler.com` (81.7% precision) has 2 extra `navigation` nodes that sit **inside `display:none`
+parents at 0×0** and still reach our tree. Each candidate mechanism was built as a fixture and
+measured against Chrome through `a11y-score --diff`:
+
+```text
+  a display:none SUBTREE leaks                 100% Chrome-exact
+  a MEDIA-QUERY-hidden subtree leaks           100% Chrome-exact
+  XHTML `<button …/>` re-nests the document    identical (betaParent=BUTTON, bodyKids=4)
+  Chrome drops empty <p> and we keep them      Chrome keeps them too
+  a ZERO-AREA landmark is dropped by Chrome    100% Chrome-exact
+  a zero-area landmark's CONTENTS are dropped  100% Chrome-exact
+```
+
+⚠ And the Wikipedia collapsible thread produced a **measurement that cannot answer its question**.
+The hook *has* fired (`hookFired=YES len=1`) and `jQuery.fn.makeCollapsible` exists, but calling it
+does nothing and a freshly-registered `$(document).ready` never runs — because **jQuery schedules
+ready on a `setTimeout`, and a post-load `eval_for_test` gets no further timer turn.** Injecting the
+probe into the page instead moved the reading *earlier* than the module loaders, so it could not see
+the end state either. Chrome gave the identical answer on the same local file. *An instrument that
+can only observe before or after the window it is measuring cannot measure it.*
+
+### THE CAPABILITY: t1464's RESIDUE, DIAGNOSED ONE LEVEL DOWN
+
+t1464 left `<audio controls>` at `0x17` against Chrome's `300x54` and explained it as *"there is no
+audio control-bar widget with an intrinsic size."*
+
+⭐⭐ **THE WIDGET WAS NEVER THE MISSING PIECE.** `<video>` has no widget either and is `300x150`,
+because it is an **atomic inline replaced** box and therefore takes CSS 2.1 §10.3.2's *default object
+size*. `<audio controls>` was an ordinary inline, so no default object size could ever apply and the
+`17` was just a line box. *A residue's diagnosis is a hypothesis, and the wrong level makes a cheap
+fix look expensive.*
+
+```text
+                           Chrome          before          after
+  <audio>                  none 0x0        none 0x0        none 0x0       ✓ (t1464)
+  <audio controls>         inline 300x54   inline 0x17     inline 300x54
+  <video>       CONTROL    inline 300x150  inline 300x150  inline 300x150 ✓
+```
+
+⚠ Four attempts at four layers, and only the last was upstream of the others: the intrinsic-size
+function's tag list (never called for `<audio>`), its height arm (same), `default_object_tag`
+(reached only by boxes already replaced), and finally `is_atomic_inline_replaced` — the gate that
+decides whether any of the above applies. **The first two were REVERTED rather than left in**: an
+edit that changes no behaviour is machinery a later reader has to explain, and the shipped change
+would otherwise have contained three guesses and one mechanism.
+
+### LANDED
+
+```
+  engine/layout/src/lib.rs   audio in is_atomic_inline_replaced, is_replaced_tag,
+                             default_object_tag + a 54px height (NOT the shared 150)
+  gate  g_an_audio_player_reserves_its_space   RED under 3 named mutations
+  vacuity arm: <video> must already take the default object size
+  local clickability 100.0% (0 missed of 477) — unchanged, checked in two seconds (t1472)
+  WPT html/semantics/embedded-content 863 -> 863 · css/css-display 211 -> 211 ·
+      css/css-sizing 1329 -> 1329    all 0 fixed / 0 new, same-hour control
+  571 manuk-page binaries green (the t1469 practice: the wall sweeps 19 of them)
+  Bar 0: no hang, no crash, no panic
+```
+
+⚠ `audio` is deliberately absent from `is_replaced_element`: like `iframe`/`object`/`embed` it is
+atomic in a line without taking §10.4's ratio adjustment, because a control bar has no aspect ratio.
+
+NEXT: the Wikipedia collapsible needs an instrument that can observe *during* the load window — the
+existing `--drain`-style budget gates prove the timer queue is drainable, so a probe that reports on
+every drain turn rather than at one instant would settle in one run what three probes could not.
+
+WIKI: docs/wiki/an-audio-player-reserves-its-space.md

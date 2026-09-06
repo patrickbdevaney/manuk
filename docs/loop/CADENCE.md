@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1147** | ticks 1–1472 |
-| median tick cycle | **33m** | 1146 intervals |
-| median, last 10 | **57m** | 10 intervals |
+| ticks landed | **1148** | ticks 1–1473 |
+| median tick cycle | **33m** | 1147 intervals |
+| median, last 10 | **63m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.83** | 1379.0h elapsed |
-| median verify wall | **67s** | 1086 ticks |
+| **ticks per hour** | **0.83** | 1381.0h elapsed |
+| median verify wall | **67s** | 1087 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **568**
+* **live gates**: 27 → **569**
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**527 of 1147 ticks** (46%) moved a
+**528 of 1148 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **527** capability ticks, median cycle **33m**
+* **528** capability ticks, median cycle **33m**
 * median diff per tick: **+297 / −35** lines across 9 files
 
 ## Every tick
@@ -1244,5 +1244,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1470** | 2026-09-06 14:35 | 52m | capability | 8m | +253/−58 | 568 | 81 | 56.0% · | the good score was an unrendered page (2026-09-06) |
 | **1471** | 2026-09-06 15:20 | 45m | capability | 8m | +612/−51 | 568 | 81 | 56.0% · | the whole gap is addressing, and most of it needs a POSITION (2026-09-06) |
 | **1472** | 2026-09-06 16:01 | 41m | measurement | 8m | +215/−42 | 568 | 81 | 56.0% · | the oracle that refused a tick runs in two seconds (2026-09-06) |
+| **1473** | 2026-09-06 18:00 | 2.0h | capability | 8m | +310/−47 | 569 | 81 | 56.0% · | the residue's diagnosis was at the wrong level (2026-09-06) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

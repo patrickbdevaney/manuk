@@ -3518,10 +3518,14 @@ fn shift_content_y(content: &mut BoxContent, dy: f32) {
 /// cascade's replaced-element set, wider than `is_replaced_element` on purpose: `iframe` /
 /// `object` / `embed` don't take §10.4 ratio adjustment but are just as atomic in a line.
 fn is_atomic_inline_replaced(dom: &Dom, styles: &StyleMap, node: NodeId) -> bool {
+    // ⚠ `audio` is here and NOT in `is_replaced_element`: like `iframe`/`object`/`embed` it is
+    //   atomic in a line without taking §10.4's ratio adjustment — a control bar has no aspect
+    //   ratio. The `display: Inline` test is what keeps a BARE `<audio>` out: the UA sheet makes it
+    //   `display: none`, so only `<audio controls>` reaches here.
     matches!(styles.get(&node).map(|s| s.display), Some(Display::Inline))
         && matches!(
             dom.tag_name(node),
-            Some("img" | "canvas" | "video" | "svg" | "object" | "embed" | "iframe")
+            Some("img" | "canvas" | "video" | "svg" | "object" | "embed" | "iframe" | "audio")
         )
 }
 
@@ -5804,9 +5808,14 @@ impl Ctx<'_> {
         // NOT in the list: a sourceless image has no default object size in any browser. Applied
         // here and not in UA defaults because an AUTHOR width must win and a definite-height-plus-
         // ratio derivation must win — both already resolved above (the tick-153 lesson).
+        // ⭐ **`<audio controls>` IS A REPLACED BOX; A BARE `<audio>` IS NOTHING AT ALL.** Chrome
+        //    computes `display: none` at `0x0` for the bare form (t1464 put that in the UA sheet)
+        //    and `inline` at **300x54** for the control bar, which is the only form of the element a
+        //    user ever sees. Without a default object size it laid out `0x17` — the right display and
+        //    the wrong box, so a player reserved no space and everything below it moved up.
         let default_object_tag = matches!(
             self.dom.tag_name(node),
-            Some("svg" | "canvas" | "video" | "iframe" | "object" | "embed")
+            Some("svg" | "canvas" | "video" | "iframe" | "object" | "embed" | "audio")
         );
         if s.width == Dim::Auto
             && !s.width_stretch
@@ -6511,7 +6520,13 @@ impl Ctx<'_> {
         // 300-wide case AND for an authored width (Chrome-measured: `<svg style="width:200px">`
         // with no viewBox is 200×150, not 200×0).
         if default_object_tag && own_definite_h.is_none() && s.aspect_ratio.is_none() {
-            content_height = 150.0;
+            // ⚠ An audio control bar is NOT the 300x150 default object size — Chrome draws it at
+            // 300x54, and taking the shared default would reserve nearly three times too much.
+            content_height = if self.dom.tag_name(node) == Some("audio") {
+                54.0
+            } else {
+                150.0
+            };
         }
         // The height half of the broken-image placeholder — see the `broken_img_placeholder` comment
         // above. 16 tall, Chrome-measured, and only when nothing definite was resolved for it; with
@@ -9087,7 +9102,7 @@ impl Ctx<'_> {
         if !is_img
             && !matches!(
                 self.dom.tag_name(node),
-                Some("svg" | "canvas" | "video" | "object" | "embed" | "iframe")
+                Some("svg" | "canvas" | "video" | "object" | "embed" | "iframe" | "audio")
             )
         {
             return None;
@@ -17116,7 +17131,7 @@ fn kid_own_first_baseline(k: &LayoutBox, dom: &Dom, styles: &StyleMap) -> Option
 fn is_replaced_tag(dom: &Dom, node: NodeId) -> bool {
     matches!(
         dom.tag_name(node),
-        Some("img" | "canvas" | "video" | "svg" | "object" | "embed" | "iframe")
+        Some("img" | "canvas" | "video" | "svg" | "object" | "embed" | "iframe" | "audio")
     )
 }
 

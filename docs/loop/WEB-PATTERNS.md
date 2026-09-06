@@ -11585,3 +11585,30 @@ negative is a small confirmation that a general rule the tree depends on is corr
 
 **Status:** t1472 — the local clickability baseline is `100.0%, 0 missed of 477 links`; five
 hypotheses for martinfowler's 81.7% precision ruled out and recorded.
+
+---
+
+## A residue's diagnosis is a hypothesis — and the wrong level makes a cheap fix look expensive
+
+**Pattern.** When a tick records what it did *not* fix, it also records why, and that "why" is
+untested. t1464 left `<audio controls>` at `0x17` against Chrome's `300x54` and explained it as
+*"there is no audio control-bar widget with an intrinsic size."* A widget was never the missing
+piece: `<video>` has none either and is `300x150`, because it is an **atomic inline replaced** box
+and takes CSS 2.1 §10.3.2's default object size. `<audio controls>` was an ordinary inline, so no
+default object size could apply. The fix was three predicate entries.
+
+**How to find the right level.** Follow the value backwards through the predicates that gate it, not
+forwards from the symptom. Four attempts at four layers here, and only the last — the gate deciding
+whether the element is replaced at all — was upstream of the others.
+
+**⚠ Revert the attempts that changed nothing, before trying the next layer.** Two of the four edits
+were dead code the moment they failed to move the number. Left in, the shipped change would have
+contained three guesses and one mechanism, and a later reader would have had to explain all four.
+
+**Fixture requirement.** Assert the neighbour that already works (`<video>` at `300x150`) in the same
+row set: it is the vacuity arm *and* it stops a later tick collapsing two different default sizes
+into one constant.
+
+**Status:** landed t1473; local clickability unchanged at 100.0% (0 of 477), WPT
+`html/semantics/embedded-content`, `css/css-display` and `css/css-sizing` all flat against a
+same-hour control; 571 `manuk-page` binaries green.

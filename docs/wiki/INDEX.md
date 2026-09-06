@@ -105,6 +105,12 @@
   - L44 · Measured
   - L51 · ⚠ And a harness lesson that cost most of the tick
 
+## An audio player reserves its space
+`docs/wiki/an-audio-player-reserves-its-space.md`
+
+  - L28 · Three details that keep it scoped
+  - L43 · What it cost to find, which is the reusable part
+
 ## An option is not hidden by a stylesheet
 `docs/wiki/an-option-is-not-hidden-by-a-stylesheet.md`
 
@@ -3307,4 +3313,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2842 sections across 115 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2844 sections across 116 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
