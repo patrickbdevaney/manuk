@@ -11278,3 +11278,29 @@ binary abort on drop.
 
 **Status:** landed t1461, gated by `g_the_agents_browser_runs_the_page` +
 `g_the_agents_browser_fetches_a_script` under two mutations each.
+
+---
+
+## Price the term before you build it — and expect the headline metric not to move
+
+**Pattern.** When a measurement decomposes a failure, add the candidate fix **to the measurement**
+first as an extra column. `drive-probe`'s `+landmark` column re-keyed the agent's address as
+`(landmark, role, name)` and reported `80.7% -> 82.4%` before a line of resolver code existed —
+including the rows where it buys nothing (a site with no landmarks: `71.2% -> 71.2%`).
+
+**The discipline it enforces.** A priced term arrives with its own limits attached. Here: sites
+without landmarks do not move, and duplicates *within* one landmark still need a further term. Both
+are asserted in the gate, so the landmark cannot later be mistaken for a solved problem.
+
+**And the headline will not move.** `drive-probe`'s `rate` asks *is `(role, name)` unique* — a
+property of the page, not of the resolver. Giving the agent a way to disambiguate does not remove
+the duplicates. **A capability and the metric that priced it can ask different questions**; reporting
+the first as if it moved the second is the mistake to avoid.
+
+**Fixture requirement.** When the action under test cannot succeed (a `file://` link to nothing),
+assert on **which** target it reached, not on success. The two twins' differing hrefs make the
+failure message name the node that was clicked — stronger evidence than `is_ok()`, which either twin
+would satisfy.
+
+**Status:** landed t1462 as `targeting::resolve_target_in` + `AgentBrowser::click_by_name_in`, gated
+by `g_the_posts_link_in_the_navigation` under three mutations.

@@ -195,6 +195,54 @@ pub fn resolve_target_scoped(
     role: Option<&Role>,
     viewport: Rect,
 ) -> Option<Targeted> {
+    resolve_target_in(tree, intent, role, None, viewport)
+}
+
+/// Map every node to the role of its nearest enclosing landmark.
+fn landmark_scopes(tree: &A11yNode) -> std::collections::HashMap<NodeId, Role> {
+    let mut m = std::collections::HashMap::new();
+    fn go(n: &A11yNode, scope: Option<&Role>, m: &mut std::collections::HashMap<NodeId, Role>) {
+        let here = if crate::drivability::is_landmark(&n.role) {
+            Some(&n.role)
+        } else {
+            scope
+        };
+        if let Some(r) = here {
+            m.insert(n.node, r.clone());
+        }
+        for c in &n.children {
+            go(c, here, m);
+        }
+    }
+    go(tree, None, &mut m);
+    m
+}
+
+/// [`resolve_target_scoped`], further restricted to targets inside a given **landmark**.
+///
+/// ⭐⭐⭐ **`(role, name)` IS NOT A SUFFICIENT ADDRESS FOR THE REAL WEB.** `drive-probe` measured it:
+/// of the targets an agent can perceive across six real sites, **99% of the ones it cannot act on
+/// are ambiguous** — and listing them showed why. They are the same links in the header nav and in
+/// the footer: `Posts`, `About`, `GitHub`, `Sitemap`. Chrome's tree contains the same twins, so this
+/// is not a projection defect; it is an addressing scheme that cannot say what a human says without
+/// thinking about it — *the `Posts` link **in the navigation***.
+///
+/// Re-keying the address as `(landmark, role, name)` was priced on the corpus **before** this
+/// existed: `77.7% -> 81.1%` drivable, and much more where the duplication is header-vs-footer
+/// (a11yproject `61.2 -> 77.6`).
+///
+/// ⚠ It is not the whole answer, and the pricing said so: a site with no landmarks does not move at
+/// all, and duplicates *within* one landmark need a further term.
+///
+/// ⚠ Filtered AFTER scoring, for the same reason the role is: a runner-up in another landmark is
+/// not competition, and must not make the winner look ambiguous.
+pub fn resolve_target_in(
+    tree: &A11yNode,
+    intent: &str,
+    role: Option<&Role>,
+    landmark: Option<&Role>,
+    viewport: Rect,
+) -> Option<Targeted> {
     let kw = keywords(intent);
     let mut scored: Vec<(f32, &A11yNode)> = Vec::new();
     collect_scored(tree, &kw, &viewport, &mut scored);
@@ -203,6 +251,10 @@ pub fn resolve_target_scoped(
     // competition and must not make the winner look ambiguous.
     if let Some(r) = role {
         scored.retain(|(_, n)| n.role.matches(r));
+    }
+    if let Some(l) = landmark {
+        let scopes = landmark_scopes(tree);
+        scored.retain(|(_, n)| scopes.get(&n.node).is_some_and(|s| s.matches(l)));
     }
     if scored.is_empty() {
         return None;

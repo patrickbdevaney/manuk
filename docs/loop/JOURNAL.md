@@ -105418,3 +105418,77 @@ ambiguity is now concentrated on a smaller, truer denominator — wikipedia's 19
 targets — so landmark-scoped resolution is worth more than the 3.3 points t1459 priced.
 
 WIKI: docs/wiki/the-agents-browser-had-no-javascript.md
+
+## Tick 1462 — Track C: the landmark is the missing term, and it was priced before it was built (2026-09-06)
+
+TICK SHAPE: capability
+
+Rotation → C. Both t1459 and constitution check #140 named the same next step, so it was already
+specified: *"implement landmark-scoped resolution in `AgentBrowser::resolve` — the 3.3 points are
+already measured."*
+
+### WHAT WAS ALREADY KNOWN, AND WHY THAT MATTERED
+
+t1459 did not just find that 99% of unactionable targets are ambiguous — it added a `+landmark`
+column to `drive-probe` that reported what re-keying the address would buy, **with no resolver
+change at all**:
+
+```text
+                            rate   +landmark
+  martinfowler.com         84.3%       89.3%
+  news.ycombinator.com     71.2%       71.2%     ← no landmarks; does not move at all
+  en.wikipedia.org/…       61.9%       65.3%
+  TOTAL                    80.7%       82.4%
+```
+
+⭐⭐ **A PRICED TERM ARRIVES WITH ITS OWN LIMITS ATTACHED.** The row that buys nothing is as
+informative as the ones that buy the most, and both are now asserted in the gate rather than left as
+prose — a site with no landmarks does not move, and duplicates *within* one landmark still need a
+further term.
+
+### LANDED
+
+`targeting::resolve_target_in` filters candidates to those whose nearest enclosing landmark matches,
+**after** scoring — the same placement as the role filter and for the same recorded reason: a
+runner-up in another landmark is not competition and must not make the winner look ambiguous.
+`AgentBrowser::click_by_name_in(landmark, role, name)` is the production caller, because a
+capability with no caller is the shape this repo keeps finding (t1402, t1403).
+
+```
+  agent/src/targeting.rs   landmark_scopes() + resolve_target_in()
+  agent/src/lib.rs         AgentBrowser.landmark + click_by_name_in()
+  gate  g_the_posts_link_in_the_navigation   RED under 3 named mutations
+        1. drop the landmark filter         -> both scoped calls reach the same node
+        2. filter on the node's OWN role    -> nothing is inside a landmark; every call fails
+        3. record only the landmark node    -> descendants lose their scope
+  vacuity arm: the page must genuinely contain TWO `Posts` links
+  53 agent test binaries green, 0 failures
+  Bar 0: no hang, no crash, no panic
+```
+
+### THE HEADLINE DID NOT MOVE, AND THAT IS CORRECT
+
+```text
+  drive-probe TOTAL   before 80.7% / 82.4%   after 80.4% / 82.1%   (run-to-run band)
+```
+
+⭐⭐⭐ **`drive-probe`'s `rate` ASKS WHETHER `(role, name)` IS UNIQUE — A PROPERTY OF THE PAGE, NOT OF
+THE RESOLVER.** Giving the agent a way to disambiguate does not remove the duplicates, so the column
+that moves is `+landmark`, and it moved at t1459 when it was added. **A capability and the metric
+that priced it can ask different questions**, and reporting the first as though it moved the second
+is exactly the kind of claim this loop exists to refuse. The number to watch for this feature is the
+gap between the two columns closing as callers adopt it, not the first column rising.
+
+### THE FIXTURE ASSERTION IS THE PART I'D KEEP
+
+⚠ The fixture's links are `file://` paths to nothing, so activation always errors — and my first
+assertion was `is_ok()`, which **either twin would have satisfied**. The nav's `Posts` points at
+`/posts` and the footer's at `/posts-archive`, so the attempted URL in the error names the node that
+was actually clicked. *When the action under test cannot succeed, assert on WHICH target it reached.*
+The failing path carried better evidence than the passing one would have.
+
+NEXT: the term after the landmark, for duplicates that share one — `blog.rust-lang.org`'s remaining
+13 and wikipedia's 190 of 501 are all inside a single landmark. Price it in `drive-probe` first, the
+way the landmark was: the candidates are an ordinal and the nearest preceding heading.
+
+WIKI: docs/wiki/the-landmark-is-the-missing-term.md

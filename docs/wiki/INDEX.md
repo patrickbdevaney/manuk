@@ -3115,6 +3115,14 @@
   - L41 · The band belongs in the tool
   - L53 · The session's fourth instrument found wrong about its own numbers
 
+## The landmark is the missing term
+`docs/wiki/the-landmark-is-the-missing-term.md`
+
+  - L17 · Priced before it was built
+  - L36 · Why the headline rate does not move when you add it
+  - L43 · The limits, asserted rather than implied
+  - L51 · A test that asserts the right thing about a link it cannot follow
+
 ## The scrolling area of every element — measured, implemented, and refused
 `docs/wiki/the-scrolling-area-of-every-element.md`
 
@@ -3225,4 +3233,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2804 sections across 104 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2808 sections across 105 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -159,6 +159,10 @@ pub struct AgentBrowser {
     /// The accessibility snapshot from the last [`Self::observe_diff`], for race-free
     /// in-process semantic diffing of what an action changed.
     last_a11y: Option<manuk_a11y::A11yNode>,
+    /// The landmark every `resolve` is currently restricted to, set for the duration of one
+    /// [`Self::click_by_name_in`]. `None` — the default — resolves across the whole page exactly as
+    /// before, so no existing caller changes behaviour.
+    landmark: Option<manuk_a11y::Role>,
 }
 
 /// A synchronous readiness snapshot (see [`AgentBrowser::readiness`]).
@@ -384,6 +388,7 @@ impl AgentBrowser {
             scroll_y: 0.0,
             history: manuk_page::history::SessionHistory::new(),
             last_a11y: None,
+            landmark: None,
         }
     }
 
@@ -610,13 +615,19 @@ impl AgentBrowser {
             width: self.width as f32,
             height: self.height as f32,
         };
-        crate::targeting::resolve_target_scoped(&tree, name, Some(role), viewport)
-            .map(|t| t.node)
-            // The scorer needs a name to match on; `find_containing` is kept as the fallback for an
-            // intent that reduces to no keywords (punctuation, an empty string) so no caller that
-            // worked before stops working.
-            .or_else(|| tree.find_containing(role, name).map(|n| n.node))
-            .with_context(|| format!("no {} named {name:?} on this page", role.as_str()))
+        crate::targeting::resolve_target_in(
+            &tree,
+            name,
+            Some(role),
+            self.landmark.as_ref(),
+            viewport,
+        )
+        .map(|t| t.node)
+        // The scorer needs a name to match on; `find_containing` is kept as the fallback for an
+        // intent that reduces to no keywords (punctuation, an empty string) so no caller that
+        // worked before stops working.
+        .or_else(|| tree.find_containing(role, name).map(|n| n.node))
+        .with_context(|| format!("no {} named {name:?} on this page", role.as_str()))
     }
 
     /// §4b — type `text` into the text field with accessible name `field`.
@@ -840,6 +851,24 @@ impl AgentBrowser {
     }
 
     /// §4b — click the element with this role + accessible name.
+    /// [`click_by_name`](Self::click_by_name) restricted to one **landmark** — *the `Posts` link in
+    /// the navigation*, which is what a human says and what `(role, name)` alone cannot express.
+    ///
+    /// ⭐ `drive-probe` measured the gap this closes: 99% of the targets an agent perceives but
+    /// cannot act on are ambiguous, and the duplicates are overwhelmingly the same links in the
+    /// header nav and the footer. See [`crate::targeting::resolve_target_in`].
+    pub async fn click_by_name_in(
+        &mut self,
+        landmark: &manuk_a11y::Role,
+        role: &manuk_a11y::Role,
+        name: &str,
+    ) -> Result<Activation> {
+        let prev = self.landmark.replace(landmark.clone());
+        let out = self.click_by_name(role, name).await;
+        self.landmark = prev;
+        out
+    }
+
     pub async fn click_by_name(
         &mut self,
         role: &manuk_a11y::Role,
