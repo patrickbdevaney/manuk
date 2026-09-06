@@ -106024,3 +106024,92 @@ wall took ~50 minutes to say so. And `g_constellation_unknowns` is still red on 
 four ticks carried.
 
 WIKI: docs/wiki/the-area-tie-break-was-a-proxy.md
+
+## Tick 1469 — nineteen of five hundred and sixty-seven (2026-09-06)
+
+TICK SHAPE: capability
+
+Rotation → A. Check #141's steer 2 and t1468's NEXT both named the same thing:
+`g_constellation_unknowns` red on the clean tree for four ticks while every wall run said green.
+
+### NEITHER WAS LYING — THE WALL NEVER RAN IT
+
+```text
+  gate files in engine/page/tests/           567
+  launched by name in verify.sh               19
+  manuk-page in the crate-suite loop          NO
+```
+
+The loop is `for c in manuk-css manuk-layout manuk-paint manuk-dom manuk-net manuk-agent
+manuk-shell`; the one `manuk-page` line above it is a **build warm-up**, not a test run. ⭐⭐⭐ **548
+of the 567 gates in this project's largest gate directory are executed by nothing on the per-tick
+path.**
+
+⚠ And it is a **recurrence with a number**: t1403 recorded *"a count of GATE FILES is not a count of
+EXECUTED gates"* after two gates sat red for three ticks under a green `GATES 534`. Same defect,
+larger scale, never closed.
+
+### SO I RAN THEM. TWO WERE RED, BOTH THE SAME SHAPE
+
+Both are the engine getting **more correct** while the gate held the old claim — the t1344 pattern,
+which that tick measured at *four of seven red gates*:
+
+```text
+  gate                       pinned                        now      Chrome
+  g_constellation_unknowns   img.sizes-auto=undefined       auto     auto
+  g_iface_surface_2          overclaimed:none               ToggleEvent exists
+```
+
+⭐ The first **carried its own answer in a trailing comment** — `// Chrome: auto` — and its header
+says precisely what to do: *"a red row here is not necessarily a regression — it may be a capability
+that just ARRIVED. Re-measure against headless Chrome, update this claim, and update the matching row
+in `CONSTELLATION.tsv` in the SAME tick."* Done, both halves.
+
+⭐⭐ The second is subtler and worth stating carefully. `g_iface_surface_2` keeps a list of
+capabilities this engine does **not** have, so `'X' in window` must answer `false` and a page can
+route around us (t772's half-installed-API trap). `ToggleEvent` was on it, and measured against
+Chrome on the same fixture we are **byte-identical**:
+
+```text
+  typeof=function | ctor=ok old=closed new=open type=toggle | isEvent=true
+  dispatched=ToggleEvent/old=closed/new=open        (on `details.open = true`)
+```
+
+**Leaving the name on that list asks the engine to lie in the other direction** — the same defect the
+gate exists to catch, mirrored.
+
+### AFTER THE REPAIRS
+
+```text
+  cargo test -p manuk-page --features stylo,spidermonkey --no-fail-fast
+    570 binaries ok, 595 tests, 0 failures
+```
+
+⚠⚠ **`--no-fail-fast` IS LOAD-BEARING AND I NEARLY MISSED IT.** `cargo test` stops at the first
+failing binary, so my first sweep ran **230 of 568** and produced a clean-looking tail that did not
+exist. *A green count from a fail-fast run is a count of the binaries before the first red.*
+
+⚠ One gate flaked only under the full-suite load and passed alone (`g_forced_reflow_budget`, a timing
+gate starved by 230 concurrent binaries). Re-run a timing failure alone before believing it.
+
+### LANDED
+
+```
+  engine/page/tests/g_constellation_unknowns.rs   img.sizes-auto: undefined -> auto (Chrome-measured)
+  engine/page/tests/g_iface_surface_2.rs          ToggleEvent off the not-supported list
+  docs/loop/CONSTELLATION.tsv                     srcset row's residue updated in the same tick
+  570 binaries / 595 tests green
+  Bar 0: no hang, no crash, no panic
+```
+
+⚠ HARNESS (one line, per the scope rule): `scripts/verify.sh` runs 19 of `engine/page`'s 567 gates
+and does not include `manuk-page` in its crate-suite loop. Reported, not fixed. The agent-side half
+costs nothing and is now a practice: **before landing a gate in a package the wall does not sweep,
+run the package sweep yourself.**
+
+NEXT: the other packages deserve the same question. `manuk-a11y`, `manuk-html`, `manuk-text`,
+`manuk-media`, `manuk-js`, `manuk-compositor`, `manuk-store` and `manuk-bidi` are all outside the
+wall (surface audit #88, ranked #1 twice) — 120 tests, all green when I ran them at t1464, but that
+is one reading and nothing re-reads it.
+
+WIKI: docs/wiki/nineteen-of-five-hundred-and-sixty-seven.md

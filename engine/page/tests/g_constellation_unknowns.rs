@@ -214,8 +214,13 @@ fn the_capability_map_unknowns_have_a_measured_verdict() {
         ("button.command", "no"),           // Chrome: yes
         ("button.commandForElement", "no"), // Chrome: yes
         ("interestTargetElement", "no"),
-        ("writingSuggestions", "no"),    // Chrome: yes
-        ("img.sizes-auto", "undefined"), // Chrome: auto
+        ("writingSuggestions", "no"), // Chrome: yes
+        // ⭐ **THE ENGINE GOT MORE CORRECT AND THIS ROW HELD THE OLD ANSWER.** It pinned
+        // `undefined` with its own comment already reading `// Chrome: auto`; `img.sizes` now
+        // reflects, and headless Chrome on the same fixture answers `auto`. Re-measured at t1469,
+        // which is what this gate's header asks for when a row goes red: *"a red row here is not
+        // necessarily a regression — it may be a capability that just ARRIVED."*
+        ("img.sizes-auto", "auto"),
         ("CustomElementRegistry", "present"),
         ("WebTransport", "absent"),           // Chrome: present
         ("RTCPeerConnection", "absent"),      // Chrome: present

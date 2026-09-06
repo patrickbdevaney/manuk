@@ -2649,6 +2649,13 @@
   - L2049 · What the rewrite covers
   - L2061 · ⚠⚠⚠ One histogram bar, two mechanisms — the rank was right and the price was wrong
 
+## Nineteen of five hundred and sixty-seven
+`docs/wiki/nineteen-of-five-hundred-and-sixty-seven.md`
+
+  - L24 · What was actually red
+  - L52 · After the repairs
+  - L66 · The standing rule this leaves
+
 ## One hit-test, not two
 `docs/wiki/one-hit-test-not-two.md`
 
@@ -3280,4 +3287,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2831 sections across 111 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2834 sections across 112 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -78,8 +78,15 @@ const HTML: &str = r#"<!doctype html><html><head>
     var CLAIMED = [];
     ['OffscreenCanvas','TrustedTypePolicyFactory','XMLHttpRequestUpload','ReportingObserver',
      'PerformanceResourceTiming','PerformanceObserverEntryList','StaticRange','CSSKeyframeRule',
-     'DeviceMotionEvent','DeviceOrientationEvent','GamepadEvent','TrackEvent','ToggleEvent',
+     'DeviceMotionEvent','DeviceOrientationEvent','GamepadEvent','TrackEvent',
      'FormDataEvent','ContentVisibilityAutoStateChangeEvent','CDATASection','DOMStringMap']
+    // ⭐ `ToggleEvent` CAME OFF THIS LIST AT t1469 — the capability ARRIVED and the list did not
+    //    notice. Measured against headless Chrome on the same fixture, byte-identical:
+    //      typeof=function | ctor=ok old=closed new=open type=toggle | isEvent=true
+    //      dispatched=ToggleEvent/old=closed/new=open   (on `details.open = true`)
+    //    This list means "a capability this engine does not have, so feature detection must keep
+    //    answering false". Once the engine HAS it, leaving the name here asks the engine to lie in
+    //    the other direction — which is the same defect this gate exists to catch, mirrored.
       .forEach(function (n) { if (typeof globalThis[n] !== 'undefined') { CLAIMED.push(n); } });
     R.push('overclaimed:' + (CLAIMED.length ? CLAIMED.join(',') : 'none'));
 

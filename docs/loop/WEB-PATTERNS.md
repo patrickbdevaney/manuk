@@ -11472,3 +11472,33 @@ priced cost: -62 clickable links if closed by tie-break alone.
 
 **Status:** t1468, measurement-and-refusal. Engine reverted; the three gates restored to their
 pre-tick expectations.
+
+---
+
+## A gate that disagrees with the wall about its own tree — ask which one is running
+
+**Pattern.** When a gate is red on a clean tree while the wall reports green for several ticks
+running, the tempting readings are "the gate is flaky" or "the wall is stale". Check a third
+possibility first: **the wall may not be running it.** Here, 19 of `engine/page/tests/`'s 567 gate
+files are launched by name and the package is absent from the crate-suite loop, so 548 gates are
+executed by nothing on the per-tick path.
+
+**⚠ It is a recurrence.** t1403 recorded *"a count of GATE FILES is not a count of EXECUTED gates"*
+after two gates sat red for three ticks under a green `GATES 534`. Same defect, larger number, not
+closed.
+
+**What the unrun gates were hiding.** Both reds were the *engine getting more correct* while the
+gate held a stale pin — `img.sizes` now reflects `auto` (the row's own trailing comment already said
+`// Chrome: auto`), and `ToggleEvent` now works exactly as Chrome does. The second matters most:
+that gate keeps a list of capabilities we do **not** have so feature detection can route around us,
+and leaving an arrived capability on it **asks the engine to lie in the other direction**.
+
+**⚠ `--no-fail-fast` or the count is a lie.** `cargo test` stops at the first failing binary: the
+first sweep ran 230 of 568 and its clean tail did not exist. And re-run a timing failure alone —
+one gate flaked only under 230 concurrent binaries.
+
+**The agent-side practice, since the harness is observer-owned:** before landing a gate in a
+package the wall does not sweep, run the package sweep yourself.
+
+**Status:** t1469 — both stale gates repaired against headless Chrome, `CONSTELLATION.tsv` updated in
+the same tick as its gate requires; 570 binaries / 595 tests green.
