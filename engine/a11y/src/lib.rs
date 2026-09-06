@@ -318,6 +318,23 @@ impl Role {
                 | Role::MenuItemCheckBox
                 | Role::MenuItemRadio
                 | Role::Option
+                // ⚠⚠⚠ **`checkbox` AND `radio` WERE MISSING WHILE `switch` — THE THIRD MEMBER OF THE
+                // SAME ARIA FAMILY — WAS PRESENT.** ARIA 1.2 gives all three `nameFrom: contents`,
+                // and headless Chrome (CDP `Accessibility.getFullAXTree`) confirms it:
+                //
+                // ```text
+                //   <div role=checkbox>Remember me</div>   chrome  checkbox "Remember me"   ours ""
+                //   <div role=switch>Dark</div>            chrome  switch   "Dark"          ours "Dark"
+                //   <div role=button>Details</div>         chrome  button   "Details"       ours "Details"
+                // ```
+                //
+                // ⭐ **A NATIVE `<input type=checkbox>` HAS NO CONTENT, so this was invisible to every
+                // native-control fixture** — it only bites the `<div role="checkbox">` that modern
+                // web apps actually ship, which is the one an agent most needs to name. Found by
+                // ASSEMBLING the drive loop (t1455), not by any of the naming gates: a control the
+                // agent could see, ground and click, and could not refer to.
+                | Role::CheckBox
+                | Role::Radio
                 | Role::Switch
                 | Role::TreeItem
                 | Role::Tooltip

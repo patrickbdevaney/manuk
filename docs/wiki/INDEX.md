@@ -3032,6 +3032,14 @@
   - L4057 · An author line-height is the line box, and a taller face must NOT grow it
   - L4063 · The Latin control arm is free, by construction
 
+## Perceive, act, observe — the loop closed, and closing it found three defects
+`docs/wiki/the-agent-drive-loop.md`
+
+  - L7 · The loop
+  - L21 · Assembling it found three defects, and none of the pieces was wrong on its own
+  - L56 · Gate
+  - L64 · What this does NOT prove
+
 ## The metric is a percentage over what happens to be checked out
 `docs/wiki/the-aperture-is-the-metric.md`
 
@@ -3169,4 +3177,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2776 sections across 97 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2780 sections across 98 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

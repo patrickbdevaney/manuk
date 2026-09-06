@@ -11111,3 +11111,21 @@ the most dangerous shape in a projection** — nothing is missing, so nothing lo
 
 **Unlocks:** toggle-button state, form `required`/`readonly`/`invalid`/`value`, and a truthful focus
 target in the exported accessibility tree. (t1453)
+
+## ⭐⭐⭐ AN AGENT MUST BE ABLE TO VERIFY ITS OWN CLICK
+
+The drive loop is perceive → ground → actuate → **observe**, and the last step is the one that makes
+the others worth anything: an agent that clicks and cannot see the result either proceeds on faith or
+clicks again and undoes itself.
+
+⚠ Assembling it found that a **natively disabled** control still ran every listener on it. An agent
+clicks a disabled "Submit", the page's own handler runs, the state changes, and the agent concludes the
+action worked. **A positive control cannot fail that way** — it took a negative row in an end-to-end
+loop to find, after 1,400 ticks.
+
+⚠ And `<div role="checkbox">Remember me</div>` had no accessible name, because `checkbox` and `radio`
+were missing from name-from-content while `switch` was present. A native `<input type=checkbox>` has no
+content, so every native fixture was blind to it — and the `<div role=checkbox>` is what apps ship.
+
+**Unlocks:** an agent that can find a control by name, click it by coordinate, and read back that it
+worked. (t1455)

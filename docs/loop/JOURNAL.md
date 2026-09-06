@@ -104787,3 +104787,81 @@ already carries its numbers.
 ```
 
 WIKI: none [forced] — no engine source changed; the product is the audits.
+
+## Tick 1455 — Track C: the loop closed, and closing it found three defects (2026-09-05)
+
+TICK SHAPE: capability
+CLASS: agentic surface / M2 drive loop — Track C, first tick
+
+### THE ASSEMBLY THE AUDIT NAMED, ONE TICK LATER
+
+Surface audit #87 (t1454): *"Every component of the M2 drive demo is built and gated and no tick has
+ever composed them. That is an ASSEMBLY job, not a construction one — and assembly is exactly the kind
+of work that stays undone, because no single piece of it looks like a tick."*
+
+```text
+  1. PERCEIVE  read the a11y tree; find the target by ROLE + ACCESSIBLE NAME
+  2. GROUND    take the node's own bounding box; aim at its CENTRE
+  3. ACTUATE   dispatch a click at that COORDINATE, through hit-testing
+  4. OBSERVE   re-read the tree and confirm the state CHANGED
+```
+
+⭐⭐ **STEP 4 IS THE ONE THAT MAKES THE OTHER THREE WORTH ANYTHING.** The M2 milestone is not "can it
+click" — it is **can it verify its own action**.
+
+### ⭐⭐⭐ AND COMPOSING FOUR CORRECT PIECES FOUND THREE DEFECTS
+
+**None of the four components was wrong on its own**, and every one of these was invisible to the
+gates that cover them individually.
+
+**1. `checkbox` and `radio` were not name-from-content, while `switch` was.** ARIA 1.2 gives all three
+`nameFrom: contents`; CDP `Accessibility.getFullAXTree` confirms Chrome does too. ⭐ **A native
+`<input type=checkbox>` has no content, so this was invisible to every native-control fixture** — it
+only bites the `<div role="checkbox">` that apps actually ship. *The agent could see the control,
+ground it and click it, and had no way to refer to it.*
+
+**2. A natively disabled control dispatched every listener on it.**
+
+```text
+  <button disabled> + .click()            chrome: handler does NOT run   ours: RAN
+  <div role=button aria-disabled=true>    chrome: handler DOES run       ours: ran ✓
+```
+
+⚠⚠ **AN AGENTIC-SAFETY DEFECT, NOT A CONFORMANCE ONE.** An agent clicks a disabled "Submit", the
+page's own handler runs, the observable state changes, and the agent concludes the action **worked**.
+Nothing in 1,400 ticks found it because **a positive control cannot fail this way** — it took a
+NEGATIVE row in an end-to-end loop.
+
+**3. `aria-disabled` must still fire**, and suppressing both would have been a different bug wearing
+the same fix. It is advisory, and many real UIs rely on their handler running to explain why a control
+is unavailable.
+
+⭐⭐⭐ **THE GENERAL FINDING: A COMPOSITION IS A TEST NO COMPONENT GATE IS.** Four subsystems, each
+gated, each green, and their junction held three defects — one of which is a safety property nobody had
+thought to write down. *This is the strongest argument the session has produced for the observer's
+`>5 ticks dark` rule*: the value was not in Track C's code, it was in Track C's **joins**.
+
+### THE GATE
+
+`g_agent_drive_loop` — the four steps over three control shapes (`aria-pressed` toggle, `aria-checked`
+checkbox, `aria-expanded` disclosure), a **native-disabled negative**, and an **`aria-disabled` control
+on that negative**. Red under C1 (click a no-op → every observe row, perceive and ground green), C4
+(let native-disabled through → the negative row alone), C5 (suppress `aria-disabled` too → the control
+row alone) and C6 (drop `CheckBox`/`Radio` from name-from-content → the agent cannot find its target).
+
+### WHAT THIS DOES NOT PROVE, SAID PLAINLY
+
+The board asks for the drive loop on **one real site**, and a gate cannot depend on the network. This
+proves the four components compose; it does not prove a real page's markup is reachable this way.
+`agent-run` is where that measurement belongs and it is the next Track C tick.
+
+### THE RECEIPT
+
+```text
+  g_agent_drive_loop  NEW, four steps × three control shapes + 2 negative rows,
+                      red under 4 of 4 mutations
+  manuk-a11y 21/21 · 14 neighbouring a11y / click / disabled gates green
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/the-agent-drive-loop.md

@@ -7984,6 +7984,34 @@ impl Page {
     /// `true` if the engine should still perform the element's **default action** (follow a
     /// link, submit a form) — i.e. no listener called `preventDefault()`. Without JS (no
     /// context / feature off) this is a no-op that returns `true`.
+    /// **Is this element inert to pointer activation because HTML says so?** — the `disabled`
+    /// content attribute on a form control, or an ancestor `<fieldset disabled>`.
+    ///
+    /// ⚠ Deliberately NOT `aria-disabled`: that attribute is advisory, tells assistive technology the
+    /// control is unavailable, and does not change what the DOM dispatches. Chrome fires the handler
+    /// for `<div role=button aria-disabled=true>` and does not for `<button disabled>`.
+    fn node_is_natively_disabled(&self, node: manuk_dom::NodeId) -> bool {
+        let mut cur = Some(node);
+        let mut first = true;
+        while let Some(n) = cur {
+            if let Some(el) = self.dom.element(n) {
+                let tag = self.dom.tag_name(n).unwrap_or("");
+                let disableable = matches!(
+                    tag,
+                    "button" | "input" | "select" | "textarea" | "optgroup" | "option" | "fieldset"
+                );
+                // Only a `<fieldset disabled>` disables its DESCENDANTS; every other control
+                // disables itself alone, so the walk past the first node looks for fieldsets.
+                if (first && disableable || tag == "fieldset") && el.attr("disabled").is_some() {
+                    return true;
+                }
+            }
+            first = false;
+            cur = self.dom.parent(n);
+        }
+        false
+    }
+
     pub fn dispatch_click(
         &mut self,
         node: manuk_dom::NodeId,
@@ -8006,6 +8034,29 @@ impl Page {
         fonts: &FontContext,
         viewport_width: f32,
     ) -> bool {
+        // ── ⚠⚠⚠ **A NATIVELY DISABLED FORM CONTROL DISPATCHES NOTHING, AND OURS RAN EVERY
+        //    LISTENER ON IT.** HTML makes a disabled `button`/`input`/`select`/`textarea`/
+        //    `fieldset`/`optgroup`/`option` inert to pointer activation: the event is not dispatched
+        //    at all, not even through `element.click()`. Chrome-measured:
+        //
+        //    ```text
+        //      <button disabled> + .click()               chrome: handler does NOT run   ours: RAN
+        //      <div role=button aria-disabled=true>        chrome: handler DOES run       ours: ran ✓
+        //    ```
+        //
+        //    ⭐ **`aria-disabled` is advisory and MUST still fire** — it tells assistive technology
+        //    the control is unavailable without changing the DOM's behaviour, and a great many real
+        //    UIs use it precisely so their own handler can explain why. Suppressing both would be a
+        //    different bug wearing the same fix.
+        //
+        //    ⚠⚠ **THIS IS AN AGENTIC-SAFETY DEFECT, not a conformance one.** An agent clicks a
+        //    disabled "Submit", the page's own handler runs, the observable state changes, and the
+        //    agent concludes the action WORKED. Found by assembling the drive loop (t1455) — the
+        //    NEGATIVE row of that gate — and by nothing else in 1,400 ticks, because a positive
+        //    control cannot fail this way.
+        if self.node_is_natively_disabled(node) {
+            return false;
+        }
         // ── THE POINTER SEQUENCE, which a large class of real UI is the only listener for. ──────
         //
         // Dropdown menus, comboboxes, drag handles, sliders and press-and-hold controls listen on
