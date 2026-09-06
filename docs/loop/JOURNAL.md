@@ -105830,3 +105830,83 @@ with `z-index: auto` the spec orders them by tree order and both hit-tests still
 rule is shared, that is one change in two call sites rather than two rules.
 
 WIKI: docs/wiki/one-hit-test-not-two.md
+
+## Tick 1467 — one phase short, and the next phase costs more than it buys (2026-09-06)
+
+TICK SHAPE: measurement-and-refusal
+
+Rotation → B. The largest remaining item in Wikipedia's excess was **42 `link "↑"` against Chrome's
+42 `link "Jump up"`** — matched exactly, so plainly the same nodes named differently.
+
+### ASK THE PAGE, NOT THE SITE
+
+The static HTML has neither string; Chrome's post-JS DOM has `aria-label="Jump up" title="Jump up"`
+on all 42. Rather than reverse-engineer MediaWiki, one eval on our own page:
+
+```text
+  mw=object | jq=undefined | RLQ=object | cite=loaded | col=loaded | backlinks=83 | label=NONE
+  jqstate=loading | scripts=6 | srcscripts=1 | SRC[…&modules=jquery&skin=vector-2022…]
+```
+
+⭐⭐⭐ **`jqstate=loading`.** MediaWiki injected jQuery's `<script src>` and it never executed, so
+every jQuery-dependent enhancement did nothing — while `mw.loader` still reported its modules
+`loaded`. *A loader's own status is not evidence that anything ran.*
+
+### AND MY FIRST DIAGNOSIS WAS WRONG
+
+I concluded from two fixtures that a dynamically inserted `<script src>` is never fetched. It is.
+The same fixture run through `load_async` **and `finish_loading`** gives `jq=function sink=[start
+ONLOAD]`, Chrome-exact.
+
+⚠⚠ **BOTH FAILING PROBES READ THE WORLD FROM A `setTimeout`, WHICH FIRES BEFORE THE DRAIN SETTLES** —
+so they measured the pre-drain page and called it a missing capability. *When a phase is the thing
+under test, do not observe from inside the page's own timers.* `g_script_load_event`'s comment had
+already said where the phase lives: *"the dynamic-script phase lives in `finish_loading`, not in
+`load_async` — a gate that stops at `load_async` never reaches the code under test and would pass by
+not looking."* **The agent stopped one phase short of it.**
+
+### THE PRICE, AND THE REFUSAL
+
+```text
+                    precision   recall      F1     wikipedia nodes
+  without           93.2%       96.4%    94.8%     865   (Chrome: 779)
+  with              70.9%       97.9%    82.2%    2191
+```
+
+Recall improves and the names arrive (`jumpup=48 arrow=0`). Precision collapses, and the excess
+names itself: **`486 listitem ""`** — the same signature t1461 removed by getting the collapse to run
+at all. **`finish_loading` restores the names and undoes the collapse.**
+
+⚠⚠⚠ F1 is the steering metric this loop adopted at t1458, and it falls. **REFUSED.** The call is
+written into `AgentBrowser::load_url` as a comment carrying this exact table, with the blocker named:
+once the collapse survives the module's own JavaScript, the line goes in.
+
+### THE SHAPE WORTH KEEPING
+
+⭐⭐ **A phase boundary is not a detail of the loader — it is which browser the agent IS.**
+
+```text
+  t1461   load -> load_async        subresources, the lifecycle, page scripts     ADOPTED (+18 F1)
+  t1467   load_async -> finish_loading   the dynamic-script drain, hence every    REFUSED (-12 F1)
+                                         module loader on the web
+```
+
+Each looked like a missing feature and was a missing **call**. And strictly more browser is not
+strictly better at a given fidelity — which is exactly why the second had to be priced rather than
+assumed.
+
+### LANDED
+
+```
+  agent/src/lib.rs   the refusal, with its measurement, at the call site
+  53 agent test binaries green, 0 failures
+  no gate added — there is nothing green to gate; the number is the deliverable
+  Bar 0: no hang, no crash, no panic
+```
+
+NEXT: find why the collapse does not survive. The likely mechanism is that `jquery.makeCollapsible`
+restructures the DOM into a form whose hiding lives in a **style module** we do not load, so the
+class is applied and nothing hides — testable by asking whether the collapsed container's computed
+`display` is `none` after `finish_loading`. That is one probe, and it is the whole blocker.
+
+WIKI: docs/wiki/one-phase-short-and-the-price-of-the-next-one.md

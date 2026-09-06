@@ -2656,6 +2656,13 @@
   - L36 · The plural is half the point
   - L51 · ⚠ The area name was wrong for two ticks
 
+## One phase short, and the price of the next one
+`docs/wiki/one-phase-short-and-the-price-of-the-next-one.md`
+
+  - L7 · Where the missing names came from
+  - L36 · What the next phase costs
+  - L52 · The shape worth keeping
+
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
 
@@ -3265,4 +3272,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2824 sections across 109 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2827 sections across 110 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

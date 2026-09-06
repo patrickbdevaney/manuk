@@ -11417,3 +11417,30 @@ path prefix, on the suite that covers the agent's own geometry channel.
 
 **Status:** landed t1466, gated by `g_one_hit_test_not_two` under three mutations; WPT
 `css/cssom-view` **1314 → 1316**, `css/css-position` flat, clean same-hour control.
+
+---
+
+## A phase boundary is which browser you are — and each one must be PRICED, not assumed
+
+**Pattern.** A loader with named phases (`load` → `load_async` → `finish_loading`) hides capability
+behind *which call the caller stops at*. Two ticks running, an apparent missing feature in the
+agent's browser was a missing **call**: no page scripts at all (t1461), then no dynamic-script drain
+and therefore no module loader (t1467). Each looked like an engine gap and was a phase boundary.
+
+**How it is found.** Ask the page about itself instead of reverse-engineering the site.
+One eval returned `mw=object | jq=undefined | cite=loaded | jqstate=loading` — MediaWiki had
+injected jQuery's `<script src>`, it had never executed, and every jQuery-dependent enhancement
+silently did nothing while the loader still reported its modules `loaded`.
+
+**⚠ Do not observe a phase from inside the page's own timers.** Two probes read state on a
+`setTimeout` and reported the drain as *broken*; the timer fires before the drain settles, so they
+measured the pre-drain page. Read after the phase returns.
+
+**And price the next phase before adopting it.** Strictly more browser is not strictly better at a
+given fidelity: adding `finish_loading` raised recall (96.4% → 97.9%, the missing names arrived) and
+collapsed precision (93.2% → 70.9%, F1 94.8% → 82.2%) because the collapsed navbox content came
+back — `486 listitem ""`, the exact signature the previous tick had removed. **Refused, with the
+table written into the call site and the blocker named.**
+
+**Status:** t1467, measurement-and-refusal. `AgentBrowser::load_url` carries the comment; the call
+goes in once the collapse survives the module's own JavaScript.

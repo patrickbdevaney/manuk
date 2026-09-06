@@ -440,6 +440,23 @@ impl AgentBrowser {
         //    are collapsed by `jquery.makeCollapsible`, and without it the accessibility tree
         //    carried 681 phantom list items that Chrome does not expose.
         let page = Page::load_async(&html, &final_url, &self.fonts, self.width as f32).await;
+        // ── ⚠⚠⚠ **`finish_loading` IS DELIBERATELY NOT CALLED HERE, AND IT WAS MEASURED (t1467).**
+        //    The dynamic-script drain lives there, so without it `mw.loader.getState('jquery')`
+        //    reads `loading` on Wikipedia, jQuery is `undefined`, and MediaWiki's cite enhancement
+        //    never adds the `aria-label="Jump up"` that Chrome names 42 backlinks by.
+        //
+        //    Adding it fixes exactly that — and **triples the node count**, because the collapsed
+        //    navbox content comes back: `486 listitem ""` in excess of Chrome, the same signature
+        //    t1461 removed. Measured on the six-site corpus:
+        //
+        //    ```text
+        //                        precision   recall      F1
+        //      without           93.2%       96.4%    94.8%
+        //      with              70.9%       97.9%    82.2%   ← wikipedia precision 77.5 -> 33.1
+        //    ```
+        //
+        //    F1 is the steering metric (t1458) and it falls, so the ratchet refuses. The blocker is
+        //    NAMED: once the collapse survives the module's own JS, this line goes in.
         self.scroll_y = 0.0;
         self.page = Some(page);
         Ok(())
