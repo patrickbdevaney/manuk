@@ -104865,3 +104865,67 @@ proves the four components compose; it does not prove a real page's markup is re
 ```
 
 WIKI: docs/wiki/the-agent-drive-loop.md
+
+## Tick 1456 — a rotated run's `x` is a `y`, and my own fixture agreed with the wrong rule (2026-09-05)
+
+TICK SHAPE: measurement-and-refusal
+CLASS: CSSOM-View / scrollable overflow in a vertical writing mode — REFUSED, reverted
+
+### THE DEFECT, PROVEN THREE WAYS
+
+`writing-mode: vertical-lr`, `overflow: scroll` inline-flex, three 110px items with text `1`/`2`/`3`:
+
+```text
+                    Chrome    ours
+  scrollWidth        110       245
+  scrollHeight       350       350   ✓
+  the item RECTS   [3,3 110x110 | 3,123 | 3,243]   IDENTICAL to Chrome
+```
+
+1. **The layout is exact** — every box rect matches Chrome, so this is a *reading* of the fragment
+   tree rather than a defect in it.
+2. **`245 = 243 + 2`** — the third item's own **y** plus its glyph advance.
+3. **Removing the text makes it Chrome-exact.** The runs are the cause.
+
+`TextStyle::sideways` marks a run in a vertical writing mode and its own doc comment says what the
+fields mean there: *"the item's `x` is the pen's starting **y** and its `baseline` is the baseline's
+**x**"*. `scrollable_overflow_extent` reads them physically, so a run's DOWNWARD advance accumulates
+as HORIZONTAL overflow.
+
+⭐⭐ **ONE RULE, TWO IMPLEMENTATIONS, AND ONLY ONE HAD LEARNED IT.** `scrollable_overflow_start` — the
+other walk over the same tree — already refuses to consult inline fragments, in a comment reading *"a
+START edge from a run would be a number in the wrong axis"*. The start walk can decline because text
+overflowing BACKWARDS does so inside a box; the end walk cannot, because a run overflowing forwards is
+the commonest overflow there is.
+
+### THE REFUSAL, AND IT IS POINTED AT MY OWN FIXTURE
+
+Transposing both fields makes `scrollHeight` explode (350 → 795). Taking only the `w` half makes **all
+six probe rows Chrome-exact** — and reads **−14** on `css/css-flexbox`: 14 new, 0 fixed, every one in
+the two `negative-overflow` files the probe was reduced FROM.
+
+⚠⚠⚠ **A SIX-ROW FIXTURE I WROTE AGREED WITH A RULE THE REAL MATRIX REFUTES.** The session's
+most-repeated lesson, arriving one more time and aimed at the probe rather than the engine: in all six
+rows `baseline` and the right answer coincide, so the fixture could not tell them apart. *A reduction
+is a hypothesis about which variables matter, and a reduction that agrees with your fix is the least
+informative kind.*
+
+### WHAT THE NEXT TICK MUST ESTABLISH FIRST — AND IT IS NOT A FIX
+
+**What `f.x`, `f.baseline` and `f.width` actually mean for a sideways run, MEASURED rather than read
+off the doc comment.** The comment says `x` is a `y` and `baseline` is an `x`; the −14 says that is not
+the whole story — most likely one is line-relative where the other is absolute. Print all three for a
+known three-line vertical run and compare against the box rects — **exactly the move that dissolved
+t1449's contradiction at t1450, and it worked because it printed a number instead of reasoning about
+one.**
+
+### THE RECEIPT
+
+```text
+  engine reverted to HEAD; manuk-layout 191/191 on the reverted tree
+  css/css-flexbox unchanged at 3528; the −14 was measured, not banked
+  no gate added — there is nothing green to gate
+  Bar 0: no hang, no crash, no panic
+```
+
+WIKI: docs/wiki/a-rotated-runs-x-is-a-y.md

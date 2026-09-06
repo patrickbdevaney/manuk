@@ -106,6 +106,15 @@
   - L303 · A frame is a bitmap, so its pixels need explicit refreshing (tick 232)
   - L331 · The agent's click point IS layout geometry, so a containing-block bug is an actuation bug (I3)
 
+## A rotated run's `x` is the pen's starting *y* — and the extent walk read it as an x
+`docs/wiki/a-rotated-runs-x-is-a-y.md`
+
+  - L6 · The defect, proven three ways
+  - L32 · ⭐⭐ One rule, two implementations, and only one had learned it
+  - L39 · What was refused, and with what number
+  - L50 · What the next tick must establish first
+  - L58 · Status
+
 ## The start edge of the scrolling area — two bugs a fixture with a zero could not see
 `docs/wiki/a-sentinel-that-is-also-a-legal-value.md`
 
@@ -3177,4 +3186,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2780 sections across 98 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2785 sections across 99 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

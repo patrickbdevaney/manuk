@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1130** | ticks 1–1454 |
-| median tick cycle | **32m** | 1129 intervals |
-| median, last 10 | **70m** | 10 intervals |
+| ticks landed | **1131** | ticks 1–1455 |
+| median tick cycle | **32m** | 1130 intervals |
+| median, last 10 | **69m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.83** | 1361.7h elapsed |
-| median verify wall | **67s** | 1069 ticks |
+| **ticks per hour** | **0.83** | 1362.9h elapsed |
+| median verify wall | **67s** | 1070 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**513 of 1130 ticks** (45%) moved a
+**514 of 1131 ticks** (45%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **513** capability ticks, median cycle **32m**
-* median diff per tick: **+296 / −35** lines across 8 files
+* **514** capability ticks, median cycle **32m**
+* median diff per tick: **+295 / −35** lines across 8 files
 
 ## Every tick
 
@@ -1227,5 +1227,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1452** | 2026-09-05 21:51 | 1.8h | capability | 8m | +359/−44 | 562 | 81 | 56.0% · | Track B, at the eleventh time of asking (2026-09-05) |
 | **1453** | 2026-09-05 22:12 | 22m | capability | 8m | +182/−43 | 562 | 81 | 56.0% · | a required field with a plausible default (2026-09-05) |
 | **1454** | 2026-09-05 22:46 | 34m | measurement-and-refusal | 8m | +512/−42 | 563 | 81 | 56.0% · | eight crates, 98 tests, six seconds, none of them in the wall (2026-09-05) |
+| **1455** | 2026-09-05 23:55 | 69m | capability | 8m | +190/−42 | 563 | 81 | 56.0% · | Track C: the loop closed, and closing it found three defects (2026-09-05) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -11129,3 +11129,17 @@ content, so every native fixture was blind to it — and the `<div role=checkbox
 
 **Unlocks:** an agent that can find a control by name, click it by coordinate, and read back that it
 worked. (t1455)
+
+## ⚠ VERTICAL TEXT INFLATES A SCROLLER'S WIDTH
+
+A `writing-mode: vertical-*` scroll container reports a `scrollWidth` far larger than its content:
+`245` where Chrome says `110`, because a rotated run's advance runs DOWN the page and the scrollable
+extent reads it as horizontal. Every CJK vertical-script page with a scrollable region gets a
+horizontal scrollbar it should not have, and `scrollLeft + clientWidth >= scrollWidth` never becomes
+true.
+
+⭐ The box rects are exact — only the metric is wrong, which is the tell that a fragment-tree READING
+is at fault rather than layout.
+
+**Status:** open; localised to one expression and the naive transposition measured and refused
+(t1456).
