@@ -105670,3 +105670,89 @@ is `scripts/verify.sh`, which is harness and observer-owned. ⚠ Recorded here p
 NOT acted on. `LAST_AUDIT_TICK` bumped to 1464.
 
 WIKI: docs/wiki/a-lockstep-gate-scoped-to-one-value.md
+
+## Tick 1465 — a banner wins the click: the `auto` spelling of a working feature (2026-09-06)
+
+TICK SHAPE: capability
+
+Rotation → C. t1459's named residue: *"a positioned element with `z-index: auto` does not win a
+click against the in-flow content it covers… a cookie banner is exactly this markup."*
+
+### THE RULE, AND WHERE IT WAS NOT APPLIED
+
+CSS 2.1 Appendix E: in-flow blocks, floats and inlines are painting steps 3-7; **positioned
+descendants with `z-index: auto` or `0` are step 8** — strictly later, so strictly on top.
+`z_index_map` computed `s.z_index.unwrap_or(parent_z)`, so an `auto` overlay took its *parent's*
+layer — the same one as the content it covers — and `A11yNode::hit_test` broke the tie by **smaller
+area**, which the content underneath wins.
+
+```text
+                                               Chrome    before    after
+  auto-z overlay over an in-flow link            b1        l1        b1
+  z-index:5 overlay                              b2        b2        b2   ✓ explicit z already worked
+  z-index:-1 underlay                            l3        l3        l3   ✓ negative stays under
+  no overlay                       CONTROL       l4        l4        l4   ✓
+  4-deep auto chain vs z-index:1                 z1        z1        z1   ✓ the SCALE row
+```
+
+⭐⭐ **THE EXPLICIT ROWS ARE WHAT MAKE THIS A MISSING CASE, NOT A MISSING FEATURE.** `z-index: 5`
+already won and `-1` already lost, so the layer machinery worked — only the **`auto` spelling** was
+unmapped. And the negative row is what kills the naive fix: *"positioned beats in-flow"* applied
+unconditionally would raise a `z-index: -1` underlay too.
+
+⭐⭐⭐ **A COOKIE BANNER IS EXACTLY THIS MARKUP** — positioned, no `z-index`, larger than what it
+covers. The agent's coordinate click landed on the link behind it and every layer above reported
+success. *The silent misfire is worse than an error, because nothing downstream can tell.*
+
+### TWO GREEN MUTATIONS, AND MY OWN STATED REASON WAS WRONG
+
+⚠⚠ Bumping `auto` by 1024 instead of 1, and dropping the `* 1024` from the explicit arm, **both
+passed the first fixture.** And the reason I had written for the first mutation going red was simply
+false: a `z-index: -1` underlay is negative and can never rise, however large the bump.
+
+Neither a shallow overlay nor a negative one can see the **scale** — only a deep `auto` chain
+measured against a *small* explicit `z-index` can, because that is the only configuration where the
+two encodings order differently. `Deep vs z1` (Chrome-measured: `z1`) is that row, and it is red
+under both. *A stated red-reason is a claim, and it dies as silently as any other.*
+
+⚠ The row also took two attempts: my first `.nest` chain sat after the link, so the 300x60 overlay
+overflowed into the NEXT row and stole its assertion. A fixture that leaks between rows fails the
+wrong one.
+
+### LANDED
+
+```
+  engine/page/src/lib.rs   z_index_map: explicit -> n*1024+1, auto -> parent+1, non-positioned -> parent
+  gate  g_a_banner_wins_the_click   RED under 3 named mutations
+  vacuity arm: a link with nothing on top must win its own centre
+  WPT css/css-position  285 failing -> 285   0 fixed / 0 new   (clean same-hour control)
+  ⚠ this map also feeds `paint()`, so it is a paint-order change too — correct per Appendix E,
+    and the wall's 72/72 parity gate is what judges it
+  Bar 0: no hang, no crash, no panic
+```
+
+### TWO THINGS NAMED RATHER THAN CLAIMED
+
+⚠ **The step-8 PEER case is unfixed.** When the covered content is itself positioned with `z-index:
+auto`, the two are peers and the spec orders them by tree order; `hit_test` uses area. A positioned
+link under an auto overlay still takes the click (Chrome says the overlay). It needs a `positioned`
+bit on `A11yNode`, because area is the right question only for *unrelated* in-flow boxes — the t853
+`<li>`/`<a>` float dust the tie-break was written for. The gate asserts today's answer with an
+instruction to delete that row when it changes.
+
+⚠⚠ **`document.elementFromPoint` IS A SECOND IMPLEMENTATION AND IT IGNORES z-index ENTIRELY** — a
+flat scan over the layout rects resolving by smallest area, consulting `pointer-events` and SVG
+paintedness but never a layer. It reads `l1=l1 l2=l2 l3=l3 l4=l4`: wrong on **both** overlay rows,
+including the explicit `z-index: 5` one the a11y path gets right. Two implementations of one rule,
+disagreeing — this repo's most-repeated shape. Not fixed in the same tick as a paint-order change;
+they need separate controls.
+
+⚠ INSTRUMENT (one line): `g_constellation_unknowns` is **RED on the clean tree at HEAD** (t1464),
+before this tick's change and identically with or without it, under all three feature sets including
+the wall's. Reported, not investigated; the wall passed it at t1464.
+
+NEXT: join the two hit-tests. `doc_element_from_point` should resolve by layer then area, using the
+same map — one rule, one implementation, and it fixes the explicit-z case for the web API in the
+same move.
+
+WIKI: docs/wiki/a-banner-wins-the-click.md

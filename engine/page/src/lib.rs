@@ -10530,8 +10530,27 @@ impl Page {
         let mut map = HashMap::new();
         let mut stack = vec![(self.dom.root(), 0i32)];
         while let Some((node, parent_z)) = stack.pop() {
+            // ── ⭐⭐⭐ **A POSITIONED ELEMENT WITH `z-index: auto` PAINTS ABOVE IN-FLOW CONTENT, AND
+            //    THIS GAVE IT THE SAME LAYER.** CSS 2.1 Appendix E puts in-flow blocks, floats and
+            //    inlines in steps 3-7 and *positioned descendants with `z-index: auto` or `0`* in
+            //    step **8** — strictly later, so strictly on top. `unwrap_or(parent_z)` handed an
+            //    `auto` overlay its parent's layer, and `A11yNode::hit_test` then broke the tie by
+            //    SMALLER AREA, which the content underneath wins.
+            //
+            //    ⚠ A cookie banner is exactly this markup: `position: absolute/fixed`, no
+            //    `z-index`, larger than the link it covers. An agent grounding a click by
+            //    coordinate hit the link *through* the banner and reported success — the silent
+            //    misfire that is worse than an error, because nothing downstream can tell.
+            //
+            //    The scale is `n * 1024 + 1` for an explicit `z-index` and `parent + 1` for `auto`,
+            //    so 1023 levels of nested `auto` positioning still sit below `z-index: 1`, and an
+            //    explicit `z-index: 0` (also step 8) still clears in-flow content at 1. `TOP_LAYER_Z`
+            //    (1e9) is unreachable by any z-index a page would write.
             let z = match self.styles.get(&node) {
-                Some(s) if s.position != Position::Static => s.z_index.unwrap_or(parent_z),
+                Some(s) if s.position != Position::Static => match s.z_index {
+                    Some(n) => n.saturating_mul(1024).saturating_add(1),
+                    None => parent_z.saturating_add(1),
+                },
                 _ => parent_z,
             };
             // **The top layer.** A modal dialog paints above the whole document regardless of where it

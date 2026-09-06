@@ -1138,3 +1138,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1462	e6854c26	1788682689	2026-09-06T04:18:09-04:00	1031	capability	465	10	469	49	565	81	3896	6960	0	642	0	Track C: the landmark is the missing term, and it was priced before it was built (2026-09-06)
 1463	332287b9	1788686422	2026-09-06T05:20:22-04:00	3733	capability	465	9	344	43	566	81	3896	6960	0	642	0	the fix was written one line above the bug (2026-09-06)
 1464	94efdd75	1788692107	2026-09-06T06:55:07-04:00	5685	capability	465	10	438	45	566	81	3896	6960	0	642	0	a lockstep gate that enforced one value, and the two drifts it was not watching (2026-09-06)
+1465	5c2a7c02	1788696469	2026-09-06T08:07:49-04:00	4362	capability	465	9	411	43	567	81	3896	6960	0	642	0	a banner wins the click: the `auto` spelling of a working feature (2026-09-06)

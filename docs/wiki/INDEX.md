@@ -4,6 +4,14 @@
 > `docs/wiki/` is listed here. To retrieve a section by content, use
 > `scripts/wiki-lookup.sh <terms>` (precise keyword match, no semantic fuzz).
 
+## A banner wins the click
+`docs/wiki/a-banner-wins-the-click.md`
+
+  - L30 · The encoding
+  - L37 · Two green mutations, and what they named
+  - L47 · What this does not fix, measured and named
+  - L55 · ⚠⚠ And document.elementFromPoint is a second implementation that ignores z-index entirely
+
 ## The accessible name is a function of the COMPUTED STYLE
 `docs/wiki/accessible-name-computed-style.md`
 
@@ -3250,4 +3258,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2817 sections across 107 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2821 sections across 108 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

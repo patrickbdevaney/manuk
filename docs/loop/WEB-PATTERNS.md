@@ -11359,3 +11359,32 @@ artifacts after a restore, so a test can report HEAD's behaviour from correct so
 **Status:** landed t1464 (`both_ua_sheets_agree_on_which_elements_are_display_none`, plus the
 `audio` and `option` lockstep fixes it found); WPT `html/semantics/embedded-content` and
 `css/css-display` both flat against a clean same-hour control.
+
+---
+
+## The `auto` spelling of a working feature is where the bug hides
+
+**Pattern.** When a property has an explicit form and a keyword default, the explicit form gets
+implemented and tested and the keyword falls through to whatever the fallback was. `z_index_map`
+handled `z-index: 5` and `z-index: -1` correctly and gave `z-index: auto` its *parent's* layer — so
+a positioned overlay tied with the in-flow content it covered, and the tie-break (smaller area)
+handed the click to the thing underneath.
+
+**Why it matters more than a normal miss.** A cookie banner is `position: fixed` with no `z-index`,
+larger than what it covers. The agent clicked *through* it and every layer above reported success —
+a silent misfire, which is worse than an error because nothing downstream can detect it.
+
+**How to tell a missing case from a missing feature.** Test the explicit spellings first. Both
+already worked, so the layer machinery existed; only the default was unmapped. And the negative row
+is what kills the naive fix — *"positioned beats in-flow"* applied unconditionally raises a
+`z-index: -1` underlay too.
+
+**Fixture requirement — two green mutations proved it.** Neither a shallow overlay nor a negative
+`z-index` can see the **scale** an encoding uses. Only a *deep* chain of the keyword form measured
+against a *small* explicit value can, because that is the only configuration where two candidate
+encodings order differently.
+
+**Status:** landed t1465, gated by `g_a_banner_wins_the_click` under three mutations; WPT
+`css/css-position` flat against a clean same-hour control. The step-8 **peer** case (both sides
+positioned) and `document.elementFromPoint`'s separate z-blind flat scan are named in the gate and
+left for a later tick.
