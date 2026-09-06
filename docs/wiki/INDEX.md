@@ -88,6 +88,15 @@
   - L38 · ⚠ A low-confidence winner is returned, not refused
   - L48 · The gate
 
+## A lockstep gate scoped to one value
+`docs/wiki/a-lockstep-gate-scoped-to-one-value.md`
+
+  - L14 · What the uncovered half cost
+  - L20 · And the drift recurred within one tick
+  - L26 · The display: none half found a third drift on its first run
+  - L44 · Measured
+  - L51 · ⚠ And a harness lesson that cost most of the tick
+
 ## An option is not hidden by a stylesheet
 `docs/wiki/an-option-is-not-hidden-by-a-stylesheet.md`
 
@@ -3241,4 +3250,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2812 sections across 106 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2817 sections across 107 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

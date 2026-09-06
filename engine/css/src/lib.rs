@@ -5588,6 +5588,24 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
         | "datalist" | "basefont" | "noembed" | "noframes" | "rp" => (None, 0.0, 400, 1.0),
         // Form controls render as replaced-ish inline-block boxes (styled below).
         "input" | "button" | "textarea" | "select" => (InlineBlock, 0.0, 400, 1.0),
+        // ⚠⚠ **KEEP IN LOCKSTEP — and t1463 changed only the OTHER sheet.** `option`/`optgroup` were
+        // `display: none` in `stylo_engine.rs`'s UA_CSS and absent from this list, so a `<select>`
+        // exposed no options under one cascade and all of them under the other. t1463 corrected the
+        // Stylo sheet to Chrome's `block` and left this at the `inline` fallback, which is the same
+        // drift in the opposite direction, one tick after the journal quoted the lockstep comment.
+        // `both_ua_sheets_agree_on_which_elements_are_display_none` is the gate that catches it now.
+        "option" | "optgroup" => (Block, 0.0, 400, 1.0),
+        // ⚠ `<audio>` renders only with `controls`, and then it is the control bar — Chrome:
+        // bare `none` at 0x0, `<audio controls>` `inline` at 300x54. Unqualified `display: none`
+        // in either sheet hides the one form of the element anybody sees; unqualified `inline`
+        // renders the one nobody does.
+        "audio" => {
+            if el.attr("controls").is_some() {
+                (Inline, 0.0, 400, 1.0)
+            } else {
+                (None, 0.0, 400, 1.0)
+            }
+        }
         // `<summary>` is a block: it is the disclosure's always-visible label. Whether the
         // *rest* of the `<details>` renders depends on the PARENT's `open` attribute, which this
         // per-element function cannot see — `cascade_node` applies that part.

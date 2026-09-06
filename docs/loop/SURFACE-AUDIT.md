@@ -8127,3 +8127,81 @@ exactly the kind that stays undone because no single piece of it looks like a ti
 2. ⚠⚠ **Track C: assemble, do not build.** Every piece exists; the gap is a composition nobody has
    been asked to own.
 3. ⚠ `WPT-AREAS.tsv` — fifth mention; `_out` — insufficient workaround, twice measured.
+
+## Audit #88 — tick 1464 (2026-09-06)
+
+Ten ticks since #87. Those ten produced the largest single movement the agentic surface has ever had
+and four defects of **one shape**, which is what this audit is about.
+
+### ⭐⭐⭐ THE FINDING: A CAPABILITY THAT EXISTS IN ONE CONFIGURATION AND NOT THE OTHER IS INVISIBLE TO BOTH SUITES
+
+Four defects in ten ticks, all the same:
+
+```text
+  t1460  `inset` shorthand        implemented under Stylo,  ABSENT under MinimalCascade
+  t1463  option display           `none` under Stylo,       `block` under MinimalCascade
+  t1461  SpiderMonkey             ON for engine/page tests, OFF for the whole agent crate
+  t1464  audio display            `none` under Stylo,       `inline` under MinimalCascade
+```
+
+This project has **two cascades and two JS configurations**, and its two test suites each exercise
+one of each. WPT runs Stylo-with-JS and never asks an accessibility question; the agent suite asks
+the accessibility question and was running MinimalCascade-without-JS. **Neither instrument could see
+the other's half**, and a defect that lives in exactly one half is invisible to both. That is not a
+gap in either suite — it is a gap *between* them, and nothing enumerated it.
+
+The cost was not small. Under `option { display: none }` a `<select>` exposed **no options at all**,
+so every dropdown on the web was missing from the agent's perception, for as long as the rule
+existed. Under a JS-less browser, Wikipedia's accessibility tree carried **681 phantom list items**
+and the Track B bar read 76.6% F1 instead of 94.8%.
+
+### ⭐⭐ AND THE GATE THAT SHOULD HAVE CAUGHT IT EXISTED, SCOPED TO ONE VALUE
+
+`both_ua_sheets_agree_on_which_elements_are_block` has been in `stylo_engine.rs` for hundreds of
+ticks. Its doc comment names the exact failure mode and even says *"(MinimalCascade — what
+manuk-agent runs)"*. It reads `UA_CSS`'s **`display: block`** rule and nothing else, while
+`option, optgroup { display: none }` sat one screen above it.
+
+**A gate named for a plural asserts a sample and reads as a population** — the t1351 lesson, arriving
+against a gate specifically built to enforce a lockstep. The `display: none` half was closed this
+tick, and it found a **third** drift on its first run (`audio`), which is the strongest argument for
+it that could exist.
+
+⚠ And the drift recurred *within one tick*: t1463 corrected the Stylo sheet and left
+`apply_ua_defaults` at its `inline` fallback — a half-fix, one tick after the journal entry quoting
+the lockstep comment. **A rule that is only prose gets obeyed only when someone remembers it.**
+
+### THE INSTRUMENTS THIS SESSION BUILT, AND WHAT THEY COST TO GET RIGHT
+
+```text
+  a11y-score    precision/recall/F1 vs CDP     the previous number was recall, from a /tmp script
+  drive-probe   perceive -> ground -> act      the previous claim was a hermetic fixture
+  --diff        the multiset excess, ranked    named Wikipedia's 681 phantoms in one run
+```
+
+⚠ Both new instruments needed a **mutation to find a hole in their own fixture** — `a11y-score`'s
+multiset test passed under a set intersection, and `drive-probe`'s overlay row passed at equal area.
+Two for two. The mutation pass is still the loop's most productive instrument, and it is most
+productive on the instruments themselves.
+
+### ⚠ CARRIED, AND EACH NOW OVERDUE AN OWNER DECISION
+
+* **Eight crates and 120 tests are still not in the wall** (`manuk-a11y` 21, `manuk-html` 18,
+  `manuk-text` 14, `manuk-media` 18, `manuk-js` 9, `manuk-compositor` 8, `manuk-store` 17,
+  `manuk-bidi` 15). All green today; measured in seconds. **Second consecutive audit, ranked #1 both
+  times.**
+* **CI never finishes.** Runs for t1461 and t1463 were cancelled at 17m31s and mid-flight by the next
+  push — the tick cadence outruns the concurrency group, so most runs report `cancelled` rather than
+  a verdict. First observation.
+* `css/cssom-view` still absent from `WPT-AREAS.tsv`. **Sixth consecutive audit.**
+* `ORACLE_CRAWLED: 0` — thirteenth.
+
+### RANKED, from this audit only
+
+1. ⭐⭐⭐ **Enumerate the configuration matrix, or keep finding these one at a time.** Two cascades ×
+   two JS settings = four browsers, two of which nothing tests. The lockstep gates are the pattern
+   that works; extend them (box-sizing, margins, font-weight all live in both sheets too).
+2. ⭐⭐ **`manuk-agent` should build with `stylo`.** Blockers are now a *named list of one*:
+   `g_counter_set_and_pseudo_counters` — a pseudo's own `counter-increment` is ignored on the Stylo
+   path. Two of the three original blockers have been cleared by measuring rather than arguing.
+3. ⚠ The wall's missing eight crates — second ranking, unchanged.

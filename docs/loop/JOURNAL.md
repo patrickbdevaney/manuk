@@ -105579,3 +105579,94 @@ capability gap in its own right, gated already by `g_counter_set_and_pseudo_coun
 thing standing between the agent and the production cascade.
 
 WIKI: docs/wiki/an-option-is-not-hidden-by-a-stylesheet.md
+
+## Tick 1464 — a lockstep gate that enforced one value, and the two drifts it was not watching (2026-09-06)
+
+TICK SHAPE: capability
+
+Rotation → B. Surface audit #88 also due (last 1454) and written this tick.
+
+### THE AUDIT FOUND THE SHAPE, AND THE SHAPE HAD A GATE ALREADY
+
+Audit #88's headline: **four defects in ten ticks, all the same shape** — a capability present in one
+configuration and absent in the other (`inset` t1460, `option` t1463, SpiderMonkey t1461, `audio`
+here). Two cascades × two JS settings = four browsers, and each of the two suites exercises one of
+each, so a defect living in exactly one half is invisible to both.
+
+⭐⭐⭐ **AND THE GATE THAT SHOULD HAVE CAUGHT IT HAS EXISTED FOR HUNDREDS OF TICKS, SCOPED TO ONE
+VALUE.** `both_ua_sheets_agree_on_which_elements_are_block` reads `UA_CSS`'s `display: block` rule
+and nothing else. `option, optgroup { display: none }` sat one screen above it. *A gate named for a
+plural asserts a sample and reads as a population* — arriving against a gate built specifically to
+enforce the lockstep it was not enforcing.
+
+### THE DRIFT RECURRED WITHIN ONE TICK OF ITS OWN LESSON
+
+t1463 corrected the Stylo sheet to Chrome's `block` and left `apply_ua_defaults` at its `inline`
+fallback — **the same divergence in the opposite direction, one tick after the journal entry quoting
+the lockstep comment.** That is the whole argument for mechanising a prose rule, made by me, against
+myself, in one day.
+
+### AND THE NEW HALF FOUND A THIRD DRIFT ON ITS FIRST RUN
+
+```text
+                         Chrome              UA_CSS      MinimalCascade
+  <audio>                none, 0x0           none        inline      ← drift
+  <audio controls>       inline, 300x54      none        inline      ← and WRONG in both
+  <video>                inline, 300x150     —           —           ✓
+```
+
+⭐⭐ `audio { display: none }` unqualified **hid the one form of the element anybody ever sees.**
+Chrome's sheet is `audio:not([controls])`, and the difference is a rendered control bar. Both
+cascades were wrong, in opposite directions, and no suite had noticed.
+
+⚠ The computed value is now Chrome-exact in both cascades; the **box** is not — ours is `0x17`
+against Chrome's `300x54`, because there is no audio control-bar widget with an intrinsic size.
+Named rather than claimed, and left for a later tick: it is a replaced-element intrinsic-sizing
+question, not a cascade one.
+
+### LANDED
+
+```
+  engine/css/src/stylo_engine.rs  audio -> audio:not([controls]);  the display:none lockstep GATE
+  engine/css/src/lib.rs           option|optgroup => Block;  audio => Inline iff [controls]
+  gate  both_ua_sheets_agree_on_which_elements_are_display_none
+        vacuity arm: the parsed `display: none` tag list must contain param+datalist and be >=5,
+        so a reformatting of the sheet cannot turn it into a no-op over an empty list
+  WPT html/semantics/embedded-content  863 -> 863   0/0   (clean same-hour control)
+      css/css-display                  211 -> 211   0/0
+  Bar 0: no hang, no crash, no panic
+```
+
+### ⚠⚠ THE HARNESS LESSON THAT COST MOST OF THIS TICK
+
+Two of my own background control-build jobs were alive at once. Each does *revert → build →
+restore*, and they took turns reverting each other's restore: **the working tree silently returned to
+HEAD three times.** Four separate things made it hard to see, and all four are worth keeping:
+
+* **`grep -c` on a string that also appears in the neighbouring comment reports success on a reverted
+  file.** Verify a restore by the LINE (`grep -n "^audio"`), never a count.
+* **`pkill -f <pattern>` matches your own shell**, because the pattern is in its command line — one of
+  those killed the script that was about to restore the tree. Kill by PID. (This is in memory as a
+  `pgrep` warning; it is the same trap with a sharper edge.)
+* **Cargo reused the control build's artifacts** after the restore, so the probe reported HEAD's
+  behaviour from correct sources — a wrong answer with no wrong input anywhere in sight.
+* **`cp -a` of the repo to /tmp filled the disk** (it includes `target/`), which is the third time
+  this project has recorded a disk trap.
+
+Never run two in-place control builds concurrently: they share one working tree.
+
+NEXT: `<audio controls>` has the right `display` and the wrong box — `300x54` in Chrome, `0x17` here.
+`<video>`'s `300x150` already comes from the replaced-element default-size path; audio needs its own
+constant there, and a control bar to justify it.
+
+### SELF-AUDIT (tick 1464) — ONE ITEM, AND IT IS NOT MINE
+
+`./scripts/self-audit.sh`: **1 prescribed-but-not-executed item**, everything else green (392
+clusters, 52 process defects each naming a closing mechanism, 1195 pattern rows, gates declaring how
+to break them, journal unbroken for the last 5 ticks).
+
+The one item: *"verify wall: 2034s EXCEEDS the 300s target — Part 21.2 item 1 has regressed."* That
+is `scripts/verify.sh`, which is harness and observer-owned. ⚠ Recorded here per the scope rule and
+NOT acted on. `LAST_AUDIT_TICK` bumped to 1464.
+
+WIKI: docs/wiki/a-lockstep-gate-scoped-to-one-value.md

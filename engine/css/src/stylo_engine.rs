@@ -370,7 +370,13 @@ option, optgroup { display: block; }
    ⚠ `<ruby>` is deliberately ABSENT: Chrome computes `display: ruby`, which is a layout mode this
    engine does not implement, and writing the declaration would claim a capability the layout cannot
    honour. Named here rather than left looking overlooked. */
-audio { display: none; }
+/* ⚠⚠ **`audio` UNQUALIFIED HID THE ONE `<audio>` THAT RENDERS.** Chrome's sheet is
+   `audio:not([controls])`, and it matters: a bare `<audio>` is `display: none` at 0x0, but
+   `<audio controls>` is `inline` at **300x54** — the control bar, which is the only form of the
+   element a user ever sees. Found by `both_ua_sheets_agree_on_which_elements_are_display_none` on
+   its first run, as a drift against `apply_ua_defaults` (which said `inline` for both and so was
+   wrong the other way). */
+audio:not([controls]) { display: none; }
 hgroup, search { display: block; }
 nobr { white-space: nowrap; }
 /* ⚠⚠⚠ `<legend>` IS DELIBERATELY ABSENT, AND IT COST TWO ATTEMPTS TO EARN THAT.
@@ -4507,6 +4513,100 @@ mod tests {
     ///
     /// **How it goes RED:** delete any tag from either list. Removing `form` from
     /// `apply_ua_defaults` reproduces the t853 mis-actuation exactly.
+    /// **The `display: none` half of the same lockstep — the half that was not covered, and where
+    /// the next drift happened.**
+    ///
+    /// ⭐⭐⭐ `both_ua_sheets_agree_on_which_elements_are_block` existed, its doc comment even says
+    /// *"(MinimalCascade — what manuk-agent runs)"*, and it reads `UA_CSS`'s **`display: block`**
+    /// rule only. `option, optgroup { display: none }` sat one screen above it for the whole time,
+    /// diverging from a `MinimalCascade` that never listed them — so a `<select>` exposed **no
+    /// options at all** under one cascade and every option under the other, and which you got
+    /// depended on a cargo feature. A gate named for a plural asserts a sample and reads as a
+    /// population.
+    ///
+    /// ⚠ And the drift recurred immediately in the other direction: t1463 corrected the Stylo sheet
+    /// to Chrome's `block` and left `apply_ua_defaults` at its `inline` fallback. Fixing one sheet
+    /// is exactly the failure the lockstep comment describes, and it happened one tick after the
+    /// comment was quoted in a journal entry. **A rule that is only prose gets obeyed only when
+    /// someone remembers it.**
+    ///
+    /// **How it goes RED:** put `option, optgroup` back in either sheet's `display: none` list, or
+    /// remove them from `apply_ua_defaults`.
+    #[test]
+    fn both_ua_sheets_agree_on_which_elements_are_display_none() {
+        // Every plain-tag selector list in UA_CSS whose declaration is exactly `display: none`.
+        // Attribute and descendant selectors (`[hidden]`, `details > *`) are conditional and are
+        // not per-tag defaults, so they are not comparable to `apply_ua_defaults` and are skipped
+        // by the `is_ascii_alphanumeric` filter below.
+        let mut hidden: Vec<&str> = Vec::new();
+        for chunk in UA_CSS
+            .split("{ display: none; }")
+            .take(UA_CSS.matches("{ display: none; }").count())
+        {
+            let sel = &chunk[chunk
+                .rfind("*/")
+                .map(|i| i + 2)
+                .unwrap_or(0)
+                .max(chunk.rfind('}').map(|i| i + 1).unwrap_or(0))
+                .max(chunk.rfind(';').map(|i| i + 1).unwrap_or(0))..];
+            for t in sel.split(',') {
+                let t = t.trim();
+                if !t.is_empty() && t.chars().all(|c| c.is_ascii_alphanumeric()) {
+                    hidden.push(t);
+                }
+            }
+        }
+        assert!(
+            hidden.contains(&"param") && hidden.contains(&"datalist") && hidden.len() >= 5,
+            "the UA_CSS `display: none` rules did not parse — got {hidden:?}. This assertion \
+             exists so a reformatting of the sheet cannot silently turn this gate into a no-op \
+             over an empty list, which is the vacuous-gate failure mode."
+        );
+
+        let ua_display = |tag: &str| {
+            let mut s = crate::ComputedStyle::initial();
+            let el = manuk_dom::ElementData {
+                name: tag.to_string(),
+                attrs: Vec::new(),
+                namespace: None,
+            };
+            crate::apply_ua_defaults(&mut s, &el);
+            s.display
+        };
+
+        let mut drifted = Vec::new();
+        for tag in &hidden {
+            if ua_display(tag) != crate::Display::None {
+                drifted.push(format!("{tag}: UA_CSS none, minimal {:?}", ua_display(tag)));
+            }
+        }
+
+        // ⚠ THE OTHER DIRECTION, which is the one t1463 broke. An element the shipping sheet gives
+        //   a real display to must not be `None` here — nor left at the `inline` fallback when the
+        //   sheet says `block`, because that is the same divergence wearing a milder value.
+        for (tag, want) in [
+            ("option", crate::Display::Block),
+            ("optgroup", crate::Display::Block),
+        ] {
+            let got = ua_display(tag);
+            if got != want {
+                drifted.push(format!(
+                    "{tag}: UA_CSS says `display: block` (Chrome agrees), minimal says {got:?}"
+                ));
+            }
+        }
+
+        assert!(
+            drifted.is_empty(),
+            "THE TWO UA SHEETS HAVE DRIFTED ON `display`. `stylo_engine.rs`'s UA_CSS and \
+             `apply_ua_defaults` (MinimalCascade — what manuk-agent runs) disagree: {drifted:?}.\n  \
+             An element hidden in one cascade and not the other is absent from the accessibility \
+             tree in one build and present in the other — which is how every `<select>` on the web \
+             lost its options for an agent while WPT, which runs the other configuration, saw \
+             nothing wrong."
+        );
+    }
+
     #[test]
     fn both_ua_sheets_agree_on_which_elements_are_block() {
         // The shipping sheet's block rule, read out of the sheet rather than re-typed — a copy

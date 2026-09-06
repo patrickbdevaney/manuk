@@ -11330,3 +11330,32 @@ dropdown's contents. A divergence like that is invisible to a suite that only ex
 
 **Status:** landed t1463, gated by `g_an_option_is_not_hidden_by_a_stylesheet` under three
 mutations; WPT `html/semantics/forms` and `css/css-display` both flat against a same-hour control.
+
+---
+
+## A lockstep gate must cover every VALUE, not one — and verify a restore by the line
+
+**Pattern.** When one rule is expressed in two places, a gate that enforces their agreement must
+enumerate the whole rule. `both_ua_sheets_agree_on_which_elements_are_block` read the `display:
+block` list and nothing else; `option, optgroup { display: none }` diverged one screen above it and
+cost every `<select>` its options in one of the two builds. A gate named for a plural asserts a
+sample and reads as a population.
+
+**How it is found.** Extend the gate to the next value and run it. The `display: none` half found a
+**third**, unknown drift on its first run: `audio { display: none }` unqualified, against Chrome's
+`audio:not([controls])` — hiding the one form of the element anybody sees, and wrong in *both*
+cascades in opposite directions.
+
+**The recurrence is the argument for mechanising.** The drift came back within one tick: t1463 fixed
+one sheet and left the other, one tick after quoting the lockstep comment in a journal entry. **A
+rule that is only prose gets obeyed only when someone remembers it.**
+
+**⚠ Harness, dearly bought.** Two concurrent in-place control builds share one working tree and take
+turns reverting each other's restore. Verify a restore by the **line** (`grep -n "^audio"`), never a
+count — `grep -c` on a string that also appears in the neighbouring comment reports success on a
+reverted file. `pkill -f <pattern>` matches your own shell. And cargo may reuse the control build's
+artifacts after a restore, so a test can report HEAD's behaviour from correct sources.
+
+**Status:** landed t1464 (`both_ua_sheets_agree_on_which_elements_are_display_none`, plus the
+`audio` and `option` lockstep fixes it found); WPT `html/semantics/embedded-content` and
+`css/css-display` both flat against a clean same-hour control.
