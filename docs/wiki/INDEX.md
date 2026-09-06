@@ -119,6 +119,13 @@
   - L33 · Measured
   - L53 · What it unblocks, and what still blocks it
 
+## An ordinal needs an enumeration
+`docs/wiki/an-ordinal-needs-an-enumeration.md`
+
+  - L29 · The round trip is the whole point
+  - L39 · An enumeration of identical rows is not an enumeration
+  - L46 · ⚠ The role filter was untested until a button was added
+
 ## ARCHITECTURE — concurrency, process model, memory, and the REASONING
 `docs/wiki/architecture.md`
 
@@ -3313,4 +3320,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2844 sections across 116 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2847 sections across 117 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

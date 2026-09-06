@@ -8205,3 +8205,74 @@ productive on the instruments themselves.
    `g_counter_set_and_pseudo_counters` — a pseudo's own `counter-increment` is ignored on the Stylo
    path. Two of the three original blockers have been cleared by measuring rather than arguing.
 3. ⚠ The wall's missing eight crates — second ranking, unchanged.
+
+## Audit #89 — tick 1474 (2026-09-06)
+
+Ten ticks since #88. #88's headline was *"a capability that exists in one configuration and not the
+other is invisible to both suites."* This window's is one level up.
+
+### ⭐⭐⭐ THE FINDING: THE LOOP'S OWN HEADLINE WAS TAKEN ON A BROWSER THAT HAD NOT RENDERED THE PAGE
+
+t1461 reported Track B's node-match F1 at **94.8%** against a `>=90%` bar and the loop recorded the
+bar as met — in this file, in `CONSTITUTION-CHECK` #141, and in three commit messages. t1470 counted
+the denominator's own health:
+
+```text
+                          <li> in DOM    with a box    zero-size
+  without finish_loading      770            126           644
+  with finish_loading         776            614           162
+```
+
+**84% of the page had no layout box.** The accessibility tree excludes boxless nodes, so a browser
+that renders less scores *better*: fewer phantoms, and the omissions are invisible to precision. The
+honest figure is **82.0%**, and the bar is **not met**.
+
+⚠⚠ It also made t1467's refusal wrong. That tick measured `finish_loading` at 94.8% → 82.2% and
+refused it on the ratchet — **a correct change rejected because it was compared against a flattering
+baseline.** *A refusal is only as good as the baseline it is measured against*, and nothing in the
+loop's machinery checks a baseline before honouring a refusal.
+
+### ⭐⭐ AND THE SECOND FINDING IS WHY IT SURVIVED NINE TICKS
+
+`verify.sh` launches **19 of `engine/page/tests/`'s 567 gate files** by name, and `manuk-page` is
+absent from the crate-suite loop. 548 gates are executed by nothing on the per-tick path. Two were
+red on the clean tree when finally run (t1469), one of them for four consecutive ticks.
+
+⚠ **t1403 already recorded this** — *"a count of GATE FILES is not a count of EXECUTED gates"*, after
+two gates sat red for three ticks under a green `GATES 534`. Same defect, larger number, not closed.
+
+### THE INSTRUMENTS THIS WINDOW BUILT, AND THE ONE THAT MATTERED MOST
+
+```text
+  --diff        the multiset excess, ranked      named Wikipedia's phantoms in one run
+  ceiling       drive-probe's fourth column      turned a 21-point gap into a decomposition
+  hittest       verify.sh's G6, run locally      a 50-minute refusal became a 2-second check
+```
+
+⭐ **`manuk-wpt hittest` is the most valuable of the three and it already existed.** t1468 built,
+gated, documented and reverted a whole tick because one line at the end of a ~50-minute wall refused
+it. The check is one subcommand against one cached page. **The scope rule forbids editing `scripts/`;
+it has never forbidden reading it**, and reading it paid twice in ten ticks — this, and the 19-of-567
+count above. *Fourth "already built" of the session.*
+
+### ⚠ CARRIED
+
+* **Eight crates and 120 tests still outside the wall** — all green today (a11y 21, html 18, text 14,
+  media 18, js 9, compositor 8, store 17, bidi 15). **Third consecutive audit, ranked #1 each time.**
+* **The wall is growing: 2034s at t1464, 3945s at t1474.** The self-audit's only failing item, and
+  `wall-audit.sh` can attribute 256s of it — **6.5%**. Two instruments disagreeing by 15× about one
+  number.
+* **CI never finishes** — the tick cadence outruns its concurrency group. Second observation.
+* `css/cssom-view` was absent from `WPT-AREAS.tsv` for six audits **and the loop was spelling the area
+  wrong for two ticks** (`cssom-view` reports 0 runnable; it is `css/cssom-view`). Seventh mention.
+* `ORACLE_CRAWLED: 0` — fifteenth.
+
+### RANKED, from this audit only
+
+1. ⭐⭐⭐ **A metric whose denominator can move must report the denominator.** The a11y score should
+   publish "nodes with a box / nodes in the DOM" beside precision, or the next under-rendering
+   regression flatters itself the same way. This is agent-side and cheap.
+2. ⭐⭐ **Run the package sweep before landing a gate** — already adopted as practice at t1469, and it
+   is the only defence against the 548 while `verify.sh` is observer-owned.
+3. ⚠ The eight missing crates — third ranking, unchanged, and the only change here that *adds*
+   coverage rather than costing it.

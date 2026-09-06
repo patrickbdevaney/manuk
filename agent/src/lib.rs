@@ -883,6 +883,36 @@ impl AgentBrowser {
     /// ⭐ `drive-probe` measured the gap this closes: 99% of the targets an agent perceives but
     /// cannot act on are ambiguous, and the duplicates are overwhelmingly the same links in the
     /// header nav and the footer. See [`crate::targeting::resolve_target_in`].
+    /// **Every target `name` resolves to, in document order, with the terms that tell them apart.**
+    ///
+    /// ⭐⭐⭐ An ordinal is useless without an enumeration. `drive-probe` measured that the whole
+    /// remaining drive gap is addressing (the ceiling is 99.5%) and that **15.2 of the 21 points need
+    /// `nth`** rather than another naming term — but an agent can only ask for *the third `Edit`* if
+    /// something told it there are three. This is what turns an ambiguous resolve from a dead end
+    /// into a question the agent can answer: enumerate, read the `landmark`/`heading` on each row,
+    /// then call [`Self::click_by_name_at`] with whichever term separates them — or with `nth`.
+    ///
+    /// ⚠ The order is the order `nth` indexes; see [`crate::targeting::candidates`].
+    pub fn candidates_for(
+        &self,
+        role: &manuk_a11y::Role,
+        name: &str,
+    ) -> Result<Vec<crate::targeting::Candidate>> {
+        let tree = self.a11y_tree()?;
+        let viewport = manuk_a11y::Rect {
+            x: 0.0,
+            y: self.scroll_y,
+            width: self.width as f32,
+            height: self.height as f32,
+        };
+        Ok(crate::targeting::candidates(
+            &tree,
+            name,
+            Some(role),
+            viewport,
+        ))
+    }
+
     /// [`click_by_name`](Self::click_by_name) restricted to the section under a **heading**, and/or
     /// to the **nth** match in document order.
     ///

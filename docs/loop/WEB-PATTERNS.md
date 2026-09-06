@@ -11612,3 +11612,29 @@ into one constant.
 **Status:** landed t1473; local clickability unchanged at 100.0% (0 of 477), WPT
 `html/semantics/embedded-content`, `css/css-display` and `css/css-sizing` all flat against a
 same-hour control; 571 `manuk-page` binaries green.
+
+---
+
+## A capability with no way to be ASKED for is not reachable — publish the set, not just the selector
+
+**Pattern.** Measuring that a term is worth points does not make those points available. `nth` was
+priced at **15.2 of the agent's remaining 21 drive points** — more than both semantic terms combined
+— and no caller could use it, because nothing told the agent how many candidates there were. An
+ambiguous resolve handed back one arbitrary winner and no view of the set it came from.
+
+**The fix is an enumeration whose ORDER IS THE SELECTOR'S ORDER.** `candidates(..)[i].node` and
+`resolve_target_at(.., nth = Some(i), ..)` both sort by node id, so they name the same node by
+construction, and the gate asserts the round trip for every row. Publishing one order and indexing
+another is the t1402 shape — two halves of one system that disagree about the thing they share, each
+with passing tests.
+
+**And an enumeration of identical rows is not an enumeration.** Each row must carry what
+distinguishes it — here the enclosing landmark, the nearest preceding heading and the click point —
+and the gate checks those terms actually work as addresses when handed back to the resolver.
+
+**⚠ Fixture requirement, earned by a green mutation.** A filter is only tested by an item it
+excludes. Dropping the role filter changed nothing while every same-named element on the page was
+already the right role; a `<button>Edit</button>` among the `<a>Edit</a>`s is what makes it visible.
+
+**Status:** landed t1474 as `targeting::candidates` + `AgentBrowser::candidates_for`, gated by
+`g_an_ordinal_needs_an_enumeration` under three mutations; 55 agent binaries green.

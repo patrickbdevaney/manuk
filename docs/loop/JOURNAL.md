@@ -106425,3 +106425,89 @@ existing `--drain`-style budget gates prove the timer queue is drainable, so a p
 every drain turn rather than at one instant would settle in one run what three probes could not.
 
 WIKI: docs/wiki/an-audio-player-reserves-its-space.md
+
+## Tick 1474 — an ordinal needs an enumeration (2026-09-06)
+
+TICK SHAPE: capability
+
+Rotation → C. Surface audit #89 and the self-audit were also due and are recorded below.
+
+### THE MEASURED POINTS NO CALLER COULD REACH
+
+t1471 priced the addressing gap and found the whole of it is naming, not geometry — at a **99.5%
+ceiling** essentially every target is already grounded and unoccluded, and an ordinal recovers
+**15.2** of the 21 points against the two semantic terms' 5.8.
+
+⭐⭐⭐ **BUT AN AGENT CAN ONLY ASK FOR *THE THIRD `Edit`* IF SOMETHING TOLD IT THERE ARE THREE.** With
+`nth` and no enumeration, an ambiguous resolve was still a dead end: the caller got one arbitrary
+winner and no view of the set. *Measuring that a term is worth points does not make those points
+available* — the 15.2 were unreachable by any caller for three ticks.
+
+```text
+  nth  role  name    landmark      heading    point
+   0   link  Edit    navigation    –          (80, 12)
+   1   link  Edit    –             History    (80, 92)
+   2   link  Edit    –             Usage      (80, 172)
+```
+
+### THE ROUND TRIP IS THE WHOLE POINT
+
+⚠⚠ **The published order must be the order `nth` indexes.** Both sort by node id — document order —
+so `candidates(..)[i].node == resolve_target_at(.., nth = Some(i), ..)` by construction, and the gate
+asserts it for **every** row. Publishing one order and indexing another is the t1402 shape: two
+halves of one system that disagree about the thing they share, each with passing tests. An
+enumeration the ordinal does not match is worse than none, because the caller cannot notice.
+
+⚠ And an enumeration of identical rows is not an enumeration — every row publishes its landmark, its
+nearest preceding heading and its click point, and the gate checks those terms work as addresses when
+handed back to the resolver.
+
+### ⚠ A GREEN MUTATION EARNED A FIXTURE ROW, AGAIN
+
+Dropping the role filter from `candidates` came back **green**: with only links named `Edit` on the
+page, nothing else scored above zero, so the filter changed no answer. **A filter is only tested by
+an item it excludes** — a `<button>Edit</button>` among the `<a>Edit</a>`s is the only thing that can
+see it, and it is in the fixture because the mutation was run.
+
+### LANDED
+
+```
+  agent/src/targeting.rs   candidates() + Candidate { nth, role, name, landmark, heading, point }
+  agent/src/lib.rs         AgentBrowser::candidates_for — the production surface
+  gate  g_an_ordinal_needs_an_enumeration   RED under 3 named mutations
+  vacuity arm: three Edit LINKS beside a <button>Edit</button> the role filter must exclude
+  55 agent test binaries green, 0 failures
+  Bar 0: no hang, no crash, no panic
+```
+
+### SURFACE AUDIT #89 (due at 1474)
+
+⭐⭐⭐ **The loop's own headline was taken on a browser that had not rendered the page** — 84% of
+Wikipedia's list items had no layout box, the a11y tree excludes boxless nodes, so a browser that
+renders *less* scores better. 94.8% withdrawn, 82.0% honest, the `>=90%` bar **not met**. It also
+made t1467's refusal wrong: *a refusal is only as good as the baseline it is measured against*, and
+nothing in the loop checks a baseline before honouring a refusal.
+
+⭐⭐ **And it survived nine ticks because `verify.sh` runs 19 of `engine/page`'s 567 gates.** t1403
+already recorded *"a count of GATE FILES is not a count of EXECUTED gates"*; same defect, larger
+number, not closed.
+
+⭐ The most valuable instrument this window **already existed**: `manuk-wpt hittest` turns t1468's
+50-minute refusal into a 2-second check. *The scope rule forbids editing `scripts/`; it has never
+forbidden reading it* — and reading it paid twice in ten ticks. Fourth "already built" of the session.
+
+Ranked: (1) **a metric whose denominator can move must report the denominator**; (2) run the package
+sweep before landing a gate; (3) the eight crates and 120 tests still outside the wall — third
+ranking, all green today.
+
+### SELF-AUDIT (tick 1474)
+
+One prescribed-but-not-executed item, unchanged and not mine: *"verify wall: **3945s** exceeds the
+300s target"* — up from 2034s at t1464, while `wall-audit.sh` can attribute 256s (**6.5%**). Harness,
+observer-owned; reported per the scope rule. `LAST_AUDIT_TICK` bumped to 1474.
+
+NEXT: audit #89's ranked #1 is agent-side and cheap — publish "nodes with a box / nodes in the DOM"
+beside precision in `a11y-score`, so the next under-rendering cannot flatter itself the way this one
+did for nine ticks.
+
+WIKI: docs/wiki/an-ordinal-needs-an-enumeration.md

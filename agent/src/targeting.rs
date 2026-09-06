@@ -218,6 +218,68 @@ fn landmark_scopes(tree: &A11yNode) -> std::collections::HashMap<NodeId, Role> {
     m
 }
 
+/// **Every candidate a name resolves to, in DOCUMENT ORDER, with the terms that tell them apart.**
+///
+/// ⭐⭐⭐ **AN ORDINAL IS USELESS WITHOUT AN ENUMERATION.** `drive-probe` measured that the whole
+/// remaining drive gap is addressing — the ceiling is 99.5%, so essentially every target is already
+/// grounded and unoccluded — and that **15.2 of the 21 points need `nth`** rather than another
+/// naming term. But an agent can only ask for *the third `Edit`* if something told it there are
+/// three. Without this, an ambiguous resolve is a dead end: the caller is handed one arbitrary
+/// winner and has no way to see the set it was chosen from.
+///
+/// ⚠ **THE ORDER HERE IS THE ORDER `nth` INDEXES.** Both sort by node id — document order — so
+/// `candidates(..)[i]` and `resolve_target_at(.., nth = Some(i), ..)` name the same node by
+/// construction. Publishing one order and indexing another would be the t1402 shape: two halves of
+/// one system that disagree about the thing they share.
+pub fn candidates(
+    tree: &A11yNode,
+    intent: &str,
+    role: Option<&Role>,
+    viewport: Rect,
+) -> Vec<Candidate> {
+    let kw = keywords(intent);
+    let mut scored: Vec<(f32, &A11yNode)> = Vec::new();
+    collect_scored(tree, &kw, &viewport, &mut scored);
+    if let Some(r) = role {
+        scored.retain(|(_, n)| n.role.matches(r));
+    }
+    scored.retain(|(s, _)| *s > 0.0);
+    scored.sort_by_key(|(_, n)| n.node.0);
+    let landmarks = landmark_scopes(tree);
+    let headings = heading_scopes(tree);
+    scored
+        .into_iter()
+        .enumerate()
+        .map(|(i, (score, n))| Candidate {
+            nth: i,
+            node: n.node,
+            role: n.role.clone(),
+            name: n.name.clone(),
+            landmark: landmarks.get(&n.node).map(|r| r.as_str().to_string()),
+            heading: headings.get(&n.node).filter(|h| !h.is_empty()).cloned(),
+            point: n.bbox.map(|b| b.center()),
+            score,
+        })
+        .collect()
+}
+
+/// One row of [`candidates`] — everything an agent needs to choose between look-alikes.
+#[derive(Debug, Clone)]
+pub struct Candidate {
+    /// Index in document order. Pass this straight back as `nth`.
+    pub nth: usize,
+    pub node: NodeId,
+    pub role: Role,
+    pub name: String,
+    /// The enclosing landmark, when there is one — worth +3.2 points on the corpus.
+    pub landmark: Option<String>,
+    /// The nearest preceding heading, when there is one — a further +2.6.
+    pub heading: Option<String>,
+    /// Where it would be clicked, when it has a box.
+    pub point: Option<(f32, f32)>,
+    pub score: f32,
+}
+
 /// [`resolve_target_scoped`], further restricted to targets inside a given **landmark**.
 ///
 /// ⭐⭐⭐ **`(role, name)` IS NOT A SUFFICIENT ADDRESS FOR THE REAL WEB.** `drive-probe` measured it:
