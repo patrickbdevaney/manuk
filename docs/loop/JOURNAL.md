@@ -106199,3 +106199,79 @@ subscription that never receives its payload. One eval lists the registered hook
 whole remaining Wikipedia gap and, on this corpus, the whole Track B gap.
 
 WIKI: docs/wiki/the-good-score-was-an-unrendered-page.md
+
+## Tick 1471 — the whole gap is addressing, and most of it needs a POSITION (2026-09-06)
+
+TICK SHAPE: capability
+
+Rotation → C. t1462's NEXT: *"the term after the landmark, for duplicates that share one… price it in
+`drive-probe` first, the way the landmark was."*
+
+### THE CEILING TURNED A SHORTFALL INTO A DECOMPOSITION
+
+I added two priced columns and, more usefully, a **ceiling** — what the rate would be if every
+duplicate could be addressed by ordinal, so only grounding and occlusion can fail:
+
+```text
+                         rate    +landmark   +heading   ceiling(ordinal)
+  martinfowler.com      84.3%       89.3%     100.0%        100.0%
+  news.ycombinator      66.3%       66.3%      66.3%        100.0%
+  blog.rust-lang.org    96.9%       96.9%      98.6%        100.0%
+  www.a11yproject       77.6%       77.6%      86.2%         89.7%
+  danluu.com           100.0%      100.0%     100.0%        100.0%
+  en.wikipedia.org      67.8%       73.5%      75.5%         99.5%
+  TOTAL                 78.5%       81.7%      84.3%         99.5%
+```
+
+⭐⭐⭐ **THE CEILING IS 99.5%.** Essentially every target an agent can perceive is already grounded
+and unoccluded, so the **entire 21-point shortfall is addressing and none of it is geometry.** Every
+instinct says the hard part of driving a browser is hitting the right pixel. On this corpus, hitting
+the pixel is solved — and t1459's headline finding (99% of failures are ambiguity) now has the
+stronger form: *there is nothing else left*.
+
+### AND IT RANKED THE FIXES BEFORE EITHER EXISTED
+
+```text
+  landmark (t1462)   +3.2      heading   +2.6      ordinal   +15.2
+```
+
+⭐⭐ **Two semantic terms recover 5.8 points; one positional term recovers 15.2.**
+`news.ycombinator.com` has neither landmarks nor headings, sits at `66.3 → 66.3 → 66.3` and reaches
+100% only at the ceiling — proof, before a line of code, that no further *naming* term could help it.
+`martinfowler.com` goes to **100% on the heading alone**.
+
+So `nth` is not a convenience API. On this corpus it is the majority of the fix.
+
+### TWO THINGS THE TERMS BROUGHT WITH THEM
+
+⚠ **A heading is a PRECEDING SIBLING, not an ancestor.** `<h2>` and the content it introduces are
+siblings in HTML, so an ancestor walk finds nothing at all — the scope must be carried through a flat
+pre-order scan, unlike the landmark's, which really is an enclosing container. Mutation 2 is that
+distinction.
+
+⚠ **`nth` counts DOCUMENT ORDER, not score.** "The third Edit link" is the third one on the page —
+what a caller counting them saw. Indexing the score-sorted list returns "the third best match", which
+on a page of identical links is arbitrary. Mutation 3 is that distinction.
+
+### LANDED
+
+```
+  agent/src/drivability.rs   targets_sectioned() + the sectioned and ceiling tallies
+  agent/src/bin/drive-probe.rs   all four columns
+  agent/src/targeting.rs     heading_scopes() + resolve_target_at(landmark, heading, nth)
+  agent/src/lib.rs           AgentBrowser::click_by_name_at — the production caller
+  gate  g_the_third_edit_link   RED under 3 named mutations
+  vacuity arm: the page must contain three identical `Edit` links under three headings
+  54 agent test binaries green, 0 failures
+  Bar 0: no hang, no crash, no panic
+```
+
+⚠ All three filters run **after** scoring, for the reason the role filter does: a runner-up a filter
+excludes is not competition and must not make the winner look ambiguous.
+
+NEXT: the ceiling says the remaining Track C work is not more terms — it is **enumeration**. An agent
+can only say "the third Edit" if something tells it there are three; `drive-probe`'s `--list` already
+computes exactly that grouping and nothing exposes it to a caller. Publishing the ambiguity set
+alongside a resolve failure turns 21 points of dead end into a question the agent can answer.
+
+WIKI: docs/wiki/the-whole-gap-is-addressing.md

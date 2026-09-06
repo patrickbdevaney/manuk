@@ -11530,3 +11530,31 @@ moves.
 
 **Status:** t1470 — `finish_loading` adopted, F1 re-baselined 94.8% → **82.0%**, Track B's `>=90%`
 bar explicitly **not met**. Five of six corpus sites are 89.5-99.9%; Wikipedia alone is 48.5%.
+
+---
+
+## Add a CEILING column — it turns a shortfall into a decomposition
+
+**Pattern.** A metric that reports only "78.5% drivable" cannot say whether the missing 21 points are
+geometry, naming, or something inherent. Add a column computed with the hardest failure mode assumed
+away — here, "what if every duplicate could be addressed by ordinal" — and the remainder is the part
+no further work of that kind can fix.
+
+**What it showed.** The ceiling is **99.5%**: essentially every target an agent can perceive is
+already grounded and unoccluded, so the *entire* shortfall is addressing and none of it is geometry.
+Every instinct says the hard part of driving a browser is hitting the right pixel; on this corpus
+hitting the pixel is solved.
+
+**And it ranked the fixes before any were built.** landmark +3.2, heading +2.6, ordinal **+15.2** —
+so two semantic terms recover 5.8 points and one positional term recovers 15.2. `news.ycombinator.com`
+has neither landmarks nor headings, sits at 66.3% under every naming term and 100% at the ceiling:
+proof, before a line of code, that no further *naming* term could help it.
+
+**Two non-obvious details the terms brought with them.** A heading is a **preceding sibling**, not an
+ancestor (`<h2>` and its section are siblings in HTML), so its scope needs a flat pre-order scan
+rather than the landmark's enclosing walk. And `nth` must count **document order, not score** — "the
+third Edit link" is what a caller counting them saw; indexing a score-sorted list is arbitrary on a
+page of identical links.
+
+**Status:** landed t1471 as `targeting::resolve_target_at` + `AgentBrowser::click_by_name_at`, gated
+by `g_the_third_edit_link` under three mutations; `drive-probe` now prints all four columns.

@@ -37,8 +37,16 @@ async fn main() -> Result<()> {
     }
 
     println!(
-        "{:<40} {:>7} {:>9} {:>11} {:>10} {:>8} {:>8} {:>10}",
-        "url", "targets", "drivable", "ungrounded", "ambiguous", "mis-hit", "rate", "+landmark"
+        "{:<40} {:>7} {:>9} {:>10} {:>8} {:>8} {:>10} {:>10} {:>9}",
+        "url",
+        "targets",
+        "drivable",
+        "ambiguous",
+        "mis-hit",
+        "rate",
+        "+landmark",
+        "+heading",
+        "ceiling"
     );
     let mut total = drivability::Tally::default();
 
@@ -57,15 +65,16 @@ async fn main() -> Result<()> {
         };
         let t = drivability::tally(&tree);
         println!(
-            "{:<40} {:>7} {:>9} {:>11} {:>10} {:>8} {:>7.1}% {:>9.1}%",
+            "{:<40} {:>7} {:>9} {:>10} {:>8} {:>7.1}% {:>9.1}% {:>9.1}% {:>8.1}%",
             url.chars().take(40).collect::<String>(),
             t.total,
             t.drivable,
-            t.ungrounded,
             t.ambiguous,
             t.mishit,
             t.rate() * 100.0,
-            t.scoped_rate() * 100.0
+            t.scoped_rate() * 100.0,
+            t.sectioned_rate() * 100.0,
+            t.ordinal_rate() * 100.0
         );
 
         if list {
@@ -96,18 +105,21 @@ async fn main() -> Result<()> {
         total.ambiguous += t.ambiguous;
         total.mishit += t.mishit;
         total.drivable_scoped += t.drivable_scoped;
+        total.drivable_sectioned += t.drivable_sectioned;
+        total.drivable_ordinal += t.drivable_ordinal;
     }
 
     println!(
-        "{:<40} {:>7} {:>9} {:>11} {:>10} {:>8} {:>7.1}% {:>9.1}%",
+        "{:<40} {:>7} {:>9} {:>10} {:>8} {:>7.1}% {:>9.1}% {:>9.1}% {:>8.1}%",
         "TOTAL",
         total.total,
         total.drivable,
-        total.ungrounded,
         total.ambiguous,
         total.mishit,
         total.rate() * 100.0,
-        total.scoped_rate() * 100.0
+        total.scoped_rate() * 100.0,
+        total.sectioned_rate() * 100.0,
+        total.ordinal_rate() * 100.0
     );
     Ok(())
 }

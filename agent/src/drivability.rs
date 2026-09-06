@@ -95,6 +95,47 @@ pub fn targets_scoped(root: &A11yNode) -> Vec<(&A11yNode, &'static str)> {
     out
 }
 
+/// Every actionable, named node, paired with its enclosing landmark **and** the nearest heading
+/// that precedes it in document order.
+///
+/// ⭐⭐ **THE TERM AFTER THE LANDMARK, PRICED BEFORE IT IS BUILT** — the same discipline that
+/// produced the landmark itself (t1459 measured `+3.3` points before `resolve_target_in` existed).
+/// The landmark separates the header nav from the footer; it cannot separate two `Edit` links inside
+/// one `main`, and on Wikipedia that is most of what is left. The two candidates a human actually
+/// uses are the **section heading** ("the Edit link under *History*") and an **ordinal** ("the third
+/// one"). This function supplies the first; [`tally`] prices both.
+///
+/// ⚠ A heading is a *preceding sibling in document order*, not an ancestor — `<h2>` and the content
+/// it introduces are siblings in HTML, so an ancestor walk finds nothing. That is why this is a flat
+/// pre-order scan carrying the last heading seen rather than a scoped walk like the landmark's.
+pub fn targets_sectioned(root: &A11yNode) -> Vec<(&A11yNode, &'static str, String)> {
+    let mut out = Vec::new();
+    let mut heading = String::new();
+    fn go<'a>(
+        n: &'a A11yNode,
+        scope: &'static str,
+        heading: &mut String,
+        out: &mut Vec<(&'a A11yNode, &'static str, String)>,
+    ) {
+        let scope = if is_landmark(&n.role) {
+            n.role.as_str()
+        } else {
+            scope
+        };
+        if matches!(n.role, Role::Heading { .. }) && !n.name.trim().is_empty() {
+            *heading = n.name.trim().to_string();
+        }
+        if is_actionable(&n.role) && !n.name.trim().is_empty() {
+            out.push((n, scope, heading.clone()));
+        }
+        for c in &n.children {
+            go(c, scope, heading, out);
+        }
+    }
+    go(root, "", &mut heading, &mut out);
+    out
+}
+
 /// Every actionable, named node in the tree, in document order.
 pub fn targets(root: &A11yNode) -> Vec<&A11yNode> {
     let mut out = Vec::new();
@@ -149,9 +190,33 @@ pub struct Tally {
     /// How many would be drivable if the address included the enclosing landmark — the size of the
     /// fix, measured before it is built.
     pub drivable_scoped: usize,
+    /// …and if it also included the nearest preceding heading.
+    pub drivable_sectioned: usize,
+    /// …and if an ORDINAL were allowed instead ("the third `Edit`"), which by construction makes
+    /// every target addressable — so this is the CEILING, not a proposal. It is here to say how much
+    /// of the gap is inherent ambiguity rather than a missing term.
+    pub drivable_ordinal: usize,
 }
 
 impl Tally {
+    /// The drivable rate once the address includes the landmark AND the nearest heading.
+    pub fn sectioned_rate(&self) -> f64 {
+        if self.total == 0 {
+            0.0
+        } else {
+            self.drivable_sectioned as f64 / self.total as f64
+        }
+    }
+
+    /// The ceiling: every target addressable by ordinal, so only grounding and occlusion can fail.
+    pub fn ordinal_rate(&self) -> f64 {
+        if self.total == 0 {
+            0.0
+        } else {
+            self.drivable_ordinal as f64 / self.total as f64
+        }
+    }
+
     /// The drivable rate once the address includes the enclosing landmark.
     pub fn scoped_rate(&self) -> f64 {
         if self.total == 0 {
@@ -205,6 +270,40 @@ pub fn tally(root: &A11yNode) -> Tally {
         let d = scounts[&(*s, t.role.as_str().to_string(), t.name.trim().to_string())];
         if classify(root, t, d) == Verdict::Drivable {
             out.drivable_scoped += 1;
+        }
+    }
+
+    // …and with the nearest preceding heading as a third term.
+    let sectioned = targets_sectioned(root);
+    let mut hcounts = std::collections::HashMap::<(&str, &str, String, String), usize>::new();
+    for (t, sc, h) in &sectioned {
+        *hcounts
+            .entry((
+                sc,
+                h.as_str(),
+                t.role.as_str().to_string(),
+                t.name.trim().to_string(),
+            ))
+            .or_insert(0) += 1;
+    }
+    for (t, sc, h) in &sectioned {
+        let d = hcounts[&(
+            *sc,
+            h.as_str(),
+            t.role.as_str().to_string(),
+            t.name.trim().to_string(),
+        )];
+        if classify(root, t, d) == Verdict::Drivable {
+            out.drivable_sectioned += 1;
+        }
+    }
+
+    // The ceiling: an ordinal makes every duplicate unique by construction, so only Ungrounded and
+    // MisHit can still fail. The distance between this and `sectioned` is inherent ambiguity that no
+    // further NAMING term can remove.
+    for t in &ts {
+        if classify(root, t, 1) == Verdict::Drivable {
+            out.drivable_ordinal += 1;
         }
     }
     out

@@ -163,6 +163,11 @@ pub struct AgentBrowser {
     /// [`Self::click_by_name_in`]. `None` — the default — resolves across the whole page exactly as
     /// before, so no existing caller changes behaviour.
     landmark: Option<manuk_a11y::Role>,
+    /// The heading whose section `resolve` is restricted to, and the ordinal within the matches —
+    /// both set for the duration of one [`Self::click_by_name_at`]. `None` resolves across the whole
+    /// page exactly as before.
+    heading: Option<String>,
+    nth: Option<usize>,
 }
 
 /// A synchronous readiness snapshot (see [`AgentBrowser::readiness`]).
@@ -389,6 +394,8 @@ impl AgentBrowser {
             history: manuk_page::history::SessionHistory::new(),
             last_a11y: None,
             landmark: None,
+            heading: None,
+            nth: None,
         }
     }
 
@@ -632,11 +639,13 @@ impl AgentBrowser {
             width: self.width as f32,
             height: self.height as f32,
         };
-        crate::targeting::resolve_target_in(
+        crate::targeting::resolve_target_at(
             &tree,
             name,
             Some(role),
             self.landmark.as_ref(),
+            self.heading.as_deref(),
+            self.nth,
             viewport,
         )
         .map(|t| t.node)
@@ -874,6 +883,33 @@ impl AgentBrowser {
     /// ⭐ `drive-probe` measured the gap this closes: 99% of the targets an agent perceives but
     /// cannot act on are ambiguous, and the duplicates are overwhelmingly the same links in the
     /// header nav and the footer. See [`crate::targeting::resolve_target_in`].
+    /// [`click_by_name`](Self::click_by_name) restricted to the section under a **heading**, and/or
+    /// to the **nth** match in document order.
+    ///
+    /// ⭐⭐⭐ Priced on six real sites before it existed (`drive-probe`): the landmark is worth +3.2
+    /// points, the heading a further +2.6, and an **ordinal the remaining +15.2** — because at a
+    /// 99.5% ceiling essentially every target is already grounded and unoccluded, so the whole
+    /// shortfall is *which one did you mean*. `news.ycombinator.com` has neither landmarks nor
+    /// headings and moves for neither; `martinfowler.com` reaches 100% on the heading alone.
+    pub async fn click_by_name_at(
+        &mut self,
+        landmark: Option<&manuk_a11y::Role>,
+        heading: Option<&str>,
+        nth: Option<usize>,
+        role: &manuk_a11y::Role,
+        name: &str,
+    ) -> Result<Activation> {
+        let prev = (self.landmark.clone(), self.heading.clone(), self.nth);
+        self.landmark = landmark.cloned();
+        self.heading = heading.map(str::to_string);
+        self.nth = nth;
+        let out = self.click_by_name(role, name).await;
+        self.landmark = prev.0;
+        self.heading = prev.1;
+        self.nth = prev.2;
+        out
+    }
+
     pub async fn click_by_name_in(
         &mut self,
         landmark: &manuk_a11y::Role,

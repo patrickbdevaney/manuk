@@ -3210,6 +3210,13 @@
   - L21 · Why it matters: the refusal it unblocked
   - L40 · Two scopings, each with a number
 
+## The whole gap is addressing
+`docs/wiki/the-whole-gap-is-addressing.md`
+
+  - L24 · Where the 21 points go
+  - L37 · Two things about the terms that are not obvious
+  - L47 · The method, repeated
+
 ## A guard that fires on a clock cannot name a cause — and will name whoever the author had in mind
 `docs/wiki/timeout-names-whose-clock.md`
 
@@ -3294,4 +3301,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2837 sections across 113 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2840 sections across 114 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

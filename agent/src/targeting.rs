@@ -243,6 +243,59 @@ pub fn resolve_target_in(
     landmark: Option<&Role>,
     viewport: Rect,
 ) -> Option<Targeted> {
+    resolve_target_at(tree, intent, role, landmark, None, None, viewport)
+}
+
+/// Map every node to the accessible name of the nearest heading that PRECEDES it.
+///
+/// ⚠ A heading is a *preceding sibling in document order*, not an ancestor — `<h2>` and the content
+/// it introduces are siblings in HTML — so this is a flat pre-order scan carrying the last heading
+/// seen, not a scoped walk like [`landmark_scopes`].
+fn heading_scopes(tree: &A11yNode) -> std::collections::HashMap<NodeId, String> {
+    let mut m = std::collections::HashMap::new();
+    let mut cur = String::new();
+    fn go(n: &A11yNode, cur: &mut String, m: &mut std::collections::HashMap<NodeId, String>) {
+        if matches!(n.role, Role::Heading { .. }) && !n.name.trim().is_empty() {
+            *cur = n.name.trim().to_string();
+        }
+        m.insert(n.node, cur.clone());
+        for c in &n.children {
+            go(c, cur, m);
+        }
+    }
+    go(tree, &mut cur, &mut m);
+    m
+}
+
+/// [`resolve_target_in`] with the two further address terms `drive-probe` priced, both optional.
+///
+/// ⭐⭐⭐ **THE WHOLE REMAINING GAP IS ADDRESSING, AND MOST OF IT NEEDS A POSITION, NOT A NAME.**
+/// Measured on six real sites before any of this existed:
+///
+/// ```text
+///                    rate    +landmark   +heading   ceiling(ordinal)
+///   TOTAL           78.5%       81.7%      84.3%        99.5%
+/// ```
+///
+/// The **ceiling** is what makes the rest legible: at 99.5%, essentially every target is grounded
+/// and unoccluded, so the entire 21-point shortfall is *which one did you mean*. The two semantic
+/// terms recover 5.8 of those points; the remaining **15.2 are inherent ambiguity** that no further
+/// naming term can remove — `news.ycombinator.com` has neither landmarks nor headings and does not
+/// move for either, while `martinfowler.com` reaches **100%** on the heading alone.
+///
+/// So `nth` is not a convenience here. It is the majority of the fix.
+///
+/// ⚠ All three filters run **after** scoring, for the reason the role filter does: a runner-up that
+/// a filter excludes is not competition and must not make the winner look ambiguous.
+pub fn resolve_target_at(
+    tree: &A11yNode,
+    intent: &str,
+    role: Option<&Role>,
+    landmark: Option<&Role>,
+    heading: Option<&str>,
+    nth: Option<usize>,
+    viewport: Rect,
+) -> Option<Targeted> {
     let kw = keywords(intent);
     let mut scored: Vec<(f32, &A11yNode)> = Vec::new();
     collect_scored(tree, &kw, &viewport, &mut scored);
@@ -255,6 +308,41 @@ pub fn resolve_target_in(
     if let Some(l) = landmark {
         let scopes = landmark_scopes(tree);
         scored.retain(|(_, n)| scopes.get(&n.node).is_some_and(|s| s.matches(l)));
+    }
+    if let Some(h) = heading {
+        let hs = heading_scopes(tree);
+        let want = h.trim().to_ascii_lowercase();
+        scored.retain(|(_, n)| {
+            hs.get(&n.node)
+                .is_some_and(|s| s.to_ascii_lowercase().contains(&want))
+        });
+    }
+    // ⭐ `nth` is applied LAST and by DOCUMENT ORDER, not by score: "the third Edit link" means the
+    //   third one on the page, which is what a caller counting them saw. Sorting by score first and
+    //   then indexing would return "the third best match", a different and unusable thing.
+    if let Some(i) = nth {
+        scored.sort_by_key(|(_, n)| n.node.0);
+        return scored.get(i).and_then(|(score, best)| {
+            let bbox = best.bbox?;
+            let (point, obstructed_by, offscreen_dy) = match tree.landing(best.node, Some(viewport))
+            {
+                Landing::Clear { point } => (point, None, None),
+                Landing::Obstructed { by, point } => (point, Some(by), None),
+                Landing::OffScreen { dy } => (bbox.center(), None, Some(dy)),
+                Landing::Unreachable => (bbox.center(), None, None),
+            };
+            Some(Targeted {
+                node: best.node,
+                role: best.role.clone(),
+                name: best.name.clone(),
+                point,
+                obstructed_by,
+                offscreen_dy,
+                score: *score,
+                // An ordinal is an exact address: the caller said WHICH one.
+                confidence: 1.0,
+            })
+        });
     }
     if scored.is_empty() {
         return None;
