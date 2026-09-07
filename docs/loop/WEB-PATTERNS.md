@@ -11692,3 +11692,35 @@ until the disagreement is explained**, and a SHAPE column that cannot be trusted
 
 **Status:** t1476, measurement. Third instrument disagreement of the session, after the wall's own
 duration (3945s vs 256s) and the a11y score vs the rendered page.
+
+---
+
+## A redirect makes "the URL" two values — and only one of them is the base
+
+**Pattern.** `fetch_html(url)` returns `(body, final_url)`. A probe that fetches with the original URL
+and lays out with it as the base resolves every relative subresource against the wrong origin, and
+produces a *different document from the same bytes*. That is what made two of our own instruments
+disagree about our own layout: `fidelity` used the post-redirect `final_url` and was right; the probe
+used the pre-redirect one and read `1184x36` where the truth was `200x48`.
+
+⚠ **`curl -L` hides this by design** — it follows the chain and hands back the final *body* while you
+keep holding the original *URL*. Ask for `%{url_effective}` and pass that as the base.
+
+**And control a zero before believing it.** Chasing the same site, `document.styleSheets` read `0`,
+which looked like "no CSS loaded" and would have explained the whole shape failure. A fixture where
+the linked sheet visibly changes a colour separates the two readings:
+
+```text
+                                Chrome                 Manuk
+  <style> + <link>              sheets=2 [STYLE,LINK]  sheets=1 [STYLE]
+  the linked rule's effect      rgb(1,2,3)             rgb(1,2,3)   ← identical
+```
+
+**The CSS loads and applies; only the CSSOM view of it is missing** — `document.styleSheets` scans
+`getElementsByTagName('style')`, so external `<link rel=stylesheet>` is invisible and `<link>.sheet`
+is `undefined`. **A zero from an empty VIEW looks exactly like a zero from an absent THING**, and
+without the control this tick would have "explained" a placement failure with a loading bug that does
+not exist.
+
+**Status:** t1477 — the instrument disagreement is settled (fidelity was right, the SHAPE ranking
+stands); the `document.styleSheets` gap is characterised and named for a following tick.

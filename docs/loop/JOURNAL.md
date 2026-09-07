@@ -106697,3 +106697,72 @@ aperture rule is unwritten for an eighth check; I5 `ORACLE_CRAWLED: 0` for a six
 a two-second oracle, and the fidelity load path. The scope rule forbids editing it, not reading it.
 
 WIKI: docs/wiki/placement-is-the-weak-axis-ranked.md
+
+## Tick 1477 — the base URL was the disagreement (2026-09-06)
+
+TICK SHAPE: measurement
+
+Constitution check #142's steer #1: *"settle the `fidelity` vs live-probe disagreement before any
+placement work."* Settled.
+
+### IT WAS THE BASE URL
+
+```text
+  fetch_html("https://europa.eu/") → final_url = https://european-union.europa.eu/select-language?…
+
+  probe with base "https://europa.eu/"    ul [d=block 1184x36]   ← looked like Chrome's number
+  probe with base = the REAL final_url    ul [d=block  200x48]   ← matches fidelity exactly
+  fidelity                                ul [17 32    200x48]
+```
+
+⭐⭐ **`fidelity` WAS RIGHT.** It lays out against the post-redirect `final_url` that `fetch_html`
+returns; my probe passed the pre-redirect URL as the base, so every relative subresource resolved
+against the wrong origin and the page laid out differently. **Same bytes, different document.**
+
+⚠ *A redirect makes "the URL" two values and only one of them is the base.* `curl -L` hides it by
+design — it follows the chain and hands back the final *body* while you keep holding the original
+*URL*. `%{url_effective}` is the one to pass.
+
+⭐ **The whole SHAPE ranking from t1476 therefore stands**, including europa.eu's `cov 99.2 / SHAPE
+0.0`. Placement work is unblocked, and the exit certificate's weakest leg has a trustworthy column.
+
+### AND THE THING IT TURNED UP ON THE WAY
+
+Chasing europa.eu's zero, `document.styleSheets` read **0** — which looked like "no CSS loaded" and
+would have explained SHAPE 0.0 entirely. It does not. On a fixture where the sheet demonstrably
+applies:
+
+```text
+                                   Chrome                    Manuk
+  <style> + <link>, both loading    sheets=2 [STYLE,LINK]     sheets=1 [STYLE]
+  the linked rule's effect          color: rgb(1,2,3)         color: rgb(1,2,3)   ← identical
+  link.sheet                        object                    undefined
+```
+
+⭐⭐ **THE CSS LOADS AND APPLIES; ONLY THE CSSOM VIEW OF IT IS MISSING.** `document.styleSheets` is
+built by scanning `getElementsByTagName('style')`, so every external `<link rel=stylesheet>` is
+invisible to it and `<link>.sheet` is `undefined`. Every theme switcher, CSS-in-JS runtime and
+`sheet.disabled` toggler iterates that list and sees only the inline sheets.
+
+⚠⚠ **AND THE `sheets=0` READING PROVED NOTHING UNTIL IT WAS CONTROLLED.** A count that is zero
+because the *view* is empty looks exactly like a count that is zero because the *thing* is absent.
+One fixture where the linked sheet visibly changes a colour separates them — without it this tick
+would have "explained" a placement failure with a stylesheet-loading bug that does not exist. That is
+the same shape as t1470's under-rendering, one level over: *an instrument's zero is a claim about the
+instrument until something independent confirms the thing.*
+
+### LANDED
+
+```
+  no engine change — the deliverable is the settled disagreement and the characterised gap
+  clickability still 100.0% (0 of 477); no gate added
+  Bar 0: no hang, no crash, no panic
+```
+
+NEXT: `document.styleSheets` must include external sheets. `<style>.sheet` already exists (t665), so
+the missing piece is a `CSSStyleSheet` built from the text `fetch_and_apply_stylesheets` already has
+in hand, attached to its `<link>` — then the existing getter needs one more selector
+(`querySelectorAll('style, link[rel]')`, filtered on `rel~=stylesheet`, which returns document order
+and so gets Chrome's `[STYLE,LINK]` ordering for free).
+
+WIKI: docs/wiki/the-base-url-was-the-disagreement.md

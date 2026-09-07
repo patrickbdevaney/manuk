@@ -3178,6 +3178,12 @@
   - L48 · Two mutations had already said the shape was wrong
   - L57 · What still stands
 
+## The base URL was the disagreement
+`docs/wiki/the-base-url-was-the-disagreement.md`
+
+  - L26 · What it re-validates
+  - L36 · And the thing it turned up on the way
+
 ## The end padding attaches to the MARGIN box — the model that resolves t1449's contradiction
 `docs/wiki/the-end-padding-attaches-to-the-margin-box.md`
 
@@ -3333,4 +3339,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2852 sections across 119 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2854 sections across 120 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
