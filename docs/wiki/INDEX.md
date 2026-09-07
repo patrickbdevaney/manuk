@@ -96,6 +96,13 @@
   - L38 · ⚠ A low-confidence winner is returned, not refused
   - L48 · The gate
 
+## A linked sheet is in the CSSOM
+`docs/wiki/a-linked-sheet-is-in-the-cssom.md`
+
+  - L23 · The text was never missing
+  - L32 · Four details that are easy to get subtly wrong
+  - L53 · The gate that predicted this tick
+
 ## A lockstep gate scoped to one value
 `docs/wiki/a-lockstep-gate-scoped-to-one-value.md`
 
@@ -2788,14 +2795,6 @@
   - L137 · ⚠⚠⚠ And the suite still reads generic, because a second entrance disagrees with the tree
   - L155 · Not built yet
 
-## A linked sheet is in the CSSOM — the CSS applied and the object model could not see it
-`docs/wiki/a-linked-sheet-is-in-the-cssom.md`
-
-  - L6  · Chrome-measured, including `rel=preload` answering `null` not `undefined`
-  - L24 · The text was never missing — only a way for the prelude to reach it
-  - L32 · Four details easy to get subtly wrong (builder reuse, ownerNode, order, null)
-  - L52 · The gate that predicted this tick, and the WPT diff that looked like churn
-
 ## Publish the denominator
 `docs/wiki/publish-the-denominator.md`
 
@@ -3353,4 +3352,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2856 sections across 121 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2859 sections across 122 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

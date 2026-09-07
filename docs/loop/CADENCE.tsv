@@ -1152,3 +1152,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1476	da41e647	1788745008	2026-09-06T21:36:48-04:00	3087	measurement	465	8	344	43	569	81	3896	6960	0	642	0	placement is the weak axis, ranked — and the instrument disagrees with itself (2026-09-06)
 1477	1c2d5f89	1788747542	2026-09-06T22:19:02-04:00	2534	measurement	465	7	209	42	569	81	3896	6960	0	642	0	the base URL was the disagreement (2026-09-06)
 1478	6d4fa138	1788751287	2026-09-06T23:21:27-04:00	3745	capability	465	10	365	47	569	81	3896	6960	0	642	0	publish the denominator (2026-09-07)
+1479	d7f1b51b	1788759245	2026-09-07T01:34:05-04:00	7958	capability	465	2	13	10	570	81	3896	6960	0	642	0	a linked sheet is in the CSSOM (2026-09-07)

@@ -73,7 +73,11 @@ document.getElementById('out').textContent =
 fn a_linked_stylesheet_is_visible_to_the_cssom() {
     let dir = std::path::Path::new("/tmp/g1479");
     std::fs::create_dir_all(dir).unwrap();
-    std::fs::write(dir.join("ext.css"), "#t { color: rgb(1,2,3) }\n#t { outline-width: 3px }\n").unwrap();
+    std::fs::write(
+        dir.join("ext.css"),
+        "#t { color: rgb(1,2,3) }\n#t { outline-width: 3px }\n",
+    )
+    .unwrap();
     let path = dir.join("page.html");
     std::fs::write(&path, HTML).unwrap();
 
