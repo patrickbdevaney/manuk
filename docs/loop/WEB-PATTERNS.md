@@ -11668,3 +11668,27 @@ because the check takes two seconds; the same four would have cost four ticks an
 time. **When a gate refuses you twice, make it local before attempting a third time.**
 
 **Status:** t1475, measurement-and-refusal. Engine reverted, baseline confirmed at 100.0% (0 of 477).
+
+---
+
+## Coverage near 100 with SHAPE near 0 is ONE bug, not a tail — and check the instrument agrees with itself
+
+**Pattern.** A site that draws every box and places none of them correctly is not a death-tail of
+small errors; it is one systematic placement rule. `europa.eu` reads `cov 99.2 / SHAPE 0.0`, and
+`--shape-dump` names the mechanism in one run: Chrome lays the lists out as full-width vertical items
+(`1144x18` at y=0,18,162…) and we lay them out in **~305px columns** (`305x48` at x=0,305,610). A
+section at `x=931, 217 wide` where Chrome has `x=0, 1184 wide` is a column assignment, not an offset.
+
+**Rank the corpus before picking.** The observer's tri-sweep said "placement is the weak axis, long
+tail <40%"; a 24-site slice turns that into a list, and the two `cov ≈ 100 / SHAPE < 40` rows
+(`europa.eu`, `discuss.python.org`) are worth more than the whole tail because one mechanism explains
+each entirely.
+
+**⚠ But confirm the instrument agrees with itself first.** Loading the *same* document through the
+*same* `load_async` + `finish_loading` path at the *same* 1200px viewport, `fidelity` reports one
+`<ul>` as `200x48` and asking the page itself reports `1184x36` — which is Chrome's number. Two
+answers about our own boxes. **When two instruments disagree about one number, neither is evidence
+until the disagreement is explained**, and a SHAPE column that cannot be trusted cannot direct work.
+
+**Status:** t1476, measurement. Third instrument disagreement of the session, after the wall's own
+duration (3945s vs 256s) and the a11y score vs the rendered page.

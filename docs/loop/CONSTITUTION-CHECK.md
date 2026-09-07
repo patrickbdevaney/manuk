@@ -12296,3 +12296,89 @@ the missing eight crates, the `_out` race) were reported and left alone, per the
 3. **Track A's shared stacking rule is now the model for the rest.** `stacking_layer` joined two
    implementations that had drifted; `box-sizing`, margins and font-weight also live in both cascades
    and have no such gate.
+
+## Check #142 — tick 1476
+
+Re-read `CONSTITUTION.MD` (PART VII, the invariants) and `docs/loop/V1-SCOPE.md` against ticks
+1469-1476.
+
+### GATE OR SCOREBOARD?
+
+**Gate — and this window is the first in which the loop's THREE exit legs are measured by one
+instrument on one corpus.** The observer's `tri-sweep.sh` (t1475) reports, on 93 de-botwalled sites:
+
+```text
+  M1  coverage 88.5%  SHAPE 69.4%    ← "placement is the weak axis, long tail <40%"
+  M2  rate 82.0%
+  a11y F1 79.4%
+```
+
+⭐⭐⭐ **AND TWO OF ITS THREE LEGS ARE INSTRUMENTS THIS LOOP BUILT IN THIS ARC** — `drive-probe`
+(t1459) and `a11y-score` (t1458), both of which existed nowhere ten ticks earlier. The exit
+certificate is no longer scored on a render number plus two estimates.
+
+⚠ The honest reading of that is mixed, and the mixed part matters more: **my 6-site numbers survived a
+15× larger corpus** (M2 78.5 vs 82.0, a11y 82.0 vs 79.4), which is the first outside confirmation
+either instrument has had — *and* **no exit leg is at its bar.**
+
+### WHAT CHECK #141's STEER ASKED FOR
+
+1. **"The next Track B tick is the collapse, not the names."** ⚠ **Attempted and it dissolved the
+   question.** The collapse was never running in either configuration; the low node count was
+   **under-rendering** (126 of 770 list items had a box). Track B's `>=90%` claim was **withdrawn**
+   at t1470 — 94.8% → 82.0% — and `finish_loading` adopted. The steer was answered by refuting its
+   premise.
+2. **"`g_constellation_unknowns` red for three ticks while the wall is green."** ✅ Settled at t1469:
+   **the wall runs 19 of `engine/page`'s 567 gates.** Two gates were red; both were the engine
+   getting *more* correct while the gate held a stale pin.
+3. **"The shared stacking rule is the model for the rest."** ⚠ Extended at t1466 and then **refused
+   twice** — t1468 (−62 links) and t1475 (four Appendix E models, −86 to −351). t1475 found why: the
+   clickability metric measures **containment**, not paint order.
+
+### PART VI CORRECTIONS
+
+* **NEW, and it is this check's most valuable finding:** *a metric that excludes what is not rendered
+  rewards a browser that renders nothing.* The a11y score counted only nodes with a layout box, so an
+  incompletely loaded page scored **better** — 94.8% against an honest 82.0%. It also made t1467's
+  refusal wrong. **A refusal is only as good as the baseline it is measured against**, and nothing in
+  the loop's machinery checks a baseline before honouring a refusal. That is a gap in the ratchet
+  itself, not in a tick.
+* **NEW:** *a gate that is not executed is not a gate, and the loop cannot see which are.* 548 of 567
+  `engine/page` gates run nowhere on the per-tick path; t1403 recorded the same defect at a smaller
+  number and it was never closed. The agent-side half — sweep the package before landing — is adopted
+  as practice from t1469.
+* **NEW:** *when two instruments disagree about one number, neither is evidence.* Three instances in
+  eight ticks: the wall's own duration (3945s vs 256s), the a11y score vs the rendered page, and
+  `fidelity` vs `getBoundingClientRect` on one document (t1476).
+* **VI.3 — the aperture rule is STILL not in prose.** Eighth check.
+* **I5 — `ORACLE_CRAWLED: 0`. SIXTEENTH check.**
+
+### THE INVARIANTS
+
+**I3 — held, and it is now the invariant doing the most work.** The agent surface has three
+instruments under it and every one of them has *lowered* a number this window. An invariant that only
+ever confirms is not being tested; this one is.
+
+**I2 — held.** Nothing forked or patched; the `option`, `audio` and `audio`-sizing corrections all
+went into our own UA sheet and predicates on the way out.
+
+**I4, I8 — held. I1, I6, I7 — not bent.**
+
+### PART VII / V1-SCOPE
+
+Every tick since #141 is browser capability or the instrument that measures one. Nothing touched
+`scripts/`; five harness findings were reported and left alone. ⚠ **Reading the harness paid three
+times** — the 19-of-567 count, `manuk-wpt hittest` as a two-second oracle, and the fidelity load path.
+*The scope rule forbids editing it, not reading it*, and that distinction has been worth more than any
+single capability this window.
+
+### STEER
+
+1. ⭐⭐⭐ **Settle the `fidelity` vs live-probe disagreement before any placement work.** SHAPE is the
+   exit certificate's weakest leg and the number every M1 tick would be steered by; a column two
+   instruments cannot agree on cannot direct work. One `--dump-html` diff.
+2. ⭐⭐ **Publish the denominator beside every rate.** The a11y score should report *nodes with a box /
+   nodes in the DOM*; the next under-rendering will otherwise flatter itself exactly as this one did
+   for nine ticks. Cheap, agent-side, and it closes the mechanism rather than the instance.
+3. ⚠ **The peer/paint-order thread is closed until the hit-test resolves containment first.** Two
+   refusals and five measurements say a comparator cannot express it.

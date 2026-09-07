@@ -106587,3 +106587,113 @@ and that is where a paint rank could be applied safely, because a flat scan can 
 explicitly (an ancestor walk) instead of proxying it by area.
 
 WIKI: docs/wiki/clickability-does-not-measure-paint-order.md
+
+## Tick 1476 — placement is the weak axis, ranked — and the instrument disagrees with itself (2026-09-06)
+
+TICK SHAPE: measurement
+
+⭐⭐⭐ **THE OBSERVER BUILT `tri-sweep.sh` ON THIS SESSION'S INSTRUMENTS.** `drive-probe` (t1459) and
+`a11y-score` (t1458) are now the M2 and a11y legs of the exit certification, and the first honest
+read of all three legs on a 93-site de-botwalled corpus is:
+
+```text
+  M1  coverage 88.5%  SHAPE 69.4%   ← "placement is the weak axis, long tail <40%"
+  M2  rate 82.0%                      (my 6-site read: 78.5%)
+  a11y F1 79.4%                       (my 6-site read: 82.0%)
+```
+
+Both of my corpus numbers survive a 15× larger corpus. That is the first outside confirmation either
+instrument has had.
+
+### THE SENTENCE, TURNED INTO A RANKED LIST
+
+```text
+  europa.eu                cov 99.2   SHAPE  0.0   ← every box drawn, none in the right place
+  developer.mozilla.org    cov 67.8   SHAPE 35.6
+  discuss.python.org       cov 100.0  SHAPE 36.6   ← full coverage, bad placement
+  angular.io               cov 98.6   SHAPE 45.6
+  a11yproject.com          cov 96.0   SHAPE 49.3
+  basecamp.com             cov 96.2   SHAPE 56.9
+  google.com               cov 93.1   SHAPE 66.7
+  arxiv.org  90.7 · golangbridge 93.5 · codeberg 93.9 · lite.cnn 100.0
+```
+
+⭐ **`cov 99.2 / SHAPE 0.0` IS ONE BUG, NOT A TAIL.** Coverage near 100 with shape at zero cannot be
+many small errors — it is one systematic placement rule affecting everything. `discuss.python.org`
+(100.0 / 36.6) is the same shape.
+
+### europa.eu's SIGNATURE, NAMED IN ONE RUN
+
+```text
+                  Chrome                 Manuk
+  li #1     [40   0  1144x18]      [0    0  305x48]
+  li #10    [40 162  1144x18]      [305 48  305x48]
+  li #17    [40 288  1144x18]      [610  0  305x48]
+  ul        [ 0  47  1184x36]      [17  32  200x48]
+  section   [ 0 499  1184x83]      [931  0  217x416]
+
+  123 of 123 scored elements misplaced · median dx=281 dy=99
+  86 sibling pairs read out of sequence · 1 element escapes the 1200px viewport
+```
+
+Chrome lays the lists out as **full-width vertical list items**; we lay them out in **~305px
+columns**. A section at `x=931, 217 wide` where Chrome has `x=0, 1184 wide` is a **column
+assignment**, not an offset.
+
+### ⚠⚠ AND THEN TWO OF OUR OWN INSTRUMENTS DISAGREED ABOUT OUR OWN LAYOUT
+
+Same 18 KB document (2 `<ul>`, 37 `<li>` either way), same `load_async` + `finish_loading`, same
+1200px viewport:
+
+```text
+  fidelity says ours is   ul [17 32 200x48]
+  a live probe says       ul [d=block, 1184x36]     ← which is CHROME's number
+```
+
+**Two answers about our own boxes.** So the mechanism above is named but not yet attributable: until
+this is settled the SHAPE column cannot direct work, and it is the number the exit certificate is
+scored on.
+
+⚠ Leading hypothesis, untested: the harness's fetch resolves europa.eu's redirect chain differently
+from `curl -L`, so the two lay out different documents that coincidentally match in byte count. One
+`--dump-html` settles it.
+
+⚠⚠⚠ **THIRD INSTRUMENT DISAGREEMENT OF THE SESSION** — after the wall's own duration (`self-audit`
+3945s vs `wall-audit` 256s) and the a11y score vs the rendered page (t1470, 94.8% withdrawn). *When
+two instruments disagree about one number, neither is evidence until the disagreement is explained.*
+
+### LANDED
+
+```
+  no engine change — the deliverable is the ranked slice and the named disagreement
+  clickability baseline still 100.0% (0 of 477); no gate added
+  Bar 0: no hang, no crash, no panic
+```
+
+NEXT: settle the disagreement before touching layout. Dump the HTML the fidelity harness actually
+fetched for europa.eu and diff it against `curl -L`'s — if they differ, the ranked list above is
+measuring pages I have not seen; if they match, `fidelity` and `getBoundingClientRect` disagree about
+one layout tree, which is a far more serious finding than the placement bug it was pointing at.
+
+### CONSTITUTION CHECK #142 (also due at 1476)
+
+Gate, not scoreboard — and **the first window in which all three exit legs are measured by one
+instrument on one corpus**, two of whose three legs this arc built (`drive-probe`, `a11y-score`).
+⚠ No leg is at its bar: M1 SHAPE 69.4%, M2 82.0%, a11y F1 79.4%.
+
+⭐⭐⭐ **PART VI CORRECTION — a metric that excludes what is not rendered rewards a browser that
+renders nothing**, and it made t1467's refusal wrong. *A refusal is only as good as the baseline it
+is measured against*, and nothing in the loop's machinery checks a baseline before honouring a
+refusal — a gap in the ratchet itself, not in a tick. ⚠ Also new: *a gate that is not executed is not
+a gate* (548 of 567), and *when two instruments disagree about one number, neither is evidence*
+(three instances in eight ticks).
+
+I3 is now the invariant doing the most work — the agent surface has three instruments under it and
+every one has **lowered** a number this window. An invariant that only ever confirms is not being
+tested. I2 held: nothing forked; every correction went into our own sheet on the way out. VI.3's
+aperture rule is unwritten for an eighth check; I5 `ORACLE_CRAWLED: 0` for a sixteenth.
+
+⚠ **Reading the harness paid three times** this window — the 19-of-567 count, `manuk-wpt hittest` as
+a two-second oracle, and the fidelity load path. The scope rule forbids editing it, not reading it.
+
+WIKI: docs/wiki/placement-is-the-weak-axis-ranked.md

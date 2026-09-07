@@ -2759,6 +2759,12 @@
   - L1159 · Why this is rigor-preserving and not a shortcut
   - L1174 · ⚠⚠ The gate had TWO holes, and only the RED PROOF found either
 
+## Placement is the weak axis, ranked
+`docs/wiki/placement-is-the-weak-axis-ranked.md`
+
+  - L32 · europa.eu's signature
+  - L52 · ⚠ And two of our own instruments disagree about our own layout
+
 ## `pointer-events` — inert on the cascade every agent gate runs on
 `docs/wiki/pointer-events-cascade-drift.md`
 
@@ -3327,4 +3333,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2850 sections across 118 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2852 sections across 119 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
