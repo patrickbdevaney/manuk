@@ -11724,3 +11724,28 @@ not exist.
 
 **Status:** t1477 — the instrument disagreement is settled (fidelity was right, the SHAPE ranking
 stands); the `document.styleSheets` gap is characterised and named for a following tick.
+
+---
+
+## Publish the denominator beside every rate — or a failing browser will flatter itself
+
+**Pattern.** When a metric silently drops items that fail an upstream stage, that stage failing makes
+the metric go **up**. The a11y score counts nodes with a layout box, so a page that does not lay out
+emits fewer phantoms and its omissions never enter the comparison: it read **94.8% F1** for nine
+ticks on a document where **126 of 770 list items had a box**, and **82.0%** once rendered.
+
+**The fix is a column, not a caveat.** `Rendered { nodes, boxed }` prints beside every rate, and a
+precision that rises while `rendered` falls is visibly not an improvement. It earned itself on the
+first run: Wikipedia reads **33.1% precision at 96.1% rendered**, which says *phantoms, not
+under-rendering* without the reader knowing any history.
+
+**Close the mechanism, not the instance.** The instance (adopt `finish_loading`) was fixed two ticks
+earlier; the mechanism is that nothing in the output could distinguish the two failure modes, and
+that would have recurred with the next upstream regression.
+
+**⚠ And state the bound.** The column counts nodes the tree kept, not DOM elements, so it is a
+**lower bound** on under-rendering. A lower-bounded instrument that reads as exact is how the first
+mistake happened; say which it is in the doc comment and the output.
+
+**Status:** landed t1478 as `a11y_score::Rendered`, gated by `g_the_denominator_is_published` under
+three mutations, with a vacuity arm that a laid-out page must NOT read low; 56 agent binaries green.

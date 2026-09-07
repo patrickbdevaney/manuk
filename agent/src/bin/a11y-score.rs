@@ -267,12 +267,13 @@ async fn main() -> Result<()> {
     }
 
     println!(
-        "{:<38} {:>7} {:>7} {:>7} {:>8} {:>8} {:>8}",
-        "url", "manuk", "chrome", "match", "prec", "recall", "F1"
+        "{:<38} {:>7} {:>7} {:>7} {:>8} {:>8} {:>8} {:>10}",
+        "url", "manuk", "chrome", "match", "prec", "recall", "F1", "rendered"
     );
 
     let (mut pool_m, mut pool_c) = (Vec::new(), Vec::new());
     let mut pooled_hit = 0usize;
+    let mut rendered_total = a11y_score::Rendered::default();
 
     for (i, url) in urls.iter().enumerate() {
         let port = 9500 + i as u16;
@@ -283,13 +284,20 @@ async fn main() -> Result<()> {
                 continue;
             }
         };
+        let mut site_rendered = a11y_score::Rendered::default();
         let mut browser = AgentBrowser::new(1024, 768);
         let manuk = match browser
             .navigate(url)
             .await
             .and_then(|_| browser.a11y_tree())
         {
-            Ok(t) => a11y_score::manuk_bag(&t),
+            Ok(t) => {
+                let r = a11y_score::rendered(&t);
+                rendered_total.nodes += r.nodes;
+                rendered_total.boxed += r.boxed;
+                site_rendered = r;
+                a11y_score::manuk_bag(&t)
+            }
             Err(e) => {
                 println!("{url:<38} MANUK FAILED: {e}");
                 continue;
@@ -308,7 +316,7 @@ async fn main() -> Result<()> {
             hit as f64 / chrome.0.len() as f64
         };
         println!(
-            "{:<38} {:>7} {:>7} {:>7} {:>7.1}% {:>7.1}% {:>7.1}%   (dropped structural: manuk {} / chrome {})",
+            "{:<38} {:>7} {:>7} {:>7} {:>7.1}% {:>7.1}% {:>7.1}% {:>9.1}%   (dropped structural: manuk {} / chrome {})",
             url.chars().take(38).collect::<String>(),
             manuk.0.len(),
             chrome.0.len(),
@@ -316,6 +324,7 @@ async fn main() -> Result<()> {
             precision * 100.0,
             recall * 100.0,
             a11y_score::f1(precision, recall) * 100.0,
+            site_rendered.rate() * 100.0,
             manuk.1,
             chrome.1,
         );
@@ -346,7 +355,7 @@ async fn main() -> Result<()> {
         let precision = pooled_hit as f64 / pool_m.len() as f64;
         let recall = pooled_hit as f64 / pool_c.len() as f64;
         println!(
-            "{:<38} {:>7} {:>7} {:>7} {:>7.1}% {:>7.1}% {:>7.1}%",
+            "{:<38} {:>7} {:>7} {:>7} {:>7.1}% {:>7.1}% {:>7.1}% {:>9.1}%",
             "TOTAL (pooled, per-site matches)",
             pool_m.len(),
             pool_c.len(),
@@ -354,6 +363,7 @@ async fn main() -> Result<()> {
             precision * 100.0,
             recall * 100.0,
             a11y_score::f1(precision, recall) * 100.0,
+            rendered_total.rate() * 100.0,
         );
     }
     Ok(())

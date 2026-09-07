@@ -106766,3 +106766,72 @@ in hand, attached to its `<link>` — then the existing getter needs one more se
 and so gets Chrome's `[STYLE,LINK]` ordering for free).
 
 WIKI: docs/wiki/the-base-url-was-the-disagreement.md
+
+## Tick 1478 — publish the denominator (2026-09-07)
+
+TICK SHAPE: capability
+
+Surface audit #89's ranked #1 and constitution check #142's steer #2, which are the same item:
+*"a metric whose denominator can move must report the denominator."*
+
+### THE MECHANISM, NOT THE INSTANCE
+
+The a11y score counts nodes with a layout box. So a page that fails to lay out emits fewer phantoms,
+its omissions never enter the comparison, and **precision rises** — a browser that renders less
+scores better.
+
+```text
+                         <li> in DOM    with a box       reported F1
+  without finish_loading      770            126             94.8%   ← reported as "bar met"
+  with finish_loading         776            614             82.0%   ← honest
+```
+
+The **instance** was fixed at t1470 (adopt `finish_loading`). The **mechanism** — that nothing in the
+output could tell the two failure modes apart — was still live, and would have recurred with the next
+upstream regression.
+
+### THE COLUMN, AND IT EARNED ITSELF ON THE FIRST RUN
+
+```text
+  url                     manuk  chrome  match    prec   recall     F1   rendered
+  martinfowler.com          360     297    294   81.7%    99.0%  89.5%      97.8%
+  news.ycombinator.com      477     495    476   99.8%    96.2%  97.9%      95.7%
+  blog.rust-lang.org       1673    1673   1672   99.9%    99.9%  99.9%      99.9%
+  www.a11yproject.com       158     158    154   97.5%    97.5%  97.5%      94.8%
+  danluu.com                414     416    414  100.0%    99.5%  99.8%      99.4%
+  en.wikipedia.org/…       2191     779    726   33.1%    93.2%  48.9%      96.1%
+  TOTAL                    5273    3818   3736   70.9%    97.9%  82.2%      97.4%
+```
+
+⭐⭐ **Wikipedia reads 33.1% precision at 96.1% rendered** — so its gap is *phantoms*, not
+under-rendering, and no reader needs the history to see it. The pooled **97.4%** also certifies
+today's 82.2% F1: the corpus is properly laid out, so the number is trustworthy in a way last week's
+94.8% was not.
+
+*A precision that rises while `rendered` falls is not an improvement.*
+
+### LANDED
+
+```
+  agent/src/a11y_score.rs        Rendered { nodes, boxed } + rendered()
+  agent/src/bin/a11y-score.rs    the column, per site and pooled
+  gate  g_the_denominator_is_published   RED under 3 named mutations
+  vacuity arm: a laid-out page must NOT read low, or the column fires on every healthy measurement
+  56 agent test binaries green, 0 failures
+  Bar 0: no hang, no crash, no panic
+```
+
+⚠ **The bound is stated, not implied.** It counts nodes the a11y tree kept, not DOM elements — this
+crate cannot see the DOM — so it is a **lower bound** on under-rendering. *A lower-bounded instrument
+that reads as exact is how the first mistake happened*, so the doc comment says which it is.
+
+⚠ A zero-area box counts as not laid out; that is what separated the two cases in the measurement
+above, where most of Wikipedia's boxless list items were zero-area rather than absent.
+
+NEXT: t1477's residue, now the only named item left in the CSSOM thread — `document.styleSheets` sees
+inline `<style>` and no `<link>` at all, because the getter scans `getElementsByTagName('style')` and
+`<link>.sheet` is `undefined`. The text is already in hand (`Page::external_css`, keyed by resolved
+URL, and `link.href` is already absolute), so the missing piece is a publish channel from
+`manuk-page` into the prelude — the same shape as `STYLES_PTR`.
+
+WIKI: docs/wiki/publish-the-denominator.md

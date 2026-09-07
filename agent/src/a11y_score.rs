@@ -134,6 +134,56 @@ pub fn score(ours: &[Key], theirs: &[Key]) -> Score {
     }
 }
 
+/// **How much of the page actually got a layout box** — the denominator every rate here divides by.
+///
+/// ⭐⭐⭐ **A METRIC THAT EXCLUDES WHAT IS NOT RENDERED REWARDS A BROWSER THAT RENDERS NOTHING.** The
+/// accessibility tree omits boxless nodes, so an incompletely loaded page emits fewer phantoms and
+/// its omissions are invisible to precision. That is not a hypothetical: this score read **94.8% F1**
+/// for nine ticks on a Wikipedia where **126 of 770 list items had a box**, and **82.0%** once the
+/// page was actually rendered (614 of 776). The number that looked good was the browser not having
+/// laid out 84% of the document.
+///
+/// So every row publishes this beside its rates. A precision that rises while `rendered` falls is
+/// not an improvement, and no reader should have to know that to see it.
+///
+/// ⚠ It counts nodes the a11y tree kept, not DOM elements: this crate cannot see the DOM from here,
+/// and the tree is what the score is computed over. That makes it a *lower* bound on under-rendering
+/// — a page can still be under-rendered in ways this does not catch — which is stated rather than
+/// implied.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct Rendered {
+    /// Nodes in the accessibility tree.
+    pub nodes: usize,
+    /// …of which have a non-zero-area box.
+    pub boxed: usize,
+}
+
+impl Rendered {
+    pub fn rate(&self) -> f64 {
+        if self.nodes == 0 {
+            0.0
+        } else {
+            self.boxed as f64 / self.nodes as f64
+        }
+    }
+}
+
+/// Count [`Rendered`] over a tree.
+pub fn rendered(root: &manuk_a11y::A11yNode) -> Rendered {
+    let mut r = Rendered::default();
+    fn go(n: &manuk_a11y::A11yNode, r: &mut Rendered) {
+        r.nodes += 1;
+        if n.bbox.is_some_and(|b| b.width > 0.0 && b.height > 0.0) {
+            r.boxed += 1;
+        }
+        for c in &n.children {
+            go(c, r);
+        }
+    }
+    go(root, &mut r);
+    r
+}
+
 /// Flatten a Manuk a11y tree into the comparison's bag, counting what was dropped.
 pub fn manuk_bag(root: &manuk_a11y::A11yNode) -> (Vec<Key>, usize) {
     let (mut out, mut dropped) = (Vec::new(), 0usize);

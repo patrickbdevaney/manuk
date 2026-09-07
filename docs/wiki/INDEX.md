@@ -2788,6 +2788,12 @@
   - L137 · ⚠⚠⚠ And the suite still reads generic, because a second entrance disagrees with the tree
   - L155 · Not built yet
 
+## Publish the denominator
+`docs/wiki/publish-the-denominator.md`
+
+  - L19 · The column
+  - L41 · What it is, exactly
+
 ## THE WIKI — what we durably KNOW, organised by subsystem
 `docs/wiki/README.md`
 
@@ -3339,4 +3345,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2854 sections across 120 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2856 sections across 121 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
