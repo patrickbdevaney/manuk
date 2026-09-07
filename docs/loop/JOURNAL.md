@@ -106835,3 +106835,85 @@ URL, and `link.href` is already absolute), so the missing piece is a publish cha
 `manuk-page` into the prelude — the same shape as `STYLES_PTR`.
 
 WIKI: docs/wiki/publish-the-denominator.md
+
+## Tick 1479 — a linked sheet is in the CSSOM (2026-09-07)
+
+TICK SHAPE: capability
+
+t1477's residue, and the last named item in the CSSOM thread.
+
+### THE RULES WERE IN THE CASCADE AND ABSENT FROM THE VIEW OF THEM
+
+```text
+                                   Chrome              before        after
+  document.styleSheets.length      2                   1             2
+  …their ownerNodes                [STYLE, LINK]       [STYLE]       [STYLE, LINK]
+  the linked rule's effect         color: rgb(1,2,3)   rgb(1,2,3)    rgb(1,2,3)    ✓ unchanged
+  link.sheet                       object              undefined     object
+  a rel=preload link's .sheet      null                undefined     null
+
+  WPT css/cssom  593 failing -> 591   ·  css/cssom-view  727 -> 727
+  572 manuk-page binaries green
+```
+
+⭐⭐ **THE ROW THAT DOES NOT MOVE IS THE TELL.** The linked rules applied normally and the page
+rendered correctly — only the count changed. *When the effect is right and the description is wrong,
+the defect is in the view, and no rendering test can see it.* Every theme switcher, CSS-in-JS runtime
+and `sheet.disabled` toggler iterates `document.styleSheets` and took its no-stylesheets branch on
+any page whose CSS is external.
+
+### THE TEXT WAS NEVER MISSING
+
+t665 built `<style>.sheet` and recorded the gap as deliberate scope — *"`<link>.sheet` stays
+`undefined`… for an applied linked sheet `null` would be a lie."* `Page::external_css` has held the
+fetched text all along, keyed by resolved URL, and `link.href` is already absolute. So the whole
+missing piece was a way for the prelude to reach it: one binding
+(`document.__manukSheetText(href)`) plus the publish channel `set_grid_tracks` /
+`set_scroll_geometry` already established.
+
+⚠ Four details, each of which the gate pins: **reuse `__makeSheet`** through a detached `<style>` shim
+(two parsers for one grammar is how the two disagree later); **`ownerNode` is the `<link>`**, not the
+shim; **order is document order**, from one `querySelectorAll('style, link[rel]')` rather than two
+tag lists concatenated; and **absent is `null`, not `undefined`** — the false-presence trap t663
+measured on `<style>`, which would otherwise have been reintroduced one tag over.
+
+⚠ `HTMLLinkElement` is not a global here, so this cannot live on its own prototype — the
+`HTMLElement.prototype` getter would shadow it. One getter, two tags.
+
+### THE GATE THAT PREDICTED THIS TICK
+
+`g_cssom_sheet_bridge` pinned `T__linksheet_undefined` with an instruction: *"This bridge is
+`<style>`-only by decision… **If linked sheets landed, update this gate.**"* It went red, and was
+updated exactly as written — its own marks (`T__linksheet_object`, `docsheets 3→4`) showed the change
+working.
+
+⭐ **Third time this session** a gate has named its own scope limit and thereby told the next tick it
+had succeeded, after t1459's overlay row and t1465's peer row. *A gate that names what it cannot yet
+catch is the cheapest form of a plan.*
+
+### ⚠ AND THE WPT DIFF LOOKED LIKE CHURN WITH REGRESSIONS
+
+The raw name-list diff read **18 fixed / 16 new**. Both lists are the same `@IMPORT SHEET FAILED`
+**WARN log lines carrying an ephemeral port number** (`:42431` vs `:46419`), so one line reads as
+fixed *and* new across runs. Keyed on subtest name alone: **2 fixed, 0 new**. *Diff the names — and
+make sure the key is a name.*
+
+### LANDED
+
+```
+  engine/js/src/dom_bindings.rs   EXTERNAL_CSS + set_external_css + document.__manukSheetText
+  engine/js/src/lib.rs            the pub seam, mirroring set_snap_candidates
+  engine/page/src/lib.rs          publish at the three arm-the-JS-view sites (+ from_dom's seeded_css)
+  engine/js/src/event_loop.rs     the sheet getter handles LINK; styleSheets scans both tags
+  gate  g_a_linked_sheet_is_in_the_cssom   RED under 4 named mutations
+  vacuity arm: the linked rule must actually APPLY, or the gate measures a view of nothing
+  ⚠ `rules0` reads the INLINE sheet: Chrome throws SecurityError on a file:// linked sheet's
+    cssRules, so pinning that number would assert what no oracle can confirm
+  Bar 0: no hang, no crash, no panic
+```
+
+NEXT: `sheet.disabled` is the other half a theme switcher uses — it is now reachable on a linked
+sheet and does nothing. Chrome removes the sheet's rules from the cascade on `disabled = true`; the
+seam is the same `external_css` map, so this is a write path rather than a read one.
+
+WIKI: docs/wiki/a-linked-sheet-is-in-the-cssom.md

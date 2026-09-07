@@ -180,6 +180,11 @@ thread_local! {
     /// offsets clamped to the scrollable range, one list per axis. Empty axis = that axis does not
     /// snap. A `scrollLeft`/`scrollTop` write lands on the nearest candidate at assignment time, so
     /// `el.scrollLeft = 130; el.scrollLeft` reads the snapped `100` on the same line — as in Chrome.
+    /// Every external stylesheet's text, keyed by resolved URL — the source `<link>.sheet` is built
+    /// from. See [`set_external_css`].
+    static EXTERNAL_CSS: std::cell::RefCell<std::collections::HashMap<String, String>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+
     static SNAP_CANDIDATES: std::cell::RefCell<std::collections::HashMap<NodeId, (Vec<f32>, Vec<f32>)>> =
         std::cell::RefCell::new(std::collections::HashMap::new());
     /// The focused element, and focus requests the page made.
@@ -718,6 +723,22 @@ pub fn set_grid_tracks(g: std::collections::HashMap<NodeId, (Vec<f32>, Vec<f32>)
 /// by the host (only it has the layout tree); the `scrollLeft`/`scrollTop` setters snap against them.
 pub fn set_snap_candidates(c: std::collections::HashMap<NodeId, (Vec<f32>, Vec<f32>)>) {
     SNAP_CANDIDATES.with(|s| *s.borrow_mut() = c);
+}
+
+/// Publish the fetched text of every external stylesheet, keyed by its resolved URL.
+///
+/// ⭐⭐⭐ **THE CSS LOADED AND APPLIED AND THE CSSOM COULD NOT SEE IT.** `document.styleSheets` was
+/// built by scanning `getElementsByTagName('style')`, so every `<link rel=stylesheet>` was invisible
+/// to it and `<link>.sheet` was `undefined` — measured against Chrome on a sheet that demonstrably
+/// changed a colour: `sheets=1 [STYLE]` here, `sheets=2 [STYLE,LINK]` there, same rendering. Every
+/// theme switcher, CSS-in-JS runtime and `sheet.disabled` toggler iterates that list.
+///
+/// t665 built `<style>.sheet` from the element's own text and recorded the gap as deliberate scope:
+/// *"`<link>.sheet` stays `undefined`… for an applied linked sheet `null` would be a lie."* The text
+/// was never missing — `Page::external_css` has held it all along — only a way for the prelude to
+/// reach it.
+pub fn set_external_css(c: std::collections::HashMap<String, String>) {
+    EXTERNAL_CSS.with(|s| *s.borrow_mut() = c);
 }
 
 thread_local! {
@@ -4915,6 +4936,7 @@ unsafe fn define_members(
         def_guarded!(def, c"querySelector", doc_query, 1);
         def_guarded!(def, c"querySelectorAll", doc_query_all, 1);
         def_guarded!(def, c"elementFromPoint", doc_element_from_point, 2);
+        def_guarded!(def, c"__manukSheetText", doc_manuk_sheet_text, 1);
         def_guarded!(def, c"elementsFromPoint", doc_elements_from_point, 2);
         def_guarded!(def, c"createElement", doc_create_element, 1);
         def_guarded!(def, c"createElementNS", doc_create_element_ns, 2);
@@ -5070,6 +5092,7 @@ unsafe fn define_members(
         def_guarded!(def, c"querySelector", doc_query, 1);
         def_guarded!(def, c"querySelectorAll", doc_query_all, 1);
         def_guarded!(def, c"elementFromPoint", doc_element_from_point, 2);
+        def_guarded!(def, c"__manukSheetText", doc_manuk_sheet_text, 1);
         def_guarded!(def, c"elementsFromPoint", doc_elements_from_point, 2);
         def_guarded!(def, c"getBoundingClientRect", el_get_bounding_rect, 0);
         def_guarded!(def, c"getClientRects", el_get_client_rects, 0);
@@ -5366,6 +5389,33 @@ unsafe fn stacking_layer_of(dom: &Dom, node: NodeId) -> i32 {
         layer = manuk_css::stacking_layer(st, layer);
     }
     layer
+}
+
+/// `document.__manukSheetText(href)` → the fetched text of that external stylesheet, or `null`.
+///
+/// The one primitive `<link>.sheet` needs. `link.href` is already absolute in this engine and
+/// `EXTERNAL_CSS` is keyed by resolved URL, so the lookup is direct — no URL resolution crosses this
+/// boundary, which is the only reason a string-keyed map is enough.
+unsafe fn doc_manuk_sheet_text(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if argc < 1 {
+        *vp = NullValue();
+        return true;
+    }
+    let Some(href) = arg_string(cx, vp, argc, 0) else {
+        *vp = NullValue();
+        return true;
+    };
+    let text = EXTERNAL_CSS.with(|c| c.borrow().get(&href).cloned());
+    match text {
+        Some(t) => {
+            *vp = utf8_jsval(cx, &t);
+            true
+        }
+        None => {
+            *vp = NullValue();
+            true
+        }
+    }
 }
 
 /// `document.elementFromPoint(x, y)` → the topmost ELEMENT whose border box contains the client point,

@@ -2788,6 +2788,14 @@
   - L137 · ⚠⚠⚠ And the suite still reads generic, because a second entrance disagrees with the tree
   - L155 · Not built yet
 
+## A linked sheet is in the CSSOM — the CSS applied and the object model could not see it
+`docs/wiki/a-linked-sheet-is-in-the-cssom.md`
+
+  - L6  · Chrome-measured, including `rel=preload` answering `null` not `undefined`
+  - L24 · The text was never missing — only a way for the prelude to reach it
+  - L32 · Four details easy to get subtly wrong (builder reuse, ownerNode, order, null)
+  - L52 · The gate that predicted this tick, and the WPT diff that looked like churn
+
 ## Publish the denominator
 `docs/wiki/publish-the-denominator.md`
 

@@ -2139,6 +2139,9 @@ unsafe fn forced_reflow(ctx: *mut std::ffi::c_void, dom: *mut Dom) {
     // ⚠ Computed from the tree WITH the offsets applied above, because `scroll_geometry_of` adds the
     // offset back when it measures the extent; handing it an unscrolled tree would measure a
     // different page from the one the clamp is about.
+    // The CSSOM's view of the external sheets — the same map the cascade read, published so
+    // `document.styleSheets` and `<link>.sheet` can see what actually applied.
+    manuk_js::set_external_css(unsafe { (*c.external_css).clone() });
     manuk_js::set_scroll_geometry(scroll_geometry_of(dom, &root_box, &c.styles, &offsets));
     manuk_js::set_snap_candidates(snap_candidates_of(dom, &root_box, &c.styles, &offsets));
 
@@ -4878,6 +4881,8 @@ impl Page {
             .into_iter()
             .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
             .collect();
+        // The CSSOM's view of the external sheets — see `manuk_js::set_external_css`.
+        manuk_js::set_external_css(self.external_css.clone());
         manuk_js::set_scroll_geometry(self.scroll_geometry_map());
         manuk_js::set_snap_candidates(self.snap_candidates_map());
         // **Seed the pre-fetched ES-module import graph for THIS pass (B3b).** Modules are deferred, so
@@ -7770,6 +7775,10 @@ impl Page {
         let js = if dom.find_first("script").is_none() && !has_inline_handler {
             None
         } else {
+            // The CSSOM's view of the external sheets — see `manuk_js::set_external_css`.
+            // `seeded_css` is what this document actually cascaded with, which is exactly what the
+            // object model must report.
+            manuk_js::set_external_css(seeded_css.clone());
             manuk_js::set_scroll_geometry(scroll_geometry_of(
                 &dom,
                 &root_box,

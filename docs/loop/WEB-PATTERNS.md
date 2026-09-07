@@ -11749,3 +11749,36 @@ mistake happened; say which it is in the doc comment and the output.
 
 **Status:** landed t1478 as `a11y_score::Rendered`, gated by `g_the_denominator_is_published` under
 three mutations, with a vacuity arm that a laid-out page must NOT read low; 56 agent binaries green.
+
+---
+
+## The rules were in the cascade and absent from the VIEW of them
+
+**Pattern.** A subsystem can be entirely correct and still invisible to the API that describes it.
+`document.styleSheets` scanned `getElementsByTagName('style')`, so every `<link rel=stylesheet>` was
+missing from it and `<link>.sheet` was `undefined` — while the linked rules applied normally and the
+page rendered correctly. Every theme switcher, CSS-in-JS runtime and `sheet.disabled` toggler
+iterates that list and took its no-stylesheets branch on any page whose CSS is external.
+
+**The tell is a row that does not move.** Measured against Chrome, `color: rgb(1,2,3)` was identical
+before and after; only the count changed, `1 → 2`. When the effect is right and the description is
+wrong, the defect is in the view — and no rendering test can see it.
+
+**Reuse the builder.** The linked sheet is built from a *detached* `<style>` shim carrying the fetched
+text so it goes through the same parser as the inline path. Two parsers for one grammar is how the
+two disagree later; `ownerNode` is then pointed back at the `<link>`.
+
+**Order is document order** — one `querySelectorAll('style, link[rel]')`, not two
+`getElementsByTagName` calls concatenated, which would group by tag and reorder every page.
+
+**⚠ And absent means `null`, not `undefined`.** `HTMLLinkElement.sheet` is `CSSStyleSheet?`; the
+standard guard `if (el.sheet === null)` is FALSE against `undefined`, which is the false-presence trap
+this project measured on `<style>` at t663 and would have reintroduced one tag over.
+
+**⚠ Reading the WPT diff:** the raw name-list diff read **18 fixed / 16 new**. Both lists were the
+same `@IMPORT SHEET FAILED` **WARN log lines carrying an ephemeral port**, so one line reads as fixed
+*and* new across runs. Keyed on subtest name alone: 2 fixed, **0 new**. *Diff the names, and make sure
+the key is a name.*
+
+**Status:** landed t1479; WPT `css/cssom` 593 → 591, `css/cssom-view` flat, 572 `manuk-page` binaries
+green, gated by `g_a_linked_sheet_is_in_the_cssom` under four mutations.

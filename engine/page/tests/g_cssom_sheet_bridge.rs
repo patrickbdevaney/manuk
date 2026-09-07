@@ -305,13 +305,17 @@ fn a_rule_inserted_through_the_sheet_reaches_the_cascade() {
          back gave the old value. `MediaList` is live in the spec, and a snapshot passes every \
          other assertion here.\n  marks: {marks:?}"
     );
-    // ── THE SCOPE, PINNED — see fixture step 8. If this flips to `object`, `<link>` support landed
-    //    and the gate should assert the linked sheet's rules instead of its absence.
+    // ── ⭐⭐ THE SCOPE MOVED, AND THIS ROW SAID WHAT TO DO WHEN IT DID. It pinned
+    //    `T__linksheet_undefined` with the instruction *"if linked sheets landed, update this
+    //    gate"* — and at t1479 they landed: `document.__manukSheetText` gives the prelude the text
+    //    `Page::external_css` had held all along, and the `<style>` builder is reused unchanged.
+    //    A gate that names its own scope limit is also the thing that tells the next tick it
+    //    succeeded — the third time this session (t1465's peer row, t1459's overlay row).
     assert!(
-        has("T__linksheet_undefined"),
-        "`<link>.sheet` is no longer `undefined`. This bridge is `<style>`-only by decision: for an \
-         APPLIED linked sheet, handing back `null` is a lie that reads as honest, and handing back a \
-         half-built object is worse. If linked sheets landed, update this gate.\n  marks: {marks:?}"
+        has("T__linksheet_object"),
+        "`<link>.sheet` is not an object. A linked sheet whose rules are IN the cascade must be in \
+         the object model too: `undefined` fails the standard `if (el.sheet === null)` guard, which \
+         is the false-presence trap t663 measured one tag over.\n  marks: {marks:?}"
     );
     assert!(
         has("T__oob_threw"),

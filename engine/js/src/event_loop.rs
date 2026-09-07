@@ -6825,6 +6825,45 @@ const PRELUDE: &str = r#"
         Object.defineProperty(__HP, 'sheet', {
           configurable: true,
           get: function () {
+            // ⭐⭐⭐ **LINK TOO, AND THROUGH THE SAME BUILDER.** `<link rel=stylesheet>.sheet` was
+            //    `undefined` while its rules were live in the cascade — measured against Chrome on a
+            //    sheet that demonstrably changed a colour: `sheets=1 [STYLE]` here against
+            //    `sheets=2 [STYLE,LINK]` there, `color: rgb(1,2,3)` identical in both. The rules
+            //    were in the cascade and absent from the object model, and every theme switcher,
+            //    CSS-in-JS runtime and `sheet.disabled` toggler iterates that list.
+            //
+            //    ⚠ `HTMLLinkElement` is not a global in this engine, so this cannot live on its own
+            //    prototype: the `HTMLElement.prototype` getter below would shadow it. One getter,
+            //    two tags.
+            //
+            //    ⚠ The sheet is built from a DETACHED `<style>` shim carrying the fetched text so it
+            //    goes through the SAME `__makeSheet` as the inline path — two parsers for one
+            //    grammar is how the two disagree later — and `ownerNode` is then pointed back at the
+            //    `<link>`, which is what Chrome reports and what a consumer walks back to.
+            if (this && this.tagName === 'LINK') {
+              var rel = (this.getAttribute('rel') || '').toLowerCase().split(/\s+/);
+              if (rel.indexOf('stylesheet') < 0) { return null; }
+              if (!this.__manukSheet) {
+                var txt = null;
+                try {
+                  txt = document.__manukSheetText ? document.__manukSheetText(this.href) : null;
+                } catch (e) { txt = null; }
+                // ⚠ `null`, not `undefined`: `HTMLLinkElement.sheet` is `CSSStyleSheet?`, and the
+                //   standard guard `if (el.sheet === null)` is FALSE against `undefined` — the
+                //   false-presence trap t663 measured on `<style>`.
+                if (txt === null || txt === undefined) { return null; }
+                var shim = document.createElement('style');
+                shim.textContent = txt;
+                var lsh = __makeSheet(shim);
+                try {
+                  Object.defineProperty(lsh, 'ownerNode', { value: this, configurable: true });
+                } catch (e) {}
+                Object.defineProperty(this, '__manukSheet', {
+                  value: lsh, configurable: true, enumerable: false, writable: false
+                });
+              }
+              return this.__manukSheet;
+            }
             if (!this || this.tagName !== 'STYLE') { return undefined; }
             // ONE object per element: `el.sheet === el.sheet` is an assumption every CSSOM consumer
             // makes, and a library that stashes bookkeeping on the sheet loses it otherwise.
@@ -6837,6 +6876,24 @@ const PRELUDE: &str = r#"
           }
         });
       }
+      // ── `<link rel=stylesheet>.sheet` (t1479) ────────────────────────────────────────────────
+      //
+      // ⭐⭐⭐ **THE CSS LOADED AND APPLIED AND THE CSSOM COULD NOT SEE IT.** Measured against Chrome
+      // on a sheet that demonstrably changed a colour: `sheets=1 [STYLE]` here against
+      // `sheets=2 [STYLE,LINK]` there, with `color: rgb(1,2,3)` identical in both. So the rules were
+      // in the cascade and absent from the object model — every theme switcher, CSS-in-JS runtime
+      // and `sheet.disabled` toggler iterates that list and saw only the inline sheets.
+      //
+      // t665 built `<style>.sheet` and recorded this as deliberate scope: *"`<link>.sheet` stays
+      // `undefined`… for an applied linked sheet `null` would be a lie."* The text was never
+      // missing — `Page::external_css` has held it all along — only a way to reach it, which
+      // `document.__manukSheetText(href)` now is.
+      //
+      // ⚠ The sheet is built through the SAME `__makeSheet` the `<style>` path uses, from a
+      // DETACHED `<style>` shim carrying the fetched text. Reusing it rather than writing a second
+      // rule parser is the point: two parsers for one grammar is how the two disagree later.
+      // `ownerNode` is then pointed back at the `<link>`, because that is what Chrome reports and
+      // what a consumer walks back to.
       // `document.styleSheets` — a live list, rebuilt on read from the document's own <style>
       // elements, so a sheet appended after load is in it without anything having to invalidate a
       // cache. It was `undefined`, so `document.styleSheets.length` THREW rather than reporting zero.
@@ -6844,7 +6901,12 @@ const PRELUDE: &str = r#"
         Object.defineProperty(document, 'styleSheets', {
           configurable: true,
           get: function () {
-            var els = this.getElementsByTagName ? this.getElementsByTagName('style') : [];
+            // ⚠ `querySelectorAll` and not two `getElementsByTagName` calls: it returns DOCUMENT
+            //   ORDER across both tags, which is the order Chrome reports (`[STYLE,LINK]` for a
+            //   `<style>` written above a `<link>`). Concatenating two tag lists would group them.
+            var els = this.querySelectorAll
+              ? this.querySelectorAll('style, link[rel]')
+              : (this.getElementsByTagName ? this.getElementsByTagName('style') : []);
             var list = [];
             for (var i = 0; i < els.length; i++) {
               var sh = els[i].sheet;

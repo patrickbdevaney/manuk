@@ -482,6 +482,16 @@ pub fn set_snap_candidates(c: std::collections::HashMap<manuk_dom::NodeId, (Vec<
 pub fn set_snap_candidates(_c: std::collections::HashMap<manuk_dom::NodeId, (Vec<f32>, Vec<f32>)>) {
 }
 
+/// **Publish every external stylesheet's text so the CSSOM can see it** — see
+/// [`dom_bindings::set_external_css`].
+#[cfg(feature = "_sm")]
+pub fn set_external_css(c: std::collections::HashMap<String, String>) {
+    dom_bindings::set_external_css(c);
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn set_external_css(_c: std::collections::HashMap<String, String>) {}
+
 /// **Publish each grid container's USED track sizes, `(columns, rows)` in px.**
 ///
 /// `grid-template-columns` / `grid-template-rows` are among the few properties CSSOM §5.1 resolves to
