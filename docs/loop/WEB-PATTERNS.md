@@ -11638,3 +11638,33 @@ already the right role; a `<button>Edit</button>` among the `<a>Edit</a>`s is wh
 
 **Status:** landed t1474 as `targeting::candidates` + `AgentBrowser::candidates_for`, gated by
 `g_an_ordinal_needs_an_enumeration` under three mutations; 55 agent binaries green.
+
+---
+
+## When a more CORRECT model scores worse, the metric is measuring something else
+
+**Pattern.** Four successive models of CSS 2.1 Appendix E's in-flow painting steps — each strictly
+closer to the specification than the single-layer model it replaced — scored **86, 351, 98 and 331**
+unclickable links against a baseline of **0**. A change that is more spec-correct cannot make a
+browser worse at finding links; so the metric is not measuring what its name suggests.
+
+**It was measuring containment.** G6 asks "can the browser find this link", and it finds one by
+walking **up** from the hit node looking for an `<a href>`. So the question is *"is there a link on
+the ancestor chain of whatever won"*, not *"did the topmost box win"*. Those come apart exactly when
+a rank change hands the click to a **sibling** subtree instead of a nested one — which is what every
+in-flow sub-rank does, because Appendix E's steps 4–7 reorder boxes that are siblings.
+
+⭐⭐ **So the equal-layer area tie-break was never a proxy for paint order — it is a proxy for
+CONTAINMENT.** The smaller box is usually the one inside the other, and the ancestor walk needs the
+innermost box precisely because that is the one with the link above it. One mechanism explains all
+five numbers, including the earlier tick's 62.
+
+**What it changes about the fix.** The remaining case is not reachable by reordering a comparator at
+all: resolve containment first and paint order only between candidates where neither contains the
+other. That is a different shape from a tie-break.
+
+**And make the oracle local first.** Four wrong models were measured and discarded inside one tick
+because the check takes two seconds; the same four would have cost four ticks and ~3½ hours of wall
+time. **When a gate refuses you twice, make it local before attempting a third time.**
+
+**Status:** t1475, measurement-and-refusal. Engine reverted, baseline confirmed at 100.0% (0 of 477).

@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1149** | ticks 1–1474 |
-| median tick cycle | **33m** | 1148 intervals |
+| ticks landed | **1150** | ticks 1–1475 |
+| median tick cycle | **33m** | 1149 intervals |
 | median, last 10 | **52m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.83** | 1381.6h elapsed |
-| median verify wall | **67s** | 1088 ticks |
+| **ticks per hour** | **0.83** | 1383.7h elapsed |
+| median verify wall | **67s** | 1089 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**529 of 1149 ticks** (46%) moved a
+**529 of 1150 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -1246,5 +1246,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1472** | 2026-09-06 16:01 | 41m | measurement | 8m | +215/−42 | 568 | 81 | 56.0% · | the oracle that refused a tick runs in two seconds (2026-09-06) |
 | **1473** | 2026-09-06 18:00 | 2.0h | capability | 8m | +310/−47 | 569 | 81 | 56.0% · | the residue's diagnosis was at the wrong level (2026-09-06) |
 | **1474** | 2026-09-06 18:41 | 41m | capability | 8m | +510/−44 | 569 | 81 | 56.0% · | an ordinal needs an enumeration (2026-09-06) |
+| **1475** | 2026-09-06 20:45 | 2.1h | measurement-and-refusal | 8m | +215/−42 | 569 | 81 | 56.0% · | when a more CORRECT model scores worse, the metric is measuring something else (2026-09-06 |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

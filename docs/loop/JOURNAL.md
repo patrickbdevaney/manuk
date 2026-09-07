@@ -106511,3 +106511,79 @@ beside precision in `a11y-score`, so the next under-rendering cannot flatter its
 did for nine ticks.
 
 WIKI: docs/wiki/an-ordinal-needs-an-enumeration.md
+
+## Tick 1475 — when a more CORRECT model scores worse, the metric is measuring something else (2026-09-06)
+
+TICK SHAPE: measurement-and-refusal
+
+Rotation → A. t1468 refused the step-8 peer fix at 62 unclickable links and concluded that closing it
+needed CSS 2.1 Appendix E's in-flow steps modelled rather than a tie-break swapped. t1472 made that
+oracle local. This tick modelled them.
+
+### FOUR MODELS, ALL REFUSED, ALL MEASURED IN SECONDS
+
+```text
+                                                   missed / 477    clickability
+  baseline (area tie-break)                              0            100.0%
+  block 0 · float +1 · inline +2 · positioned +3         86             76.8%
+  …without the inline rank                              351              5.1%
+  …without the float rank                                98             73.5%
+  …inline rank that does not accumulate                 331             10.5%
+```
+
+⭐⭐⭐ **EVERY VARIANT IS FAR WORSE, AND TWO ARE CATASTROPHIC.** A model strictly closer to the
+specification scored an order of magnitude worse. A change that is more spec-correct cannot make a
+browser worse at finding links — **so the metric is not measuring what its name suggests.**
+
+### IT WAS MEASURING CONTAINMENT, AND THE HIT-TEST'S OWN COMMENT SAYS SO
+
+G6 asks *"can the browser find this link"*, and t853's comment states how it finds one:
+
+> the shell walks **up** from whatever was hit looking for an `<a href>`, and an ancestor `<li>` has
+> no link above it
+
+So the question is *"is there an `<a href>` on the ancestor chain of whatever won"*, not *"did the
+topmost box win"*. Those come apart precisely when a rank change hands the click to a **sibling**
+subtree rather than a nested one — which is exactly what every in-flow sub-rank does, because
+Appendix E's steps 4-7 reorder boxes that are siblings of one another.
+
+⭐⭐ **SO THE EQUAL-LAYER AREA TIE-BREAK WAS NEVER A PROXY FOR PAINT ORDER — IT IS A PROXY FOR
+CONTAINMENT.** The smaller box is usually the one *inside* the other, and the ancestor walk needs the
+innermost box precisely because that is the one with the link above it. t1468 called area "a proxy
+for the whole of steps 4-7" and that was the wrong noun; one mechanism explains all five numbers,
+including t1468's own 62.
+
+### WHAT THAT CHANGES ABOUT THE FIX
+
+The peer case is **not reachable by reordering the hit-test at all**: any ordering that is
+paint-correct is containment-incorrect somewhere, and the metric is made of containment. It needs the
+hit-test to resolve **containment first and paint order second** — keep the structural
+ancestor/descendant resolution and apply paint rank only between candidates where neither contains
+the other. That is a different shape from a comparator, and it is the first time this thread has had
+a description of the fix rather than of the symptom.
+
+⚠ Price known: **−62 to −351 clickable links**, depending on how much of Appendix E is modelled.
+
+### THE INSTRUMENT IS THE REUSABLE PART
+
+⭐ Four wrong models were built, measured and discarded **inside one tick** because t1472 made the
+oracle a two-second command. The same four would have cost four ticks and ~3½ hours of wall time a
+day earlier. *When a gate refuses you twice, make it local before attempting a third time.*
+
+### REVERTED
+
+```
+  engine/css/src/lib.rs           restored (stacking_layer unchanged)
+  engine/page/src/lib.rs          restored
+  engine/js/src/dom_bindings.rs   restored
+  clickability re-verified at 100.0% (0 missed of 477) on the reverted tree
+  no gate added — there is nothing green to gate
+  Bar 0: no hang, no crash, no panic
+```
+
+NEXT: implement the containment-first shape. `A11yNode::hit_test`'s `go` already resolves
+ancestor/descendant structurally — the missing half is that `elementFromPoint`'s FLAT scan does not,
+and that is where a paint rank could be applied safely, because a flat scan can test containment
+explicitly (an ancestor walk) instead of proxying it by area.
+
+WIKI: docs/wiki/clickability-does-not-measure-paint-order.md

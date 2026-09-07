@@ -814,6 +814,13 @@
   - L87 · The trap this belongs to
   - L94 · See also
 
+## Clickability does not measure paint order
+`docs/wiki/clickability-does-not-measure-paint-order.md`
+
+  - L22 · Why: the metric is defined over the ancestor chain, not the pixel
+  - L42 · What this means for the peer case
+  - L53 · The instrument is the reusable part
+
 ## CONFORMANCE AND ORACLES — how we MEASURE, and what each instrument cannot see
 `docs/wiki/conformance-and-oracles.md`
 
@@ -3320,4 +3327,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2847 sections across 117 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2850 sections across 118 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
