@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1157** | ticks 1–1482 |
-| median tick cycle | **33m** | 1156 intervals |
-| median, last 10 | **1.5h** | 10 intervals |
+| ticks landed | **1158** | ticks 1–1483 |
+| median tick cycle | **33m** | 1157 intervals |
+| median, last 10 | **57m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.79** | 1466.9h elapsed |
-| median verify wall | **67s** | 1096 ticks |
+| **ticks per hour** | **0.79** | 1467.1h elapsed |
+| median verify wall | **67s** | 1097 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**534 of 1157 ticks** (46%) moved a
+**535 of 1158 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **534** capability ticks, median cycle **33m**
+* **535** capability ticks, median cycle **33m**
 * median diff per tick: **+297 / −35** lines across 9 files
 
 ## Every tick
@@ -1254,5 +1254,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1480** | 2026-09-10 04:20 | 3.1d | capability | 8m | +1356/−57 | 572 | 81 | 56.0% · | a page could not report its own boot failure (2026-09-10) |
 | **1481** | 2026-09-10 07:15 | 2.9h | capability | 8m | +537/−47 | 574 | 81 | 56.0% · | an external script keeps its `src` (2026-09-10) |
 | **1482** | 2026-09-10 07:56 | 41m | capability | 8m | +592/−42 | 575 | 81 | 56.0% · | a handled rejection is not an unhandled one (2026-09-10) |
+| **1483** | 2026-09-10 08:08 | 11m | capability | 8m | +292/−44 | 575 | 81 | 56.0% · | a slot knows what is assigned to it (2026-09-10) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

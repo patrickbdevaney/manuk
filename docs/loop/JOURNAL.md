@@ -107338,3 +107338,78 @@ immediately. `e.open is not a function` says the OBJECT is wrong, not the method
 `indexedDB.open` returns and what a page does with it before assuming the API is merely incomplete.
 
 WIKI: docs/wiki/a-slot-knows-what-is-assigned-to-it.md
+
+## Tick 1484 — the audits, and the mandate's own number does not reproduce (2026-09-10)
+
+TICK SHAPE: audit
+
+Three cadences fell due at once: self-audit (every 10, last 1474), surface audit (every 10, last
+1474), constitution re-read (every 8, last 1476).
+
+### ⭐⭐⭐ SURFACE AUDIT #90 — OF 21 UNSCORED SITES, EXACTLY ONE IS THE ENGINE'S
+
+The observer's 2026-09-10 mandate names the SCORABILITY ceiling as **the binding constraint** and
+directs every tick at *"the SHARED function/JS/DOM/event-loop defects that make sites unscorable."*
+Its own P0 said: *CONFIRM the ~82% is current.* Confirmed, and it does not come back that way.
+
+```text
+  40 sites, corpus-crux-trend head · SCORED 19 (48%) · refused 21, by the instrument's OWN tag
+
+  ORIGIN-side, out of any engine's reach ........ 14   bot-wall 8 · unreachable 2 · http 2 · empty 2
+  ORACLE-side (reference browser / file:// method)  6   module-shell 2 · shell-only 2 · probe-blocked 1 · timeout 1
+  ENGINE-side, OURS ............................. 1   css-starved 1
+```
+
+Bot-walls are out of the in-scope denominator (`DAILY-DRIVER-CERTIFICATION.md` §3), so in-scope
+scorability is **19/32 = 59%** — *further* from the bar than the mandate's 82%, and **almost none of
+the gap is a function defect.** The figure does not reproduce and its attribution is wrong in the same
+breath.
+
+⚠ One 40-site slice, one run; the bot-wall count is a property of THIS slice. Enough to refuse the
+attribution, not enough to replace the number. **The full-400 tag histogram is the next tick.**
+
+⭐⭐ **AND YET P1's METHOD WAS PRODUCTIVE, WHICH IS THE INTERESTING PART.** Four ticks executed P1 as
+written and each found a real, shared, Chrome-arbitrated defect — but none moved scorability, because
+*the sites they fixed were already scored*. **A mandate can name the wrong bottleneck and still point
+at good work**; the only way to tell is to measure what it claims, which is what P0 was for.
+
+### ⭐⭐⭐ CONSTITUTION CHECK #143 — THE VACUITY ARM FOUND FOUR BUGS IN FOUR TICKS
+
+*"And a clean input must report nothing"* caught: a script-free document inheriting the previous
+page's errors (t1480); a handled `.catch` reported as unhandled (t1482 — two false alarms in three
+against Chrome); and, as `runs=1`, that restoring `<script src>` would make every external script on
+every page execute **twice** (t1481). **Not one was the thing the tick set out to do.** Promoting it
+to PART VI prose is steer #3.
+
+⚠⚠ **A METHODOLOGY DEFECT THAT IS MINE, NOT THE HARNESS'S.** The mutation-proof harness restores its
+backup with `shutil.move`, which **preserves the older mtime** — so cargo reuses the artifact built
+*from the mutation*, and the first clean-tree run after any mutation suite is a **false RED**. Cost an
+hour at t1482; verified synthetically (`mutated_mtime > restored_mtime` is `True`). Every run now
+`touch`es the restored files. The RED results are unaffected — a mutation is *written*, so cargo
+rebuilds — only the post-restore state is poisoned.
+
+### SELF-AUDIT @ 1483
+
+One prescribed-but-not-executed item, unchanged and observer-owned: **the wall is 1465s against a
+300s target.** Reported, not touched (V1-SCOPE).
+
+✅ **CI now finishes** — three successes in the last eight runs, closing audit #89's *"CI never
+finishes"*.
+⚠ Carried: nine crates outside the wall's crate loop (fourth audit); 575 gate files against 19
+executed by name (third); `ORACLE_CRAWLED: 0` (seventeenth).
+
+### LANDED
+
+```
+  docs/loop/SURFACE-AUDIT.md        Audit #90 — the refusal-tag attribution
+  docs/loop/CONSTITUTION-CHECK.md   Check #143 — the vacuity rule, and the mtime defect
+  STATUS.md                         all three cadences reset to 1484
+```
+
+NEXT, and it is steer #1 of my own audit: **run the refusal-tag histogram over the full 400-site cert
+corpus** (`docs/bench/corpus-v2.tsv`). If ~1-engine-owned-in-40 holds, P1 is aimed at a term that is
+not binding, and the loop belongs on P2 (the M2 function cert, `bidi/src/protocol.rs:481`) or P4
+(render). One sweep settles the direction of every tick after it — which is worth more than any single
+API. If it does NOT hold, the mandate stands and IndexedDB (20 events on 40 sites) is the next row.
+
+WIKI: none — an audit tick; its output IS the two audit documents.

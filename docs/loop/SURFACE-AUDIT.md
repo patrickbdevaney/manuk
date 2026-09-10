@@ -8276,3 +8276,94 @@ count above. *Fourth "already built" of the session.*
    is the only defence against the 548 while `verify.sh` is observer-owned.
 3. ⚠ The eight missing crates — third ranking, unchanged, and the only change here that *adds*
    coverage rather than costing it.
+
+---
+
+## Audit #90 — tick 1484 (2026-09-10)
+
+**The map under audit:** the observer's 2026-09-10 mandate, which names *"the SCORABILITY/FUNCTION
+ceiling — ~82%, 24/135 in-scope sites never yield a scored tree"* as **the binding constraint**, and
+directs every tick at *"the SHARED function/JS/DOM/event-loop defects that make sites unscorable."*
+
+Its P0 was *"CONFIRM the ~82% is current — do not trust the t1226 figure."* This audit is that
+confirmation, and it does not come back the way the map says.
+
+### ⭐⭐⭐ OF 21 UNSCORED SITES, EXACTLY ONE IS THE ENGINE'S
+
+40 sites, the head of `docs/bench/corpus-crux-trend.txt`, one `manuk-wpt fidelity` pass, attributed
+by the instrument's OWN refusal tag:
+
+```text
+  sites 40 · SCORED 19 (48%) · refused 21
+
+  ORIGIN-side, out of any engine's reach ........... 14
+      bot-wall 8 · unreachable 2 · http 2 · empty 2
+  ORACLE-side — the reference browser, or the        6
+  file:// snapshot method ..........................
+      oracle-module-shell 2 · shell-only 2 · probe-blocked 1 · oracle-timeout 1
+  ENGINE-side, OURS ................................ 1
+      css-starved 1
+```
+
+Bot-walls are excluded from the in-scope denominator by `DAILY-DRIVER-CERTIFICATION.md` §3, so
+in-scope scorability on this slice is **19/32 = 59%** — *further* from the bar than the map's 82%, and
+**almost none of the gap is a function defect.** The map's number does not reproduce and its
+*attribution* is wrong in the same breath.
+
+⚠ **This is one 40-site slice, one run, and the bot-wall count is a property of THIS slice.** It is
+enough to refuse the attribution, not enough to replace the figure. The honest next step is the same
+tag histogram over the full 400.
+
+### ⭐⭐ AND YET P1's METHOD WAS PRODUCTIVE — WHICH IS THE INTERESTING PART
+
+Four ticks executed P1 as written and every one of them found a real, shared, Chrome-arbitrated
+defect: window-handler throws reported nowhere (t1480), `src` dropped from every external script
+(t1481), rejections reported 3× and never harvested (t1482), the whole `HTMLSlotElement` API absent
+(t1483). None of them moved scorability, because **the sites they fixed were already scored.**
+
+*A mandate can name the wrong bottleneck and still point at good work* — and the way to tell the
+difference is to measure the thing it claims, which is what P0 was for and what had not been done.
+
+### ⭐⭐ THE INSTRUMENT COULD NOT ANSWER ITS OWN MANDATE'S QUESTION
+
+P0 asked for a histogram of the *first-failure cause*. Nothing in the tree could produce one. *"A
+script on this page died"* had **five implementations and no consumer**: two `tracing::warn!` lines,
+a JS array read by one caller, a bare `catch (e) {}` for every `window`-level handler, and unhandled
+rejections — which turned out to carry **80 of the 91** uncaught events on the slice.
+
+⚠ The map has been ranking work by a failure signal it was seeing roughly a tenth of, for as long as
+it has had one.
+
+### ⚠ WHAT THE NEW HISTOGRAM SAYS, NOW THAT IT EXISTS
+
+```text
+  39 documents · 24 boot CLEAN · 15 with >=1 uncaught
+  top nameable rows: IndexedDB (20 events) · HTMLSlotElement (8, now fixed)
+                     JSPI (2 sites) · a React hydration mismatch (1)
+```
+
+### ⚠ CARRIED
+
+* **Nine crates outside the wall's crate loop** (`manuk-page`, `manuk-js`, a11y, html, text, media,
+  compositor, store, bidi). **Fourth consecutive audit, ranked in the top three each time.**
+* **575 gate files, 19 executed by name** on the per-tick path. The number grew by 5 this session
+  because this session added 5 gates. Third audit; t1403 recorded it at a smaller number.
+* **The wall is the self-audit's only failing item** — 1465s against a 300s target. Observer-owned;
+  reported, not touched.
+* `ORACLE_CRAWLED: 0` — **sixteenth**.
+* ✅ **CI now finishes.** Three consecutive successes in the last eight runs, where audit #89 recorded
+  *"CI never finishes — the tick cadence outruns its concurrency group."* Closed.
+
+### RANKED, from this audit only
+
+1. ⭐⭐⭐ **Re-attribute the scorability gap before another tick is spent on it.** Run the refusal-tag
+   histogram over the full 400-site cert corpus. If it holds at ~1 engine-owned refusal in 40, the
+   mandate's P1 is aimed at a term that is not binding, and P4 (render) or P2 (the M2 function cert)
+   is the real next line. This is one sweep and it settles the loop's direction.
+2. ⭐⭐ **The oracle-side 6 is the biggest actionable block after bot-walls, and the instrument already
+   names its own fix** — *"a loopback reverse PROXY so document, bundle and XHR share ONE origin"* —
+   and `tests/wpt/src/proxy.rs` exists and printed `PROXY REFERENCE ACCEPTED` for at least one site in
+   this very run. Six of 40 sites are refused for exactly what it was built to remove. Find out why it
+   engages for some and not others.
+3. ⚠ The nine missing crates — fourth ranking, unchanged, and still the only change that *adds*
+   coverage rather than costing it.

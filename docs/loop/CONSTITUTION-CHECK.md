@@ -12382,3 +12382,84 @@ single capability this window.
    for nine ticks. Cheap, agent-side, and it closes the mechanism rather than the instance.
 3. ⚠ **The peer/paint-order thread is closed until the hit-test resolves containment first.** Two
    refusals and five measurements say a comparator cannot express it.
+
+---
+
+## Check #143 — tick 1484
+
+Re-read `CONSTITUTION.MD` (PART VII, the invariants) and `docs/loop/V1-SCOPE.md` against ticks
+1477–1483.
+
+### GATE OR SCOREBOARD?
+
+**Gate, and the window's four capability ticks were all decided by the same instrument.** t1480 built
+`Page::boot_errors` because the observer's P0 asked for a histogram of the first-failure cause and
+nothing in the tree could produce one. Ticks 1481–1483 then took its rows in order: the OneTrust
+consent stub (`src` dropped from every external script), the rejection reporter (3× over-report), the
+whole `HTMLSlotElement` API. Each was Chrome-arbitrated to a byte and gated under named mutations.
+
+⭐⭐⭐ **THE VACUITY ARM WAS THE HALF THAT FOUND THINGS — FOUR TIMES IN FOUR TICKS.** *"And a clean
+input must report nothing"* caught: a script-free document inheriting the previous page's errors
+(t1480), a handled `.catch` reported as an unhandled rejection (t1482, two false alarms in three
+against Chrome), and — as `runs=1` — the fact that restoring `<script src>` would make every external
+script on every page execute **twice** (t1481). None was the thing the tick set out to do.
+
+*An arm that only asserts the positive case cannot tell a working detector from one that fires on
+everything.* This belongs in PART VI as a rule, not as four anecdotes.
+
+### PART VI CORRECTIONS
+
+* **NEW, and it is this check's most valuable finding:** *one rule with five implementations and no
+  consumer is not a subsystem, it is five silences.* Every path by which a page's script can die wrote
+  somewhere nobody read — and the largest, unhandled rejections, carried **80 of 91** events. The loop
+  has been ranking work by a failure signal it saw a tenth of.
+* **NEW:** *a mandate can name the wrong bottleneck and still point at good work.* Surface audit #90
+  attributes the scorability gap and finds **1 engine-owned refusal in 40 sites**; the mandate's P1
+  aims every tick at exactly that term. All four ticks were nonetheless real. The way to tell the
+  difference is to measure the thing the mandate claims — which is what P0 was for, and what had not
+  been done for the four ticks before it.
+* **NEW:** *a control flag must not live in a web-facing attribute.* `fetch_external_scripts` removed
+  `src` because its ABSENCE meant "there is text to run" — so the page could not have the attribute
+  back in any configuration. `Page::dyn_scripts_ran` exists because the DYNAMIC path had the identical
+  bug and was fixed; the parser half, which runs on every page, stayed broken.
+* **VI.3 — the aperture rule is STILL not in prose.** Ninth check.
+* **I5 — `ORACLE_CRAWLED: 0`. SEVENTEENTH check.**
+
+### THE INVARIANTS
+
+**I3 — held, and it did the most work again.** Every one of the four ticks lowered a number or refused
+a claim: boot-clean went 29 → 24 when the harvest learned to see rejections (the instrument getting
+more honest, not the engine getting worse), and t1481's render means were explicitly **not** claimed
+to have moved because both affected sites were byte-identical on `structural` and `SHAPE`.
+
+**I2 — held.** Nothing forked. The slot assignment is computed against our own `Dom` primitives; the
+rejection queue asks SpiderMonkey (`GetPromiseIsHandled`) rather than keeping a second copy of a fact
+the engine owns.
+
+**I1, I4, I6, I7, I8 — not bent.**
+
+### PART VII / V1-SCOPE
+
+Every tick is browser capability or the instrument that measures one. Nothing touched `scripts/`.
+⚠ Two harness findings were reported and left alone: the `F2 pipeline` perf floor read 7.60x against
+a 7.5x bar on one attempt and 5.51/5.99/6.42 across three same-tree runs (the bench pages contain
+**zero `<script>` tags**, so the tick under test could not reach them), and one 40-site sweep died at
+site 6 under memory pressure with no crash marker.
+
+⚠⚠ **AND ONE METHODOLOGY DEFECT THAT IS MINE, NOT THE HARNESS'S.** The mutation-proof harness restores
+its backup with `shutil.move`, which **preserves the backup's older mtime** — so cargo's mtime-based
+freshness reuses the artifact it built *from the mutation*, and the first clean-tree run after any
+mutation suite is a **false RED**. It cost an hour at t1482 and was verified synthetically. Every
+mutation run now `touch`es the restored files. The RED results are unaffected (a mutation is written,
+so cargo rebuilds); only the state after the restore is poisoned.
+
+### STEER
+
+1. ⭐⭐⭐ **Settle the direction before spending another tick on it.** Run the refusal-tag histogram
+   over the full 400-site cert corpus. If ~1-in-40 engine-owned holds, P1 is aimed at a term that is
+   not binding and the loop should be on P2 (the M2 function cert) or P4 (render). One sweep.
+2. ⭐⭐ **The boot histogram's next row is IndexedDB** — 20 events on 40 sites, and the plateau-breaker
+   plan's lever #5 already names Firestore / Firebase-Auth / Amplify as opening IDB at boot. ⚠ `e.open
+   is not a function` says the OBJECT is wrong, not that the method is missing: probe before building.
+3. ⚠ **Promote the vacuity rule to PART VI prose.** Four findings in four ticks came from one
+   assertion shape, and it is currently folklore carried in gate doc comments.
