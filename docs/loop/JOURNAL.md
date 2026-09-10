@@ -106917,3 +106917,138 @@ sheet and does nothing. Chrome removes the sheet's rules from the cascade on `di
 seam is the same `external_css` map, so this is a write path rather than a read one.
 
 WIKI: docs/wiki/a-linked-sheet-is-in-the-cssom.md
+
+## Tick 1480 — a page could not report its own boot failure (2026-09-10)
+
+TICK SHAPE: capability
+
+The observer's P0 order of 2026-09-10: *enumerate the in-scope sites failing the FUNCTION/scorability
+gate; HISTOGRAM the first-failure cause.* No instrument in the tree could name one.
+
+### ONE RULE, FOUR IMPLEMENTATIONS, AND THE ONLY SILENT ONE COVERED `window`
+
+```text
+  a top-level classic <script> throw     ->  tracing::warn!("a page <script> threw")   stderr
+  a type=module evaluation failure       ->  tracing::warn!("a page module failed")    stderr
+  every DEFERRED throw (setTimeout, a    ->  globalThis.__errors, a JS array read by
+    microtask, an element listener, on*)     exactly ONE caller: `manuk-wpt diag`
+  every WINDOW-level handler throw       ->  NOWHERE AT ALL
+```
+
+⭐⭐⭐ **`__fireWindowEvent` invoked handlers inside a bare `catch (e) {}`, twice.** A throw from any
+`window.addEventListener(…)` or `window.onX` handler was discarded whole — no `window.onerror`, no
+`error` event, no `__errors` entry, no log line. Its sibling `__dispatchEvent` has routed both of its
+equivalents through `__reportError` for ticks; this one never did. The class is `load`, `resize`,
+`popstate`, `message`, `hashchange`, `unhandledrejection` — where a page's boot code and its
+cross-origin plumbing live, and where every error-reporting SDK on the web installs its handler.
+
+⭐⭐ **The harvester's first act was to name a hole in the thing it was harvesting.** The gate threw
+three times, from three paths; two arrived. That is how the fourth row was found — by CONSUMING the
+list, not by reading the dispatcher. *Instruments are validated by consumption* (t1419), fifth time.
+
+### CHROME-ARBITRATED, AND TWO MORE DIVERGENCES FELL OUT
+
+```text
+  fixture: a throwing `load` listener + window.onerror + an `error` listener + a second listener
+
+  Chrome    onerror:Uncaught TypeError: … | errevt:… | second-listener-ran
+  before    (nothing — swallowed)
+  after 1   errevt:… | onerror:… | onerror:[object Object] | second-listener-ran
+  after 2   errevt:… | onerror:… | second-listener-ran        ✓ byte-identical on the gate fixture
+```
+
+⚠ `after 1` exposed a **pre-existing double fire**: `__reportError` called `globalThis.onerror`
+directly *and* dispatched an `error` event whose dispatcher calls it again — with the EVENT rather
+than the `ErrorEventHandler` argument list. Every SDK on the page double-counted and half its reports
+carried `[object Object]`. The unpacking now lives in the dispatcher; the direct call is the fallback
+for a realm with no `dispatchEvent`.
+
+⚠ Routing window throws back to `__reportError` closes a loop — a throwing `window.onerror` would
+report its own throw forever. HTML has one flag for exactly this (*in error reporting mode*); without
+it the gate fixture is an infinite recursion. Chrome: `onerror-calls=1`. Ours: `onerror-calls=1`.
+
+### THE MEASUREMENT — 40 sites, `corpus-crux-trend.txt` head
+
+```text
+  documents with a BOOT verdict     39
+    boot CLEAN                      28   (72%)
+    >=1 uncaught error              11   (28%)
+
+  FIRST-FAILURE CLASS
+    2  undefined-deref:hasAttribute            ikea.com, otomoto.pl   <-- ONE BUNDLE
+    2  other:WebAssembly-Promise-APIs-…        (JSPI)
+    1  undefined-deref:undefined               paypal.com
+    1  undefined-deref:marginTop               mangago.me
+    1  syntax-error                            repubblica.it
+    1  other:no-exception-object
+    1  other:Minified-React-error--446…        (hydration mismatch)
+    1  missing-member:d
+    1  missing-global:gsuite                   workspace.google.com
+```
+
+⭐⭐⭐ **THE TOP ROW IS ONE THIRD-PARTY BUNDLE AT A BYTE-IDENTICAL OFFSET.**
+
+```text
+  OneTrustStub</S.prototype.setOTDataLayer@https://www.ikea.com/  inline#156:1:12608
+  OneTrustStub</S.prototype.setOTDataLayer@https://www.otomoto.pl/ inline#66:1:12608
+  TypeError: can't access property "hasAttribute", p.stubScriptElement is null
+```
+
+The **OneTrust consent SDK**, on a very large fraction of the GDPR-facing web, dies at the top level
+of a classic script — so the consent gate never resolves and the page stays behind it. This is the
+shared-cause, many-sites-at-once lever the mandate asks for.
+
+### ⚠⚠ THE INSTRUMENT'S FIRST READING WAS CONTAMINATED — THE SECOND IS THE ONE QUOTED
+
+The first run reported `marktplaats.nl`'s error as the boot failure of two sites that **run no
+script**. `PageContext::load` cleared the harvest and was the only place that did, but `manuk-page`
+builds no context at all for a script-free document. 15/33 became **11/39**.
+
+⭐⭐ Isomorphic to the `<iframe>` case the snapshot site had already been moved for, one tick earlier,
+in the same file — *same rule, second entrance*. **The gate could not see it because both its
+fixtures had scripts** (t1424: the fixture is part of the instrument). The script-free third document
+is now the arm, and the ORDER is the arm: a clean *scripted* page in that slot clears the harvest on
+its own way through and leaves nothing to inherit. The clear now lives at the DOCUMENT boundary in
+`Page::load`, alone — a second copy in `PageContext::load` would be an inert mutation site.
+
+⚠ And the histogram key had a SPACE in it: `other:TypeError: Invalid URL×3` reached every
+whitespace-splitting consumer as four buckets. It read as nonsense rather than failing.
+
+### LANDED
+
+```
+  engine/js/dom_bindings.rs   SCRIPT_ERRORS + record_script_error + ScriptError + __hostScriptError
+                              all four throw sites record; __fireWindowEvent reports and unpacks
+  engine/js/event_loop.rs     __reportError -> __hostScriptError; in-error-reporting-mode flag;
+                              dispatch owns the onerror invocation
+  engine/js/lib.rs            script_errors / script_error_count / clear_script_errors seam (+ JS-less twins)
+  engine/page/lib.rs          Page::boot_errors(), cleared at the DOCUMENT boundary
+  tests/wpt/fidelity.rs       boot_class() — the histogram key — + its unit test
+  tests/wpt/main.rs           a BOOT line per site, printed BEFORE the four refusals
+  gate  g_a_page_reports_its_own_boot_failure       RED under 4 named mutations
+  gate  g_window_handler_throws_are_reported        RED under 4 named mutations
+  vacuity arms: a clean page reports ZERO; a SCRIPT-FREE page reports ZERO; the page keeps running
+  WPT dom  8170 -> 8174  (same binary both ways)  ·  HANG/CRASH 0
+  Bar 0: no hang, no crash, no panic
+```
+
+⚠ RESIDUE, all named in the gates: **ORDER** — Chrome runs the `onerror` PROPERTY handler before the
+`addEventListener('error')` one (an event-handler attribute is a listener registered where it was
+assigned); `__fireWindowEvent` runs its list first and the property last, for every window event.
+**`"Uncaught "`** is Chrome's prefix, not the spec's (Firefox agrees with us), so the gate asserts the
+message *contains* the thrown text and nothing about its framing. **A module link failure arrives
+with NO exception object** — the specifier is known inside `module_resolve_hook` and not carried out.
+**`run_scripts` is a second copy of the script loop** (`dom_bindings::run_scripts` vs
+`PageContext::load` → `run_one_script`); mutating one was INERT against the page path, which is how
+the duplication surfaced. Both now record.
+
+NEXT: **the OneTrust stub, and it names a file.** `fetch_external_scripts` inlines a `<script src>`'s
+source into the element and **drops `src`** — `fire_external_script_load`'s own doc comment says
+*"after which nothing in the pipeline remembers the element was ever external."* A stub that locates
+its own tag with `document.querySelector('script[src*="otSDKStub"]')` gets `null` from a DOM where no
+script has a `src`. **PROBE THAT BEFORE PATCHING** (t1418: a plausible rule that fits the fixtures
+you happened to write is the most expensive kind of wrong) — the four-line probe is a page with one
+`<script src>` that reports `document.querySelectorAll('script[src]').length` and
+`document.currentScript`, ours vs Chrome.
+
+WIKI: docs/wiki/a-page-could-not-report-its-own-boot-failure.md

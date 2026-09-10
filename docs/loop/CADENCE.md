@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1154** | ticks 1–1479 |
-| median tick cycle | **33m** | 1153 intervals |
-| median, last 10 | **52m** | 10 intervals |
+| ticks landed | **1155** | ticks 1–1480 |
+| median tick cycle | **33m** | 1154 intervals |
+| median, last 10 | **57m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.83** | 1388.5h elapsed |
-| median verify wall | **67s** | 1093 ticks |
+| **ticks per hour** | **0.79** | 1463.3h elapsed |
+| median verify wall | **67s** | 1094 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **570**
+* **live gates**: 27 → **572**
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**531 of 1154 ticks** (46%) moved a
+**532 of 1155 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,8 +90,8 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **531** capability ticks, median cycle **33m**
-* median diff per tick: **+297 / −35** lines across 8 files
+* **532** capability ticks, median cycle **33m**
+* median diff per tick: **+297 / −35** lines across 9 files
 
 ## Every tick
 
@@ -1251,5 +1251,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1477** | 2026-09-06 22:19 | 42m | measurement | 8m | +209/−42 | 569 | 81 | 56.0% · | the base URL was the disagreement (2026-09-06) |
 | **1478** | 2026-09-06 23:21 | 62m | capability | 8m | +365/−47 | 569 | 81 | 56.0% · | publish the denominator (2026-09-07) |
 | **1479** | 2026-09-07 01:34 | 2.2h | capability | 8m | +13/−10 | 570 | 81 | 56.0% · | a linked sheet is in the CSSOM (2026-09-07) |
+| **1480** | 2026-09-10 04:20 | 3.1d | capability | 8m | +1356/−57 | 572 | 81 | 56.0% · | a page could not report its own boot failure (2026-09-10) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

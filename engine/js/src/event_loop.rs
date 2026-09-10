@@ -7885,7 +7885,21 @@ const PRELUDE: &str = r#"
           return { file: f, line: l, col: c };
         } catch (x) { return null; }
       };
+      // ── **IN ERROR REPORTING MODE** (HTML §8.1.7.1, tick 1480). ─────────────────────────────
+      //
+      // Reporting an exception DISPATCHES an `error` event and calls `onerror`. Either can itself
+      // throw — and as of this tick every window-level handler throw is routed back here, which
+      // closes the loop: a throwing `window.onerror` would report its own throw, forever.
+      //
+      // The spec has exactly this flag for exactly this reason: *"If the global object is in error
+      // reporting mode, abort these steps."* Set on entry, cleared on exit, so SEQUENTIAL reports
+      // are unaffected and only a NESTED one is dropped. This is not defence in depth against a
+      // hypothetical — without it the fixture below is an infinite recursion.
+      globalThis.__inErrorReport = false;
       globalThis.__reportError = function (e) {
+        if (globalThis.__inErrorReport) { return; }
+        globalThis.__inErrorReport = true;
+        try {
         try {
           var msg = String((e && e.message) ? e.message : e);
           var at = globalThis.__errorAddr(e);
@@ -7903,6 +7917,14 @@ const PRELUDE: &str = r#"
           // it without bound.
           try {
             var where = at ? (' at ' + at.file + ':' + at.line + ':' + at.col) : '';
+            // ── **AND OUT OF THE JS WORLD** (tick 1480). `__errors` is a JS array; a host that
+            //    wants to know why a page booted into a shell cannot read one. Every deferred
+            //    throw now also lands in the ONE native list the two top-level paths write to,
+            //    so `Page::boot_errors` is the whole answer instead of two thirds of it.
+            //    Unconditional — the DEDUPE below decides what gets PRINTED, not what gets
+            //    counted, and a harvest that dropped repeats could not see a throwing interval
+            //    at all. The native side caps its own storage.
+            try { __hostScriptError(msg + where); } catch (x) {}
             var key = msg + where;
             var seen = globalThis.__errSeen || (globalThis.__errSeen = {});
             var n = (seen[key] || 0) + 1;
@@ -7913,11 +7935,27 @@ const PRELUDE: &str = r#"
               __hostLog('warn', 'uncaught (reported) x' + n + ' (same site): ' + msg + where);
             }
           } catch (x) {}
-          if (typeof globalThis.onerror === 'function') {
-            try {
-              globalThis.onerror(msg, at ? at.file : '', at ? at.line : 0, at ? at.col : 0, e);
-            } catch (x) {}
-          }
+          // ── **`window.onerror` FIRED TWICE, AND THE SECOND TIME WITH `[object Object]`.** ──
+          //
+          // Measured against headless Chrome on one fixture (a throwing `load` listener, an
+          // `onerror` and an `error` listener that both append to a log):
+          //
+          // ```text
+          //   Chrome   onerror:Uncaught TypeError: … | errevt:… | second-listener-ran
+          //   ours     onerror:winload-threw | errevt:winload-threw | onerror:[object Object] | …
+          // ```
+          //
+          // The extra row is this block calling `globalThis.onerror` DIRECTLY and then dispatching
+          // an `error` event, whose own dispatcher reads `g['on' + type]` and calls it again — with
+          // the EVENT, not the unpacked argument list. `window.onerror` is an event handler for
+          // `error` with a special (`ErrorEventHandler`) signature; it is invoked exactly once, BY
+          // the dispatch. Two invocations means every error-reporting SDK on the page double-counts,
+          // and half its reports carry `[object Object]` as the message.
+          //
+          // So the direct call is now the FALLBACK for a realm with no `dispatchEvent`, and the
+          // dispatcher owns the unpacking (`__fireWindowEvent`, which special-cases `error`). One
+          // rule, one implementation, in the place that already had to know about `on<type>`.
+          var dispatched = false;
           if (typeof globalThis.dispatchEvent === 'function') {
             var init = {
               message: msg, error: e,
@@ -7927,9 +7965,15 @@ const PRELUDE: &str = r#"
             try { ev = new ErrorEvent('error', init); }
             catch (x) { ev = { type: 'error', message: msg, error: e,
                                filename: init.filename, lineno: init.lineno, colno: init.colno }; }
-            try { globalThis.dispatchEvent(ev); } catch (x) {}
+            try { globalThis.dispatchEvent(ev); dispatched = true; } catch (x) {}
+          }
+          if (!dispatched && typeof globalThis.onerror === 'function') {
+            try {
+              globalThis.onerror(msg, at ? at.file : '', at ? at.line : 0, at ? at.col : 0, e);
+            } catch (x) {}
           }
         } catch (x) { /* reporting must never itself throw — that would kill the loop again */ }
+        } finally { globalThis.__inErrorReport = false; }
       };
 
       // ── **`DOMException` — it did not exist at all.** ───────────────────────────────────────

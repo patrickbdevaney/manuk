@@ -5137,6 +5137,177 @@ pub fn may_bank_a_sweep(banking: bool, is_debug: bool, override_set: bool) -> bo
     !banking || !is_debug || override_set
 }
 
+// ── **THE FIRST-FAILURE CAUSE, AS A HISTOGRAM KEY** (tick 1480). ────────────────────────────────
+//
+// The Phase-0 exit metric is capped by SCORABILITY, not by placement: a site that boots into a shell
+// contributes zero no matter how good layout gets, and the observer's P0 order is to *histogram the
+// first-failure cause* rather than rank sites by shape. A per-site list of raw exception strings is
+// not a histogram — minified production code mints a different message on every site — so the
+// messages have to collapse to the thing they have in common, which is **the symbol**.
+//
+// `"IntersectionObserver is not defined"` and `"ResizeObserver is not defined"` are two rows of one
+// finding (*the observer trio is absent*); `"e.observe is not a function"` and
+// `"t.matchMedia is not a function"` are two rows of another (*a member is missing from a surface we
+// do ship*). The class is what makes a hundred sites collapse to five decisions.
+//
+// ⚠ **THE SYMBOL, NOT THE RECEIVER.** SpiderMonkey says `"x.foo is not a function"`, and on minified
+// code `x` is noise while `foo` is the IDL member we did not implement. Keying on the whole
+// expression would give one bucket per site, which is a list wearing a histogram's clothes.
+//
+// ⚠ **`other:` KEEPS ITS TEXT.** An unclassified message is truncated, not discarded: a bucket that
+// swallows what it cannot parse is how a classifier reports 100% coverage of nothing.
+
+/// The histogram key for one uncaught page error.
+///
+/// Shapes recognised, all four of them SpiderMonkey's own wordings:
+///
+/// ```text
+///   ReferenceError: Foo is not defined              -> missing-global:Foo
+///   TypeError: x.foo is not a function              -> missing-member:foo
+///   TypeError: Foo is not a constructor             -> missing-ctor:Foo
+///   TypeError: can't access property "foo", x is …  -> undefined-deref:foo
+///   SyntaxError: …                                  -> syntax-error
+///   anything else                                   -> other:<first 60 chars>
+/// ```
+pub fn boot_class(message: &str) -> String {
+    // The harvest carries `at <file>:<line>:<col>` and a stack; the classification reads the
+    // FIRST line only, which is the sentence SpiderMonkey wrote about the failure itself.
+    let first = message.lines().next().unwrap_or("").trim();
+    let head = first.split(" at ").next().unwrap_or(first).trim();
+    // Strip the `TypeError: ` / `ReferenceError: ` prefix when the message carries one — a stack's
+    // first line does, a bare `e.message` does not, and both reach here.
+    let body = head
+        .split_once(": ")
+        .map(|(k, rest)| if k.ends_with("Error") { rest } else { head })
+        .unwrap_or(head)
+        .trim();
+
+    if head.starts_with("SyntaxError") {
+        return "syntax-error".into();
+    }
+    // `can't access property "foo", x is undefined` — the property is the finding.
+    if let Some(rest) = body.strip_prefix("can't access property ") {
+        if let Some(name) = rest.split('"').nth(1) {
+            return format!("undefined-deref:{name}");
+        }
+    }
+    for (suffix, kind) in [
+        (" is not defined", "missing-global"),
+        (" is not a function", "missing-member"),
+        (" is not a constructor", "missing-ctor"),
+    ] {
+        if let Some(expr) = body.strip_suffix(suffix) {
+            let expr = expr.trim();
+            if expr.is_empty() {
+                break;
+            }
+            // The last dotted component: the SYMBOL, not the receiver it hung off.
+            let sym = expr.rsplit(['.', '[']).next().unwrap_or(expr);
+            let sym: String = sym
+                .chars()
+                .filter(|c| c.is_alphanumeric() || *c == '_' || *c == '$')
+                .collect();
+            if sym.is_empty() {
+                break;
+            }
+            // A `missing-global` whose expression was dotted is really a member read off a global
+            // that DOES exist, so it belongs in the member bucket — the two are one decision apart.
+            let kind = if kind == "missing-global" && expr.contains('.') {
+                "missing-member"
+            } else {
+                kind
+            };
+            return format!("{kind}:{sym}");
+        }
+    }
+    // ⚠ **A HISTOGRAM KEY WITH A SPACE IN IT IS NOT A KEY** (found by the first sweep that used
+    // this). The per-site line prints `classes: k1×n k2×n …` and every consumer of that line splits
+    // on whitespace — so `other:TypeError: Invalid URL×3` arrived as four separate buckets
+    // (`other:TypeError:`, `Invalid`, `URL×3`). The FIRST-failure tally was fine because it is
+    // bracketed; the CLASSES tally was nonsense, and it read as nonsense rather than failing, which
+    // is the more expensive of the two.
+    // `body`, not `head`: the `TypeError: `/`Error: ` prefix has already been stripped, so the same
+    // sentence thrown as two different error types lands in ONE bucket. The type is not the
+    // discriminator — `SyntaxError` already has a bucket of its own above.
+    let trimmed: String = body
+        .chars()
+        .take(60)
+        .map(|c| {
+            if c.is_alphanumeric() || c == ':' || c == '.' || c == '_' || c == '$' {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    format!("other:{}", trimmed.trim_matches('-'))
+}
+
+#[cfg(test)]
+mod boot_class_tests {
+    use super::boot_class;
+
+    /// **Proven red** by returning `"other"` unconditionally — every row below then fails — and by
+    /// keying on the whole expression instead of the last component, which breaks row 2 and 4.
+    #[test]
+    fn a_boot_error_collapses_to_the_symbol_that_is_missing() {
+        // The four SpiderMonkey wordings, taken verbatim from this engine's own logs.
+        assert_eq!(
+            boot_class("ReferenceError: IntersectionObserver is not defined"),
+            "missing-global:IntersectionObserver"
+        );
+        assert_eq!(
+            boot_class("TypeError: e.observe is not a function"),
+            "missing-member:observe"
+        );
+        assert_eq!(
+            boot_class("TypeError: ResizeObserver is not a constructor"),
+            "missing-ctor:ResizeObserver"
+        );
+        assert_eq!(
+            boot_class("TypeError: can't access property \"children\", t is undefined"),
+            "undefined-deref:children"
+        );
+
+        // The harvest carries the address and the stack. The key must not.
+        assert_eq!(
+            boot_class(
+                "TypeError: n.matchMedia is not a function at https://x.test/ inline#12:1:44\n\
+                 boot@https://x.test/app.js:1:9021"
+            ),
+            "missing-member:matchMedia",
+            "the address and the stack are per-SITE; keying on them gives one bucket per site"
+        );
+
+        // `window.foo is not defined` is a MEMBER we lack on a global we ship, not a missing global.
+        assert_eq!(
+            boot_class("ReferenceError: window.scheduler is not defined"),
+            "missing-member:scheduler"
+        );
+
+        // A message we cannot parse keeps its text — a bucket that swallows the unknown reports
+        // full coverage of nothing.
+        let o = boot_class("InternalError: too much recursion");
+        assert!(
+            o.starts_with("other:") && o.contains("too-much-recursion"),
+            "an unclassified message must carry its own text: got {o:?}"
+        );
+        // …and it must carry it as ONE TOKEN. The sweep line is whitespace-separated, so a key with
+        // a space in it silently becomes four keys — which is what the first real sweep produced.
+        assert!(
+            !o.contains(' '),
+            "a histogram key must contain no whitespace, or every consumer that splits the sweep \
+             line turns one bucket into several: got {o:?}"
+        );
+        assert_eq!(
+            boot_class("TypeError: Invalid URL"),
+            "other:Invalid-URL",
+            "the `TypeError: ` prefix is stripped like any other, and the remainder is one token"
+        );
+        assert_eq!(boot_class("SyntaxError: unexpected token"), "syntax-error");
+    }
+}
+
 #[cfg(test)]
 mod bank_guard_tests {
     use super::may_bank_a_sweep;

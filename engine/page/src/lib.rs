@@ -2269,6 +2269,10 @@ pub struct Page {
     /// scripts survive to fire on user input (a click, an input). `None` if scripts failed to
     /// load or (always) without the `spidermonkey` feature.
     js: Option<manuk_js::PageContext>,
+    /// **Why this page is less than it should be** — every uncaught error the document's own
+    /// script produced, in order, from all three paths that can produce one (a top-level classic
+    /// `<script>`, a module evaluation, and any deferred throw). See [`Page::boot_errors`].
+    boot_errors: Vec<manuk_js::ScriptError>,
     /// Forms whose **submit button was clicked**, awaiting the host's next
     /// [`take_form_submits`](Page::take_form_submits). `RefCell` because that getter takes `&self`
     /// (it is a drain, and every other `take_*` on `Page` has the same shape).
@@ -4523,6 +4527,47 @@ impl Page {
         // withhold the event forever because one subresource was slow. Withholding it would leave
         // every `window.onload` handler on the page unrun — which is the bug this exists to fix.
         self.fire_lifecycle("load", fonts, viewport_width);
+        // Everything the deferred/module scripts and the `load` handlers threw joins the harvest.
+        // **`load` is exactly where a real site's boot bundle dies**, so a list that stopped at the
+        // paint-blocking scripts would miss the majority of what it was built to see.
+        self.absorb_script_errors();
+    }
+
+    /// Merge whatever the harvest holds now into this page's own list, **by value and not by
+    /// index**. The thread-local is reset per `load_document`, and this page may have loaded
+    /// `<iframe>`s since its own pass — an index would silently re-take a list that had been
+    /// replaced underneath it. The cost is that a page throwing the byte-identical message from two
+    /// places records it once; the count of DISTINCT boot failures is what a histogram wants.
+    #[cfg(feature = "spidermonkey")]
+    fn absorb_script_errors(&mut self) {
+        for e in manuk_js::script_errors() {
+            if !self.boot_errors.contains(&e) {
+                self.boot_errors.push(e);
+            }
+        }
+    }
+
+    /// JS-less build: nothing ran, so nothing threw.
+    #[cfg(not(feature = "spidermonkey"))]
+    fn absorb_script_errors(&mut self) {}
+
+    /// **WHY THIS PAGE IS LESS THAN IT SHOULD BE.** Every uncaught error the document's own script
+    /// produced, in order — the boot bundle's top-level `TypeError`, a module that failed to link, a
+    /// `setTimeout` callback that threw on a missing IDL member.
+    ///
+    /// Before tick 1480 this had three separate spellings and no consumer: two `tracing::warn!`
+    /// lines and a JS array (`globalThis.__errors`) read only by `manuk-wpt diag`. A page could not
+    /// report its own boot failure, so the fidelity instrument could rank a site as "renders a
+    /// shell" and never say WHY — which is the measurement the Phase-0 scorability ceiling needs.
+    ///
+    /// ⚠ **A WATCHDOG PREEMPTION IS NOT IN HERE.** When the script deadline cuts a runaway script
+    /// off, that is our budget and not the page's bug; booking one as the other would make every
+    /// slow site read as a broken one.
+    ///
+    /// ⚠ Capped at 64 per document (a throwing `setInterval` reaches 20,000 tasks), which is far
+    /// more than a boot histogram needs and bounded enough that a broken page cannot be a memory bug.
+    pub fn boot_errors(&self) -> &[manuk_js::ScriptError] {
+        &self.boot_errors
     }
 
     #[cfg(feature = "spidermonkey")]
@@ -4810,6 +4855,9 @@ impl Page {
         if within!() {
             self.fetch_and_apply_background_images().await;
         }
+        // Symmetric with the scripted build's `finish_loading`, and a no-op here for the reason
+        // that build states out loud: nothing ran, so nothing threw.
+        self.absorb_script_errors();
     }
 
     /// Fetch + decode this page's `<img>` resources and paint them. An image without an
@@ -7772,6 +7820,20 @@ impl Page {
                 })
             })
         });
+        // ⚠⚠ **THE RESET BELONGS WHERE A DOCUMENT BEGINS, NOT WHERE A SCRIPT CONTEXT IS BUILT.**
+        //
+        // `PageContext::load` clears the harvest, and it was the ONLY place that did — but the very
+        // next line declines to build a context at all for a document with no `<script>` and no
+        // inline handler. So a script-free page inherited the PREVIOUS page's boot errors, and the
+        // first 40-site sweep duly reported `marktplaats.nl`'s `TypeError: Invalid URL` as the boot
+        // failure of `stdn.iau.ir` and `awlyaa.education.dz`, neither of which runs any script.
+        //
+        // Found by USE, on the first real corpus run, one tick after the snapshot site three hundred
+        // lines up was moved for the ISOMORPHIC reason (a child frame's `load_document` clearing the
+        // parent's list). Same rule, second entrance — *the fixture is part of the instrument*, and
+        // a two-page gate on one thread could not see it because both its pages have scripts.
+        #[cfg(feature = "spidermonkey")]
+        manuk_js::clear_script_errors();
         let js = if dom.find_first("script").is_none() && !has_inline_handler {
             None
         } else {
@@ -7866,6 +7928,16 @@ impl Page {
             }
         };
 
+        // ⚠ **TAKEN HERE, AND NOT AT THE STRUCT LITERAL, BECAUSE A CHILD FRAME CLEARS IT.**
+        // The harvest is thread-local and reset per `load_document`; the `<iframe>` pass below runs
+        // `load_document` again for every frame on this same thread. Reading it three hundred lines
+        // lower would report the LAST FRAME's errors as this document's — the shape of bug this
+        // list exists to make visible, reintroduced by the instrument that reports it.
+        #[cfg(feature = "spidermonkey")]
+        let boot_errors = manuk_js::script_errors();
+        #[cfg(not(feature = "spidermonkey"))]
+        let boot_errors: Vec<manuk_js::ScriptError> = Vec::new();
+
         let title = dom
             .find_first("title")
             .map(|t| {
@@ -7925,6 +7997,7 @@ impl Page {
             dom,
             styles,
             js,
+            boot_errors,
             has_sticky,
             sticky_applied: std::collections::HashMap::new(),
             sticky_scroll_y: 0.0,

@@ -1097,6 +1097,49 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
             continue;
         }
         let manuk_ms = t_manuk.elapsed().as_millis();
+
+        // ── **WHY THIS SITE IS WHAT IT IS** (tick 1480, the observer's P0 order). ───────────────
+        //
+        // The Phase-0 exit metric is capped by SCORABILITY: a site whose boot bundle throws renders
+        // a shell and contributes zero however good layout gets. Until now the instrument could
+        // report THAT a site rendered a shell and never WHY — the three places this engine reports
+        // an uncaught page error all wrote to stderr or to a JS array nobody read.
+        //
+        // Printed BEFORE the four refusals below, deliberately: the sites that go UNMEASURABLE from
+        // here are precisely the cohort the histogram is for, and a line printed after the
+        // `continue` would be missing from every one of them.
+        {
+            let errs = page.boot_errors();
+            if errs.is_empty() {
+                eprintln!("  BOOT: clean");
+            } else {
+                let mut classes: std::collections::BTreeMap<String, usize> = Default::default();
+                for e in errs {
+                    *classes
+                        .entry(manuk_wpt::fidelity::boot_class(&e.message))
+                        .or_default() += 1;
+                }
+                let mut v: Vec<_> = classes.into_iter().collect();
+                v.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+                // The FIRST error is the one that matters — everything after it may be a
+                // consequence of the page having already lost its boot. Both are printed: the
+                // first for causality, the tally for how much of the page went with it.
+                let first = &errs[0];
+                eprintln!(
+                    "  BOOT: {} uncaught · FIRST [{}] {} ({}) · classes: {}",
+                    errs.len(),
+                    manuk_wpt::fidelity::boot_class(&first.message),
+                    first.message.lines().next().unwrap_or("").trim(),
+                    first.phase,
+                    v.iter()
+                        .take(6)
+                        .map(|(c, n)| format!("{c}×{n}"))
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                );
+            }
+        }
+
         // Our half is done; everything after this belongs to the oracle or to the instrument, and the
         // watchdog must stop charging it to us.
         SITE_SIDE.store(2, std::sync::atomic::Ordering::SeqCst);

@@ -11782,3 +11782,43 @@ the key is a name.*
 
 **Status:** landed t1479; WPT `css/cssom` 593 → 591, `css/cssom-view` flat, 572 `manuk-page` binaries
 green, gated by `g_a_linked_sheet_is_in_the_cssom` under four mutations.
+
+## The consent gate, the analytics SDK, and every `window.onload` that throws
+
+**The class:** any page whose boot code lives in a `window` handler — `load`, `resize`, `popstate`,
+`message` (every `postMessage` receiver), `hashchange`, `unhandledrejection` — and any page that
+installs `window.onerror` to notice when that boot code fails. In practice: every GDPR consent gate,
+every error-reporting SDK (Sentry, Bugsnag, Rollbar), every app's own fallback UI, and the entire
+cross-origin plumbing layer of embedded widgets and payment iframes.
+
+`__fireWindowEvent` invoked those handlers inside a bare `catch (e) {}`, twice. A throw was
+**discarded whole** — no `window.onerror`, no `error` event, no `__errors` entry, no log line. The
+sibling dispatcher for element events has routed both of its equivalents through `__reportError` for
+ticks; the one covering `window` never did. So a page whose boot died reported that it was fine, and
+the SDK installed precisely to notice saw nothing.
+
+**And `window.onerror` fired twice, the second time with `[object Object]`.** It is an
+`ErrorEventHandler` — `(message, source, lineno, colno, error)`, invoked **once**, by the `error`
+dispatch. This engine called it directly *and* dispatched, and the dispatcher handed it the EVENT.
+Every reporting SDK on the page double-counted, and half its reports carried a stringified object
+where the message belonged.
+
+**Reporting can recurse, and HTML has one flag for it.** Once a window handler's throw is reported, a
+throwing `window.onerror` reports its own throw — forever. *"If the global object is in error
+reporting mode, abort these steps."* Set on entry, cleared in `finally`: sequential reports are
+unaffected, only a nested one is dropped. Chrome-measured: `onerror-calls=1`.
+
+**The host can now read it.** `Page::boot_errors()` is one ordered list fed by all four paths that
+can produce an uncaught page error, reset at the DOCUMENT boundary — so *"this site renders a shell"*
+can finally be followed by *"because this symbol was missing"*. Measured on 40 CrUX sites: 28 boot
+clean, 11 throw, and the top first-failure class is **one third-party bundle at a byte-identical
+minified offset** (the OneTrust consent stub, on two unrelated sites).
+
+**⚠ Clear where a DOCUMENT begins, not where a SCRIPT CONTEXT is built.** This engine builds no JS
+context for a page with no `<script>` and no inline handler, so a clear placed in the context's
+constructor misses exactly the pages that cannot produce a boot error — and they inherited the
+previous page's. Two script-free sites were reported as failing on another site's `TypeError`.
+
+**Status:** landed t1480; WPT `dom` 8170 → 8174, HANG/CRASH 0, gated by
+`g_a_page_reports_its_own_boot_failure` and `g_window_handler_throws_are_reported` under eight
+mutations, with the Chrome fixture byte-identical.

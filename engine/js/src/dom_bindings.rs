@@ -240,6 +240,117 @@ unsafe fn error_field(
     }
 }
 
+// ── **A PAGE COULD NOT REPORT ITS OWN BOOT FAILURE** (tick 1480). ────────────────────────────────
+//
+// One rule — *"a script on this page died and the page is now less than it should be"* — had
+// **three implementations and no consumer**:
+//
+//   1. a top-level classic `<script>` throw    -> `tracing::warn!("a page <script> threw")`
+//   2. a `type=module` evaluation failure      -> `tracing::warn!("a page module failed")`
+//   3. every DEFERRED throw (setTimeout, a     -> `globalThis.__errors`, a JS array read by
+//      microtask, an event listener, `on*`)       exactly one caller (`manuk-wpt diag`)
+//
+// So the single most common way a real site fails in this engine — the boot bundle throws on a
+// missing IDL member and the app never mounts — was observable only by *grepping stderr*, and the
+// fidelity instrument that ranks our work by site could not say WHY a site rendered a shell. The
+// comment on `__errors` has named the missing piece since tick 675: *"it is the storage the
+// unhandled-error harvester wants"*. This is that harvester, and it is ONE list, because three
+// spellings of one fact is how the three disagree later.
+//
+// ⚠ **A PREEMPTION IS NOT A PAGE ERROR.** `run_one_script` already distinguishes "the page threw"
+// from "we cut it off at the deadline"; only the first is recorded here. Booking our own watchdog
+// as the page's bug is the silent-failure shape inverted, and it would have made every slow site
+// look like a broken one.
+//
+// ⚠ **CLEARED PER DOCUMENT, NOT PER PROCESS.** The list is thread-local and `PageContext::load`
+// takes it to empty, for the reason `PENDING_EXTERNAL_SCRIPTS` is *taken, not read*: a sweep loads
+// hundreds of sites on one thread, and an error carried forward attributes one page's defect to the
+// next one measured.
+//
+// ⚠ **CAPPED.** A `setInterval` that throws reaches the runaway-timer ceiling at 20,000 tasks; the
+// JS funnel already dedupes what it PRINTS, but this list must not grow with the failure. The cap is
+// generous enough that a boot histogram sees the whole boot and small enough that it cannot be a
+// memory bug.
+thread_local! {
+    static SCRIPT_ERRORS: std::cell::RefCell<Vec<ScriptError>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// The most errors one document's list will hold. Past this the count keeps rising and the
+/// messages stop being appended, so `n` stays honest while memory does not move.
+const MAX_SCRIPT_ERRORS: usize = 64;
+
+thread_local! {
+    static SCRIPT_ERROR_COUNT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// One uncaught error from the page's own script, with the phase that produced it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ScriptError {
+    /// Which of the three paths produced it: `"script"` (top-level classic), `"module"`
+    /// (module evaluation), `"deferred"` (a task, microtask, listener or `on*` handler).
+    pub phase: &'static str,
+    /// The message, with whatever address and stack the thrown value carried — the same text
+    /// `pending_exception` prints, so the log and the harvest never disagree.
+    pub message: String,
+}
+
+/// The message to record when a module failed. `ModuleLink` can fail with **no pending exception**
+/// — an unresolvable specifier is reported by the resolve hook and the failure arrives here as a
+/// bare `false` — and `"(no exception object)"` in a histogram reads as a defect in the reporter
+/// rather than a fact about the page. Naming the phase keeps the bucket actionable.
+///
+/// ⚠ Residue, deliberately not papered over: the SPECIFIER that failed to resolve is known inside
+/// `module_resolve_hook` and is not carried out to here. Until it is, this bucket says *which
+/// stage*, not *which import*.
+fn module_failure_message(raw: String) -> String {
+    if raw.starts_with("(no exception") {
+        "ModuleError: a module failed to compile, link or evaluate, with no exception object          (an unresolvable import specifier reaches here as a bare failure)"
+            .to_string()
+    } else {
+        raw
+    }
+}
+
+/// Record one uncaught page error. Never called for a watchdog preemption.
+pub(crate) fn record_script_error(phase: &'static str, message: String) {
+    SCRIPT_ERROR_COUNT.with(|c| c.set(c.get().saturating_add(1)));
+    SCRIPT_ERRORS.with(|e| {
+        let mut e = e.borrow_mut();
+        if e.len() < MAX_SCRIPT_ERRORS {
+            e.push(ScriptError { phase, message });
+        }
+    });
+}
+
+/// Every uncaught page error recorded since the current document began loading, in order.
+pub fn script_errors() -> Vec<ScriptError> {
+    SCRIPT_ERRORS.with(|e| e.borrow().clone())
+}
+
+/// How many were recorded — which is **not** `script_errors().len()` once the cap bites. A count
+/// that silently equals a cap is how a flood reads as a trickle.
+pub fn script_error_count() -> usize {
+    SCRIPT_ERROR_COUNT.with(|c| c.get())
+}
+
+/// Start a fresh document's tally. Called by `PageContext::load`.
+pub fn clear_script_errors() {
+    SCRIPT_ERRORS.with(|e| e.borrow_mut().clear());
+    SCRIPT_ERROR_COUNT.with(|c| c.set(0));
+}
+
+/// `__hostScriptError(message)` — the DEFERRED half of the harvester, called from `__reportError`
+/// in the prelude. The JS funnel already owns the address and the stack (tick 666 lifted them off
+/// the exception there); this binding is only the way OUT of the JS world, so the deferred throw
+/// lands in the same list as the two native ones.
+unsafe fn host_script_error(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let msg = arg_string(cx, vp, argc, 0).unwrap_or_default();
+    record_script_error("deferred", msg);
+    *vp = UndefinedValue();
+    true
+}
+
 /// **The pending exception, WITH the place it happened.**
 ///
 /// This used to stringify the exception and stop, which yields `"TypeError: can't access property
@@ -13915,6 +14026,14 @@ pub unsafe fn install(
     JS_DefineFunction(
         &mut wrap_cx(cx),
         global.handle(),
+        c"__hostScriptError".as_ptr(),
+        host_fn!(host_script_error),
+        1,
+        0,
+    );
+    JS_DefineFunction(
+        &mut wrap_cx(cx),
+        global.handle(),
         c"__storage".as_ptr(),
         host_fn!(host_storage),
         4,
@@ -14272,7 +14391,11 @@ pub fn run_scripts(
             // import/export syntax is valid and self-contained modules run. Modules are
             // never `document.currentScript`, per spec.
             if !unsafe { run_module(raw_cx, src, Some(*node)) } {
-                tracing::warn!(error = %pending_exception(raw_cx), "a page module failed");
+                // ⚠ ONE read: `pending_exception` CLEARS the exception, so the log and the
+                // harvest must share the string or the second one reports `(no exception object)`.
+                let msg = module_failure_message(pending_exception(raw_cx));
+                tracing::warn!(error = %msg, "a page module failed");
+                record_script_error("module", msg);
             }
         } else {
             set_current_script(Some(*node));
@@ -14282,7 +14405,9 @@ pub fn run_scripts(
             match evaluate_script(runtime.cx(), global.handle(), src, rval.handle_mut(), opts) {
                 Ok(()) => {}
                 Err(()) => {
-                    tracing::warn!(error = %pending_exception(raw_cx), "a page <script> threw")
+                    let msg = pending_exception(raw_cx);
+                    tracing::warn!(error = %msg, "a page <script> threw");
+                    record_script_error("script", msg);
                 }
             }
             set_current_script(None);
@@ -14354,6 +14479,14 @@ impl PageContext {
         styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
         external_scripts: std::collections::HashSet<NodeId>,
     ) -> Result<(Self, usize), String> {
+        // ⚠ **THE HARVEST IS NOT RESET HERE, AND THAT IS DELIBERATE.** The reset belongs where a
+        // DOCUMENT begins, and this is where a SCRIPT CONTEXT is built — which `manuk-page` skips
+        // entirely for a document with no `<script>` and no inline handler. A clear on this line
+        // therefore misses exactly the pages that cannot produce a boot error, and they inherited
+        // the previous page's (measured: two script-free sites reported `marktplaats.nl`'s
+        // `TypeError: Invalid URL` on the first 40-site sweep). `Page::load` clears unconditionally,
+        // one line before it decides whether to build this context; a second clear here would be a
+        // redundant statement of one rule and an INERT mutation site, which is how two copies drift.
         set_view_maps(layout, styles);
         // ⚠ **A NEW DOCUMENT STARTS AT SCROLL 0, AND `SCROLL` IS A THREAD-LOCAL THAT NOTHING RESET.**
         // It is written by `set_view_state` and by `view_changed`, both of which describe a page that
@@ -16661,7 +16794,9 @@ fn run_one_script(
     if is_module {
         // Modules are never `document.currentScript`, per spec — the thread-local stays -1.
         if !unsafe { run_module(raw_cx, src, Some(node)) } {
-            tracing::warn!(error = %pending_exception(raw_cx), "a page module failed");
+            let msg = module_failure_message(pending_exception(raw_cx));
+            tracing::warn!(error = %msg, "a page module failed");
+            record_script_error("module", msg);
         }
     } else {
         set_current_script(Some(node));
@@ -16679,7 +16814,9 @@ fn run_one_script(
                      scripts after it still run; the alternative is a frozen tab."
                 );
             } else {
-                tracing::warn!(error = %pending_exception(raw_cx), "a page <script> threw");
+                let msg = pending_exception(raw_cx);
+                tracing::warn!(error = %msg, "a page <script> threw");
+                record_script_error("script", msg);
             }
         }
         set_current_script(None);
@@ -21958,11 +22095,52 @@ const WINDOW_PRELUDE: &str = r#"
                 var a = g.__winListeners[type]; if (!a) return;
                 var i = a.indexOf(fn); if (i >= 0) a.splice(i, 1);
             };
+            // ── **THE FOURTH IMPLEMENTATION, AND THE ONLY SILENT ONE** (tick 1480). ──────────
+            //
+            // Both arms below were a bare `catch (e) {}`. A throw from ANY window-level handler —
+            // `window.addEventListener('load'|'resize'|'popstate'|'message'|'unhandledrejection', …)`
+            // and every `window.onX` property handler — was **discarded entirely**: no
+            // `window.onerror`, no `error` event, no `__errors` entry, no log line. Nothing.
+            //
+            // The sibling dispatcher, `__dispatchEvent`, has routed both of its equivalents through
+            // `__reportError` for ticks. One rule, two implementations, and the divergent one was
+            // the one covering `window` — which is where a page's boot code actually listens.
+            //
+            // ⚠ **THIS IS A CAPABILITY BUG, NOT ONLY AN INSTRUMENT GAP.** HTML §8.1.7.1 says an
+            // uncaught exception in a listener is *reported*: fire `error` at the global and run
+            // `onerror`. Every error-reporting SDK on the web (Sentry, Bugsnag, Rollbar) and every
+            // app's own fallback UI installs exactly that handler, and for this whole class of
+            // throw they saw a page that was working fine.
+            //
+            // Found by the gate for `Page::boot_errors`: a throwing `window.addEventListener('load')`
+            // handler produced no harvest entry while a throwing `setTimeout` and a throwing
+            // `document.addEventListener` one both did. The harvester's first act was to name a
+            // hole in the thing it was harvesting.
+            //
+            // ⚠ `__reportError` is late-bound (`typeof` guarded) for the same reason the other
+            // call sites guard it: this prelude section can run before that one is installed.
             g.__fireWindowEvent = function (type, ev) {
                 var a = (g.__winListeners[type] || []).slice();
-                for (var i = 0; i < a.length; i++) { try { a[i].call(g, ev); } catch (e) {} }
+                for (var i = 0; i < a.length; i++) {
+                    try { a[i].call(g, ev); }
+                    catch (e) { if (typeof g.__reportError === 'function') { g.__reportError(e); } }
+                }
                 var on = g['on' + type];
-                if (typeof on === 'function') { try { on.call(g, ev); } catch (e) {} }
+                if (typeof on === 'function') {
+                    try {
+                        // **`window.onerror` HAS ITS OWN SIGNATURE.** It is an `ErrorEventHandler`
+                        // (HTML §8.1.7.2.1): `(message, source, lineno, colno, error)`, not
+                        // `(event)`. Handing it the ErrorEvent makes every handler that does the
+                        // ordinary `String(message)` report `[object Object]` — which is exactly
+                        // what this engine did, on top of firing the handler a second time.
+                        if (type === 'error' && ev && typeof ev === 'object' && 'message' in ev) {
+                            on.call(g, ev.message, ev.filename, ev.lineno, ev.colno, ev.error);
+                        } else {
+                            on.call(g, ev);
+                        }
+                    }
+                    catch (e) { if (typeof g.__reportError === 'function') { g.__reportError(e); } }
+                }
             };
 
             // **`window.dispatchEvent` — it did not exist, and it is not optional.**

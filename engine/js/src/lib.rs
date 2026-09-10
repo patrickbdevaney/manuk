@@ -1480,6 +1480,38 @@ pub fn deliver_message(
 #[cfg(feature = "_sm")]
 pub use dom_bindings::PageContext;
 
+/// **THE UNHANDLED-ERROR HARVEST** — every uncaught error the current document's own script
+/// produced, from all three paths that can produce one (a top-level classic `<script>`, a module
+/// evaluation, and any deferred throw: a task, a microtask, a listener, an `on*` handler).
+///
+/// The list is reset by `load_document`, so it describes exactly one document. A watchdog
+/// preemption is deliberately NOT in it: that is our budget cutting the page off, not the page
+/// failing, and booking one as the other would make every slow site read as a broken one.
+#[cfg(feature = "_sm")]
+pub use dom_bindings::{clear_script_errors, script_error_count, script_errors, ScriptError};
+
+/// JS-less build: no script runs, so no script can throw. An empty harvest is the literal truth
+/// here rather than a stub — the shape every other `not(_sm)` twin in this file keeps.
+#[cfg(not(feature = "_sm"))]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ScriptError {
+    pub phase: &'static str,
+    pub message: String,
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn script_errors() -> Vec<ScriptError> {
+    Vec::new()
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn script_error_count() -> usize {
+    0
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn clear_script_errors() {}
+
 /// Load `dom`'s scripts on a persistent global and return the context to retain for the
 /// document's lifetime, plus the number of scripts that ran.
 ///

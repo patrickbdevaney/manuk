@@ -133,6 +133,23 @@
   - L39 · An enumeration of identical rows is not an enumeration
   - L46 · ⚠ The role filter was untested until a button was added
 
+## A page could not report its own boot failure
+`docs/wiki/a-page-could-not-report-its-own-boot-failure.md`
+
+  - L5 · The rule, and where it lived
+  - L22 · Why it matters twice over
+  - L36 · What was built
+  - L51 · Three details the gates pin
+  - L71 · The harvester's first act was to name a hole in what it was harvesting
+  - L79 · Arbitrated against Chrome, and two more divergences fell out
+  - L101 · And routing window throws back here closes a loop
+  - L113 · Named residue
+  - L135 · The gates
+  - L146 · The measurement it was built for (P0, observer mandate 2026-09-10)
+  - L167 · ⭐ The top row is ONE THIRD-PARTY BUNDLE, at a byte-identical offset
+  - L188 · ⚠ The instrument's own first reading was contaminated, and the second is the one above
+  - L204 · ⚠ And the histogram key had a space in it
+
 ## ARCHITECTURE — concurrency, process model, memory, and the REASONING
 `docs/wiki/architecture.md`
 
@@ -3352,4 +3369,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2859 sections across 122 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2872 sections across 123 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
