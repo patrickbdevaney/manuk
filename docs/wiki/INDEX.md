@@ -96,6 +96,16 @@
   - L38 · ⚠ A low-confidence winner is returned, not refused
   - L48 · The gate
 
+## A handled rejection is not an unhandled one
+`docs/wiki/a-handled-rejection-is-not-an-unhandled-one.md`
+
+  - L5 · The fifth path
+  - L23 · And routing them in immediately exposed an older bug
+  - L42 · Why the timing is the algorithm
+  - L56 · How it is decided
+  - L69 · ⚠ Found by a vacuity arm, not by reading the tracker
+  - L79 · The gates
+
 ## A linked sheet is in the CSSOM
 `docs/wiki/a-linked-sheet-is-in-the-cssom.md`
 
@@ -3380,4 +3390,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2879 sections across 124 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2885 sections across 125 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -7291,6 +7291,14 @@ impl Page {
         let _ = manuk_js::eval_in_page(ctx, &mut self.dom, src, &rects, &self.styles, None);
         self.drain_canvases();
         self.drain_element_scrolls();
+        // ⚠ **THE PAGE KEEPS RUNNING AFTER `finish_loading`, AND SO MUST THE HARVEST.**
+        // Absorbing only at the end of the load pass loses everything a page does afterwards, which
+        // for a real SPA is most of what it does. Measured on `meet.google.com`: **eight**
+        // `assignedElements is not a function` rejections in the log — a genuinely missing
+        // `HTMLSlotElement` method on a site rendering 1,522 of 4,238 boxes — and `boot_errors`
+        // reported ONE, because all eight arrived after the last absorb. Every host re-entry into
+        // script goes through here, so this is the one place that covers them all.
+        self.absorb_script_errors();
     }
 
     /// Fire `pageswap` on the OUTGOING document — the MPA companion to `pagereveal` (t372/373).

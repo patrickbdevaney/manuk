@@ -11853,3 +11853,38 @@ the CrUX-trend slice; WPT `dom` 8174→8175, `html/semantics` 6296→6297, HANG/
 `g_an_external_script_keeps_its_src` under three mutations, Chrome fixture byte-identical. ⚠ The
 render means did NOT move and are not claimed to: the two sites are byte-identical on `structural`
 and `SHAPE` before and after.
+
+## The error reporter that cried wolf twice out of three times
+
+**The class:** every page that installs `window.onunhandledrejection` or
+`addEventListener('unhandledrejection', …)` — which is every error-reporting SDK (Sentry, Bugsnag,
+Rollbar), every app's own *"something went wrong"* fallback, and a great many routers and data
+layers that branch on it to retry, log the user out, or swap in an error screen.
+
+This engine reported a rejection at the instant SpiderMonkey's tracker fired. HTML §8.1.7.5 instead
+keeps a list of *about-to-be-notified rejected promises* and drains it at the **end of a microtask
+checkpoint** — and that delay is the substance of the algorithm, not an optimisation, because the
+commonest shape on the web
+
+```js
+  (async function () { … })().catch(handle);
+```
+
+rejects the promise **before** `.catch` is attached: the async function returns an already-rejected
+promise and the handler is the next expression. Chrome fires the event once on a three-case fixture;
+this engine fired it three times. Across a 40-site CrUX slice, **26% of every report this engine made
+about async failure was false**.
+
+**Decide it by asking the engine, not by tracking the transition.** The parked list holds the promise
+object (traced, so a GC in between cannot collect it) and asks `GetPromiseIsHandled` at drain time. A
+hand-rolled `Handled`-transition set would be a second, weaker copy of a fact SpiderMonkey already
+owns.
+
+**⚠ And a promise rejection is where a framework's failures go to die**, so it is also the path a host
+most needs to be able to read. `Page::boot_errors` now carries it: on a 40-site slice this one path
+supplied **80 of 91** uncaught events, and the rows it had been hiding were the nameable ones —
+IndexedDB and a missing `HTMLSlotElement.assignedElements`.
+
+**Status:** landed t1482; unhandled-rejection reports 80 → 59 on the CrUX-trend slice; WPT `dom`
+flat, HANG/CRASH 0. Gated by `g_a_handled_rejection_is_not_reported` (Chrome fixture exact, with the
+never-handled case as the vacuity arm) under three mutations.

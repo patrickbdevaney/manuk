@@ -107156,3 +107156,107 @@ available and swap 99% full. *A delta no larger than the band is not a movement*
 floor is a single sample.
 
 WIKI: docs/wiki/an-external-script-keeps-its-src.md
+
+## Tick 1482 — a handled rejection is not an unhandled one (2026-09-10)
+
+TICK SHAPE: capability
+
+P1, continued: t1480 built the boot harvest over FOUR paths and t1481's own sweep showed it was
+missing the fifth — the one whose log line says why it matters most.
+
+### THE FIFTH PATH CARRIED 80 OF THE 91 EVENTS
+
+> *"UNHANDLED PROMISE REJECTION — a page's async code threw and nothing was listening. **Every modern
+> framework renders inside an async function, so this is where their failures go to die.**"*
+
+```text
+  40-site CrUX slice, t1481:   80 unhandled rejections, none in the harvest
+                               11 errors from every other path combined, all in it
+```
+
+⭐⭐ The rows it was hiding were the NAMEABLE ones: **IndexedDB** (`no object store named e` ×16,
+`e.open is not a function` ×4) and **`HTMLSlotElement.assignedElements`** (×8) — a genuinely missing
+method, on `meet.google.com`, which renders 1,522 of Chrome's 4,238 boxes.
+
+### AND ROUTING THEM IN EXPOSED AN OLDER BUG IN THE SAME BREATH
+
+```text
+  A  rejected, `.catch` attached SYNCHRONOUSLY on the same line
+  B  rejected, `.catch` attached from a LATER MICROTASK
+  C  rejected, never handled at all
+
+           Chrome              before                        after
+  n=       1                   3                             1
+  msgs     [C-never]           [A-caught, B-late, C-never]   [C-never]
+```
+
+⭐⭐⭐ **TWO FALSE ALARMS OUT OF THREE**, on the one event every error-reporting SDK and every app's
+own *"something went wrong"* UI listens to — and an app that BRANCHES on it (error screen, forced
+logout, retry) did the wrong thing on a working page.
+
+HTML §8.1.7.5 drains *about-to-be-notified rejected promises* at the **end of a microtask
+checkpoint**, and that delay IS the algorithm: `(async () => …)().catch(h)` rejects **before**
+`.catch` attaches, because the async function returns an already-rejected promise and the handler is
+the next expression. Reporting at the tracker necessarily reports what the page has handled.
+
+⭐⭐⭐ **FOUND BY A VACUITY ARM, NOT BY READING THE TRACKER.** The clean fixture gained a caught async
+throw and the clean page reported one. *Fourth time in three ticks* that the "and a clean input must
+report nothing" half is the half that found something (t1470 denominator, t1480 script-free document,
+this twice). The harvest did not create the bug; it made an existing one observable **at a boundary
+that already had an assertion on it**.
+
+Corpus effect, same 40 sites: **unhandled-rejection reports 80 → 59** — 26% of every report this
+engine made about async failure was false.
+
+⚠ Boot-clean went 29 → **24** and sites with ≥1 uncaught 10 → **15**. That is the instrument getting
+MORE honest, not the engine getting worse: it is now counting a path it could not see.
+
+### ⚠⚠ AND THE HARVEST'S LAST ABSORB WAS TOO EARLY
+
+`meet.google.com` logs EIGHT `assignedElements` rejections and `boot_errors` reported ONE: all eight
+arrive after `finish_loading`'s absorb. A page keeps running after the load pass, and for a real SPA
+that is most of what it does. Every host re-entry into script goes through `eval_for_test`, so the
+absorb moves there too.
+
+### ⚠⚠⚠ A METHODOLOGY BUG THAT COST AN HOUR AND WILL COST ANOTHER IF IT IS NOT WRITTEN DOWN
+
+The gates went RED on a clean tree, twice, and then green 12 times running with no code change. The
+cause is the **mutation harness's restore**: it creates the backup with `shutil.copy` (new mtime),
+writes the mutation (newer still), then restores with `shutil.move` — which **preserves the backup's
+OLDER mtime**. Cargo's freshness is mtime-based, so it reuses the artifact it built *from the
+mutation*. Verified synthetically: `mutated_mtime > restored_mtime` is `True`.
+
+⭐⭐⭐ **A MUTATION PROOF IS ONLY SAFE IF THE RESTORE IS NEWER THAN THE MUTATION.** The RED results
+themselves are sound — a mutation is written, so cargo rebuilds — but the FIRST run after any
+mutation suite is measuring the last mutation. `touch` every restored file, or read a false red.
+This is t1414's *"do not judge cargo artifact freshness by MTIME"* arriving through a second door.
+
+### LANDED
+
+```
+  engine/js/dom_bindings.rs   PENDING_REJECTIONS (traced) + notify_about_rejected_promises;
+                              report_rejection split out; the harvest gains a "rejection" phase
+  engine/js/event_loop.rs     the drain, at the END of microtask_checkpoint (after BOTH passes)
+  engine/page/lib.rs          absorb after every host re-entry into script
+  gate  g_a_handled_rejection_is_not_reported   RED under 3 named mutations
+  gate  g_a_page_reports_its_own_boot_failure   extended: a 4th path, RED under a 4th mutation
+  vacuity arm: case C — a genuinely unhandled rejection MUST still be reported, or "defer the
+    report" is satisfied by deferring it forever
+  WPT dom 8175 (flat, same binary both ways) · HANG/CRASH 0
+  Bar 0: no hang, no crash, no panic
+```
+
+⚠ RESIDUE: the per-site `classes:` line prints only the top 6 and the harvest dedupes by message
+value, so a class repeated on one site reads ×1 — the tally counts DISTINCT failures, which is what a
+histogram wants, but it is not an event count. ⚠ One sweep run died at site 6 with no crash marker
+under memory pressure (swap 99% full); the re-run completed all 40, and only the complete run is
+quoted.
+
+NEXT: the histogram now ranks honestly, and the top nameable rows are **`HTMLSlotElement`'s
+`assignedElements`/`assignedNodes`** (8 events on meet.google.com, a shell at 1,522 of 4,238 boxes)
+and **IndexedDB `openCursor`/`createIndex`** (20 events; the plateau-breaker plan's lever #5, which
+names Firestore/Firebase-Auth/Amplify as opening IDB at boot). `assignedElements` is the smaller,
+better-specified one and the board's T2b already names the shadow-DOM gap. Probe both against Chrome
+before building — t1418.
+
+WIKI: docs/wiki/a-handled-rejection-is-not-an-unhandled-one.md

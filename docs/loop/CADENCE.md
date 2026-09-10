@@ -13,9 +13,9 @@
 |---|---|---|
 | ticks landed | **1156** | ticks 1–1481 |
 | median tick cycle | **33m** | 1155 intervals |
-| median, last 10 | **71m** | 10 intervals |
+| median, last 10 | **1.5h** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.79** | 1464.6h elapsed |
+| **ticks per hour** | **0.79** | 1466.2h elapsed |
 | median verify wall | **67s** | 1095 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -27,7 +27,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **573**
+* **live gates**: 27 → **574**
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
@@ -1252,6 +1252,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1478** | 2026-09-06 23:21 | 62m | capability | 8m | +365/−47 | 569 | 81 | 56.0% · | publish the denominator (2026-09-07) |
 | **1479** | 2026-09-07 01:34 | 2.2h | capability | 8m | +13/−10 | 570 | 81 | 56.0% · | a linked sheet is in the CSSOM (2026-09-07) |
 | **1480** | 2026-09-10 04:20 | 3.1d | capability | 8m | +1356/−57 | 572 | 81 | 56.0% · | a page could not report its own boot failure (2026-09-10) |
-| **1481** | 2026-09-10 05:40 | 80m | capability | 8m | +523/−61 | 573 | 81 | 56.0% · | an external script keeps its `src` (2026-09-10) |
+| **1481** | 2026-09-10 07:15 | 2.9h | capability | 8m | +537/−47 | 574 | 81 | 56.0% · | an external script keeps its `src` (2026-09-10) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

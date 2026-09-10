@@ -16493,6 +16493,65 @@ unsafe fn set_module_private_url(cx: *mut RawJSContext, module: *mut JSObject, u
 ///
 /// The Framework Exception Miner's entire premise is that the browser names its own bugs out loud. A
 /// swallowed rejection is the browser naming its bug into a void.
+// ── **A REJECTION IS REPORTED AT THE CHECKPOINT, NOT AT THE INSTANT IT HAPPENS** (tick 1482). ──
+//
+// HTML §8.1.7.5 keeps a list of *about-to-be-notified rejected promises* and drains it in
+// **"notify about rejected promises"**, which runs at the END of a microtask checkpoint. That delay
+// is the whole substance of the algorithm: the overwhelmingly common shape
+//
+// ```js
+//   (async function () { … })().catch(handle);
+// ```
+//
+// rejects the promise *before* `.catch` is attached — the async function returns an
+// already-rejected promise and the handler goes on the next line — so an engine that reports at the
+// instant of rejection reports a failure the page has fully handled.
+//
+// Measured against headless Chrome on a three-case fixture (sync `.catch`; `.catch` attached in a
+// later microtask; never handled):
+//
+// ```text
+//   Chrome   n=1  [C-never]
+//   before   n=3  [A-caught, B-late, C-never]
+// ```
+//
+// **Two false alarms out of three**, on the one event every error-reporting SDK and every app's own
+// "something went wrong" UI listens to. Found by the VACUITY ARM of the boot-error gate: a clean page
+// with a caught async throw must report nothing, and it reported one.
+//
+// The list holds the promise object (traced, so a GC between the checkpoint and the rejection cannot
+// collect it) and asks SpiderMonkey at drain time whether it is *still* unhandled — rather than
+// tracking the `Handled` transition ourselves, which would be a second, weaker copy of a fact the
+// engine already owns.
+thread_local! {
+    static PENDING_REJECTIONS: std::cell::RefCell<Vec<RootedTraceableBox<Heap<*mut JSObject>>>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// The most rejections one checkpoint will park. A page that rejects in a loop must not grow this
+/// without bound; past the cap the extras are reported immediately, which is the OLD behaviour and
+/// therefore never worse than not reporting them at all.
+const MAX_PENDING_REJECTIONS: usize = 256;
+
+/// **"Notify about rejected promises"** (HTML §8.1.7.5) — drain the parked list, reporting only
+/// those SpiderMonkey still considers unhandled. Called at the end of every microtask checkpoint.
+pub(crate) unsafe fn notify_about_rejected_promises(cx: *mut RawJSContext) {
+    let parked = PENDING_REJECTIONS.with(|p| std::mem::take(&mut *p.borrow_mut()));
+    for slot in parked {
+        let obj = slot.get();
+        if obj.is_null() {
+            continue;
+        }
+        rooted!(in(cx) let p = obj);
+        // The handler may have been attached at any point since the rejection — synchronously on the
+        // next line, or from a microtask that ran during this very checkpoint. Both are "handled".
+        if mozjs::rust::wrappers::GetPromiseIsHandled(p.handle()) {
+            continue;
+        }
+        report_rejection(cx, p.handle());
+    }
+}
+
 unsafe extern "C" fn promise_rejection_tracker(
     cx: *mut RawJSContext,
     _muted: bool,
@@ -16500,10 +16559,32 @@ unsafe extern "C" fn promise_rejection_tracker(
     state: mozjs::jsapi::PromiseRejectionHandlingState,
     _data: *mut std::os::raw::c_void,
 ) {
-    // `Handled` means a rejection that WAS reported now has a handler — not news.
+    // `Handled` means a rejection that WAS reported now has a handler — not news. (The parked list
+    // does not need pruning here: `notify_about_rejected_promises` asks the engine directly.)
     if state != mozjs::jsapi::PromiseRejectionHandlingState::Unhandled {
         return;
     }
+    // Park it for the checkpoint rather than reporting now — see the block comment above.
+    let parked = PENDING_REJECTIONS.with(|list| {
+        let mut list = list.borrow_mut();
+        if list.len() >= MAX_PENDING_REJECTIONS {
+            return false;
+        }
+        let boxed = RootedTraceableBox::new(Heap::default());
+        boxed.set(promise.get());
+        list.push(boxed);
+        true
+    });
+    if parked {
+        return;
+    }
+    rooted!(in(cx) let p_over = promise.get());
+    report_rejection(cx, p_over.handle());
+}
+
+/// Report one genuinely-unhandled rejection: fire `unhandledrejection` (cancelable, so the page's own
+/// reporter can take ownership), and if it is not cancelled, log it and record it in the harvest.
+unsafe fn report_rejection(cx: *mut RawJSContext, promise: mozjs::rust::HandleObject) {
     rooted!(in(cx) let p = promise.get());
     rooted!(in(cx) let mut val = UndefinedValue());
     mozjs::glue::JS_GetPromiseResult(p.handle().into(), val.handle_mut().into());
@@ -16560,6 +16641,20 @@ unsafe extern "C" fn promise_rejection_tracker(
         "UNHANDLED PROMISE REJECTION — a page's async code threw and nothing was listening. Every \
          modern framework renders inside an async function, so this is where their failures go to die."
     );
+    // ── **THE FIFTH PATH, AND THIS COMMENT SAYS WHY IT MATTERS MOST** (tick 1482). ──────────────
+    //
+    // t1480 built `Page::boot_errors` over the four ways a page's script can die and left this one
+    // out — the one whose own log line says *"every modern framework renders inside an async
+    // function, so this is where their failures go to die."* Measured immediately afterwards on the
+    // 40-site CrUX slice: **80 unhandled rejections, and not one of them reached the harvest**,
+    // against 11 errors that did. The histogram built to rank the web's boot failures was seeing
+    // roughly a tenth of them.
+    //
+    // ⚠ **AFTER THE CANCELABLE CHECK, NOT BEFORE.** A page whose handler calls `preventDefault()`
+    // has taken ownership of the failure; the early `return` above is that case, and recording it
+    // here would put an app's own handled error into a list whose whole claim is *"this page is less
+    // than it should be."*
+    record_script_error("rejection", msg);
 }
 
 unsafe extern "C" fn module_metadata_hook(

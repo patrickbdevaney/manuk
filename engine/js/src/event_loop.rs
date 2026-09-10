@@ -8415,6 +8415,15 @@ fn microtask_checkpoint(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> 
     // A native reaction may have called `queueMicrotask`; drain again so the checkpoint is
     // a fixed point rather than one pass.
     eval(rt, global, DRAIN_MICRO, "event_loop_micro.js")?;
+    // ── **"NOTIFY ABOUT REJECTED PROMISES"** (HTML §8.1.7.5) — at the END of the checkpoint, and
+    // that timing IS the algorithm. `(async () => …)().catch(h)` rejects before `.catch` attaches,
+    // so an engine reporting at the instant of rejection reports failures the page has handled:
+    // Chrome n=1, ours n=3 on the fixture in `g_a_handled_rejection_is_not_reported`. See
+    // `dom_bindings::notify_about_rejected_promises`.
+    //
+    // ⚠ AFTER the second drain, not between the two: a microtask run by that drain is exactly where
+    // a deferred `.catch` gets attached, and draining the list first would report it anyway.
+    unsafe { crate::dom_bindings::notify_about_rejected_promises(raw_cx) };
     Ok(())
 }
 

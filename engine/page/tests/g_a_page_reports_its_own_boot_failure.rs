@@ -18,9 +18,11 @@
 //! `Page::boot_errors()` is now that one list, and this gate pins the three properties that make it
 //! worth having rather than merely present:
 //!
-//! 1. **ALL THREE PATHS LAND IN IT.** A gate that exercised only the classic top-level throw would
-//!    pass with two thirds of the mechanism missing — and the deferred path is the majority of real
-//!    boot failures, because real boot code runs from a `DOMContentLoaded`/`load` handler.
+//! 1. **ALL FOUR PATHS LAND IN IT.** A gate that exercised only the classic top-level throw would
+//!    pass with three quarters of the mechanism missing — and the deferred and REJECTION paths are
+//!    the majority of real boot failures, because real boot code runs from a `load` handler or
+//!    inside an `async` function. Measured on the 40-site CrUX slice at t1481: **80 unhandled
+//!    rejections against 11 errors of every other kind combined**, and t1480 shipped without them.
 //! 2. **THE PAGE KEEPS RUNNING.** The harvest must not turn a reported error into a fatal one: the
 //!    scripts after the throwing one still run and the DOM they build is still there. That is the
 //!    invariant `run_one_script`'s own comment was written to protect, and a harvester is exactly
@@ -37,7 +39,8 @@
 //! Mutations that must turn this red:
 //!   1. drop `record_script_error` from the classic arm  -> `TypeError` row missing, n=2
 //!   2. drop it from the module arm                      -> `module` phase missing, n=2
-//!   3. drop `__hostScriptError` from `__reportError`    -> the deferred rows missing, n=1
+//!   3. drop `__hostScriptError` from `__reportError`    -> the deferred rows missing
+//!   3b. drop the record from `promise_rejection_tracker` -> the rejection row missing
 //!   4. `clear_script_errors()` removed from `load`      -> the CLEAN page inherits this page's
 //!                                                          errors and the vacuity arm fires
 //!   5. record the watchdog-preemption branch too        -> (not reachable from this fixture; the
@@ -66,6 +69,11 @@ const HTML: &str = r##"<!doctype html><html><head><meta charset=utf-8></head><bo
   import { nothing } from './there-is-no-such-module-1480.js';
   nothing();
 </script>
+<script>
+  // (4) UNHANDLED REJECTION — the path the engine's own log line calls "where every modern
+  //     framework's failures go to die", and the one t1480 shipped without.
+  (async function () { (void 0).hydrate(); })();
+</script>
 </body></html>"##;
 
 /// A page with the same shape and no throws. Loaded SECOND, on the same thread, so it also proves
@@ -75,6 +83,9 @@ const CLEAN: &str = r##"<!doctype html><html><head><meta charset=utf-8></head><b
   var d = document.createElement('div'); d.id = 'alive'; d.textContent = 'alive';
   document.body.appendChild(d);
   window.addEventListener('load', function () { d.textContent = 'mounted'; });
+  // A REJECTION THAT IS HANDLED must not be recorded — an app that catches its own async failure
+  // has not failed. Without this row the vacuity arm does not cover the fourth path at all.
+  (async function () { throw new Error('caught'); })().catch(function () {});
 </script>
 </body></html>"##;
 
@@ -154,6 +165,12 @@ fn a_page_reports_every_uncaught_error_its_own_script_produced() {
         phases.contains(&"deferred"),
         "the DEFERRED throw (a load listener) is missing — this is where real boot code lives, so \
          it is the majority of what this list exists to see: {report:?}"
+    );
+    assert!(
+        phases.contains(&"rejection"),
+        "the UNHANDLED REJECTION is missing. On the 40-site CrUX slice this path carried 80 events \
+         against 11 from every other path combined, so a harvest without it sees roughly a tenth \
+         of the web's boot failures: {report:?}"
     );
 
     // ── (3) ORDER IS CAUSAL. The top-level throw happened before the listener could be registered,
