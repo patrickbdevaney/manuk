@@ -2277,6 +2277,37 @@ pub struct Page {
     /// script produced, in order, from all three paths that can produce one (a top-level classic
     /// `<script>`, a module evaluation, and any deferred throw). See [`Page::boot_errors`].
     boot_errors: Vec<manuk_js::ScriptError>,
+    /// **`@font-face` blocks this document declared, and how many produced a usable face.**
+    ///
+    /// A declared family SHADOWS a locally-installed one of the same name (CSS Fonts' rule, and
+    /// `declare_webfont_family`'s own comment says why: a failed download that fell back to a local
+    /// same-named face cost 19 SHAPE points on `martinfowler.com` and looked like the wrong font
+    /// rather than like a failure). So *declared minus loaded* is the number of families this page
+    /// asked for, claimed, and then could not deliver — and every text box in them is measured in a
+    /// fallback face with different advances.
+    ///
+    /// Built at t1489 because a survey needed it: **48% of the near-bar cohort's shape misses are on
+    /// elements where the family and size AGREE and the measured ADVANCE does not** (`payb.jp`
+    /// `Noto Sans JP/16` — Chrome 168, ours 158). A controlled fixture refuted the obvious reading —
+    /// our metrics match Chrome to one pixel on a webfont that loads (155 vs 154) — so the question
+    /// is which FACE the two engines end up with, and that needs a count rather than a guess.
+    /// ⚠⚠ **KEYED, NOT COUNTED — AND A COUNTER HERE IS WRONG, MEASURED.** `fetch_and_apply_stylesheets`
+    /// re-visits every `@font-face` block on later style rounds; `claim_webfont_src` short-circuits
+    /// the FETCH but the declaration runs again. A pair of `+=` counters therefore inflates the
+    /// denominator once per round while the numerator, gated by the claim, cannot follow — which is
+    /// how `pivaldi.restoplace.ws` first read *"20 of 122"* for a page with 61 blocks.
+    ///
+    /// Found by an INERT MUTATION: `assign` and `accumulate` were indistinguishable to a
+    /// single-round fixture, and asking why exposed that neither was right. *A mutation that does
+    /// not go red is a question about the fixture* (t1424, t1239).
+    ///
+    /// The key is `family\u{1}first-src`, which is unique per block and idempotent across rounds —
+    /// per FACE rather than per family, because Google Fonts ships one block per weight and subset
+    /// and *"did this page get the faces it asked for"* is the question.
+    webfonts: (
+        std::collections::HashSet<String>,
+        std::collections::HashSet<String>,
+    ),
     /// Forms whose **submit button was clicked**, awaiting the host's next
     /// [`take_form_submits`](Page::take_form_submits). `RefCell` because that getter takes `&self`
     /// (it is a drain, and every other `take_*` on `Page` has the same shape).
@@ -4586,6 +4617,14 @@ impl Page {
             Some(u) => Some((secs, resolve_url(&self.final_url, &u))),
             None => Some((secs, self.final_url.clone())),
         }
+    }
+
+    /// `(declared, loaded)` `@font-face` blocks for this document. See [`Page::webfonts`]'s field
+    /// comment: the difference is families the page CLAIMED — shadowing any local face of the same
+    /// name — and then could not deliver, so every text box in them is measured in a fallback face
+    /// with different advances.
+    pub fn webfonts(&self) -> (usize, usize) {
+        (self.webfonts.0.len(), self.webfonts.1.len())
     }
 
     /// **WHY THIS PAGE IS LESS THAN IT SHOULD BE.** Every uncaught error the document's own script
@@ -8055,6 +8094,7 @@ impl Page {
             styles,
             js,
             boot_errors,
+            webfonts: Default::default(),
             has_sticky,
             sticky_applied: std::collections::HashMap::new(),
             sticky_scroll_y: 0.0,
@@ -10395,6 +10435,7 @@ impl Page {
         // `registered_webfont` records whether a face arrived that the document has NOT been laid
         // out with yet — see the relayout guard below.
         let mut registered_webfont = false;
+
         // ⚠⚠⚠ **THE DOCUMENT'S OWN CODEPOINTS, COLLECTED ONCE — THE OTHER HALF OF `unicode-range`.**
         //
         // The inlined Google-Fonts block declares one `@font-face` PER SUBSET: `kuechenmomente.de`
@@ -10480,6 +10521,9 @@ impl Page {
                 // in the key because two families may legitimately point at the same file.
                 let urls: Vec<String> = ff.srcs.iter().map(|s| resolve_url(&base, s)).collect();
                 let Some(first) = urls.first() else { continue };
+                // The key is per FACE and idempotent across style rounds — see the field comment.
+                let face_key = format!("{}\u{1}{first}", ff.family.to_ascii_lowercase());
+                self.webfonts.0.insert(face_key.clone());
                 if !fonts.claim_webfont_src(&ff.family, first) {
                     continue; // this block was already tried this load — arrived or 404'd
                 }
@@ -10491,6 +10535,7 @@ impl Page {
                         // different advances, so every line box, wrap point and content height in
                         // the document is now stale.
                         registered_webfont = true;
+                        self.webfonts.1.insert(face_key.clone());
                         break; // first usable source wins
                     }
                 }

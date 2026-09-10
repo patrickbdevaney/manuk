@@ -3281,6 +3281,15 @@
   - L53 · What the next tick implements
   - L60 · Status
 
+## The face, not the metrics
+`docs/wiki/the-face-not-the-metrics.md`
+
+  - L6 · The survey
+  - L24 · Hypothesis 1: our text metrics are wrong — REFUTED
+  - L36 · Hypothesis 2: the webfonts do not arrive — REFUTED, and the refutation needed a fixed instrument
+  - L67 · What is left, and it is stated as untested
+  - L80 · Landed
+
 ## The good score was an unrendered page
 `docs/wiki/the-good-score-was-an-unrendered-page.md`
 
@@ -3438,4 +3447,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2913 sections across 130 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2918 sections across 131 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

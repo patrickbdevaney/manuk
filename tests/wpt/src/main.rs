@@ -1166,6 +1166,28 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
             }
         }
 
+        // ── **THE FACE, NOT THE METRICS** (t1489). A survey of the near-bar cohort found that 48%
+        // of its shape misses are on elements where the family and size AGREE and the measured
+        // ADVANCE does not — and a controlled fixture refuted the obvious reading, because our text
+        // metrics match Chrome to one pixel on a webfont that loads (155 vs 154 for the same probe
+        // string in the same 16px face). So the question is which FACE each engine ends up with, and
+        // a declared-but-unloaded `@font-face` family is the one thing that makes that diverge
+        // *silently*: the declaration SHADOWS any local face of the same name, so the page renders in
+        // a fallback while still reporting the family it asked for.
+        {
+            let (declared, loaded) = page.webfonts();
+            if declared > 0 {
+                eprintln!(
+                    "  WEBFONTS: {loaded} of {declared} @font-face families delivered a usable face{}",
+                    if loaded < declared {
+                        " — the rest SHADOW a local face of the same name, so their text is measured                          in a fallback"
+                    } else {
+                        ""
+                    }
+                );
+            }
+        }
+
         // Our half is done; everything after this belongs to the oracle or to the instrument, and the
         // watchdog must stop charging it to us.
         SITE_SIDE.store(2, std::sync::atomic::Ordering::SeqCst);
@@ -1592,6 +1614,17 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                             } else {
                                 format!("  DISPLAY c={cd}/m={md}")
                             };
+                            // Same treatment for `font`, and for the same reason: the pair IS the
+                            // mechanism. `family/px/advance`, where the two advances are INDEPENDENT
+                            // measurements of one probe string — Chrome's `measureText` on the
+                            // element's resolved font against this engine's own `fonts.measure`.
+                            let cf = cseen.get(&miss.path).map(|s| s.font.as_str()).unwrap_or("");
+                            let mf = mseen.get(&miss.path).map(|s| s.font.as_str()).unwrap_or("");
+                            let fonts_ = if cf == mf || cf.is_empty() || mf.is_empty() {
+                                String::new()
+                            } else {
+                                format!("  FONT c={cf}/m={mf}")
+                            };
                             eprintln!(
                                 "    {:<10} c[{} {} {}x{}]  m[{} {} {}x{}]  {}{}",
                                 miss.axis(),
@@ -1604,7 +1637,65 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                                 miss.manuk[2],
                                 miss.manuk[3],
                                 miss.path,
-                                modes,
+                                format!("{modes}{fonts_}"),
+                            );
+                        }
+                        // ── **AND THE SAME QUESTION OF THE `font` FIELD** (t1489). The t1488 survey
+                        // refused "wrong layout mode" — only 50 of 1,352 near-bar misses disagree
+                        // about `display` at all — and narrowed the gap to SIZING inside agreed
+                        // modes. `Seen::font` is the next key and it is already carried: it is
+                        // `family/px/advance`, where the advance is THIS engine's own measurement of
+                        // a probe string in the element's resolved font. A line box that is wrong by
+                        // a few percent compounds down a page exactly the way these misses do —
+                        // `body` 12547 against Chrome's 10767 on `puentedemando`.
+                        //
+                        // ⚠ The oracle's `font` is Chrome's family stack and size with OUR advance
+                        // (the producer measures it here, see the `advcache` block above), so the
+                        // ADVANCE compares like with like only when the family and size agree. The
+                        // tally therefore reports the three cases separately: same family and size
+                        // but a different advance is a METRICS disagreement; a different family is a
+                        // FALLBACK disagreement; a different size is a CASCADE one.
+                        {
+                            let mut kinds: std::collections::BTreeMap<&str, usize> =
+                                Default::default();
+                            for miss in &misses {
+                                let (Some(c), Some(m)) =
+                                    (cseen.get(&miss.path), mseen.get(&miss.path))
+                                else {
+                                    continue;
+                                };
+                                if c.font.is_empty() || m.font.is_empty() || c.font == m.font {
+                                    continue;
+                                }
+                                let cp: Vec<&str> = c.font.split('/').collect();
+                                let mp: Vec<&str> = m.font.split('/').collect();
+                                let kind = if cp.len() == 3 && mp.len() == 3 {
+                                    if cp[0] != mp[0] {
+                                        "family"
+                                    } else if cp[1] != mp[1] {
+                                        "size"
+                                    } else {
+                                        "advance"
+                                    }
+                                } else {
+                                    "shape"
+                                };
+                                *kinds.entry(kind).or_default() += 1;
+                            }
+                            let n: usize = kinds.values().sum();
+                            let mut v: Vec<_> = kinds.into_iter().collect();
+                            v.sort_by(|a, b| b.1.cmp(&a.1));
+                            eprintln!(
+                                "  SHAPE MISS FONT: {n} of {} misses disagree about font · {}",
+                                misses.len(),
+                                if v.is_empty() {
+                                    "(none — the misses are inside AGREED text metrics)".to_string()
+                                } else {
+                                    v.iter()
+                                        .map(|(k, c)| format!("{k}×{c}"))
+                                        .collect::<Vec<_>>()
+                                        .join(" ")
+                                }
                             );
                         }
                         // …and the TALLY, because a per-element list of 60 rows is a list and a

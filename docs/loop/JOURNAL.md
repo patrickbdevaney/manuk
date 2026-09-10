@@ -107735,3 +107735,109 @@ percent compounds down a page exactly the way these misses do (`body` 12547 agai
 puentedemando). Survey before grinding.
 
 WIKI: docs/wiki/list-item-lays-out-as-a-block-and-must-not-report-as-one.md
+
+## Tick 1489 — the face, not the metrics (2026-09-10)
+
+TICK SHAPE: instrument
+
+t1488's narrowing, followed: the near-bar gap is *sizing inside agreed layout modes*. `Seen::font` is
+the next key and it too was already carried and discarded.
+
+### ⭐⭐ 48% OF NEAR-BAR MISSES ARE THE SAME FAMILY AT THE SAME SIZE MEASURING A DIFFERENT ADVANCE
+
+```text
+  562 of 1,170 misses across six near-bar sites:
+      payb.jp        Noto Sans JP/16   chrome 168  ours 158     6.0% narrower
+      puentedemando  Google Sans/16    chrome 168  ours 161     4.2% narrower
+      pivaldi        Open Sans/14      chrome 141  ours 149     5.7% WIDER
+      serennu        0 of 16 — no disagreement at all
+```
+
+Two INDEPENDENT measurements of one probe string: Chrome's `measureText` against our `fonts.measure`.
+
+### ⭐⭐⭐ TWO HYPOTHESES, BOTH REFUTED — AND THE SECOND NEEDED THE INSTRUMENT FIXED FIRST
+
+**1. Our metrics are wrong — NO.** One controlled page: ours `w=155 s=142 m=144`, Chrome
+`w=154 s=142 m=144`. **We match to one pixel, including on a webfont that loads.** So the question is
+which FACE each engine ends up with.
+
+**2. The webfonts do not arrive — NO,** and this is the tick's real lesson. A declared `@font-face`
+family SHADOWS a local one of the same name (t559/t560, on purpose), so a failed webfont is silent by
+construction. `Page::webfonts()` was built to count it and first read **`pivaldi: 20 of 122`**, which
+looked like the answer.
+
+⚠⚠ **IT WAS AN ARTEFACT OF MY OWN COUNTER, AND AN INERT MUTATION EXPOSED IT.** Mutation 3
+(`assign` vs `accumulate`) did not go red — a single-round fixture cannot tell them apart — and asking
+why showed **neither was right**: later style rounds re-declare every block while `claim_webfont_src`
+blocks the re-fetch, so a `+=` counter inflates the denominator per round and the numerator cannot
+follow. Keyed per face:
+
+```text
+  payb.jp 14/15 · puentedemando 16/21 · pivaldi 20/20 · restaurantguru 7/7 · razaoautomovel 11/12
+```
+
+**Delivery is near-perfect and the advance still disagrees.** Had the counter shipped uncorrected this
+tick would have concluded webfont loading was the cause. *A mutation that does not go red is a
+question about the FIXTURE* — and here the answer was a defect in the thing being tested.
+
+### ⚠ WHAT IS LEFT, STATED AS UNTESTED
+
+`manuk_text::FontKey` carries **`bold: bool` at a 600 threshold**, so 300/400/500 collapse to one face
+and 600/700/800 to another, while Google Fonts ships a file per weight and Chrome picks the real one.
+A page set in weight 500 gets our 400 face and Chrome's 500.
+
+⚠ **NOT CONFIRMED.** The obvious fixture is inconclusive — Chrome's own per-weight advances bucketed
+at exactly 300/400/500=151 and 600/700/800=156, which is the FALLBACK bucketing and means Chrome
+measured before the font settled. Confirming it needs a fixture that proves the face is live at
+measure time: `document.fonts.ready`, or a local `@font-face` per weight served from disk.
+
+### LANDED
+
+```
+  tests/wpt/main.rs   --shape-dump prints the DISPLAY and FONT pair per miss + a tally of each
+  engine/page/lib.rs  Page::webfonts() — declared vs delivered, keyed per face and idempotent
+  gate  g_a_declared_webfont_that_never_arrives_is_counted   RED under 3 mutations, including the
+        second-style-round arm the inert mutation demanded
+  Bar 0: no hang, no crash, no panic
+```
+
+NEXT: settle the weight hypothesis with a fixture that cannot be fooled — a **local** `@font-face` per
+weight served from disk (no network, no `fonts.ready` race), measured in both engines. If graded
+weights are the mechanism, `FontKey`'s boolean is the fix and it reaches every text box on every page
+that uses a weight other than 400/700 — which, on the modern web, is most of them.
+
+### WALL-TIME AUDIT #56 (due at t1488; last t1468)
+
+```text
+  total 2481s · attributed 1088s (44%) · UNATTRIBUTED 1392s (56%)
+    427s  D  disk reclaim          17%
+    337s  P  parity (72 Chrome runs) 14%
+    217s  T  crate tests            9%
+     77s  B  build                  3%
+     the remaining nine line items sum to 26s
+```
+
+The audit asks four rigor-preserving questions. **Every lever they name lives in `scripts/` or the
+build configuration, which V1-SCOPE makes the observer's.** Answered by READING — which the scope rule
+permits, and which the last three surface audits record as having paid — and reported, not touched:
+
+1. ⭐⭐ **PARALLELISM — the crate-test loop is SERIAL, and the audit's own question does not cover it.**
+   `verify.sh:610` is `for c in manuk-css … manuk-shell; do _crate_suite "$c"; done`: seven
+   `cargo test -p` invocations one after another, 217s. The audit's text says *"the gates are launched
+   concurrently … the perf floors are deliberately NOT"* and says nothing about this loop, so the
+   question as posed cannot find it.
+2. ⭐⭐ **THE LARGEST SINGLE LINE ITEM IS NOT A GATE.** `D` is disk reclaim (427s, 17%) — it asserts
+   nothing and exists because the volume runs 75–88% full. It is pure overhead and it outranks every
+   check on the wall.
+3. **REDUNDANCY / SCOPE — nothing found from reading.** The nine remaining line items sum to 26s; there
+   is no third place worth narrowing while `D` and the serial `T` are on the board.
+4. ⚠ **AND THE AUDIT CANNOT SEE 56% OF WHAT IT IS AUDITING.** 1,392s are unattributed. Wall audit #55
+   recorded this as *"the instrument cannot see 86% of the wall"*, so the aperture has widened —
+   from 14% to 44% — and a majority is still dark. **An audit that ranks 44% of a cost cannot claim its
+   ranking is the ranking**, and this one does not.
+
+Nothing trimmed: the two findings are both observer-owned. Recorded per the audit's own instruction —
+*"an audit that finds the wall already lean is a fine result — say so"* — with the correction that it
+is not lean, and that the two biggest items are not rigor.
+
+WIKI: docs/wiki/the-face-not-the-metrics.md

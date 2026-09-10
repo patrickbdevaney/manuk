@@ -1161,3 +1161,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1485	adf29776	1789048162	2026-09-10T09:49:22-04:00	3009	instrument	465	11	620	48	576	81	3896	6960	0	642	0	the scorability gap is not a function gap (2026-09-10)
 1486	b88c6fd8	1789051660	2026-09-10T10:47:40-04:00	3498	capability	465	9	407	46	576	81	3896	6960	0	642	0	a meta refresh is a redirect (2026-09-10)
 1487	380a8c4d	1789056875	2026-09-10T12:14:35-04:00	5215	instrument	465	13	510	46	577	81	3896	6960	0	642	0	both sides must follow the same redirect (2026-09-10)
+1488	c2b870b7	1789062211	2026-09-10T13:43:31-04:00	5336	capability	465	9	514	43	578	81	3896	6960	0	642	0	a survey refused its own hypothesis and named the bug on the way past (2026-09-10)
