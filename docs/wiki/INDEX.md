@@ -122,6 +122,16 @@
   - L44 · Measured
   - L51 · ⚠ And a harness lesson that cost most of the tick
 
+## A meta refresh is a redirect
+`docs/wiki/a-meta-refresh-is-a-redirect.md`
+
+  - L5 · The gap
+  - L20 · The grammar, arbitrated against headless Chrome — one variant per page
+  - L40 · The host performs it, not the page
+  - L47 · ⚠ A refresh is the easiest infinite loop on the web
+  - L67 · And the instrument was naming a cause it had never checked
+  - L84 · The gate
+
 ## An audio player reserves its space
 `docs/wiki/an-audio-player-reserves-its-space.md`
 
@@ -3410,4 +3420,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2897 sections across 127 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2903 sections across 128 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

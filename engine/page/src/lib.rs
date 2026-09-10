@@ -4551,6 +4551,39 @@ impl Page {
     #[cfg(not(feature = "spidermonkey"))]
     fn absorb_script_errors(&mut self) {}
 
+    /// **The declarative refresh this document asks for**, as `(seconds, absolute url)` — the
+    /// `<meta http-equiv="refresh">` a host must perform, resolved against the document's own URL.
+    ///
+    /// `None` when there is no such `<meta>`, or when its `content` does not begin with a time
+    /// (Chrome refuses `content="dest.html"`; see [`parse_meta_refresh`]). A `content` with no URL
+    /// means *reload this document*, and reports the document's own URL — so a caller performing the
+    /// navigation does the right thing without a second code path, and a caller that wants to refuse
+    /// self-refresh can compare against `final_url`.
+    ///
+    /// ⚠ **THE HOST PERFORMS IT, NOT THE PAGE** — the same shape as `take_scroll_requests` and
+    /// `take_form_submits`. A `Page` does not own the tab it is displayed in, and a navigation that
+    /// bypassed the host would leave the omnibox, the back stack and the agent's own view of "where
+    /// am I" all describing a document that is gone.
+    ///
+    /// ⚠ **THE FIRST ONE WINS.** A document with two refresh metas is following the first, as every
+    /// engine does — the later ones describe a page that will not exist by the time they are read.
+    pub fn meta_refresh(&self) -> Option<(f32, String)> {
+        let node = self.dom.descendants(self.dom.root()).find(|&n| {
+            self.dom.tag_name(n) == Some("meta")
+                && self
+                    .dom
+                    .element(n)
+                    .and_then(|e| e.attr("http-equiv"))
+                    .is_some_and(|v| v.trim().eq_ignore_ascii_case("refresh"))
+        })?;
+        let content = self.dom.element(node)?.attr("content")?;
+        let (secs, url) = parse_meta_refresh(content)?;
+        match url {
+            Some(u) => Some((secs, resolve_url(&self.final_url, &u))),
+            None => Some((secs, self.final_url.clone())),
+        }
+    }
+
     /// **WHY THIS PAGE IS LESS THAN IT SHOULD BE.** Every uncaught error the document's own script
     /// produced, in order — the boot bundle's top-level `TypeError`, a module that failed to link, a
     /// `setTimeout` callback that threw on a missing IDL member.
@@ -11077,6 +11110,85 @@ pub async fn fetch_streaming_page(
 /// Fetch a document's HTML. Supports `http(s)://` (via `manuk-net`, with WHATWG
 /// charset decoding), `data:` URLs (RFC 2397), `file://`, and bare local paths.
 /// Returns `(html, final_url_after_redirects)`.
+// ── **`<meta http-equiv="refresh">` — THE PAGE THAT SAYS "YOU ARE BEING REDIRECTED" AND NEVER WAS.**
+//
+// This engine handled exactly one `http-equiv` — `Content-Security-Policy` — and no other. A
+// declarative refresh is the oldest redirect on the web and it is still how corporate portals,
+// payment gateways, domain moves and half of enterprise software land the user somewhere else. On
+// this engine those pages rendered their stub — usually an empty `<body>` — and stopped.
+//
+// **Measured on the representative CrUX trend corpus (t1485, 200 sites): three of them are a
+// `<meta refresh>` stub AS THEIR HOMEPAGE** — `secure.paymentech.com` (222 bytes),
+// `www.datacareservices.com` (104 bytes) and `linxonline.co.pierce.wa.us`. All three were filed by
+// the fidelity instrument as `probe-blocked`, whose doc comment asserts *"a page-supplied CSP, in
+// every case observed so far"* — and **zero of the eight sites carrying that tag have a CSP at all**.
+// A refusal reason that names a mechanism it never checked; the actual mechanism is that Chrome
+// followed the refresh and our injected probe went with the old document.
+//
+// ## The grammar, arbitrated against headless Chrome, one variant per page
+//
+// ```text
+//   http-equiv   content                        Chrome
+//   refresh      0;url=dest.html                navigates
+//   refresh      0; URL=dest.html               navigates      `url=` is case-insensitive
+//   Refresh      0;dest.html                    navigates      `url=` is OPTIONAL
+//   REFRESH      0;url='dest.html'              navigates      quotes are stripped
+//   refresh      "   0 ;   url  =  x  "         navigates      whitespace everywhere
+//   refresh      dest.html                      DOES NOT       the TIME is required
+//   refresh      0                              reloads self   no url = this document
+//   refresh      1;url=dest.html                navigates      a delay is still a refresh
+//   not-refresh  0;url=dest.html                DOES NOT       only `refresh` counts
+// ```
+//
+// ⚠ **THE SIXTH ROW IS THE ONE A HAND-WRITTEN PARSER GETS WRONG.** `content="dest.html"` looks like
+// the obvious spelling and Chrome refuses it: the value must begin with a time. A parser that split
+// on `;` and took the last field would navigate here, and a page that uses `refresh` to carry
+// something else entirely would be dragged off itself.
+
+/// Parse a `<meta http-equiv="refresh">` `content` value into `(seconds, url)`, per HTML's
+/// *shared declarative refresh steps*. `url` is left RELATIVE; the caller resolves it, because only
+/// the caller knows the document's base.
+///
+/// `None` when the value does not begin with a time — which is Chrome's behaviour and the row above
+/// that is easiest to get wrong. `Some((t, None))` means *reload this document*.
+pub fn parse_meta_refresh(content: &str) -> Option<(f32, Option<String>)> {
+    let b = content.trim_start();
+    let digits: String = b.chars().take_while(|c| c.is_ascii_digit()).collect();
+    if digits.is_empty() {
+        return None; // the TIME is required — `content="dest.html"` does nothing in Chrome
+    }
+    let secs: f32 = digits.parse().ok()?;
+    let mut rest = &b[digits.len()..];
+    // A fractional part is parsed and IGNORED by the spec ("0.5" is 0 seconds, not half a second).
+    if let Some(after) = rest.strip_prefix('.') {
+        rest = after.trim_start_matches(|c: char| c.is_ascii_digit());
+    }
+    let rest = rest.trim_start();
+    let Some(rest) = rest.strip_prefix([';', ',']).or_else(|| {
+        // A bare space between the time and the url is tolerated: `content="0 url=x"`.
+        (!rest.is_empty()).then_some(rest)
+    }) else {
+        return Some((secs, None)); // `content="0"` — reload this document
+    };
+    let mut rest = rest.trim_start();
+    // Optional, case-insensitive `url` `=`.
+    if rest.len() >= 3 && rest[..3].eq_ignore_ascii_case("url") {
+        let after = rest[3..].trim_start();
+        if let Some(eq) = after.strip_prefix('=') {
+            rest = eq.trim_start();
+        }
+    }
+    // Optional matching quote. An unterminated quote takes the remainder, as Chrome does.
+    let url = match rest.chars().next() {
+        Some(q @ ('"' | '\'')) => rest[1..].split(q).next().unwrap_or("").to_string(),
+        _ => rest.trim_end().to_string(),
+    };
+    if url.is_empty() {
+        return Some((secs, None));
+    }
+    Some((secs, Some(url)))
+}
+
 /// Every `<meta http-equiv="Content-Security-Policy" content="…">` in the document, in order.
 ///
 /// A DOM walk rather than the charset prescan's raw-byte scan, because a CSP meta is not bounded to

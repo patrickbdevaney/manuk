@@ -287,6 +287,11 @@ struct App {
     >,
     /// R1 — a navigation's main-document fetch is in flight off-thread (chrome stays live).
     loading: bool,
+    /// **How many `<meta http-equiv="refresh">` hops this navigation has already taken.** Reset by
+    /// [`Self::goto`] — i.e. by anything the USER initiated — and bounded, because a declarative
+    /// refresh is the easiest infinite loop on the web: A refreshes to B, B refreshes to A, and no
+    /// script ran and nothing threw.
+    meta_refresh_hops: u8,
     bookmarks: Bookmarks,
     /// Persistent, frecency-ranked visited-site history — the source of omnibox autocomplete. Unlike
     /// `history` (this session's back/forward stack), it survives restart and ranks by visit count.
@@ -485,6 +490,7 @@ impl App {
             tab_win: std::collections::HashMap::new(),
             tab_opener: std::collections::HashMap::new(),
             bfcache: Vec::new(),
+            meta_refresh_hops: 0,
             proxy,
             nav_gen: 0,
             media: crate::media::MediaSet::new(),
@@ -1298,7 +1304,59 @@ impl App {
         self.handle_history_ops();
         // ...and may have posted to their opener (the OAuth popup pattern) — route it.
         self.pump_messages();
+        if self.follow_meta_refresh() {
+            return;
+        }
         self.rerender();
+    }
+
+    /// **Perform the document's `<meta http-equiv="refresh">`**, if it has one. Returns `true` when
+    /// a navigation was started, in which case the caller must not paint the page it is about to
+    /// leave.
+    ///
+    /// A declarative refresh is the oldest redirect on the web and it is still how corporate
+    /// portals, payment gateways and domain moves land the user somewhere else. This engine handled
+    /// exactly one `http-equiv` — CSP — so those pages rendered their stub, usually an empty
+    /// `<body>`, and stopped. **Three of the 200-site CrUX trend corpus are such a stub as their
+    /// HOMEPAGE** (`secure.paymentech.com` at 222 bytes, `www.datacareservices.com` at 104,
+    /// `linxonline.co.pierce.wa.us`).
+    ///
+    /// ⚠ **A REFRESH IS THE EASIEST INFINITE LOOP ON THE WEB** and nothing about it looks like one:
+    /// no script runs, nothing throws, the page simply loads again. Three guards, and each answers a
+    /// different loop:
+    ///
+    /// * **the hop bound** — A → B → A → B … , reset only by a navigation the user initiated;
+    /// * **the self-target refusal** — `content="0"` means *reload this document*, which at zero
+    ///   delay is a spin with no exit;
+    /// * **the delay gate** — see the residue below.
+    ///
+    /// ⚠ **RESIDUE, NAMED: ONLY A SUB-SECOND REFRESH IS FOLLOWED.** A `content="5;url=…"` is a page
+    /// asking to be *read* first, and honouring it instantly would yank the document out from under
+    /// the user — strictly worse than not following it. Doing it properly needs a timer the shell
+    /// does not yet expose to a page-owned deadline. Every redirect stub in the corpus is `0` or
+    /// `1`, so this is the whole of the pattern and none of the polling case.
+    fn follow_meta_refresh(&mut self) -> bool {
+        let Some((secs, url)) = self.page.as_ref().and_then(|p| p.meta_refresh()) else {
+            return false;
+        };
+        if secs >= 1.0 {
+            tracing::info!(%url, secs, "meta refresh with a visible delay — not followed (residue)");
+            return false;
+        }
+        if url == self.url {
+            tracing::info!(%url, "meta refresh targets THIS document at zero delay — refusing the spin");
+            return false;
+        }
+        if self.meta_refresh_hops >= 5 {
+            tracing::warn!(%url, "meta refresh chain exceeded 5 hops — stopping, this is a loop");
+            return false;
+        }
+        self.meta_refresh_hops += 1;
+        tracing::info!(%url, hop = self.meta_refresh_hops, "following <meta http-equiv=refresh>");
+        // No history entry: a redirect stub is not somewhere the user asked to be, and leaving it in
+        // the back stack makes Back bounce off it straight back to the destination.
+        self.goto_no_history(&url);
+        true
     }
 
     /// L04 — the navigation resolved to a **download** (server said attachment / binary). The net
@@ -1368,6 +1426,12 @@ impl App {
         self.handle_history_ops();
         self.pump_messages();
         self.pump_form_submits();
+        // Before the paint and before the deferred scripts: a redirect stub has nothing worth
+        // showing and nothing worth running, and painting it is the flash of an empty page the user
+        // never asked to see.
+        if self.follow_meta_refresh() {
+            return;
+        }
         self.rerender();
         // The document is on screen NOW. Only then do the deferred scripts run and the images load.
         self.run_deferred_scripts();
@@ -3329,6 +3393,10 @@ impl App {
     /// prewarmed it is already in the bfcache — serve it instantly (no fetch/pipeline) instead of
     /// a fresh load.
     fn goto(&mut self, url: &str) {
+        // A user-initiated navigation starts a fresh refresh budget. `goto_no_history` deliberately
+        // does NOT reset it: that is the entry the refresh path itself uses, and a counter a loop
+        // can reset is not a bound.
+        self.meta_refresh_hops = 0;
         if self.bfcache.iter().any(|(u, _)| u == url) && self.restore_from_bfcache(url) {
             tracing::info!(%url, "prerender: instant click served from prewarmed bfcache");
             self.history.push(url.to_string());

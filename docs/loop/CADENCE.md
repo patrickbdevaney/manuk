@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1159** | ticks 1–1484 |
-| median tick cycle | **33m** | 1158 intervals |
-| median, last 10 | **57m** | 10 intervals |
+| ticks landed | **1160** | ticks 1–1485 |
+| median tick cycle | **33m** | 1159 intervals |
+| median, last 10 | **51m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.79** | 1467.9h elapsed |
-| median verify wall | **67s** | 1098 ticks |
+| **ticks per hour** | **0.79** | 1468.8h elapsed |
+| median verify wall | **67s** | 1099 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **575**
+* **live gates**: 27 → **576**
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**535 of 1159 ticks** (46%) moved a
+**535 of 1160 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -1256,5 +1256,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1482** | 2026-09-10 07:56 | 41m | capability | 8m | +592/−42 | 575 | 81 | 56.0% · | a handled rejection is not an unhandled one (2026-09-10) |
 | **1483** | 2026-09-10 08:08 | 11m | capability | 8m | +292/−44 | 575 | 81 | 56.0% · | a slot knows what is assigned to it (2026-09-10) |
 | **1484** | 2026-09-10 08:59 | 51m | audit | 8m | +439/−42 | 575 | 81 | 56.0% · | the audits, and the mandate's own number does not reproduce (2026-09-10) |
+| **1485** | 2026-09-10 09:49 | 50m | instrument | 8m | +620/−48 | 576 | 81 | 56.0% · | the scorability gap is not a function gap (2026-09-10) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -11923,3 +11923,33 @@ rejections to 0; ten rows byte-identical to headless Chrome; WPT `dom` flat, HAN
 `g_a_slot_knows_what_is_assigned_to_it` under five mutations. ⚠ `instanceof HTMLSlotElement` is still
 `false` (per-tag reflector prototypes are separate work) and `slotchange` does not fire — both named
 rather than shimmed.
+
+## The redirect stub — "you are being redirected", and you never were
+
+**The class:** the oldest redirect on the web, `<meta http-equiv="refresh" content="0;url=…">`. It is
+how corporate portals, payment gateways, domain moves, post-login landings and half of enterprise
+software send the user somewhere else, and it needs no script. This engine read exactly one
+`http-equiv` — `Content-Security-Policy` — so those pages rendered their stub and stopped. The stub is
+usually an empty `<body>`: **three of the 200-site CrUX trend corpus serve one as their homepage**,
+the smallest 104 bytes.
+
+**The time is required, and that is the row a hand-written parser gets wrong.** Chrome refuses
+`content="dest.html"` and follows `content="0;dest.html"` — `url=` is optional, quotes are stripped,
+whitespace is tolerated everywhere, and the value must begin with a number. A parser that splits on
+`;` and takes the last field navigates on the first and drags a page off itself for any other use of
+the `refresh` name.
+
+**The host performs it, not the page.** A `Page` does not own the tab it is displayed in; a navigation
+that bypassed the host leaves the omnibox, the back stack and the agent's own idea of *where am I*
+describing a document that is gone.
+
+**⚠ And it is the easiest infinite loop on the web, with nothing that looks like one.** No script runs,
+nothing throws, the page simply loads again. Three guards are needed and each answers a different
+loop: a hop bound that only a USER-initiated navigation resets, a refusal to follow a zero-delay
+refresh that targets the current document, and a floor on the delay. Follow it *before* the paint, or
+the user gets a flash of an empty page they never asked to see.
+
+**Status:** landed t1486; gated by `g_a_meta_refresh_is_a_redirect` under five mutations, eleven rows
+arbitrated against headless Chrome. ⚠ Only sub-second refreshes are followed (a `5;url=…` is a page
+asking to be read first), and the fidelity instrument still probes the stub because it fetches with
+`curl -sL`, which follows HTTP redirects and not `<meta>` ones.

@@ -1158,3 +1158,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1482	45d9aaec	1789041407	2026-09-10T07:56:47-04:00	2452	capability	465	9	592	42	575	81	3896	6960	0	642	0	a handled rejection is not an unhandled one (2026-09-10)
 1483	fff7b183	1789042086	2026-09-10T08:08:06-04:00	679	capability	465	6	292	44	575	81	3896	6960	0	642	0	a slot knows what is assigned to it (2026-09-10)
 1484	961a9670	1789045153	2026-09-10T08:59:13-04:00	3067	audit	465	7	439	42	575	81	3896	6960	0	642	0	the audits, and the mandate's own number does not reproduce (2026-09-10)
+1485	adf29776	1789048162	2026-09-10T09:49:22-04:00	3009	instrument	465	11	620	48	576	81	3896	6960	0	642	0	the scorability gap is not a function gap (2026-09-10)

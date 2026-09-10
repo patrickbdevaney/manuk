@@ -107494,3 +107494,86 @@ and `PROXY REFERENCE ACCEPTED` is printed by the fidelity path, so the seam is r
 turns out to be deliberately narrow, the finding is the same and the next line is P4/render.
 
 WIKI: docs/wiki/the-scorability-gap-is-not-a-function-gap.md
+
+## Tick 1486 — a meta refresh is a redirect (2026-09-10)
+
+TICK SHAPE: capability
+
+Following t1485's own residue: the 8 `probe-blocked` sites. Probed the cohort before assuming
+anything, and the probe found a bigger thing than the tag.
+
+### ⭐⭐⭐ THE ENGINE HANDLED EXACTLY ONE `http-equiv`, AND IT WAS NOT THIS ONE
+
+`Content-Security-Policy` was the only `http-equiv` this engine had ever read. A declarative refresh
+is the oldest redirect on the web and it is still how corporate portals, payment gateways, domain
+moves and half of enterprise software land the user somewhere else. Those pages rendered their stub —
+usually an empty `<body>` — and stopped.
+
+**Three of the 200-site CrUX trend corpus are such a stub AS THEIR HOMEPAGE:**
+
+```text
+  secure.paymentech.com        222 bytes   <meta http-equiv="Refresh" content="0;URL=http://www.chasepaymentech.com/">
+  www.datacareservices.com     104 bytes   <meta HTTP-EQUIV="REFRESH" CONTENT="0; URL=http://www.datacare.com">
+  linxonline.co.pierce.wa.us   768 bytes
+```
+
+### THE GRAMMAR, ONE VARIANT PER PAGE, ARBITRATED AGAINST CHROME
+
+```text
+  refresh      0;url=dest.html      navigates      Refresh   0;dest.html        navigates  (url= OPTIONAL)
+  refresh      0; URL=dest.html     navigates      REFRESH   0;url='dest.html'  navigates  (quotes stripped)
+  refresh      "  0 ; url = x  "    navigates      refresh   0                  reloads self
+  refresh      1;url=dest.html      navigates      not-refresh 0;url=dest.html  DOES NOT
+  refresh      dest.html            DOES NOT   <-- the TIME is required
+```
+
+⭐ **THE SIXTH ROW IS THE ONE A HAND-WRITTEN PARSER GETS WRONG.** `content="dest.html"` is the obvious
+spelling and Chrome refuses it. A parser that split on `;` and took the last field would navigate
+here, and would drag a page off itself for any other use of the `refresh` name.
+
+⚠ **A REFRESH IS THE EASIEST INFINITE LOOP ON THE WEB** and nothing about it looks like one: no script
+runs, nothing throws, the page simply loads again. Three guards — a **hop bound** reset only by a
+navigation the USER initiated (`goto_no_history` is what the refresh path itself uses, so a counter it
+could reset would be no bound at all), a **self-target refusal** at zero delay, and the **delay gate**
+below. The stub is not painted: the refresh is followed BEFORE `rerender()` and before the deferred
+scripts, so there is no flash of an empty page.
+
+### ⭐⭐ AND THE INSTRUMENT WAS NAMING A CAUSE IT HAD NEVER CHECKED
+
+All three were filed `probe-blocked`, whose doc comment asserted *"a page-supplied CSP, in every case
+observed so far."* Tested against all eight sites carrying that tag: **ZERO have a CSP**, in a `<meta>`
+or in a header. The reason is now stated as an **observation**, not a mechanism — *a refusal must cite
+the failing message* (t1222), *a comment is a checkable claim that dies silently* (t1303). It had been
+wrong for as long as it had been written down and it steered every reader of the ranked backlog toward
+a CSP problem that does not exist.
+
+### LANDED
+
+```
+  engine/page/lib.rs    parse_meta_refresh() + Page::meta_refresh() — reports, does not navigate
+  shell/src/gui.rs      follow_meta_refresh() on BOTH finish paths, before the paint;
+                        hop bound + self-target refusal + a fresh budget per user navigation
+  tests/wpt/fidelity.rs ProbeBlocked's false CSP claim replaced by what was measured
+  gate  g_a_meta_refresh_is_a_redirect   RED under 5 named mutations
+  vacuity arm: the ORDINARY `0;url=…` spelling must be FOUND — every "does not navigate" row is
+    satisfied by a parser that returns None for everything
+  manuk-shell 77 tests green · manuk-wpt lib 109 green
+  Bar 0: no hang, no crash, no panic
+```
+
+⚠ RESIDUE: **only a sub-second refresh is followed.** `content="5;url=…"` is a page asking to be READ
+first; honouring it instantly would yank the document out from under the user, which is strictly worse
+than not following it. Doing it properly needs a timer the shell does not expose to a page-owned
+deadline. Every redirect stub in the corpus is `0` or `1`.
+
+⚠ **The ENGINE follows the refresh; the INSTRUMENT does not.** `manuk-wpt` fetches with `curl -sL`,
+which follows HTTP redirects and not `<meta>` ones, then probes the stub — so those three sites still
+read `probe-blocked` in a sweep. Deliberate split, and named in the corrected doc.
+
+NEXT: follow the refresh in `manuk-wpt`'s own fetch (3 of the 8 convert), and **identify** the other
+five rather than guess — `haraj.com.sa` is 215 KB with no CSP and `venus.zeronline.cloud` is 86 bytes,
+so they are not one mechanism either. The tool to use is the dump itself: print whether the probe's
+`<script id>` is present in Chrome's output at all, which distinguishes *never injected* from
+*injected and navigated away from*.
+
+WIKI: docs/wiki/a-meta-refresh-is-a-redirect.md

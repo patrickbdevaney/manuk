@@ -63,9 +63,26 @@ pub enum Unmeasurable {
     HttpStatus(u32),
     /// A 2xx with a zero-length body.
     EmptyBody(u32),
-    /// The document arrived, but the injected probe never executed — a page-supplied CSP, in every
-    /// case observed so far. The instrument's own error text already asked the right question
-    /// (*"did Chrome run the script?"*) and the caller discarded it.
+    /// The document arrived and the injected probe's JSON was not in the dump.
+    ///
+    /// ⚠⚠ **THIS VARIANT USED TO NAME A CAUSE IT HAD NEVER CHECKED** — *"a page-supplied CSP, in
+    /// every case observed so far"* — and at t1486 the claim was tested against the eight sites
+    /// carrying the tag on the 200-site CrUX trend corpus. **Zero of the eight have a CSP**, in a
+    /// `<meta>` or in a header, with one exception whose header CSP is not what stops the probe.
+    /// What three of them DO have is `<meta http-equiv="refresh">`: Chrome follows the redirect and
+    /// the probe goes with the document it left. `secure.paymentech.com` is 222 bytes and
+    /// `www.datacareservices.com` is 104 — a `<head>` and nothing else.
+    ///
+    /// The reason is therefore stated as an OBSERVATION now and not as a mechanism. *A refusal must
+    /// cite the failing message* (t1222) and *a comment is a checkable claim that dies silently*
+    /// (t1303); this one had been wrong for as long as it had been written down, and it steered every
+    /// reader of the ranked backlog toward a CSP problem that does not exist.
+    ///
+    /// ⚠ **NEXT, and it is not done here:** `manuk-page` follows a declarative refresh as of t1486
+    /// (see `Page::meta_refresh`), so the ENGINE lands on the destination — but this instrument
+    /// fetches the document with `curl -sL`, which follows HTTP redirects and not `<meta>` ones, and
+    /// then probes the stub. Following the refresh HERE converts three sites; the other five need
+    /// their own mechanism identified rather than guessed at, which is the whole point of this note.
     ProbeBlocked,
     /// **We fetched the page and could not paint it.** The only variant here that is OUR bug rather
     /// than a property of the origin, and it was the quietest of the four drops: a render failure
@@ -462,9 +479,11 @@ impl Unmeasurable {
                  which blamed the corpus for the network's answer"
             ),
             Self::ProbeBlocked => {
-                "the document loaded but its own Content-Security-Policy blocked \
-                 the injected probe, so no boxes came back. The page is measurable in principle; \
-                 the measurement channel is not"
+                "the document loaded and the injected probe's JSON was NOT in the dump, so no \
+                 boxes came back. ⚠ The cause is NOT stated because it has not been established: \
+                 measured t1486 on the eight sites carrying this tag, ZERO have a CSP, and three \
+                 are a `<meta http-equiv=refresh>` stub whose redirect Chrome followed. The page \
+                 is measurable in principle; the measurement channel is not"
                     .into()
             }
             Self::RenderFailed => {
