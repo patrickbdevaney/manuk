@@ -5191,6 +5191,8 @@ unsafe fn define_members(
             Some(el_set_outer_text)
         );
         def_guarded!(def, c"attachShadow", el_attach_shadow, 1);
+        def_guarded!(def, c"assignedNodes", el_assigned_nodes, 0);
+        def_guarded!(def, c"assignedElements", el_assigned_elements, 0);
         prop_guarded!(
             prop,
             c"adoptedStyleSheets",
@@ -5257,6 +5259,7 @@ unsafe fn define_members(
         prop_guarded!(prop, c"namespaceURI", el_get_namespace_uri, None);
         prop_guarded!(prop, c"parentNode", el_get_parent_node, None);
         prop_guarded!(prop, c"shadowRoot", el_get_shadow_root, None);
+        prop_guarded!(prop, c"assignedSlot", el_get_assigned_slot, None);
         prop_guarded!(prop, c"parentElement", el_get_parent_element, None);
         prop_guarded!(prop, c"firstChild", el_get_first_child, None);
         prop_guarded!(prop, c"lastChild", el_get_last_child, None);
@@ -9615,6 +9618,202 @@ unsafe fn el_attach_shadow(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> 
     let sr = (*dom).attach_shadow(host, mode);
     *vp = ObjectValue(new_reflector(cx, dom, sr));
     true
+}
+
+// ── **SLOT ASSIGNMENT — `assignedNodes` / `assignedElements` / `assignedSlot`.** ────────────────
+//
+// `<slot>` existed as an element and as a *name* in the interface list, and nothing more: the three
+// members every web-component library actually calls were absent. Chrome-measured against a host with
+// two named children, two default elements and a text node:
+//
+// ```text
+//                          Chrome     before
+//   assignedElements()     s1+s2      MISSING (not a function)
+//   assignedNodes()        2          MISSING
+//   the DEFAULT slot       d1+d2 / 3  MISSING
+//   el.assignedSlot        "a"        null
+// ```
+//
+// It is the top nameable row of the t1482 boot histogram: **eight** `assignedElements is not a
+// function` rejections on `meet.google.com`, which renders 1,522 of Chrome's 4,238 boxes. Lit,
+// Stencil, FAST and every hand-rolled component read their light-DOM children through exactly this.
+//
+// ⚠ **COMPUTED, NOT STORED.** The spec's assignment is *derived* from the tree and re-derived on every
+// mutation; keeping a cached map means keeping it correct across `appendChild`, `slot=` writes and
+// shadow-root `innerHTML` — three places that would silently drift apart. A host's children are a
+// handful of nodes and the shadow root's slots fewer still, so the walk is cheap and it cannot go
+// stale. (This is the same call the repo made for `document.styleSheets` at t1479 and for the same
+// reason.)
+//
+// ⚠ **A NODE GOES TO THE *FIRST* SLOT OF ITS NAME**, in shadow-tree order (DOM §4.2.2.4). A second
+// `<slot name="a">` gets nothing — pages use that deliberately as a fallback region, and an
+// implementation that assigned to every matching slot would render the same children twice.
+//
+// ⚠ **TEXT NODES COUNT.** `assignedNodes()` on the default slot answers 3 where `assignedElements()`
+// answers 2, because the host's bare text child is assigned too. A component that measures
+// `assignedNodes().length` to decide whether it has content — an extremely common empty-state check —
+// gets the wrong answer if text is dropped.
+
+/// The slot name a light-DOM child of a shadow host asks for: its `slot` attribute, or `""`.
+/// A text node cannot carry an attribute, so it always asks for the default slot.
+unsafe fn slot_name_requested(dom: *const Dom, child: NodeId) -> String {
+    (*dom)
+        .element(child)
+        .and_then(|e| e.attr("slot"))
+        .unwrap_or("")
+        .to_string()
+}
+
+/// The name a `<slot>` offers: its `name` attribute, or `""` for the default slot.
+unsafe fn slot_name_offered(dom: *const Dom, slot: NodeId) -> String {
+    (*dom)
+        .element(slot)
+        .and_then(|e| e.attr("name"))
+        .unwrap_or("")
+        .to_string()
+}
+
+/// The shadow root this `<slot>` lives in, walking up through its own tree. `None` for a `<slot>`
+/// that is not inside a shadow tree at all — which is legal markup and assigns nothing, exactly as
+/// in Chrome.
+unsafe fn shadow_root_of(dom: *const Dom, mut n: NodeId) -> Option<NodeId> {
+    loop {
+        if (*dom).shadow_host(n).is_some() {
+            return Some(n);
+        }
+        n = (*dom).parent(n)?;
+    }
+}
+
+/// The FIRST `<slot>` in `root`'s tree offering `name` — the one the spec assigns to.
+unsafe fn first_slot_named(dom: *const Dom, root: NodeId, name: &str) -> Option<NodeId> {
+    (*dom)
+        .descendants(root)
+        .find(|&d| (*dom).tag_name(d) == Some("slot") && slot_name_offered(dom, d) == name)
+}
+
+/// Every light-DOM node assigned to `slot`, in host tree order. Empty for a `<slot>` outside a
+/// shadow tree, and empty for a second slot of a name already claimed.
+unsafe fn assigned_nodes_of(dom: *const Dom, slot: NodeId) -> Vec<NodeId> {
+    let Some(root) = shadow_root_of(dom, slot) else {
+        return Vec::new();
+    };
+    let Some(host) = (*dom).shadow_host(root) else {
+        return Vec::new();
+    };
+    let offered = slot_name_offered(dom, slot);
+    (*dom)
+        .children(host)
+        .filter(|&c| (*dom).is_element(c) || (*dom).is_text(c))
+        .filter(|&c| slot_name_requested(dom, c) == offered)
+        // …and only if THIS slot is the first of that name. Otherwise a duplicate
+        // `<slot name="a">` would report the same children a second time.
+        .filter(|_| first_slot_named(dom, root, &offered) == Some(slot))
+        .collect()
+}
+
+/// `slot.assignedNodes({flatten})` — the light-DOM nodes (elements AND text) this slot renders.
+///
+/// ⚠ `flatten: true` differs only when the slot has NO assigned nodes, in which case it yields the
+/// slot's own fallback content. That is the case a component checks to decide *"am I showing the
+/// default?"*, so returning the assigned list unconditionally would answer `[]` where Chrome answers
+/// the fallback and every empty-state branch would take the wrong arm.
+unsafe fn el_assigned_nodes(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let Some((dom, slot)) = this_node(vp) else {
+        *vp = NullValue();
+        return true;
+    };
+    if (*dom).tag_name(slot) != Some("slot") {
+        return throw_dom(
+            cx,
+            "TypeError",
+            "assignedNodes is only available on a <slot> element",
+        );
+    }
+    let mut out = assigned_nodes_of(&*dom, slot);
+    if out.is_empty() && arg_flatten(cx, vp, argc) {
+        out = (*dom)
+            .children(slot)
+            .filter(|&c| (*dom).is_element(c) || (*dom).is_text(c))
+            .collect();
+    }
+    node_array(cx, vp, dom, &out);
+    true
+}
+
+/// `slot.assignedElements({flatten})` — `assignedNodes` filtered to elements. The method components
+/// reach for first, because a text node between tags is noise to them.
+unsafe fn el_assigned_elements(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    let Some((dom, slot)) = this_node(vp) else {
+        *vp = NullValue();
+        return true;
+    };
+    if (*dom).tag_name(slot) != Some("slot") {
+        return throw_dom(
+            cx,
+            "TypeError",
+            "assignedElements is only available on a <slot> element",
+        );
+    }
+    let mut out: Vec<NodeId> = assigned_nodes_of(&*dom, slot)
+        .into_iter()
+        .filter(|&n| (*dom).is_element(n))
+        .collect();
+    if out.is_empty() && arg_flatten(cx, vp, argc) {
+        out = (*dom)
+            .children(slot)
+            .filter(|&c| (*dom).is_element(c))
+            .collect();
+    }
+    node_array(cx, vp, dom, &out);
+    true
+}
+
+/// `element.assignedSlot` — the `<slot>` this element is rendered in, or `null`.
+///
+/// The inverse of the walk above, and the direction a component uses to ask *"where did my parent
+/// put me?"*. `null` for a node whose parent is not a shadow host, for a node whose requested name
+/// has no slot, and — deliberately — for a text node, which has no JS reflector to hang it on.
+unsafe fn el_get_assigned_slot(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    *vp = NullValue();
+    let Some((dom, n)) = this_node(vp) else {
+        return true;
+    };
+    let Some(parent) = (*dom).parent(n) else {
+        return true;
+    };
+    let Some(root) = (*dom).shadow_root(parent) else {
+        return true;
+    };
+    let want = slot_name_requested(&*dom, n);
+    if let Some(slot) = first_slot_named(&*dom, root, &want) {
+        *vp = ObjectValue(new_reflector(cx, dom, slot));
+    }
+    true
+}
+
+/// `{ flatten: true }` from an options argument, absent or malformed reading `false` — the IDL
+/// default, and the answer for the bare `assignedNodes()` every component actually writes.
+unsafe fn arg_flatten(cx: *mut RawJSContext, vp: *mut Value, argc: u32) -> bool {
+    if argc == 0 {
+        return false;
+    }
+    let args = mozjs::jsapi::CallArgs::from_vp(vp, argc);
+    rooted!(in(cx) let opts = args.get(0).get());
+    if !opts.is_object() {
+        return false;
+    }
+    rooted!(in(cx) let obj = opts.to_object());
+    rooted!(in(cx) let mut v = UndefinedValue());
+    if !JS_GetProperty(
+        &mut wrap_cx(cx),
+        obj.handle(),
+        c"flatten".as_ptr(),
+        v.handle_mut(),
+    ) {
+        return false;
+    }
+    v.get().is_boolean() && v.get().to_boolean()
 }
 
 /// `element.shadowRoot` — the attached shadow root, or `null`. **A `closed` root reads `null`.**

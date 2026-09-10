@@ -221,6 +221,15 @@
   - L49 · Bug 3, found on the way — inline fragments are not in physical coordinates
   - L58 · The gate now
 
+## A slot knows what is assigned to it
+`docs/wiki/a-slot-knows-what-is-assigned-to-it.md`
+
+  - L5 · The gap
+  - L24 · Computed, not stored
+  - L32 · Ten rows, arbitrated against headless Chrome, byte-identical
+  - L57 · ⚠ Residue, named, and deliberately NOT shimmed
+  - L73 · The gate
+
 ## A transform is physical in every writing mode
 `docs/wiki/a-transform-is-physical-in-every-writing-mode.md`
 
@@ -3390,4 +3399,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2885 sections across 125 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2890 sections across 126 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -107260,3 +107260,81 @@ better-specified one and the board's T2b already names the shadow-DOM gap. Probe
 before building — t1418.
 
 WIKI: docs/wiki/a-handled-rejection-is-not-an-unhandled-one.md
+
+## Tick 1483 — a slot knows what is assigned to it (2026-09-10)
+
+TICK SHAPE: capability
+
+P1, taking the top nameable row of the histogram t1482 made honest.
+
+### `<slot>` WAS AN ELEMENT AND A NAME IN AN INTERFACE LIST
+
+```text
+                         Chrome     before     after
+  assignedElements()     s1+s2      MISSING    s1+s2
+  assignedNodes()        2          MISSING    2
+  the DEFAULT slot       d1+d2 / 3  MISSING    d1+d2 / 3
+  el.assignedSlot        "a"        null       "a"
+```
+
+The three members **every** web-component library calls to read its own light-DOM children — Lit,
+Stencil, FAST, every hand-rolled `connectedCallback` — were absent, so the call was a `TypeError`
+that took the rest of the component's boot with it. `meet.google.com`: **8 → 0**
+`assignedElements is not a function` rejections.
+
+### COMPUTED, NOT STORED — AND TEN ROWS BYTE-IDENTICAL TO CHROME
+
+```text
+  named=s1+s2  dupe=-  def=d1+d2  defNodes=3  slotOf=true  d1Slot=true
+  z=-  zFlat=zfb  loose=-/0  nonSlot=threw
+```
+
+Assignment is *derived* from the tree, as the spec defines it; a cached map would have to be kept
+correct across `appendChild`, `slot=` writes and shadow-root `innerHTML` — three places that drift.
+The walk is over a host's handful of children, so it is cheap **and it cannot go stale** (the call
+t1479 made for `document.styleSheets`, for the same reason).
+
+⭐ Four of the ten rows are rules that are easy to get subtly wrong and are all real component idioms:
+**a node goes to the FIRST slot of its name** (a duplicate `<slot name>` is a deliberate fallback
+region; assigning to both renders the children twice); **text nodes count** in `assignedNodes` and
+not in `assignedElements` (the commonest empty-state check is `assignedNodes().length`);
+**`flatten` changes the answer only when the slot is EMPTY**, which is exactly the *"am I showing the
+default?"* question; and a **`<slot>` outside a shadow tree assigns nothing** — a walk that stopped at
+"nearest parent" would answer with the whole document.
+
+⚠ `nonSlot=threw`: the methods live on the shared element prototype here, so the tag check is what
+stops `div.assignedElements()` quietly answering `[]` — a wrong answer of the right type, which no
+`try` catches.
+
+### ⚠ RESIDUE, NAMED, AND DELIBERATELY NOT SHIMMED
+
+`slot instanceof HTMLSlotElement` is **false** where Chrome says true. A `Symbol.hasInstance` shim
+would fix `instanceof` in an afternoon and is **refused**: the prototype chain would still be wrong,
+so a page patching `HTMLSlotElement.prototype.foo` still would not reach instances. That is *correct
+in the one channel a human checks* (t1282). Per-tag reflector prototypes are the board's T2b `[L]`.
+
+⚠ `slotchange` does not fire — computed assignment has no invalidation point to hang an event on.
+Components that read in `connectedCallback` (the majority) are correct; those that re-read on
+`slotchange` re-read late.
+
+### LANDED
+
+```
+  engine/js/dom_bindings.rs   assigned_nodes_of + assignedNodes/assignedElements/assignedSlot
+  gate  g_a_slot_knows_what_is_assigned_to_it   RED under 5 named mutations
+  TWO vacuity arms: the fixture must COMPLETE, and `named=s1+s2` must be NON-EMPTY — "assigns
+    nothing" would otherwise satisfy every suppression row in the list
+  WPT dom 8175 (flat, same binary both ways) · HANG/CRASH 0
+  Bar 0: no hang, no crash, no panic
+```
+
+⚠ The single-site re-measure of `meet.google.com` could not be scored — **Chrome's own fetch came
+back `unreachable`** on that run — so the rejection count is quoted and no render delta is.
+
+NEXT: the histogram's next nameable row is **IndexedDB** — `no object store named e` ×16 and
+`e.open is not a function` ×4 on the 40-site slice, and the plateau-breaker plan's lever #5 names
+Firestore / Firebase-Auth / Amplify as opening IDB at boot and calling `createIndex()`/`openCursor()`
+immediately. `e.open is not a function` says the OBJECT is wrong, not the method: probe what
+`indexedDB.open` returns and what a page does with it before assuming the API is merely incomplete.
+
+WIKI: docs/wiki/a-slot-knows-what-is-assigned-to-it.md

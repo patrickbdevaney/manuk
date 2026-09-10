@@ -11888,3 +11888,38 @@ IndexedDB and a missing `HTMLSlotElement.assignedElements`.
 **Status:** landed t1482; unhandled-rejection reports 80 → 59 on the CrUX-trend slice; WPT `dom`
 flat, HANG/CRASH 0. Gated by `g_a_handled_rejection_is_not_reported` (Chrome fixture exact, with the
 never-handled case as the vacuity arm) under three mutations.
+
+## The web component that cannot see its own children
+
+**The class:** every custom element that renders `<slot>` and then reads what landed in it — Lit,
+Stencil, FAST, and every hand-rolled `connectedCallback` that calls `assignedElements()` to count
+tabs, wire up menu items, or decide whether to show an empty state. `<slot>` existed here as an
+element and as a name in the interface list; `assignedElements()`, `assignedNodes()` and
+`element.assignedSlot` did not exist at all, so the call was a `TypeError` that took the rest of the
+component's boot with it.
+
+**Compute it, do not cache it.** The spec's assignment is *derived* from the tree and re-derived on
+every mutation. A cached map must be kept correct across `appendChild`, `slot=` writes and
+shadow-root `innerHTML` — three places that silently drift apart. A host's children are a handful of
+nodes; the walk is cheap and cannot go stale.
+
+**Four rules that are easy to get subtly wrong, and all four are ordinary idioms:**
+
+* A node goes to the **first** slot of its name. A second `<slot name="a">` gets nothing — pages
+  write that deliberately as a fallback region, and assigning to both renders the children twice.
+* **Text nodes count** in `assignedNodes()` and not in `assignedElements()`. The commonest
+  empty-state check on the web is `assignedNodes().length`.
+* `{flatten: true}` changes the answer **only when the slot is empty**, yielding its fallback
+  content — which is exactly the *"am I showing the default?"* question a component asks.
+* A `<slot>` **outside a shadow tree** assigns nothing. A walk that stopped at "nearest parent"
+  instead of "the shadow root" would answer with the whole document.
+
+**⚠ And the methods must refuse a non-slot.** On an engine where every element shares one prototype,
+`div.assignedElements()` would otherwise answer `[]` — a wrong answer of the right type, which no
+`try` catches.
+
+**Status:** landed t1483; `meet.google.com` goes from 8 `assignedElements is not a function`
+rejections to 0; ten rows byte-identical to headless Chrome; WPT `dom` flat, HANG/CRASH 0. Gated by
+`g_a_slot_knows_what_is_assigned_to_it` under five mutations. ⚠ `instanceof HTMLSlotElement` is still
+`false` (per-tag reflector prototypes are separate work) and `slotchange` does not fire — both named
+rather than shimmed.
