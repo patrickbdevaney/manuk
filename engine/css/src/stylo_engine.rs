@@ -1158,6 +1158,14 @@ pub fn cascade_via_stylo_sized(
             // (t1358 multicol), a `static_prefs::pref!` call inside a value parser (t1369 the
             // `content` alt syntax), and `engine = "gecko"` — which no flag reaches at all.
             cs.counter_set = m.counter_set.clone();
+            // ⚠ **A FOURTH MEMBER OF THE SAME FAMILY, AND THE SIMPLEST ONE.** `list-item` is not a
+            // `crate::Display` — it collapses to `Block` in BOTH cascades on purpose, because it is
+            // block-level and the marker is generated elsewhere. So neither `clone_display()` nor
+            // our own enum can carry it, and the *computed value* answered `block` on every `<li>`
+            // and every `<summary>` on the web. The MinimalCascade tracks the keyword beside the
+            // collapse (`ComputedStyle::list_item`); recovered here for exactly the reason
+            // `appearance` and `counter_set` are.
+            cs.list_item = m.list_item;
         }
         timed(&mut ph.hints_ns, || {
             apply_presentational_hints(dom, node, &mut cs)

@@ -3278,6 +3278,16 @@ fn computed_style_js(
         Display::TableColumnGroup => "table-column-group",
         Display::None => "none",
     };
+    // ⚠ **`list-item` LAYS OUT AS A BLOCK AND MUST NOT REPORT AS ONE.** The cascade collapses the
+    // keyword to `Display::Block` on purpose — it *is* block-level, the marker is generated
+    // elsewhere — and the collapse leaked into the computed value, so `getComputedStyle(li).display`
+    // answered `block` on every `<li>` and every `<summary>` on the web. That is precisely the
+    // failure the `flow-root` comment three arms up describes, and it was live one keyword over.
+    let display = if cs.list_item && display == "block" {
+        "list-item"
+    } else {
+        display
+    };
     let position = match cs.position {
         Position::Static => "static",
         Position::Relative => "relative",

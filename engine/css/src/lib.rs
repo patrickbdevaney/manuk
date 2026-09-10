@@ -1597,6 +1597,21 @@ pub struct ComputedStyle {
     /// Recording the *decision* separately (rather than reading `display` back out) is what keeps
     /// the merge from overriding a display Stylo resolved correctly.
     pub legacy_webkit_box: Option<Display>,
+    /// **`display: list-item` lays out as a block and must not REPORT as one.**
+    ///
+    /// `list-item` is block-level — the marker is generated elsewhere — so both cascades map it to
+    /// [`Display::Block`] and every layout path is correct as written. The collapse then leaked into
+    /// the *computed value*: `getComputedStyle(li).display` answered `block` where Chrome answers
+    /// `list-item`, on every `<li>` and every `<summary>` on the web.
+    ///
+    /// The serializer's own doc comment already states the rule this broke — *"`display` must
+    /// round-trip the specified keyword"* — and `legacy_webkit_box` beside it is the precedent: a
+    /// side flag is how a value that LAYS OUT as one thing REPORTS as another, without giving layout
+    /// a variant it would have to handle in twenty places.
+    ///
+    /// Found by a survey (t1488): across 1,352 shape misses on six near-bar corpus sites, only 50
+    /// disagreed about `display` at all — and 40 of those 50 were this one keyword.
+    pub list_item: bool,
     /// `scroll-snap-type` on a scroll container; `scroll-snap-align` on its children.
     pub scroll_snap_type: ScrollSnapAxis,
     pub scroll_snap_align: ScrollSnapAlign,
@@ -2109,6 +2124,7 @@ impl ComputedStyle {
             text_overflow: TextOverflow::Clip,
             line_clamp: None,
             legacy_webkit_box: None,
+            list_item: false,
             scroll_snap_type: ScrollSnapAxis::None,
             scroll_snap_align: ScrollSnapAlign::None,
             text_transform: TextTransform::None,
@@ -5667,6 +5683,13 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
         _ => (Inline, 0.0, 400, 1.0),
     };
     s.display = display;
+    // ⚠ **THE UA SHEET SAYS `list-item`, AND THE TABLE ABOVE COULD NOT.** The tuple's first slot is a
+    // `Display`, and `list-item` is not one — it collapses to `Block` by design. So the tags whose UA
+    // default IS `list-item` have to say so here. Chrome-measured, and the set is smaller than it
+    // looks: `li` and `summary`, and NOT `dd`/`dt`, which really are plain blocks.
+    // Keep in lockstep with `stylo_engine.rs`'s own UA sheet — a keyword one cascade knows and the
+    // other does not is the two-cascades trap this file has been bitten by before.
+    s.list_item = matches!(tag, "li" | "summary");
     // `[popover]` — a popover is hidden until it is SHOWN, whatever element carries it. Same failure
     // as a closed `<dialog>`: with no rule, the menu's items, the tooltip's copy and the whole
     // dropdown render inline in the middle of the page before anyone opens them. Attribute-keyed, not
@@ -6289,6 +6312,7 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 // `list-item` is block-level; the marker is generated elsewhere. Both cascades must
                 // agree here — a keyword one of them knows and the other does not is the
                 // two-cascades trap, and it produces a divergence nobody can reproduce.
+                // Handled below so the flag is set alongside the collapse; see `ComputedStyle::list_item`.
                 "list-item" => Some((Display::Block, None)),
                 "contents" => Some((Display::Contents, None)),
                 "none" => Some((Display::None, None)),
@@ -6297,6 +6321,10 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
             if let Some((d, legacy)) = parsed {
                 s.display = d;
                 s.legacy_webkit_box = legacy;
+                // ⚠ Set AND CLEARED. `display: block` after `display: list-item` in the cascade must
+                // stop reporting `list-item`; a flag that is only ever set is a latch, and a latch on
+                // a cascaded property is wrong for every element that overrides it.
+                s.list_item = v.trim().eq_ignore_ascii_case("list-item");
             }
         }
         "color" => {

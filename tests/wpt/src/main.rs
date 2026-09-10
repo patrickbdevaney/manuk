@@ -1561,9 +1561,39 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                              d = chrome - manuk)",
                             misses.len()
                         );
+                        // ⭐ **THE MECHANISM ORACLE IS NEARLY FREE — `display` IS ALREADY COMPUTED
+                        // AND WAS BEING DISCARDED.** Both `Seen` maps carry each element's computed
+                        // `display` (brick 4b put it there so the jarring invariants could read it),
+                        // and this dump printed tag paths and rectangles only. So a survey over the
+                        // near-bar cohort keyed on the leaf TAG answered *"68 of 88 misses are on a
+                        // `div`"* — which names nothing, because `div` is not a layout mode.
+                        //
+                        // ⚠ **A DISAGREEMENT ABOUT `display` IS THE MECHANISM ITSELF**, not a hint at
+                        // one: a container Chrome lays out as `flex` and we lay out as `block` puts
+                        // N items on N rows instead of one, which is exactly the shape of the worst
+                        // misses in the cohort (`section` 2630px tall against Chrome's 798, a child
+                        // `7052px` wide against our viewport-clamped 1200). Printing it turns "this
+                        // box is the wrong height" into "this box is in the wrong layout mode".
+                        //
+                        // Printed as `c=…/m=…` and only when the two DIFFER — an agreeing pair is
+                        // noise on a line that is already dense, and the whole value is in the
+                        // disagreement.
                         for miss in misses.iter().take(shape_dump) {
+                            let cd = cseen
+                                .get(&miss.path)
+                                .map(|s| s.display.as_str())
+                                .unwrap_or("?");
+                            let md = mseen
+                                .get(&miss.path)
+                                .map(|s| s.display.as_str())
+                                .unwrap_or("?");
+                            let modes = if cd == md {
+                                String::new()
+                            } else {
+                                format!("  DISPLAY c={cd}/m={md}")
+                            };
                             eprintln!(
-                                "    {:<10} c[{} {} {}x{}]  m[{} {} {}x{}]  {}",
+                                "    {:<10} c[{} {} {}x{}]  m[{} {} {}x{}]  {}{}",
                                 miss.axis(),
                                 miss.chrome[0],
                                 miss.chrome[1],
@@ -1574,6 +1604,43 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                                 miss.manuk[2],
                                 miss.manuk[3],
                                 miss.path,
+                                modes,
+                            );
+                        }
+                        // …and the TALLY, because a per-element list of 60 rows is a list and a
+                        // histogram over every miss is a finding. This is the line a survey reads.
+                        {
+                            let mut pairs: std::collections::BTreeMap<String, usize> =
+                                Default::default();
+                            for miss in &misses {
+                                let cd = cseen
+                                    .get(&miss.path)
+                                    .map(|s| s.display.as_str())
+                                    .unwrap_or("?");
+                                let md = mseen
+                                    .get(&miss.path)
+                                    .map(|s| s.display.as_str())
+                                    .unwrap_or("?");
+                                if cd != md {
+                                    *pairs.entry(format!("{cd}->{md}")).or_default() += 1;
+                                }
+                            }
+                            let disagreeing: usize = pairs.values().sum();
+                            let mut v: Vec<_> = pairs.into_iter().collect();
+                            v.sort_by(|a, b| b.1.cmp(&a.1));
+                            eprintln!(
+                                "  SHAPE MISS DISPLAY: {disagreeing} of {} misses disagree about \
+                                 display · {}",
+                                misses.len(),
+                                if v.is_empty() {
+                                    "(none — the misses are inside AGREED layout modes)".to_string()
+                                } else {
+                                    v.iter()
+                                        .take(8)
+                                        .map(|(k, n)| format!("{k}×{n}"))
+                                        .collect::<Vec<_>>()
+                                        .join(" ")
+                                }
                             );
                         }
                     }

@@ -2440,6 +2440,15 @@
   - L78 · Deferred
   - L81 · Terminal gate — reasonable security sweep
 
+## `list-item` lays out as a block and must not report as one
+`docs/wiki/list-item-lays-out-as-a-block-and-must-not-report-as-one.md`
+
+  - L5 · How it was found
+  - L34 · The bug the refusal named
+  - L49 · Arbitrated against headless Chrome
+  - L65 · A side flag, not a new Display variant
+  - L77 · Result
+
 ## `load` fired before the images — so every `window.onload` handler measured an unfinished document
 `docs/wiki/load-waits-for-subresources.md`
 
@@ -3429,4 +3438,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2908 sections across 129 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2913 sections across 130 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -107650,3 +107650,88 @@ can never reach it. **That trigger is a sufficient condition used as a necessary
 defect t903 already fixed once when the trigger asked for `type=module`.
 
 WIKI: docs/wiki/both-sides-must-follow-the-same-redirect.md
+
+## Tick 1488 — a survey refused its own hypothesis and named the bug on the way past (2026-09-10)
+
+TICK SHAPE: capability
+
+t1485 put RENDER on the main line. The cheapest sites to move are the **near-bar cohort** — 28 of the
+200-site corpus sit between shape 55% and 75%, against a 0.75 bar. Surveyed rather than ground.
+
+### THE SURVEY, AND THE HYPOTHESIS IT KILLED
+
+```text
+  miss axis over 316 worst-misses, six near-bar sites:
+      height 133 · y 91 · x 74 · width 18       -> 71% on the BLOCK axis
+  the leaf tag of the height misses:
+      div 68 · img 7 · a 7 · section 2 · body 2  -> `div` names nothing; div is not a layout mode
+```
+
+The hypothesis was **wrong layout mode**: a flex row falling back to a column stacks N items and is
+exactly N× too tall, which fits the worst misses (a `<section>` 2630px tall against Chrome's 798; a
+child Chrome sizes at 7052px wide against our viewport-clamped 1200).
+
+⭐⭐⭐ **THE ORACLE ALREADY CARRIED THE ANSWER AND THE DUMP DISCARDED IT.** Both `Seen` maps hold each
+element's computed `display`; `--shape-dump` printed tag paths and rectangles only. One line of
+plumbing:
+
+```text
+  1,352 shape misses across six near-bar sites · only 50 disagree about display AT ALL
+  and 40 of those 50 are ONE keyword:   list-item -> block
+```
+
+**The hypothesis is refused in one run.** The near-bar shape gap is *inside agreed layout modes* —
+both engines agree the box is a block and disagree about how tall it is. Narrower place to look next,
+and it cost one run rather than ten ticks of fitting a rule.
+
+### ⭐⭐ AND THE REFUSAL NAMED THE ACTUAL BUG
+
+`display: list-item` is block-level, so both cascades collapse it to `Display::Block` on purpose and
+every layout path is right. **The collapse leaked into the computed value**: `getComputedStyle(li)
+.display` answered `block` on every `<li>` and every `<summary>` on the web.
+
+⚠ **THE RULE IT BREAKS WAS ALREADY WRITTEN DOWN, THREE ARMS AWAY IN THE SAME `match`** — the
+`flow-root` arm: *"`display` must round-trip the specified keyword — a feature-detect that reads back
+`block` for `flow-root` concludes the value is unsupported."* Identical failure, one keyword over,
+live the whole time.
+
+```text
+  Chrome:  li=list-item  over=block  dt=block  dd=block  sum=list-item
+           oli=list-item  explicit=list-item  two=list-item     ← ours, after, byte-identical
+```
+
+⚠ `dt`/`dd` are NOT list items and the UA table had `"li" | "dd" | "dt"` on ONE arm — the obvious fix
+is wrong for two of the three. `<summary>` IS one, which is not obvious and is why it was measured.
+⚠ `over=block`: **a flag that is only ever set is a latch**, and a latch on a cascaded property is
+wrong for every element that overrides it. ⚠ A SIDE FLAG, not a new `Display` variant — a variant
+would make twenty layout sites handle a mode that behaves exactly like `Block`, and the first one that
+forgot would be a rendering regression bought for a serialization fix.
+
+### LANDED
+
+```
+  engine/css/lib.rs           ComputedStyle::list_item — set at the UA default AND at the declaration,
+                              read from the NORMALISED value so `block flow list-item` counts
+  engine/css/stylo_engine.rs  recovered from the MinimalCascade, as appearance/counter_set already are
+  engine/js/dom_bindings.rs   the serializer arm
+  tests/wpt/main.rs           --shape-dump prints the DISPLAY disagreement + a per-site tally
+  gate  g_display_list_item_does_not_report_as_block   RED under 5 named mutations
+  TWO vacuity arms: `li=list-item` (every `=block` row is satisfied by an engine that never reports
+    it) and `dt=block` (if everything reported `list-item` the positive row proves nothing);
+    plus a LAYOUT arm — the two <li> must still stack, because this was a serialization fix
+  WPT css/css-display 332 -> 353 (+21) · css/cssom 2868 -> 2894 (+26) · HANG/CRASH 0 in both
+  Bar 0: no hang, no crash, no panic
+```
+
+⚠ **The `cssom` ROW WAS SPELLED WRONG and the sweep silently measured nothing** — the directory is
+`css/cssom`; a bare `cssom` reports `FILES 0`. Surface audit #89 recorded this as its seventh mention
+and the row was still stale. The +26 is therefore partly six audits of accumulated drift, not this
+tick's work, and is reported as such.
+
+NEXT: the survey's real product is the narrowing — **the near-bar gap is a SIZING problem inside block
+layout, not a mode problem.** The same `--shape-dump` now prints display; the next key to try is the
+`font` field the `Seen` map also already carries, because a line-box height that is wrong by a few
+percent compounds down a page exactly the way these misses do (`body` 12547 against Chrome's 10767 on
+puentedemando). Survey before grinding.
+
+WIKI: docs/wiki/list-item-lays-out-as-a-block-and-must-not-report-as-one.md

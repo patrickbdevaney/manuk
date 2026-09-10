@@ -11953,3 +11953,33 @@ the user gets a flash of an empty page they never asked to see.
 arbitrated against headless Chrome. ⚠ Only sub-second refreshes are followed (a `5;url=…` is a page
 asking to be read first), and the fidelity instrument still probes the stub because it fetches with
 `curl -sL`, which follows HTTP redirects and not `<meta>` ones.
+
+## The list item that told every feature-detect it was a block
+
+**The class:** any page that reads `getComputedStyle(el).display` and branches — feature detection,
+CSS-in-JS runtimes that mirror computed values, virtualised lists that classify their children, and
+the many components that check `display === 'list-item'` before installing a custom marker. Every
+`<li>` and every `<summary>` on the web answered `block` here.
+
+**A value can lay out as one thing and must still report as another.** `display: list-item` is
+block-level — the marker is generated elsewhere — so collapsing it to `block` for layout is right, and
+letting the collapse reach the computed value is not. The rule was already written down in this engine
+one arm away in the same `match`, for `flow-root`: *"a feature-detect that reads back `block` for
+`flow-root` concludes the value is unsupported and falls back to a clearfix or `overflow:hidden`, both
+of which have side effects the author avoided."*
+
+**Use a side flag, not a new layout mode.** A new `Display` variant forces every layout site to handle
+a mode that behaves exactly like `block`, and the first one that forgets is a real rendering
+regression bought for a serialization fix. Gate it by asserting a box did NOT move.
+
+**⚠ A flag that is only ever set is a latch.** An author's `display: block` on an `<li>` must stop
+reporting `list-item`; on a cascaded property, "set on match" without "clear on non-match" is wrong for
+every element that overrides it.
+
+**⚠ And the UA set is smaller than it looks.** `<li>` and `<summary>` are list items; `<dt>` and `<dd>`
+are plain blocks, and they sit on the same arm of most UA tables — so the obvious one-line fix is wrong
+for two of the four. Measure the set.
+
+**Status:** landed t1488; WPT `css/css-display` 332→353, `css/cssom` 2868→2894, HANG/CRASH 0. Gated by
+`g_display_list_item_does_not_report_as_block` under five mutations, eight rows byte-identical to
+headless Chrome.

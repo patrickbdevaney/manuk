@@ -13,9 +13,9 @@ css/css-ui	1333	1900	70.2	0	0
 css/css-backgrounds	4891	6181	79.1	0	0
 css/css-values	3773	8488	44.5	0	0
 css/css-position	1174	1482	79.2	0	0
-css/css-display	332	549	60.5	0	0
+css/css-display	353	549	64.3	0	0
 css/css-color	10473	11337	92.4	0	0
-cssom	2868	3507	81.8	0	0
+cssom	2894	3507	82.5	0	0
 domparsing	342	1294	26.4	0	0
 url	1	7	14.3	0	0
 encoding	360564	1127437	32.0	0	0
@@ -28,4 +28,4 @@ css/CSS2	2095	2210	94.8	0	0
 html/browsers	221	1891	11.7	0	0
 html/semantics	6297	11635	54.1	0	0
 html/canvas	682	4515	15.1	0	0
-TOTAL	496032	1307944	37.92	0	0
+TOTAL	496079	1307944	37.93	0	0
