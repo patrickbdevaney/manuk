@@ -107806,7 +107806,7 @@ weight served from disk (no network, no `fonts.ready` race), measured in both en
 weights are the mechanism, `FontKey`'s boolean is the fix and it reaches every text box on every page
 that uses a weight other than 400/700 — which, on the modern web, is most of them.
 
-### WALL-TIME AUDIT #56 (due at t1488; last t1468)
+### WALL-TIME AUDIT (due at t1488; last t1468) — recorded as Audit #59 in `docs/loop/WALL-AUDIT.md`
 
 ```text
   total 2481s · attributed 1088s (44%) · UNATTRIBUTED 1392s (56%)
@@ -107841,3 +107841,106 @@ Nothing trimmed: the two findings are both observer-owned. Recorded per the audi
 is not lean, and that the two biggest items are not rigor.
 
 WIKI: docs/wiki/the-face-not-the-metrics.md
+
+## Tick 1490 — `load` fires after the webfont arrives (2026-09-10)
+
+TICK SHAPE: capability
+
+Three ticks of narrowing land here, and each of the first two refused its own hypothesis.
+
+### ⭐⭐⭐ EVERY `window.onload` HANDLER MEASURED TEXT IN A FONT THE PAGE DOES NOT USE
+
+`load_async`'s pre-`load` block waits for subframes, images and masks — each with a comment saying
+what it cost not to (a handler reaching into a not-yet-loaded frame **throws**, and the `encoding`
+suite's 767k subtests paid for it; one measuring an undecoded image gets `naturalWidth === 0`, and
+`grid-minimum-size-grid-items-021` lost exactly half its subtests to it). **The stylesheet phase was
+not in that list**, and it is where `@font-face` is fetched and where the arriving face triggers the
+relayout.
+
+Ahem makes every glyph one em, so five chars at 32px is arithmetically 160px:
+
+```text
+                   DOMContentLoaded    load     a later task
+  Chrome                  96            160         160
+  before                  96             96          96
+  after                   96            160         160
+```
+
+⚠⚠ **THE LAYOUT WAS RIGHT THE WHOLE TIME** — `root_box` read 160 before the fix, and a host re-entry
+one call later read 160 correctly. Only the geometry JS could see was stale, which is why **no
+rendering test could catch it**: the same shape as t1479's `document.styleSheets`, where the effect
+was right and the description was wrong.
+
+⚠ `dcl:96` is part of the assertion. Chrome fires DOMContentLoaded BEFORE the font arrives and so must
+we — a fix that merely loaded fonts earlier would be differently wrong. **The ordering is the claim.**
+
+### ⚠⚠⚠ THE UNGUARDED FIX WAS A BAR 0, AND THE OLD-BINARY CONTROL CAUGHT IT
+
+`wpt html/semantics` went **HANG/CRASH 0 → 1** on
+`tabular-data/processing-model-1/span-limits.html`. Same-hour control, one binary apart: clean
+without the change, hanging with it.
+
+That file is bare markup with `colspan=1000` cells — **no `<style>`, no `<link>`, no `@font-face`**.
+The pass could not change one pixel of it and charged it a SECOND full relayout of the expensive
+kind. ⭐ *"Idempotent for FETCHING" is not "free to call twice"*: the relayout branch also fires on
+`has_dirty()`, which the harness's own scripts make true.
+
+The guard is the **precondition, not a heuristic** — a document with no stylesheet source has no
+`@font-face` to arrive. After it: `html/semantics` **6297/11635, HANG/CRASH 0**, the banked mark
+exactly, and `css/css-fonts` flat at 4092.
+
+### ⚠⚠⚠ AND THE BOUNDED-BUT-UNCAPPED VERSION WAS A **SECOND** BAR 0
+
+With the guard in, `G_LOAD` — *"the page renders when its subresources never answer"* — failed at
+**13.6s against a 2s budget**: a phase on the pre-`load` path is outside `finish_loading`'s
+`timeout(budget, …)` wrapper and answers to nothing on its own.
+
+⚠ The comment I wrote with the first version asserted the opposite — *"it runs under the same
+`load_budget()`"* — and was simply **WRONG**. *A comment is a checkable claim that dies silently*
+(t1303); this one was checked within the hour by a gate.
+
+```text
+  unbounded                 13.6s
+  + nav-budget bound         5.41s    still over the 4s ceiling — finish_loading starts a FRESH budget
+  + quarter-budget cap       4.20s    green   (the bound the early-CSS block 90 lines above uses)
+```
+
+⭐⭐ **TWO BAR 0s IN ONE TICK, FROM TWO DIFFERENT GATES, ON TWO DIFFERENT MECHANISMS — and both were
+the COST of the wait rather than the wait itself.** The capability was right the first time; what was
+wrong was believing a phase is free because it is idempotent, and then believing it is bounded because
+a neighbouring phase is.
+
+### HOW IT WAS FOUND — THREE REFUSALS
+
+```text
+  t1488  71% of near-bar misses on the block axis; leaf tag `div` names nothing
+         -> the `display` the oracle already carried REFUTED "wrong layout mode"
+            (50 of 1,352) and named `list-item -> block` on the way past
+  t1489  48% of misses are same-family same-size different ADVANCE
+         -> a controlled fixture REFUTED "our metrics are wrong" (155 vs 154)
+         -> a corrected counter REFUTED "the webfonts do not arrive" (14/15, 20/20, 7/7)
+  t1490  -> the layout was right and JS could not see it
+```
+
+### LANDED
+
+```
+  engine/page/lib.rs   the stylesheet phase joins the pre-`load` wait, GUARDED on
+                       has_stylesheet_source() — the precondition the Bar 0 demanded
+  gate  g_load_fires_after_the_webfont_arrives   RED under 3 mutations, TWO of which are the two
+        Bar 0 shapes themselves (the unguarded pass, and the unbounded deadline via g_load_budget)
+  vacuity arm: m=96, the monospace control — a fixture whose webfont silently failed would read
+    `a` and `m` the same, and Ahem's 160 is arithmetic rather than coincidence
+  guard arms: this fixture MUST reach the pass; bare markup must NOT
+  WPT html/semantics 6297/11635 HANG/CRASH 0 (the mark) · css/css-fonts 4092 (flat)
+  Bar 0: no hang, no crash, no panic
+```
+
+NEXT: the near-bar advance divergence is still open and is now the only thread left from the t1488
+survey — the faces load, our metrics are right, and `manuk_text::FontKey` still carries **`bold: bool`
+at a 600 threshold**. That IS confirmed on the clean system-font path: `font-family: "Lato"` at
+weights 400/500/700 measures `312 / 312 / 320` against Chrome's `312 / 314 / 320`. Weight 500 gets our
+400 face. The fix is a numeric weight in `FontKey` plus CSS Fonts §5.2's closest-match rule, and it
+reaches every text box on every page that uses a weight other than 400/700.
+
+WIKI: docs/wiki/load-fires-after-the-webfont-arrives.md

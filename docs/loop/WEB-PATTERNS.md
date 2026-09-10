@@ -11983,3 +11983,32 @@ for two of the four. Measure the set.
 **Status:** landed t1488; WPT `css/css-display` 332→353, `css/cssom` 2868→2894, HANG/CRASH 0. Gated by
 `g_display_list_item_does_not_report_as_block` under five mutations, eight rows byte-identical to
 headless Chrome.
+
+## The onload handler that measured the wrong font
+
+**The class:** every component that measures text after the page loads — a carousel sizing its slides,
+a virtualised list computing row heights, a chart laying out axis labels, a "fit text to box" widget,
+and every framework that measures on `load`. All of them were handed the fallback face's metrics,
+because `load` fired before the document's `@font-face` faces had arrived.
+
+**`load` waits for subresources, and a webfont is one.** The wait already covered subframes, images and
+masks — each added after a measured failure — and did not cover stylesheets, which is where
+`@font-face` is fetched and where an arriving face triggers the relayout. The once-only `load` guard
+(correct on its own) then made the later, right dispatch a no-op.
+
+**⚠ The layout was right the whole time.** The box tree measured correctly; only the geometry published
+to JS was stale. No rendering test can catch that class — the effect is right and the description of it
+is wrong.
+
+**⚠ And `DOMContentLoaded` must still fire early.** Chrome reads the fallback at DCL and the real face
+at `load`. A fix that merely loaded fonts sooner makes DCL wrong in the other direction; the ordering
+is the whole claim, so a gate must pin both events.
+
+**⚠⚠ Waiting unconditionally is a Bar 0.** Bare markup with no stylesheet at all cannot be changed by
+the wait and pays a second full relayout for it — which turned a table test with `colspan=1000` cells
+into a hang. *"Idempotent for fetching" is not "free to call twice."* Guard on the precondition — is
+there a stylesheet source at all — not on a heuristic.
+
+**Status:** landed t1490; Chrome-byte-identical on an Ahem fixture (`dcl:96 load:160 t0:160`), WPT
+`html/semantics` 6297/11635 with HANG/CRASH 0 (the banked mark), `css/css-fonts` flat. Gated by
+`g_load_fires_after_the_webfont_arrives` under two mutations, one of which reproduces the Bar 0.

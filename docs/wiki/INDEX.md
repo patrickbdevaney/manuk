@@ -2449,6 +2449,16 @@
   - L65 · A side flag, not a new Display variant
   - L77 · Result
 
+## `load` fires after the webfont arrives
+`docs/wiki/load-fires-after-the-webfont-arrives.md`
+
+  - L5 · The gap
+  - L21 · Arbitrated against headless Chrome
+  - L42 · ⚠⚠ The unguarded fix was a Bar 0, and the control is what caught it
+  - L60 · ⚠⚠ AND SO WAS THE UNBOUNDED ONE — a SECOND Bar 0, caught by a different gate
+  - L83 · How it was found
+  - L97 · The gate
+
 ## `load` fired before the images — so every `window.onload` handler measured an unfinished document
 `docs/wiki/load-waits-for-subresources.md`
 
@@ -3447,4 +3457,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2918 sections across 131 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2924 sections across 132 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

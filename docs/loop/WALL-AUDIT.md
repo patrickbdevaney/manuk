@@ -2615,3 +2615,47 @@ They cost seconds and would *add* coverage rather than cost it — the only chan
 strictly positive on both axes.
 
 **Harness-owned; reported, not acted on**, per the loop's scope rule.
+
+---
+
+## Audit #59 — tick 1490 (2026-09-10)
+
+```text
+  total 2481s · attributed 1088s (44%) · UNATTRIBUTED 1392s (56%)
+    427s  D  disk reclaim            17%
+    337s  P  parity (72 Chrome runs)  14%
+    217s  T  crate tests               9%
+     77s  B  build                     3%
+     the remaining nine line items sum to 26s
+```
+
+The audit poses four rigor-preserving questions. **Every lever they name lives in `scripts/` or the
+build configuration, which V1-SCOPE makes the observer's.** Answered by READING — which the scope rule
+permits, and which the last three surface audits record as having paid — and reported, not touched.
+
+### 1. PARALLELISM — the crate-test loop is SERIAL, and the audit's own question does not cover it
+
+`verify.sh:610` is `for c in manuk-css … manuk-shell; do _crate_suite "$c"; done`: **seven
+`cargo test -p` invocations one after another, 217s.** The audit's prompt says *"the gates are launched
+concurrently … the perf floors are deliberately NOT"* and says nothing about this loop, so the question
+as posed cannot find it. This is the largest strictly-recoverable item on the wall.
+
+### 2. THE LARGEST SINGLE LINE ITEM IS NOT A GATE
+
+`D` is disk reclaim — **427s, 17%, asserting nothing.** It exists because the volume runs 75–88% full.
+It outranks every check on the wall and buys no coverage.
+
+### 3. REDUNDANCY / SCOPE — nothing found from reading
+
+The nine remaining line items sum to 26s. There is no third place worth narrowing while `D` and the
+serial `T` are on the board.
+
+### 4. ⚠ AND THE AUDIT CANNOT SEE 56% OF WHAT IT IS AUDITING
+
+1,392s are unattributed. Audit #55 recorded this as *"the instrument cannot see 86% of the wall"*, so
+the aperture has widened — **14% → 44%** — and a majority is still dark. **An audit that ranks 44% of a
+cost cannot claim its ranking is the ranking**, and this one does not.
+
+**Nothing trimmed; both findings are observer-owned.** Recorded per the audit's own instruction —
+*"an audit that finds the wall already lean is a fine result — say so"* — with the correction that it
+is **not** lean, and that its two biggest items are not rigor.

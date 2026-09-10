@@ -4429,6 +4429,82 @@ impl Page {
             &mut nav_accounted_ms,
             &mut nav_hits,
         );
+        // ── **AND SO DO STYLESHEETS AND THEIR WEBFONTS** (t1490). ────────────────────────────
+        //
+        // This block waits for subframes, images and masks before firing `load`, for the reason each
+        // of their comments gives — a `window.onload` handler that reaches into a not-yet-loaded
+        // frame throws, and one that measures an undecoded image gets `naturalWidth === 0`. The
+        // stylesheet phase, which is where `@font-face` is fetched and where the arriving face
+        // triggers a relayout, was **not** in the list. So `load` fired on a document laid out in the
+        // FALLBACK face, `__fireLoad`'s once-only guard made the later, correct dispatch a no-op, and
+        // every `window.onload` handler on the web measured text in a font the page does not use.
+        //
+        // Measured against headless Chrome on a 20-line fixture (`@font-face` → Ahem, 5 chars at
+        // 32px, which Ahem defines as exactly 160px):
+        //
+        // ```text
+        //                    DOMContentLoaded    load     a later task
+        //   Chrome                  96            160         160
+        //   before                  96             96          96      (layout was already 160)
+        // ```
+        //
+        // ⚠ **THE LAYOUT WAS RIGHT THE WHOLE TIME.** `root_box` measured 160; only the geometry JS
+        // could see was stale, and a re-entry one call later read 160 correctly. That is why no
+        // rendering test could catch it — the same shape as t1479's `document.styleSheets`, where
+        // the effect was right and the description was wrong.
+        //
+        // ⚠ Idempotent with the pass in `finish_loading`, exactly as the subframe pass beside it is:
+        // `claim_webfont_src` refuses a src already tried and `apply_stylesheets` fingerprints its
+        // inputs, so the second call does no work. And it runs under the same `load_budget()` the
+        // block already spends, so a page with a dead font still fires `load` on schedule — the
+        // promise `finish_loading` makes in the same words: *"`load` fires either way."*
+        //
+        // ⚠⚠⚠ **AND IT IS GUARDED, BECAUSE THE UNGUARDED VERSION WAS A BAR 0.** `wpt
+        // html/semantics` went `HANG/CRASH 0 -> 1` on
+        // `tabular-data/processing-model-1/span-limits.html`, and the same-hour old-binary control
+        // confirmed the attribution. That file has **no `<style>`, no `<link>` and no `@font-face`** —
+        // it is bare markup with `colspan=1000` cells — so the pass could not change one pixel of it
+        // and charged it a SECOND full relayout of a table whose layout is the expensive kind.
+        // `fetch_and_apply_stylesheets`'s own relayout branch fires on `has_dirty()`, which the
+        // harness's scripts make true, so "idempotent for FETCHING" is not "free to call twice".
+        //
+        // The guard is the precondition, not a heuristic: a document with no stylesheet source has no
+        // `@font-face` to arrive and therefore nothing for `load` to wait on.
+        //
+        // ⚠ RESIDUE: a page whose ONLY `@font-face` lives in an external sheet still passes the guard
+        // (it has a `<link>`), so it is served. A page with neither — no font — needs no wait. There is
+        // no third case.
+        #[cfg(feature = "spidermonkey")]
+        //
+        // ⚠⚠⚠ **AND IT IS BOUNDED BY THE NAVIGATION'S OWN BUDGET, BECAUSE THE UNBOUNDED VERSION WAS
+        // THE OTHER BAR 0.** `G_LOAD` — *"the page renders when its subresources never answer"* —
+        // failed at **13.6s against a 2s budget**: a phase added to the pre-`load` path is outside
+        // `finish_loading`'s `timeout(budget, …)` wrapper and answers to nothing on its own. The
+        // comment this replaces asserted the opposite (*"it runs under the same `load_budget()`"*)
+        // and was simply wrong — *a comment is a checkable claim that dies silently* (t1303), and
+        // here the gate checked it.
+        //
+        // Bounded exactly as the early-CSS block above is: against `nav_started + load_budget()`, so
+        // a dead stylesheet cannot extend the navigation past the bound `G_LOAD` asserts. Cancelling
+        // mid-phase is safe by construction — the argument `finish_loading` makes for its own
+        // wrapper: each phase applies to the DOM only after it has what it needs, so a dropped future
+        // loses that phase's *enhancement* and never a half-mutated document. The sheets are not
+        // lost either; `finish_loading` picks them up exactly as it does today.
+        if page.has_stylesheet_source() {
+            // ⚠ **A QUARTER OF THE BUDGET, NOT ALL OF IT** — the same bound the early-CSS block
+            // above uses, and for a reason the first attempt measured: `G_LOAD`'s ceiling is 2× the
+            // budget for the WHOLE navigation, and `finish_loading` starts a fresh budget of its own
+            // afterwards. A phase here that may spend a full budget therefore buys a second one, and
+            // the gate went 13.6s → 5.41s against a 4s ceiling: bounded, and still two budgets.
+            let budget = load_budget();
+            let left = std::cmp::min(nav_started + budget, std::time::Instant::now() + budget / 4)
+                .saturating_duration_since(std::time::Instant::now());
+            let _ = tokio::time::timeout(
+                left,
+                page.fetch_and_apply_stylesheets(fonts, viewport_width),
+            )
+            .await;
+        }
         // **Subframes load BEFORE `load` fires** — `load` waits for subframes (HTML spec), and a page's
         // `<body onload>` is precisely where it reaches into them. Firing `load` first made the entire
         // `encoding` suite (767k subtests) read a not-yet-loaded frame and throw. Idempotent with the
@@ -4617,6 +4693,15 @@ impl Page {
             Some(u) => Some((secs, resolve_url(&self.final_url, &u))),
             None => Some((secs, self.final_url.clone())),
         }
+    }
+
+    /// **Is there any stylesheet source at all?** — an inline `<style>` or a `<link rel=stylesheet>`.
+    ///
+    /// The precondition for the pre-`load` stylesheet pass: a document with no stylesheet source has
+    /// no `@font-face` to arrive, so there is nothing for `load` to wait on and a second full relayout
+    /// buys nothing. See the call site in `load_async` for the Bar 0 that made this a guard.
+    pub fn has_stylesheet_source(&self) -> bool {
+        !collect_style_sources(&self.dom, &self.final_url).is_empty()
     }
 
     /// `(declared, loaded)` `@font-face` blocks for this document. See [`Page::webfonts`]'s field
