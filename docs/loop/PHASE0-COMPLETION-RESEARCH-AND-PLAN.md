@@ -118,7 +118,7 @@ Now that scorable sites dominate, push **shape≥0.75 on ≥95% of nodes** — t
 
 ## 6. Open decisions for the owner (flagged, not decided)
 
-1. **Bar reconciliation — 80% vs 95%.** `ROADMAP.md:42` says render on **≥80%** of corpus; the locked cert (`DAILY-DRIVER-CERTIFICATION.md`, `PHASE0-MEASUREMENT-SYSTEM.md`) says **≥95% render∧function**. That is a 10–15pt difference in the finish line. Recommendation: treat **≥95%** as the certification, but recognize a **≥85–90% render∧function** milestone as "an agent can daily-drive the real web" — which `ROADMAP.md:37` itself calls the true goal ("a lower, achievable bar than pixel-perfect Chrome"). Pick the number that ends Phase 0.
+1. **Bar reconciliation — 80% vs 95% → DECIDED: 95% is the cert (owner, 2026-09-10).** Phase-0 exit is the locked **≥95% render∧function** certificate (`DAILY-DRIVER-CERTIFICATION.md`, `PHASE0-MEASUREMENT-SYSTEM.md`); the `ROADMAP.md:42` "≥80%" line is superseded and should be reconciled to 95% when next touched. A ≥85–90% render∧function point may still be noted as an interim "an agent can daily-drive the web" milestone, but it does **not** end Phase 0 — the certificate does.
 2. **Confirm the binding constraint is current** (P0) before committing the loop to P1 — the ~82% figure is from t1226.
 3. **AccessKit adoption** (`H0.7` not started) — greenlight for P3.
 4. **a11y metric:** the cert bar is **node-match ≥90%**; the tri-sweep's F1 (79.4%) is a related instrument, not the cert. Keep node-match as the authority.
