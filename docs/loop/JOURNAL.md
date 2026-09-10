@@ -108003,3 +108003,80 @@ mechanism that must not be folded into it: `Noto Sans JP` at 400, Chrome 168 aga
 face delivered (14 of 15) and every miss at a non-collapsing weight.
 
 WIKI: docs/wiki/pricing-the-bold-bool-collapse.md
+
+## Tick 1492 — the numeric font weight was REFUSED (2026-09-10)
+
+TICK SHAPE: refusal
+
+t1491 priced the `bold: bool` collapse and justified the 30-call-site change. It was built, it worked,
+it was Chrome-byte-identical on two fixtures — and it is **reverted**.
+
+### IT WORKED
+
+```text
+  system family, `Lato` 32px      300   400   500   700   900
+    Chrome                        303   312   314   320   327
+    before                        312   312   312   320   320
+    after                         303   312   314   320   327
+
+  a graded @font-face set         400   500   700   450
+    Chrome                        312   314   320   314
+    after                         312   314   320   314    (450 is §5.2's DIRECTIONAL tie: look UP)
+```
+
+### ⭐⭐⭐ AND THE SUITE SAID NO
+
+```text
+  wpt css/css-fonts/variations
+    clean tree, TWO runs      237/468   242/468     (a ±5 band)
+    with the change           147/468   148/468     -92, far outside it
+```
+
+**A regression is never traded for a capability.** Reverted, whole.
+
+### WHAT THE REFUSAL ESTABLISHED — WHICH A GREEN TICK WOULD NOT HAVE
+
+⚠ **Reverting only the `@font-face` branch did NOT recover it** — `variations` stayed at 148. So the
+cause is the SYSTEM path (`fontdb::Weight(key.weight)`), which is exactly the half that was
+Chrome-verified. *When two instruments disagree about one number, neither is evidence* (check #142).
+
+⭐⭐ **The `@font-face` branch was independently wrong, and THAT is established.** Its §5.2
+closest-match ran over each registered face's weight, and the failing assertions named the error:
+
+```text
+  Test @font-face matching for weight 420
+    @font-face should be mapped to CSSTest Weights 600 — got the 300 face
+```
+
+§5.2 matches the **`@font-face` DESCRIPTOR's** declared weight or range, **not the weight inside the
+font FILE**. `manuk_css::FontFace` carries `family`, `srcs`, `unicode_range` and **no weight at all**.
+*A closest-match over the wrong number is more confidently wrong than a coarse match over it* — which
+is what the corpus measured.
+
+⚠ **And the CSSTest weight faces are NOT installed here** (`fc-list | grep -c CSSTest` = 0); the tests
+load them from `./resources/…`, through the very `@font-face` path whose descriptor is missing. So the
+suite may be measuring the descriptor gap rather than the weight key. **Not established**, and it is
+the first thing the next attempt must settle.
+
+⚠ Also found and NOT shipped: a `FontKey::is_bold()` accessor kept "for compatibility" had **zero
+callers** once the numeric weight went in — found by an inert mutation, deleted rather than gated.
+*A guard nothing reaches is not a guard.*
+
+### LANDED
+
+```
+  docs/wiki/the-numeric-font-weight-was-refused.md   the measurement and the 3-step next attempt
+  no engine change — the tree is byte-identical to t1491
+```
+
+NEXT, in order, and step 2 is the one that decides:
+1. **Carry the descriptor** — parse `font-weight` in the `@font-face` block into `manuk_css::FontFace`,
+   thread it through `register_named_font`, key the webfont map on `(id, lo, hi)`. A prerequisite for
+   §5.2 being implementable on that path at all, and worth doing on its own evidence.
+2. **Re-measure `variations` with the descriptor present, on the clean tree.** That decides whether
+   the −92 is the weight key or the missing descriptor. Nothing else can.
+3. **Only then re-attempt the numeric key**, with `variations` as the gate rather than the casualty.
+
+*A revert with a full measurement is not a lost tick* (t1420).
+
+WIKI: docs/wiki/the-numeric-font-weight-was-refused.md

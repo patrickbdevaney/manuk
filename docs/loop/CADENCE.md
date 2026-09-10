@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1164** | ticks 1–1490 |
-| median tick cycle | **33m** | 1163 intervals |
+| ticks landed | **1165** | ticks 1–1491 |
+| median tick cycle | **33m** | 1164 intervals |
 | median, last 10 | **73m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.79** | 1476.1h elapsed |
-| median verify wall | **67s** | 1103 ticks |
+| **ticks per hour** | **0.79** | 1477.8h elapsed |
+| median verify wall | **67s** | 1104 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**538 of 1164 ticks** (46%) moved a
+**538 of 1165 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -1261,5 +1261,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1487** | 2026-09-10 12:14 | 87m | instrument | 8m | +510/−46 | 577 | 81 | 56.0% · | both sides must follow the same redirect (2026-09-10) |
 | **1488** | 2026-09-10 13:43 | 89m | capability | 8m | +514/−43 | 578 | 81 | 56.0% · | a survey refused its own hypothesis and named the bug on the way past (2026-09-10) |
 | **1490** | 2026-09-10 17:09 | 3.4h | capability | 8m | +267/−82 | 579 | 81 | 56.0% · | `load` fires after the webfont arrives (2026-09-10) |
+| **1491** | 2026-09-10 18:53 | 1.7h | instrument | 8m | +202/−42 | 579 | 81 | 56.0% · | pricing the `bold: bool` collapse (2026-09-10) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

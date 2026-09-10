@@ -3331,6 +3331,14 @@
   - L43 · The limits, asserted rather than implied
   - L51 · A test that asserts the right thing about a link it cannot follow
 
+## The numeric font weight was refused
+`docs/wiki/the-numeric-font-weight-was-refused.md`
+
+  - L5 · What was built
+  - L28 · Why it was refused
+  - L38 · What the refusal established, which a green tick would not have
+  - L64 · The three-step next attempt
+
 ## The refusing oracle runs in two seconds
 `docs/wiki/the-refusing-oracle-runs-in-two-seconds.md`
 
@@ -3465,4 +3473,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2928 sections across 133 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2932 sections across 134 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
