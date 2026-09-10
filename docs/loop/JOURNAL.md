@@ -107052,3 +107052,107 @@ you happened to write is the most expensive kind of wrong) — the four-line pro
 `document.currentScript`, ours vs Chrome.
 
 WIKI: docs/wiki/a-page-could-not-report-its-own-boot-failure.md
+
+## Tick 1481 — an external script keeps its `src` (2026-09-10)
+
+TICK SHAPE: capability
+
+P1 of the observer's mandate — *fix the SHARED defects that make sites unscorable* — taking the top
+row of t1480's own histogram. Probed first, per t1480's NEXT.
+
+### THE CONTROL FLAG WAS LIVING IN A WEB-FACING ATTRIBUTE
+
+`fetch_external_scripts` fetched a `<script src>`, put the source in the element, and called
+`dom.remove_attr(node, "src")`. The **absence** of `src` was then read by `collect_inline_scripts` as
+*"this node has text and should run"* — so the flag and the attribute the page reads were the same
+bit, and no configuration existed in which the page could have it back.
+
+⭐⭐⭐ **THIS ENGINE HAD ALREADY FIXED THE SAME BUG ONE PATH OVER**, and said so in a doc comment:
+`Page::dyn_scripts_ran` exists because *"`fetch_and_run_dynamic_scripts` removed `src` before
+evaluating… `new URL(document.currentScript.src)` does not skip, it **throws** — `TypeError: Invalid
+URL: ` on 4 of 200 CrUX corpus sites."* One rule, two implementations; the PARSER half — the half
+that runs on **every page** — was the stale one.
+
+⭐⭐ *A sentinel that is also a legal value is not a sentinel* (t1424), one class along: the sentinel
+here was a legal **ABSENCE**.
+
+### CHROME-ARBITRATED, BYTE-IDENTICAL AFTER
+
+```text
+                                       Chrome     before     after
+  runs                                 1          1          1
+  document.currentScript.src           has-src    ""         has-src
+  …and it is ABSOLUTE                  abs        —          abs
+  new URL(currentScript.src)           ok         THREW      ok
+  querySelectorAll('script[src]')      1          0          1
+  querySelectorAll('script[src*=…]')   1          0          1
+```
+
+Two families of wholly ordinary code break on this and essentially nothing else does: a bundle
+locating its own tag (`script[src*="otSDKStub"]` — every consent SDK and tag manager, to read its own
+`data-*`), and a bundle deriving its asset base (`new URL(document.currentScript.src)` — literally
+what webpack's `publicPath: 'auto'` emits).
+
+### ⚠ THE THIRD LINE IS THE DANGEROUS ONE
+
+`drain_injected_scripts` selects by *"has `src` and is not in `dyn_scripts_ran`"*. Restoring `src`
+without seeding that set makes **every external script on every page fetch and execute twice** — a
+page's analytics, consent gate and router all booting twice, a Bar-0 shape dressed as a one-line
+attribute change. `runs=1` is the gate's vacuity arm for exactly this; mutation 3 turns it into
+`runs=2`.
+
+### RESULT ON THE CORPUS — AND WHAT IT DOES NOT CLAIM
+
+Same 40 sites, same binary in every other respect:
+
+```text
+                                  before   after
+  boot CLEAN                        28       29
+  documents with >=1 uncaught       11       10
+  uncaught errors, all classes      18       11
+  occurrences of "Invalid URL"       4        1
+  first-failure `…:hasAttribute`     2        0   <- the class is GONE (ikea.com, otomoto.pl)
+```
+
+⚠⚠ **THE RENDER NUMBERS DID NOT MOVE, AND ARE NOT OFFERED AS IF THEY HAD.** `ikea.com` and
+`otomoto.pl` are byte-identical before and after on `structural` and `SHAPE`. The consent SDK now
+runs — a capability restored — but it is not what was shaping those two pages. The sweep means
+(`COVERAGE 85.9→86.9`, `SHAPE 73.5→73.2`, `VISUAL 59.5→57.8`) are **single runs over live origins
+with no band measured**, and per t1410 a delta no larger than the band is not a movement. The
+boot-error counts are the evidence because they are discrete, per-site and reproducible; the means
+are not.
+
+### LANDED
+
+```
+  engine/page/lib.rs          `src` survives the inlining; dyn_scripts_ran seeded with the same set
+  engine/js/dom_bindings.rs   collect_inline_scripts(dom, inlined) — the sentinel moves off the DOM
+  gate  g_an_external_script_keeps_its_src   RED under 3 named mutations
+  vacuity arm: runs=1 — the fetched script must execute EXACTLY ONCE
+  WPT dom 8174 -> 8175 · html/semantics 6296 -> 6297 (denominator 11394 -> 11635, re-discovered)
+  WPT TOTAL 496030 -> 496032 · HANG/CRASH 0 in both areas
+  Bar 0: no hang, no crash, no panic
+```
+
+⚠ RESIDUE: the node now carries `src` AND a text child, where Chrome's external script has `src` and
+`textContent === ""`. Holding the fetched source in a **side map** rather than in the DOM is the
+complete fix and needs the map to reach `collect_inline_scripts` through `PageContext`.
+⚠ `getElementsByTagName('script').length` read from the first script is 2 here and 1 in Chrome — we
+parse the whole document before running anything. Parse/execute interleaving; deliberately not pinned.
+
+NEXT: the histogram's remaining rows, in order. `other:no-exception-object` is **ours, not a page's** —
+`evaluate_script` returned `Err` for a CLASSIC script with nothing pending, which is a hole in the
+reporter and makes one site's first-failure unnameable; find what clears the exception. Then
+`other:WebAssembly-Promise-APIs-not-supported` (2 sites, JSPI) and
+`other:Minified-React-error--446` (a hydration mismatch — decode the React error number first, it
+names the invariant).
+
+⚠ HARNESS (observer's, reported not touched): the wall's `F2 pipeline large/mid` floor read **7.60x**
+against a 7.5x bar on the first attempt and **passed** on the re-run. Both bench pages contain
+**zero `<script>` tags**, so this tick's change — entirely in the script fetch/run path — cannot
+reach them. Three back-to-back runs on the same tree gave **5.51 / 5.99 / 6.42**, i.e. the reading is
+a ~1-point band and the failing sample sat outside it, taken while `mem-guard` reported 12.4 GB
+available and swap 99% full. *A delta no larger than the band is not a movement* (t1410), and this
+floor is a single sample.
+
+WIKI: docs/wiki/an-external-script-keeps-its-src.md

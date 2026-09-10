@@ -7820,6 +7820,11 @@ impl Page {
                 })
             })
         });
+        // The `<script src>` nodes the host fetched and inlined — filled inside the block below on
+        // the scripted path, and empty in a build (or a document) with no script context. It becomes
+        // `dyn_scripts_ran`, i.e. HTML's "already started" flag, for the reason stated at the seed.
+        let mut inlined_scripts: std::collections::HashSet<manuk_dom::NodeId> =
+            std::collections::HashSet::new();
         // ⚠⚠ **THE RESET BELONGS WHERE A DOCUMENT BEGINS, NOT WHERE A SCRIPT CONTEXT IS BUILT.**
         //
         // `PageContext::load` clears the harvest, and it was the ONLY place that did — but the very
@@ -7906,6 +7911,13 @@ impl Page {
             // Taken, not read: the seed belongs to THIS document, and leaving it in place would let
             // a node index from this page fire a `load` on the next one built in this thread.
             let external = PENDING_EXTERNAL_SCRIPTS.with(|p| std::mem::take(&mut *p.borrow_mut()));
+            // ⚠⚠ **AND `drain_injected_scripts` MUST NOT RE-FETCH WHAT THE PARSER ALREADY RAN.**
+            // As of tick 1481 a parser-inlined `<script src>` KEEPS its `src`, and that drain's
+            // filter is *"has `src` and is not in `dyn_scripts_ran`"* — so without this seed every
+            // external script on every page would be fetched a second time and executed a second
+            // time, which is a Bar-0 shape (a page's analytics, its consent gate and its router all
+            // booting twice) dressed as a one-line attribute change.
+            inlined_scripts = external.clone();
             match manuk_js::load_document(&mut dom, final_url, &rects, &styles, external) {
                 Ok((ctx, n)) => {
                     if n > 0 {
@@ -8001,7 +8013,7 @@ impl Page {
             has_sticky,
             sticky_applied: std::collections::HashMap::new(),
             sticky_scroll_y: 0.0,
-            dyn_scripts_ran: std::collections::HashSet::new(),
+            dyn_scripts_ran: inlined_scripts,
             // Empty by default; the async pre-fetch pass on the caller's path sets this before the
             // deferred (module) scripts run (`load_async`, `from_prefetched_inner`).
             module_graph_sources: std::collections::HashMap::new(),
@@ -11271,10 +11283,40 @@ async fn fetch_external_scripts(
                 let Some(js) = subresource_text(&r) else {
                     continue;
                 };
-                // Remember where this script CAME FROM before the evidence is destroyed. `src` is
-                // removed on the next line and the node then looks inline forever after.
+                // ── **`src` STAYS. THE SENTINEL MOVES OFF THE DOM.** (tick 1481) ───────────────
+                //
+                // This line used to be `dom.remove_attr(node, "src")`, and the absence of `src` was
+                // then read as *"this script has text and should run"* by `collect_inline_scripts`.
+                // A control flag and a web-facing attribute were the same bit, so the page could not
+                // have the attribute back. Measured against headless Chrome on a four-line fixture:
+                //
+                // ```text
+                //                                        Chrome    before    after
+                //   document.currentScript.src           has-src   ""        has-src
+                //   querySelectorAll('script[src]')      1         0         1
+                //   querySelectorAll('script[src*=…]')   1         0         1
+                // ```
+                //
+                // ⚠ **THIS ENGINE HAD ALREADY FIXED THE SAME BUG ONE PATH OVER.** `dyn_scripts_ran`
+                // exists because `fetch_and_run_dynamic_scripts` removed `src` before evaluating and
+                // *"a script cannot read its own URL off an attribute that is gone"* — measured then
+                // as `TypeError: Invalid URL: ` on 4 of 200 CrUX sites. One rule, two
+                // implementations; the PARSER half was the stale one, and it is the half that runs
+                // on every page.
+                //
+                // What it costs on the real web: a bundle that locates its own tag with
+                // `document.querySelector('script[src*="otSDKStub"]')`, or derives its asset base
+                // from `document.currentScript.src` (webpack's `publicPath: 'auto'` does exactly
+                // that), gets `null`/`""`. The t1480 boot histogram's top first-failure class was
+                // the OneTrust consent stub dying this way on TWO of 40 sites at a byte-identical
+                // minified offset.
+                //
+                // ⚠ RESIDUE, named: the node now carries `src` AND a text child, where Chrome's
+                // external script has `src` and `textContent === ""`. Holding the source in a side
+                // map instead of the DOM is the complete fix and is a larger change (the map has to
+                // reach `collect_inline_scripts` through `PageContext`); this is the half that the
+                // corpus actually fails on.
                 origins.insert(node, r.final_url.to_string());
-                dom.remove_attr(node, "src");
                 let text = dom.create_text(js);
                 dom.append_child(node, text);
                 // CSP already said yes to this URL, above. Record the node so the inline check does

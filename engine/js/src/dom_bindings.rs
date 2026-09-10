@@ -14341,7 +14341,12 @@ pub fn run_scripts(
     layout: &std::collections::HashMap<NodeId, [f32; 4]>,
     styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
 ) -> Result<usize, String> {
-    let scripts = collect_inline_scripts(dom);
+    // ⚠ **THE EMPTY SET IS CORRECT HERE AND IT IS NOT A SHORTCUT.** This entry point (`run_scripts`)
+    // is the one-shot path that never went through `Page`'s external-script fetch, so no node on its
+    // document has had a source inlined into it — a `<script src>` reaching here genuinely has
+    // nothing to run. `PageContext::load` below, which is the path every real page takes, passes the
+    // set it actually has.
+    let scripts = collect_inline_scripts(dom, &std::collections::HashSet::new());
     if scripts.is_empty() {
         return Ok(0);
     }
@@ -14569,7 +14574,9 @@ impl PageContext {
         };
 
         let mut ran = 0usize;
-        for (node, src, is_module, blocks_paint) in collect_inline_scripts(dom) {
+        for (node, src, is_module, blocks_paint) in
+            collect_inline_scripts(dom, &ctx.external_scripts)
+        {
             if !blocks_paint {
                 continue;
             }
@@ -14719,11 +14726,12 @@ impl PageContext {
         rooted!(&in(runtime.cx()) let global = self.global.get());
         let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
 
-        let pending: Vec<(NodeId, String, bool)> = collect_inline_scripts(dom)
-            .into_iter()
-            .filter(|(n, _, _, _)| !self.ran.borrow().contains(n))
-            .map(|(n, src, is_module, _)| (n, src, is_module))
-            .collect();
+        let pending: Vec<(NodeId, String, bool)> =
+            collect_inline_scripts(dom, &self.external_scripts)
+                .into_iter()
+                .filter(|(n, _, _, _)| !self.ran.borrow().contains(n))
+                .map(|(n, src, is_module, _)| (n, src, is_module))
+                .collect();
 
         let mut ran = 0usize;
         for (node, src, is_module) in pending {
@@ -16938,7 +16946,15 @@ pub(crate) fn script_type_is_classic_js(ty: Option<&str>) -> bool {
     CLASSIC.iter().any(|c| t.eq_ignore_ascii_case(c))
 }
 
-fn collect_inline_scripts(dom: &Dom) -> Vec<(NodeId, String, bool, bool)> {
+/// `inlined` names the `<script src>` nodes whose source was FETCHED AND PLACED IN THE ELEMENT by
+/// the host. Before tick 1481 that fact was encoded as *"`src` has been removed"* — a control flag
+/// living in a web-facing attribute, so keeping the attribute and knowing the script had run were
+/// mutually exclusive and the attribute lost. The set is the same one `PageContext::external_scripts`
+/// already carried for the `load` event, so no new channel was needed; it simply had to be READ here.
+fn collect_inline_scripts(
+    dom: &Dom,
+    inlined: &std::collections::HashSet<NodeId>,
+) -> Vec<(NodeId, String, bool, bool)> {
     let mut out = Vec::new();
     for n in dom.descendants(dom.root()) {
         if dom.tag_name(n) != Some("script") {
@@ -16947,10 +16963,14 @@ fn collect_inline_scripts(dom: &Dom) -> Vec<(NodeId, String, bool, bool)> {
         let mut is_module = false;
         let mut blocks_paint = true;
         if let Some(el) = dom.element(n) {
-            // A `src` that is still present means the fetch failed — there is nothing to run.
-            // (`fetch_external_scripts` inlines the text and REMOVES `src`, leaving `defer`/`async`
-            // and `type` in place, which is exactly what we need to classify it here.)
-            if el.attr("src").is_some() {
+            // A `src` that is still present means the fetch failed — there is nothing to run —
+            // **unless the host inlined this node's source into it**, which is the ordinary case for
+            // every external script on every page. `fetch_external_scripts` used to signal that by
+            // REMOVING `src`; it no longer does, because a page reads that attribute (see the
+            // comment there, and `Page::dyn_scripts_ran` for the same fix on the dynamic path).
+            // A failed fetch, an SRI mismatch and a CSP refusal all leave `src` AND stay out of this
+            // set, so each still takes the "there is nothing to run" path it always took.
+            if el.attr("src").is_some() && !inlined.contains(&n) {
                 continue;
             }
             let ty = el.attr("type").unwrap_or("").trim();

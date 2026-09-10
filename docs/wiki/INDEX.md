@@ -118,6 +118,17 @@
   - L28 · Three details that keep it scoped
   - L43 · What it cost to find, which is the reusable part
 
+## An external script keeps its `src`
+`docs/wiki/an-external-script-keeps-its-src.md`
+
+  - L5 · The mechanism
+  - L30 · What it cost, measured
+  - L48 · Arbitrated against headless Chrome
+  - L61 · The fix is three lines and one of them is the dangerous one
+  - L75 · Result on the corpus, and what it does NOT claim
+  - L96 · Residue, named
+  - L108 · The gate
+
 ## An option is not hidden by a stylesheet
 `docs/wiki/an-option-is-not-hidden-by-a-stylesheet.md`
 
@@ -3369,4 +3380,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2872 sections across 123 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2879 sections across 124 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

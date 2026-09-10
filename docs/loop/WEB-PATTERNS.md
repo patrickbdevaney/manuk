@@ -11822,3 +11822,34 @@ previous page's. Two script-free sites were reported as failing on another site'
 **Status:** landed t1480; WPT `dom` 8170 → 8174, HANG/CRASH 0, gated by
 `g_a_page_reports_its_own_boot_failure` and `g_window_handler_throws_are_reported` under eight
 mutations, with the Chrome fixture byte-identical.
+
+## The consent SDK that cannot find its own `<script>` tag
+
+**The class:** any bundle that locates its own element or derives its asset base from it. Two idioms
+cover almost all of it — `document.querySelector('script[src*="otSDKStub"]')`, which every consent
+SDK and tag manager uses to read its own `data-*` configuration, and
+`new URL(document.currentScript.src)`, which is literally what webpack's `publicPath: 'auto'` emits
+and is therefore on a very large share of bundled sites.
+
+This engine fetched a `<script src>`, put the source in the element, and then **removed `src`** —
+because the absence of the attribute was how the script runner knew there was text to run. A control
+flag and a web-facing attribute were the same bit, so the page could not have the attribute back:
+`script[src]` selectors matched nothing, and `currentScript.src` was `""`, which does not make
+`new URL()` skip — it makes it **throw**.
+
+**The engine had already fixed this one path over.** `Page::dyn_scripts_ran` exists because the
+DYNAMIC script path had the identical bug, measured then as `TypeError: Invalid URL: ` on 4 of 200
+CrUX sites. One rule, two implementations, and the parser half — the half that runs on every page —
+was the stale one.
+
+**⚠ The dangerous half of the fix is invisible.** The injected-script drain selects scripts by *"has
+`src` and has not run"*. Give `src` back without also marking the parser's scripts as already-run and
+every external script on every page fetches and executes a **second** time — analytics, consent gate
+and router all booting twice. `runs=1` is the assertion that makes the fix a fix.
+
+**Status:** landed t1481; the top first-failure class of the t1480 boot histogram (the OneTrust stub
+on ikea.com and otomoto.pl, at a byte-identical minified offset) is gone; boot-clean 28→29 of 39 on
+the CrUX-trend slice; WPT `dom` 8174→8175, `html/semantics` 6296→6297, HANG/CRASH 0. Gated by
+`g_an_external_script_keeps_its_src` under three mutations, Chrome fixture byte-identical. ⚠ The
+render means did NOT move and are not claimed to: the two sites are byte-identical on `structural`
+and `SHAPE` before and after.
