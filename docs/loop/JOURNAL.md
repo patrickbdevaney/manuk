@@ -107413,3 +107413,84 @@ not binding, and the loop belongs on P2 (the M2 function cert, `bidi/src/protoco
 API. If it does NOT hold, the mandate stands and IndexedDB (20 events on 40 sites) is the next row.
 
 WIKI: none — an audit tick; its output IS the two audit documents.
+
+## Tick 1485 — the scorability gap is not a function gap (2026-09-10)
+
+TICK SHAPE: instrument
+
+Steer #1 of my own surface audit #90, executed: the refusal-tag histogram over the representative
+200-site CrUX trend corpus. Rows banked at `docs/loop/SWEEP-t1485-refusal-tags.tsv`.
+
+### ⭐⭐⭐ THE MANDATE'S BINDING CONSTRAINT IS WORTH 6 SITES; THE TERM NOBODY IS WORKING IS WORTH 23
+
+```text
+  200 sites · SCORED 113 (56.5%) · refused 87
+
+  ORIGIN — out of any engine's reach ............................... 58
+      bot-wall 36 · unreachable 16 · http 5 · empty 1
+  METHOD — oracle sees a file:// snapshot, we render the LIVE url .. 23
+      probe-blocked 8 · tree-divergence 7 · shell-only 4 · oracle-module-shell 3 · thin-overlap 1
+  ENGINE — OURS ..................................................... 6
+      css-starved 5 · render-failed 1
+
+  in-scope (bot-walls out) 164 · scored 113 = 68.9%     (the mandate says ~82%)
+  of the 51 in-scope refusals:  ORIGIN 22 · METHOD 23 · ENGINE 6
+```
+
+**The gap is bigger than the map says and almost none of it is a function defect.** Audit #90 found
+this on 40; this is the same result at 5× the sample.
+
+### ⭐⭐⭐ AND BOOT ERRORS BARELY PREDICT RENDER QUALITY EITHER
+
+`Page::boot_errors` (t1480) makes this cross-tab possible for the first time. Among the 107 scored
+sites with a shape number:
+
+```text
+  boot CLEAN   n=53   mean SHAPE 67.7%   shape>=75 on 30 (57%)
+  boot THREW   n=54   mean SHAPE 67.4%   shape>=75 on 23 (43%)
+```
+
+**A page that throws at boot renders essentially as well as one that does not** — 0.3 points apart on
+n≈53 per arm. The crossing rate differs (30 sites vs 23) and is the only signal; at this n it is
+suggestive, not decisive. So the function axis is not gating scorability **and** it is not what
+separates a well-rendered page from a badly-rendered one among the pages that score.
+
+⚠ **THIS DOES NOT SAY t1480-1483 WERE WRONG.** Each found a real, shared, Chrome-arbitrated defect
+behind a gate proven red. *A mandate can name the wrong bottleneck and still point at good work.* What
+the measurement says is narrower: that work does not move the exit metric, and the loop spent four
+ticks learning it the expensive way **because P0 had not been run.**
+
+### THE TWO ADDRESSABLE TERMS, RANKED
+
+1. ⭐⭐⭐ **METHOD — 23 sites, and the fix exists and is barely engaging.** All five tags are one
+   asymmetry: the oracle is fed a `curl` snapshot from `file://` while we render the live URL, so a
+   module bundle is cross-origin for Chrome and not for us, a CSP blocks the probe, or the two engines
+   settle one app into two states. `Unmeasurable::OracleModuleShell`'s own doc names the remedy — *"a
+   loopback reverse PROXY so document, bundle and XHR share ONE origin"* — and `tests/wpt/src/proxy.rs`
+   exists. It printed `PROXY REFERENCE ACCEPTED` on **6 of 200** and was mentioned on 12. **Find out
+   why it engages for 6 and not 29.**
+2. ⭐⭐ **RENDER — 53 of 164 in-scope at shape>=0.75, against a 95% bar (32.3%).** P4 on the mandate's
+   own list, sequenced *after* the ceiling. On this evidence the ceiling worth lifting is METHOD, and
+   P4 is the main line.
+3. ⚠ **`css-starved` (5) is the one genuinely engine-owned lever**, ours by the instrument's own words
+   (*"our own `load_deadline` cut those sheets"*). Five sites, unscorable AND rendering wrong.
+
+### LANDED
+
+```
+  docs/loop/SWEEP-t1485-refusal-tags.tsv   200 rows: url, refusal tag, shape, boot verdict
+  docs/wiki/the-scorability-gap-is-not-a-function-gap.md
+  no engine change — this tick is a measurement and a direction
+```
+
+⚠ One run, no repeat, so no error band (t1410): the refusal tags are discrete and per-site, which is
+why they are quoted; the shape means are single-run, which is why 0.3 points is reported as *inside
+the band* rather than as a result. Run at `--jobs 3`; contention did not manifest as timeouts —
+`oracle-timeout` does not appear in the 200-site histogram at all.
+
+NEXT: **why does the reference proxy engage on 6 sites of 200?** `tests/wpt/src/proxy.rs` is 821 lines
+and `PROXY REFERENCE ACCEPTED` is printed by the fidelity path, so the seam is readable in one sitting.
+23 refusals are waiting on whatever the answer is — four times the entire ENGINE column. If the proxy
+turns out to be deliberately narrow, the finding is the same and the next line is P4/render.
+
+WIKI: docs/wiki/the-scorability-gap-is-not-a-function-gap.md

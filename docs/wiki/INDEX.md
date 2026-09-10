@@ -3282,6 +3282,17 @@
   - L31 · What it unblocks
   - L38 · The other half of this tick: five hypotheses ruled out
 
+## The scorability gap is not a function gap
+`docs/wiki/the-scorability-gap-is-not-a-function-gap.md`
+
+  - L6 · What was asked
+  - L18 · The attribution
+  - L43 · And boot errors barely predict render quality either
+  - L60 · ⚠ This does not say the four function ticks were wrong
+  - L70 · Where the metric actually is
+  - L77 · The two addressable terms, ranked
+  - L97 · ⚠ What this measurement does not carry
+
 ## The scrolling area of every element — measured, implemented, and refused
 `docs/wiki/the-scrolling-area-of-every-element.md`
 
@@ -3399,4 +3410,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2890 sections across 126 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2897 sections across 127 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
