@@ -15,7 +15,7 @@
 | median tick cycle | **33m** | 1163 intervals |
 | median, last 10 | **73m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.79** | 1475.3h elapsed |
+| **ticks per hour** | **0.79** | 1476.1h elapsed |
 | median verify wall | **67s** | 1103 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -1260,6 +1260,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1486** | 2026-09-10 10:47 | 58m | capability | 8m | +407/−46 | 576 | 81 | 56.0% · | a meta refresh is a redirect (2026-09-10) |
 | **1487** | 2026-09-10 12:14 | 87m | instrument | 8m | +510/−46 | 577 | 81 | 56.0% · | both sides must follow the same redirect (2026-09-10) |
 | **1488** | 2026-09-10 13:43 | 89m | capability | 8m | +514/−43 | 578 | 81 | 56.0% · | a survey refused its own hypothesis and named the bug on the way past (2026-09-10) |
-| **1490** | 2026-09-10 16:20 | 2.6h | capability | 8m | +566/−44 | 579 | 81 | 56.0% · | `load` fires after the webfont arrives (2026-09-10) |
+| **1490** | 2026-09-10 17:09 | 3.4h | capability | 8m | +267/−82 | 579 | 81 | 56.0% · | `load` fires after the webfont arrives (2026-09-10) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -1303,6 +1303,10 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                         std::collections::HashMap::new();
                     // (family stack, bold, italic, size bits) -> the probe string's advance. See the
                     // `font` block below: one measure per distinct font on the page.
+                    // Our computed `font-weight` per stripped path — the key `mseen` ends up with.
+                    // Built here rather than derived later because `Seen` has no weight field and
+                    // adding one would change what the two engines compare on.
+                    let mut mweights: std::collections::HashMap<String, u16> = Default::default();
                     let mut advcache: std::collections::HashMap<(String, bool, bool, u32), i64> =
                         std::collections::HashMap::new();
                     for n in dom.descendants(dom.root()) {
@@ -1422,6 +1426,10 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                                 })
                                 .unwrap_or("")
                                 .to_string();
+                            mweights.insert(
+                                manuk_wpt::oracle::strip_sig_key(&path),
+                                styles.get(&n).map(|st| st.font_weight).unwrap_or(400),
+                            );
                             mseen.insert(
                                 path,
                                 manuk_wpt::oracle::Seen {
@@ -1681,6 +1689,45 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                                     "shape"
                                 };
                                 *kinds.entry(kind).or_default() += 1;
+                            }
+                            // ── **PRICE THE MECHANISM BEFORE BUILDING IT** (t1491, and t1367-1374's
+                            // rule: three of four candidates priced at ~0). `manuk_text::FontKey`
+                            // carries `bold: bool` at a 600 threshold, so 300/400/500 collapse to one
+                            // face and 600/700/800 to another — confirmed against Chrome on a clean
+                            // system-font fixture (`Lato` at 400/500/700 measures 312/312/320 where
+                            // Chrome gives 312/314/320). Replacing it with a numeric weight is a
+                            // 30-call-site refactor, so the question that has to come first is: **how
+                            // many of the advance disagreements are even AT a collapsing weight?**
+                            //
+                            // A miss at weight 400 or 700 cannot be explained by the collapse, and if
+                            // those dominate the refactor is aimed at nothing.
+                            {
+                                let (mut collapsing, mut exact) = (0usize, 0usize);
+                                for miss in &misses {
+                                    let (Some(c), Some(m)) =
+                                        (cseen.get(&miss.path), mseen.get(&miss.path))
+                                    else {
+                                        continue;
+                                    };
+                                    if c.font.is_empty() || m.font.is_empty() || c.font == m.font {
+                                        continue;
+                                    }
+                                    // Our own computed weight for that element, from the same map the
+                                    // producer measured with.
+                                    let Some(&w) = mweights.get(&miss.path) else {
+                                        continue;
+                                    };
+                                    if w == 400 || w == 700 {
+                                        exact += 1;
+                                    } else {
+                                        collapsing += 1;
+                                    }
+                                }
+                                eprintln!(
+                                    "  SHAPE MISS WEIGHT: of the font-disagreeing misses, {collapsing} \
+                                     are at a weight the bold:bool key COLLAPSES and {exact} are at \
+                                     400/700 (which the collapse cannot explain)"
+                                );
                             }
                             let n: usize = kinds.values().sum();
                             let mut v: Vec<_> = kinds.into_iter().collect();

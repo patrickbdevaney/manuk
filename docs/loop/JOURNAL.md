@@ -107944,3 +107944,62 @@ weights 400/500/700 measures `312 / 312 / 320` against Chrome's `312 / 314 / 320
 reaches every text box on every page that uses a weight other than 400/700.
 
 WIKI: docs/wiki/load-fires-after-the-webfont-arrives.md
+
+## Tick 1491 — pricing the `bold: bool` collapse (2026-09-10)
+
+TICK SHAPE: instrument
+
+t1490's residue was a 30-call-site refactor. Priced first, per t1367-1374's rule.
+
+### THE CANDIDATE, CONFIRMED AGAINST CHROME ON A CLEAN PATH
+
+```text
+  font-family: "Lato", 32px      400    500    700       (no webfont, no network, no race)
+  Chrome                         312    314    320
+  ours                           312    312    320       <- weight 500 gets our 400 face
+```
+
+`FontKey` carries `bold: bool` at a 600 threshold, so 300/400/500 collapse to one face and 600/700/800
+to another. Replacing it with a numeric weight + CSS Fonts §5.2's closest-match rule is **30
+construction sites across 9 files**.
+
+### ⭐⭐⭐ THE PRICE — AND IT IS MIXED IN A WAY ONLY A MEASUREMENT GIVES
+
+```text
+                       at a COLLAPSING weight    at 400/700
+  payb.jp                      0                    223     <- explains NONE of the WORST site
+  puentedemando              217                     65
+  pivaldi                     46                      4
+  ru.restaurantguru           16                      0
+  razaoautomovel               6                      7
+  ────────────────────────────────────────────────────────
+                             285                    299     -> AT MOST 49%
+```
+
+⚠ **AT MOST is the honest word** — "sits at a collapsing weight" is an upper bound, not a count of
+misses explained. *A failure-signature count is an upper bound, not an estimate* (t1347: 144 → 12).
+
+⭐⭐ **THE REFACTOR IS JUSTIFIED AND IT IS NOT THE WHOLE ANSWER.** Worth ~half the term on four of five
+sites, worth **nothing** on `payb.jp` — the highest font-disagreement rate in the cohort (420 of 432),
+entirely at 400/700 in `Noto Sans JP`. A second mechanism was hiding behind an aggregate that looked
+like one problem. Written first, the refactor would have been correct, landed, and left the worst site
+where it was — **with no way to tell, because the aggregate would have moved.**
+
+### LANDED
+
+```
+  tests/wpt/main.rs     --shape-dump gains SHAPE MISS WEIGHT, read from our own computed font-weight
+  tests/wpt/oracle.rs   strip_sig_key extracted from strip_sigs — ONE implementation, two callers,
+                        because two copies of that transform is how two maps keyed by "the same path"
+                        stop agreeing (which is the failure the signature itself caused, t550)
+  manuk-wpt lib 111 green (the existing strip_sigs test covers the extraction unchanged)
+  no engine change — this tick is a price and a decision
+```
+
+NEXT: the refactor is now justified on its own terms — `FontKey { weight: u16 }` plus §5.2's
+closest-match rule, ~30 mechanical sites, most of which already compute `bold` FROM a weight they hold
+(`bold: st.font_weight >= 600` becomes `weight: st.font_weight`). ⚠ And `payb.jp` is a SEPARATE
+mechanism that must not be folded into it: `Noto Sans JP` at 400, Chrome 168 against our 158, with the
+face delivered (14 of 15) and every miss at a non-collapsing weight.
+
+WIKI: docs/wiki/pricing-the-bold-bool-collapse.md

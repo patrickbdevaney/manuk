@@ -2540,49 +2540,54 @@ pub fn sig_of(dom: &manuk_dom::Dom, n: manuk_dom::NodeId) -> String {
 /// because `nth-of-type` already distinguishes same-tag siblings. Where a collision WOULD occur the later entry
 /// wins, which can only LOSE elements from each side, never invent matches; so a coverage number that
 /// rises under ablation is a real signal, not an artifact of the ablation.
+/// **Strip the `.SIG` class-hash component from ONE selector-path key.**
+///
+/// Extracted at t1491 so a map keyed alongside `Seen` can be stripped the same way. Two copies of
+/// this transform is how two maps keyed by "the same path" stop agreeing — the exact failure mode the
+/// sig itself caused (see [`strip_sigs`]).
+pub fn strip_sig_key(k: &str) -> String {
+    let mut out = String::with_capacity(k.len());
+    let mut rest = k;
+    while let Some(i) = rest.find(":nth-of-type(") {
+        let (head, tail) = rest.split_at(i);
+        // A sig, if present, is the final 9 bytes of `head`: `.` + 8 hex digits.
+        //
+        // ⚠⚠ **`is_char_boundary` is the guard, not a micro-optimisation.** A sig is nine
+        // ASCII bytes, so where one exists `len - 9` is always a char boundary — but a class
+        // name is arbitrary author text, and a page served with a broken charset produces
+        // keys full of multi-byte replacement characters. `swift.org` did exactly that, and
+        // `&head[head.len() - 9..]` landed inside a two-byte `'\u{fffd}'` and **panicked the
+        // whole sweep process**. The site was then recorded as `reason=crashed`, which reads
+        // as a browser Bar-0 event: *the instrument charged its own panic to the engine.*
+        let keep = match head.len().checked_sub(9) {
+            Some(cut) if head.is_char_boundary(cut) => {
+                let cand = &head[cut..];
+                if cand.starts_with('.')
+                    && cand[1..]
+                        .bytes()
+                        .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+                {
+                    &head[..cut]
+                } else {
+                    head
+                }
+            }
+            _ => head,
+        };
+        out.push_str(keep);
+        // Copy `:nth-of-type(N)` verbatim, then continue after it.
+        let close = tail.find(')').map(|c| c + 1).unwrap_or(tail.len());
+        out.push_str(&tail[..close]);
+        rest = &tail[close..];
+    }
+    out.push_str(rest);
+    out
+}
+
 pub fn strip_sigs(
     m: std::collections::HashMap<String, crate::oracle::Seen>,
 ) -> std::collections::HashMap<String, crate::oracle::Seen> {
-    m.into_iter()
-        .map(|(k, v)| {
-            let mut out = String::with_capacity(k.len());
-            let mut rest = k.as_str();
-            while let Some(i) = rest.find(":nth-of-type(") {
-                let (head, tail) = rest.split_at(i);
-                // A sig, if present, is the final 9 bytes of `head`: `.` + 8 hex digits.
-                //
-                // ⚠⚠ **`is_char_boundary` is the guard, not a micro-optimisation.** A sig is nine
-                // ASCII bytes, so where one exists `len - 9` is always a char boundary — but a class
-                // name is arbitrary author text, and a page served with a broken charset produces
-                // keys full of multi-byte replacement characters. `swift.org` did exactly that, and
-                // `&head[head.len() - 9..]` landed inside a two-byte `'\u{fffd}'` and **panicked the
-                // whole sweep process**. The site was then recorded as `reason=crashed`, which reads
-                // as a browser Bar-0 event: *the instrument charged its own panic to the engine.*
-                let keep = match head.len().checked_sub(9) {
-                    Some(cut) if head.is_char_boundary(cut) => {
-                        let cand = &head[cut..];
-                        if cand.starts_with('.')
-                            && cand[1..]
-                                .bytes()
-                                .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
-                        {
-                            &head[..cut]
-                        } else {
-                            head
-                        }
-                    }
-                    _ => head,
-                };
-                out.push_str(keep);
-                // Copy `:nth-of-type(N)` verbatim, then continue after it.
-                let close = tail.find(')').map(|c| c + 1).unwrap_or(tail.len());
-                out.push_str(&tail[..close]);
-                rest = &tail[close..];
-            }
-            out.push_str(rest);
-            (out, v)
-        })
-        .collect()
+    m.into_iter().map(|(k, v)| (strip_sig_key(&k), v)).collect()
 }
 
 /// `tag.SIG:nth-of-type(N)/…` from the root — N 1-based over the element siblings that share this

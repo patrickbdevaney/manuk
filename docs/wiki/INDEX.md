@@ -2880,6 +2880,14 @@
   - L137 · ⚠⚠⚠ And the suite still reads generic, because a second entrance disagrees with the tree
   - L155 · Not built yet
 
+## Pricing the `bold: bool` collapse
+`docs/wiki/pricing-the-bold-bool-collapse.md`
+
+  - L6 · The candidate
+  - L26 · The price
+  - L45 · What that decides
+  - L56 · The instrument
+
 ## Publish the denominator
 `docs/wiki/publish-the-denominator.md`
 
@@ -3457,4 +3465,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2924 sections across 132 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2928 sections across 133 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
