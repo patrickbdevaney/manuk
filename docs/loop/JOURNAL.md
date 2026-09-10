@@ -107577,3 +107577,76 @@ so they are not one mechanism either. The tool to use is the dump itself: print 
 *injected and navigated away from*.
 
 WIKI: docs/wiki/a-meta-refresh-is-a-redirect.md
+
+## Tick 1487 — both sides must follow the same redirect (2026-09-10)
+
+TICK SHAPE: instrument
+
+t1486's own residue, executed: the engine follows a `<meta refresh>` and the instrument did not.
+
+### ⭐⭐⭐ THREE SITES WENT FROM UNSCORED TO SCORED, AND ONE CLEARS THE RENDER BAR
+
+```text
+                                        before          after
+  www.datacareservices.com              probe-blocked   structural  98.7%   SHAPE 76.9%  ← clears 0.75
+  secure.paymentech.com                 probe-blocked   structural  93.7%   SHAPE  3.0%
+  linxonline.co.pierce.wa.us            probe-blocked   structural 100.0%   SHAPE 45.2%
+```
+
+The denominator moved for the right reason: not by dropping a hard site, but because a site that was
+always measurable finally is. This is the METHOD block t1485 ranked #1 — 23 sites of 200 — being
+worked, and it is the first of them.
+
+### ⚠⚠ AND FIXING HALF OF IT CREATED THE ASYMMETRY THE INSTRUMENT FORBIDS
+
+Teaching the *fetch* to follow the refresh made Chrome score the destination **while our engine still
+scored the stub** — two sides diffing different documents, which is exactly what
+`Unmeasurable::CssStarved`'s own rule refuses: *refuse when the comparison is ASYMMETRIC.* Both sides
+now follow it, with the same three guards (hop bound, self-target refusal, delay floor).
+
+⭐ **ONE PARSER, NOT TWO.** The instrument uses `manuk_page::parse_meta_refresh` and
+`manuk_page::resolve_url` — the same functions the engine navigates by and the same ones
+`g_a_meta_refresh_is_a_redirect` pins against Chrome. A second copy is how the instrument and the
+engine come to disagree about what page they are looking at.
+
+### ⭐⭐ AND `probe-blocked` IS AT LEAST THREE THINGS, NONE OF THEM CSP
+
+```text
+  ww1.goojara.to           the probe element is ABSENT from the dump
+  venus.zeronline.cloud    the probe element is ABSENT from the dump
+  xhdesign.today           Chrome returned almost no document (145 bytes)
+  swiftspinus.com          Chrome returned almost no document (0 bytes)
+```
+
+`swiftspinus.com` gets **zero bytes** back from Chrome. That is not a blocked probe; it is a browser
+that produced nothing, and it had sat under a label saying otherwise. The classifier is a pure
+function reporting an OBSERVATION with no diagnosis, and its vacuity arm is that none of the three may
+contain `content-security-policy` — the whole finding was a mechanism named without being checked, and
+nothing else stops it drifting back.
+
+### LANDED
+
+```
+  tests/wpt/chrome.rs   fetch_document_following_refresh + meta_refresh_target (engine's parser)
+                        report_probe_absence -> probe_absence_observation, a pure classifier
+  tests/wpt/main.rs     OUR side follows it too — the symmetry the instrument requires elsewhere
+  engine/page/lib.rs    resolve_url made pub, so there is ONE URL joiner across both
+  tests  chrome::meta_refresh_and_probe_absence_tests   RED under 4 named mutations
+  vacuity arm: the observation may not assert a CSP — measured FALSE on 8 of 8 sites
+  manuk-wpt lib 111 green
+  Bar 0: no hang, no crash, no panic
+```
+
+⚠ RESIDUE: the four remaining `probe-blocked` sites now say what was observed and still need a
+mechanism each — two are a dump with no probe element (a navigation we do not yet follow, or a page
+replacing its own `documentElement`) and two return almost nothing from Chrome at all. ⚠ And
+`secure.paymentech.com` scores **SHAPE 3.0%** on its destination: it is now measurable and it renders
+badly, which is a Track-A row rather than a refusal.
+
+NEXT: the remaining METHOD block is `tree-divergence` (7) and `shell-only` (4) — both are the
+file://-snapshot asymmetry that the one-origin proxy exists to remove, and the proxy's trigger is a
+SHELL FLOOR on the oracle's element count, so a `tree-divergence` site (whose oracle count is HEALTHY)
+can never reach it. **That trigger is a sufficient condition used as a necessary one** — the same
+defect t903 already fixed once when the trigger asked for `type=module`.
+
+WIKI: docs/wiki/both-sides-must-follow-the-same-redirect.md

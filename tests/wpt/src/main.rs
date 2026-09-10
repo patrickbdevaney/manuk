@@ -1084,6 +1084,32 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
         let page = rt.block_on(async {
             let mut p = Page::load_async(&html, &final_url, fonts, vw as f32).await;
             p.finish_loading(fonts, vw as f32).await;
+            // ── **BOTH SIDES MUST FOLLOW THE SAME REDIRECT** (t1487). ─────────────────────────
+            //
+            // `capture_seen_all_paths` follows a `<meta http-equiv="refresh">` before it probes, and
+            // so does every real browser — so an engine that stops at the stub is being diffed
+            // against a DIFFERENT DOCUMENT. That is the asymmetry this instrument refuses everywhere
+            // else (`CssStarved`'s own rule: *refuse when the comparison is ASYMMETRIC*), and it
+            // arrived here the moment the oracle learned to follow one.
+            //
+            // The host performs the navigation, because `Page` deliberately only reports it — and in
+            // this program the host is this loop. Bounded and self-refusing for the same reason the
+            // shell's follower is: a declarative refresh is the easiest infinite loop on the web.
+            let mut at = final_url.clone();
+            for _ in 0..3 {
+                let Some((secs, next)) = p.meta_refresh() else {
+                    break;
+                };
+                if secs >= 1.0 || next == at {
+                    break;
+                }
+                let Ok((h2, u2)) = manuk_page::fetch_html(&next).await else {
+                    break;
+                };
+                at = u2;
+                p = Page::load_async(&h2, &at, fonts, vw as f32).await;
+                p.finish_loading(fonts, vw as f32).await;
+            }
             p
         });
         let mpath = out.join(format!("{name}.manuk.png"));

@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1160** | ticks 1–1485 |
-| median tick cycle | **33m** | 1159 intervals |
-| median, last 10 | **51m** | 10 intervals |
+| ticks landed | **1161** | ticks 1–1486 |
+| median tick cycle | **33m** | 1160 intervals |
+| median, last 10 | **55m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.79** | 1468.8h elapsed |
-| median verify wall | **67s** | 1099 ticks |
+| **ticks per hour** | **0.79** | 1469.7h elapsed |
+| median verify wall | **67s** | 1100 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**535 of 1160 ticks** (46%) moved a
+**536 of 1161 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -90,7 +90,7 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 
 ## What a capability costs
 
-* **535** capability ticks, median cycle **33m**
+* **536** capability ticks, median cycle **33m**
 * median diff per tick: **+297 / −35** lines across 9 files
 
 ## Every tick
@@ -1257,5 +1257,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1483** | 2026-09-10 08:08 | 11m | capability | 8m | +292/−44 | 575 | 81 | 56.0% · | a slot knows what is assigned to it (2026-09-10) |
 | **1484** | 2026-09-10 08:59 | 51m | audit | 8m | +439/−42 | 575 | 81 | 56.0% · | the audits, and the mandate's own number does not reproduce (2026-09-10) |
 | **1485** | 2026-09-10 09:49 | 50m | instrument | 8m | +620/−48 | 576 | 81 | 56.0% · | the scorability gap is not a function gap (2026-09-10) |
+| **1486** | 2026-09-10 10:47 | 58m | capability | 8m | +407/−46 | 576 | 81 | 56.0% · | a meta refresh is a redirect (2026-09-10) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

@@ -444,7 +444,11 @@ fn media_type_rejected(mime: &str) -> bool {
 }
 
 /// Resolve `href` against `base` to an absolute URL string (falling back to `href`).
-fn resolve_url(base: &str, href: &str) -> String {
+///
+/// `pub` since t1487 so `manuk-wpt` resolves a `<meta refresh>` target with the SAME function the
+/// engine navigates by. A second URL joiner in the instrument is how the instrument and the engine
+/// come to disagree about what page they are looking at.
+pub fn resolve_url(base: &str, href: &str) -> String {
     Url::parse(base)
         .ok()
         .and_then(|b| b.join(href).ok())

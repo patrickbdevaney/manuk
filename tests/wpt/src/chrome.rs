@@ -525,13 +525,101 @@ pub fn capture_boxes_all_ids(url: &str, vw: u32, vh: u32) -> Result<HashMap<Stri
 /// reason — the thing §0 of the certification design requires and t602 explicitly asked for — was
 /// gone. A typed error cannot be discarded by an `if let Ok`; the caller has to say what it did with
 /// it.
+/// **Fetch a document and follow its `<meta http-equiv="refresh">`, as `curl -sL` follows an HTTP
+/// one.** Returns the FINAL url and its html.
+///
+/// ⚠⚠ **A REDIRECT STUB IS NOT THE PAGE, AND THE INSTRUMENT WAS SCORING THE STUB.** `fetch_document`
+/// uses `curl -sL`, which follows `Location:` and knows nothing about `<meta>`. The document then
+/// goes to Chrome as a `file://` temp with our probe spliced in — and Chrome DOES follow the meta
+/// refresh, so it navigates to the destination and the probe's output goes with the document it
+/// left. The row was filed `probe-blocked` and its stated cause was a CSP that does not exist.
+///
+/// Measured (t1486) on the 200-site CrUX trend corpus: three sites are a `<meta refresh>` stub as
+/// their HOMEPAGE — `secure.paymentech.com` at 222 bytes, `www.datacareservices.com` at 104,
+/// `linxonline.co.pierce.wa.us` at 768.
+///
+/// ⚠ **ONE PARSER, NOT TWO.** The grammar is `manuk_page::parse_meta_refresh`, the same function the
+/// engine navigates by and the same one `g_a_meta_refresh_is_a_redirect` pins against Chrome. A
+/// second copy here is how the instrument and the engine come to disagree about what a page is.
+///
+/// ⚠ Bounded at three hops and refuses a self-target, for the reason the shell's own follower states:
+/// a declarative refresh is the easiest infinite loop on the web and nothing about it looks like one.
+/// A delayed refresh (>= 1s) is NOT followed here either, matching the shell.
+fn fetch_document_following_refresh(
+    url: &str,
+) -> std::result::Result<(String, String), Unmeasurable> {
+    let mut at = url.to_string();
+    let mut html = fetch_document(&at)?;
+    for _ in 0..3 {
+        let Some((secs, next)) = meta_refresh_target(&html, &at) else {
+            break;
+        };
+        if secs >= 1.0 || next == at {
+            break;
+        }
+        eprintln!(
+            "  META REFRESH: the document redirects to {next} — following it, as a browser does"
+        );
+        at = next;
+        html = fetch_document(&at)?;
+    }
+    Ok((at, html))
+}
+
+/// The first `<meta http-equiv="refresh">` of `html`, resolved against `base`.
+fn meta_refresh_target(html: &str, base: &str) -> Option<(f32, String)> {
+    let dom = manuk_html::parse(html);
+    let node = dom.descendants(dom.root()).find(|&n| {
+        dom.tag_name(n) == Some("meta")
+            && dom
+                .element(n)
+                .and_then(|e| e.attr("http-equiv"))
+                .is_some_and(|v| v.trim().eq_ignore_ascii_case("refresh"))
+    })?;
+    let content = dom.element(node)?.attr("content")?;
+    let (secs, u) = manuk_page::parse_meta_refresh(content)?;
+    let u = u?;
+    Some((secs, manuk_page::resolve_url(base, &u)))
+}
+
+/// **Say what was actually observed when the probe produced nothing.** `ProbeBlocked` asserted a CSP
+/// for as long as it existed and zero of the eight sites carrying it in the t1485 corpus have one
+/// (t1486). A refusal that names a mechanism it has not checked steers every reader of the ranked
+/// backlog at a problem that is not there, so this prints the three distinguishable observations and
+/// no interpretation: whether the probe element reached the dump at all, whether it reached it
+/// carrying nothing, and how much document came back.
+fn report_probe_absence(dump: &str) {
+    eprintln!(
+        "  PROBE ABSENCE: {} (dump {} bytes, marker {})",
+        probe_absence_observation(dump),
+        dump.len(),
+        dump.contains("__PARITY__")
+    );
+}
+
+/// The three distinguishable observations, as a pure function so the classification is testable
+/// without a browser — and so it stays a CLASSIFICATION and does not drift back into a diagnosis.
+pub fn probe_absence_observation(dump: &str) -> &'static str {
+    if dump.trim().len() < 200 {
+        "Chrome returned almost no document"
+    } else if dump.contains("__PARITY__") {
+        "the probe element IS in the dump and its text is not parseable JSON — the script was          parsed and did not run (a nonce/CSP shape), or it threw"
+    } else {
+        "the probe element is ABSENT from the dump — the document Chrome ended on is not the one we          injected into (a navigation), or the page replaced its own documentElement"
+    }
+}
+
 pub fn capture_seen_all_paths(
     url: &str,
     vw: u32,
     vh: u32,
 ) -> std::result::Result<HashMap<String, crate::oracle::Seen>, Unmeasurable> {
     let chrome = chrome_bin().ok_or(Unmeasurable::Unreachable)?;
-    let html = fetch_document(url)?;
+    // A `<meta refresh>` stub is not the page. Chrome follows it and takes our probe with it, so the
+    // fetch has to follow it first — and the `<base>` below must then be the FINAL url, or every
+    // relative subresource on the destination resolves against the stub's directory.
+    let (url, html) = fetch_document_following_refresh(url)?;
+    let url = url.as_str();
     let base = format!("<base href=\"{url}\">");
     let doc = format!("{}{PROBE_ALL_PATHS_JS}", splice_head(&html, &base));
     let tmp = std::env::temp_dir().join(format!("manuk-shape-{}.html", stable_tag(&doc)));
@@ -554,8 +642,11 @@ pub fn capture_seen_all_paths(
     // DOM in which the probe is present as TEXT and its output never existed. `parse_seen_probe_json`
     // already asks exactly the right question — *"did Chrome run the script?"* — and for five ticks
     // nobody heard it, because the caller discarded the error.
-    let seen = parse_seen_probe_json(&String::from_utf8_lossy(&out.stdout))
-        .map_err(|_| Unmeasurable::ProbeBlocked)?;
+    let dump = String::from_utf8_lossy(&out.stdout);
+    let seen = parse_seen_probe_json(&dump).map_err(|_| {
+        report_probe_absence(&dump);
+        Unmeasurable::ProbeBlocked
+    })?;
     // ⚠⚠⚠ **THE SNAPSHOT REFERENCE IS A SHELL — TRY ONE ORIGIN. THE CAUSE DOES NOT GATE THE FIX.**
     //
     // t865 named the wall and t880 built the fix for the `oracle-module-shell` cohort: a module
@@ -1862,5 +1953,91 @@ mod tests {
              `viewport_chrome_offset` is meant to convert the window size into exactly this and \
              has stopped doing so"
         );
+    }
+}
+
+#[cfg(test)]
+mod meta_refresh_and_probe_absence_tests {
+    use super::{meta_refresh_target, probe_absence_observation};
+
+    /// **Proven red** by dropping the `resolve_url` join (every row loses its origin), by matching
+    /// `http-equiv` case-sensitively (the `REFRESH` row goes `None`), and by taking the first
+    /// `<meta>` of ANY `http-equiv` (the CSP row starts answering).
+    #[test]
+    fn a_meta_refresh_target_is_resolved_against_the_document_that_carried_it() {
+        let at = "https://stub.test/a/b.html";
+        let doc = |m: &str| format!("<!doctype html><html><head>{m}</head><body>s</body></html>");
+
+        // The ordinary redirect stub, resolved against the document's own directory.
+        assert_eq!(
+            meta_refresh_target(
+                &doc(r#"<meta http-equiv="Refresh" content="0;URL=dest.html">"#),
+                at
+            ),
+            Some((0.0, "https://stub.test/a/dest.html".to_string()))
+        );
+        // Root-relative resolves, and `http-equiv` is case-insensitive.
+        assert_eq!(
+            meta_refresh_target(
+                &doc(r#"<meta HTTP-EQUIV="REFRESH" CONTENT="0; url=/x">"#),
+                at
+            ),
+            Some((0.0, "https://stub.test/x".to_string()))
+        );
+        // A delay is REPORTED, not swallowed — the caller decides whether to follow it, and a
+        // classifier that dropped the seconds would make that decision impossible.
+        assert_eq!(
+            meta_refresh_target(
+                &doc(r#"<meta http-equiv="refresh" content="5;url=/x">"#),
+                at
+            ),
+            Some((5.0, "https://stub.test/x".to_string()))
+        );
+
+        // ── The refusals. Each is a real document shape, not a spec curiosity.
+        assert_eq!(
+            meta_refresh_target(
+                &doc(r#"<meta http-equiv="Content-Security-Policy" content="0;url=/x">"#),
+                at
+            ),
+            None,
+            "a CSP meta must not be read as a redirect — CSP is the ONLY http-equiv this engine \
+             used to handle, so confusing the two is the available mistake"
+        );
+        // Chrome refuses a content with no leading time; so must this.
+        assert_eq!(
+            meta_refresh_target(
+                &doc(r#"<meta http-equiv="refresh" content="dest.html">"#),
+                at
+            ),
+            None
+        );
+        // `content="0"` means reload THIS document: no target to travel to.
+        assert_eq!(
+            meta_refresh_target(&doc(r#"<meta http-equiv="refresh" content="0">"#), at),
+            None
+        );
+        assert_eq!(meta_refresh_target(&doc(""), at), None);
+    }
+
+    /// `ProbeBlocked` asserted *"a page-supplied CSP, in every case observed so far"* and **zero of
+    /// the eight sites carrying it had one** (t1486). This pins that the replacement reports what was
+    /// SEEN and names no cause — the three observations are distinguishable from the dump alone.
+    #[test]
+    fn probe_absence_reports_an_observation_and_not_a_diagnosis() {
+        let big = "x".repeat(400);
+        assert!(probe_absence_observation("").contains("almost no document"));
+        assert!(probe_absence_observation(&big).contains("ABSENT"));
+        assert!(probe_absence_observation(&format!("{big}__PARITY__")).contains("IS in the dump"));
+        // ⚠ The vacuity arm: none of the three may assert a MECHANISM. The whole finding was that
+        //   the old text named one it had never checked.
+        for d in ["", big.as_str(), "__PARITY__"] {
+            let o = probe_absence_observation(d).to_ascii_lowercase();
+            assert!(
+                !o.contains("content-security-policy") && !o.contains("blocked the injected"),
+                "the observation must not assert a CSP — that claim was measured FALSE on 8 of 8 \
+                 sites: {o}"
+            );
+        }
     }
 }

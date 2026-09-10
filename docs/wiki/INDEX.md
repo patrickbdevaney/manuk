@@ -290,6 +290,15 @@
   - L32 · What it changes about a11yproject
   - L43 · ⚠ Scope
 
+## Both sides must follow the same redirect
+`docs/wiki/both-sides-must-follow-the-same-redirect.md`
+
+  - L5 · What t1486 left behind
+  - L20 · The result
+  - L33 · One parser, not two
+  - L45 · And probe-blocked now reports what was SEEN
+  - L66 · Gated
+
 ## BOX LAYOUT — taffy mapping realities and quirks (flex / grid / sizing)
 `docs/wiki/box-layout.md`
 
@@ -3420,4 +3429,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2903 sections across 128 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2908 sections across 129 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
