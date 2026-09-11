@@ -108148,3 +108148,76 @@ t1492 measurement stands as the bar to clear: it must not fall below 247, and th
 (system `Lato` 300..900, and a graded `@font-face` set including §5.2's 450 tie) are already written.
 
 WIKI: docs/wiki/a-font-face-declares-its-own-weight.md
+
+## Tick 1494 — a graded `@font-face` set matches by weight (2026-09-10)
+
+TICK SHAPE: capability
+
+Step 3 of t1492's refusal plan, with `variations` as the gate rather than the casualty.
+
+### THIRD ATTEMPT, AND THE FIRST TWO ARE WHY THIS ONE IS SHAPED THIS WAY
+
+```text
+  t1492  numeric key + §5.2 over each face's FILE weight
+         -> Chrome-byte-identical on two fixtures, and css-fonts/variations -92. REFUSED, reverted whole.
+  t1493  carried the @font-face DESCRIPTOR, coarse rule over it
+         -> variations 237/242 -> 247/247
+  t1494  BOTH: the numeric key, and §5.2 over the DECLARED weight
+         -> variations 247/247 · css/css-fonts 4092/7552 (the mark, measured twice)
+```
+
+```text
+  @font-face: 400 -> Lato-Regular · 500 -> Lato-Medium · 700 -> Lato-Bold
+
+           400    500    700    450
+  Chrome   312    314    320    314
+  before   312    312    320    312
+  after    312    314    320    314
+```
+
+⭐ **`450` IS THE ROW THAT SEPARATES §5.2 FROM "NEAREST NUMBER"** — equidistant from 400 and 500, and
+the spec is directional: inside 400–500 look UP first. A distance metric ties and takes whichever came
+first.
+
+### ⚠⚠ AND THE SYSTEM PATH IS DELIBERATELY LEFT COARSE, WITH THE REASON ISOLATED TO ONE LINE
+
+Handing `fontdb::Query` the real weight takes `variations` **247 → 148**, twice each, with the rest of
+the tree identical. Not shipped. So a system family still collapses (`Lato` 300..900 reads
+`312 312 312 320 320` against Chrome's `303 312 314 320 327`) and **that is stated, not claimed**.
+
+⚠ The cause is NOT established. The `variations` tests load their faces from `./resources/…` through
+the `@font-face` path; if those loads fail in the harness, the suite scores FALLBACK behaviour and a
+coarse fallback matches more of the expected widths by accident. **The next probe is whether those
+faces register at all — `Page::webfonts()` answers it directly and already exists.**
+
+### ⚠ TWO INERT MUTATIONS, AND BOTH WERE QUESTIONS ABOUT THE FIXTURE
+
+* *"match the FILE weight, not the declared"* is **inert against this gate**, because its declared
+  weights agree with its files. It is RED against `g_a_font_face_declares_its_own_weight` (t1493),
+  whose fixture deliberately **inverts** them. The two gates cover different halves.
+* *"collapse the key"* had to be mutated at **both** `FontKey` sites in `engine/layout`; mutating one
+  left the gate green — which says the two sites serve different paths and this fixture reaches one.
+
+### LANDED
+
+```
+  engine/text/lib.rs   FontKey { weight: u16 } + weight_is_closer (§5.2's DIRECTIONAL rule)
+                       the @font-face branch matches the DECLARED weight, style first then weight
+  engine/layout, js/canvas, shell, tests/wpt   the 30 construction sites
+  gate  g_a_graded_font_face_set_matches_by_weight   RED under 2 named mutations (+1 against t1493's)
+  TWO vacuity arms: all three faces must arrive, AND 400/500/700 must be three DISTINCT widths
+  css/css-fonts 4092/7552 (the mark, twice) · css/css-text 2900 (flat) · HANG/CRASH 0
+  Bar 0: no hang, no crash, no panic
+```
+
+⚠ RESIDUE: **canvas text still collapses weights** — `ctx.font` is parsed in JS, which hands the
+native side a boolean, so `ctx.font = "500 16px X"` is indistinguishable from 400 there. Widening
+`__cvMeasureText` is a JS-boundary change and its own tick; the corpus measurement that justified this
+refactor is about LAYOUT text.
+
+NEXT: **probe whether `css/css-fonts/variations`'s own faces register** (`Page::webfonts()` on one of
+those files). If they do not, the suite has been scoring fallback behaviour and the system-path line is
+blocked by an artefact rather than a defect — which would unblock the last third of this thread and is
+one measurement away.
+
+WIKI: docs/wiki/a-graded-font-face-set-matches-by-weight.md

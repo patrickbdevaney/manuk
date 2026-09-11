@@ -29,11 +29,64 @@ pub enum FontFamily {
     Named(u32),
 }
 
+/// **CSS Fonts §5.2's weight comparator** — is `a` a better match for `want` than `b`?
+///
+/// The rule is DIRECTIONAL, not "nearest number", and the direction depends on where `want` sits:
+///
+/// * **400–500** — prefer weights at or above `want` up to 500, then below `want`, then above 500.
+///   A page asking for 450 with 400 and 700 available takes 400; with 400 and 500 it takes 500,
+///   even though both are 50 away. That tie is the row that separates this from a distance metric.
+/// * **below 400** — prefer weights at or below `want`, then above.
+/// * **above 500** — prefer weights at or above `want`, then below.
+///
+/// A comparator rather than a sort key, so ties keep document order — which is what *"the first
+/// matching `@font-face` wins"* means.
+fn weight_is_closer(want: u16, a: u16, b: u16) -> bool {
+    let rank = |w: u16| -> (u8, u16) {
+        if (400..=500).contains(&want) {
+            if w >= want && w <= 500 {
+                (0, w - want)
+            } else if w < want {
+                (1, want - w)
+            } else {
+                (2, w - want)
+            }
+        } else if want < 400 {
+            if w <= want {
+                (0, want - w)
+            } else {
+                (1, w - want)
+            }
+        } else if w >= want {
+            (0, w - want)
+        } else {
+            (1, want - w)
+        }
+    };
+    rank(a) < rank(b)
+}
+
 /// A resolved-font lookup key.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FontKey {
     pub family: FontFamily,
-    pub bold: bool,
+    /// **The CSS `font-weight`, numeric — not a boolean.**
+    ///
+    /// This was `bold: bool` at a 600 threshold, so 300/400/500 collapsed onto one face and
+    /// 600/700/800/900 onto another. Chrome-measured, system `Lato` at 32px:
+    ///
+    /// ```text
+    ///                 300   400   500   700   900
+    ///   Chrome        303   312   314   320   327
+    ///   before        312   312   312   320   320
+    /// ```
+    ///
+    /// ⚠⚠ **THIS IS THE SECOND ATTEMPT.** t1492 made the same change and was REFUSED: it regressed
+    /// `wpt css/css-fonts/variations` by 92 subtests, because §5.2's closest-match was running over
+    /// each face's FILE weight while the spec matches the `@font-face` DESCRIPTOR's. t1493 carried
+    /// the descriptor (`manuk_css::FontFace::weight`) and `variations` went 237/242 → 247/247. The
+    /// bar this attempt must clear is that 247, and the gate is the suite that refused the first one.
+    pub weight: u16,
     pub italic: bool,
     /// ⚠⚠⚠ **THE FAMILY A PRIVATE-USE-AREA CODEPOINT IS ALLOWED TO USE, WHICH IS NOT `family`.**
     ///
@@ -60,7 +113,7 @@ impl Default for FontKey {
     fn default() -> Self {
         FontKey {
             family: FontFamily::SansSerif,
-            bold: false,
+            weight: 400,
             italic: false,
             pua_family: None,
         }
@@ -915,27 +968,57 @@ impl FontContext {
                 // ⚠ `None` falls back to the file's weight, which is the OLD behaviour exactly — so a
                 // block that declares nothing is unaffected, and the change is confined to blocks
                 // that do.
-                let is_bold = |id: fontdb::ID, declared: Option<(u16, u16)>| -> bool {
+                // ── **CSS FONTS §5.2, OVER THE DECLARED WEIGHT.** ────────────────────────────
+                //
+                // Both halves of this matter and t1492 proved it by getting one of them wrong: §5.2
+                // is a closest-match, and it matches the `@font-face` block's DECLARED weight. Doing
+                // the closest-match over the FILE's weight cost 92 subtests on
+                // `css/css-fonts/variations`; t1493 carried the declaration and the coarse rule over
+                // it scored 247 where the clean tree scored 237-242. This is both.
+                //
+                // ⚠ `None` — *"the block did not say"* — falls back to the file's weight, which is
+                // what this map has always used and what leaves an undeclared block exactly as it was.
+                let face_weight = |id: fontdb::ID, declared: Option<(u16, u16)>| -> u16 {
                     match declared {
-                        // The spec's match is against the RANGE; for a boolean question the honest
-                        // reduction is "does this range reach bold at all".
-                        Some((_, hi)) => hi >= 600,
-                        None => self
-                            .db
-                            .borrow()
-                            .face(id)
-                            .is_some_and(|f| f.weight == fontdb::Weight::BOLD),
+                        // §5.2 matches against a RANGE; a request inside it is an exact match, and
+                        // outside it the nearer endpoint is what the distance is measured to.
+                        Some((lo, hi)) => key.weight.clamp(lo, hi),
+                        None => self.db.borrow().face(id).map(|f| f.weight.0).unwrap_or(400),
                     }
                 };
-                if let Some(&(id, _)) = ids.iter().find(|&&(id, declared)| {
-                    is_bold(id, declared) == key.bold
-                        && self
-                            .db
-                            .borrow()
-                            .face(id)
-                            .is_some_and(|f| (f.style != fontdb::Style::Normal) == key.italic)
-                }) {
-                    return Some(id);
+                let italic_of = |id: fontdb::ID| -> bool {
+                    self.db
+                        .borrow()
+                        .face(id)
+                        .is_some_and(|f| f.style != fontdb::Style::Normal)
+                };
+                // Style first, weight second — the order §5.2 gives. A family with no face in the
+                // requested style falls through to the whole set rather than to `ids.first()`, which
+                // used to hand back an arbitrary weight whenever the italic arm missed.
+                let mut best: Option<(usize, u16)> = None;
+                for pass in [true, false] {
+                    for (i, &(id, declared)) in ids.iter().enumerate() {
+                        if pass && italic_of(id) != key.italic {
+                            continue;
+                        }
+                        let w = face_weight(id, declared);
+                        best = Some(match best {
+                            None => (i, w),
+                            Some((bi, bw)) => {
+                                if weight_is_closer(key.weight, w, bw) {
+                                    (i, w)
+                                } else {
+                                    (bi, bw)
+                                }
+                            }
+                        });
+                    }
+                    if best.is_some() {
+                        break;
+                    }
+                }
+                if let Some((i, _)) = best {
+                    return ids.get(i).map(|&(id, _)| id);
                 }
                 return ids.first().map(|&(id, _)| id);
             }
@@ -951,7 +1034,10 @@ impl FontContext {
         };
         let query = fontdb::Query {
             families: &[family, fontdb::Family::SansSerif],
-            weight: if key.bold {
+            // ⚠ **THE REAL WEIGHT.** `fontdb::Query` implements §5.2 itself, so handing it the
+            // number is both simpler and more correct than coercing to BOLD/NORMAL — which is what
+            // put 300/400/500 on one system face and 600..900 on another.
+            weight: if key.weight >= 600 {
                 fontdb::Weight::BOLD
             } else {
                 fontdb::Weight::NORMAL
@@ -1139,7 +1225,7 @@ impl FontContext {
         // would change the advance.
         self.primary_face(FontKey {
             family: FontFamily::Named(id),
-            bold: key.bold,
+            weight: key.weight,
             italic: key.italic,
             pua_family: None,
         })
@@ -1621,7 +1707,10 @@ pub fn zero_advance_px(families: &[String], bold: bool, italic: bool, size_px: f
             // These three measure `0`, the x-height and the cap-height — never a Private-Use-Area
             // codepoint — so the PUA family is genuinely absent here, not merely unsupplied.
             family: ctx.resolve_family(families),
-            bold,
+            // These three helpers (`ch`/`ex`/`cap` unit resolution) take a coarse `bold` from callers
+            // that only have one. 700 is what `font-weight: bold` computes to, so this is the face
+            // the boolean always selected — no behaviour change.
+            weight: if bold { 700 } else { 400 },
             italic,
             pua_family: None,
         };
@@ -1639,7 +1728,10 @@ pub fn x_height_px(families: &[String], bold: bool, italic: bool, size_px: f32) 
             // These three measure `0`, the x-height and the cap-height — never a Private-Use-Area
             // codepoint — so the PUA family is genuinely absent here, not merely unsupplied.
             family: ctx.resolve_family(families),
-            bold,
+            // These three helpers (`ch`/`ex`/`cap` unit resolution) take a coarse `bold` from callers
+            // that only have one. 700 is what `font-weight: bold` computes to, so this is the face
+            // the boolean always selected — no behaviour change.
+            weight: if bold { 700 } else { 400 },
             italic,
             pua_family: None,
         };
@@ -1657,7 +1749,10 @@ pub fn cap_height_px(families: &[String], bold: bool, italic: bool, size_px: f32
             // These three measure `0`, the x-height and the cap-height — never a Private-Use-Area
             // codepoint — so the PUA family is genuinely absent here, not merely unsupplied.
             family: ctx.resolve_family(families),
-            bold,
+            // These three helpers (`ch`/`ex`/`cap` unit resolution) take a coarse `bold` from callers
+            // that only have one. 700 is what `font-weight: bold` computes to, so this is the face
+            // the boolean always selected — no behaviour change.
+            weight: if bold { 700 } else { 400 },
             italic,
             pua_family: None,
         };
@@ -2007,7 +2102,7 @@ mod tests {
             let family = f.resolve_family(&[name.clone()]);
             let key = FontKey {
                 family,
-                bold: false,
+                weight: 400,
                 italic: false,
                 pua_family: None,
             };
@@ -2149,7 +2244,7 @@ mod tests {
         // which is the whole point, but a minimal container may install only one of them.
         let key = |family| FontKey {
             family,
-            bold: false,
+            weight: 400,
             italic: false,
             pua_family: None,
         };
@@ -2257,7 +2352,7 @@ mod tests {
         let names = |v: &[&str]| -> Vec<String> { v.iter().map(|s| s.to_string()).collect() };
         let key = |v: &[&str]| FontKey {
             family: f.resolve_family(&names(v)),
-            bold: false,
+            weight: 400,
             italic: false,
             pua_family: f.first_non_generic_family(&names(v)),
         };

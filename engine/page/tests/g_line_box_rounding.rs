@@ -67,7 +67,7 @@ fn g_line_box_rounding() {
     //    `sum(round)` — on a zero-gap face the two rules agree and the test proves nothing.
     let key = FontKey {
         family: FontFamily::SansSerif,
-        bold: false,
+        weight: 400,
         italic: false,
         pua_family: None,
     };

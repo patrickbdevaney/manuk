@@ -12041,3 +12041,30 @@ spec; silently normalising it passes the tests that check this for the wrong rea
 **Status:** landed t1493; `css/css-fonts/variations` 237–242 → 247/247 (two runs each), area total at
 its banked mark, HANG/CRASH 0. Gated by `g_a_font_face_declares_its_own_weight` under four mutations,
 Chrome-arbitrated on an inverted fixture.
+
+## The webfont family that ships nine weights and could only answer with two
+
+**The class:** every Google Fonts `<link>` and every self-hosted font pipeline. They deliver one file
+per weight — `@font-face` blocks declaring 300, 400, 500, 600, 700 — and an engine keying faces on a
+boolean `bold` can answer with at most two of them. A page set in 500 gets the 400 face; every line box
+on it is measured in a font the design does not use, and the error compounds down the page.
+
+**§5.2 is directional, not "nearest number".** A request for 450 with 400 and 500 available takes
+**500**, even though both are 50 away: inside 400–500 the spec looks UP first, then down, then above
+500. Below 400 it looks down first; above 500, up first. That equidistant row is the only one that
+distinguishes a correct implementation from a distance metric, so a fixture without it proves nothing.
+
+**⚠ Match the DECLARED weight, and carry it first.** Running the closest-match over each font file's
+internal weight is worse than a coarse boolean over it — the coarse rule is obviously approximate, a
+precise rule over the wrong input is confidently wrong. Measured as −92 subtests before the descriptor
+was carried, and neutral-to-positive after.
+
+**⚠ Style first, then weight.** A family with no face in the requested style must fall through to the
+whole set rather than to "the first registered face", which otherwise hands back an arbitrary weight
+whenever the italic arm misses.
+
+**Status:** landed t1494 after two refusals; `css/css-fonts` at its banked mark, `variations` 247/247
+against a 237–242 clean-tree band, HANG/CRASH 0. Gated by
+`g_a_graded_font_face_set_matches_by_weight`. ⚠ The SYSTEM-font path is deliberately still coarse —
+handing `fontdb::Query` the real weight regresses `variations` 247 → 148 for reasons not yet
+established, and that is stated rather than shipped.

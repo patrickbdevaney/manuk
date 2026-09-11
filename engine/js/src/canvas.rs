@@ -712,7 +712,15 @@ fn font_key(
         .collect();
     manuk_text::FontKey {
         family: fonts.resolve_family(&names),
-        bold,
+        // ⚠ **RESIDUE, NAMED: CANVAS TEXT STILL COLLAPSES WEIGHTS.** LAYOUT threads the real
+        // `font-weight` into the key as of t1494, so a 500-weight paragraph gets the 500 face. Canvas
+        // does not: the JS side parses `ctx.font` and hands down a BOOLEAN, so
+        // `ctx.font = "500 16px X"` arrives here indistinguishable from 400. 700 is what
+        // `font-weight: bold` computes to, so this is exactly the face the boolean always chose — no
+        // behaviour change and no new claim. Widening `__cvMeasureText` to take a number is a
+        // JS-boundary change and its own tick; the corpus measurement that justified this refactor
+        // (285 of 584 near-bar misses at a collapsing weight) is about LAYOUT text.
+        weight: if bold { 700 } else { 400 },
         italic,
         // A canvas `fillText` draws the same PUA icons a page does — see `FontKey::pua_family`.
         pua_family: fonts.first_non_generic_family(&names),

@@ -2970,7 +2970,7 @@ fn first_letter_len(s: &str) -> usize {
 fn text_style(cs: &ComputedStyle, fonts: &FontContext) -> TextStyle {
     let key = FontKey {
         family: fonts.resolve_family(&cs.font_family),
-        bold: cs.font_weight >= 600,
+        weight: cs.font_weight,
         italic: cs.italic,
         // Which family a Private-Use-Area codepoint may use — NOT the same answer as
         // `resolve_family`, and the difference is every icon font behind a generic. See
@@ -3007,7 +3007,7 @@ fn text_style(cs: &ComputedStyle, fonts: &FontContext) -> TextStyle {
             // Resolve the CSS font-family list to a concrete face (installed or
             // `@font-face`-registered), falling back through generics.
             family: fonts.resolve_family(&cs.font_family),
-            bold: cs.font_weight >= 600,
+            weight: cs.font_weight,
             italic: cs.italic,
             pua_family: fonts.first_non_generic_family(&cs.font_family),
         },
@@ -15458,7 +15458,7 @@ impl Ctx<'_> {
                                 sideways: false,
                                 font_key: FontKey {
                                     family: FontFamily::SansSerif,
-                                    bold: false,
+                                    weight: 400,
                                     italic: false,
                                     // A synthetic fragment with no text — nothing to place a
                                     // Private-Use-Area codepoint in.
@@ -15515,7 +15515,7 @@ impl Ctx<'_> {
                                 sideways: false,
                                 font_key: FontKey {
                                     family: FontFamily::SansSerif,
-                                    bold: false,
+                                    weight: 400,
                                     italic: false,
                                     // A synthetic fragment with no text — nothing to place a
                                     // Private-Use-Area codepoint in.
@@ -15873,7 +15873,7 @@ impl Ctx<'_> {
                     });
                     let key = FontKey {
                         family: FontFamily::SansSerif,
-                        bold: false,
+                        weight: 400,
                         italic: false,
                         // An empty-text fragment carrying geometry only — no glyphs, so no PUA.
                         pua_family: None,
@@ -15946,7 +15946,7 @@ impl Ctx<'_> {
                     });
                     let key = FontKey {
                         family: FontFamily::SansSerif,
-                        bold: false,
+                        weight: 400,
                         italic: false,
                         // An empty-text fragment carrying geometry only — no glyphs, so no PUA.
                         pua_family: None,
@@ -28906,13 +28906,13 @@ mod tests {
         // face's own metrics names the source directly and cannot be faked that way.
         let sans = FontKey {
             family: FontFamily::SansSerif,
-            bold: false,
+            weight: 400,
             italic: false,
             pua_family: None,
         };
         let cjk_key = TEST_FONTS.with(|f| FontKey {
             family: f.resolve_family(&["Noto Sans CJK JP".to_string()]),
-            bold: false,
+            weight: 400,
             italic: false,
             pua_family: None,
         });

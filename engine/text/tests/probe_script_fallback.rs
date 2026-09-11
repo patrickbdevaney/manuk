@@ -19,7 +19,7 @@ use manuk_text::{FontContext, FontFamily, FontKey};
 fn key() -> FontKey {
     FontKey {
         family: FontFamily::SansSerif,
-        bold: false,
+        weight: 400,
         italic: false,
         pua_family: None,
     }

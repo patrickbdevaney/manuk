@@ -2106,7 +2106,7 @@ impl App {
             decoration: Default::default(),
             font_key: FontKey {
                 family: FontFamily::SansSerif,
-                bold: false,
+                weight: 400,
                 italic: false,
                 // Browser chrome names no font family, so there is no author list a
                 // Private-Use-Area codepoint could be restricted to.
@@ -2374,7 +2374,7 @@ impl App {
             decoration: Default::default(),
             font_key: FontKey {
                 family: FontFamily::SansSerif,
-                bold: false,
+                weight: 400,
                 italic: false,
                 // Browser chrome names no font family, so there is no author list a
                 // Private-Use-Area codepoint could be restricted to.

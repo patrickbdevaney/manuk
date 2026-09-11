@@ -105,6 +105,14 @@
   - L38 · ⚠ A low-confidence winner is returned, not refused
   - L48 · The gate
 
+## A graded `@font-face` set matches by weight
+`docs/wiki/a-graded-font-face-set-matches-by-weight.md`
+
+  - L5 · The gap
+  - L24 · Three attempts, and the shape of this one is the record of the first two
+  - L35 · ⚠ And the system-font path is deliberately left coarse
+  - L53 · What the gates cover, and one that had to move
+
 ## A handled rejection is not an unhandled one
 `docs/wiki/a-handled-rejection-is-not-an-unhandled-one.md`
 
@@ -3482,4 +3490,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2937 sections across 135 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2941 sections across 136 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

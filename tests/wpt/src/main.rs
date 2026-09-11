@@ -1398,7 +1398,11 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                                         None => {
                                             let key = manuk_text::FontKey {
                                                 family: fonts.resolve_family(&st.font_family),
-                                                bold,
+                                                // The probe must measure what the page does: layout
+                                                // uses the real weight as of t1494, so a boolean here
+                                                // would make the instrument and the engine disagree
+                                                // about the SAME element.
+                                                weight: st.font_weight,
                                                 italic: st.italic,
                                                 pua_family: None,
                                             };
