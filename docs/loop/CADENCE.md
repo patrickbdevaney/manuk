@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1173** | ticks 1–1499 |
-| median tick cycle | **33m** | 1172 intervals |
-| median, last 10 | **89m** | 10 intervals |
+| ticks landed | **1174** | ticks 1–1500 |
+| median tick cycle | **33m** | 1173 intervals |
+| median, last 10 | **81m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.79** | 1487.4h elapsed |
-| median verify wall | **67s** | 1112 ticks |
+| **ticks per hour** | **0.79** | 1487.8h elapsed |
+| median verify wall | **67s** | 1113 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**540 of 1173 ticks** (46%) moved a
+**540 of 1174 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -1270,5 +1270,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1497** | 2026-09-11 02:34 | 38m | instrument | 8m | +283/−42 | 581 | 81 | 56.0% · | `tree-divergence` is two different things (2026-09-11) |
 | **1498** | 2026-09-11 02:47 | 13m | instrument | 8m | +188/−42 | 581 | 81 | 56.0% · | retry one origin when the trees barely overlap (2026-09-11) |
 | **1499** | 2026-09-11 04:26 | 1.7h | instrument | 8m | +187/−42 | 581 | 81 | 56.0% · | the only engine-owned refusal is a clock (2026-09-11) |
+| **1500** | 2026-09-11 04:49 | 23m | refusal | 8m | +243/−43 | 581 | 81 | 56.0% · | the container-query skip was REFUSED (2026-09-11) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

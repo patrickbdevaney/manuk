@@ -108612,3 +108612,63 @@ pass re-lays out the whole document; the question is whether it must, or whether
 changes are confined to a subtree the first layout already sized.
 
 WIKI: docs/wiki/the-container-query-skip-was-refused.md
+
+## Tick 1501 — the proxy is refused because it is also a shell (2026-09-11)
+
+TICK SHAPE: instrument
+
+`METHOD` is the compass's largest addressable term and this arc took it 23 → 17. What remains is
+`shell-only` (4) and `oracle-module-shell` (3) — and **those already reach the proxy's floor**. So the
+question is not whether to widen the trigger again; it is why the proxy is being refused.
+
+### ⭐⭐ FIVE OF SEVEN REFUSED, AND IN EVERY ONE THE PROXIED RENDER IS ITSELF A SHELL
+
+```text
+  site                 proxied render   what only LIVE has
+  comix.to                   4 tags     div×1258 span×371 a×223 img×167 svg×167 button×161
+  allticketscol.com        168 tags     span×298 div×245 img×89 button×66 app-evento-card×39
+  vk.com                   147 tags     path×14 p×4 svg×3 button×2 …
+  esaj.tjsp.jus.br          37 tags     path×54 div×39 svg×31 a×27 li×26 h3×13
+  house.udn.com              6 tags     a×155 div×153 option×91 script×80 source×80
+  awlyaa.education.dz       10 tags     ACCEPTED (10 vs 9 — a genuinely small page)
+  www.amazon.com.mx            —        `empty-`: the origin returned nothing to this client
+```
+
+`renders_agree` is doing exactly what its doc says — *"a proxy that cannot be shown to agree with the
+live page is not a reference"*. **The refusals are correct.** What they say is that one origin is
+**necessary and not sufficient**: the apps do not boot under it either.
+
+### ⭐ ONE NAMED SUB-MECHANISM, AND ONLY ONE
+
+`house.udn.com` is 195 bytes whose whole body is `window.location.href="/house/index"`. The proxy
+**does** serve arbitrary same-origin paths (`format!("{upstream}{path}")`) but injects the probe **only
+at `doc_path`** — so the navigation is served and lands on a page the probe never reached. Same family
+as t1486's meta-refresh finding, one mechanism over: *the document redirects and the instrument
+measures the document it left.* ⚠ The meta-refresh case could be fixed by following the redirect BEFORE
+injecting; a JS navigation cannot, because it is only known by running the page.
+
+⚠ **The other four are NOT explained** and this tick does not pretend they are.
+
+### LANDED
+
+```
+  docs/loop/CONSTITUTION-CHECK.md   Check #145 (due at 1501)
+  docs/wiki/the-proxy-is-refused-because-it-is-also-a-shell.md
+  no engine change — this tick is a reading and a stop
+```
+
+⭐⭐⭐ **CHECK #145's most valuable rule:** *one run can ACCEPT as well as refuse.* t1500 showed −26% on
+a real site from one before/after pair and had completely overlapping bands at three runs a side.
+t1410 is almost always cited against a false REGRESSION; the symmetric case is more dangerous, because
+nothing in the loop pushes back on a result you want. ⚠ And *a cohort named by its symptom is usually
+two mechanisms* now has **three** instances this window (font misses, `tree-divergence`, `css-starved`),
+as does *a sufficient condition used as a necessary one* (the proxy floor, the weight key, the
+`@container` trigger).
+
+NEXT: **establish why these apps do not boot under one origin, before any more proxy work.** The proxy
+was built on the premise that the origin wall is what stops them, and for the two sites t1498 converted
+that premise held; for these five it does not, and widening further would only produce more correct
+refusals. `Page::boot_errors` (t1480) is the instrument for that question and already exists — run the
+proxied document through our own engine and read what threw.
+
+WIKI: docs/wiki/the-proxy-is-refused-because-it-is-also-a-shell.md

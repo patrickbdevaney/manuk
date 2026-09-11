@@ -3392,6 +3392,14 @@
   - L49 · ⚠ And the cohort is not one thing either
   - L61 · What this decides
 
+## The proxy is refused because it is also a shell
+`docs/wiki/the-proxy-is-refused-because-it-is-also-a-shell.md`
+
+  - L5 · Where METHOD stands
+  - L13 · The refusals, read
+  - L34 · One named sub-mechanism, and only one
+  - L50 · What this decides
+
 ## The refusing oracle runs in two seconds
 `docs/wiki/the-refusing-oracle-runs-in-two-seconds.md`
 
@@ -3545,4 +3553,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2972 sections across 142 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2976 sections across 143 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

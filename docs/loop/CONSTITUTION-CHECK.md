@@ -12538,3 +12538,76 @@ largest single line item on the wall is **disk reclaim at 427s**, which asserts 
    with `variations` as the gate, which must not fall below 247. Both Chrome fixtures are written.
 3. ⚠ **Promote the vacuity rule and the inert-mutation rule to PART VI prose.** Between them they
    found seven defects in this window and they are carried entirely in gate doc comments.
+
+---
+
+## Check #145 — tick 1501
+
+Re-read `CONSTITUTION.MD` (PART VII, the invariants) and `docs/loop/V1-SCOPE.md` against ticks
+1494–1501.
+
+### GATE OR SCOREBOARD?
+
+**Gate, and this window is the one where the loop's compass became evidence.** t1496 repeated the
+200-site attribution independently: `ORIGIN 58/60 · METHOD 23/17 · ENGINE 6/5`. The mandate's binding
+constraint is **five or six sites in two hundred**, on two runs a day apart. Every conclusion drawn
+from t1485 onward now rests on a measurement with a band rather than on a single observation.
+
+⭐⭐ And one third of `METHOD`'s own movement is this loop's work: `probe-blocked` 8 → 4, which is
+t1486/t1487 teaching both the engine and the instrument to follow `<meta http-equiv="refresh">`. **The
+category the audit ranked as the largest addressable term is measurably smaller than when it was
+ranked** — which is the first time in this arc that a ranked lever has been shown to move by being
+worked.
+
+### PART VI CORRECTIONS
+
+* **NEW, and it is the window's most valuable rule:** *one run can ACCEPT as well as refuse.* t1500's
+  optimisation showed **−26% on a real site** from a single before/after pair; three runs a side had
+  completely overlapping bands and a marginally worse mean. t1410's rule is almost always cited
+  against a false REGRESSION — the symmetric case is more dangerous, because nothing in the loop
+  pushes back on a result you want.
+* **NEW:** *a cohort named by its symptom is usually two mechanisms, and the aggregate hides the
+  smaller one.* **Three instances this window**: the near-bar font misses (285 collapsing / 299 not,
+  and ZERO on the worst site), `tree-divergence` (two shells + two index shifts), `css-starved`
+  (four container-query-bound + one not). Each time the split changed what the fix should be.
+* **NEW:** *a sufficient condition used as a necessary one* — **three instances**: the proxy's shell
+  floor (t1498, fixed), the `bold: bool` weight key (t1494, fixed), the `@container` substring trigger
+  (t1500, priced and refused). It is now frequent enough to be worth looking for by name.
+* **VI.3 — the aperture rule is STILL not in prose.** Eleventh check.
+* **I5 — `ORACLE_CRAWLED: 0`. TWENTIETH check.**
+
+### THE INVARIANTS
+
+**I3 — held, twice, and both times against a result I wanted.** t1492 was Chrome-byte-identical on two
+fixtures and reverted whole for −92 on a suite; t1500 looked like a 26% win on a major site and was
+reverted for a band overlap. **Two refusals in eight ticks, both of changes that worked.**
+
+**I2 — held.** The `@font-face` descriptor went into our own `FontFace`; §5.2's matching was handed to
+`fontdb::Query` where it could be, and hand-rolled only where the descriptor made delegation
+impossible.
+
+**I1, I4, I6, I7, I8 — not bent.**
+
+### PART VII / V1-SCOPE
+
+Every tick is browser capability or the instrument that measures one. Nothing touched `scripts/`.
+
+⚠⚠ **ONE PROCESS DEFECT, MINE, RECORDED RATHER THAN QUIETLY FIXED.** `retry_one_origin` landed inside
+t1497's commit — whose message says *"no engine change"* — because I wrote it while that tick's wall
+was running, and `tick.sh` commits the working tree. Unused dead code, so nothing shipped behaved
+differently; the commit record was wrong for one tick. **Never edit the tree while the wall runs**
+(t1183–1188): known, and broken anyway. Recorded in t1498's journal and wiki.
+
+### STEER
+
+1. ⭐⭐⭐ **`METHOD`'s remainder is now understood and mostly NOT ours.** The proxy is refused on 5 of 7
+   `shell-only`/`module-shell` sites because the one-origin render is **also a shell** — `comix.to`
+   4 tags, `house.udn.com` 6, against live pages of 1,258 and 153 divs. The acceptance test is doing
+   its job; the app does not boot under the proxy either. Before any more proxy work, establish *why*
+   — the one named sub-mechanism so far is that a same-origin NAVIGATION is proxied from upstream but
+   served **without the probe injected**.
+2. ⭐⭐ **`ENGINE` is 5 and its largest member is a clock.** trivago's container-query relayout is
+   NECESSARY work (t1500 proved the skip is not the answer), so the remaining question is whether it
+   can be made incremental. That is a layout-performance subsystem, not a CSS one.
+3. ⚠ **Nine crates outside the wall, fifth ranking, unchanged** — and this arc added six gates the wall
+   does not run.
