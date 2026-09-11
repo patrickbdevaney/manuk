@@ -1,19 +1,26 @@
 #!/usr/bin/env bash
 # ── TRI-SWEEP — measure all three exit legs per real site in one pass, honestly.
 #   M1  render fidelity   : manuk-wpt fidelity   (structural coverage %, SHAPE %, visual %)
-#   M2  drive/addressing  : drive-probe          (rate %, ceiling %)  [no Chrome, batched]
-#   a11y accessibility    : a11y-score           (F1 %, precision, recall)  [own Chrome]
+#   M2  drive/addressing  : drive-probe          (rate %, ceiling %)  [no Chrome, per-site parallel]
+#   a11y accessibility    : a11y-score           (F1 %, precision, recall)  [own Chrome, per-site serial]
 #
 # FIXES over old fidelity-sweep.sh: (1) parser matches REBUILT output 'structural: X% (oracle N paths...)' +
 # 'SHAPE: X% within Npx' (old grepped dead 'N ids'/'PLACEMENT:'); (2) PER-SITE ISOLATED --out (old shared one
-# dir across jobs=3 → concurrent Chrome clobbered → example.com falsely NO_DATA); (3) M2 batched (fast, no
-# Chrome); (4) a11y batched in chunks (a11y-score uses port 9500+arg-index; separate processes collide on 9500).
+# dir across jobs=3 → concurrent Chrome clobbered → example.com falsely NO_DATA); (3+4) M2 AND a11y run
+# PER SITE under a per-site timeout — a hang scores a TAGGED ZERO instead of vanishing (old code ran ~20/10
+# sites under ONE chunk timeout, so the first hang wiped the rest: only 11/76 M2 & 10/76 a11y survived, biased
+# up). a11y stays SERIAL (a11y-score binds Chrome on 9500+idx; parallel procs collide). Headline prints FULL
+# (hang=0) vs MEASURED-only so the sampling bias is visible, not hidden.
 #
-# usage: tri-sweep.sh [--corpus FILE] [--limit N] [--jobs J] [--m1-timeout S] [--out DIR] [--no-a11y] [--no-m1]
+# usage: tri-sweep.sh [--corpus F] [--limit N] [--jobs J] [--m1-timeout S] [--m2-timeout S] [--a11y-timeout S]
+#                     [--m1-from FILE] [--out DIR] [--no-a11y] [--no-m1]
 set -uo pipefail
 R=/home/patrickd/manuk
 CORPUS=$R/docs/bench/oracle-corpus.txt
-LIMIT=0; JOBS=4; M1TMO=30; M2TMO=75; AXTMO=50; A11Y=1; M1=1; M1FROM=""
+# M2TMO/AXTMO are GENEROUS on purpose: per-site runs relaunch the fetch (and a11y its own Chrome),
+# so a tight limit turns a slow FETCH into a false TIMEOUT=0 (obs. 2026-09-11: 50s starved blog.rust-lang,
+# MDN, docs.python — all normally high). Keep them generous; lower --jobs if the box is contended.
+LIMIT=0; JOBS=4; M1TMO=30; M2TMO=90; AXTMO=90; A11Y=1; M1=1; M1FROM=""
 OUT=/tmp/claude-1000/-home-patrickd-manuk/3538dee1-05ec-426b-a0b7-1512fbafcc55/scratchpad/trisweep
 while [ $# -gt 0 ]; do case "$1" in
   --corpus) CORPUS="$2"; shift 2;; --limit) LIMIT="$2"; shift 2;; --jobs) JOBS="$2"; shift 2;;
