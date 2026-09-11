@@ -109702,7 +109702,7 @@ before a `Break` and a `Break` brings its own line into existence** — unfalsif
 by construction. Kept `false`, and the coupling written down rather than asserted by a row that would
 only look like a control.
 
-### WALL-TIME AUDIT #56 (fell due at this tick) — THE WALL IS NOT LEAN, AND THE GATES ARE NOT WHY
+### WALL-TIME AUDIT #60 (fell due at this tick; recorded in docs/loop/WALL-AUDIT.md) — THE WALL IS NOT LEAN, AND THE GATES ARE NOT WHY
 
 ```text
   total 752s
@@ -109735,3 +109735,135 @@ NEXT, in order:
    survived a solo repeat. Before quoting any parallel-sweep delta, re-run the site alone.
 
 WIKI: docs/wiki/an-inline-of-only-breaks.md
+
+## Tick 1512 — a `<br>` is not content its parent is made of; 23 of 23 (2026-09-11)
+
+TICK SHAPE: capability
+
+t1511 landed four rows it could not explain, **pinned in the gate** at what the engine produced with
+Chrome's number beside each and the instruction *"if you have just fixed it: this failure is the good
+outcome."* This is that fix.
+
+```text
+                                   Chrome            t1511            t1512
+  XX<span><br><br></span>YY     [ 0, 60, 0,19]   [ 0, 60,19,19]   [ 0, 60, 0,19] ✓
+  XX<span><br>Q</span>YY        [ 0,220,10,19]   [ 0,220,19,19]   [ 0,220,10,19] ✓
+  XX<span><br><i></i></span>YY  [ 0,300,12,19]   [ 0,280,19,39]   [ 0,300,12,19] ✓
+  XX<span><i></i><br></span>YY  [19,320,12,19]   [ 0,320,31,39]   [19,320,12,19] ✓
+```
+
+⭐⭐⭐ **The whole 23-value fixture is Chrome-exact** — 8 inline rects, 3 atomic children, all 10
+containing-block heights. It was 11 of 16 before t1511.
+
+### ONE RULE, TWO PLACES
+
+t1511 named the surplus and could not explain it: *"in every one the extra width is 19 — the width of
+the `XX` before the span — and in every one the content spans more than one line."* **Both halves are
+the same sentence: a `<br>` is not content its parent is made of.** It keeps its own box (t380 —
+`getBoundingClientRect` on a `<br>` is how caret libraries find line ends) and is not part of its
+parent's.
+
+1. **A `<br>`'s fragment does not LIFT into its ancestors.** `node_rects` propagates every fragment
+   up; the break's zero-width one sits at the **end of the previous line**, so lifting it reached the
+   span's box back to `x = 19` — the far side of the `XX` it had broken after. That is where the 19
+   came from, twice.
+2. **The two reporters land INSIDE the content, skipping leading and trailing breaks.** A LEADING
+   break dragged the head reporter onto the previous line; a TRAILING one pushed the tail onto the
+   next. A span whose drawing content is on ONE line measured two, in both directions.
+
+### ⭐⭐⭐ THE GATE TOLD THIS TICK WHAT TO WRITE, AND THEN CONFIRMED THE HAND-OFF
+
+```text
+  G_AN_INLINE_OF_ONLY_BREAKS: #s2 moved.
+    If you have just fixed it: this failure is the good outcome. Move #s2 into CHROME
+    with [0, 60, 0, 19] and delete it from KNOWN_WRONG.
+```
+
+t1511 refused to guess Chrome's model (t1418) and pinned the rows instead. One tick later the fix
+landed, the gate went red, printed that sentence with the exact value, and **`KNOWN_WRONG` is now
+empty and deleted.** *A gate that names what it cannot catch does not merely avoid pretending
+(t1417) — it hands the next tick a finished target.*
+
+### THE MEASUREMENT
+
+```text
+  serennu.com   73.8  ->  77.0 (t1511)  ->  78.7 (t1512)    misplaced 12 -> 12 -> 11
+                two readings at every step
+```
+
+⭐ **+4.9 shape on a real site across the two ticks**, having crossed the Phase-0 0.75 floor at t1511.
+
+### THE RATCHET — 13 SITES, ZERO REGRESSIONS, AND THREE FALSE SIGNALS IN TWO TICKS
+
+```text
+  mayatoys.in    85.6 -> 87.3   +1.7   back to its true value — confirms t1511's contention finding
+  a1.ro          62.5 -> 56.2   -6.2   its own band: 56.2 and 62.5 measured on ONE binary at t1511
+  beb88run.xyz   93.5 -> LOST          reason `oracle-timeout-150s`; SOLO it reads 93.7 (banked 93.5)
+  ten others                    unchanged
+```
+
+⚠⚠⚠ **THREE FALSE SIGNALS FROM `--jobs 2` SWEEP ROWS IN TWO TICKS, AND NOT ONE SURVIVED A SOLO
+REPEAT** — a false regression (t1511 mayatoys), a false gain (t1511 a1.ro, which I wanted and
+refused), and now a false LOST SCORE that the row itself attributes to the ORACLE. **A parallel sweep
+row is not a measurement of the engine.** t1410's rule needs this corollary stated in its own right:
+before quoting any `--jobs` sweep delta, re-run the site alone — the contention is not symmetric
+noise, it starves whichever side happens to lose the race.
+
+### THE FLOW STILL MUST NOT MOVE
+
+All ten containing-block heights Chrome-identical through both ticks. 191 `manuk-layout` tests green.
+
+```
+  M1 restore the two head/tail reporters               RED   M5 a <br> fragment LIFTS           RED
+  M2 single reporter before the FIRST break            RED   M6 head before a LEADING break     RED
+  M3 single reporter AFTER the last break              RED   M7 tail after a TRAILING break     RED
+  M4 single-reporter branch fires for a DRAWING inline RED   clean                              GREEN
+```
+
+### ⚠⚠⚠ THE FIRST WALL WENT RED ON THE F2 PERF FLOOR, AND A NEGATIVE CONTROL REFUTED IT
+
+`F2 pipeline large/mid 8.98x exceeds 7.5x`. The ratchet is absolute, so this was measured rather
+than argued, and the measurement found something worth more than the tick.
+
+**The negative control.** `bench_page` times `layout_document` and **never calls `node_rects`** — so
+half of this tick's change (a `<br>` fragment not lifting, which lives entirely inside `node_rects`)
+**cannot affect the benchmark by construction**. Built with ONLY that half and measured:
+
+```text
+  t1511 tree (before)   large layout  277.9  268.1  272.2    mean 273
+  lift-only             large layout  299.8  312.4  278.6    mean 297   <== +9%, from code that
+                                                                            CANNOT touch the bench
+  full t1512            large layout  286.2  294.4  289.2    mean 290
+```
+
+⭐⭐⭐ **A change provably incapable of moving this benchmark moved it 9%.** That is the box's noise,
+and it is larger than the effect being chased. Six runs of the full tree on a settled box:
+
+```text
+  7.00x  6.21x  6.68x  6.67x  6.04x  6.36x      floor 7.5x, max 7.00
+```
+
+Median ~6.5, squarely inside the six-wall historical band (**6.03, 6.31, 6.31, 6.37, 6.50, 6.69**).
+And the failing wall ran **immediately after a 110 GB disk purge and a full cold rebuild with swap at
+99%** — the same run wall-audit #60 measured at 2741s against a 752s profile.
+
+⚠ **This is a refutation with a control arm, not a re-run until green.** The protocol was stated
+before the re-run: if F2 reds again on a settled box, the tick is REVERTED, capability and all.
+
+⭐⭐ **And the real finding is about the floor, not the tick: F2's margin is smaller than its own
+measurement noise on this machine.** Observed ratios today span 6.04–8.98 with no code difference
+that can explain the top of that range. A floor that a negative control can cross is a floor that
+will eventually fail an innocent tick and pass a guilty one. `scripts/` is observer-owned, so this
+is RECORDED — it belongs beside wall-audit #60, which found the same machine condition from the
+other side.
+
+NEXT, in order:
+1. ⭐⭐⭐ **Take the work order's next term.** `shape` led at 54 addressable and two of its sites are
+   now spent; `reading-order` is second at 52 and t1508 left `www.lyreco.com` with a named mechanism
+   (an `<h3>` 12px wider than Chrome's and exactly twice as tall).
+2. ⭐⭐ **Establish why the oracle lacks a webfont the engine HAS** (t1510 #2, still untouched).
+3. ⚠ **The `--jobs` corollary above deserves to be enforced, not remembered** — the sweep could
+   re-run a row that moved by more than a site's known band, the way `repeat_plan` already re-runs
+   unstable sites.
+
+WIKI: docs/wiki/a-br-is-not-content-its-parent-is-made-of.md

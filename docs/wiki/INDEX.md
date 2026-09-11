@@ -12,6 +12,16 @@
   - L47 · What this does not fix, measured and named
   - L55 · ⚠⚠ And document.elementFromPoint is a second implementation that ignores z-index entirely
 
+## A `<br>` is not content its parent is made of — two places, one rule, 23 of 23
+`docs/wiki/a-br-is-not-content-its-parent-is-made-of.md`
+
+  - L19 · The rule, and it was in two places
+  - L27 · 1. A <br>'s fragment does not LIFT into its ancestors
+  - L33 · 2. The two reporters land INSIDE the content, skipping leading and trailing breaks
+  - L40 · The measurement
+  - L49 · ⭐⭐⭐ The gate told the next tick what to write
+  - L65 · Where it is
+
 ## The accessible name is a function of the COMPUTED STYLE
 `docs/wiki/accessible-name-computed-style.md`
 
@@ -3646,4 +3656,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3029 sections across 153 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3035 sections across 154 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

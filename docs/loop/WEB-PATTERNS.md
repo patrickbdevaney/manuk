@@ -12138,3 +12138,23 @@ a local copy). Gated by `g_an_inline_of_only_breaks` under five mutations. ⚠ F
 and are PINNED in the gate with Chrome's numbers: all four keep the width of the text before them and
 all four span more than one line — a second defect in the multi-line inline union, stated rather than
 guessed at.
+
+## …and the same rule one level out: a `<br>` is not part of its parent's box
+
+**The class:** every inline that contains a line break — `<p><span>line one<br>line two</span></p>`,
+a `<label>` wrapping a two-line hint, an `<a>` with a break in its text. Following t1511's spacer
+case, the general rule is one sentence: **a `<br>` has geometry of its own and is not content its
+parent is made of.** Two places had it wrong:
+
+* **`node_rects` lifted the break's fragment into its ancestors.** That fragment sits at the END of
+  the previous line, so the ancestor's box reached back across the text the break had broken after —
+  `XX<span><br>Q</span>YY` measured 19 wide (the width of `XX`) where Chrome says 10 (the width of
+  `Q`).
+* **The head/tail reporters straddled leading and trailing breaks**, so a span whose drawing content
+  is on ONE line measured two line boxes tall, in both directions.
+
+**Status:** landed t1512. The 23-value Chrome fixture is **wholly exact** (8 inline rects, 3 atomic
+children, 10 containing-block heights); it was 11 of 16 before t1511. `serennu.com` 73.8 → 77.0 →
+**78.7** shape across the two ticks. Gated by `g_an_inline_of_only_breaks` under seven mutations. ⚠
+The break keeps its own box (t380) — that is the half this must not break, and the `<br>` rows are in
+the fixture.

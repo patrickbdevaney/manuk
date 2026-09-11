@@ -2659,3 +2659,72 @@ cost cannot claim its ranking is the ranking**, and this one does not.
 **Nothing trimmed; both findings are observer-owned.** Recorded per the audit's own instruction —
 *"an audit that finds the wall already lean is a fine result — say so"* — with the correction that it
 is **not** lean, and that its two biggest items are not rigor.
+
+## Audit #60 — tick 1511 (2026-09-11)
+
+```text
+  total 752s
+   301s  D  disk reclaim            40%
+   232s  P  parity (72 Chrome runs) 31%
+    83s  T  crate tests             11%
+    17s  G6 clickability             2%
+     7s  G1 real-site parity         1%
+     7s  B  build (workspace)        1%
+     3s  F  perf floors · 3s F4 · every named gate below rounds to 0s
+```
+
+### THE WALL GOT MUCH LEANER AND `D`'S SHARE MORE THAN DOUBLED
+
+Against audit #59 (tick 1490):
+
+```text
+                    #59 (2481s)        #60 (752s)
+  total             2481s              752s        -70%
+  D  disk reclaim    427s  17%          301s  40%   <== share more than DOUBLED
+  P  parity          337s  14%          232s  31%
+  T  crate tests     217s   9%           83s  11%   #59's "largest recoverable item"
+```
+
+**Everything the audit is allowed to optimise got better, and the one thing it is not allowed to
+touch got relatively worse.** `T` — which #59 named *"the largest strictly-recoverable item on the
+wall"* for being a serial seven-crate loop — is down 217s → 83s. `P` is down 337s → 232s. The total
+fell 70%. And `D`, which is **not a gate at all**, now costs more than everything that asserts
+anything, combined.
+
+⭐⭐⭐ **The assertions are ~15% of the wall.**
+
+### ⚠⚠⚠ AND `D`'S REAL COST IS NOT 301s — THIS TICK MEASURED THE COMPOUNDING
+
+`D` is conditional: it fires only at ≥88% full, and `/home` is at **93%** (260 G of 297 G). #59
+measured its direct cost. This tick watched what it actually does:
+
+```text
+  · target/debug — CRITICAL 93% AFTER prune: full purge to avert ENOSPC (a cold rebuild follows)
+  ▶ now 132G free (was 22G)
+```
+
+**It purges `target/debug` whole, and then `B · build` and `T · crate tests` rebuild it from cold in
+the same run.** The wall that contained this step measured **2741s** against the 752s profiled above
+— so the step's true price is its own 301s *plus* the cold rebuild it forces, and that is ~2000s of
+a single tick. It is also the explanation for a number the loop has been reading wrong: this
+session's walls ran **429s, 522s, 538s, 752s, 759s, 764s, 805s and 2741s** against a banked
+`LAST_WALL_TIME` of 465s. **The spread is whether `D` fired and how hard, not whether the gates got
+slower.** A banked wall mark that does not record that is comparing different experiments.
+
+### THE FOUR RIGOR-PRESERVING QUESTIONS, ANSWERED
+
+1. **REDUNDANCY** — nothing new found; `T`'s seven serial `cargo test -p` invocations are still
+   serial, and are now 11% rather than #59's 9%. Still the largest *recoverable* item.
+2. **PARALLELISM** — unchanged from #59; the gates launch concurrently, the perf floors deliberately
+   do not.
+3. **CACHING** — ⚠ **this is where the finding is, and it is the opposite of a missing cache**: the
+   wall's biggest step exists to DELETE a cache the next two steps rebuild. The lever is disk
+   capacity, not the wall's structure.
+4. **SCOPE** — nothing new.
+
+### NOTHING WAS TOUCHED, AND THAT IS THE CORRECT OUTCOME
+
+`scripts/` and the machine are observer-owned (V1-SCOPE / PART VII), so this is **recorded, not
+acted on** — the same disposition #59 took, for the same reason. **No gate was cut, no floor
+widened, nothing moved to CI.** The one lever that would move the biggest term is free disk, which
+is not a browser-capability change and not this loop's to make.

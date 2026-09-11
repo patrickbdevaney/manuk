@@ -1629,6 +1629,16 @@ impl LayoutBox {
                 }
             };
         for (&owner, &r) in &frags {
+            // ⚠⚠⚠ **A `<br>`'S FRAGMENT IS ITS OWN AND DOES NOT LIFT.** Chrome does not grow an
+            // ancestor inline's rect to cover a line break inside it: `XX<span><br>Q</span>YY`
+            // measures `[0,220,10x19]` — the `Q` and nothing else — while lifting the break's
+            // zero-width fragment (which sits at the END of the previous line, x=19) widened the
+            // span to 19. The break has geometry of its own (t380: `getBoundingClientRect` on a
+            // `<br>` is how caret libraries find line ends, and it is kept), but it is not content
+            // its parent is made of.
+            if dom.tag_name(owner) == Some("br") {
+                continue;
+            }
             lift(owner, r, &mut out);
         }
         // ⚠⚠⚠ **AN OUT-OF-FLOW BOX IS NOT PART OF ITS ANCESTOR INLINE'S ADVANCE.** The lift exists
@@ -15160,8 +15170,43 @@ impl Ctx<'_> {
                     if let Some(i) = last_break {
                         out.insert(mark_content + i, reporter());
                     } else {
-                        out.push(reporter());
-                        out.insert(mark_content, reporter());
+                        // ── ⚠⚠ **AND THE TWO REPORTERS MUST LAND INSIDE THE CONTENT, NOT OUTSIDE
+                        //    THE BREAKS.** Same rule as the branch above, one level out: a `<br>` is
+                        //    not content its parent is made of, so a LEADING break must not drag the
+                        //    head reporter onto the previous line and a TRAILING one must not push
+                        //    the tail reporter onto the next. Chrome-measured:
+                        //
+                        //    ```text
+                        //                                          Chrome            before
+                        //      XX<span><br><i></i></span>YY     [ 0,300,12,19]   [0,280,19,39]
+                        //      XX<span><i></i><br></span>YY     [19,320,12,19]   [0,320,31,39]
+                        //    ```
+                        //
+                        //    Both were two line boxes tall for a span whose drawing content is on
+                        //    ONE line. Skipping the leading and trailing breaks puts both reporters
+                        //    on that line and reproduces Chrome exactly.
+                        let items = &out[mark_content..];
+                        let mut head = 0usize;
+                        for (i, it) in items.iter().enumerate() {
+                            match it {
+                                InlineItem::Break { .. } => head = i + 1,
+                                InlineItem::Spacer { .. } => {}
+                                _ => break,
+                            }
+                        }
+                        let mut tail = items.len();
+                        for (i, it) in items.iter().enumerate().rev() {
+                            match it {
+                                InlineItem::Break { .. } => tail = i,
+                                InlineItem::Spacer { .. } => {}
+                                _ => break,
+                            }
+                        }
+                        let tail = tail.max(head);
+                        // Tail first: it has the higher index, so inserting the head afterwards
+                        // shifts it right by one and both stay where they were aimed.
+                        out.insert(mark_content + tail, reporter());
+                        out.insert(mark_content + head, reporter());
                     }
                 }
                 // The right margin closes the element, AFTER both branches above have had their

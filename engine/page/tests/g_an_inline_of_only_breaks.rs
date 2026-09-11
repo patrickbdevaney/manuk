@@ -33,15 +33,30 @@
 //! zero-width and `holds_line: false`, exactly like the two it replaces. A fix that moved a `<div>`
 //! height would be trading a reported rect for real layout, and the `DIV` rows are what refuse it.
 //!
-//! ## ⚠⚠ TWO ROWS ARE STILL WRONG, AND THEY ARE HERE ON PURPOSE
+//! ## ⭐⭐⭐ t1512 — ALL 23 VALUES ARE NOW CHROME-EXACT, AND THE GATE IS HOW
 //!
-//! `s2` and `s6` keep a width of 19 where Chrome says 0 and 10 — in both, 19 is the width of the
-//! `XX` that precedes the span, and in both the element's content spans **more than one line**. That
-//! is a SECOND defect, in the multi-line inline union rather than in this branch, and it is stated
-//! rather than guessed at: *a plausible rule that fits every fixture you happened to write is the
-//! most expensive kind of wrong* (t1418). A gate that names what it cannot catch beats one that
-//! pretends (t1417) — so both rows are asserted against what we produce TODAY, with Chrome's number
-//! in the message, and a fix will fail this test and be told exactly what to write instead.
+//! t1511 landed four rows it could not fix, pinned at what the engine produced, each carrying
+//! Chrome's number and the instruction *"if you have just fixed it: this failure is the good
+//! outcome — move it into CHROME."* t1512 fixed the remaining defect, **this gate went red and
+//! printed that sentence with the exact value**, and the rows moved up:
+//!
+//! ```text
+//!                                      Chrome            t1511            t1512
+//!   XX<span><br><br></span>YY       [ 0, 60, 0,19]   [ 0, 60,19,19]   [ 0, 60, 0,19] ✓
+//!   XX<span><br>Q</span>YY          [ 0,220,10,19]   [ 0,220,19,19]   [ 0,220,10,19] ✓
+//!   XX<span><br><i></i></span>YY    [ 0,300,12,19]   [ 0,280,19,39]   [ 0,300,12,19] ✓
+//!   XX<span><i></i><br></span>YY    [19,320,12,19]   [ 0,320,31,39]   [19,320,12,19] ✓
+//! ```
+//!
+//! Two changes, one rule — **a `<br>` is not content its parent is made of**:
+//!
+//! 1. **A `<br>`'s fragment does not LIFT into its ancestors.** `node_rects` propagated every
+//!    fragment up; the break's zero-width one sits at the END of the previous line, so it widened
+//!    the span to reach back to it. The break keeps its own box (t380) — it just is not part of
+//!    its parent's.
+//! 2. **The two reporters land INSIDE the content, skipping leading and trailing breaks.** A
+//!    leading break dragged the head reporter onto the previous line and a trailing one pushed the
+//!    tail reporter onto the next, so a span whose drawing content is on ONE line measured two.
 //!
 //! Mutations that must turn this red:
 //!   1. restore the two head/tail reporters        -> s1, s3, s4 regress to the `before` column
@@ -81,6 +96,13 @@ const CHROME: &[(&str, i32, i32, i32, i32)] = &[
     //    fragment (`s5`), and must leave a genuinely empty inline alone (`s8`). Without them, "insert
     //    one reporter at the last break" could be written as "always insert one reporter".
     ("#s5", 19, 160, 10, 19),
+    // ── ⭐ PROMOTED FROM `KNOWN_WRONG` AT t1512, by this gate failing and saying so. All four were
+    //    pinned at what we produced, with Chrome's number in the message; the multi-line union fix
+    //    made every one of them Chrome-exact and the gate demanded they be moved here.
+    ("#s2", 0, 60, 0, 19),
+    ("#s6", 0, 220, 10, 19),
+    ("#s9", 0, 300, 12, 19),
+    ("#s10", 19, 320, 12, 19),
     ("#s7", 19, 240, 12, 19),
     ("#i7", 19, 247, 12, 8),
     ("#i9", 0, 307, 12, 8),
@@ -88,21 +110,13 @@ const CHROME: &[(&str, i32, i32, i32, i32)] = &[
     ("#s8", 19, 260, 0, 19),
 ];
 
-/// ⚠ **KNOWN WRONG, and asserted against OURSELVES so the gate cannot pretend.** Both rows keep the
-/// width of the `XX` before them, and in both the element's content spans more than one line — a
-/// second defect in the multi-line inline union, not in the branch this gate is about.
-/// `(selector, ours-today, chrome)`.
-const KNOWN_WRONG: &[(&str, [i32; 4], [i32; 4])] = &[
-    ("#s2", [0, 60, 19, 19], [0, 60, 0, 19]),
-    ("#s6", [0, 220, 19, 19], [0, 220, 10, 19]),
-    // ── ⚠⚠ AND THESE TWO ARE THE DISCRIMINATING ROWS, added because the mutation pass proved the
-    //    gate could not tell an inline of only breaks from one that also DRAWS. `s9` and `s10` mix a
-    //    `<br>` with an atomic `<i>`: the single-reporter branch must NOT fire for them, and with
-    //    the guard removed it does and these numbers move. They are wrong today for the same
-    //    multi-line reason as `s2`/`s6`, so they are pinned, not claimed.
-    ("#s9", [0, 280, 19, 39], [0, 300, 12, 19]),
-    ("#s10", [0, 320, 31, 39], [19, 320, 12, 19]),
-];
+/// ⭐⭐⭐ **THERE IS NO `KNOWN_WRONG` TABLE ANY MORE, AND THAT IS THIS GATE'S BEST MOMENT.**
+///
+/// t1511 landed four rows it could not fix, pinned at what the engine produced, each carrying
+/// Chrome's number and the instruction *"if you have just fixed it: this failure is the good
+/// outcome — move it into CHROME."* t1512 fixed the multi-line union, the gate went red, printed
+/// that sentence with the exact value, and the rows moved up. **A gate that names what it cannot
+/// catch does not merely avoid pretending — it hands the next tick a finished target** (t1417).
 
 /// **THE FLOW MUST NOT MOVE.** Chrome's heights for all eight containing blocks; identical before
 /// and after the change.
@@ -164,20 +178,6 @@ fn an_inline_whose_only_content_is_br_reports_one_line_box_at_the_last_break() {
              the control: an inline that owns a fragment, one whose content is an atomic \
              descendant, and an empty one must all be untouched.",
             find(sel)
-        );
-    }
-
-    for &(sel, ours, chrome) in KNOWN_WRONG {
-        assert_eq!(
-            find(sel),
-            ours,
-            "G_AN_INLINE_OF_ONLY_BREAKS: {sel} moved.\n\n  \
-             This row is KNOWN WRONG and pinned on purpose: we produce {ours:?} and Chrome says \
-             {chrome:?}. Both remaining rows keep the width of the `XX` before them and in both the \
-             element's content spans MORE THAN ONE LINE — a second defect, in the multi-line inline \
-             union rather than in the single-reporter branch this gate is about.\n\n  \
-             If you have just fixed it: this failure is the good outcome. Move {sel} into CHROME \
-             with {chrome:?} and delete it from KNOWN_WRONG."
         );
     }
 
