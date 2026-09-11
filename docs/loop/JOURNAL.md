@@ -108550,3 +108550,65 @@ first question is whether the second pass is NECESSARY on these pages — `n_she
 `cq_relaid=true` together suggest a container whose size the first pass could already have known.
 
 WIKI: docs/wiki/the-only-engine-owned-refusal-is-a-clock.md
+
+## Tick 1500 — the container-query skip was REFUSED (2026-09-11)
+
+TICK SHAPE: refusal
+
+t1499 named container-query relayout as the mechanism behind the `css-starved` cohort.
+`container_query_recascade` returns `true` **unconditionally** whenever any sheet's source merely
+*contains* `@container`, and the caller reads `true` as *"re-lay out the whole document"* — a
+**sufficient condition used as a necessary one**, the third instance this window after the proxy's
+shell floor (t1498) and the `bold: bool` key (t1494). It looked like the same bug a third time.
+
+### IT DOES NOT FIRE ON THE COHORT THAT MOTIVATED IT
+
+```text
+  www.trivago.fr   container_query_ms=3996  cq_relaid=true
+  www.trivago.be   container_query_ms=3749  cq_relaid=true
+```
+
+trivago's styles **genuinely change**, so its relayout is NECESSARY work. ⭐ That narrows t1499's next
+step: make the second layout **cheaper**, not conditional.
+
+### ⭐⭐⭐ AND WHERE IT DOES FIRE, ONE RUN NEARLY ACCEPTED IT
+
+Priced over a 40-site slice: **38 passes on 4 sites** take the early return — `m.youm7.com`,
+`agoda.com`, `ebay.com`, `otomoto.pl`, all major sites, so the population is not a corner.
+
+```text
+  m.youm7.com, same binary otherwise, one flag apart
+
+  first pair, ONE RUN EACH     BEFORE 41174 ms    AFTER 30465 ms     -26%  (!)
+
+  three runs a side
+    AFTER  (fix in)   31425  33567  30331     mean 31774   range 30331-33567
+    BEFORE (fix out)  33075  30535  27461     mean 30357   range 27461-33075
+```
+
+**The bands overlap completely** and the mean is marginally WORSE with the fix. The skipped layouts
+here are the cheap kind (254–313 ms a pass, not trivago's 3,900) and the `StyleMap` comparison costs
+O(nodes) on every `@container` page.
+
+⚠⚠ *One run refuses nothing* (t1410) — **and here one run very nearly ACCEPTED something.** A
+10.7-second difference on a real site is exactly the size of result that gets written up; the repeat is
+the only thing that stopped it. The rule is usually quoted as a guard against false regressions. This
+is the other direction.
+
+⚠ The comparison also has to come AFTER `apply_natural_sizes` — the pass-1 map has them and a fresh
+cascade does not, so comparing raw maps reports "changed" for every page with one decoded image, and
+the saving would be exactly zero *while looking like it worked*.
+
+### LANDED
+
+```
+  docs/wiki/the-container-query-skip-was-refused.md
+  no engine change — reverted whole; the tree is byte-identical to t1499
+```
+
+NEXT: t1499's step, narrowed by this refusal — **trivago's container-query relayout is necessary, so
+the work is making it cheaper.** `cq_relaid=true` with `container_query_ms ≈ layout_ms` says the second
+pass re-lays out the whole document; the question is whether it must, or whether the re-cascade's
+changes are confined to a subtree the first layout already sized.
+
+WIKI: docs/wiki/the-container-query-skip-was-refused.md

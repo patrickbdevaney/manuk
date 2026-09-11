@@ -3325,6 +3325,15 @@
   - L48 · What moved, and one third of it is this loop's own work
   - L59 · ⚠ And the first attempt at this sweep was corrupt
 
+## The container-query skip was refused
+`docs/wiki/the-container-query-skip-was-refused.md`
+
+  - L5 · The change
+  - L24 · It does not fire on the cohort that motivated it
+  - L38 · Where it does fire, it buys nothing measurable
+  - L59 · Refused
+  - L68 · What the refusal establishes
+
 ## The end padding attaches to the MARGIN box — the model that resolves t1449's contradiction
 `docs/wiki/the-end-padding-attaches-to-the-margin-box.md`
 
@@ -3536,4 +3545,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2967 sections across 141 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2972 sections across 142 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
