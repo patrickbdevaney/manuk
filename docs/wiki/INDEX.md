@@ -3343,6 +3343,13 @@
   - L53 · What the next tick implements
   - L60 · Status
 
+## The engine boots it and the oracle cannot
+`docs/wiki/the-engine-boots-it-and-the-oracle-cannot.md`
+
+  - L5 · The fact
+  - L23 · Three explanations, all refuted
+  - L52 · What that leaves
+
 ## The face, not the metrics
 `docs/wiki/the-face-not-the-metrics.md`
 
@@ -3553,4 +3560,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2976 sections across 143 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2979 sections across 144 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

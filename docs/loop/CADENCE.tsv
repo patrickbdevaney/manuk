@@ -1173,3 +1173,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1498	b1e2a3b8	1789109229	2026-09-11T02:47:09-04:00	760	instrument	465	6	188	42	581	81	3896	6960	0	642	0	retry one origin when the trees barely overlap (2026-09-11)
 1499	cadb3c2b	1789115190	2026-09-11T04:26:30-04:00	5961	instrument	465	6	187	42	581	81	3896	6960	0	642	0	the only engine-owned refusal is a clock (2026-09-11)
 1500	ff1de333	1789116581	2026-09-11T04:49:41-04:00	1391	refusal	465	7	243	43	581	81	3896	6960	0	642	0	the container-query skip was REFUSED (2026-09-11)
+1501	902abd25	1789117350	2026-09-11T05:02:30-04:00	769	instrument	465	6	176	42	581	81	3896	6960	0	642	0	the proxy is refused because it is also a shell (2026-09-11)

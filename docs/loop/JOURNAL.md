@@ -108672,3 +108672,63 @@ refusals. `Page::boot_errors` (t1480) is the instrument for that question and al
 proxied document through our own engine and read what threw.
 
 WIKI: docs/wiki/the-proxy-is-refused-because-it-is-also-a-shell.md
+
+## Tick 1502 — the engine boots it and the oracle cannot (2026-09-11)
+
+TICK SHAPE: instrument
+
+t1501's steer: establish why the refused sites do not boot under one origin, before any more proxy
+work. Three explanations, all refuted — and the fact they leave behind is the finding.
+
+### ⭐⭐⭐ OUR ENGINE RENDERS `comix.to` AND THE REFERENCE CANNOT BE BUILT
+
+```text
+  comix.to
+    our engine     BOOT: clean · 2,610 boxes
+    Chrome, live   ~1,258 divs
+    Chrome, proxied      4 tags      <- the reference we score against
+    the row        oracle-module-shell — UNSCORED, counted against the bar
+```
+
+`allticketscol.com` is the same shape: `BOOT: clean` here, 168 proxied tags against a live page of 245
+divs. **For at least two of these rows the browser's half is already done**, and every reading of
+`METHOD` since t1485 has treated them as work waiting.
+
+### THREE HYPOTHESES, ALL REFUTED
+
+1. **Absolute same-origin URLs in the bundle** — the mechanism t880's own note predicts. `comix.to`'s
+   199 KB entry bundle contains **zero** occurrences of `https://comix.to` and uses `location.origin`
+   ×3, which under the proxy IS the proxy. **Refuted.**
+2. **`upgrade-insecure-requests`**, which would send every proxied `http://127.0.0.1` subresource back
+   to the live origin. Absent from document and headers on all three. **Refuted.**
+3. **A page-supplied `<base href>`** at the live origin, which `rewrite_document` does not touch.
+   `allticketscol.com` carries one — and it is `<base href="/">`, *relative*, resolving to the proxy's
+   own root. The one shape of `<base>` that is harmless. **Refuted.**
+
+### WHAT THAT LEAVES, AND IT IS AN INSTRUMENT
+
+Nothing cheap. Every remaining candidate needs the **proxied** document run in Chrome with its console
+read, and **no instrument does that**: `one_origin_reference` invokes `--dump-dom` and compares
+open-tag counts, so a proxied app that throws on line one is indistinguishable from one that renders
+four tags deliberately.
+
+⚠ `report_probe_absence` (t1487) is the precedent — it replaced a guessed cause with three
+distinguishable observations, at a smaller cost than another round of hypotheses.
+
+### LANDED
+
+```
+  docs/wiki/the-engine-boots-it-and-the-oracle-cannot.md
+  no engine change — three refutations and a redirection
+```
+
+⚠ **The honest framing for the ledger: two of these rows are UNMEASURABLE rather than UNRENDERED.** The
+fixed-denominator rule says they still count against the bar, and it is right — but a backlog that
+ranks them as engine work is pointing at the wrong half.
+
+NEXT: **capture the proxied render's console** in `one_origin_reference`, the same move
+`report_probe_absence` made — an observation instead of a guess. It is the only thing that can
+distinguish "the app threw" from "the app rendered four tags on purpose", and every remaining
+hypothesis about this cohort needs it.
+
+WIKI: docs/wiki/the-engine-boots-it-and-the-oracle-cannot.md
