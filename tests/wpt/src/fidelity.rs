@@ -1658,6 +1658,47 @@ fn ink(means: &[[f64; 3]]) -> f64 {
 /// [`document_ships_module_scripts`] survives, because *naming the cause of a shell that is STILL a
 /// shell* is a different job from *deciding whether to try the fix*, and it is the only thing that
 /// tells the ranked backlog which refusals are the proxy's own half-boots.
+/// **Is a one-origin retry worth it for a reference that is NOT a shell?**
+///
+/// [`one_origin_worth_trying`] decides BEFORE the reference is captured, on the oracle's element count
+/// alone — *"the oracle built almost nothing"*. This decides AFTER both trees are keyed, on the one
+/// thing that count cannot express: **the two engines each built a page and barely OVERLAP.**
+///
+/// t1497 measured the `tree-divergence` cohort and found half of it just ABOVE the floor, with oracles
+/// of 13 and 18 elements — shells by any reading, and one of them is in the floor's own comment table
+/// at *53 snapshot vs 567 live*.
+///
+/// ⚠ **An empty reference is NOT this case** and returns `false`: a zero-path oracle is the floor's own
+/// job and has already had its try. Two predicates for two questions, and neither is the other's
+/// fallback.
+pub fn one_origin_worth_retrying(probed: usize, overlap: usize) -> bool {
+    probed > 0 && overlap < CERT_MIN_SHAPE_SAMPLE
+}
+
+#[cfg(test)]
+mod one_origin_retry_tests {
+    use super::{one_origin_worth_retrying, CERT_MIN_SHAPE_SAMPLE};
+
+    /// **Proven red** by returning `true` unconditionally (the healthy row then retries) and by
+    /// dropping the `probed > 0` guard (an empty reference retries a second time).
+    #[test]
+    fn a_thin_overlap_retries_and_a_healthy_one_does_not() {
+        // The shape this exists for: both engines built a page, and the keys barely meet.
+        assert!(one_origin_worth_retrying(461, 2));
+        assert!(one_origin_worth_retrying(13, 2));
+        // A healthy comparison must pay nothing — the retry is two extra Chrome runs.
+        assert!(!one_origin_worth_retrying(461, CERT_MIN_SHAPE_SAMPLE));
+        assert!(!one_origin_worth_retrying(461, 400));
+        // ⚠ An EMPTY reference is the FLOOR's case and has already had its try. Retrying here would
+        //   double the Chrome bill for every unreachable origin in the corpus.
+        assert!(
+            !one_origin_worth_retrying(0, 0),
+            "a zero-path oracle is `one_origin_worth_trying`'s job, not this one's — two predicates \
+             for two questions, and neither is the other's fallback"
+        );
+    }
+}
+
 pub fn one_origin_worth_trying(probed: usize, document: &str) -> bool {
     // Read and discarded ON PURPOSE. The whole finding of t903 is that this decision must not
     // consult the document, and a parameter that a gate can vary is the cheapest way to keep that

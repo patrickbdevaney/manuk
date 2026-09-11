@@ -108428,3 +108428,63 @@ NEXT, ranked, and the order is deliberate:
    named mechanism yet — which is why it is second.
 
 WIKI: docs/wiki/tree-divergence-is-two-different-things.md
+
+## Tick 1498 — retry one origin when the trees barely overlap (2026-09-11)
+
+TICK SHAPE: instrument
+
+t1497's ranked #1, and its split is validated by the fix rather than by reading.
+
+### ⭐⭐⭐ TWO CONVERTED, TWO REFUSED, ONE CONFIRMED TO BE A DIFFERENT PROBLEM
+
+```text
+  site                        oracle  shared    outcome
+  dashboard.twitch.tv           11 -> 159   2 -> 59   CONVERTED · structural 37.1%
+  experiencia.pichincha.com     13 ->  37   2 -> 12   CONVERTED · structural 32.4%
+  tracker.shadowfax.in          18            1       PROXY REFUSED — kept its honest label
+  sports.yahoo.com              11            3       PROXY REFUSED — kept its honest label
+  www.villaggioposeidone.it    461            2       retry AGREED and shared no more — kept
+```
+
+Exactly the split t1497 measured from the `TREE ALIGNMENT` line. **The proxy's floor could not see
+these because the floor reads the oracle's COUNT and the signal is the OVERLAP**, which is not knowable
+until both trees are keyed — *a sufficient condition used as a necessary one*, the same defect t903
+fixed when the trigger additionally demanded `type="module"`.
+
+### ⭐⭐ AGREEMENT WITH LIVE IS NOT IMPROVEMENT, AND `villaggioposeidone.it` PROVES THE GAP
+
+`renders_agree` vouches that the proxied render matches the LIVE page. It does **not** vouch that the
+proxied tree shares any more of ours: that site's retry was **accepted** and came back *461 paths,
+2 shared* — the same reference it already had, because its divergence is in the KEY, not the origin.
+Swapping in a merely-DIFFERENT reference would make the row's number depend on which Chrome run
+produced it. The swap is conditional on the overlap improving, and the row says so when it declines.
+
+⚠ **Two predicates, and neither is the other's fallback.** `one_origin_worth_trying` asks *"is the
+reference a shell?"* before capture; `one_origin_worth_retrying` asks *"do the two trees meet?"* after
+keying. An EMPTY reference returns `false` from the second — a zero-path oracle is the floor's own case
+and has had its try, and retrying there would double the Chrome bill for every unreachable origin in
+the corpus. The unit test pins that row specifically.
+
+### ⚠⚠ A PROCESS DEFECT, RECORDED RATHER THAN QUIETLY FIXED
+
+`retry_one_origin` itself landed **in tick 1497's commit**, whose message says *"no engine change"*. I
+wrote it while that tick's wall was running, and `tick.sh` commits the working tree. The function was
+unused dead code, so nothing shipped behaved differently — but the commit record was wrong for one
+tick. **Never edit the tree while the wall runs** (t1183–1188): known, and broken here anyway.
+
+### LANDED
+
+```
+  tests/wpt/fidelity.rs   one_origin_worth_retrying + its unit test   RED under 2 named mutations
+  tests/wpt/main.rs       the compare-time retry, conditional on the overlap IMPROVING
+  manuk-wpt lib 112 green
+  no engine change — the browser is untouched; this is the instrument's own half of METHOD
+```
+
+NEXT: the index-shift half. `villaggioposeidone.it` is 461 oracle paths, 336 (73%) present in ours as
+a tag-path multiset, **2 matching as keys**, first differing depth 1, and we build 645 against 461.
+Foster parenting was the obvious suspect and t1497 refuted it. The next probe is the one thing not yet
+looked at: **dump both engines' depth-1 children side by side** — Chrome's own probe already emits its
+paths, and `oracle::path_of` computes ours, so the comparison needs no new machinery.
+
+WIKI: docs/wiki/retry-one-origin-when-the-trees-barely-overlap.md

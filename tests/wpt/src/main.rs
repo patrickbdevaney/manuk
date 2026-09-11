@@ -1490,6 +1490,78 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                     } else {
                         (strip_sigs(cseen), strip_sigs(mseen))
                     };
+                    // ── **RETRY ONE ORIGIN WHEN THE TWO TREES BARELY OVERLAP** (t1498). ───────────
+                    //
+                    // `capture_seen_all_paths` decides whether to try the one-origin reference up
+                    // front, on a SHELL FLOOR over the oracle's element count. That floor cannot see
+                    // the other shape the proxy exists for — **two engines that each build a page and
+                    // barely overlap** — because the overlap is not knowable until both trees are
+                    // keyed, which is here.
+                    //
+                    // t1497 measured the `tree-divergence` cohort and found half of it sitting just
+                    // ABOVE the floor with oracles of 13 and 18 elements; one of them,
+                    // `experiencia.pichincha.com`, is in the floor's own comment table at *53 snapshot
+                    // vs 567 live*. *A sufficient condition used as a necessary one* — the same defect
+                    // t903 fixed when the trigger additionally demanded `type="module"`.
+                    //
+                    // ⚠ **THE ACCEPTANCE TEST IS WHAT MAKES WIDENING SAFE, AND IT IS UNCHANGED.**
+                    // `retry_one_origin` returns `Some` only when the proxied render AGREES with the
+                    // LIVE one (`proxy::renders_agree`), so a wider trigger can only convert rows that
+                    // test has already vouched for. `None` keeps the snapshot's honest shell and its
+                    // honest label — which is the outcome for the OTHER half of that cohort, the
+                    // index-shift sites, where both engines built the page and the KEY is what
+                    // disagrees.
+                    //
+                    // ⚠ Bounded to the rows where the question is live: an overlap below the same
+                    // `CERT_MIN_SHAPE_SAMPLE` the floor uses, and only when the oracle actually built
+                    // something (a genuinely empty reference is already the floor's own case).
+                    let cseen = {
+                        let overlap = cseen.keys().filter(|k| mseen.contains_key(*k)).count();
+                        if manuk_wpt::fidelity::one_origin_worth_retrying(cseen.len(), overlap) {
+                            eprintln!(
+                                "  THIN OVERLAP: the oracle built {} paths and we share {} of them —                                  retrying the reference through ONE ORIGIN",
+                                cseen.len(),
+                                overlap
+                            );
+                            match manuk_wpt::chrome::retry_one_origin(url, vw, vh) {
+                                Some(better) => {
+                                    let better = if std::env::var_os("MANUK_G1_CLASS_SIG").is_some()
+                                    {
+                                        better
+                                    } else {
+                                        strip_sigs(better)
+                                    };
+                                    let n =
+                                        better.keys().filter(|k| mseen.contains_key(*k)).count();
+                                    // ⚠ **THE ACCEPTANCE TEST VOUCHES FOR AGREEMENT WITH LIVE, NOT
+                                    // FOR IMPROVEMENT** — and those are different claims. Measured
+                                    // on `villaggioposeidone.it`, whose retry was accepted and
+                                    // returned *461 paths, 2 shared* — byte-for-byte the reference it
+                                    // already had, because that site's problem is the KEY and not the
+                                    // origin. Swapping in a reference that is merely DIFFERENT would
+                                    // make the row's number depend on which Chrome run it came from.
+                                    if n > overlap {
+                                        eprintln!(
+                                            "  ONE-ORIGIN RETRY ACCEPTED: {} paths, {n} shared (was {overlap})",
+                                            better.len()
+                                        );
+                                        better
+                                    } else {
+                                        eprintln!(
+                                            "  ONE-ORIGIN RETRY KEPT THE SNAPSHOT: the proxied \
+                                             reference agrees with live but shares no more of our \
+                                             tree ({n} vs {overlap}) — this row's divergence is not \
+                                             the origin's"
+                                        );
+                                        cseen
+                                    }
+                                }
+                                None => cseen,
+                            }
+                        } else {
+                            cseen
+                        }
+                    };
                     // Rect-only Box4 views for the placement scorers (SHAPE / coverage / first-
                     // divergence still take bare box maps); the jarring invariants below read the
                     // `Seen` maps directly.

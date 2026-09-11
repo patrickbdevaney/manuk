@@ -2938,6 +2938,15 @@
   - L27 · DON'T use it for
   - L31 · HOW
 
+## Retry one origin when the trees barely overlap
+`docs/wiki/retry-one-origin-when-the-trees-barely-overlap.md`
+
+  - L5 · The widening
+  - L19 · The result, on exactly the cohort that motivated it
+  - L34 · ⚠ Agreement with live is not improvement, and those are different claims
+  - L45 · ⚠ Two predicates, and neither is the other's fallback
+  - L53 · ⚠ A process defect, recorded
+
 ## Role + name is not an address
 `docs/wiki/role-plus-name-is-not-an-address.md`
 
@@ -3518,4 +3527,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2957 sections across 139 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2962 sections across 140 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
