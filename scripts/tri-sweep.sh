@@ -13,11 +13,12 @@
 set -uo pipefail
 R=/home/patrickd/manuk
 CORPUS=$R/docs/bench/oracle-corpus.txt
-LIMIT=0; JOBS=4; M1TMO=30; A11Y=1; M1=1
+LIMIT=0; JOBS=4; M1TMO=30; M2TMO=75; AXTMO=50; A11Y=1; M1=1; M1FROM=""
 OUT=/tmp/claude-1000/-home-patrickd-manuk/3538dee1-05ec-426b-a0b7-1512fbafcc55/scratchpad/trisweep
 while [ $# -gt 0 ]; do case "$1" in
   --corpus) CORPUS="$2"; shift 2;; --limit) LIMIT="$2"; shift 2;; --jobs) JOBS="$2"; shift 2;;
-  --m1-timeout) M1TMO="$2"; shift 2;; --out) OUT="$2"; shift 2;;
+  --m1-timeout) M1TMO="$2"; shift 2;; --m2-timeout) M2TMO="$2"; shift 2;; --a11y-timeout) AXTMO="$2"; shift 2;;
+  --m1-from) M1FROM="$2"; M1=0; shift 2;; --out) OUT="$2"; shift 2;;
   --no-a11y) A11Y=0; shift;; --no-m1) M1=0; shift;;
   *) echo "unknown flag: $1"; exit 2;; esac; done
 
@@ -49,35 +50,54 @@ run_m1() {
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$cat" "$url" "$st" "${cov:-}" "${shape:-}" "${vis:-}" "${paths:-0}" >> "$M1M2"
   printf '  %-11s %-38s %-11s cov=%-6s shape=%-6s\n' "$cat" "${url:0:38}" "$st" "${cov:-–}" "${shape:-–}"
 }
-echo "▶ phase A (M1 fidelity + reachability)…"
-for row in "${ROWS[@]}"; do
-  cat=$(printf '%s' "$row"|cut -f1); url=$(printf '%s' "$row"|cut -f2)
-  while [ "$(jobs -rp|wc -l)" -ge "$JOBS" ]; do wait -n 2>/dev/null||sleep 0.2; done
-  run_m1 "$cat" "$url" &
-done; wait
+if [ -n "$M1FROM" ]; then
+  cp "$M1FROM" "$M1M2"
+  echo "▶ phase A SKIPPED — imported M1 reachability from $M1FROM ($(wc -l < "$M1M2") rows)"
+else
+  echo "▶ phase A (M1 fidelity + reachability)…"
+  for row in "${ROWS[@]}"; do
+    cat=$(printf '%s' "$row"|cut -f1); url=$(printf '%s' "$row"|cut -f2)
+    while [ "$(jobs -rp|wc -l)" -ge "$JOBS" ]; do wait -n 2>/dev/null||sleep 0.2; done
+    run_m1 "$cat" "$url" &
+  done; wait
+fi
 echo "  M1 scored: $(wc -l < "$M1M2")  reachable: $(awk -F'\t' '$3=="OK"||$3=="LOW_SAMPLE"||$3=="NO_STRUCT"' "$M1M2"|wc -l)"
 
 # ── reachable set drives the expensive phases (skip bot-walls entirely) ──
 mapfile -t RURLS < <(awk -F'\t' '$3=="OK"||$3=="LOW_SAMPLE"||$3=="NO_STRUCT"{print $2}' "$M1M2")
 
-# ── Phase B: M2 drive-probe on REACHABLE only, batched (no Chrome). ──
-echo "▶ phase B (M2 drive-probe on ${#RURLS[@]} reachable)…"
-i=0; while [ "$i" -lt "${#RURLS[@]}" ]; do
-  chunk=("${RURLS[@]:i:20}")
-  timeout 300 nice -n 15 "$DP" "${chunk[@]}" 2>/dev/null \
-    | awk '/^https?:/{r=$6;c=$9;gsub(/%/,"",r);gsub(/%/,"",c);print $1"\t"r"\t"c}' >> "$M2MAP"
-  i=$((i+20)); echo "  M2: $(wc -l < "$M2MAP")/${#RURLS[@]}"
-done
+# ── Phase B: M2 drive-probe PER SITE, parallel (no Chrome). ──
+# A site that HANGS the driver is undriveable → it counts as rate 0 (tag TIMEOUT), it does NOT vanish.
+# Per-site timeout is the fix: the old code ran 20 sites under ONE 300s timeout, so one hang wiped the batch.
+run_m2() {
+  local url="$1" o rate ceil tag
+  o=$(timeout "$M2TMO" nice -n 15 "$DP" "$url" 2>/dev/null)
+  read -r rate ceil < <(printf '%s\n' "$o" | awk '/^https?:/{r=$6;c=$9;gsub(/%/,"",r);gsub(/%/,"",c);print r" "c; exit}')
+  if [ -z "${rate:-}" ]; then rate=0; ceil=0; tag=TIMEOUT; else tag=OK; fi
+  printf '%s\t%s\t%s\t%s\n' "$url" "$rate" "$ceil" "$tag" >> "$M2MAP"
+  printf '  M2 %-38s rate=%-6s %s\n' "${url:0:38}" "$rate" "$tag"
+}
+echo "▶ phase B (M2 drive-probe on ${#RURLS[@]} reachable, per-site tmo=${M2TMO}s jobs=$JOBS)…"
+for url in "${RURLS[@]}"; do
+  while [ "$(jobs -rp|wc -l)" -ge "$JOBS" ]; do wait -n 2>/dev/null||sleep 0.2; done
+  run_m2 "$url" &
+done; wait
+echo "  M2 measured: $(awk -F'\t' '$4=="OK"' "$M2MAP"|wc -l)/${#RURLS[@]}  (timeout: $(awk -F'\t' '$4=="TIMEOUT"' "$M2MAP"|wc -l))"
 
-# ── Phase C: a11y-score on REACHABLE sites, chunked (one process/chunk) ──
+# ── Phase C: a11y-score PER SITE, SERIAL (a11y-score binds Chrome on port 9500; parallel procs collide). ──
+# Same fix as phase B: a per-site timeout so one hang scores F1 0 (tag TIMEOUT) instead of killing the batch.
 if [ "$A11Y" -eq 1 ]; then
-  echo "▶ phase C (a11y-score on ${#RURLS[@]} reachable)…"
-  i=0; while [ "$i" -lt "${#RURLS[@]}" ]; do
-    chunk=("${RURLS[@]:i:10}")
-    timeout 600 nice -n 15 "$AX" "${chunk[@]}" 2>/dev/null \
-      | awk '/^https?:/{p=$5;r=$6;f=$7;gsub(/%/,"",p);gsub(/%/,"",r);gsub(/%/,"",f);print $1"\t"p"\t"r"\t"f}' >> "$AXF"
-    i=$((i+10)); echo "  a11y: $(wc -l < "$AXF")/${#RURLS[@]}"
+  echo "▶ phase C (a11y-score on ${#RURLS[@]} reachable, per-site serial tmo=${AXTMO}s)…"
+  n=0
+  for url in "${RURLS[@]}"; do
+    n=$((n+1))
+    o=$(timeout "$AXTMO" nice -n 15 "$AX" "$url" 2>/dev/null)
+    read -r prec rec f1 < <(printf '%s\n' "$o" | awk '/^https?:/{p=$5;r=$6;f=$7;gsub(/%/,"",p);gsub(/%/,"",r);gsub(/%/,"",f);print p" "r" "f; exit}')
+    if [ -z "${f1:-}" ]; then prec=0; rec=0; f1=0; tag=TIMEOUT; else tag=OK; fi
+    printf '%s\t%s\t%s\t%s\t%s\n' "$url" "$prec" "$rec" "$f1" "$tag" >> "$AXF"
+    printf '  a11y %3d/%d %-34s F1=%-6s %s\n' "$n" "${#RURLS[@]}" "${url:0:34}" "$f1" "$tag"
   done
+  echo "  a11y measured: $(awk -F'\t' '$5=="OK"' "$AXF"|wc -l)/${#RURLS[@]}  (timeout: $(awk -F'\t' '$5=="TIMEOUT"' "$AXF"|wc -l))"
 fi
 
 # ── join: M1M2 (cat url status cov shape vis paths) + M2MAP (rate ceil) + AXF (prec rec f1) ──
@@ -88,13 +108,13 @@ awk -F'\t' '
 ' m2="$M2MAP" ax="$AXF" "$M2MAP" "$AXF" "$M1M2" > "$FINAL"
 echo ""; echo "=== DONE $(date '+%F %T') → $FINAL"
 echo "cols: cat url status cov shape vis paths m2rate m2ceil a11yprec a11yrec a11yf1"
-# ── honest headline ──
-awk -F'\t' '{t++; st=$3
-  if(st=="OK"||st=="LOW_SAMPLE")reach++
-  if($5!="")  {sh+=$5; shn++}
-  if($8!="")  {m2+=$8; m2n++}
-  if($12!=""){f1+=$12; f1n++}}
-END{printf "  sites=%d  reachable=%d (%.0f%%)\n",t,reach,100*reach/t
-  if(shn)printf "  M1  mean SHAPE (reachable): %.1f%%  (n=%d)\n",sh/shn,shn
-  if(m2n)printf "  M2  mean drive-rate:        %.1f%%  (n=%d)\n",m2/m2n,m2n
-  if(f1n)printf "  a11y mean F1:               %.1f%%  (n=%d)\n",f1/f1n,f1n}' "$FINAL"
+# ── honest headline: FULL denominator (a hang scores 0) vs MEASURED-only, so the bias is visible ──
+TOT=$(wc -l < "$M1M2")
+REACH=$(awk -F'\t' '$3=="OK"||$3=="LOW_SAMPLE"||$3=="NO_STRUCT"{n++}END{print n+0}' "$M1M2")
+echo "  sites=$TOT  reachable=$REACH"
+awk -F'\t' '($3=="OK"||$3=="LOW_SAMPLE")&&$5!=""{s+=$5;n++}
+  END{if(n)printf "  M1  SHAPE (reachable):   %.1f%%  (n=%d)\n",s/n,n}' "$M1M2"
+awk -F'\t' '{n++;all+=$2; if($4=="OK"){ok++;oks+=$2}else to++}
+  END{if(n)printf "  M2  drive-rate: FULL %.1f%% (n=%d, %d timeout scored 0)  |  measured-only %.1f%% (n=%d)\n",all/n,n,to,(ok?oks/ok:0),ok}' "$M2MAP"
+[ "$A11Y" -eq 1 ] && awk -F'\t' '{n++;all+=$4; if($5=="OK"){ok++;oks+=$4}else to++}
+  END{if(n)printf "  a11y F1:        FULL %.1f%% (n=%d, %d timeout scored 0)  |  measured-only %.1f%% (n=%d)\n",all/n,n,to,(ok?oks/ok:0),ok}' "$AXF"
