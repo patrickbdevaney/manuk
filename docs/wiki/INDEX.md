@@ -192,6 +192,15 @@
   - L39 · An enumeration of identical rows is not an enumeration
   - L46 · ⚠ The role filter was untested until a button was added
 
+## A work order ranked by headroom is only as good as its definition of "reachable"
+`docs/wiki/an-unscored-site-is-not-addressable-by-the-term-it-fails.md`
+
+  - L12 · Defect 1 — an unscored site is not addressable by the term it fails
+  - L32 · Defect 2 — a site nobody is ALLOWED to fix is not work
+  - L54 · The corrected work order, on the real corpus
+  - L74 · ⚠ Two more defects the fixtures caught, both in the instrument's own voice
+  - L87 · Where it is
+
 ## A page could not report its own boot failure
 `docs/wiki/a-page-could-not-report-its-own-boot-failure.md`
 
@@ -3599,4 +3608,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3002 sections across 148 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3007 sections across 149 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

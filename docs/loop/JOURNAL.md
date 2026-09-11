@@ -109220,3 +109220,97 @@ NEXT, in order:
    re-run selector matching for the whole document?
 
 WIKI: docs/wiki/a-work-order-must-be-ranked-by-headroom.md
+
+## Tick 1507 — the ranking was only as good as its definition of "reachable" (2026-09-11)
+
+TICK SHAPE: instrument
+
+t1506 landed a headroom-ranked work order. Ran it on the first real 200-site corpus and the ranking
+it produced was wrong in two nameable ways. ⭐⭐⭐ **Both were found by USE, in the first five minutes
+of consuming the instrument, and neither would have been found by reading it** — t1419's rule,
+fourth instance.
+
+### DEFECT 1 — AN UNSCORED SITE IS NOT ADDRESSABLE BY THE TERM IT FAILS
+
+`certificate` skips an unmeasurable row BEFORE the jarring loop, so an unscored site is counted clean
+on nothing: its rows sit inside all four jarring holes AND the shape hole at once. t1506 ranked
+jarring terms on `sites - clean[i]`, which counts that one shared blockage once per term.
+
+```text
+  sites - clean     reading-order 147 > overlap 137 > h-overflow 122 > dead-target 103 > shape 54
+  scored - clean    shape 54 > reading-order 52 > overlap 42 > h-overflow 27 > dead-target 8
+```
+
+The naive model put `reading-order` at the top with a hole of 137 — **when only 52 of that is
+reachable by working reading-order at all.** ⭐⭐⭐ *The unscored cohort is not a competing term, it is
+the shared PREREQUISITE of all five others*, and a ranking that double-counts it into every one of
+them ranks by how much of the same blockage each term happens to contain.
+
+### DEFECT 2 — A SITE NOBODY IS ALLOWED TO FIX IS NOT WORK
+
+Corrected, the unscored term then led with **95** — the number the standing mandate quotes. Of those
+95, **60 are bot-wall / unreachable / HTTP / empty-body**: the ORIGIN's refusal, out of scope by
+DAILY-DRIVER-CERTIFICATION.md §3, not convertible by any tick.
+
+⚠⚠ **The loop has known this since t1485 and applied it BY HAND at every sweep** — the
+`ORIGIN 58 / METHOD 23 / ENGINE 6` histograms are awk over the tag column. **The certificate itself
+had never known about it.** `Unmeasurable::is_origins` puts the rule where the ranking happens.
+
+### THE CORRECTED WORK ORDER, ON THE REAL CORPUS
+
+```text
+  · shape >=0.75 on 25.5% (bar 95%) — hole 139   <== at most 54; 85 of the remainder are UNSCORED
+  · reading-order clean on 26.5%   — hole 137    <== at most 52; 85 …
+  · overlap clean on 31.5%         — hole 127    <== at most 42; 85 …
+  · 95 of 200 UNSCORED — 60 the ORIGIN's, so only 35 is work    <== at most 35
+  · h-overflow clean on 39.0%      — hole 112    <== at most 27; 85 …
+  · dead-target clean on 48.5%     — hole 93     <== at most 8;  85 …
+```
+
+⭐⭐⭐ **The scorability term is FOURTH**, and it is now the INSTRUMENT saying so on its own corpus
+rather than an argument. It agrees exactly with t1506's independent in-scope arithmetic (shape 70 >
+unscored 14 over 141 in-scope sites, computed in awk from a different sweep file). **Two derivations,
+two corpus slices, same order.**
+
+⚠ And **no single term closes the gap** — all six carry the verdict. The certificate is met by a
+conjunction of several terms or not at all, and ⭐⭐ **reading-order and overlap have never been
+worked in this project's history** while sitting second and third.
+
+### TWO MORE DEFECTS, BOTH IN THE INSTRUMENT'S OWN VOICE, BOTH CAUGHT BY A FIXTURE
+
+* **The unscored term was being told it was waiting on itself** — `headroom_note` appended *"N of the
+  remainder are UNSCORED and must be SCORED first"* to every term including the scorability term, a
+  sentence that cannot be acted on. The prerequisite is now a parameter, zero for the term that IS it.
+* ⭐⭐ **The first fixture could not reproduce the shape it was about.** `row(.., None, ..)` has no
+  shape AND no `unmeasurable` reason, so it still reaches the jarring loop and counts clean on all
+  four: `clean = [173,158,148,192]` against the real corpus's `[78,63,53,97]`. *An UNSCORED row and a
+  REFUSED row are different states, and only the second is what the corpus is made of.* `refused()`
+  and `refused_ours()` now exist so a fixture cannot make that mistake silently.
+
+```
+  M1  drop the sort_by                            RED     M7  jarring measured vs SHAPE gap     RED
+  M2  sort ASCENDING                              RED     M8  clean_gap forgets clean[i]        RED
+  M3  the note is always silent                   RED     M9  headroom_clean = sites - clean    RED
+  M4  the note always fires                       RED     M10 is_origins returns false          RED
+  M5  headroom_unscored ignores scope             RED     M11 is_origins swallows RenderFailed  RED
+  M6  shape_gap forgets shape_ok                  RED     M12 unscored term waits on itself     RED
+  clean                                           GREEN
+```
+
+### THE RATCHET
+
+No engine behaviour changed, no site moved, no banked mark touched. ⚠ **RESIDUE:** a row with a valid
+but SUB-SAMPLE shape (`CERT_MIN_SHAPE_SAMPLE`) is not `scored` and still reaches the jarring loop, so
+`clean[i]` can exceed `scored`. Zero rows on today's corpus; handled with `saturating_sub` rather
+than by changing the certificate's counting, which would move banked marks. Named, not fixed.
+
+NEXT, in order:
+1. ⭐⭐⭐ **Take the work order's second term: `reading-order`, 52 addressable sites, never worked in
+   this project's history.** It is one point behind shape and it has no prior art to be stale — the
+   first question is what the invariant actually measures and what a violation looks like on one
+   site.
+2. ⭐⭐ **`overlap` is third at 42 and also never worked.** Same shape of question.
+3. **Find the `serennu.com` reproducer** (t1506 residue): `<span class="tiny"><br /><br /></span>`
+   measures `0x14` against Chrome's `605x62`; two minimal fixtures do NOT reproduce it.
+
+WIKI: docs/wiki/an-unscored-site-is-not-addressable-by-the-term-it-fails.md

@@ -403,6 +403,32 @@ impl Unmeasurable {
         }
     }
 
+    /// **Is this refusal the ORIGIN'S, and therefore not work we can ever do?**
+    ///
+    /// `DAILY-DRIVER-CERTIFICATION.md` §3 rules a bot wall, a dead host and an HTTP error out of
+    /// scope: they are properties of the site, not defects in the engine, and no tick can convert
+    /// one. The loop has applied that rule by hand at every sweep since — the t1485/t1496 histograms
+    /// are literally `ORIGIN 58 / METHOD 23 / ENGINE 6` computed in awk — and **the certificate
+    /// itself has never known about it.**
+    ///
+    /// ⚠⚠⚠ That is not cosmetic. `shortfalls` ranks by how many sites a term could contribute, and
+    /// on `SWEEP-t1406-rows.tsv` the unscored cohort is 95 — of which **59 are bot-wall,
+    /// unreachable or HTTP**. Counting those as headroom puts the scorability term at the top of
+    /// the work order with a number that is 62% unreachable-by-rule. *A site nobody is allowed to
+    /// fix is not work, and a work order that ranks it is ranking a wish.*
+    ///
+    /// ⚠ `Timeout` is OURS deliberately — t1409 established that a watchdog firing on a clock
+    /// cannot name a cause, and the engine is the default suspect for its own clock. `OracleTimeout`
+    /// is the instrument's, which is not the origin's either, but it is also not a site we can claim
+    /// by fixing the engine; it is filed with the addressable set so it stays visible as an
+    /// instrument debt rather than disappearing into the origin's column.
+    pub fn is_origins(&self) -> bool {
+        matches!(
+            self,
+            Self::Unreachable | Self::BotWall(_) | Self::HttpStatus(_) | Self::EmptyBody(_)
+        )
+    }
+
     /// Read back what [`Self::tag`] wrote, so a chunked sweep keeps its reasons across the boundary.
     pub fn from_tag(s: &str) -> Option<Self> {
         let num = |p: &str| s.strip_prefix(p).and_then(|n| n.parse::<u32>().ok());
@@ -756,6 +782,11 @@ pub struct Cert {
     /// measurement channel, and an empty body is neither. Sorted by count so the list reads as a
     /// priority order rather than a set.
     pub unmeasured_by_reason: Vec<(String, usize)>,
+    /// **Unscored sites whose refusal belongs to the ORIGIN** (bot wall / dead host / HTTP error /
+    /// empty body) — out of scope by `DAILY-DRIVER-CERTIFICATION.md` §3 and not convertible by any
+    /// tick. See [`Unmeasurable::is_origins`]; they are subtracted from the scorability term's
+    /// headroom, because a site nobody is allowed to fix is not work.
+    pub unscored_origin: usize,
 }
 
 /// The certificate's shape floor and its site-fraction bar — the two numbers the exit rule is
@@ -821,6 +852,10 @@ pub fn certificate(rows: &[Fidelity]) -> Cert {
             *by_reason.entry(u.tag()).or_default() += 1;
         }
     }
+    c.unscored_origin = rows
+        .iter()
+        .filter(|r| r.unmeasurable.as_ref().is_some_and(|u| u.is_origins()))
+        .count();
     c.unmeasured_by_reason = by_reason.into_iter().collect();
     // Most common first: the list is a work order, and the biggest cause is the first job.
     c.unmeasured_by_reason
@@ -875,11 +910,43 @@ impl Cert {
     /// about arithmetic, not about the engine, and it is cheap for the instrument to state and
     /// expensive for a reader to derive — which is precisely the kind of thing that gets estimated
     /// instead, and then steered by for twenty ticks.
+    /// **Unscored sites we are ALLOWED to convert** — the cohort minus the origin's refusals.
+    ///
+    /// See [`Unmeasurable::is_origins`]. On `SWEEP-t1406-rows.tsv` this is 95 − 59 = **36**, and
+    /// the difference decides the work order: at 95 the scorability term leads everything; at 36 it
+    /// sits below the shape term's 54, which is where the loop's own in-scope arithmetic (t1506)
+    /// had already put it by doing the subtraction in awk.
     fn headroom_unscored(&self) -> usize {
-        self.sites - self.scored
+        (self.sites - self.scored).saturating_sub(self.unscored_origin)
     }
     fn headroom_shape(&self) -> usize {
-        self.scored - self.shape_ok
+        self.scored.saturating_sub(self.shape_ok)
+    }
+
+    /// **The sites a JARRING term could clean WITHOUT the scorability work** — the scored-but-dirty
+    /// ones.
+    ///
+    /// ⚠⚠⚠ **THE FIRST HEADROOM MODEL USED `sites − clean[i]` AND THAT IS NOT ADDRESSABLE WORK.**
+    /// `certificate` skips an unmeasurable row before it reaches the jarring loop, so an unscored
+    /// site is counted clean on NOTHING — its 95 rows sit inside every one of the four jarring holes
+    /// as well as inside the shape hole. Ranking on `sites − clean[i]` therefore put
+    /// `reading-order` (hole 137) at the top of the work order on the real corpus, when only **52**
+    /// of that 137 is reachable by working reading-order; the other 85 are pages we cannot score at
+    /// all, and no amount of reading-order work touches them.
+    ///
+    /// ⭐⭐⭐ **The unscored cohort is not a competing term — it is the shared PREREQUISITE of all five
+    /// others**, and a ranking that lets it be double-counted into every one of them ranks by how
+    /// much of the same blockage each term happens to contain. Measured on `SWEEP-t1406-rows.tsv`
+    /// the correction reverses the order: `sites − clean` says reading-order 137 > overlap 127 >
+    /// h-overflow 112 > dead-target 93 > shape 54; `scored − clean` says **shape 54 > reading-order
+    /// 52 > overlap 42 > h-overflow 27 > dead-target 8**.
+    ///
+    /// ⚠ `saturating_sub` is not decoration: a row with a valid but SUB-SAMPLE shape
+    /// ([`CERT_MIN_SHAPE_SAMPLE`]) is not `scored` and yet still reaches the jarring loop, so
+    /// `clean[i]` can exceed `scored`. That combination is zero rows on today's corpus and one
+    /// corpus away from being some — see the journal's residue note for t1507.
+    fn headroom_clean(&self, i: usize) -> usize {
+        self.scored.saturating_sub(self.clean[i])
     }
 
     /// The terms that are BELOW the bar, named — **ranked by HEADROOM, most first**, which is what
@@ -900,14 +967,26 @@ impl Cert {
                         .join(", ")
                 )
             };
+            let origin = if self.unscored_origin > 0 {
+                format!(
+                    " — {} of them refused BY THE ORIGIN (bot wall / dead host / HTTP / empty), \
+                     out of scope per DAILY-DRIVER-CERTIFICATION.md §3 and not convertible by any \
+                     tick, so only {} of this cohort is work",
+                    self.unscored_origin,
+                    self.headroom_unscored()
+                )
+            } else {
+                String::new()
+            };
             out.push((
                 self.headroom_unscored(),
                 format!(
-                    "{} of {} sites UNSCORED (cannot be claimed, counted against the bar){}{}",
+                    "{} of {} sites UNSCORED (cannot be claimed, counted against the bar){}{}{}",
                     self.sites - self.scored,
                     self.sites,
+                    origin,
                     by,
-                    self.headroom_note(self.headroom_unscored(), self.shape_gap())
+                    self.headroom_note(self.headroom_unscored(), self.shape_gap(), 0)
                 ),
             ));
             // **The residue is itself a finding, and it must not round to zero.** A site that failed
@@ -936,21 +1015,29 @@ impl Cert {
                     self.shape_frac() * 100.0,
                     CERT_SITE_BAR * 100.0,
                     self.shape_gap(),
-                    self.headroom_note(self.headroom_shape(), self.shape_gap())
+                    self.headroom_note(
+                        self.headroom_shape(),
+                        self.shape_gap(),
+                        self.sites - self.scored
+                    )
                 ),
             ));
         }
         for i in 0..4 {
             if self.clean_frac(i) < CERT_SITE_BAR {
                 out.push((
-                    self.sites - self.clean[i],
+                    self.headroom_clean(i),
                     format!(
                         "{} clean on {:.1}% of sites (bar {:.0}%) — the hole is {} site(s){}",
                         JARRING_NAMES[i],
                         self.clean_frac(i) * 100.0,
                         CERT_SITE_BAR * 100.0,
                         self.clean_gap(i),
-                        self.headroom_note(self.sites - self.clean[i], self.clean_gap(i))
+                        self.headroom_note(
+                            self.headroom_clean(i),
+                            self.clean_gap(i),
+                            self.sites - self.scored
+                        )
                     ),
                 ));
             }
@@ -976,18 +1063,33 @@ impl Cert {
     /// compared every term to [`Self::shape_gap`], which is only the right question for the two
     /// terms that feed the SHAPE bar — the scored-but-low sites, and the unscored ones (an unscored
     /// site can never be `shape_ok`, so its whole cohort is shape headroom). A jarring invariant has
-    /// its own bar and its own hole, and its headroom is `sites − clean`, which is always at least
-    /// that hole — **a jarring term can ALWAYS close its own gap, so this must never fire on one.**
-    /// Compared against the shape hole instead it would have fired on a jarring term whenever the
-    /// shape hole happened to be the larger number, which is a confident false statement about a
-    /// term that is perfectly reachable.
-    fn headroom_note(&self, headroom: usize, gap: usize) -> String {
+    /// its own bar and its own hole, and comparing it against the shape hole would have fired on it
+    /// whenever the shape hole happened to be the larger number — a confident false statement about
+    /// a term measured against somebody else's bar.
+    ///
+    /// ⚠ **t1506 also wrote here that "a jarring term can ALWAYS close its own gap". That was true
+    /// only of the FIRST headroom model, and that model was wrong** — see [`Self::headroom_clean`].
+    /// Against `scored − clean[i]`, a jarring term on a corpus with unscored sites routinely cannot
+    /// close its own gap, and saying so is the most useful line this function prints.
+    /// `prereq` is how many of this term's unreached sites are blocked on OTHER work — the whole
+    /// unscored cohort, for every term except the unscored one itself, which IS that work and must
+    /// not be told it is waiting on itself.
+    fn headroom_note(&self, headroom: usize, gap: usize, prereq: usize) -> String {
         if gap == 0 || headroom >= gap {
             return String::new();
         }
+        let blocked = prereq.min(gap - headroom);
+        let by = if blocked > 0 {
+            format!(
+                "; {blocked} of the remainder are sites that are UNSCORED and must be SCORED before \
+                 this term can reach them"
+            )
+        } else {
+            String::new()
+        };
         format!(
             "  <== CANNOT CLOSE THE GAP: solved COMPLETELY this term is worth at most {headroom} \
-             site(s) against a hole of {gap}"
+             site(s) against a hole of {gap}{by}"
         )
     }
 }
@@ -3075,6 +3177,30 @@ mod shape_tests {
         assert!((shape - 1.0).abs() < f64::EPSILON);
     }
 
+    /// An UNSCORED row with a reason — the state 95 of the 200 real corpus rows are in.
+    ///
+    /// ⚠ **`row(.., None, ..)` is NOT this state, and the difference is load-bearing.** A row with
+    /// `shape: None` and `unmeasurable: None` still reaches `certificate`'s jarring loop and is
+    /// counted CLEAN on all four invariants; a row with an `unmeasurable` reason is skipped before
+    /// it. The first draft of `an_unscored_site_is_not_addressable_by_the_term_it_fails` used the
+    /// former and got `clean = [173, 158, 148, 192]` against the real corpus's `[78, 63, 53, 97]` —
+    /// **a fixture that could not reproduce the shape of the thing it was about.**
+    fn refused(name: &str) -> Fidelity {
+        Fidelity {
+            unmeasurable: Some(super::Unmeasurable::Unreachable),
+            ..row(name, None, [0; 4])
+        }
+    }
+
+    /// A refusal that is OURS — the engine fetched the page and failed to paint it. Convertible, and
+    /// therefore headroom; `refused` above is the origin's and is not.
+    fn refused_ours(name: &str) -> Fidelity {
+        Fidelity {
+            unmeasurable: Some(super::Unmeasurable::RenderFailed),
+            ..row(name, None, [0; 4])
+        }
+    }
+
     fn row(name: &str, shape: Option<f64>, jarring: [usize; 4]) -> Fidelity {
         Fidelity {
             name: name.into(),
@@ -3278,17 +3404,18 @@ mod shape_tests {
         );
     }
 
-    /// ⚠⚠ **A JARRING TERM CAN ALWAYS CLOSE ITS OWN GAP, SO THE VERDICT MUST NEVER FIRE ON ONE.**
+    /// ⚠⚠ **A JARRING TERM IS MEASURED AGAINST ITS OWN BAR, NOT THE SHAPE BAR.**
     ///
     /// The first version of `headroom_note` compared EVERY term to the SHAPE hole. That is the right
-    /// question only for the two terms that feed the shape bar; a jarring invariant has its own bar
-    /// and its own hole, and its headroom (`sites − clean`) is always at least that hole. Compared
-    /// against the shape hole it would print *"CANNOT CLOSE THE GAP"* on a perfectly reachable term
-    /// whenever the shape hole happened to be larger — a confident false statement, and exactly the
-    /// class of error this whole gate was written to stop, committed by the gate itself.
+    /// question only for the two terms that feed the shape bar. Compared against the shape hole it
+    /// would print *"CANNOT CLOSE THE GAP"* on a term that closes its own gap comfortably, whenever
+    /// the shape hole happened to be larger — a confident false statement, and exactly the class of
+    /// error this whole gate was written to stop, committed by the gate itself.
     ///
-    /// The corpus below is built to trigger it: the shape hole is large (95 − 5 = 90) and every
-    /// jarring term is only a few sites short.
+    /// The corpus below is built to trigger it: **every site is scored**, the shape hole is large
+    /// (95 − 5 = 90) and every jarring term is only a few sites short. With no unscored cohort the
+    /// two headroom models agree, which is what isolates the bar-choice this row is about from the
+    /// addressability question [`Cert::headroom_clean`] is about.
     #[test]
     fn a_jarring_term_never_carries_the_cannot_close_verdict() {
         let mut rows = Vec::new();
@@ -3342,6 +3469,131 @@ mod shape_tests {
         );
     }
 
+    /// ⭐⭐⭐ **AN UNSCORED SITE IS NOT ADDRESSABLE BY THE TERM IT FAILS — and ranking as though it
+    /// were reverses the work order on the real corpus.**
+    ///
+    /// `certificate` skips an unmeasurable row before the jarring loop, so an unscored site is
+    /// counted clean on NOTHING: its rows sit inside all four jarring holes AND the shape hole at
+    /// once. t1506 ranked on `sites − clean[i]`, which counts that shared blockage once per term,
+    /// and the first real corpus it was run on put `reading-order` (hole 137) at the top — when
+    /// only 52 of that 137 is reachable by working reading-order at all.
+    ///
+    /// These are the measured `SWEEP-t1406-rows.tsv` numbers: 200 sites, 105 scored, shape_ok 51,
+    /// clean = [78, 63, 53, 97]. The two models give opposite orders, and the corrected one restores
+    /// SHAPE to the top:
+    ///
+    /// ```text
+    ///   sites - clean    reading-order 147 > overlap 137 > h-overflow 122 > dead-target 103 > shape 54
+    ///   scored - clean   shape 54 > reading-order 52 > overlap 42 > h-overflow 27 > dead-target 8
+    /// ```
+    ///
+    /// Mutations that must turn this red:
+    ///   1. `headroom_clean` returns `sites - clean[i]`  -> reading-order leads again
+    ///   2. the note drops its `blocked` clause          -> the prerequisite is never named
+    #[test]
+    fn an_unscored_site_is_not_addressable_by_the_term_it_fails() {
+        let mut rows = Vec::new();
+        for i in 0..105 {
+            let mut j = [0usize; 4];
+            if i >= 78 {
+                j[0] = 1;
+            }
+            if i >= 63 {
+                j[1] = 1;
+            }
+            if i >= 53 {
+                j[2] = 1;
+            }
+            if i >= 97 {
+                j[3] = 1;
+            }
+            rows.push(row(
+                &format!("s{i}"),
+                Some(if i < 51 { 0.90 } else { 0.50 }),
+                j,
+            ));
+        }
+        // The real split: of t1406's 95 unscored, 60 are bot-wall/unreachable/HTTP/empty — the
+        // ORIGIN's, and out of scope per DAILY-DRIVER-CERTIFICATION.md §3 — and 35 are ours.
+        for i in 0..60 {
+            rows.push(refused(&format!("origin{i}")));
+        }
+        for i in 0..35 {
+            rows.push(refused_ours(&format!("ours{i}")));
+        }
+        let c = certificate(&rows);
+        assert_eq!((c.sites, c.scored, c.shape_ok), (200, 105, 51));
+        assert_eq!(c.clean, [78, 63, 53, 97], "the measured t1406 clean counts");
+        assert_eq!(c.unscored_origin, 60);
+        assert_eq!(
+            c.headroom_unscored(),
+            35,
+            "95 unscored minus 60 the origin refused — a site nobody is ALLOWED to fix is not work, \
+             and at 95 this term leads the whole work order on a number that is 63% wish"
+        );
+
+        // ── THE TWO MODELS, side by side. The naive one is the bug.
+        assert_eq!(
+            c.clean_gap(2),
+            137,
+            "ceil(0.95 x 200) = 190, minus 53 clean"
+        );
+        assert_eq!(
+            c.sites - c.clean[2],
+            147,
+            "reading-order's headroom under the NAIVE `sites - clean` — above its own hole of 137, \
+             so under that model the term looked entirely reachable and led the work order"
+        );
+        assert_eq!(c.headroom_clean(2), 52, "…and what is actually reachable");
+        assert_eq!(c.headroom_shape(), 54);
+
+        let sf = c.shortfalls();
+        assert!(
+            sf[0].starts_with("shape "),
+            "SHAPE is the largest ADDRESSABLE term (54) and must lead; ranking on `sites - clean` \
+             puts reading-order (147) here instead, which is 85 sites of somebody else's blockage \
+             counted as this term's work: {sf:?}"
+        );
+        let ro = sf
+            .iter()
+            .find(|s| s.starts_with("reading-order "))
+            .expect("VACUOUS: reading-order must be below the bar here");
+        assert!(
+            ro.contains("at most 52 site(s)") && ro.contains("hole of 137"),
+            "reading-order must print its own hole AND what it can actually reach: {ro}"
+        );
+        assert!(
+            ro.contains("85 of the remainder are sites that are UNSCORED"),
+            "and it must NAME the prerequisite — otherwise a reader concludes the term is simply \
+             hard, rather than BLOCKED on work that belongs to another term: {ro}"
+        );
+        // ⚠ And the unscored term must NOT be told it is waiting on itself.
+        let un = sf
+            .iter()
+            .find(|s| s.contains("UNSCORED (cannot be claimed"))
+            .expect("the unscored term must still be named");
+        assert!(
+            un.contains("60 of them refused BY THE ORIGIN") && un.contains("only 35 of this cohort"),
+            "the origin's refusals must be named and subtracted IN THE LINE, not left for a reader \
+             to do in awk — which is how the loop has done it at every sweep since t1485: {un}"
+        );
+        // The scorability term is FOURTH on this corpus, behind shape, reading-order and overlap.
+        let rank = sf
+            .iter()
+            .position(|s| s.contains("UNSCORED (cannot be claimed"))
+            .unwrap();
+        assert_eq!(
+            rank, 3,
+            "shape 54 > reading-order 52 > overlap 42 > UNSCORED 35 — the standing mandate ranked \
+             this term FIRST, and it is fourth: {sf:?}"
+        );
+        assert!(
+            !un.contains("must be SCORED before this term"),
+            "the scorability term IS the scoring work — telling it that it is blocked on scoring is \
+             a sentence that cannot be acted on: {un}"
+        );
+    }
+
     /// The boundary of [`Cert::headroom_note`]: `headroom == gap` is enough, `gap - 1` is not.
     /// A one-off here reverses the verdict on exactly the terms that are closest to mattering.
     #[test]
@@ -3354,7 +3606,7 @@ mod shape_tests {
         let c = certificate(&rows);
         assert_eq!(c.shape_gap(), 0, "19 of 20 already meets ceil(0.95 x 20)");
         assert_eq!(
-            c.headroom_note(c.headroom_unscored(), c.shape_gap()),
+            c.headroom_note(c.headroom_unscored(), c.shape_gap(), 0),
             "",
             "a gap of zero is not a gap, and no term can fail to close it"
         );
