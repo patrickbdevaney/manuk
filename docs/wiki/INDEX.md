@@ -3515,6 +3515,13 @@
   - L64 · The two that stayed silent
   - L76 · The rule
 
+## The reference got honest in both directions — and a 98.7% coverage was measured against 533 elements
+`docs/wiki/the-reference-got-honest-in-both-directions.md`
+
+  - L18 · The two shapes of movement, and the coverage column separates them
+  - L50 · What this changes for the loop
+  - L65 · ⚠ What this sweep is NOT
+
 ## The refusing oracle runs in two seconds
 `docs/wiki/the-refusing-oracle-runs-in-two-seconds.md`
 
@@ -3677,4 +3684,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3048 sections across 156 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3051 sections across 157 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

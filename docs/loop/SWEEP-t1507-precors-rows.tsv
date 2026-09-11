@@ -1,0 +1,35 @@
+#name	coverage	shape	h_overflow	overlap	reading_order	dead_target	shape_n	reason	instrument
+255md.com	1.000000	0.883721	0	0	0	0	43		d3da5acb
+allticketscol.com	1.000000	0.000000	0	0	0	0	1	oracle-module-shell-1	d3da5acb
+chat.google.com	1.000000	0.881356	0	0	0	0	59		d3da5acb
+dashboard.twitch.tv	0.371069	0.694915	0	0	1	0	59		d3da5acb
+gismart.com	0.982517	0.790036	3	0	0	0	281		d3da5acb
+ioi-russia.vdi.mipt.ru	1.000000	0.878049	0	0	0	0	41		d3da5acb
+mayatoys.in	0.863014	0.873016	0	0	0	0	945		d3da5acb
+momon-ga.com	1.000000	0.951049	0	0	0	0	572		d3da5acb
+nysainfo.pl	0.512910	0.860600	0	6	0	0	1033		d3da5acb
+pivaldi.restoplace.ws	0.969072	0.744681	0	3	1	0	376		d3da5acb
+probidas.lt	0.929635	0.636099	23	0	10	0	687		d3da5acb
+rockstaractu.com	0.922353	0.968112	0	0	2	0	784		d3da5acb
+serennu.com	1.000000	0.737705	0	28	0	0	61		d3da5acb
+tracker.shadowfax.in	0.055556	0.000000	0	0	0	0	1	tree-divergence-48	d3da5acb
+www.aftenbladet.no	0.946593	0.381323	510	0	16	0	1028		d3da5acb
+www.crazyshop.pl	0.911860	0.760483	0	0	110	0	1407		d3da5acb
+www.friulioggi.it	0.956769	0.684899	3	0	0	0	841		d3da5acb
+a1.ro	0.019417	0.562500	0	0	2	0	16		d3da5acb
+beb88run.xyz	0.669647	0.935247	0	13	8	0	1498		d3da5acb
+crm.majoo.id	0.886792	0.595745	0	0	0	0	47		d3da5acb
+esaj.tjsp.jus.br	1.000000	0.500000	0	0	0	0	4	shell-only-4	d3da5acb
+hope.cap-systems.org	1.000000	0.000000	0	0	0	0	17		d3da5acb
+littlecaesarsbcs.libellum.com.mx	1.000000	0.974359	0	0	0	0	78		d3da5acb
+meuconsultordigital.com.br	0.975258	0.334038	0	9	1	0	473		d3da5acb
+m.youm7.com	0.984897	0.822437	0	79	6	0	1239		d3da5acb
+pasarbokep.com	0.996032	0.717131	0	0	0	0	251		d3da5acb
+portagelearning.edu	0.090361	0.333333	0	1	0	0	15		d3da5acb
+pt88.app	0.333333	0.755319	0	6	8	0	94		d3da5acb
+ru.restaurantguru.com	-	-	0	0	0	0	0	css-starved-1	d3da5acb
+sip777man.site	0.489000	0.969440	1	4	9	0	1178		d3da5acb
+vk.com	1.000000	0.400000	0	0	0	0	5	oracle-module-shell-5	d3da5acb
+www.bilibili.com	0.867540	0.783557	2	1	1	0	596		d3da5acb
+www.datacareservices.com	0.987037	0.763602	0	0	0	0	533		d3da5acb
+www.jatekshop.eu	0.978096	0.767442	0	0	1	0	1161		d3da5acb

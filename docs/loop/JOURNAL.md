@@ -110030,3 +110030,84 @@ NEXT, in order:
    blocker and the blocker is gone; what remains of that work is the principled origin fix.
 
 WIKI: docs/wiki/one-flag-in-the-oracles-command-line.md
+
+## Tick 1515 — the reference got honest in both directions (2026-09-11)
+
+TICK SHAPE: instrument
+
+t1514's own NEXT: *"re-sweep the corpus — every banked rows file predates this and the fingerprint
+cannot say so."* 34 sites, the same slice t1507 banked, our side byte-identical.
+
+```text
+  SCORED            29/34  ->  29/34      newly scored 2 · lost 2
+  improved 9 · worse 6
+  mean shape (scored)  72.6 -> 71.2       shape >= 0.75   17 -> 16
+```
+
+**The headline went DOWN and that is the correct outcome.** Nothing in the engine changed; the
+reference stopped being wrong.
+
+### THE COVERAGE COLUMN SEPARATES THE TWO SHAPES OF MOVEMENT
+
+```text
+  site                      cov b   cov a    n b    n a    shape
+  www.jatekshop.eu           97.8    97.9   1161   1161   76.7 -> 95.1   +18.3
+  rockstaractu.com           92.2    92.2    784    784   96.8 -> 90.9    -5.9
+  www.friulioggi.it          95.7    95.7    841    841   68.5 -> 48.4   -20.1
+  ─────────────────────────────────────────────────────────────────────
+  allticketscol.com         100.0    91.2      1     73    0.0 -> 72.6   NOW SCORED
+  nysainfo.pl                51.3    44.7   1033    937   86.1 -> 74.1
+  vk.com                    100.0     3.8      5      4   40.0 -> 25.0
+  www.datacareservices.com   98.7     2.4    533     13   76.4 -> 23.1
+```
+
+**Above the line the oracle's element set is IDENTICAL** — same coverage, same sample — so only the
+TEXT BOXES moved. That is t1513's font finding, measured on real sites: `jatekshop` **+18.3** because
+we agree far better with the real face than with the fallback, and `friulioggi`/`rockstaractu` worse
+because on those our metrics disagree with the REAL face. ⭐ **Both directions are the same
+correction; only one of them flatters us.**
+
+**Below the line the oracle now renders a different page.**
+
+> ⭐⭐⭐ **`www.datacareservices.com` read COVERAGE 98.7% against an oracle that rendered 533 elements.
+> The reference now renders ~20× more of it, and we render 13. Coverage 98.7% → 2.4%.**
+> `vk.com` is the same shape: 100% of FIVE elements → 3.8% of a real page.
+
+Coverage is *"of the elements Chrome renders, the fraction we render"*. When Chrome could not boot
+the SPA either, the ratio was near-perfect agreement **about a page neither engine had built**.
+t1425-1428's rule and its largest instance yet: **a staleness that FLATTERS is not a smaller bug than
+one that breaks.**
+
+### WHAT IT CHANGES
+
+* **Two real engine gaps are newly visible.** `datacareservices` and `vk.com` render almost nothing of
+  a page the reference now builds — hidden behind 98.7% and 100%.
+* ⚠⚠ **Every banked ranking predates a different reference.** `SWEEP-t1406` is what t1506-1507's work
+  order was computed from, and it was taken against an oracle that could not load a module or a
+  self-hosted font. The `ORIGIN/METHOD/ENGINE` histogram, the burndown's ordering and every
+  `font-resolution` conclusion are in that class.
+* **The certificate's terms may re-rank** — the coverage collapse on SPA sites suggests the
+  scorability/coverage term is LARGER than the pre-CORS rows said, the opposite direction from
+  t1506-1507, and it must be re-derived rather than assumed either way.
+
+Both rows files are banked side by side so the comparison can be re-run:
+`docs/loop/SWEEP-t1507-precors-rows.tsv`, `docs/loop/SWEEP-t1515-cors-rows.tsv`.
+
+### ⚠ WHAT THIS SWEEP IS NOT
+
+⚠ **34 sites, ONE run per side.** The per-site moves above clear the known run-to-run bands
+(`a1.ro` ±6.3; t1512 measured three false `--jobs` signals in two ticks) — but **the MEANS do not**.
+72.6 vs 71.2 is inside the noise of a 29-site mean and is reported as DIRECTION, not magnitude.
+`probidas.lt` LOST SCORE to `unreachable`, which is the network.
+
+⚠ **No engine behaviour changed in t1514 or here.** Every number that moved is the reference.
+
+NEXT, in order:
+1. ⚠⚠ **THE SELF-AUDIT AND SURFACE AUDIT ARE BOTH DUE** (`LAST_*` 1505, cadence 10). The next tick
+   cannot land without them.
+2. ⭐⭐⭐ **`www.datacareservices.com` renders 13 of ~530 elements** and `vk.com` 3.8% — two real,
+   newly-visible engine gaps on pages the reference now builds. This is the scorability term the
+   board has always pointed at, finally measurable.
+3. ⭐⭐ **Re-derive the work order on post-CORS rows** before taking another term from it.
+
+WIKI: docs/wiki/the-reference-got-honest-in-both-directions.md
