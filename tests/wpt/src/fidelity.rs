@@ -1715,6 +1715,17 @@ pub fn repeat_urls(urls: &[String], rows_text: &str) -> (Vec<String>, Vec<(Strin
     (out, plan)
 }
 
+/// **The situation-indexed rules for reading the loop's own output**, named as a constant so the
+/// pointer and the file cannot drift apart.
+///
+/// ⚠⚠⚠ It exists because a banked rule did not reach the tick that needed it: *"a `--jobs N` sweep
+/// row is not evidence about a single site"* was in `CONSTELLATION.tsv`, marked `works`, with a gate
+/// name, from constitution check #106 (t1128) — and t1511/t1512 re-derived it from three fresh false
+/// signals. Surface audit #93 named the mechanism: **the map is indexed by CAPABILITY and consulted
+/// to decide what to BUILD, never to interpret a MEASUREMENT.** A rule is only as good as the moment
+/// it is READ.
+pub const READING_A_MEASUREMENT: &str = "docs/loop/READING-A-MEASUREMENT.md";
+
 /// Print the certificate block — the one place a sweep's headline is allowed to come from.
 pub fn certificate_report(rows: &[Fidelity]) {
     let c = certificate(rows);
@@ -1744,6 +1755,17 @@ pub fn certificate_report(rows: &[Fidelity]) {
         for s in c.shortfalls() {
             println!("      · {s}");
         }
+        // ⚠⚠⚠ **THE POINTER IS HERE BECAUSE A BANKED RULE DID NOT REACH THE TICK THAT NEEDED IT.**
+        //
+        // `--jobs N` sweep rows are not evidence about a single site — banked at constitution check
+        // #106 (t1128), in `CONSTELLATION.tsv`, marked `works`, with a gate name. t1511 and t1512
+        // re-derived it from three fresh false signals, because the map is indexed by CAPABILITY and
+        // is consulted to decide what to BUILD, never to interpret a MEASUREMENT (surface audit
+        // #93). A rule is only as good as the moment it is READ, so the rules now sit in a file
+        // indexed by SITUATION and the numbers point at it.
+        println!("\n  ⚠ Before quoting any number above: {READING_A_MEASUREMENT} — what the \
+             obvious reading of a sweep delta, a coverage %, a font cluster or a red perf floor gets \
+             wrong, and where each was paid for.");
     }
 }
 
@@ -3032,7 +3054,7 @@ pub fn band_report(band: &CertBand) {
 
 #[cfg(test)]
 mod shape_tests {
-    use super::{certificate, shape_misses, shape_stats, Fidelity};
+    use super::{certificate, shape_misses, shape_stats, Fidelity, READING_A_MEASUREMENT};
     use std::collections::HashMap;
 
     // A realistic selector-path box tree modelling the microsoft.com artifact from the redesign:
@@ -3278,6 +3300,45 @@ mod shape_tests {
         // An EMPTY sweep never holds. A certificate over zero sites is the most flattering possible
         // reading of an engine and the least informative.
         assert!(!certificate(&[]).holds(), "zero sites is not a pass");
+    }
+
+    /// **A POINTER TO A FILE THAT DOES NOT EXIST IS WORSE THAN NO POINTER.**
+    ///
+    /// The certificate tells every reader to check `READING_A_MEASUREMENT` before quoting a number.
+    /// If that file is renamed or deleted the advice becomes a dead end at exactly the moment
+    /// someone took it — so the path is a constant and this asserts the file is really there.
+    #[test]
+    fn the_measurement_guide_the_certificate_points_at_exists() {
+        let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .join(READING_A_MEASUREMENT);
+        assert!(
+            p.exists(),
+            "the certificate points every reader at `{READING_A_MEASUREMENT}` and it is not there \
+             ({}). A pointer to a missing file is worse than no pointer: it spends the reader's \
+             attention and returns nothing.",
+            p.display()
+        );
+        let body = std::fs::read_to_string(&p).expect("unreadable");
+        // ⚠ The guide is indexed by SITUATION, and these are its SECTION HEADINGS — checked as
+        //   headings, not as substrings. The first draft asserted `body.contains("--jobs")`, which a
+        //   mutation renaming the heading passed anyway because the token survives in the prose
+        //   below it. **An assertion that a rewrite can satisfy by accident is not a gate.**
+        for want in [
+            "## You are looking at a per-site number from a `--jobs N` sweep",
+            "## You are looking at a delta between two banked rows files",
+            "## You are looking at a coverage percentage",
+            "## You are looking at a `font-resolution:` cluster",
+            "## You are looking at a RED perf floor",
+            "## You are looking at a shortfall in the exit certificate",
+        ] {
+            assert!(
+                body.lines().any(|l| l.trim() == want),
+                "the guide must still carry the section `{want}` — each one is a rule the loop PAID \
+                 for twice, and a section quietly dropped is the exact failure that created this \
+                 file. If you renamed it, rename it here too."
+            );
+        }
     }
 
     /// **G_A_WORK_ORDER_IS_RANKED_BY_HEADROOM — a term that cannot close the gap cannot be ranked

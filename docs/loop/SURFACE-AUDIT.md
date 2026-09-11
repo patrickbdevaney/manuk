@@ -8543,3 +8543,88 @@ quirks-MODE parsing (row 110, gated).
    common — for each, is the COMMON spelling separately gated, or assumed?
 3. ⚠ **An outside number needs a band.** t1403's citation steered from a single month. Any future
    steer quoting another project's rate must quote at least two consecutive periods.
+
+## Audit #93 — tick 1516 (2026-09-11)
+
+**Sources, fetched today:** Chrome headless-mode guides (the `--headless=new` unification), and
+<https://servo.org/blog/2026/07/31/june-in-servo/> plus the Servo 2026 coverage.
+
+### ⭐⭐⭐ THE LOOP RE-DERIVED A RULE IT HAD ALREADY BANKED — FROM THREE FRESH FALSE SIGNALS
+
+t1512's journal states, as a new finding:
+
+> *"THREE FALSE SIGNALS FROM `--jobs 2` SWEEP ROWS IN TWO TICKS, AND NOT ONE SURVIVED A SOLO REPEAT
+> … a parallel sweep row is not a measurement of the engine."*
+
+`CONSTELLATION.tsv` already carries, marked `works`, with a gate name:
+
+```text
+  instrument | a `--jobs 2` sweep row is bankable for the DENOMINATOR and is NOT evidence about any
+               single site | … five readings across the t1121 and t1127 sweeps failed to reproduce
+               on either binary in the same hour … | works | G_SWEEP_DIFF_POPULATION
+             | constitution check #106 (tick 1128), added to PART VI
+```
+
+**The rule was banked 384 ticks ago, in the map, in PART VI, with a gate — and it did not reach the
+tick that needed it.** t1511 paid for it with a false regression it had to chase, a false gain it
+nearly kept, and t1512 with a false lost score.
+
+⚠⚠⚠ **The mechanism of the failure is the interesting part: `CONSTELLATION.tsv` is consulted to
+decide what to BUILD and never to interpret a MEASUREMENT.** Every instrument row in it — there are
+four — is a rule about reading the loop's own output, filed in the place the loop looks for missing
+features. *A rule is only as good as the moment it is READ, and a map indexed by capability cannot be
+searched by situation.*
+
+### THE EXTERNAL AXIS — one reassurance, one third confirmation
+
+* ⭐ **`--headless=new` is the SAME BINARY as headed Chrome since Chrome 112**, and old headless was
+  removed outright in 2024. The oracle passes `--headless=new` (`base_flags`), so it is on the right
+  side of that change and the class of *"headless renders differently"* divergences does not apply
+  to it. ⚠ Worth having checked in the same window that t1513-1514 found the oracle wrong for a
+  completely different reason — **the flag that gets blamed was innocent and the one nobody looked at
+  was not.**
+* **Servo, June-July 2026: "real world compat" on named sites (DuckDuckGo, Gumroad).** That is the
+  THIRD independent engine — after Ladybird (audit #92) and this one — to pivot from spec-suite
+  scores to named real sites. The strategy this loop is executing is now the consensus of every
+  independent engine that exists.
+
+### ⭐⭐ AUDIT #92'S OWN RANKED ITEM, EXECUTED — AND IT FOUND FOUR MORE
+
+#92 ranked #2: *"ask the ORDINARY-SPELLING question of the rest of the map."* Done, at the CSS
+property level rather than the API level. **Four of the most ordinary declarations on the web have no
+row of their own on a 606-row map:**
+
+```text
+  z-index / stacking contexts     no row   (the map has no paint-ORDER capability at all)
+  text-overflow: ellipsis         no row   — ZERO mentions anywhere, name column or prose
+  white-space (nowrap/pre-wrap)   no row   — `nowrap` appears only inside other rows' prose
+  plain overflow: hidden/auto     no row   — the map has `overflow-anchor` and
+                                             `overflow: clip must NOT establish a BFC`, and
+                                             nothing for the values that DO
+```
+
+⭐ **The last one is phantom #7's exact shape, second instance:** the exotic spellings are mapped and
+the ordinary one is not. Added, all four, as `unknown` (map 606 → 610).
+
+⚠ **`z-index` is the most consequential of the four and for a reason beyond the map:** paint order is
+not geometry, so `shape` cannot see it and **none of the four jarring invariants is a paint-order
+one.** A page whose dropdown renders behind its trigger scores clean on every term the certificate
+has.
+
+### ⚠ CARRIED
+
+* **Nine crates outside the wall's crate loop — SEVENTH consecutive audit.** Unchanged.
+* **The wall is 308s against a 300s target** — the self-audit's only failing item, and it is **eight
+  seconds over**, down from 2002s at the start of this window. Wall-audit #60 explains the swing.
+* `ORACLE_CRAWLED: 0` — **twenty-third**.
+
+### RANKED, from this audit only
+
+1. ⭐⭐⭐ **Make the instrument rules reachable from the situation, not only from the capability.**
+   Four rules about reading the loop's own output are filed in a map indexed by feature. The cheapest
+   fix is a `docs/loop/READING-A-MEASUREMENT.md` the sweep's own output points at — the sweep already
+   prints prose beside every number.
+2. ⭐⭐ **`z-index` / paint order is unmeasured AND unmeasurable by the current certificate.** A
+   fifth jarring invariant is a bigger question than a capability row, and this is the first audit to
+   name it.
+3. ⚠ Nine crates — seventh ranking, unchanged.

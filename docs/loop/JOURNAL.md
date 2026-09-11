@@ -110111,3 +110111,94 @@ NEXT, in order:
 3. ⭐⭐ **Re-derive the work order on post-CORS rows** before taking another term from it.
 
 WIKI: docs/wiki/the-reference-got-honest-in-both-directions.md
+
+## Tick 1516 — the loop re-derived a rule it had already banked (2026-09-11)
+
+TICK SHAPE: instrument
+
+SELF-AUDIT and SURFACE AUDIT #93, both due here — and #93 found the window's most uncomfortable
+result in the loop's own records rather than outside them.
+
+### ⭐⭐⭐ A RULE BANKED 384 TICKS AGO, RE-PAID FOR IN TWO
+
+t1512's journal states, as a new finding: *"THREE FALSE SIGNALS FROM `--jobs 2` SWEEP ROWS IN TWO
+TICKS … a parallel sweep row is not a measurement of the engine."* `CONSTELLATION.tsv` already
+carried, marked `works`, with a gate name:
+
+```text
+  instrument | a `--jobs 2` sweep row is bankable for the DENOMINATOR and is NOT evidence about any
+               single site | … five readings across the t1121 and t1127 sweeps failed to reproduce
+               on either binary in the same hour … | works | G_SWEEP_DIFF_POPULATION
+             | constitution check #106 (tick 1128), added to PART VI
+```
+
+**Banked at t1128, in the map, in PART VI, with a gate — and it did not reach the tick that needed
+it.** t1511 paid with a false regression it chased and a false gain it nearly kept; t1512 with a
+false lost score.
+
+⚠⚠⚠ **The mechanism is the finding: `CONSTELLATION.tsv` is indexed by CAPABILITY and consulted to
+decide what to BUILD, never to interpret a MEASUREMENT.** All four of its `instrument` rows are rules
+about reading the loop's own output, filed in the place the loop looks for missing features. *A rule
+is only as good as the moment it is READ, and a map indexed by capability cannot be searched by
+situation.*
+
+**Closed, not just recorded.** `docs/loop/READING-A-MEASUREMENT.md` is indexed by SITUATION — *you are
+looking at a `--jobs` row / a rows-file delta / a coverage % / a `font-resolution` cluster / a red
+perf floor / a certificate shortfall* — each section saying what the obvious reading gets wrong and
+where it was paid for. **And the certificate now prints a pointer to it under every shortfall list**,
+because a rule nobody reads is not banked.
+
+```
+  M1 the pointer names a file that is not there   RED
+  M2 a section is quietly dropped (--jobs)        RED
+  M3 a section is quietly dropped (perf floor)    RED
+  clean                                           GREEN
+```
+
+⚠ **M2 came back GREEN first time.** The assertion was `body.contains("--jobs")`, and a mutation that
+renamed the heading passed anyway because the token survives in the prose beneath it. **An assertion
+a rewrite can satisfy by accident is not a gate** — now it matches whole section headings.
+
+### SURFACE AUDIT #93 — THE EXTERNAL AXIS
+
+* ⭐ **`--headless=new` is the SAME BINARY as headed Chrome since Chrome 112**; old headless was
+  removed outright in 2024. The oracle passes `--headless=new`, so the whole *"headless renders
+  differently"* class does not apply to it. ⚠ Checked in the same window that t1513-1514 found the
+  oracle badly wrong for a completely different reason — **the flag that gets blamed was innocent and
+  the one nobody looked at was not.**
+* **Servo, June-July 2026: "real world compat" on named sites (DuckDuckGo, Gumroad).** The THIRD
+  independent engine, after Ladybird (#92) and this one, to pivot from spec-suite scores to named
+  real sites.
+
+### ⭐⭐ #92'S OWN RANKED ITEM, EXECUTED — FOUR MORE ORDINARY SPELLINGS MISSING
+
+```text
+  z-index / stacking contexts     no row   (the map has NO paint-ORDER capability at all)
+  text-overflow: ellipsis         no row   — ZERO mentions anywhere, name column or prose
+  white-space (nowrap/pre-wrap)   no row
+  plain overflow: hidden/auto     no row   — the map has `overflow-anchor` and
+                                             `overflow: clip must NOT establish a BFC`, not the
+                                             values that DO
+```
+
+The last is phantom #7's exact shape, second instance. Added as `unknown`; map 606 → 610.
+
+⚠ **`z-index` is the most consequential, for a reason beyond the map: paint order is not geometry,
+so `shape` cannot see it and NONE of the four jarring invariants is a paint-order one.** A page whose
+dropdown renders behind its trigger scores clean on every term the certificate has.
+
+### SELF-AUDIT — ONE ITEM, AND IT IS EIGHT SECONDS
+
+`verify wall: 308s EXCEEDS the 300s target` — down from **2002s** when this window opened. Wall-audit
+#60 explains the swing (a conditional disk reclaim that was 40% of the wall and forced a cold
+rebuild). Everything else green.
+
+NEXT, in order:
+1. ⭐⭐⭐ **`www.datacareservices.com` renders 13 of ~530 elements and `vk.com` 3.8%** — two real,
+   newly-visible engine gaps on pages the corrected reference now builds (t1515). This is the
+   scorability term the board has always pointed at, finally measurable.
+2. ⭐⭐ **A paint-order invariant.** #93's rank 2: the certificate cannot see a page whose layers are
+   inverted, and `z-index` now has a row saying so.
+3. ⭐ **Re-derive the work order on post-CORS rows** before taking another term from it.
+
+WIKI: none — the finding is a process defect and its artefact IS docs/loop/READING-A-MEASUREMENT.md.

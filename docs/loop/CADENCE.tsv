@@ -1184,3 +1184,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1512	8174db76	1789158862	2026-09-11T16:34:22-04:00	12335	capability	465	7	252	49	583	81	3896	6960	0	642	0	a `<br>` is not content its parent is made of; 23 of 23 (2026-09-11)
 1513	a4770f10	1789160629	2026-09-11T17:03:49-04:00	1767	instrument	465	7	241	42	583	81	3896	6960	0	642	0	the oracle renders every site from `file://`, so a self-hosted webfont is CORS-blocked (2026-09-11)
 1514	e1c65241	1789162288	2026-09-11T17:31:28-04:00	1659	instrument	465	8	273	42	583	81	3896	6960	0	642	0	one flag, and two refusal cohorts stop existing (2026-09-11)
+1515	8dc0f404	1789163678	2026-09-11T17:54:38-04:00	1390	instrument	465	8	363	44	583	81	3896	6960	0	642	0	the reference got honest in both directions (2026-09-11)
