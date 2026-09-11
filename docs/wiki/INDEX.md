@@ -285,6 +285,15 @@
   - L30 · The rule
   - L56 · What it did NOT fix, with the numbers
 
+## A work order that cannot say which term is *capable* of closing the gap will rank the wrong one
+`docs/wiki/a-work-order-must-be-ranked-by-headroom.md`
+
+  - L13 · The arithmetic nobody had run
+  - L54 · What the instrument does now
+  - L71 · ⚠ EACH TERM IS MEASURED AGAINST ITS OWN HOLE — and the first version was not
+  - L85 · ⚠⚠ TWO FIXTURES ARGUED WITH THEIR OWN ASSERTION TEXT, AND BOTH TIMES THE TEXT WAS RIGHT
+  - L100 · Where it is
+
 ## The end of the accessible-name chain, in the right order
 `docs/wiki/ax-name-fallback-chain.md`
 
@@ -3590,4 +3599,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2997 sections across 147 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3002 sections across 148 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

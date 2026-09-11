@@ -850,10 +850,42 @@ impl Cert {
             && self.shape_frac() >= CERT_SITE_BAR
             && (0..4).all(|i| self.clean_frac(i) >= CERT_SITE_BAR)
     }
-    /// The terms that are BELOW the bar, named. An unmet certificate must say which term missed, or
-    /// the next tick is chosen by guesswork.
+    /// **How many sites must cross the shape floor for the certificate's shape term to hold.**
+    ///
+    /// The bar is a fraction of ALL sites (unscored ones count against it), so this is
+    /// `ceil(bar × sites) − shape_ok` — the size of the hole, in sites.
+    pub fn shape_gap(&self) -> usize {
+        let need = (CERT_SITE_BAR * self.sites as f64).ceil() as usize;
+        need.saturating_sub(self.shape_ok)
+    }
+
+    /// **The most sites a term could EVER contribute, if it were solved completely.**
+    ///
+    /// ⚠⚠⚠ **THIS IS THE NUMBER THAT DECIDES WHICH TERM IS BINDING, AND THE CERTIFICATE USED TO
+    /// PRINT ITS WORK ORDER WITHOUT IT.** `shortfalls` said *"in the order to work them"* and then
+    /// emitted the terms in the order they happened to be written — unscored first, always. A
+    /// standing observer mandate ranked the scorability term as *the* binding constraint on exactly
+    /// that reading. Measured on the 200-site CrUX trend corpus at t1506: the shape hole is **77
+    /// sites** and the whole unscored cohort is **14**. Solving scorability perfectly — every
+    /// unreachable page reached, every refusal converted, and every one of them landing above the
+    /// shape floor on arrival — moves the certificate less than a fifth of the way.
+    ///
+    /// A term whose headroom is below [`Self::shape_gap`] **cannot close the gap even if it is
+    /// solved completely**, and no amount of work on it will meet the certificate. That is a fact
+    /// about arithmetic, not about the engine, and it is cheap for the instrument to state and
+    /// expensive for a reader to derive — which is precisely the kind of thing that gets estimated
+    /// instead, and then steered by for twenty ticks.
+    fn headroom_unscored(&self) -> usize {
+        self.sites - self.scored
+    }
+    fn headroom_shape(&self) -> usize {
+        self.scored - self.shape_ok
+    }
+
+    /// The terms that are BELOW the bar, named — **ranked by HEADROOM, most first**, which is what
+    /// *"in the order to work them"* has always claimed and never did.
     pub fn shortfalls(&self) -> Vec<String> {
-        let mut out = Vec::new();
+        let mut out: Vec<(usize, String)> = Vec::new();
         if self.scored != self.sites {
             let named: usize = self.unmeasured_by_reason.iter().map(|(_, n)| n).sum();
             let by = if self.unmeasured_by_reason.is_empty() {
@@ -868,11 +900,15 @@ impl Cert {
                         .join(", ")
                 )
             };
-            out.push(format!(
-                "{} of {} sites UNSCORED (cannot be claimed, counted against the bar){}",
-                self.sites - self.scored,
-                self.sites,
-                by
+            out.push((
+                self.headroom_unscored(),
+                format!(
+                    "{} of {} sites UNSCORED (cannot be claimed, counted against the bar){}{}",
+                    self.sites - self.scored,
+                    self.sites,
+                    by,
+                    self.headroom_note(self.headroom_unscored(), self.shape_gap())
+                ),
             ));
             // **The residue is itself a finding, and it must not round to zero.** A site that failed
             // to score with NO reason attached is one the instrument could not explain — the exact
@@ -880,31 +916,79 @@ impl Cert {
             // decomposition look complete because the named causes are the only ones printed.
             let unexplained = (self.sites - self.scored).saturating_sub(named);
             if unexplained > 0 {
-                out.push(format!(
-                    "{unexplained} of those UNSCORED sites have NO recorded reason — the instrument \
-                     could not say why, which is an instrument gap, not a result"
+                out.push((
+                    // Rides one below its parent term so the decomposition stays adjacent to it —
+                    // this is a note ON the unscored row, not a term competing with it.
+                    self.headroom_unscored().saturating_sub(1),
+                    format!(
+                        "{unexplained} of those UNSCORED sites have NO recorded reason — the \
+                         instrument could not say why, which is an instrument gap, not a result"
+                    ),
                 ));
             }
         }
         if self.shape_frac() < CERT_SITE_BAR {
-            out.push(format!(
-                "shape ≥{:.2} on {:.1}% of sites (bar {:.0}%)",
-                CERT_SHAPE_FLOOR,
-                self.shape_frac() * 100.0,
-                CERT_SITE_BAR * 100.0
+            out.push((
+                self.headroom_shape(),
+                format!(
+                    "shape ≥{:.2} on {:.1}% of sites (bar {:.0}%) — the hole is {} site(s){}",
+                    CERT_SHAPE_FLOOR,
+                    self.shape_frac() * 100.0,
+                    CERT_SITE_BAR * 100.0,
+                    self.shape_gap(),
+                    self.headroom_note(self.headroom_shape(), self.shape_gap())
+                ),
             ));
         }
         for i in 0..4 {
             if self.clean_frac(i) < CERT_SITE_BAR {
-                out.push(format!(
-                    "{} clean on {:.1}% of sites (bar {:.0}%)",
-                    JARRING_NAMES[i],
-                    self.clean_frac(i) * 100.0,
-                    CERT_SITE_BAR * 100.0
+                out.push((
+                    self.sites - self.clean[i],
+                    format!(
+                        "{} clean on {:.1}% of sites (bar {:.0}%) — the hole is {} site(s){}",
+                        JARRING_NAMES[i],
+                        self.clean_frac(i) * 100.0,
+                        CERT_SITE_BAR * 100.0,
+                        self.clean_gap(i),
+                        self.headroom_note(self.sites - self.clean[i], self.clean_gap(i))
+                    ),
                 ));
             }
         }
-        out
+        // ⚠ STABLE sort, descending by headroom: equal-headroom terms keep the order they were
+        // written in, so this ranks the list without shuffling terms it has nothing to say about.
+        out.sort_by(|a, b| b.0.cmp(&a.0));
+        out.into_iter().map(|(_, s)| s).collect()
+    }
+
+    /// **The hole in one JARRING term** — sites that must become clean for it to meet the bar.
+    fn clean_gap(&self, i: usize) -> usize {
+        let need = (CERT_SITE_BAR * self.sites as f64).ceil() as usize;
+        need.saturating_sub(self.clean[i])
+    }
+
+    /// The clause that turns a headroom into a VERDICT about the term.
+    ///
+    /// Empty when the term could close its gap — a number that is fine needs no sentence. Loud when
+    /// it cannot, because that is the case a reader will otherwise not compute.
+    ///
+    /// ⚠ **EACH TERM IS MEASURED AGAINST ITS OWN HOLE, and the first version of this was not.** It
+    /// compared every term to [`Self::shape_gap`], which is only the right question for the two
+    /// terms that feed the SHAPE bar — the scored-but-low sites, and the unscored ones (an unscored
+    /// site can never be `shape_ok`, so its whole cohort is shape headroom). A jarring invariant has
+    /// its own bar and its own hole, and its headroom is `sites − clean`, which is always at least
+    /// that hole — **a jarring term can ALWAYS close its own gap, so this must never fire on one.**
+    /// Compared against the shape hole instead it would have fired on a jarring term whenever the
+    /// shape hole happened to be the larger number, which is a confident false statement about a
+    /// term that is perfectly reachable.
+    fn headroom_note(&self, headroom: usize, gap: usize) -> String {
+        if gap == 0 || headroom >= gap {
+            return String::new();
+        }
+        format!(
+            "  <== CANNOT CLOSE THE GAP: solved COMPLETELY this term is worth at most {headroom} \
+             site(s) against a hole of {gap}"
+        )
     }
 }
 
@@ -3068,6 +3152,219 @@ mod shape_tests {
         // An EMPTY sweep never holds. A certificate over zero sites is the most flattering possible
         // reading of an engine and the least informative.
         assert!(!certificate(&[]).holds(), "zero sites is not a pass");
+    }
+
+    /// **G_A_WORK_ORDER_IS_RANKED_BY_HEADROOM — a term that cannot close the gap cannot be ranked
+    /// first.**
+    ///
+    /// `shortfalls` has said *"in the order to work them"* since it was written, and emitted its
+    /// terms in the order they happened to be coded: the UNSCORED term first, always, however small
+    /// it was. ⚠⚠⚠ **A standing observer mandate ranked the scorability term as THE binding
+    /// constraint on exactly that reading, and the loop steered by it.** Measured on the 200-site
+    /// CrUX trend corpus at t1506: the shape hole is 77 sites and the entire unscored cohort is 14.
+    /// Solving scorability perfectly — every unreachable page reached, every refusal converted, and
+    /// every one of them landing above the shape floor on arrival — moves the certificate less than
+    /// a fifth of the way.
+    ///
+    /// The corpus below is that shape: 100 sites, 5 unscored, 70 scored-but-below the floor, 25
+    /// passing. The hole is 95 − 25 = 70; shape is worth exactly 70 and unscored at most 5.
+    ///
+    /// Mutations that must turn this red:
+    ///   1. drop the `sort_by` -> the unscored term is first again
+    ///   2. sort ASCENDING -> the smallest term is first
+    ///   3. `headroom_note` returns "" always -> nothing says the term cannot close the gap
+    ///   4. `headroom_note` returns the warning always -> it decorates instead of discriminating
+    ///   5. `headroom_unscored` returns `sites` -> the term outranks shape on a corpus where it cannot
+    ///   6. `shape_gap` forgets to subtract `shape_ok` -> the gap is the bar, not the hole
+    #[test]
+    fn a_work_order_is_ranked_by_headroom_and_says_which_terms_cannot_close_the_gap() {
+        let mut rows = Vec::new();
+        for i in 0..25 {
+            rows.push(row(&format!("pass{i}"), Some(0.90), [0; 4]));
+        }
+        for i in 0..70 {
+            rows.push(row(&format!("low{i}"), Some(0.50), [0; 4]));
+        }
+        for i in 0..5 {
+            rows.push(row(&format!("un{i}"), None, [0; 4]));
+        }
+        let c = certificate(&rows);
+        assert_eq!((c.sites, c.scored, c.shape_ok), (100, 95, 25));
+
+        // ── THE ARITHMETIC, stated as three numbers so a reader never has to derive it.
+        assert_eq!(c.shape_gap(), 70, "ceil(0.95 x 100) - 25");
+        assert_eq!(c.headroom_shape(), 70, "the scored sites below the floor");
+        assert_eq!(c.headroom_unscored(), 5, "the whole unscored cohort");
+
+        let sf = c.shortfalls();
+
+        // ── VACUITY. If nothing is below the bar there is no order to check, and every assertion
+        //    below would pass over an empty list.
+        assert!(
+            sf.len() >= 2,
+            "VACUOUS: this corpus must produce BOTH a shape shortfall and an unscored one — {sf:?}"
+        );
+
+        // ── RANK. The biggest term first, whatever order it was written in.
+        assert!(
+            sf[0].starts_with("shape "),
+            "the term with the most headroom must lead the work order, not the one that happens to              be coded first — got {sf:?}"
+        );
+
+        // ── THE VERDICT. A term that cannot close the gap must SAY SO, on its own line, in the
+        //    place a reader is already looking. This is the sentence the mandate did not have.
+        let unscored = sf
+            .iter()
+            .find(|s| s.contains("UNSCORED"))
+            .expect("the unscored term must still be named");
+        assert!(
+            unscored.contains("CANNOT CLOSE THE GAP")
+                && unscored.contains("at most 5")
+                && unscored.contains("hole of 70"),
+            "the unscored term is worth 5 against a hole of 70 and must say so — got {unscored}"
+        );
+
+        // ── AND THE SYMMETRIC HALF: a term that CAN close the gap must NOT carry the warning, or
+        //    the sentence is decoration rather than a discriminator.
+        assert!(
+            !sf[0].contains("CANNOT CLOSE THE GAP"),
+            "shape has exactly 70 of headroom against a hole of 70 — it CAN close the gap, and a \
+             warning that fires here is decoration rather than a discriminator: {sf:?}"
+        );
+    }
+
+    /// ⭐⭐⭐ **AND THE REAL CORPUS IS THE CASE WHERE **NEITHER** TERM CAN CLOSE THE GAP.**
+    ///
+    /// The fixture above was first written with 30 passing and 60 low, and the symmetric assertion
+    /// failed — because at those numbers the SHAPE term cannot close the gap either. That is not a
+    /// bad fixture, it is the shape of the actual problem, and it deserves its own row rather than
+    /// being tuned away.
+    ///
+    /// These are the measured t1506 numbers for the in-scope CrUX trend corpus (200 sites, 59 ruled
+    /// out at the origin as bot-wall/unreachable/HTTP per DAILY-DRIVER-CERTIFICATION.md §3): 141
+    /// in-scope, 57 above the floor, 70 scored below it, 14 unscored. **The hole is 77. Shape is
+    /// worth 70 and scorability 14 — so the certificate cannot be met by finishing either one, and
+    /// a work order that names only the largest term is still telling a reader something false.**
+    #[test]
+    fn the_measured_corpus_is_a_gap_no_single_term_can_close() {
+        let mut rows = Vec::new();
+        for i in 0..57 {
+            rows.push(row(&format!("pass{i}"), Some(0.90), [0; 4]));
+        }
+        for i in 0..70 {
+            rows.push(row(&format!("low{i}"), Some(0.50), [0; 4]));
+        }
+        for i in 0..14 {
+            rows.push(row(&format!("un{i}"), None, [0; 4]));
+        }
+        let c = certificate(&rows);
+        assert_eq!((c.sites, c.scored, c.shape_ok), (141, 127, 57));
+        assert_eq!(c.shape_gap(), 77, "ceil(0.95 x 141) = 134, minus 57");
+        assert_eq!(c.headroom_shape(), 70);
+        assert_eq!(c.headroom_unscored(), 14);
+
+        let sf = c.shortfalls();
+        assert!(
+            sf[0].starts_with("shape "),
+            "shape is still the LARGER term and still leads: {sf:?}"
+        );
+        // BOTH must carry the verdict. A reader who sees it on only one term concludes the other is
+        // sufficient, which is the precise error this whole gate exists to stop.
+        let with_verdict = sf.iter().filter(|s| s.contains("CANNOT CLOSE")).count();
+        assert_eq!(
+            with_verdict, 2,
+            "70 < 77 and 14 < 77: NEITHER term closes the gap alone, and the work order must say so \
+             on both — {sf:?}"
+        );
+    }
+
+    /// ⚠⚠ **A JARRING TERM CAN ALWAYS CLOSE ITS OWN GAP, SO THE VERDICT MUST NEVER FIRE ON ONE.**
+    ///
+    /// The first version of `headroom_note` compared EVERY term to the SHAPE hole. That is the right
+    /// question only for the two terms that feed the shape bar; a jarring invariant has its own bar
+    /// and its own hole, and its headroom (`sites − clean`) is always at least that hole. Compared
+    /// against the shape hole it would print *"CANNOT CLOSE THE GAP"* on a perfectly reachable term
+    /// whenever the shape hole happened to be larger — a confident false statement, and exactly the
+    /// class of error this whole gate was written to stop, committed by the gate itself.
+    ///
+    /// The corpus below is built to trigger it: the shape hole is large (95 − 5 = 90) and every
+    /// jarring term is only a few sites short.
+    #[test]
+    fn a_jarring_term_never_carries_the_cannot_close_verdict() {
+        let mut rows = Vec::new();
+        for i in 0..5 {
+            rows.push(row(&format!("pass{i}"), Some(0.90), [0; 4]));
+        }
+        for i in 0..95 {
+            // Low shape, and the FIRST ten are also dirty on `overlap` (index 1).
+            rows.push(row(
+                &format!("low{i}"),
+                Some(0.50),
+                if i < 10 { [0, 1, 0, 0] } else { [0; 4] },
+            ));
+        }
+        let c = certificate(&rows);
+        assert_eq!((c.sites, c.scored, c.shape_ok), (100, 100, 5));
+        assert_eq!(c.shape_gap(), 90, "the shape hole is huge");
+        assert_eq!(c.clean[1], 90);
+        assert_eq!(c.clean_gap(1), 5, "and the overlap hole is five sites");
+
+        let sf = c.shortfalls();
+        let overlap = sf
+            .iter()
+            .find(|s| s.starts_with("overlap "))
+            .expect("VACUOUS: the overlap term must be below the bar for this to test anything");
+        assert!(
+            !overlap.contains("CANNOT CLOSE"),
+            "overlap is 10 sites of headroom against a hole of 5 — it closes its own gap \
+             comfortably, and measuring it against the SHAPE hole of 90 would be a false verdict \
+             about a reachable term: {overlap}"
+        );
+        assert!(
+            overlap.contains("the hole is 5 site(s)"),
+            "and each term must print ITS OWN hole, not the certificate's largest: {overlap}"
+        );
+        // ── THE CONTROL, and writing it is what caught the fixture's own arithmetic: 95
+        //    scored-but-low against a hole of 90 means the SHAPE term CLOSES its gap here. It leads
+        //    the order on headroom and carries NO verdict — so this corpus proves the note is
+        //    silent on both a reachable jarring term and a reachable shape term, and the earlier
+        //    tests prove it is loud when the term really cannot reach. Silence everywhere would
+        //    pass a note that never fires; loudness everywhere would pass one that always does.
+        assert!(
+            sf[0].starts_with("shape ") && !sf[0].contains("CANNOT CLOSE"),
+            "95 of headroom against a hole of 90 CLOSES the gap — the term leads on size and must \
+             carry no verdict: {sf:?}"
+        );
+        assert_eq!(
+            sf.iter().filter(|s| s.contains("CANNOT CLOSE")).count(),
+            0,
+            "every term on this corpus is reachable; a verdict anywhere here is a false alarm: {sf:?}"
+        );
+    }
+
+    /// The boundary of [`Cert::headroom_note`]: `headroom == gap` is enough, `gap - 1` is not.
+    /// A one-off here reverses the verdict on exactly the terms that are closest to mattering.
+    #[test]
+    fn the_cannot_close_verdict_fires_below_the_gap_and_not_at_it() {
+        // 20 sites, bar 0.95 -> need 19. With 19 passing the shape term is met and there is no gap.
+        let mut rows: Vec<Fidelity> = (0..19)
+            .map(|i| row(&format!("p{i}"), Some(0.90), [0; 4]))
+            .collect();
+        rows.push(row("un", None, [0; 4]));
+        let c = certificate(&rows);
+        assert_eq!(c.shape_gap(), 0, "19 of 20 already meets ceil(0.95 x 20)");
+        assert_eq!(
+            c.headroom_note(c.headroom_unscored(), c.shape_gap()),
+            "",
+            "a gap of zero is not a gap, and no term can fail to close it"
+        );
+        let sf = c.shortfalls();
+        assert!(
+            sf.iter().any(|s| s.contains("UNSCORED"))
+                && !sf.iter().any(|s| s.contains("CANNOT CLOSE")),
+            "the site is still UNSCORED and still counts against the bar — but nothing here is \
+             arithmetically hopeless, so the loud clause must stay silent: {sf:?}"
+        );
     }
 
     /// **G_UNSCOREABLE_REASON — an unscored site must say WHICH ENGINE failed it.**

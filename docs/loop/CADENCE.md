@@ -15,7 +15,7 @@
 | median tick cycle | **33m** | 1176 intervals |
 | median, last 10 | **55m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.79** | 1491.5h elapsed |
+| **ticks per hour** | **0.79** | 1492.1h elapsed |
 | median verify wall | **67s** | 1116 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -1273,6 +1273,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1500** | 2026-09-11 04:49 | 23m | refusal | 8m | +243/−43 | 581 | 81 | 56.0% · | the container-query skip was REFUSED (2026-09-11) |
 | **1501** | 2026-09-11 05:02 | 13m | instrument | 8m | +176/−42 | 581 | 81 | 56.0% · | the proxy is refused because it is also a shell (2026-09-11) |
 | **1503** | 2026-09-11 06:05 | 63m | instrument | 8m | +569/−16 | 581 | 81 | 56.0% · | the proxy rewrites a HOST, and a site is a set of hosts (2026-09-11) |
-| **1505** | 2026-09-11 08:32 | 2.4h | capability | 8m | +892/−66 | 582 | 81 | 56.0% · | `location.href = "/x"` did nothing, and did not throw (2026-09-11) |
+| **1505** | 2026-09-11 09:10 | 3.1h | capability | 8m | +599/−64 | 582 | 81 | 56.0% · | `location.href = "/x"` did nothing, and did not throw (2026-09-11) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

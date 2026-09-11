@@ -109102,3 +109102,121 @@ NEXT, in order:
    untouched): `classify_fetch`'s 200-status wall test knows only Cloudflare's two markers.
 
 WIKI: docs/wiki/a-script-navigation-is-a-navigation.md
+
+## Tick 1506 — the work order said "in the order to work them" and never ranked them (2026-09-11)
+
+TICK SHAPE: instrument
+
+The board's P0 is *"MEASURE FIRST … CONFIRM the ~82% is current — do not trust the t1226 figure."*
+Did that, and the confirmation refused the mandate's own conclusion.
+
+### THE ARITHMETIC NOBODY HAD RUN
+
+The exit bar is `shape >= 0.75 on >=95% of sites`, and unscored sites count AGAINST it. So there is
+a hole, in sites, and each term has a **headroom** — the most it could contribute if solved
+completely. On the in-scope CrUX trend corpus (200 sites, 59 ruled out at the origin as
+bot-wall/unreachable/HTTP per DAILY-DRIVER-CERTIFICATION.md §3; scores from SWEEP-t1496):
+
+```text
+  in-scope                141
+  shape >= 0.75            57      the bar needs 134
+  scored but below          70     <- the SHAPE term's headroom
+  unscored                  14     <- the SCORABILITY term's headroom
+  ─────────────────────────────
+  THE HOLE                  77
+```
+
+⭐⭐⭐ **The scorability term is worth at most 14 sites against a hole of 77.** The standing mandate
+says *"The BINDING constraint is the SCORABILITY/FUNCTION ceiling — ~82%, 24/135 in-scope sites never
+yield a scored tree — NOT layout placement."* Solved **perfectly** — every unreachable page reached,
+every refusal converted, and every one of them landing above the shape floor on arrival — it moves
+the certificate less than a fifth of the way.
+
+⚠ **And the conclusion does not depend on which scorability figure is right.** Under the mandate's
+OWN number (24 of 135) the term is worth 24 against a hole in the seventies. It was never
+arithmetically capable of being the binding constraint, at either measurement. *That is what makes
+this a refutation rather than a competing estimate.*
+
+⚠⚠ Nor does the SHAPE term close it alone: 70 against 77. **This is a gap no single term can close**,
+and a work order that names only the largest is still telling a reader something false.
+
+### WHY THE LOOP BELIEVED IT — THE INSTRUMENT PRINTED IT FIRST
+
+`Cert::shortfalls` has said `CERTIFICATE NOT MET — shortfalls, in the order to work them:` since it
+was written, and emitted the terms **in the order they were coded**: the UNSCORED term first, always,
+however small. ⭐⭐⭐ ***"In the order to work them" was a claim the function did not implement*** —
+t1303-1308's rule (*a workaround's COMMENT is a checkable claim that dies SILENTLY*) applied to a
+ranking rather than a workaround, and it steered a mandate.
+
+Now ranked by headroom, descending, stable; every term prints **its own hole**; and a term whose
+headroom is below its hole says so where the reader is already looking.
+
+```text
+  · reading-order clean on 44.1% of sites (bar 95%) — the hole is 18 site(s)
+  · overlap clean on 55.9% of sites (bar 95%) — the hole is 14 site(s)
+  · shape >=0.75 on 50.0% of sites (bar 95%) — the hole is 16 site(s)
+        <== CANNOT CLOSE THE GAP: solved COMPLETELY this term is worth at most 12 site(s) …
+  · h-overflow clean on 67.6% of sites (bar 95%) — the hole is 10 site(s)
+  · 5 of 34 sites UNSCORED … <== CANNOT CLOSE THE GAP: … at most 5 site(s) against a hole of 16
+  · dead-target clean on 85.3% of sites (bar 95%) — the hole is 4 site(s)
+```
+
+### ⚠ THE GATE COMMITTED THE GATE'S OWN ERROR FIRST
+
+The first implementation compared **every** term to the SHAPE hole. That is the right question only
+for the two terms that feed the shape bar. A jarring invariant has its own bar and its own hole, and
+its headroom (`sites - clean`) is **always at least** that hole — *a jarring term can always close
+its own gap*. Measured against the shape hole it would have printed `CANNOT CLOSE THE GAP` on a
+perfectly reachable term whenever the shape hole was the larger number: a confident false statement,
+**the exact class of error this gate exists to stop, committed by the gate itself.**
+
+```
+  M1  drop the sort_by                     RED   the unscored term leads again
+  M2  sort ASCENDING                       RED   the smallest term leads
+  M3  the note is always silent            RED   nothing says a term cannot close the gap
+  M4  the note always fires                RED   it decorates instead of discriminating
+  M5  headroom_unscored returns `sites`    RED   the term outranks shape where it cannot
+  M6  shape_gap forgets `shape_ok`         RED   the gap becomes the bar, not the hole
+  M7  a jarring term measured vs shape_gap RED   <- the error above, gated
+  M8  clean_gap forgets `clean[i]`         RED
+  clean                                    GREEN
+```
+
+### ⭐⭐ TWO FIXTURES ARGUED WITH THEIR OWN ASSERTION TEXT, AND BOTH TIMES THE TEXT WAS RIGHT
+
+The symmetric half — *a term that CAN close the gap must NOT carry the warning* — failed twice, and
+each failure was the FIXTURE's arithmetic, not the code's. 30/60/10 gives a hole of 65 and a shape
+headroom of 60: shape cannot close it either. That is not a bad fixture, it is the shape of the real
+problem, and it became its own test rather than being tuned away. Then 5/95 gives a hole of 90 and a
+headroom of 95, where the verdict correctly stays silent. **A control arm you have to compute in
+order to write is a control arm that checks your arithmetic as well as the code's** — both times the
+assertion MESSAGE, which states the numbers in prose, is what exposed the contradiction, before the
+code was ever suspected.
+
+### THE RATCHET
+
+No engine behaviour changed, no site moved, the denominator is untouched. What changed is what the
+next twenty ticks are allowed to believe about which term to work.
+
+### RESIDUE, STATED
+
+`serennu.com` (73.8 shape, 100% coverage, **12 misplaced elements**) was probed as a near-bar anchor
+and the mechanism localised to one element class: `<span class="tiny"><br /><br /></span>` — an
+inline box whose only children are line breaks — measures `0x14` here against Chrome's `605x62`, the
+union of its line fragments. ⚠ **Two minimal fixtures FAILED to reproduce it** (a bare
+`<span><br><br></span>`, and one inside a `vertical-align:middle` parent in a `<center>`, matching
+the page): both gave a non-zero width. The reproducer is not yet found, and that is stated rather
+than guessed at. ⚠ `www.unoeste.br` was tried first and REJECTED as an anchor — two runs disagreed
+about the ORACLE's own rects (`1200x497` vs `1200x76` for the same element), so the page changes
+between loads and cannot arbitrate anything (t1404-1405).
+
+NEXT, in order:
+1. ⭐⭐⭐ **The work order now ranks itself — read it and take the top term.** On the 34-site slice
+   that is `reading-order` (hole 18) and `overlap` (hole 14), both ABOVE the shape hole, and neither
+   has ever been worked. The full-corpus run is the one to rank on; this slice is a demonstration.
+2. ⭐⭐ **Find the `serennu.com` reproducer** — the residue above. The element is named and the two
+   fixtures that do NOT reproduce it are named, so the next attempt starts from three facts.
+3. **Probe the new `unknown` constellation rows** (audit #92): does a style change on one node
+   re-run selector matching for the whole document?
+
+WIKI: docs/wiki/a-work-order-must-be-ranked-by-headroom.md
