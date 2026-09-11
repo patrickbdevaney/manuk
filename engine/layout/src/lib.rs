@@ -15101,8 +15101,68 @@ impl Ctx<'_> {
                         leading: 0.0,
                         metrics: None,
                     };
-                    out.push(reporter());
-                    out.insert(mark_content, reporter());
+                    // ── ⚠⚠⚠ **AN INLINE WHOSE OWN CONTENT IS ONLY `<br>` GETS **ONE** REPORTER, AT
+                    //    THE LAST BREAK — not a head and a tail straddling them.**
+                    //
+                    // `<span class="tiny"><br /><br /></span>` is a spacer idiom, and the two
+                    // reporters above are wrong for it in three ways at once: the head lands at the
+                    // END of the PREVIOUS content and the tail at the START of the NEXT line, so the
+                    // union comes out several line boxes tall and as wide as whatever happened to
+                    // precede it. Chrome-measured, `16px/20px monospace`, `<div style="width:600px">`:
+                    //
+                    // ```text
+                    //                                      Chrome            before
+                    //   XX<span><br></span>YY            [19,  0,0,19]    [ 0,  0,19,39]
+                    //   XX<span><br><br></span>YY        [ 0, 60,0,19]    [ 0, 40,19,59]
+                    //   <span><br></span>YY              [ 0,100,0,19]    [ 0,100, 0,39]
+                    //   XX<span><br></span>              [19,140,0,19]    [ 0,140,19,20]
+                    // ```
+                    //
+                    // **Chrome's rect is ONE line box tall and ZERO wide in every one of them, and
+                    // it sits where the LAST `<br>` sits.** A single reporter inserted immediately
+                    // before that break reproduces all four exactly.
+                    //
+                    // ⚠ **THE FLOW IS ALREADY RIGHT AND MUST NOT MOVE.** All eight containing-block
+                    // heights in the gate's fixture are Chrome-identical before and after — this
+                    // changes what the element REPORTS, never what it contributes. The reporter is
+                    // zero-width and `holds_line: false`, exactly as the two it replaces.
+                    //
+                    // ⚠ **NAMED RESIDUE, measured and NOT fixed here:** an inline that owns a
+                    // non-zero fragment AND a `<br>` — `XX<span><br>Q</span>YY` — reads `[0,220,19,19]`
+                    // against Chrome's `[0,220,10,19]`, because Chrome drops a ZERO-WIDTH fragment
+                    // from the union when a non-zero one exists. That is a different rule in a
+                    // different place (this branch does not fire at all when the element owns a
+                    // fragment), and it is left stated rather than guessed at.
+                    // ⚠ **A `Spacer` RIDES IN FRONT OF THE BREAK AND IS NOT CONTENT.** The first
+                    // attempt tested `all(Break)` and never fired once: `<span><br></span>` emits
+                    // `[Spacer, Break]`, not `[Break]`. The spacer is the element's opening gap —
+                    // zero-width, owned by nothing (an item this element OWNED would have kept the
+                    // branch from running at all). The test is therefore *"at least one break, and
+                    // nothing that draws"*, which is what "its only content is `<br>`" means.
+                    // ⚠ **ONE CLAUSE, NOT TWO — the mutation pass deleted the other.** This read
+                    // `any(Break) && all(Break|Spacer)`, and the first half could not be falsified:
+                    // `rposition` below already answers `None` when there is no break, so the
+                    // `any` test decided nothing any input could show. Fifth instance of t1403's
+                    // rule in this arc. What remains is the real guard — *nothing here DRAWS* —
+                    // and `XX<span><br><i></i></span>YY` is the row that can falsify it.
+                    let content = &out[mark_content..];
+                    let last_break = content
+                        .iter()
+                        .all(|it| {
+                            matches!(it, InlineItem::Break { .. } | InlineItem::Spacer { .. })
+                        })
+                        .then(|| {
+                            content
+                                .iter()
+                                .rposition(|it| matches!(it, InlineItem::Break { .. }))
+                        })
+                        .flatten();
+                    if let Some(i) = last_break {
+                        out.insert(mark_content + i, reporter());
+                    } else {
+                        out.push(reporter());
+                        out.insert(mark_content, reporter());
+                    }
                 }
                 // The right margin closes the element, AFTER both branches above have had their
                 // chance to give it a box — so a margin-only inline is still reported, and the

@@ -177,6 +177,16 @@
   - L96 · Residue, named
   - L108 · The gate
 
+## `<span><br><br></span>` reported a box three line boxes tall and as wide as the text before it
+`docs/wiki/an-inline-of-only-breaks.md`
+
+  - L7 · Why it was wrong, and why the branch that got it wrong is right
+  - L20 · The measurement
+  - L49 · ⚠⚠⚠ THE FLOW WAS ALREADY RIGHT AND MUST NOT MOVE — that is half the gate
+  - L56 · ⚠⚠ FOUR ROWS ARE STILL WRONG AND THEY ARE IN THE GATE ON PURPOSE
+  - L72 · ⚠ TWO MUTATIONS CAME BACK GREEN, AND THEY CHANGED BOTH THE CODE AND THE GATE
+  - L88 · Where it is
+
 ## An option is not hidden by a stylesheet
 `docs/wiki/an-option-is-not-hidden-by-a-stylesheet.md`
 
@@ -3636,4 +3646,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3023 sections across 152 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3029 sections across 153 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

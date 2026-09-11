@@ -12104,3 +12104,37 @@ trend corpus: **zero sites lost a score or lost shape** (the one `css-starved` r
 banked 73.3% — a CDN timeout under `--jobs 2`, not a regression). Gated by
 `g_a_script_navigation_is_a_navigation` under six mutations; a seventh came back GREEN and deleted an
 inert guard.
+
+## The oldest vertical spacer on the web — `<span><br><br></span>` — reported the wrong box
+
+**The class:** every hand-written page that spaces its nav with line breaks instead of margins.
+`serennu.com` does it twice in one menu; the pre-CSS-framework long tail is full of it. An inline
+whose entire content is `<br>` elements **owns no fragment of its own** — the break belongs to the
+`<br>` — so it fell into the branch written for `<span><i class="icon"></i></span>`, which emits two
+reporters straddling the element's items.
+
+**⚠⚠⚠ The head lands at the END of the PREVIOUS content and the tail at the START of the NEXT line.**
+The reported box came out several line boxes tall, offset upward, and as wide as the text before it —
+on an element whose real box is one line box tall and zero wide.
+
+```text
+                                      Chrome            before
+  XX<span><br></span>YY            [19,  0,0,19]    [ 0,  0,19,39]
+  XX<span><br><br></span>YY        [ 0, 60,0,19]    [ 0, 40,19,59]
+  <span><br></span>YY              [ 0,100,0,19]    [ 0,100, 0,39]
+  XX<span><br></span>              [19,140,0,19]    [ 0,140,19,20]
+```
+
+**Chrome's rect sits where the LAST `<br>` sits, one line box tall and zero wide.** One reporter
+immediately before that break reproduces every position and height.
+
+**⚠ THE FLOW WAS ALREADY RIGHT.** All ten containing-block heights are Chrome-identical before and
+after — this changes what the element REPORTS, never what it contributes. That half is gated, because
+a fix that moved a `<div>` height would be trading a reported rect for real layout.
+
+**Status:** landed t1511. Fixture 11/16 → 19/23 Chrome-exact; `serennu.com` **73.8% → 77.0% shape,
+crossing the Phase-0 0.75 floor** (73.8 twice before on two binaries, 77.0 twice after, live and from
+a local copy). Gated by `g_an_inline_of_only_breaks` under five mutations. ⚠ Four rows remain wrong
+and are PINNED in the gate with Chrome's numbers: all four keep the width of the text before them and
+all four span more than one line — a second defect in the multi-line inline union, stated rather than
+guessed at.

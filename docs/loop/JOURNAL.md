@@ -109602,3 +109602,136 @@ NEXT, in order:
    and at least two of them (a11yproject, jatekshop) are now known to be the oracle's.
 
 WIKI: docs/wiki/the-oracle-was-measuring-its-fallback.md
+
+## Tick 1511 — `<span><br><br></span>` reported a box three line boxes tall (2026-09-11)
+
+TICK SHAPE: capability
+
+Check #146's steer was *"the next tick is CAPABILITY, not instrument — four in a row is the limit."*
+This is that tick, and it took the work order's own anchor.
+
+### THE ELEMENT
+
+An inline whose entire content is `<br>` elements is the oldest vertical-spacer idiom on the web.
+`serennu.com` uses `<span class="tiny"><br /><br /></span>` twice in one nav. It **owns no fragment**
+— the break belongs to the `<br>` — so it fell into the branch written for
+`<span><i class="icon"></i></span>`, which emits **two** reporters straddling the element's items
+*because "an inline that wraps spans several lines and Chrome's rect covers the first line's content
+top through the last line's bottom."*
+
+⚠⚠⚠ For a br-only inline that is wrong three ways at once: **the head lands at the END of the
+PREVIOUS content and the tail at the START of the NEXT line.**
+
+```text
+                                      Chrome            before          after
+  XX<span><br></span>YY            [19,  0,0,19]    [ 0,  0,19,39]   [19,  0,0,19] ✓
+  XX<span><br><br></span>YY        [ 0, 60,0,19]    [ 0, 40,19,59]   [ 0, 60,19,19] ~
+  <span><br></span>YY              [ 0,100,0,19]    [ 0,100, 0,39]   [ 0,100,0,19] ✓
+  XX<span><br></span>              [19,140,0,19]    [ 0,140,19,20]   [19,140,0,19] ✓
+```
+
+⭐⭐⭐ **Chrome's rect is ONE line box tall and ZERO wide in every one, and it sits where the LAST
+`<br>` sits.** One reporter immediately before that break reproduces every position and height.
+Fixture **11 of 16 → 19 of 23** Chrome-exact.
+
+### THE REAL SITE, AND THE TWO RESULTS I DID NOT GET TO KEEP
+
+```text
+  serennu.com    73.8 -> 77.0    ⭐ CROSSES the Phase-0 0.75 floor
+                 before: 73.8 at t1496 AND 73.8 in t1507's slice — two runs, two binaries
+                 after:  77.0 live AND 77.0 from a locally served copy of the same document
+                 coverage 100.0% and 12 misplaced on BOTH sides
+```
+
+⚠⚠ **The 13-site ratchet slice reported one regression and one gain, and NEITHER survived a repeat.**
+
+* `mayatoys.in` read **−1.7** (87.3 → 85.6). Solo, on the post-fix binary: **87.3, 87.3, 87.3** — its
+  banked value exactly. The document has **2 `<br>` tags in 941 KB and zero br-only inlines**, so the
+  change cannot reach it. `--jobs 2` contention, and **the second such false regression this
+  session** (t1505's `ru.restaurantguru.com` `css-starved` was the first). *A parallel sweep row is
+  not a measurement of the engine.*
+* `a1.ro` read **+6.2** (56.2 → 62.5) and I wanted it. It has **zero `<br>` tags in the document**,
+  and two runs of the SAME binary read 56.2 and 62.5. **It is a1.ro's own band.** t1410's rule
+  applied to a result in my favour — *one run can ACCEPT as well as refuse.*
+
+So the tick's honest claim is **one site, +3.2, across the bar**, and eleven others unmoved.
+
+### ⚠⚠⚠ THE FLOW WAS ALREADY RIGHT AND MUST NOT MOVE — HALF THE GATE
+
+All **ten** containing-block heights are Chrome-identical before and after. This changes what the
+element REPORTS, never what it contributes: the reporter is zero-width and holds no line open,
+exactly like the two it replaces. A fix that moved a `<div>` height would be trading a reported rect
+for real layout, and the `DIV` rows refuse it. 191 `manuk-layout` tests green.
+
+### ⚠⚠ FOUR ROWS ARE STILL WRONG AND ARE PINNED IN THE GATE
+
+```text
+  XX<span><br><br></span>YY      ours [ 0, 60,19,19]  chrome [ 0, 60, 0,19]
+  XX<span><br>Q</span>YY         ours [ 0,220,19,19]  chrome [ 0,220,10,19]
+  XX<span><br><i></i></span>YY   ours [ 0,280,19,39]  chrome [ 0,300,12,19]
+  XX<span><i></i><br></span>YY   ours [ 0,320,31,39]  chrome [19,320,12,19]
+```
+
+In every one the surplus width is **19 — the width of the `XX` before the span** — and in every one
+the content spans MORE THAN ONE LINE. A SECOND defect, in the multi-line inline union, **stated
+rather than guessed at**: *a plausible rule that fits every fixture you happened to write is the most
+expensive kind of wrong* (t1418). Asserted against what we produce TODAY, with Chrome's number in the
+message and an instruction to move them into the Chrome table — a fix fails the gate and is told what
+to write (t1417).
+
+### THE MUTATION PASS CHANGED BOTH THE CODE AND THE GATE
+
+```
+  M1 restore the two head/tail reporters   RED     M4 fire for an inline that also DRAWS  RED
+  M2 insert before the FIRST break         RED     M5 accept a Word as non-drawing        RED
+  M3 insert AFTER the last break           RED     clean                                  GREEN
+```
+
+Two came back GREEN on the first pass and both were real:
+
+* ⚠ **The guard had a redundant clause** — `any(Break) && all(Break|Spacer)`, and `any` could not be
+  falsified because `rposition` already answers `None` with no break. **FIFTH instance of t1403's
+  rule in this arc**, third in seven ticks. Deleted.
+* ⚠ **The gate could not tell a br-only inline from one that also DRAWS.** Removing the whole guard
+  left it green, because no fixture mixed a `<br>` with an atomic. `XX<span><br><i></i></span>YY` and
+  its mirror were measured in Chrome and added; they now turn it red.
+
+⚠ **A third stayed green and is RECORDED, not gated.** `holds_line: true` on the reporter changes
+nothing on any fixture here or any this tick could construct, because **the reporter sits immediately
+before a `Break` and a `Break` brings its own line into existence** — unfalsifiable at this call site
+by construction. Kept `false`, and the coupling written down rather than asserted by a row that would
+only look like a control.
+
+### WALL-TIME AUDIT #56 (fell due at this tick) — THE WALL IS NOT LEAN, AND THE GATES ARE NOT WHY
+
+```text
+  total 752s
+   301s  D · disk reclaim        ██████████ 40%
+   232s  P · parity (72/72)      ███████    31%
+    83s  T · crate tests         ██         11%
+    17s  G6 · clickability                   2%
+     7s  G1 · real-site parity                1%
+     7s  B · build (workspace)                1%
+     3s  F · perf floors  ·  3s F4  ·  every named gate below rounds to 0s
+```
+
+⭐⭐⭐ **The assertions are ~15% of the wall.** `D` is not a gate at all: it is a CONDITIONAL disk
+reclaim that fires only at ≥88% full, and `/home` is at **93%** (260 G of 297 G). It deletes the
+debug cache — which `B · build` and `T · crate tests` then rebuild, in the same run. That is also
+why this session's walls ranged 429s–805s while `LAST_WALL_TIME` is banked at 465s: **the spread is
+whether `D` fired, not whether the gates got slower.**
+
+⚠ **`scripts/` and the machine are observer-owned, so this is RECORDED AND NOT ACTED ON** — one
+line, per the standing scope rule. The admissible optimisations the audit lists (redundancy,
+parallelism, caching, scope) all target `P` and `T`, and **none of them is the biggest term.** No
+gate was cut, no floor widened, nothing moved to CI.
+
+NEXT, in order:
+1. ⭐⭐⭐ **The multi-line inline union** — the four pinned rows, all four carrying the width of the
+   text before them. The gate already holds Chrome's numbers, so the next tick starts from four
+   executable targets and a failing test that tells it what to write.
+2. ⭐⭐ **Establish why the oracle lacks a webfont the engine HAS** (t1510's #2, untouched).
+3. ⚠ **`--jobs 2` sweep rows produced a false REGRESSION and a false GAIN in one slice.** Neither
+   survived a solo repeat. Before quoting any parallel-sweep delta, re-run the site alone.
+
+WIKI: docs/wiki/an-inline-of-only-breaks.md
