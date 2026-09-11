@@ -1178,3 +1178,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1505	a011d4a5	1789132202	2026-09-11T09:10:02-04:00	11064	capability	465	7	599	64	582	81	3896	6960	0	642	0	`location.href = "/x"` did nothing, and did not throw (2026-09-11)
 1506	459ccf60	1789133720	2026-09-11T09:35:20-04:00	1518	instrument	465	7	522	65	582	81	3896	6960	0	642	0	the work order said "in the order to work them" and never ranked them (2026-09-11)
 1507	c90f4b7d	1789136146	2026-09-11T10:15:46-04:00	2426	instrument	465	7	442	51	582	81	3896	6960	0	642	0	the ranking was only as good as its definition of "reachable" (2026-09-11)
+1508	a95d45aa	1789138193	2026-09-11T10:49:53-04:00	2047	instrument	465	7	317	61	582	81	3896	6960	0	642	0	reading-order is OURS, and the trace that said so named the wrong subsystem (2026-09-11)

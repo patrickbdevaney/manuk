@@ -109408,3 +109408,91 @@ NEXT, in order:
    question as this tick asked of reading-order: measure before grinding.
 
 WIKI: docs/wiki/reading-order-is-an-engine-target-and-the-trace-said-display.md
+
+## Tick 1509 — the trace withheld the one field that attributes the cause (2026-09-11)
+
+TICK SHAPE: instrument
+
+t1508 ended holding a pair of rects — `[91x64]` in Chrome, `[91x79]` here — and no way to say why.
+
+### THE RULE WAS ALREADY IN THE FILE, WITH ONE IMPLEMENTATION TOO FEW
+
+`oracle.rs` carries t562's rule verbatim: *"a geometry instance must NAME THE FONT on both sides, or
+a 2px height divergence stays unattributable — `[74x16] vs [76x18]` could equally be a different
+face, a different used size, or a different line-box rule, three different fixes, indistinguishable
+in a rect."* `fontsuffix` exists for exactly that, absence semantics and all. **`ro_trace` never
+called it.** One rule, two implementations, and the second had no consumer to notice (t1403).
+
+### IT NAMED THE MECHANISM ON THE FIRST RUN
+
+```text
+  chrome  img [906 811 50 50] static/block  {fira_sansbook/14/129}   div [966 804 91 64] static/flex  {fira_sansbook/14/129}
+  ours    img [906 811 50 50] static/block  {fira_sansbook/14/140}   div [966 797 91 79] static/flex  {fira_sansbook/14/140}
+```
+
+The third field is the measured advance of `'Hamburgefonstiv 0123'` in the computed font. Same
+declared family, same used size, **our text measures 8.5% wider**. Run whole, `www.jatekshop.eu`
+reports it **136 times** across `<li>`, `<div>`, `<span>`, at two sizes, at a constant ratio:
+
+```text
+  fira_sansbook/12/111 vs /120    120/111 = 1.081    79 hits <li>, 29 <div>
+  fira_sansbook/14/129 vs /140    140/129 = 1.085    28 hits <span>
+```
+
+Wider text wraps sooner, a wrapped box is taller, a taller box breaks the row it shared — **the
+reading-order symptom t1508 chased is two layers downstream of a text measurement.** ⚠ And we DID
+load the webfont: `WEBFONTS: 2 of 2 @font-face families delivered a usable face`. This is NOT the
+fallback-metrics failure of t1342-1343.
+
+### ⚠⚠ NOT CLAIMED AS OUR BUG — AND t1369 IS EXACTLY WHY
+
+t1369 investigated this cluster on `www.a11yproject.com` and the answer was the opposite of the
+obvious one: **ours was what the font file said** (verified against `Anaheim-Regular.woff2`, upem
+2048, the probe's 20 glyphs summing to 18540 units) and **Chrome disagreed with ITSELF** — 12
+elements at `{anaheim/20/181}` and 11 at `/201` on one page load. Two things here are unlike it:
+**neither engine disagrees with itself** (136 elements, every Chrome reading 111/129, every one of
+ours 120/140), and **the ratio is constant across two sizes**, which is a face difference rather than
+a rounding or a fallback event. ⚠ The arbitration is owed to the FONT FILE, not the oracle
+(t1367-1374). Until that run the honest statement is *"two engines with a usable face for one
+declared family measure it 8.3% apart, consistently"* — and nothing more.
+
+### ⚠⚠ AN INSTRUMENT HAZARD FOUND ON THE WAY — t1416 IN A NEW PLACE
+
+`www.jatekshop.eu` was in t1507's 34-site slice. **Its 136-hit font cluster is absent from that run's
+cluster list and appears immediately when the site runs alone — same binary, same site.** The
+chunk-wide list ranks by SITE COUNT first and truncates:
+
+```text
+  5 site(s) ·   8 hit(s)   display: block → flex  (<div>)    <- printed
+  1 site(s) · 136 hit(s)   font-resolution: …                <- cut
+```
+
+⭐⭐ *A mechanism that is 136 hits on ONE site is invisible beside one that is 8 hits on five* —
+t1416's concentration rule, in the cluster ranker rather than a WPT area table. **Recorded, not
+changed**: reordering the ranker moves what every future sweep reads first and deserves its own tick
+with its own control.
+
+```
+  M1 drop the fontsuffix call            RED   the mechanism is unattributable again
+  M2 fabricate {/0} for an absent font   RED   an absence reads as a measured zero
+  M3 drop the position/display suffix    RED   t1508's display question loses its evidence
+  clean                                  GREEN
+```
+
+### THE RATCHET
+
+No engine behaviour changed, no site moved, no banked mark touched. `instance_line` was EXTRACTED
+from `ro_trace`'s closure so the wiring could be gated at all — **second tick running that a trace's
+annotation had to be lifted out of a closure before it could be tested**, which is itself the reason
+both defects survived so long.
+
+NEXT, in order:
+1. ⭐⭐⭐ **ARBITRATE `fira_sansbook` AGAINST THE FONT FILE.** Fetch the `@font-face` `src` from
+   `www.jatekshop.eu`, read its upem and the 20 glyph advances of `Hamburgefonstiv 0123`, and see
+   whether 111/129 or 120/140 is the file. t1369 did exactly this for `anaheim` and the answer was
+   not the obvious one — **do not skip it because the ratio looks convincing.**
+2. ⚠⚠ **THE CONSTITUTION CHECK IS DUE** — `LAST_CONSTITUTION_CHECK` 1501, cadence 8, and TICK will
+   read 1509 after this lands. The next tick cannot start without it.
+3. ⭐⭐ **The cluster ranker's site-count-first ordering** (above) — its own tick, its own control.
+
+WIKI: docs/wiki/the-trace-withheld-the-field-that-attributes.md

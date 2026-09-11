@@ -1190,6 +1190,42 @@ pub fn jarring_reading_order(
 /// four: the point is to name a MECHANISM, and a fifth instance of the same one is noise.
 const RO_TRACE_MAX: usize = 4;
 
+/// One box, as a trace line: `[x y w h] position/display  {family/px/advance}`.
+///
+/// ⚠⚠⚠ **THE FONT WAS MISSING FROM THE ONE TRACE THAT NEEDED IT MOST.** This file already carries
+/// the rule, written for geometry instances at t562: *a geometry instance must NAME THE FONT on both
+/// sides, or a 2px height divergence stays unattributable — `[74x16] vs [76x18]` could equally be a
+/// different face, a different used size, or a different line-box rule, three different fixes,
+/// indistinguishable in a rect.* [`fontsuffix`] exists for exactly that, absence semantics and all.
+///
+/// **`ro_trace` never called it.** t1508 landed on a pair whose boxes were `[91x64]` in Chrome and
+/// `[91x79]` here and could not say why, because the trace printed the rects and withheld the one
+/// field that discriminates them. One rule, two implementations, and the second had no consumer to
+/// notice (t1403). Wired at t1509, and the first run named the mechanism in one line.
+///
+/// ⚠ An ABSENT font prints as ABSENCE, never as a fabricated `{/0}` — [`fontsuffix`]'s contract, and
+/// the reason this delegates rather than formatting a font itself.
+pub fn instance_line(s: &Seen) -> String {
+    format!(
+        "[{} {} {} {}] {}{}{}",
+        s.rect[0],
+        s.rect[1],
+        s.rect[2],
+        s.rect[3],
+        if s.position.is_empty() {
+            "?"
+        } else {
+            &s.position
+        },
+        if s.display.is_empty() {
+            String::new()
+        } else {
+            format!("/{}", s.display)
+        },
+        fontsuffix(&s.font)
+    )
+}
+
 /// **The one-line diagnosis of an inversion: which AXIS separates the pair, and whether `display`
 /// actually disagrees.**
 ///
@@ -1282,25 +1318,20 @@ fn ro_trace<K: std::fmt::Display + Eq + std::hash::Hash>(
         };
         let parent = a.rfind('/').map(|c| &a[..c]).unwrap_or(a);
         eprintln!("  RO-TRACE {parent}");
-        let one = |s: &Seen| {
-            format!(
-                "[{} {} {} {}] {}{}",
-                s.rect[0],
-                s.rect[1],
-                s.rect[2],
-                s.rect[3],
-                if s.position.is_empty() {
-                    "?"
-                } else {
-                    &s.position
-                },
-                if s.display.is_empty() {
-                    String::new()
-                } else {
-                    format!("/{}", s.display)
-                }
-            )
-        };
+        // ⚠⚠⚠ **THE FONT, AND IT WAS MISSING FROM THE ONE TRACE THAT NEEDED IT MOST.**
+        //
+        // This file already carries the rule, written for geometry instances at t562: *"a geometry
+        // instance must NAME THE FONT on both sides, or a 2px height divergence stays
+        // unattributable — `[74x16] vs [76x18]` could equally be a different face, a different used
+        // size, or a different line-box rule, three different fixes, indistinguishable in a rect."*
+        // `fontsuffix` exists for exactly that, absence semantics and all.
+        //
+        // **RO-TRACE never called it.** t1508 landed on `www.lyreco.com`'s `<h3>` — `[747x42]` in
+        // Chrome, `[759x84]` here, two line boxes where Chrome has one — and could not say whether
+        // the cause was the face, the used size, or the line box, because the trace printed the
+        // rects and withheld the one field that discriminates them. One rule, two implementations,
+        // and the second had no consumer to notice (t1403).
+        let one = instance_line;
         eprintln!(
             "      chrome  {} {}   {} {}",
             leaf(a),
@@ -1498,6 +1529,47 @@ mod tests {
             display: display.into(),
             ..seen(tag, rect)
         }
+    }
+
+    /// **G_A_TRACE_INSTANCE_NAMES_ITS_FONT — the field that turns a rect into an attribution.**
+    ///
+    /// t562's rule, written in this file for geometry instances: *a geometry instance must NAME THE
+    /// FONT on both sides, or a 2px height divergence stays unattributable.* `ro_trace` printed
+    /// rects, position and display — and not the font — so t1508 ended with `[91x64]` vs `[91x79]`
+    /// and no way to say whether the cause was the face, the used size, or the line box. Wiring
+    /// `fontsuffix` in named the mechanism on the first run: `fira_sansbook/14/129` in Chrome
+    /// against `fira_sansbook/14/140` here — same family, same size, **our advance 8.5% wider**.
+    ///
+    /// Mutations that must turn this red:
+    ///   1. drop the `fontsuffix` call          -> the mechanism is unattributable again
+    ///   2. format the font inline as `{/0}`    -> an absent font reads as a measured zero
+    ///   3. drop the position/display suffix    -> t1508's display question loses its evidence
+    #[test]
+    fn a_trace_instance_names_its_font() {
+        let mut s = seen_font("div", [966, 804, 91, 64], "fira_sansbook/14/129");
+        s.position = "static".into();
+        let line = instance_line(&s);
+        assert_eq!(line, "[966 804 91 64] static/block  {fira_sansbook/14/129}");
+
+        // ⚠ An ABSENT font is an ABSENCE. `{/0}` would read like a measured zero — the class of
+        // fabricated datum this project keeps catching in its own instruments.
+        let mut bare = seen("div", [966, 804, 91, 64]);
+        bare.position = "static".into();
+        let line = instance_line(&bare);
+        assert_eq!(line, "[966 804 91 64] static/block");
+        assert!(
+            !line.contains('{'),
+            "an unmeasured font must print NOTHING, never a fabricated signature: {line}"
+        );
+
+        // A box whose position the oracle did not report says `?`, not an invented `static`.
+        let mut noposition = seen_font("div", [0, 0, 1, 1], "X/1/1");
+        noposition.position = String::new();
+        assert!(
+            instance_line(&noposition).contains("] ?/block"),
+            "got {}",
+            instance_line(&noposition)
+        );
     }
 
     /// **G_AN_INVERSION_NOTE_NAMES_AN_AXIS_AND_NOT_A_DISPLAY.**

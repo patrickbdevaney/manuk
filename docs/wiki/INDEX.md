@@ -3502,6 +3502,15 @@
   - L45 · The mechanism
   - L56 · What this decides
 
+## The trace printed the rects and withheld the one field that discriminates the causes
+`docs/wiki/the-trace-withheld-the-field-that-attributes.md`
+
+  - L6 · The rule was already in the file, and it had one implementation too few
+  - L19 · It named the mechanism on the first run
+  - L43 · ⚠⚠ NOT YET CLAIMED AS OUR BUG — t1369 is the reason
+  - L61 · ⚠⚠ AN INSTRUMENT HAZARD FOUND ON THE WAY, AND IT IS t1416 IN A NEW PLACE
+  - L77 · Where it is
+
 ## The unreachable scrollable overflow region follows the scroll origin
 `docs/wiki/the-unreachable-scrollable-overflow-region.md`
 
@@ -3617,4 +3626,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3012 sections across 150 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3017 sections across 151 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

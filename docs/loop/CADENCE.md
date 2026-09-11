@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1179** | ticks 1–1507 |
-| median tick cycle | **33m** | 1178 intervals |
-| median, last 10 | **39m** | 10 intervals |
+| ticks landed | **1180** | ticks 1–1508 |
+| median tick cycle | **33m** | 1179 intervals |
+| median, last 10 | **36m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.79** | 1493.2h elapsed |
-| median verify wall | **67s** | 1118 ticks |
+| **ticks per hour** | **0.79** | 1493.8h elapsed |
+| median verify wall | **67s** | 1119 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -31,7 +31,7 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**541 of 1179 ticks** (46%) moved a
+**541 of 1180 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -1276,5 +1276,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1505** | 2026-09-11 09:10 | 3.1h | capability | 8m | +599/−64 | 582 | 81 | 56.0% · | `location.href = "/x"` did nothing, and did not throw (2026-09-11) |
 | **1506** | 2026-09-11 09:35 | 25m | instrument | 8m | +522/−65 | 582 | 81 | 56.0% · | the work order said "in the order to work them" and never ranked them (2026-09-11) |
 | **1507** | 2026-09-11 10:15 | 40m | instrument | 8m | +442/−51 | 582 | 81 | 56.0% · | the ranking was only as good as its definition of "reachable" (2026-09-11) |
+| **1508** | 2026-09-11 10:49 | 34m | instrument | 8m | +317/−61 | 582 | 81 | 56.0% · | reading-order is OURS, and the trace that said so named the wrong subsystem (2026-09-11) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
