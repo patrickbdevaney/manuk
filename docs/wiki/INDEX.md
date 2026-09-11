@@ -3374,6 +3374,15 @@
   - L38 · What the refusal established, which a green tick would not have
   - L64 · The three-step next attempt
 
+## The only engine-owned refusal is a clock
+`docs/wiki/the-only-engine-owned-refusal-is-a-clock.md`
+
+  - L5 · Why this term
+  - L14 · It is a performance bug wearing a CSS refusal's label
+  - L36 · The mechanism, and it is named in the engine's own diagnostic
+  - L49 · ⚠ And the cohort is not one thing either
+  - L61 · What this decides
+
 ## The refusing oracle runs in two seconds
 `docs/wiki/the-refusing-oracle-runs-in-two-seconds.md`
 
@@ -3527,4 +3536,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2962 sections across 140 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2967 sections across 141 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

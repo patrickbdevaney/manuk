@@ -108488,3 +108488,65 @@ looked at: **dump both engines' depth-1 children side by side** — Chrome's own
 paths, and `oracle::path_of` computes ours, so the comparison needs no new machinery.
 
 WIKI: docs/wiki/retry-one-origin-when-the-trees-barely-overlap.md
+
+## Tick 1499 — the only engine-owned refusal is a clock (2026-09-11)
+
+TICK SHAPE: instrument
+
+The compass's ENGINE column is 5–6 sites of 200 and `css-starved` is most of it — ours by the
+instrument's own words (*"our own `load_deadline` cut those sheets"*). **Four of the five are one
+origin.**
+
+### ⭐⭐⭐ IT IS A PERFORMANCE BUG WEARING A CSS REFUSAL'S LABEL
+
+```text
+  www.trivago.fr    load: manuk 61377ms · chromium 4020ms
+
+  cascade+layout+blocking scripts    8202 ms
+  deferred scripts                  19610 ms   <- the largest
+  subframes (pre-load)               7705 ms
+  initial images+masks               4085 ms
+  load_async                        41115 ms
+  external CSS (finish_loading)      7763 ms   <- and the 12s budget dies here
+  TOTAL                             61377 ms
+```
+
+**The sheets are not failing; we never get to them.** Sixty-one seconds against Chrome's four.
+
+### ⭐⭐ AND THE MECHANISM IS NAMED IN THE ENGINE'S OWN DIAGNOSTIC
+
+```text
+  SLOW RESTYLE+LAYOUT  cascade_ms=791 layout_ms=3226 container_query_ms=3395 cq_relaid=true n_sheets=8
+  SLOW FORCED REFLOW — one geometry read laid out the whole document  total_ms=7427
+  FORCED-REFLOW BUDGET EXHAUSTED
+```
+
+**`container_query_ms` ≈ `layout_ms`** — every layout on this page runs roughly twice, and one geometry
+read then lays out the whole document for **7.4 seconds**, which is what t1408's forced-reflow budget
+exists to bound and which duly reports EXHAUSTED.
+
+### ⚠ THE COHORT IS NOT ONE THING EITHER
+
+```text
+  www.trivago.*     layout_ms 3098   container_query_ms 3427   cq_relaid=true
+  www.nautica.com   layout_ms   65   container_query_ms    0   cq_relaid=false
+```
+
+Four of five have this mechanism and the fifth has a different one — the same shape t1497 found in
+`tree-divergence` and t1491 in the near-bar font misses. ⭐ *A cohort named by its symptom is usually
+two mechanisms, and the aggregate hides the smaller one.* **Third time this window.**
+
+### LANDED
+
+```
+  docs/wiki/the-only-engine-owned-refusal-is-a-clock.md
+  no engine change — this tick is the attribution
+```
+
+NEXT: **container-query re-layout cost**, because it is 4 of the 5 rows and because `cq_relaid=true`
+says the engine already knows when it is paying. A container-query pass that re-runs a whole document
+layout is a bounded subsystem with an existing diagnostic and an existing budget to gate it. ⚠ The
+first question is whether the second pass is NECESSARY on these pages — `n_sheets=8` and
+`cq_relaid=true` together suggest a container whose size the first pass could already have known.
+
+WIKI: docs/wiki/the-only-engine-owned-refusal-is-a-clock.md
