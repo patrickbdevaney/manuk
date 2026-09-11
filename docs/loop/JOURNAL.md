@@ -108370,3 +108370,61 @@ that a healthy-looking oracle never trips; the second now has a classifier that 
 rather than guessing, and two of its four are *"the probe element is ABSENT from the dump"*.
 
 WIKI: docs/wiki/the-compass-repeated.md
+
+## Tick 1497 — `tree-divergence` is two different things (2026-09-11)
+
+TICK SHAPE: instrument
+
+The compass is measured twice and ranks `METHOD` (17) at ~3× `ENGINE` (5). Its biggest remaining
+member is `tree-divergence`. Read before building, per the rule that has paid three times this window.
+
+### ⭐⭐⭐ THE INSTRUMENT ALREADY SEPARATES THEM, AND NOBODY HAD READ THE LINE
+
+`TREE ALIGNMENT` prints for exactly these rows — added at t783 precisely because *"the two candidates
+cost a subsystem each and have nothing in common"*. Read across all five:
+
+```text
+  site                        oracle  ours  exact  tag-multiset  depth   verdict
+  www.villaggioposeidone.it     461    645     2    336 (73%)      1     INDEX SHIFT
+  dashboard.twitch.tv            11     59     2      8 (73%)      1     INDEX SHIFT
+  tracker.shadowfax.in           18     48     1      1  (6%)      2     MIXED
+  experiencia.pichincha.com      13     22     2      2 (15%)      1     MIXED
+  sports.yahoo.com                —      —     —      —            —     (no line this run)
+```
+
+**Two populations, not one.**
+
+⭐⭐ **HALF IS THE PROXY'S OWN COHORT, NAMED IN THE PROXY'S OWN DOC.** `experiencia.pichincha.com` sits
+in `one_origin_worth_trying`'s comment table at **53 snapshot vs 567 live**; its oracle here built
+**13 elements**. These are shells, filed `tree-divergence` only because our count is modest too. ⚠ The
+trigger is a FLOOR on the ORACLE's count and they sit just above it — *a sufficient condition used as a
+necessary one*, the same defect t903 fixed once when the trigger demanded `type="module"`.
+
+⭐⭐ **THE OTHER HALF IS A KEY PROBLEM AND THE PROXY WOULD NOT TOUCH IT.** `villaggioposeidone.it`: 461
+oracle paths, **336 of them (73%) present in ours as a tag-path multiset, and exactly TWO matching as
+keys.** Both engines built the page; one index near the root differs and every `:nth-of-type` below it
+shifts — **459 elements reported MISSING on a site that rendered**, structural **0.4%**. That is t550's
+finding one component over (*"ONE differing class on `<body>` invalidates every descendant key"*), with
+the INDEX doing the invalidating. **An instrument defect, not a rendering one.**
+
+⚠ **Foster parenting was the obvious suspect and is REFUTED.** `html5ever` logs *"foster parenting not
+implemented"* elsewhere in this corpus and misnested table content is exactly what shifts a root-level
+index — **zero** of these five sites emit it.
+
+### LANDED
+
+```
+  docs/wiki/tree-divergence-is-two-different-things.md
+  no engine change — this tick is a split and a ranking
+```
+
+NEXT, ranked, and the order is deliberate:
+1. **Widen the proxy trigger to "the oracle built almost nothing OR the two trees barely overlap".**
+   The second is only knowable at compare time, so `one_origin_reference` has to become retriable from
+   there rather than chosen before the reference is captured. It has a built mechanism and an
+   acceptance test (`renders_agree`) that makes widening safe in one direction.
+2. **Find the depth-1 element the two engines disagree about** on `villaggioposeidone.it`. 645 against
+   461 says we build ~184 more. Neither the proxy nor any rendering fix touches this, and it has no
+   named mechanism yet — which is why it is second.
+
+WIKI: docs/wiki/tree-divergence-is-two-different-things.md

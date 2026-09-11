@@ -1168,3 +1168,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1493	16b7ee6b	1789091116	2026-09-10T21:45:16-04:00	5648	capability	465	17	514	86	581	81	3896	6960	0	642	0	a `@font-face` declares its own weight (2026-09-10)
 1494	e35ad5f1	1789096179	2026-09-10T23:09:39-04:00	5063	capability	465	7	279	44	581	81	3896	6960	0	642	0	a graded `@font-face` set matches by weight (2026-09-10)
 1495	16aef98c	1789103378	2026-09-11T01:09:38-04:00	7199	instrument	465	7	382	43	581	81	3896	6960	0	642	0	the system path is blocked by COST, not correctness (2026-09-10)
+1496	eb5ae902	1789106213	2026-09-11T01:56:53-04:00	2835	instrument	465	7	213	42	581	81	3896	6960	0	642	0	the compass, repeated (2026-09-11)

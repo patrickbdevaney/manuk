@@ -693,6 +693,32 @@ pub fn capture_seen_all_paths(
     Ok(seen)
 }
 
+/// **Try the one-origin reference for a site the caller has already decided needs one.**
+///
+/// `capture_seen_all_paths` decides up front, on a SHELL FLOOR over the oracle's element count —
+/// *"the oracle built almost nothing, so try one origin"*. That floor cannot see the other shape the
+/// proxy exists for: **two engines that each build a page and barely OVERLAP**, which is only knowable
+/// after both trees are in hand and keyed. t1497 measured the `tree-divergence` cohort and found half
+/// of it sitting just above the floor with oracles of **13 and 18 elements** — shells by any reading,
+/// and one of them (`experiencia.pichincha.com`) is in the floor's own comment table at *53 snapshot
+/// vs 567 live*.
+///
+/// *A sufficient condition used as a necessary one*, which is the same defect t903 fixed once already
+/// when the trigger additionally demanded `type="module"`.
+///
+/// ⚠ **Widening stays safe for the reason the floor's own doc gives:** [`crate::proxy::renders_agree`]
+/// refuses any proxied render that disagrees with the LIVE one, so a wider trigger can only convert
+/// rows the acceptance test has already vouched for. `None` keeps the snapshot's honest shell and its
+/// honest label.
+pub fn retry_one_origin(
+    url: &str,
+    vw: u32,
+    vh: u32,
+) -> Option<HashMap<String, crate::oracle::Seen>> {
+    let (_, html) = fetch_document_following_refresh(url).ok()?;
+    one_origin_reference(url, &html, vw, vh)
+}
+
 /// Render the reference through [`crate::proxy`] — ONE origin — and return it **only if it agrees
 /// with the LIVE render**.
 ///

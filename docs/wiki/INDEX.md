@@ -3444,6 +3444,15 @@
   - L148 · The arm that was measured and removed rather than shipped
   - L163 · The two gates that were red, and had different owners
 
+## `tree-divergence` is two different things
+`docs/wiki/tree-divergence-is-two-different-things.md`
+
+  - L5 · Why this term
+  - L16 · The instrument already separates them, and nobody had read the line
+  - L33 · Half is the proxy's own cohort, already named in its own doc
+  - L48 · The other half is a KEY problem, and the proxy would not touch it
+  - L67 · What each half needs
+
 ## Two Chrome-measured batteries that cannot both be satisfied by one end-padding rule
 `docs/wiki/two-chrome-batteries-that-disagree.md`
 
@@ -3509,4 +3518,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2952 sections across 138 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2957 sections across 139 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
