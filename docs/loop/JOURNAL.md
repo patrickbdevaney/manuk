@@ -108221,3 +108221,92 @@ blocked by an artefact rather than a defect — which would unblock the last thi
 one measurement away.
 
 WIKI: docs/wiki/a-graded-font-face-set-matches-by-weight.md
+
+## Tick 1495 — the system path is blocked by COST, not correctness (2026-09-10)
+
+TICK SHAPE: instrument
+
+t1494 shipped §5.2 over the declared `@font-face` weight and left the SYSTEM path coarse, because
+handing `fontdb::Query` the real weight took `css/css-fonts/variations` 247 → 148. It said the cause
+was **not established**. This tick establishes it, and the answer is not what the hypothesis said.
+
+### THE HYPOTHESIS WAS WRONG, AND ONE PROBE SAID SO
+
+```text
+  Page::webfonts() on at-font-face-font-matching.html  ->  (6, 6)
+```
+
+All six faces register and load. The suite exercises real webfonts, not fallbacks.
+
+### ⭐⭐ A PER-FILE DIFF PUT THE WHOLE REGRESSION IN ONE PLACE
+
+```text
+  css/css-fonts/variations, per file, coarse query -> exact query
+    at-font-face-font-matching.html   107/107  ->  8/107
+    every other file                  unchanged
+```
+
+−99 of the −99, in one file. *Diff the names, never the totals.*
+
+### ⭐⭐⭐ AND THE FAILURE LINE IS THE ANSWER, BECAUSE IT IS NOT A FAILURE
+
+```text
+  Timeout  Matching font-weight: '400' should prefer '501 550' over '502 560'
+  NotRun   Matching font-weight: '430' should prefer '420 440' over '450 460'
+```
+
+**`Timeout`, then `NotRun`.** No assertion fails; the file runs out of time on its first case and the
+rest never run. **So the change is a COST problem, not a correctness one** — a different thing to fix
+entirely, and three ticks of reading could not have told them apart.
+
+**The mechanism:** `FontContext` caches faces by `FontKey`. With `bold: bool`, every weight on a page
+collapses to **two** keys and `fontdb::query` — a scan over every installed face, with §5.2 matching on
+each — runs twice. With a numeric weight **each distinct CSS weight is its own key**, and this file
+uses dozens by design, because it is testing weight matching. Distinct weights multiply full
+font-database scans.
+
+⚠ A coarse retry when the exact query misses was tried and changed nothing (still 148) — consistent:
+the exact query MATCHES, it is just called far more often.
+
+### LANDED
+
+```
+  docs/wiki/the-system-path-is-blocked-by-cost-not-correctness.md
+  no engine change — the tree is byte-identical to t1494; variations re-confirmed at 247
+```
+
+⚠ What made this findable was `--show-failures` printing **`Timeout`** rather than a failed assertion.
+*A refusal that names what it OBSERVED beats one that names a cause* — the same lesson `ProbeBlocked`
+taught at t1486, one instrument over.
+
+NEXT, and it is a cost fix rather than a matching fix:
+1. **Index the font database by family once**, so a weight lookup scans one family's faces instead of
+   every installed face. `weight_is_closer` already implements §5.2's comparator for the `@font-face`
+   branch and would then run over a handful of candidates.
+2. **Re-measure `at-font-face-font-matching.html` ALONE** — it is the whole of the regression, so it is
+   the whole of the verification, and it runs in seconds rather than the suite's minutes.
+3. Only then re-attempt the system query, with that file as the gate.
+
+### SURFACE AUDIT #91 + SELF-AUDIT @ 1494 (both due)
+
+The map under audit: **what a measurement is worth.** Four of this window's six ticks were refusals,
+reversions or measurements rather than capability — discipline or drift, and the audit's job is to say
+which. **It is discipline, and each one changed what the next tick did**: t1491's price found a second
+mechanism hiding in an aggregate; t1492's refusal established what §5.2 matches against, which t1493
+carried and which turned a −92 into a +7; t1495 turned three ticks of *"not established"* into a named
+cost mechanism with a three-step fix.
+
+⚠ **The counter-reading, stated:** six consecutive ticks on ONE thread is exactly the clustering the
+2026-09-05 nudge called drift — and **`SINGLE_SITE_TICKS` counts sites, not threads**, so nothing in
+the loop's machinery would have objected. A gap in the instrument, not a verdict on the window.
+
+⚠⚠ **And the measurement the whole window rests on is ONE run.** `SWEEP-t1485-refusal-tags.tsv`
+(ORIGIN 58 / METHOD 23 / ENGINE 6) is the loop's current compass and has never been repeated. *One run
+refuses nothing* (t1410). Ranked #1 of this audit.
+
+⚠ Carried: nine crates outside the wall's crate loop (**fifth** audit); **581 gate files against 19
+executed by name** — and this window wrote six of the new ones, so the ratio worsens *because the loop
+is working*; the wall at **3815s** against a 300s target (observer-owned); `ORACLE_CRAWLED: 0`
+(nineteenth). ✅ CI still finishing.
+
+WIKI: docs/wiki/the-system-path-is-blocked-by-cost-not-correctness.md

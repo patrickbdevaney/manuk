@@ -3384,6 +3384,16 @@
   - L97 · The order for the next attempt
   - L106 · What it measured when it finally landed (t1428)
 
+## The system path is blocked by cost, not correctness
+`docs/wiki/the-system-path-is-blocked-by-cost-not-correctness.md`
+
+  - L5 · The open question
+  - L13 · The hypothesis was wrong, and one probe said so
+  - L21 · And a per-file diff put the whole regression in one file
+  - L31 · The failure line is the answer, and it is not a failure
+  - L45 · The mechanism
+  - L56 · What this decides
+
 ## The unreachable scrollable overflow region follows the scroll origin
 `docs/wiki/the-unreachable-scrollable-overflow-region.md`
 
@@ -3490,4 +3500,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2941 sections across 136 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2947 sections across 137 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

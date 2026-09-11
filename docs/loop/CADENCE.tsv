@@ -1166,3 +1166,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1491	c184c405	1789080805	2026-09-10T18:53:25-04:00	6206	instrument	465	6	202	42	579	81	3896	6960	0	642	0	pricing the `bold: bool` collapse (2026-09-10)
 1492	3b38bf2f	1789085468	2026-09-10T20:11:08-04:00	4663	refusal	465	12	545	53	580	81	3896	6960	0	642	0	the numeric font weight was REFUSED (2026-09-10)
 1493	16b7ee6b	1789091116	2026-09-10T21:45:16-04:00	5648	capability	465	17	514	86	581	81	3896	6960	0	642	0	a `@font-face` declares its own weight (2026-09-10)
+1494	e35ad5f1	1789096179	2026-09-10T23:09:39-04:00	5063	capability	465	7	279	44	581	81	3896	6960	0	642	0	a graded `@font-face` set matches by weight (2026-09-10)

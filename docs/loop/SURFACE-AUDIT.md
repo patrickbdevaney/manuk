@@ -8367,3 +8367,68 @@ it has had one.
    engages for some and not others.
 3. ⚠ The nine missing crates — fourth ranking, unchanged, and still the only change that *adds*
    coverage rather than costing it.
+
+---
+
+## Audit #91 — tick 1495 (2026-09-10)
+
+**The map under audit:** the loop's own picture of what a *measurement* is worth. Audit #90 refused the
+mandate's attribution; this window then spent six ticks inside one thread, and four of them were
+refusals, reversions or measurements rather than capability. That is either discipline or drift, and
+the audit's job is to say which.
+
+### ⭐⭐⭐ IT IS DISCIPLINE, AND THE LEDGER SHOWS IT
+
+```text
+  t1490  capability   `load` fires after the webfont arrives          (TWO Bar 0s caught and fixed)
+  t1491  instrument   priced the FontKey refactor                     285 of 584 — and ZERO on the worst site
+  t1492  REFUSAL      the numeric key, Chrome-verified, -92            reverted whole
+  t1493  capability   the @font-face DESCRIPTOR                        variations 237/242 -> 247
+  t1494  capability   §5.2 over the declared weight                    variations 247 · css-fonts at its mark
+  t1495  instrument   the system path is blocked by COST               Timeout, not a failed assertion
+```
+
+**Every one of the four non-capability ticks changed what the next tick did.** t1491's price found a
+second mechanism hiding in an aggregate; t1492's refusal established what §5.2 matches against, which
+t1493 then carried and which turned a −92 into a +7; t1495 turned three ticks of *"not established"*
+into a named cost mechanism with a three-step fix. *A revert with a full measurement is not a lost
+tick* is not a consolation here — it is the load-bearing claim of the window.
+
+⚠ **The counter-reading, stated:** six ticks on ONE thread (font weight) is exactly the single-thread
+clustering the 2026-09-05 observer nudge called drift. The defence is that each tick's NEXT was
+executed by the following tick and each was priced or measured first — but **`SINGLE_SITE_TICKS` does
+not count threads**, so nothing in the loop's machinery would have objected. That is a gap in the
+instrument, not a verdict on the window.
+
+### ⭐⭐ THE MEASUREMENT THE WHOLE WINDOW RESTS ON IS ONE SWEEP OLD
+
+`docs/loop/SWEEP-t1485-refusal-tags.tsv` — 200 sites, ORIGIN 58 / METHOD 23 / ENGINE 6 — is what says
+the mandate aims at a term worth six sites. **It has not been repeated.** t1410's rule is explicit: a
+delta no larger than the band is not a movement, and *one run refuses nothing*. The attribution is
+categorical rather than numeric, which is why it was quoted, but a second sweep is cheap and the loop
+has been steering by it for ten ticks.
+
+### ⚠ CARRIED
+
+* **Nine crates outside the wall's crate loop.** **FIFTH consecutive audit**, ranked top-three each
+  time. The loop runs seven; `manuk-page`, `manuk-js`, a11y, html, text, media, compositor, store and
+  bidi are not among them — and this window added five gates to `engine/page/tests`, which the wall
+  does not run.
+* **581 gate files, 19 executed by name.** Was 575 at audit #90; **this window wrote six of the six
+  new ones**. The ratio is getting worse *because the loop is working*, which is the uncomfortable
+  form of this finding.
+* **The wall is 3815s** — the self-audit's only failing item, up from 2481s at wall-audit #59 and
+  against a 300s target. Observer-owned.
+* `ORACLE_CRAWLED: 0` — **nineteenth**.
+* ✅ CI: 4 success / 4 cancelled in the last eight — still finishing, as audit #90 recorded.
+
+### RANKED, from this audit only
+
+1. ⭐⭐⭐ **Repeat the t1485 sweep before the next steer cites it.** It is the loop's current compass and
+   it is a single run. One sweep, same corpus, same method; if ENGINE 6 holds, the attribution is
+   evidence rather than an observation.
+2. ⭐⭐ **Count THREADS, not sites.** `SINGLE_SITE_TICKS` would not have noticed six consecutive ticks
+   on font weight. The check that matters is *"has this tick's subject been the subject of the last
+   N?"*, and unlike the site counter it needs no corpus.
+3. ⚠ The nine missing crates — fifth ranking, unchanged, and still the only item that *adds* coverage
+   rather than costing it.
