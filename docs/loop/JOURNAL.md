@@ -109867,3 +109867,86 @@ NEXT, in order:
    unstable sites.
 
 WIKI: docs/wiki/a-br-is-not-content-its-parent-is-made-of.md
+
+## Tick 1513 — the oracle renders every site from `file://`, so a self-hosted webfont is CORS-blocked (2026-09-11)
+
+TICK SHAPE: instrument
+
+t1510 proved the reference was using a fallback face and could not say why. Check #146 made finding
+out a ⭐⭐⭐ steer, because I5 names the differential oracle **the discovery engine**. This is the cause.
+
+### THE ORACLE'S OWN RECIPE
+
+`capture_seen_all_paths` fetches the document over HTTP, splices in a `<base href>` and the probe,
+writes it to a temp file, and loads it as `file://…`. **From a `file://` origin every webfont is
+cross-origin**, and a webfont fetch is CORS-gated — so a SELF-HOSTED face, which needs no
+`Access-Control-Allow-Origin` in real life, is blocked and Chrome lays the page out in its fallback.
+
+```text
+  as the oracle runs it              fira_sansbook|error    check false   adv 129 == no-such-family 129
+  + --disable-web-security           fira_sansbook|loaded   check TRUE    adv 140
+  + --allow-file-access-from-files   fira_sansbook|error                  (not sufficient)
+```
+
+⭐⭐⭐ **140 is the font file's value and it is OURS.** One flag flips the reference onto the real face
+and it agrees with us exactly. And `adv_fira == adv_missing == 129` in the blocked runs is the same
+fact from the other side: **the oracle's number is precisely what it measures for a family it does
+not have.**
+
+### ⭐⭐ WHY `fonts.ready` COULD NEVER HAVE WORKED
+
+`document.fonts.status` reads `"loaded"` while the face's own status reads `error`. **A failed font
+is a FINISHED font** — `fonts.ready` resolves, so t1510's fix was inert by construction, and now the
+inertness has a reason rather than a shrug.
+
+### ⚠⚠⚠ THE LOOP HAD ALREADY BANKED THIS TRAP — ABOUT ITS OWN FIXTURES
+
+From t1367-1374, in this project's memory, verbatim: *"a `file://` fixture does NOT fetch a
+cross-origin webfont, so Chrome silently renders the FALLBACK; arbitrate font metrics against the
+FONT FILE."* **The lesson was learned about hand-written fixtures and never applied to the instrument
+that does the same thing on every site in the corpus.** t1403's shape one level up: *a rule that
+names one caller does not generalise itself.*
+
+⚠ It also caught this tick mid-diagnosis. The first probe re-hosted the document on a local HTTP
+origin with a `<base>`, reproduced the symptom — **and the reproduction was a confound**, because
+re-hosting is itself what makes the font cross-origin. It stopped being a confound only when the
+flag experiment showed the confound IS the mechanism. *A fixture that moves the document's ORIGIN
+cannot diagnose anything the origin decides.*
+
+### PRICED BEFORE PROPOSING A FIX
+
+`WEBFONTS: N of M families delivered a usable face` is on every run of ours. Across **60 site runs**
+in this session's logs, **45 report at least one `@font-face` family — 75%.**
+
+⚠ **Not all 75% are affected and the bound is stated honestly:** a font served with
+`Access-Control-Allow-Origin: *` — Google Fonts, most CDNs — loads fine from `file://`. The affected
+set is **self-hosted faces**, which is what `jatekshop.eu` and `a11yproject.com` both are. The exact
+count needs the oracle to report its own fallback advance, which it does not yet do.
+
+### ⚠ THE FIX IS NOT IN THIS TICK, DELIBERATELY
+
+`--disable-web-security` is the only flag that works and it is broad — it disables the same-origin
+policy for XHR, iframes and canvas tainting too, and Chrome demands a `--user-data-dir` with it. It
+would move banked numbers on three quarters of the corpus. **That deserves its own tick with a
+before/after sweep** (t1491: price the mechanism on the corpus before building it).
+
+What landed is the LABEL: the `font-resolution` cluster has carried an `UNATTRIBUTED` warning since
+t1510 and now names the **proven cause** instead of a suspicion. Red under three mutations (drop the
+clause, drop the cause from it, lose the prefix other consumers match on).
+
+### THE RATCHET
+
+No engine behaviour changed, no site moved, the probe is byte-identical, every banked row stays
+comparable.
+
+NEXT, in order:
+1. ⭐⭐⭐ **Price the `--disable-web-security` fix properly, then land it.** Teach the probe to report
+   its own no-such-family advance so the instrument can COUNT the affected sites instead of bounding
+   them; then a before/after sweep on the same corpus. **This is I5's instrument and the constitution
+   says maintain it.**
+2. ⭐⭐ **Every `font-resolution` conclusion in the burndown and CLUSTERS.md predates this**, and at
+   least two (a11yproject t1369, jatekshop t1510) are now known to be the oracle's.
+3. ⭐ **`www.lyreco.com`'s h3 is `{Lyreco Renner/35/362}` vs ours `/367` — only 1.4% apart**, which is
+   NOT the 8.5% fallback signature. That one may be ours, and it is the work order's second term.
+
+WIKI: docs/wiki/the-oracle-renders-every-site-from-file-so-webfonts-are-cors-blocked.md

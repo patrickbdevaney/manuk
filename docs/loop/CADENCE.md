@@ -15,7 +15,7 @@
 | median tick cycle | **33m** | 1182 intervals |
 | median, last 10 | **37m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.79** | 1498.7h elapsed |
+| **ticks per hour** | **0.79** | 1499.5h elapsed |
 | median verify wall | **67s** | 1122 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -1279,6 +1279,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1508** | 2026-09-11 10:49 | 34m | instrument | 8m | +317/−61 | 582 | 81 | 56.0% · | reading-order is OURS, and the trace that said so named the wrong subsystem (2026-09-11) |
 | **1509** | 2026-09-11 11:19 | 30m | instrument | 8m | +422/−48 | 582 | 81 | 56.0% · | the trace withheld the one field that attributes the cause (2026-09-11) |
 | **1510** | 2026-09-11 13:08 | 1.8h | instrument | 8m | +569/−44 | 583 | 81 | 56.0% · | the font file settled it, and the reference was the one using a fallback (2026-09-11) |
-| **1512** | 2026-09-11 15:43 | 2.6h | capability | 8m | +433/−83 | 583 | 81 | 56.0% · | a `<br>` is not content its parent is made of; 23 of 23 (2026-09-11) |
+| **1512** | 2026-09-11 16:34 | 3.4h | capability | 8m | +252/−49 | 583 | 81 | 56.0% · | a `<br>` is not content its parent is made of; 23 of 23 (2026-09-11) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

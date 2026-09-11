@@ -212,15 +212,31 @@ fn font_sig(instance: &str) -> Option<&str> {
 ///   And a control in headless Chrome 145 with the face actually loaded measures **140**, while the
 ///   same Chrome measures **129 for a family it does not have**. The oracle's number is its FALLBACK.
 ///
-/// ⚠ Deferring the probe to `document.fonts.ready` was tried at t1510 and **changed nothing** — so it
-/// is not a swap-timing race, and the cause of the oracle's missing face is still unestablished.
+/// ⚠⚠⚠ **THE CAUSE, established at t1513 and it is the ORACLE'S OWN RECIPE.**
+/// `capture_seen_all_paths` fetches the document, splices in a `<base href>` and the probe, writes
+/// it to a temp file and loads it as **`file://`**. From a `file://` origin **every webfont is
+/// cross-origin**, so a same-origin self-hosted face is CORS-blocked and Chrome lays the page out in
+/// its fallback. Proven by one flag on the oracle's exact recipe:
+///
+/// ```text
+///   as the oracle runs it            fira_sansbook|error    check false   adv 129 == no-such-family 129
+///   + --disable-web-security         fira_sansbook|loaded   check TRUE    adv 140  (the FONT FILE, and ours)
+///   + --allow-file-access-from-files fira_sansbook|error    (not sufficient)
+/// ```
+///
+/// ⚠ Deferring the probe to `document.fonts.ready` was tried at t1510 and **changed nothing**, and
+/// now it is obvious why: `document.fonts.status` reads `"loaded"` and the face's own status reads
+/// `error`. **A failed font is a FINISHED font**, so `fonts.ready` resolves and waiting for it can
+/// never help.
 ///
 /// So the cluster is kept, ranked and counted exactly as before — nothing is hidden and no score
 /// moves — and it now carries the one instruction that makes it safe to read. **The arbitration is
 /// owed to the FONT FILE, never to the oracle** (t1367-1374).
 const FONT_RESOLUTION_UNATTRIBUTED: &str =
-    "   [UNATTRIBUTED — arbitrate against the FONT FILE, not the oracle: twice (t1369 anaheim, \
-     t1510 fira_sansbook) the file agreed with US and the ORACLE was using a fallback]";
+    "   [UNATTRIBUTED — the ORACLE renders from `file://`, so a SAME-ORIGIN webfont is CORS-blocked \
+     and Chrome lays the page out in a FALLBACK face (t1513, proven by one flag). Arbitrate against \
+     the FONT FILE, never the oracle: t1369 anaheim and t1510 fira_sansbook both ended on the \
+     reference]";
 
 fn measured_face(sig: &str) -> (&str, &str) {
     let mut it = sig.rsplitn(3, '/');
@@ -1840,9 +1856,13 @@ mod tests {
         // the face loaded measures 140 and the SAME Chrome measures 129 for a family it does not
         // have). This row is what stops a third tick spending itself on the same false lead.
         assert!(
-            sig.contains("UNATTRIBUTED") && sig.contains("arbitrate against the FONT FILE"),
-            "the cluster must carry its arbitration instruction — the two prior investigations both \
-             ended on the oracle, and the label alone points at us: {sig}"
+            sig.contains("UNATTRIBUTED")
+                && sig.contains("FONT FILE")
+                && sig.contains("CORS-blocked"),
+            "the cluster must carry its arbitration instruction AND the proven cause — t1513
+             established that the oracle renders from `file://`, so a same-origin webfont is
+             CORS-blocked and Chrome lays the page out in a fallback. The label alone points at
+             us: {sig}"
         );
         assert!(
             !sig.contains("arbitrate against the oracle"),

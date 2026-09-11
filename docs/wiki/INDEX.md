@@ -3467,6 +3467,17 @@
   - L49 · ⚠ And the cohort is not one thing either
   - L61 · What this decides
 
+## The oracle renders every site from `file://`, so a self-hosted webfont is CORS-blocked
+`docs/wiki/the-oracle-renders-every-site-from-file-so-webfonts-are-cors-blocked.md`
+
+  - L8 · The oracle's own recipe
+  - L21 · One flag, three runs, on the oracle's exact recipe
+  - L36 · ⭐⭐ Why fonts.ready could never have worked
+  - L46 · ⚠⚠⚠ The loop had already banked this trap — about its own fixtures
+  - L61 · What it costs, priced before proposing a fix
+  - L71 · ⚠ The fix is NOT in this tick, and that is deliberate
+  - L81 · Where it is
+
 ## The font file settled it: our number was right and the reference was using a fallback
 `docs/wiki/the-oracle-was-measuring-its-fallback.md`
 
@@ -3656,4 +3667,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3035 sections across 154 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3042 sections across 155 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
