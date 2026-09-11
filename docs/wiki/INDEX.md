@@ -57,6 +57,17 @@
   - L29 · ⭐⭐⭐ The runner already had the answer
   - L49 · What it cost
 
+## A document whose only content is a redirect is not the page — and `curl -sL` stops there
+`docs/wiki/a-document-whose-only-content-is-a-redirect.md`
+
+  - L8 · The measurement came first, and it set the rule
+  - L31 · Three refusals the measurement wrote, and one it exposed
+  - L42 · ⚠ A guard checked on one end of a token is not a guard on the token
+  - L48 · ⚠ And one guard was INERT — a green mutation deleted it
+  - L57 · ⭐⭐⭐ THE RESULT IS NOT A WIN — IT IS A RELABELLING, AND THAT IS THE POINT
+  - L81 · Where it is
+  - L91 · Banked next, with the evidence already taken
+
 ## A `@font-face` declares its own weight
 `docs/wiki/a-font-face-declares-its-own-weight.md`
 
@@ -3569,4 +3580,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2984 sections across 145 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2991 sections across 146 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -525,8 +525,13 @@ pub fn capture_boxes_all_ids(url: &str, vw: u32, vh: u32) -> Result<HashMap<Stri
 /// reason — the thing §0 of the certification design requires and t602 explicitly asked for — was
 /// gone. A typed error cannot be discarded by an `if let Ok`; the caller has to say what it did with
 /// it.
-/// **Fetch a document and follow its `<meta http-equiv="refresh">`, as `curl -sL` follows an HTTP
-/// one.** Returns the FINAL url and its html.
+/// **Fetch a document and follow the redirects a BROWSER follows but `curl -sL` does not.** Returns
+/// the FINAL url and its html.
+///
+/// Two kinds, and they are the same failure written in two syntaxes: `<meta http-equiv="refresh">`
+/// (t1486) and a **script that navigates and nothing else** (t1504). Both are documents whose whole
+/// content is "go somewhere else", and in both cases `curl -sL` stops at the stub while Chrome
+/// travels on — so the instrument scored the stub and charged the difference to the engine.
 ///
 /// ⚠⚠ **A REDIRECT STUB IS NOT THE PAGE, AND THE INSTRUMENT WAS SCORING THE STUB.** `fetch_document`
 /// uses `curl -sL`, which follows `Location:` and knows nothing about `<meta>`. The document then
@@ -545,21 +550,29 @@ pub fn capture_boxes_all_ids(url: &str, vw: u32, vh: u32) -> Result<HashMap<Stri
 /// ⚠ Bounded at three hops and refuses a self-target, for the reason the shell's own follower states:
 /// a declarative refresh is the easiest infinite loop on the web and nothing about it looks like one.
 /// A delayed refresh (>= 1s) is NOT followed here either, matching the shell.
-fn fetch_document_following_refresh(
+fn fetch_document_following_redirects(
     url: &str,
 ) -> std::result::Result<(String, String), Unmeasurable> {
     let mut at = url.to_string();
     let mut html = fetch_document(&at)?;
     for _ in 0..3 {
-        let Some((secs, next)) = meta_refresh_target(&html, &at) else {
+        let next = if let Some((secs, next)) = meta_refresh_target(&html, &at) {
+            if secs >= 1.0 || next == at {
+                break;
+            }
+            eprintln!(
+                "  META REFRESH: the document redirects to {next} — following it, as a browser does"
+            );
+            next
+        } else if let Some(next) = script_redirect_target(&html, &at) {
+            eprintln!(
+                "  SCRIPT REDIRECT: the document's only content is a navigation to {next} — \
+                 following it, as a browser does"
+            );
+            next
+        } else {
             break;
         };
-        if secs >= 1.0 || next == at {
-            break;
-        }
-        eprintln!(
-            "  META REFRESH: the document redirects to {next} — following it, as a browser does"
-        );
         at = next;
         html = fetch_document(&at)?;
     }
@@ -580,6 +593,187 @@ fn meta_refresh_target(html: &str, base: &str) -> Option<(f32, String)> {
     let (secs, u) = manuk_page::parse_meta_refresh(content)?;
     let u = u?;
     Some((secs, manuk_page::resolve_url(base, &u)))
+}
+
+/// **The first top-level navigation in a document whose ONLY content is that navigation**, resolved
+/// against `base`. `None` for every document that also renders something.
+///
+/// ⚠⚠⚠ **THE PRECONDITION IS THE WHOLE FUNCTION, AND IT IS READ OFF MEASURED COUNTER-EXAMPLES, NOT
+/// GUESSED.** A `location.href =` appears in a large fraction of real pages — in a consent handler,
+/// a captcha closer, a login guard — and following any of those would send the instrument to a page
+/// the user never sees, which is the *opposite* of the bug this fixes. The t1504 survey of the
+/// 200-site CrUX trend corpus found five documents under 20 KB carrying a top-level navigation
+/// assignment, and the split is clean:
+///
+/// ```text
+///   FOLLOW  venus.zeronline.cloud        86 B    0 tags    0 chars of text   -> /administrator/
+///   FOLLOW  house.udn.com               195 B    0 tags    0 chars of text   -> /house/index
+///   REFUSE  packages.booking.com       5631 B    7 tags   35 chars of text   -> a PerimeterX captcha closer
+///   REFUSE  swiftspinus.com            4204 B   33 tags  226 chars of text   -> the literal `https://`
+///   REFUSE  admin.munchbakery.com     11621 B   67 tags 3666 chars of text   -> a conditional login guard
+/// ```
+///
+/// So the rule is not "does it navigate" but **"does it render anything at all"** — no text outside
+/// `<script>`, and not one element that paints. Both followed documents carry exactly zero of each;
+/// the budget is therefore **zero** rather than a threshold chosen to fit, and a document that grows
+/// one visible element stops being followed. A false NEGATIVE here is an honest refusal of the kind
+/// the row already had; a false POSITIVE silently scores the wrong page.
+///
+/// ⚠ A guard around the assignment (`house.udn.com` tests `document.URL` for its own hostname) is
+/// deliberately NOT evaluated. It cannot be, without a JS engine and the live origin — and it does
+/// not need to be: when the document renders nothing either way, the destination is strictly more
+/// evidence about the site than a blank page is.
+fn script_redirect_target(html: &str, base: &str) -> Option<String> {
+    let dom = manuk_html::parse(html);
+    if !renders_nothing_but_a_script(&dom) {
+        return None;
+    }
+    let raw = dom
+        .descendants(dom.root())
+        .filter(|&n| dom.tag_name(n) == Some("script"))
+        .find_map(|n| navigation_assignment(&dom.text_content(n)))?;
+    let next = manuk_page::resolve_url(base, &raw);
+    // A self-target is the easiest infinite loop on the web and nothing about it looks like one —
+    // the same refusal `fetch_document_following_redirects` makes for `<meta refresh>`.
+    if next == base || next.is_empty() {
+        return None;
+    }
+    Some(next)
+}
+
+/// Does this document paint **nothing** — no text outside a script, and no element that renders?
+///
+/// The skeleton below is the set a parser materialises for a document that has no body content at
+/// all (`<script>x</script>` alone parses to `html > head + body > script`), plus the head elements
+/// that carry no box. Anything else is content, and a document with content is a page.
+fn renders_nothing_but_a_script(dom: &manuk_dom::Dom) -> bool {
+    const SKELETON: [&str; 8] = [
+        "html", "head", "body", "script", "style", "title", "meta", "link",
+    ];
+    let every_element_is_skeleton = dom
+        .descendants(dom.root())
+        .filter_map(|n| dom.tag_name(n))
+        .all(|t| SKELETON.contains(&t));
+    // Text is checked SEPARATELY from elements, not folded into the same walk, so that a bare text
+    // node under `<body>` with no element around it still refuses — which is exactly how a one-line
+    // "Redirecting…" page is written, and an element-only test would wave it through.
+    every_element_is_skeleton && visible_text_len(dom) == 0
+}
+
+/// Characters of text the document would actually show: everything outside `<script>`, `<style>` and
+/// `<title>`, with whitespace ignored.
+fn visible_text_len(dom: &manuk_dom::Dom) -> usize {
+    fn walk(dom: &manuk_dom::Dom, n: manuk_dom::NodeId, out: &mut usize) {
+        for c in dom.children(n) {
+            match dom.tag_name(c) {
+                Some("script") | Some("style") | Some("title") => continue,
+                Some(_) => walk(dom, c, out),
+                None => {
+                    *out += dom.text_content(c).split_whitespace().count();
+                }
+            }
+        }
+    }
+    let mut n = 0;
+    walk(dom, dom.root(), &mut n);
+    n
+}
+
+/// **The URL literal of the first top-level navigation in a script body**, or `None`.
+///
+/// Hand-rolled rather than a regex for the reason the rest of this crate is: the interesting part is
+/// what it REFUSES, and each refusal below is a shape that a regex written to match the four
+/// spellings would have accepted.
+///
+/// Accepts `location = "u"`, `location.href = "u"`, `location.replace("u")`, `location.assign("u")`,
+/// each optionally qualified by `window.`, `self.`, `top.`, `parent.` or `document.`.
+fn navigation_assignment(js: &str) -> Option<String> {
+    const QUALIFIERS: [&str; 5] = ["window", "self", "top", "parent", "document"];
+    let b = js.as_bytes();
+    let ident = |c: u8| c.is_ascii_alphanumeric() || c == b'_' || c == b'$';
+    let mut i = 0;
+    while let Some(rel) = js[i..].find("location") {
+        let start = i + rel;
+        let mut j = start + "location".len();
+        i = j;
+        // ── REFUSAL 1: `location` must be a whole token, checked on BOTH sides. The first version
+        // checked only the character AFTER — and `geolocation.href = "/x"` navigated, because every
+        // byte of the trailing ` = "` is exactly what a real navigation looks like. A guard on one
+        // end of a token is not a guard on the token.
+        if b.get(j).is_some_and(|&c| ident(c)) || (start > 0 && ident(b[start - 1])) {
+            continue;
+        }
+        // ── REFUSAL 2: a qualified `x.location` is only a navigation when `x` is a WINDOW. `cfg
+        // .location = "…"` and `this.state.location = "…"` are ordinary property writes.
+        if start > 0 && b[start - 1] == b'.' {
+            let mut k = start - 1;
+            while k > 0 && ident(b[k - 1]) {
+                k -= 1;
+            }
+            if !QUALIFIERS.contains(&&js[k..start - 1]) {
+                continue;
+            }
+        }
+        let skip_ws = |mut k: usize| {
+            while b.get(k).is_some_and(|c| c.is_ascii_whitespace()) {
+                k += 1;
+            }
+            k
+        };
+        j = skip_ws(j);
+        if js[j..].starts_with(".href") {
+            j = skip_ws(j + ".href".len());
+        } else if js[j..].starts_with(".replace(") || js[j..].starts_with(".assign(") {
+            let open = js[j..].find('(')? + j + 1;
+            return string_literal_at(js, skip_ws(open));
+        }
+        // ── REFUSAL 3: there must BE an `=`.
+        //
+        // ⚠ A second clause here — `matches!(b.get(j + 1), Some(b'=') | Some(b'>'))`, to refuse
+        // `==`, `===` and `=>` by name — was written, and a mutation that DELETED it left the gate
+        // green. It is inert, and the reason is worth stating where a future reader will change it:
+        // `string_literal_at` requires a QUOTE at the first non-whitespace byte after the `=`, and
+        // the second character of every comparison and arrow is `=` or `>`. The comparison is
+        // already refused, one layer down, by the thing that reads the target.
+        if b.get(j) != Some(&b'=') {
+            continue;
+        }
+        if let Some(u) = string_literal_at(js, skip_ws(j + 1)) {
+            return Some(u);
+        }
+    }
+    None
+}
+
+/// The contents of the `'`/`"`/`` ` ``-quoted literal starting at `at` — and `None` for anything
+/// COMPUTED, because a target this cannot read whole is a target it must not follow.
+///
+/// ⚠⚠ **THE CONCATENATION REFUSAL IS NOT DEFENSIVE, IT IS A MEASURED ONE.** `swiftspinus.com` in the
+/// t1504 survey redirects with
+/// `location.replace("https://" + e + location.pathname + location.search + o)`, and the first
+/// version of this function happily returned **`https://`** — a scheme with no host, which
+/// `resolve_url` would then hand to `curl`. The literal is only the target when nothing is glued to
+/// it.
+fn string_literal_at(js: &str, at: usize) -> Option<String> {
+    let b = js.as_bytes();
+    let q = *b.get(at)?;
+    if q != b'"' && q != b'\'' && q != b'`' {
+        return None;
+    }
+    let rest = &js[at + 1..];
+    let end = rest.find(q as char)?;
+    let lit = &rest[..end];
+    // A template literal with a substitution is computed, and so is anything with a `+` after it.
+    if lit.is_empty() || lit.contains("${") {
+        return None;
+    }
+    let after = js[at + 1 + end + 1..]
+        .bytes()
+        .find(|c| !c.is_ascii_whitespace());
+    if after == Some(b'+') {
+        return None;
+    }
+    Some(lit.to_string())
 }
 
 /// **Say what was actually observed when the probe produced nothing.** `ProbeBlocked` asserted a CSP
@@ -618,7 +812,7 @@ pub fn capture_seen_all_paths(
     // A `<meta refresh>` stub is not the page. Chrome follows it and takes our probe with it, so the
     // fetch has to follow it first — and the `<base>` below must then be the FINAL url, or every
     // relative subresource on the destination resolves against the stub's directory.
-    let (url, html) = fetch_document_following_refresh(url)?;
+    let (url, html) = fetch_document_following_redirects(url)?;
     let url = url.as_str();
     let base = format!("<base href=\"{url}\">");
     let doc = format!("{}{PROBE_ALL_PATHS_JS}", splice_head(&html, &base));
@@ -748,7 +942,7 @@ pub fn retry_one_origin(
     vw: u32,
     vh: u32,
 ) -> Option<HashMap<String, crate::oracle::Seen>> {
-    let (_, html) = fetch_document_following_refresh(url).ok()?;
+    let (_, html) = fetch_document_following_redirects(url).ok()?;
     one_origin_reference(url, &html, vw, vh)
 }
 
@@ -2042,7 +2236,10 @@ mod tests {
 
 #[cfg(test)]
 mod meta_refresh_and_probe_absence_tests {
-    use super::{meta_refresh_target, probe_absence_observation};
+    use super::{
+        meta_refresh_target, navigation_assignment, probe_absence_observation,
+        script_redirect_target,
+    };
 
     /// **Proven red** by dropping the `resolve_url` join (every row loses its origin), by matching
     /// `http-equiv` case-sensitively (the `REFRESH` row goes `None`), and by taking the first
@@ -2102,6 +2299,142 @@ mod meta_refresh_and_probe_absence_tests {
             None
         );
         assert_eq!(meta_refresh_target(&doc(""), at), None);
+    }
+
+    /// **THE MEASURED SPLIT, PINNED.** Five documents under 20 KB in the 200-site CrUX trend corpus
+    /// carry a top-level navigation assignment (t1504). Two are redirect stubs and three are pages
+    /// that merely *contain* a redirect — and following one of the latter would score a page the
+    /// user never sees, which is strictly worse than the honest refusal the row already had.
+    ///
+    /// Every fixture below is the real document's shape, taken from the survey's own fetch.
+    ///
+    /// **Proven red** by four mutations, each the shape of a plausible simplification:
+    /// dropping the `renders_nothing_but_a_script` precondition (all three REFUSE rows start
+    /// following); folding the text check into the element walk (`admin.munchbakery.com` still
+    /// refuses on its `<input>`, but a bare-text "Redirecting…" body would not); returning the
+    /// literal without the `+` check (`swiftspinus` answers the bare scheme `https://`); and
+    /// accepting `location` inside a longer identifier (`geolocation.href` navigates).
+    #[test]
+    fn only_a_document_that_renders_nothing_is_followed_to_its_script_redirect() {
+        let at = "https://stub.test/";
+
+        // ── FOLLOW. venus.zeronline.cloud — 86 bytes, the whole document.
+        assert_eq!(
+            script_redirect_target(
+                r#"<script>window.location.href = "https://venus.zeronline.cloud/administrator/"</script>"#,
+                at
+            ),
+            Some("https://venus.zeronline.cloud/administrator/".to_string())
+        );
+        // ── FOLLOW. house.udn.com — 195 bytes. The assignment is GUARDED by a hostname test that is
+        // false under `file://` and true at the live URL, which is precisely why the snapshot scored
+        // a shell while Chrome at the real origin scored the page.
+        assert_eq!(
+            script_redirect_target(
+                "<html>\n<head>\n<title></title>\n</head>\n<body>\n<script language=\"javascript\">\n\
+                 if(document.URL.indexOf(\"house.udn.com\") != -1) {\n\
+                 \twindow.location.href=\"/house/index\";\n}\n</script>\n</body>\n</html>",
+                "https://house.udn.com/"
+            ),
+            Some("https://house.udn.com/house/index".to_string())
+        );
+
+        // ── REFUSE. packages.booking.com — a PerimeterX captcha page. It renders a title and a
+        // body; the navigation is a handler that runs when the captcha is dismissed.
+        assert_eq!(
+            script_redirect_target(
+                "<!DOCTYPE html><html lang=\"en\"><head><title>Access to this page has been denied\
+                 </title></head><body><div id=\"px-captcha\"></div><p>Please verify.</p><script>\
+                 function onCaptchaSuccess(){location.href = \"/px/captcha_close?status=-1\";}\
+                 </script></body></html>",
+                at
+            ),
+            None,
+            "a captcha page is not a redirect stub — it renders, and its navigation is conditional"
+        );
+        // ── REFUSE. swiftspinus.com — a real page whose head script builds its target by
+        // concatenation. TWO independent refusals, and the test pins BOTH.
+        let swift =
+            "<html><head><meta charset=\"utf-8\"/><script>!function(){var t=location.hostname;\
+                     location.replace(\"https://\"+e+location.pathname)}()</script></head>\
+                     <body><h1>Swift Spin</h1><p>Shop the collection.</p></body></html>";
+        assert_eq!(script_redirect_target(swift, at), None);
+        assert_eq!(
+            navigation_assignment("location.replace(\"https://\"+e+location.pathname)"),
+            None,
+            "a concatenated target is COMPUTED — returning the first literal yields the bare scheme \
+             `https://`, which is what the first version of this function did"
+        );
+        // ── REFUSE. admin.munchbakery.com — the navigation is in an `onclick` ATTRIBUTE on a
+        // button, on a page with 3,666 characters of text.
+        assert_eq!(
+            script_redirect_target(
+                "<html><body><h1>Sign in</h1><input type=\"button\" \
+                 onclick=\"location.href='/register?returnurl=%2fadmin'\" value=\"Register\" />\
+                 </body></html>",
+                at
+            ),
+            None
+        );
+
+        // ── A stub that navigates to ITSELF is the easiest infinite loop on the web.
+        assert_eq!(
+            script_redirect_target(r#"<script>location="/"</script>"#, "https://stub.test/"),
+            None
+        );
+        // ── A document with no script at all.
+        assert_eq!(
+            script_redirect_target("<html><body></body></html>", at),
+            None
+        );
+        // ── A stub carrying VISIBLE TEXT is a page, however little of it there is. This is the row
+        // the element-only check would wave through.
+        assert_eq!(
+            script_redirect_target(
+                r#"<html><body>Redirecting…<script>location="/x"</script></body></html>"#,
+                at
+            ),
+            None
+        );
+    }
+
+    /// The four spellings a browser navigates on, and the shapes that merely LOOK like them.
+    ///
+    /// **Proven red** by dropping the whole-token test (`geolocation` answers), by dropping the
+    /// qualifier list (`cfg.location` answers), and by testing only the first `=` byte
+    /// (`location.href == "…"` is read as an assignment).
+    #[test]
+    fn a_navigation_assignment_is_a_window_location_write_and_nothing_that_resembles_one() {
+        let nav = navigation_assignment;
+        assert_eq!(nav(r#"location = "/a""#), Some("/a".to_string()));
+        assert_eq!(nav(r#"window.location.href='/b'"#), Some("/b".to_string()));
+        assert_eq!(nav(r#"top.location.replace("/c")"#), Some("/c".to_string()));
+        assert_eq!(
+            nav(r#"self.location.assign( "/d" )"#),
+            Some("/d".to_string())
+        );
+        assert_eq!(nav("document.location=`/e`"), Some("/e".to_string()));
+
+        // `location` inside a longer identifier is a different API entirely.
+        assert_eq!(nav(r#"geolocation.href = "/x""#), None);
+        assert_eq!(nav(r#"var relocation = "/x""#), None);
+        // A qualified `location` is a navigation only when the qualifier is a WINDOW.
+        assert_eq!(nav(r#"cfg.location = "/x""#), None);
+        assert_eq!(nav(r#"this.state.location = "/x""#), None);
+        // Comparisons and arrows are not assignments — refused because `string_literal_at` demands
+        // a QUOTE where the second `=` sits, NOT by a rule that names `==`. That rule was written,
+        // a mutation deleted it, and the gate stayed green; it is gone.
+        assert_eq!(nav(r#"if (location.href == "/x") {}"#), None);
+        assert_eq!(nav(r#"if (location === "/x") {}"#), None);
+        assert_eq!(nav(r#"onready(location => "/x")"#), None);
+        // A computed target cannot be followed, and `None` says so.
+        assert_eq!(nav("location.href = base + path"), None);
+        assert_eq!(nav("location.href = `${base}/x`"), None);
+        // The FIRST navigation wins, and a refused one does not stop the scan.
+        assert_eq!(
+            nav(r#"if (geolocation.href == "/x") {} location.href = "/real""#),
+            Some("/real".to_string())
+        );
     }
 
     /// `ProbeBlocked` asserted *"a page-supplied CSP, in every case observed so far"* and **zero of

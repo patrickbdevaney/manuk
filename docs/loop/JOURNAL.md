@@ -108806,3 +108806,114 @@ grep the fidelity corpus's refused rows for how many client-rendered sites fetch
 `oracle-module-shell` fix. **The count decides, not the mechanism's elegance.**
 
 WIKI: docs/wiki/the-proxy-rewrites-a-host-not-a-site.md
+
+## Tick 1504 — a document whose only content is a redirect is not the page (2026-09-11)
+
+TICK SHAPE: instrument
+
+t1503's steer said to PRICE the sibling-subdomain rewrite before building it. Priced first, refused,
+and the same survey named a different mechanism that was worth building.
+
+### THE PRICING THAT REFUSED ITS OWN HYPOTHESIS
+
+t1503 found `allticketscol.com`'s app fetching `back.allticketscol.com` — a same-site sibling host
+the proxy leaves alone because the URL lives in the JS bundle, not the document. The question was
+whether that is the `oracle-module-shell` cohort or one row. Fetched all 11 shell/thin rows, their
+entry bundles, and compared the same-site hosts named in the **document** with those named **only in
+JS**:
+
+```text
+  allticketscol.com       doc: static.        js-only: back. codigos. www.      <- the only one
+  booking.directferries   doc: booking-api. booking-vitals. config-cdn. content-cdn.   js-only: —
+  comix.to                doc: static.       js-only: —
+  vk.com                  doc: login. m. papi. web.api.     js-only: —
+  esaj.tjsp.jus.br / webfenix / awlyaa / house.udn         no sibling hosts at all
+```
+
+**ONE of ten.** Every other site names its sibling hosts in the document, where `same_site_hosts` +
+`rewrite_document` already rewrite them. t1503's own rule — *"if it is one of 200 this is a note"* —
+decides it: **REFUSED**, and the count decided, not the mechanism's elegance.
+
+### WHAT THE SAME FETCH FOUND INSTEAD
+
+Two of the ten documents are ~200 bytes. `house.udn.com` is `<script>` +
+`window.location.href="/house/index"` and nothing else; `venus.zeronline.cloud` is 86 bytes of the
+same shape. **`curl -sL` stops at the stub and Chrome travels on** — the exact failure t1486 fixed
+for `<meta http-equiv="refresh">`, in the other syntax.
+
+Surveyed the whole 200-site corpus for it. Five documents under 20 KB carry a top-level navigation;
+the split is clean and it set the rule:
+
+```text
+  FOLLOW  venus.zeronline.cloud   86 B   0 tags    0 words  -> /administrator/
+  FOLLOW  house.udn.com          195 B   0 tags    0 words  -> /house/index
+  REFUSE  packages.booking.com  5631 B   7 tags   35 words  -> a PerimeterX captcha closer
+  REFUSE  swiftspinus.com       4204 B  33 tags  226 words  -> the literal `https://`
+  REFUSE  admin.munchbakery.com 11621 B 67 tags 3666 words  -> a conditional login guard
+```
+
+⭐⭐⭐ **The discriminator is not "does it navigate" but "does it render anything at all".** Both
+followed documents carry zero words outside `<script>` and zero elements that paint, so the budget is
+**zero** rather than a threshold chosen to fit. A false negative is the honest refusal the row
+already had; a false positive silently scores the wrong page.
+
+`swiftspinus.com` earned a refusal the code did not have: `location.replace("https://"+e+...)`, and
+the first literal reader returned the bare scheme `https://`.
+
+```
+  M1  drop the stub precondition        RED   all three REFUSE rows start following
+  M2  drop the visible-text half        RED   a bare-text "Redirecting…" body gets followed
+  M3  drop the concatenation refusal    RED   swiftspinus answers `https://`
+  M4  token boundary on one end only    RED   `geolocation.href` navigates  ← found a REAL bug
+  M5  drop the window-qualifier list    RED   `cfg.location = …` navigates
+  M6  accept `==` as an assignment      GREEN ← INERT GUARD, deleted
+  clean                                 GREEN
+```
+
+⚠ **M6 is t1403's rule, third instance.** A clause refusing `==`/`===`/`=>` by name could not be
+falsified: `string_literal_at` demands a QUOTE at the first non-whitespace byte after the `=`, and the
+second character of every comparison and arrow is `=` or `>`. Deleted; the coupling is now recorded in
+the code and in the gate.
+
+### ⭐⭐⭐ THE RESULT IS A RELABELLING, AND IT CONTRADICTS A CONCLUSION BANKED TWO TICKS AGO
+
+Same binary, stashed and un-stashed:
+
+```text
+                            BEFORE            AFTER              oracle elements
+  house.udn.com             shell-only-1      thin-overlap-1        1 -> 441
+  venus.zeronline.cloud     probe-blocked     render-failed         0 ->  26
+```
+
+Neither became SCORED. Both moved from a tag meaning *"the ORACLE failed, not our bug"* to one whose
+own text says **"Unlike shell-only this is OURS: the oracle built the page and we did not."**
+
+The t1485–1495 histogram read **ORIGIN 58 / METHOD 23 / ENGINE 6**, and the constitution check's steer
+was *"METHOD's remainder is mostly NOT ours."* Two of those METHOD rows are ENGINE rows. **A
+methodology label is a hypothesis about whose bug it is, and an instrument that cannot reach the page
+cannot test it.**
+
+### THE RATCHET
+
+No row lost a score: both were UNSCORED before and after, the denominator is unchanged, and the
+follower is inert by construction on every document that renders anything — which is every scored
+row, and 198 of the 200 corpus documents by measurement.
+
+### LANDED
+
+```
+  tests/wpt/src/chrome.rs   script_redirect_target + 4 helpers, 2 gates, 6 mutations
+  docs/wiki/a-document-whose-only-content-is-a-redirect.md
+```
+
+NEXT, in order:
+1. **The two rows this exposed are now OURS and unscored.** `house.udn.com` 440 of 441 elements
+   missing, `venus.zeronline.cloud` 25 of 26 — *"we fetched the page and FAILED TO PAINT IT"*. Two
+   real pages the engine renders almost nothing of, newly visible. Probe one.
+2. **`awlyaa.education.dz` is an F5 BIG-IP ASM block page served with HTTP 200** —
+   `<title>Request Rejected</title>` + `Your support ID is: …`, 247 bytes, filed `shell-only-6`.
+   `classify_fetch`'s 200-status wall test knows only Cloudflare's two markers. Evidence is in the
+   wiki page; the same survey found no other unclassified 200-status wall in the corpus, and
+   DataDome's marker sits inside a 981 KB **real page** so it must not be used.
+
+WIKI: docs/wiki/a-document-whose-only-content-is-a-redirect.md
