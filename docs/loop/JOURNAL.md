@@ -108310,3 +108310,63 @@ is working*; the wall at **3815s** against a 300s target (observer-owned); `ORAC
 (nineteenth). ✅ CI still finishing.
 
 WIKI: docs/wiki/the-system-path-is-blocked-by-cost-not-correctness.md
+
+## Tick 1496 — the compass, repeated (2026-09-11)
+
+TICK SHAPE: instrument
+
+Surface audit #91's own steer #1: the attribution the loop has been steering by for eleven ticks had
+never been repeated, and *one run refuses nothing* (t1410).
+
+### ⭐⭐⭐ ENGINE IS 6 AND 5. THE MANDATE'S BINDING CONSTRAINT IS WORTH FIVE SITES IN TWO HUNDRED.
+
+```text
+                        t1485        t1496        spread
+  sites                   200          200
+  SCORED                  113          118          +5     (56.5% -> 59.0%)
+  ORIGIN                   58           60          +2     bot-wall 36/37 · unreachable 16/17
+  METHOD                   23           17          -6     probe-blocked 8/4 · tree-div 7/5
+  ENGINE                    6            5          -1     css-starved 5/3 · render-failed 1/2
+```
+
+Two independent runs a day apart. **The attribution is now a measurement with a band rather than an
+observation**, and every conclusion drawn from it since t1485 stands.
+
+In-scope scorability (bot-walls out) is **68.9%** and **72.4%** — both far below the mandate's quoted
+~82%, and the gap is still not a function gap.
+
+### ⭐⭐ AND ONE THIRD OF THE MOVEMENT IS THIS LOOP'S OWN WORK
+
+`METHOD` fell 23 → 17, the widest spread of the three, and **`probe-blocked` alone went 8 → 4**. That
+is t1486 and t1487: the engine and the instrument both learned to follow `<meta http-equiv="refresh">`
+and three redirect-stub sites moved from refused to scored. **The category audit #90 ranked as the
+largest addressable term is measurably smaller than when it was ranked.**
+
+⚠ The rest of METHOD's movement is NOT attributed — `tree-divergence` 7 → 5 is inside what a
+live-network sweep does on its own.
+
+### ⚠⚠ AND THE FIRST ATTEMPT AT THIS SWEEP WAS CORRUPT
+
+The runner was started twice — the first launch failed on a `pid`-file write and was assumed dead — and
+both instances appended to one file. **Caught by the row count: 269 rows for a 200-site corpus.**
+
+⭐ *A row count that can exceed its own corpus is the cheapest possible integrity check*, and it is the
+only reason the contaminated run did not become the second data point. Discarded; processes killed by
+explicit PID, because `pgrep -f` on the runner's own path **self-matches the wait loop** (t1197's trap,
+hit again); re-run once with the top-level runner's PID confirmed before waiting on it.
+
+### LANDED
+
+```
+  docs/loop/SWEEP-t1496-refusal-tags.tsv   200 rows, the independent repeat
+  docs/wiki/the-compass-repeated.md
+  no engine change — this tick is a confirmation
+```
+
+NEXT: the steer stands and is now evidence. **METHOD (17) is still ~3× ENGINE (5)**, and its largest
+remaining members are `tree-divergence` (5) and `probe-blocked` (4) — the first is the `file://`
+snapshot-vs-live asymmetry the one-origin proxy exists to remove and whose trigger is a SHELL FLOOR
+that a healthy-looking oracle never trips; the second now has a classifier that says what was observed
+rather than guessing, and two of its four are *"the probe element is ABSENT from the dump"*.
+
+WIKI: docs/wiki/the-compass-repeated.md

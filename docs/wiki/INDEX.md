@@ -3307,6 +3307,15 @@
   - L26 · What it re-validates
   - L36 · And the thing it turned up on the way
 
+## The compass, repeated
+`docs/wiki/the-compass-repeated.md`
+
+  - L5 · Why
+  - L12 · The two runs
+  - L35 · What holds
+  - L48 · What moved, and one third of it is this loop's own work
+  - L59 · ⚠ And the first attempt at this sweep was corrupt
+
 ## The end padding attaches to the MARGIN box — the model that resolves t1449's contradiction
 `docs/wiki/the-end-padding-attaches-to-the-margin-box.md`
 
@@ -3500,4 +3509,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2947 sections across 137 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2952 sections across 138 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
