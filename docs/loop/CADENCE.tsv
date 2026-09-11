@@ -1182,3 +1182,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1509	9d4141c7	1789139969	2026-09-11T11:19:29-04:00	1776	instrument	465	8	422	48	582	81	3896	6960	0	642	0	the trace withheld the one field that attributes the cause (2026-09-11)
 1510	f1caf2bb	1789146527	2026-09-11T13:08:47-04:00	6558	instrument	465	9	569	44	583	81	3896	6960	0	642	0	the font file settled it, and the reference was the one using a fallback (2026-09-11)
 1512	8174db76	1789158862	2026-09-11T16:34:22-04:00	12335	capability	465	7	252	49	583	81	3896	6960	0	642	0	a `<br>` is not content its parent is made of; 23 of 23 (2026-09-11)
+1513	a4770f10	1789160629	2026-09-11T17:03:49-04:00	1767	instrument	465	7	241	42	583	81	3896	6960	0	642	0	the oracle renders every site from `file://`, so a self-hosted webfont is CORS-blocked (2026-09-11)

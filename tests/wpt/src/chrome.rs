@@ -1498,6 +1498,33 @@ fn base_flags(vw: u32, vh: u32) -> Vec<String> {
         POINTING_DEVICE.into(),
         format!("--window-size={vw},{vh}"),
         "--virtual-time-budget=2000".into(),
+        // ── ⚠⚠⚠ **WITHOUT THIS THE REFERENCE LAYS OUT EVERY SELF-HOSTED WEBFONT SITE IN A FALLBACK
+        //    FACE, AND HAS DONE SINCE THE ORACLE WAS WRITTEN.**
+        //
+        // `capture_seen_all_paths` fetches the document, splices in a `<base href>` and the probe,
+        // writes a temp file and loads it as `file://`. From a `file://` origin **every webfont is
+        // cross-origin**, and a webfont fetch is CORS-gated — so a face the site serves itself,
+        // which needs no `Access-Control-Allow-Origin` in real life, is BLOCKED. t1513 proved it on
+        // the oracle's exact recipe with one flag:
+        //
+        // ```text
+        //   as it ran                          fira_sansbook|error    adv 129 == no-such-family 129
+        //   + --disable-web-security           fira_sansbook|loaded   adv 140   <- the FONT FILE, and ours
+        //   + --allow-file-access-from-files   fira_sansbook|error    (NOT sufficient — measured)
+        // ```
+        //
+        // ⚠ **`document.fonts.ready` cannot substitute for it** (tried at t1510, inert): the face's
+        // status is `error` while `document.fonts.status` is `"loaded"` — a failed font is a
+        // FINISHED font, so the promise resolves and waiting changes nothing.
+        //
+        // ⚠ **The narrower flag does not work and no profile dir is needed** — both measured, so
+        // this is the minimum that buys the capability rather than the first thing that worked.
+        //
+        // ⚠ **I6 — page content is untrusted input, always.** This weakens the same-origin policy in
+        // a THROWAWAY headless process that reads geometry and is never the shipping browser, and
+        // the alternative is a reference that is wrong about text metrics on three quarters of the
+        // corpus. Stated here rather than left for a reader to discover.
+        "--disable-web-security".into(),
     ];
     if REFERENCE_HIDES_SCROLLBARS {
         v.push("--hide-scrollbars".into());

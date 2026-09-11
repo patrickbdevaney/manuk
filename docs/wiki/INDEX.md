@@ -2844,6 +2844,16 @@
   - L52 · After the repairs
   - L66 · The standing rule this leaves
 
+## One flag in the oracle's command line — and two refusal cohorts stop existing
+`docs/wiki/one-flag-in-the-oracles-command-line.md`
+
+  - L8 · The change
+  - L20 · ⭐⭐⭐ ES MODULES ARE CORS-GATED TOO, AND THAT IS TWO WHOLE REFUSAL COHORTS
+  - L44 · ⚠⚠ IT OVER-CORRECTS, AND THE PRINCIPLED FIX IS THE PROXY
+  - L55 · ⚠⚠ THE INSTRUMENT FINGERPRINT DID NOT MOVE, AND IT SHOULD HAVE
+  - L69 · ⚠ I6 — page content is untrusted input, always
+  - L76 · Where it is
+
 ## One hit-test, not two
 `docs/wiki/one-hit-test-not-two.md`
 
@@ -3667,4 +3677,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3042 sections across 155 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3048 sections across 156 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

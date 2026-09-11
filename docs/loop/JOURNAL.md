@@ -109950,3 +109950,83 @@ NEXT, in order:
    NOT the 8.5% fallback signature. That one may be ours, and it is the work order's second term.
 
 WIKI: docs/wiki/the-oracle-renders-every-site-from-file-so-webfonts-are-cors-blocked.md
+
+## Tick 1514 — one flag, and two refusal cohorts stop existing (2026-09-11)
+
+TICK SHAPE: instrument
+
+t1513 proved the reference lays out self-hosted webfont sites in a fallback face and priced the fix
+for its own tick. This is it, and **the fonts were the small half.**
+
+### THE CHANGE, MEASURED DOWN TO THE MINIMUM
+
+One line in `base_flags`: `--disable-web-security`. Measured first, so it is the minimum that buys
+the capability rather than the first thing that worked — `--allow-file-access-from-files` alone does
+NOT work, and no `--user-data-dir` is needed under `headless=new`.
+
+### ⭐⭐⭐ ES MODULES ARE CORS-GATED TOO — AND THAT IS TWO WHOLE REFUSAL COHORTS
+
+```text
+  13-site slice, before -> after
+  allticketscol.com    shape 0.000 n=1  oracle-module-shell-1  ->  shape 0.726 n=73  SCORED
+  dashboard.twitch.tv  shape 69.5                              ->  shape 72.9   +3.4
+  ten others           unchanged · ZERO regressions
+  refusal tags:  2 oracle-module-shell + 2 shell-only  ->  0 of either
+```
+
+A `type="module"` script is fetched under CORS, so **from `file://` every module fetch is blocked**
+and the oracle saw a shell where the real site boots an SPA — then filed it as
+`oracle-module-shell: the ORACLE rendered only 1 element … so THE SHELL is what the site is`.
+
+⚠⚠⚠ **t1496-t1504 SPENT FOUR TICKS BUILDING A PROXY TO WORK AROUND THIS COHORT.** The refusal that
+arc kept hitting — *"the one-origin render is ALSO a shell"* — was this same wall from the other
+side. The cause was one flag in the oracle's own command line. On the 200-site corpus the named
+cohorts are **3 `oracle-module-shell` + 3 `shell-only`**, with `probe-blocked` (6) and
+`tree-divergence` (6) plausible neighbours — up to 18 of the 95 unscored rows, on top of the font
+effect on the ~75% of sites carrying an `@font-face`.
+
+### ⚠⚠ IT OVER-CORRECTS, AND THE PRINCIPLED FIX IS THE PROXY
+
+A real browser at `https://site/` has the document SAME-ORIGIN with its own subresources: its
+self-hosted fonts and modules load, and genuinely cross-origin ones are still checked. This flag
+restores the first and **also permits the second** — the reference is now more permissive than a real
+browser rather than equal to it.
+
+⭐ **So the honest reading of the proxy arc is the opposite of a waste:** giving the document its real
+origin is the CORRECT fix and this flag is the cheap one. A large net improvement today; the proxy is
+what would make the oracle exact.
+
+### ⚠⚠ THE INSTRUMENT FINGERPRINT DID NOT MOVE, AND IT SHOULD HAVE
+
+```text
+  allticketscol.com  before  oracle-module-shell-1  d3da5acb
+  allticketscol.com  after   (scored)               d3da5acb
+```
+
+The fingerprint exists so *"a rows file can say that two readings of one site came from two different
+instruments"* — and it is **the probes' own TEXT**. A browser flag is not in it. **The most
+consequential oracle change in this arc is invisible to the mechanism built to catch exactly that**,
+and every rows file banked before today now compares silently against a different reference. Named,
+not fixed: widening it to cover `base_flags` is its own tick, and must not ride in the same commit as
+a change it would then be mis-attributed to.
+
+### ⚠ I6 — PAGE CONTENT IS UNTRUSTED INPUT, ALWAYS
+
+This weakens the same-origin policy in a **throwaway headless process that reads geometry** and is
+never the shipping browser. The alternative is a reference wrong about text metrics on three quarters
+of the corpus and blind to every module-booted SPA. Stated rather than left to be discovered.
+
+### THE RATCHET
+
+**No engine behaviour changed.** Every movement is the REFERENCE becoming more like a real browser;
+our side is byte-identical. 3 improved, 0 worse on the slice.
+
+NEXT, in order:
+1. ⭐⭐⭐ **Re-sweep the corpus.** Every banked rows file predates this and the fingerprint cannot say
+   so. The burndown's rankings, the `ORIGIN/METHOD/ENGINE` histogram and every `font-resolution`
+   conclusion were taken against a reference that could not load modules or self-hosted fonts.
+2. ⭐⭐ **Widen the instrument fingerprint to cover `base_flags`** — its own tick, per above.
+3. ⭐ **Re-read the proxy arc's refusals (t1496-1504) in this light** — `oracle-module-shell` was its
+   blocker and the blocker is gone; what remains of that work is the principled origin fix.
+
+WIKI: docs/wiki/one-flag-in-the-oracles-command-line.md
