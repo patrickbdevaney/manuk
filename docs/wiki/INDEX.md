@@ -3447,6 +3447,16 @@
   - L49 · ⚠ And the cohort is not one thing either
   - L61 · What this decides
 
+## The font file settled it: our number was right and the reference was using a fallback
+`docs/wiki/the-oracle-was-measuring-its-fallback.md`
+
+  - L8 · The file
+  - L23 · And the control names what 129 actually is
+  - L45 · ⚠ The obvious fix was tried and REFUSED
+  - L57 · The second time, and that is what makes it a rule
+  - L77 · ⚠⚠ This is a finding about I5, and it is recorded in the constitution check
+  - L91 · Where it is
+
 ## The proxy is refused because it is also a shell
 `docs/wiki/the-proxy-is-refused-because-it-is-also-a-shell.md`
 
@@ -3626,4 +3636,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3017 sections across 151 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3023 sections across 152 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

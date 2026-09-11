@@ -109496,3 +109496,109 @@ NEXT, in order:
 3. ⭐⭐ **The cluster ranker's site-count-first ordering** (above) — its own tick, its own control.
 
 WIKI: docs/wiki/the-trace-withheld-the-field-that-attributes.md
+
+## Tick 1510 — the font file settled it, and the reference was the one using a fallback (2026-09-11)
+
+TICK SHAPE: instrument
+
+t1509 ended with a quantified divergence and an explicit refusal to claim it. This is the
+arbitration, and CHECK #146 (due here).
+
+### THE FILE
+
+`firasans-book-webfont.ttf` parsed directly — `head.unitsPerEm`, the format-4 `cmap`, `hmtx`
+advances for the 20 characters of `Hamburgefonstiv 0123`:
+
+```text
+  upem = 2048        probe total = 20509 units
+  at 12px   120.17px      (oracle says 111, we say 120)
+  at 14px   140.20px      (oracle says 129, we say 140)
+```
+
+⭐⭐⭐ **The file is OURS, to two decimals, at both sizes.**
+
+### AND THE CONTROL NAMES WHAT 129 ACTUALLY IS
+
+Same headless Chrome 145 the oracle uses, the same `.woff2`, served over **http://** (⚠ a `file://`
+fixture cannot fetch a cross-origin webfont and Chrome silently renders the fallback — t1367-1374):
+
+```text
+  fonts.status "loaded" · fonts.check('14px fira_sansbook') true
+  canvas advance, fira_sansbook                 140     <- the file, and ours
+  canvas advance, a family that does NOT exist  129     <- the oracle's number, exactly
+  layout width of the same string             139.72
+```
+
+⭐⭐⭐ **129 is not a different reading of Fira Sans Book — it is Chrome's measurement for a family it
+does not have.** The oracle rendered the site with a fallback; we had the real face (`WEBFONTS: 2 of
+2 @font-face families delivered a usable face`). Wider text wraps sooner, a wrapped box is taller, a
+taller box breaks its row — **so t1508's reading-order inversion on this site is the ORACLE'S**, and
+so are the 136 `font-resolution` hits and an unknown share of its shape deficit.
+
+### ⚠ THE OBVIOUS FIX WAS TRIED AND REFUSED
+
+The probe captures at `DOMContentLoaded`, `load` and a 3s timeout and never waits for
+`document.fonts.ready` — while our engine has waited for webfonts since t1490. The same asymmetry
+shape as t1504/t1505, and it looked like the answer. **It changed nothing**: with
+`fonts.ready.then(capture)` added the oracle still reports 111/129/185. Not a swap-timing race, cause
+still unestablished, and **reverted rather than kept on principle** — it moves the probe's
+fingerprint (the probes' own text), so every banked row becomes incomparable, for no measured gain.
+
+### THE SECOND TIME, AND THAT IS WHAT MAKES IT A RULE
+
+t1369 arbitrated `anaheim` on `www.a11yproject.com` and reached the same verdict from the other
+direction: **181 is what the file says**, and Chrome reported 181 for 12 elements and 201 for 11 on
+ONE page load. Two independent arbitrations, 141 ticks apart, both ending on the reference. The label
+`font-resolution:` names a subsystem and **a named subsystem is read as an accusation** (t1415,
+t1508), so it now carries the instruction that makes it safe to read — nothing hidden, nothing
+filtered, no score moved:
+
+```text
+  font-resolution: fira_sansbook/14/129 vs fira_sansbook/14/140   (<span>)
+     [UNATTRIBUTED — arbitrate against the FONT FILE, not the oracle: twice (t1369 anaheim,
+      t1510 fira_sansbook) the file agreed with US and the ORACLE was using a fallback]
+```
+
+```
+  M1 drop the UNATTRIBUTED clause           RED
+  M2 the clause points at the ORACLE        RED
+  M3 the cluster loses its prefix           RED   (other consumers match on it)
+  clean                                     GREEN
+```
+
+### CHECK #146 — AND ITS HEADLINE IS ABOUT I5
+
+> *I5. The differential oracle is the discovery engine … maintained as first-class infrastructure.*
+
+⚠⚠⚠ **I5 does not say the oracle is RIGHT. It says the oracle is what the loop discovers work from —
+and a discovery engine that is wrong in a systematic direction discovers work that does not exist.**
+The invariant is not bent; the instrument it mandates has a named defect, and the constitution's own
+words are the authority for fixing it rather than working around it.
+
+Gate-or-scoreboard, honestly: **one capability tick in eight** (t1505, 2 rows UNSCORABLE → SCORED)
+and **four consecutive instrument ticks**. That is the shape audit #91 flagged as drift, and it is
+named rather than excused. The defence is that each corrected the one before it and two changed what
+the loop is allowed to work next — a chain, not a rut — **but the next tick must be capability or
+the counter-reading wins.**
+
+⭐⭐ PART VI correction, new and belonging in prose: ***the arbitration is owed to the ARTEFACT, never
+to the reference.*** A font divergence is settled by the FONT FILE, a layout divergence by the SPEC
+(t1433), a redirect by what the DOCUMENT says (t1504). **The oracle proposes; it does not
+adjudicate.** Three ticks in this window rested on that and it is nowhere in the constitution.
+
+### THE RATCHET
+
+No engine behaviour changed, no site moved, and **the probe is byte-identical to t1509's**, so every
+banked row stays comparable. The `fonts.ready` experiment was reverted whole.
+
+NEXT, in order:
+1. ⭐⭐⭐ **CAPABILITY, per check #146's steer — four instrument ticks is the limit.** The work order
+   names the target: `shape` (54 addressable) leads.
+2. ⭐⭐⭐ **Establish why the oracle lacks a webfont the engine HAS.** `fonts.ready` is refuted. Next
+   hypotheses, cheap and orderable: add `document.fonts.size`/`status` to the probe's payload so the
+   instrument can say whether its own Chrome fetched the face; then compare the live-URL path against
+   a local control. **This is I5's instrument and the constitution says maintain it.**
+3. ⚠ **Every `font-resolution` conclusion in the burndown and CLUSTERS.md predates this arbitration**
+   and at least two of them (a11yproject, jatekshop) are now known to be the oracle's.
+
+WIKI: docs/wiki/the-oracle-was-measuring-its-fallback.md

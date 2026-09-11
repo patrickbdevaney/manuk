@@ -12611,3 +12611,110 @@ differently; the commit record was wrong for one tick. **Never edit the tree whi
    can be made incremental. That is a layout-performance subsystem, not a CSS one.
 3. ⚠ **Nine crates outside the wall, fifth ranking, unchanged** — and this arc added six gates the wall
    does not run.
+
+## Check #146 — tick 1510
+
+**Horizon: H0.** Gate: ~83% WPT across categories, oracle-verified across the corpora, a
+daily-drivable shell, semantic-API coverage of every rendered construct — with PART VII's v1 scope
+and the Phase-0 fidelity certificate as the operative near-term form of it.
+
+### ⭐⭐⭐ THE FINDING IS CONSTITUTIONAL, AND IT IS ABOUT I5
+
+> **I5. The differential oracle is the discovery engine.** *"Same page rendered in Manuk and headless
+> Chromium, diffed, divergences clustered by root cause — this is the primary mechanism for finding
+> what to build next, at every horizon. It is maintained as first-class infrastructure."*
+
+t1510 established, with a control rather than an argument, that **the oracle is measurably WORSE than
+the thing under test on an axis that decides text metrics.** On `www.jatekshop.eu` the oracle reports
+`{fira_sansbook/14/129}` against our `{fira_sansbook/14/140}`, 136 times, at a constant ratio across
+three sizes. Arbitrated against the font file — `firasans-book-webfont.ttf`, upem 2048, the probe's
+20 glyphs summing to 20509 units — the file gives **120.17px at 12 and 140.20px at 14: ours, to two
+decimals.** A control in headless Chrome 145 with the face actually loaded measures **140**; the same
+Chrome measures **129 for a family it does not have.** The oracle was using its fallback, and our
+engine had the real face (`WEBFONTS: 2 of 2 @font-face families delivered a usable face`).
+
+**This is the second time.** t1369 arbitrated `anaheim` on `www.a11yproject.com` and reached the same
+verdict from the other direction — *our* 181 was the file, Chrome reported 181 for 12 elements and
+201 for 11 **on one page load**.
+
+⚠⚠⚠ **I5 does not say the oracle is right. It says the oracle is the discovery engine — and a
+discovery engine that is wrong in a systematic direction discovers work that does not exist.** Two
+independent arbitrations, 141 ticks apart, both ending on the reference, is no longer an anecdote.
+The invariant is not bent; the *instrument the invariant mandates* has a named defect, and the
+constitution's own words — *"maintained as first-class infrastructure"* — are the authority for
+fixing it rather than working around it.
+
+⚠ **Deferring the probe to `document.fonts.ready` was tried this tick and changed nothing**, so it is
+not a swap-timing race and the cause is still unestablished. The cluster now carries its arbitration
+instruction so a third tick cannot spend itself on the same false lead, which is the containment, not
+the fix.
+
+### GATE OR SCOREBOARD? — honestly: ONE gate tick in eight, and four instrument ticks in a row
+
+```text
+  t1502-1504  instrument   the proxy arc, and a redirect the instrument could not follow
+  t1505       CAPABILITY   location.href = "/x" — 2 corpus rows UNSCORABLE -> SCORED
+  t1506       instrument   the work order was never ranked
+  t1507       instrument   …and the ranking's definition of "reachable" was wrong
+  t1508       instrument   reading-order is ours; the trace named the wrong subsystem
+  t1509       instrument   the trace withheld the field that attributes the cause
+```
+
+**t1505 moved an exit-gate condition** — scorability is a term of the certificate, and two sites
+crossed it. Nothing else in the window moved a site.
+
+⚠⚠ **Four consecutive instrument ticks is the same shape audit #91 flagged as possible drift**
+(six ticks on font weight), and it must be named rather than excused. The defence, and it is a real
+one: **each corrected the one before it, and two of them changed what the loop is allowed to work
+next.** t1506 found the certificate's work order was unranked; t1507 found the ranking it had just
+landed was wrong in two ways and produced the order the loop now steers by; t1508 and t1509 took that
+order's second term and chased it to a named mechanism. That is a chain, not a rut — but it is four
+ticks of instrument against one of capability, and **the next tick should be capability or the
+counter-reading wins.**
+
+### PART VI CORRECTIONS
+
+* ⭐⭐⭐ **VI.3's north star holds and has been silently superseded in FORM.** *"The loop optimises
+  usage-weighted breadth, not subtest count"* — and the loop's operative metric is now the Phase-0
+  fidelity certificate over the CrUX trend corpus, which is **usage-weighted by construction**. VI.3
+  names only WPT and does not mention the certificate at all. The doctrine is being obeyed; the
+  document describes an older instrument.
+* **NEW, and it belongs in prose:** *the arbitration is owed to the artefact, never to the reference.*
+  A font divergence is settled by the FONT FILE, a layout divergence by the SPEC (t1433), a
+  redirect by what the DOCUMENT says (t1504). The oracle proposes; it does not adjudicate. **Three
+  ticks in this window rested on it and it is nowhere in the constitution.**
+* **NEW:** *a work order that cannot say which term is CAPABLE of closing the gap will rank the wrong
+  one.* t1506-1507. The standing mandate ranked scorability first; measured, it is fourth of six.
+* **VI.3 — the aperture rule is STILL not in prose.** Twelfth check.
+* **I5 — `ORACLE_CRAWLED: 0`. TWENTY-SECOND check.**
+
+### THE INVARIANTS
+
+**I5 — NOT bent, but its instrument is now formally under suspicion.** See above; this is the
+window's headline and it is recorded rather than quietly worked around.
+
+**I3 — held.** t1505's navigation capability landed with its host-side performer and its semantic
+contract in the same tick (`Page::take_script_navigation`, `follow_script_navigation`, and the
+fidelity loop's own follower), not as an engine change awaiting exposure.
+
+**I2 — untouched this window.** No vendored dependency was patched; the font arbitration read a
+downloaded file rather than changing `fontdb`/`swash`.
+
+**I1, I4, I6, I7, I8 — not bent.**
+
+### PART VII / V1-SCOPE
+
+Every tick is browser capability or the instrument that measures one. Nothing touched `scripts/`. One
+harness condition was recorded and not acted on (t1505: a `manuk-shell` false-RED under an external
+32-process workload, while three other gates in the same wall read the same suite green).
+
+### STEER
+
+1. ⭐⭐⭐ **The next tick is CAPABILITY, not instrument.** Four in a row is the limit the previous audit
+   set, and the work order names the target: `shape` (54 addressable) leads, `reading-order` (52) is
+   second and now has a named mechanism on two sites.
+2. ⭐⭐⭐ **Establish why the oracle lacks a webfont the engine has.** `fonts.ready` is refuted. The
+   next hypotheses are orderable and cheap: does the oracle's Chrome fetch the font at all (add
+   `document.fonts.size`/`status` to the probe's payload), and does it differ between the live-URL
+   path and a local control? **This is I5's instrument and the constitution says maintain it.**
+3. ⚠ **Nine crates outside the wall** — sixth ranking, unchanged.

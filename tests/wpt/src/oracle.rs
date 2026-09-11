@@ -196,6 +196,32 @@ fn font_sig(instance: &str) -> Option<&str> {
 ///
 /// A signature that does not carry the two trailing numeric components is unusable and compares as
 /// itself, so a malformed one can never silently match a well-formed one.
+/// **The clause that stops this cluster from reading as a verdict about the ENGINE.**
+///
+/// ⚠⚠⚠ **TWICE NOW THE ARBITRATION HAS LANDED ON THE ORACLE, AND BOTH TIMES THE OBVIOUS READING WAS
+/// WRONG.** The label `font-resolution:` names a subsystem, and a reader takes a named subsystem as
+/// an accusation (t1415, t1508):
+///
+/// * **t1369, `www.a11yproject.com`.** `{anaheim/20/201}` in Chrome against `{anaheim/20/181}` here.
+///   **181 is what `Anaheim-Regular.woff2` says** — upem 2048, the probe's 20 glyphs summing to
+///   18540 units — and the same page load reported 181 for 12 elements and 201 for 11: the reference
+///   disagreed with ITSELF.
+/// * **t1510, `www.jatekshop.eu`.** `{fira_sansbook/14/129}` in Chrome against `{fira_sansbook/14/140}`
+///   here, 136 hits, a constant ratio across three sizes. `firasans-book-webfont.ttf` (upem 2048,
+///   20509 units for the probe) gives **120.17px at 12 and 140.20px at 14 — ours, to two decimals.**
+///   And a control in headless Chrome 145 with the face actually loaded measures **140**, while the
+///   same Chrome measures **129 for a family it does not have**. The oracle's number is its FALLBACK.
+///
+/// ⚠ Deferring the probe to `document.fonts.ready` was tried at t1510 and **changed nothing** — so it
+/// is not a swap-timing race, and the cause of the oracle's missing face is still unestablished.
+///
+/// So the cluster is kept, ranked and counted exactly as before — nothing is hidden and no score
+/// moves — and it now carries the one instruction that makes it safe to read. **The arbitration is
+/// owed to the FONT FILE, never to the oracle** (t1367-1374).
+const FONT_RESOLUTION_UNATTRIBUTED: &str =
+    "   [UNATTRIBUTED — arbitrate against the FONT FILE, not the oracle: twice (t1369 anaheim, \
+     t1510 fira_sansbook) the file agreed with US and the ORACLE was using a fallback]";
+
 fn measured_face(sig: &str) -> (&str, &str) {
     let mut it = sig.rsplitn(3, '/');
     match (it.next(), it.next()) {
@@ -586,7 +612,10 @@ pub fn signature_of(d: &Divergence) -> String {
             // the top layout defect on the anchor it tells the loop to work next.
             if let (Some(cf), Some(mf)) = (font_sig(&d.chrome), font_sig(&d.manuk)) {
                 if !same_measured_face(cf, mf) {
-                    return format!("font-resolution: {cf} vs {mf}   (<{}>)", d.tag);
+                    return format!(
+                        "font-resolution: {cf} vs {mf}   (<{}>){}",
+                        d.tag, FONT_RESOLUTION_UNATTRIBUTED
+                    );
                 }
             }
             let [_, _, dw, dh] = d.delta;
@@ -1794,11 +1823,31 @@ mod tests {
         let mut differ = geom_div("a11y.example", "a", [0, 0, 17, 0]);
         differ.chrome = "[264 4573 145×30]  {anaheim/20/201}".into();
         differ.manuk = "[251 4485 126×30]  {anaheim/20/181}".into();
-        assert_eq!(
-            signature_of(&differ),
-            "font-resolution: anaheim/20/201 vs anaheim/20/181   (<a>)",
+        let sig = signature_of(&differ);
+        assert!(
+            sig.starts_with("font-resolution: anaheim/20/201 vs anaheim/20/181   (<a>)"),
             "two faces: the width follows the TYPEFACE, and calling it a sizing bug sends the loop \
-             to fix a width computation that is already right"
+             to fix a width computation that is already right — got {sig}"
+        );
+
+        // ── ⚠⚠⚠ AND THE LABEL MUST NOT READ AS A VERDICT ABOUT THE ENGINE.
+        //
+        // `font-resolution:` names a subsystem, and a named subsystem is taken as an accusation
+        // (t1415, t1508). **Twice the arbitration has landed on the ORACLE and both times the
+        // obvious reading was wrong** — t1369's `anaheim` (181 is the file; Chrome reported both 181
+        // and 201 on ONE page load) and t1510's `fira_sansbook` (the file gives 120.17px at 12 and
+        // 140.20px at 14, which is OURS to two decimals, while a control in headless Chrome 145 with
+        // the face loaded measures 140 and the SAME Chrome measures 129 for a family it does not
+        // have). This row is what stops a third tick spending itself on the same false lead.
+        assert!(
+            sig.contains("UNATTRIBUTED") && sig.contains("arbitrate against the FONT FILE"),
+            "the cluster must carry its arbitration instruction — the two prior investigations both \
+             ended on the oracle, and the label alone points at us: {sig}"
+        );
+        assert!(
+            !sig.contains("arbitrate against the oracle"),
+            "and it must not send the next tick to the reference, which is the thing under \
+             suspicion: {sig}"
         );
 
         // ⭐⭐ **THE FAMILY NAME IS A LABEL AND ONLY THE ADVANCE IS A MEASUREMENT** — the row t1369
