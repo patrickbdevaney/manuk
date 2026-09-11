@@ -1095,14 +1095,29 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
             // The host performs the navigation, because `Page` deliberately only reports it — and in
             // this program the host is this loop. Bounded and self-refusing for the same reason the
             // shell's follower is: a declarative refresh is the easiest infinite loop on the web.
+            // ⚠⚠ **AND THE SAME ASYMMETRY ARRIVED AGAIN ONE TICK AFTER IT WAS WRITTEN DOWN.**
+            // t1504 taught `capture_seen_all_paths` to follow a document whose only content is a
+            // SCRIPT navigation, and left this loop following only the declarative one — so the
+            // oracle scored `house.udn.com/house/index` (441 elements) while our side scored the
+            // 195-byte stub (1), and the row moved from `shell-only` to a tag that blames the
+            // engine. The diff was not measuring the engine; it was measuring two documents.
+            //
+            // Our side follows BOTH because the engine can now follow both: `location.href = "/x"`
+            // became a real navigation in the same tick (`Page::take_script_navigation`). Before
+            // that it could not have, which is the honest reason this was one-sided and not an
+            // oversight — the capability did not exist to be symmetric with.
             let mut at = final_url.clone();
             for _ in 0..3 {
-                let Some((secs, next)) = p.meta_refresh() else {
+                let next = if let Some((secs, next)) = p.meta_refresh() {
+                    if secs >= 1.0 || next == at {
+                        break;
+                    }
+                    next
+                } else if let Some(next) = p.take_script_navigation() {
+                    next
+                } else {
                     break;
                 };
-                if secs >= 1.0 || next == at {
-                    break;
-                }
                 let Ok((h2, u2)) = manuk_page::fetch_html(&next).await else {
                     break;
                 };

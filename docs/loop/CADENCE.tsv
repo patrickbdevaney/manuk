@@ -1175,3 +1175,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1500	ff1de333	1789116581	2026-09-11T04:49:41-04:00	1391	refusal	465	7	243	43	581	81	3896	6960	0	642	0	the container-query skip was REFUSED (2026-09-11)
 1501	902abd25	1789117350	2026-09-11T05:02:30-04:00	769	instrument	465	6	176	42	581	81	3896	6960	0	642	0	the proxy is refused because it is also a shell (2026-09-11)
 1503	da1a957e	1789121138	2026-09-11T06:05:38-04:00	3788	instrument	465	5	569	16	581	81	3896	6960	0	642	0	the proxy rewrites a HOST, and a site is a set of hosts (2026-09-11)
+1505	83a7fa0f	1789129947	2026-09-11T08:32:27-04:00	8809	capability	465	15	892	66	582	81	3896	6960	0	642	0	`location.href = "/x"` did nothing, and did not throw (2026-09-11)

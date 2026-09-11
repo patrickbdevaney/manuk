@@ -12068,3 +12068,39 @@ against a 237–242 clean-tree band, HANG/CRASH 0. Gated by
 `g_a_graded_font_face_set_matches_by_weight`. ⚠ The SYSTEM-font path is deliberately still coarse —
 handing `fontdb::Query` the real weight regresses `variations` 247 → 148 for reasons not yet
 established, and that is stated rather than shipped.
+
+## The redirect idiom on half the web — `location.href = "/x"` — did nothing, and did not throw
+
+**The class:** every legacy portal that lands you on `/` and sends you to `/home`, every locale
+splash, every login gate that bounces an unauthenticated visitor, every URL-shortener landing page,
+every CMS whose front door is `<script>window.location.href="/app"</script>`. It is the imperative
+twin of `<meta http-equiv="refresh">` (t1486) and it is far more common. **None of its four spellings
+worked here, and not one of them threw** — the page sat on the document it was trying to leave,
+looking exactly like a page that had decided to stay.
+
+```text
+  location.href = "/x"      wrote a DATA PROPERTY on a plain object. Nothing happened.
+  location.assign("/x")     reached `__applyUrl`, the SINGLE-PAGE-APP path, which rewrites the URL
+  location.replace("/x")    object and never touches the network. Nothing happened.
+  window.location = "/x"    REPLACED THE LOCATION OBJECT WITH A STRING — `typeof location` became
+                            `"string"`, and every later `location.pathname` read `undefined`.
+```
+
+**⚠⚠⚠ `__applyUrl` CHANGES THE URL; `__navigateTo` GOES THERE.** `history.pushState`,
+`replaceState` and the host's `popstate` replay share the first and must never reach the second: a
+fix that reported a navigation from the shared function turns every SPA route change into a full
+network re-fetch — a worse regression than the bug, and invisible to any test that only checks that
+redirects now work. That control arm is half the gate.
+
+**⚠ A fragment is not a navigation.** `location.href = "#top"` is same-document in every browser;
+following it sends the host back to the network for the document it is already displaying, and on a
+page that does it in a scroll handler, forever.
+
+**Status:** landed t1505. Same-binary control on the two corpus rows that are nothing but this idiom:
+`house.udn.com` and `venus.zeronline.cloud` went **UNMEASURABLE → SCORED** (coverage 0.2% → 81.7% and
+3.8% → 100.0%; `sites 2 · scored 0` → `scored 2`) — the mandate's binding constraint, the scorability
+ceiling, not a decimal on an already-scorable site. Ratchet checked on a 34-site slice of the CrUX
+trend corpus: **zero sites lost a score or lost shape** (the one `css-starved` row re-ran at its
+banked 73.3% — a CDN timeout under `--jobs 2`, not a regression). Gated by
+`g_a_script_navigation_is_a_navigation` under six mutations; a seventh came back GREEN and deleted an
+inert guard.

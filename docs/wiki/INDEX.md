@@ -251,6 +251,16 @@
   - L50 · What the next tick must establish first
   - L58 · Status
 
+## `location.href = "/x"` did nothing — four spellings, one missing capability, no error
+`docs/wiki/a-script-navigation-is-a-navigation.md`
+
+  - L7 · What the probe found, before any patch
+  - L31 · The fix, and the line it must not cross
+  - L55 · ⭐⭐⭐ It closed an asymmetry that ONE TICK EARLIER had been written down as a rule
+  - L73 · The measurement
+  - L105 · Where it is
+  - L128 · ⚠ M6 — the refusal had two clauses and one of them could never be checked
+
 ## The start edge of the scrolling area — two bugs a fixture with a zero could not see
 `docs/wiki/a-sentinel-that-is-also-a-legal-value.md`
 
@@ -3580,4 +3590,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2991 sections across 146 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2997 sections across 147 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

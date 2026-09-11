@@ -1092,6 +1092,21 @@ pub fn take_fetches(
     Vec::new()
 }
 
+/// **The absolute URL a script navigated to**, taken and cleared, or `None`.
+///
+/// `location = u`, `location.href = u`, `location.assign(u)`, `location.replace(u)` and
+/// `document.location = u`. NOT `history.pushState`/`replaceState`, which change the URL without
+/// going anywhere — see `__applyUrl` vs `__navigateTo` in the BOM shim.
+#[cfg(feature = "_sm")]
+pub fn take_script_navigation(ctx: &PageContext) -> Option<String> {
+    with_runtime(|rt| Ok::<_, JsError>(ctx.take_pending_nav(rt))).unwrap_or_default()
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn take_script_navigation(_ctx: &PageContext) -> Option<String> {
+    None
+}
+
 /// Node ids of forms a script asked to submit. `direct` = `form.submit()` (no event, the script has
 /// decided); `requested` = `form.requestSubmit()` (fire `submit` first, the page may cancel).
 #[cfg(feature = "_sm")]

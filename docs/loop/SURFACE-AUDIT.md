@@ -8432,3 +8432,114 @@ has been steering by it for ten ticks.
    N?"*, and unlike the site counter it needs no corpus.
 3. ⚠ The nine missing crates — fifth ranking, unchanged, and still the only item that *adds* coverage
    rather than costing it.
+
+## Audit #92 — tick 1505 (2026-09-11)
+
+**Sources, fetched today:**
+
+* <https://web.dev/blog/interop-2026> · <https://github.com/web-platform-tests/interop/blob/main/2026/README.md> — the
+  Interop 2026 focus areas, announced 2026-02-12.
+* <https://ladybird.org/newsletter/2026-08-31/> — fetched directly, not from a summary, because the
+  number below is a correction of something this loop banked.
+* <https://ladybird.org/news/> — the 2026 newsletter run.
+
+### ⭐⭐⭐ PHANTOM #7, AND THIS TICK WALKED INTO IT
+
+The map carried **three** rows about navigating a page from script and **not the one the web uses**:
+
+```text
+  row  55  window.open + postMessage (popup auth)                     gated
+  row 326  `document.location` / `document.URL` / `documentURI`       gated   <- the READ
+  ---      Navigation API (the 2022 spelling)                         gated   <- the MODERN write
+  ---      `location.href = "/x"`                                     NOT ON THE MAP AT ALL
+```
+
+Row 326's own receipt is the tell: *"`window.location` had been a full shim for hundreds of ticks;
+`document.location`, the SAME object per spec, was never aliased."* Audit #31 found the missing
+**alias** and concluded the object was handled. It was — **for reading**. Nothing on the map ever
+claimed the ordinary WRITE worked, and nothing ever asked. t1505 measured it: all four spellings did
+nothing and none of them threw.
+
+⭐⭐⭐ **The map's failure mode here is new and worth naming: it listed the EXOTIC and the MODERN
+spelling of a capability and omitted the ORDINARY one.** A row for the Navigation API and a row for
+`document.location.search` both read as coverage of "script navigation" to anyone scanning the map —
+which is what a map is for. *A capability is not on the map until its most common spelling is.*
+
+### ⭐⭐⭐ A CORRECTION — AND IT IS OF SOMETHING THIS LOOP BANKED AS OUTSIDE PROOF
+
+t1403 banked: *"Ladybird WPT +3,366→+108/month at 2.08M = outside proof of the per-assert
+asymptote."* The August newsletter, quoted verbatim from the primary source:
+
+> *"Our WPT score went from 2,079,020 to 2,088,677 this month, a gain of 9,657 subtests. For scale,
+> July's gain was 108."*
+
+**+108 was one month, and the next was +9,657 — ninety times larger, at the same absolute score.**
+The July figure was a *focus shift* (the project moved onto real websites, Gmail performance, site
+compat, painting architecture, HTTP caching and media streaming), not a ceiling. ⚠ **A single
+month's rate from another project was read as a structural law about ours.** t1410's rule — *one run
+refuses nothing, repeat before believing a number* — was never applied to it, because it arrived as
+a citation rather than as a measurement. **An outside number needs a band too.**
+
+The *direction* of t1403's conclusion survives and is in fact strengthened: the months Ladybird spent
+on real sites are the months its WPT rate collapsed, which is what this loop's own pivot predicts.
+But it is no longer evidence of an asymptote, and no future steer may cite it as one.
+
+### INTEROP 2026 — RECONCILED, AND THE MAP IS CLEAN
+
+All **seventeen** focus areas — `attr()`, `contrast-color()`, container style queries, custom
+highlights, dialogs/popovers, fetch, IndexedDB, JSPI, media pseudo-classes, the **Navigation API**,
+scoped custom element registries, scroll-driven animations, scroll snap, `shape()`, View Transitions,
+WebRTC, WebTransport — are already on `CONSTELLATION.tsv`, plus the accessibility-tree consistency
+investigation that carries over from 2025. **Nothing the four vendors agreed matters most is missing
+from our map.** Six are `missing`/`partial` and honestly labelled; none is a phantom.
+
+That is the first audit in this arc where the *external standards* axis found nothing. The finding
+came from the other axis — the engine that is actually shipping.
+
+### ADDED (map 602 → 606 rows)
+
+```text
+  app     script-initiated NAVIGATION (location.href/assign/replace, window.location=)   gated   <- t1505
+  render  incremental STYLE invalidation (delta selector matching)                       unknown
+  render  LAYOUT RESULT CACHING keyed on the input constraints                           unknown
+  cross   declarative PER-SITE compatibility rules (UA override and friends)             unknown
+```
+
+The three `unknown`s all come from one paragraph of Ladybird's August newsletter, and they are not
+trivia — **they are the two mechanisms the t1501 constitution check ranked ⭐⭐ with no capability row
+behind them.** Its steer read *"the remaining question is whether [trivago's container-query relayout]
+can be made incremental — a layout-performance subsystem"*; an independent engine on the same stack
+class shipped both halves of that this month (delta selector matching, and a layout cache keyed on
+input constraints), plus animations off the main thread. **A ranked steer with no row on the map is
+a steer nothing will ever measure.**
+
+The per-site compat-rules row is a different point: row 109 *"real-world QUIRKS"* has been `partial`
+for hundreds of ticks with no gate and no mechanism — *"the work that has historically KILLED
+independent engines"*, judged rather than measured. Ladybird's JSON rule system (first use: UA
+spoofing for NYT and CNN) is a concrete mechanism for it, and it is a different capability from
+quirks-MODE parsing (row 110, gated).
+
+### ⚠ CARRIED
+
+* **Nine crates outside the wall's crate loop — SIXTH consecutive audit**, ranked top-three every
+  time. Unchanged.
+* **Gate files vs gates executed by name.** This window added one more (`engine/page/tests`, which
+  the wall does not run). Unchanged and still getting worse because the loop is working.
+* **The wall is 2002s** against a 300s target — the self-audit's only failing item, and the number is
+  not even fair: this tick's wall shared a 32-core box with an external 32-process workload at load
+  14. Observer-owned; recorded, not acted on.
+* `ORACLE_CRAWLED: 0` — **twenty-first**.
+
+### RANKED, from this audit only
+
+1. ⭐⭐⭐ **The three new `unknown` rows are the first capability rows the loop has that point at
+   LAYOUT PERFORMANCE as a capability rather than as a budget.** t1408 measured one task forcing
+   1054 full re-layouts; t1500 proved the container-query skip is not the answer; the constitution
+   check asked for incremental and nothing on the map could hold the question. Probe one — cheapest
+   first: *does a style change on one node currently re-run selector matching for the document?*
+2. ⭐⭐ **Ask the ORDINARY-SPELLING question of the rest of the map.** Phantom #7 was not a missing
+   capability, it was a capability filed under its exotic name. `document.all`, `::-webkit-*`,
+   `unicode-bidi` and the Navigation API are all rows that describe an unusual spelling of something
+   common — for each, is the COMMON spelling separately gated, or assumed?
+3. ⚠ **An outside number needs a band.** t1403's citation steered from a single month. Any future
+   steer quoting another project's rate must quote at least two consecutive periods.

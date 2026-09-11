@@ -456,6 +456,15 @@ pub fn resolve_url(base: &str, href: &str) -> String {
         .unwrap_or_else(|| href.to_string())
 }
 
+/// A URL without its `#fragment`. Two URLs that differ only here are the SAME DOCUMENT, which is
+/// why a scripted navigation to one of them is not a navigation at all.
+fn strip_fragment(u: &str) -> &str {
+    match u.find('#') {
+        Some(i) => &u[..i],
+        None => u,
+    }
+}
+
 /// Fetch + decode every `<img src>` in the tree into a node→bitmap map. Failures are
 /// skipped (the element keeps its box, empty of pixels). Natural sizing is applied by the
 /// caller from each [`DecodedImage`]'s dimensions.
@@ -4693,6 +4702,51 @@ impl Page {
             Some(u) => Some((secs, resolve_url(&self.final_url, &u))),
             None => Some((secs, self.final_url.clone())),
         }
+    }
+
+    /// **The navigation this document's SCRIPTS asked for**, absolute, taken and cleared.
+    ///
+    /// The imperative twin of [`Self::meta_refresh`], and it carries the same contract: ⚠ **THE HOST
+    /// PERFORMS IT, NOT THE PAGE.** A `Page` does not own the tab it is displayed in.
+    ///
+    /// ⚠⚠⚠ **`location.href = "/x"` IS THE MOST COMMON REDIRECT IDIOM ON THE WEB AND IT DID
+    /// NOTHING HERE.** The BOM shim built `location` as a plain object, so the assignment wrote a
+    /// property and returned; `location.assign`/`replace` reached `__applyUrl`, which rewrites the
+    /// URL for a single-page app and never touches the network; and `window.location = "/x"`
+    /// replaced the Location object **with a string**, after which every `location.pathname` on the
+    /// page read `undefined`. Four spellings, one missing capability, and not one of them threw —
+    /// the page simply sat on the document it was trying to leave.
+    ///
+    /// ⚠ **NOT `history.pushState`/`replaceState`.** Those change the URL without going anywhere,
+    /// and they share `__applyUrl` with this path precisely so that the two cannot be confused.
+    #[cfg(feature = "spidermonkey")]
+    pub fn take_script_navigation(&self) -> Option<String> {
+        let ctx = self.js.as_ref()?;
+        let next = manuk_js::take_script_navigation(ctx)?;
+        // ⚠ A script that navigates to the document it is already in is the easiest infinite loop on
+        // the web, and a FRAGMENT is the same refusal one step subtler: `location.href = "#top"` is a
+        // SAME-DOCUMENT navigation in every browser, and reporting it would send the host back to the
+        // network for a document it is already displaying — on a page that does it in a scroll
+        // handler, forever. Both refusals live here rather than in each host, where a new host would
+        // have to rediscover them.
+        // ⚠ ONE clause, not two, and the mutation pass is why. An `next == self.final_url` test
+        // sat in front of this one and **could not be falsified**: equal strings have equal
+        // fragment-stripped prefixes, so the second comparison already answered every case the
+        // first one did. (t1403's rule, and the same shape as t1504's `==`-refusal: a clause whose
+        // precondition is implied by the clause beside it is not defence in depth, it is a claim
+        // nobody can check.) The fragment comparison is the WHOLE refusal: a script navigating to
+        // this document — with or without a `#fragment` — is the easiest infinite loop on the web,
+        // and on a page that assigns `location.href = "#top"` in a scroll handler, forever.
+        if strip_fragment(&next) == strip_fragment(&self.final_url) {
+            return None;
+        }
+        Some(next)
+    }
+
+    /// JS-less build: no script ran, so no script navigated.
+    #[cfg(not(feature = "spidermonkey"))]
+    pub fn take_script_navigation(&self) -> Option<String> {
+        None
     }
 
     /// **Is there any stylesheet source at all?** — an inline `<style>` or a `<link rel=stylesheet>`.

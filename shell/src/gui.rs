@@ -291,7 +291,7 @@ struct App {
     /// [`Self::goto`] — i.e. by anything the USER initiated — and bounded, because a declarative
     /// refresh is the easiest infinite loop on the web: A refreshes to B, B refreshes to A, and no
     /// script ran and nothing threw.
-    meta_refresh_hops: u8,
+    redirect_hops: u8,
     bookmarks: Bookmarks,
     /// Persistent, frecency-ranked visited-site history — the source of omnibox autocomplete. Unlike
     /// `history` (this session's back/forward stack), it survives restart and ranks by visit count.
@@ -490,7 +490,7 @@ impl App {
             tab_win: std::collections::HashMap::new(),
             tab_opener: std::collections::HashMap::new(),
             bfcache: Vec::new(),
-            meta_refresh_hops: 0,
+            redirect_hops: 0,
             proxy,
             nav_gen: 0,
             media: crate::media::MediaSet::new(),
@@ -1304,7 +1304,7 @@ impl App {
         self.handle_history_ops();
         // ...and may have posted to their opener (the OAuth popup pattern) — route it.
         self.pump_messages();
-        if self.follow_meta_refresh() {
+        if self.follow_meta_refresh() || self.follow_script_navigation() {
             return;
         }
         self.rerender();
@@ -1347,14 +1347,51 @@ impl App {
             tracing::info!(%url, "meta refresh targets THIS document at zero delay — refusing the spin");
             return false;
         }
-        if self.meta_refresh_hops >= 5 {
+        if self.redirect_hops >= 5 {
             tracing::warn!(%url, "meta refresh chain exceeded 5 hops — stopping, this is a loop");
             return false;
         }
-        self.meta_refresh_hops += 1;
-        tracing::info!(%url, hop = self.meta_refresh_hops, "following <meta http-equiv=refresh>");
+        self.redirect_hops += 1;
+        tracing::info!(%url, hop = self.redirect_hops, "following <meta http-equiv=refresh>");
         // No history entry: a redirect stub is not somewhere the user asked to be, and leaving it in
         // the back stack makes Back bounce off it straight back to the destination.
+        self.goto_no_history(&url);
+        true
+    }
+
+    /// **Perform the navigation the document's SCRIPTS asked for** — `location.href = "/x"` and its
+    /// three siblings. Returns `true` when a navigation was started.
+    ///
+    /// The imperative twin of [`Self::follow_meta_refresh`], and it shares that method's hop counter
+    /// on purpose: a chain that alternates a `<meta refresh>` with a scripted redirect is ONE
+    /// redirect chain, and two counters would each see half of it and let it run twice as long.
+    ///
+    /// ⚠⚠⚠ **THIS IS THE MOST COMMON REDIRECT IDIOM ON THE WEB AND THE SHELL COULD NOT FOLLOW IT.**
+    /// `Page::take_script_navigation` documents the four spellings and how each one silently did
+    /// nothing. `house.udn.com` in the 200-site CrUX trend corpus is 195 bytes of exactly this and
+    /// nothing else: the user typed the address and got a blank page.
+    ///
+    /// ⚠ No delay gate, and the asymmetry with `follow_meta_refresh` is deliberate: a `<meta
+    /// refresh>` carries a time the author chose and a page asking to be READ first must be, while
+    /// an imperative assignment has no such argument — it is immediate in every browser.
+    fn follow_script_navigation(&mut self) -> bool {
+        let Some(url) = self.page.as_ref().and_then(|p| p.take_script_navigation()) else {
+            return false;
+        };
+        if url == self.url {
+            tracing::info!(%url, "script navigated to THIS document — refusing the spin");
+            return false;
+        }
+        if self.redirect_hops >= 5 {
+            tracing::warn!(%url, "redirect chain exceeded 5 hops — stopping, this is a loop");
+            return false;
+        }
+        self.redirect_hops += 1;
+        tracing::info!(%url, hop = self.redirect_hops, "following a script navigation");
+        // `location.replace` and `location.href =` differ in whether the CURRENT entry survives, and
+        // this does not yet distinguish them. No history entry is the conservative half: a redirect
+        // stub left in the back stack makes Back bounce off it straight back to the destination,
+        // which is the worse of the two errors. Named residue, not an oversight.
         self.goto_no_history(&url);
         true
     }
@@ -1429,7 +1466,7 @@ impl App {
         // Before the paint and before the deferred scripts: a redirect stub has nothing worth
         // showing and nothing worth running, and painting it is the flash of an empty page the user
         // never asked to see.
-        if self.follow_meta_refresh() {
+        if self.follow_meta_refresh() || self.follow_script_navigation() {
             return;
         }
         self.rerender();
@@ -3396,7 +3433,7 @@ impl App {
         // A user-initiated navigation starts a fresh refresh budget. `goto_no_history` deliberately
         // does NOT reset it: that is the entry the refresh path itself uses, and a counter a loop
         // can reset is not a bound.
-        self.meta_refresh_hops = 0;
+        self.redirect_hops = 0;
         if self.bfcache.iter().any(|(u, _)| u == url) && self.restore_from_bfcache(url) {
             tracing::info!(%url, "prerender: instant click served from prewarmed bfcache");
             self.history.push(url.to_string());

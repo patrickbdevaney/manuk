@@ -15644,6 +15644,34 @@ impl PageContext {
             .collect()
     }
 
+    /// **The navigation a script asked for**, absolute, taken and cleared — `None` when it asked for
+    /// none.
+    ///
+    /// Read by the same string-eval idiom as [`Self::take_form_queue`], for the same reason: the
+    /// value is produced by the BOM shim in JS and there is no native object to reach into.
+    pub fn take_pending_nav(&self, runtime: &mut Runtime) -> Option<String> {
+        let raw_cx = unsafe { runtime.cx().raw_cx() };
+        rooted!(&in(runtime.cx()) let global = self.global.get());
+        let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
+        let js = "(function(){var u=globalThis.__pendingNav||'';globalThis.__pendingNav='';\
+                  return String(u);})()";
+        let v = (unsafe { eval_in_current_global(raw_cx, js) })?;
+        if !v.is_string() {
+            return None;
+        }
+        let mut c = unsafe { wrap_cx(raw_cx) };
+        rooted!(&in(runtime.cx()) let val = v);
+        let s = match unsafe { String::safe_from_jsval(&mut c, val.handle(), ()) } {
+            Ok(ConversionResult::Success(s)) => s,
+            _ => return None,
+        };
+        if s.is_empty() {
+            None
+        } else {
+            Some(s)
+        }
+    }
+
     /// Drain this document's queued `history` ops as `(kind, state_json, url)` (see
     /// [`take_pending_history`]). Host-side thread-local, so no realm entry is needed.
     pub fn take_history_ops(&self) -> Vec<(u8, String, String)> {
@@ -22774,29 +22802,64 @@ const WINDOW_PRELUDE: &str = r#"
             if (!m) { m = [href, 'https:', '', href.charAt(0) === '/' ? href : '/' + href, '', '']; }
             var protocol = m[1] || 'https:', host = m[2] || '', path = m[3] || '/';
             var hostParts = host.split(':');
-            return {
-                href: href, protocol: protocol, host: host,
+            var o = {
+                protocol: protocol, host: host,
                 hostname: hostParts[0] || '', port: hostParts[1] || '',
                 pathname: path || '/', search: m[4] || '', hash: m[5] || '',
                 origin: protocol + '//' + host,
-                assign: function (u) { g.__applyUrl(String(u)); },
-                replace: function (u) { g.__applyUrl(String(u)); },
+                assign: function (u) { g.__navigateTo(u); },
+                replace: function (u) { g.__navigateTo(u); },
                 reload: function () {}, toString: function () { return this.href; }
             };
+            // `href` is an ACCESSOR because `location.href = "/x"` is a NAVIGATION, and a data
+            // property cannot be one. It was a data property for the whole life of this shim: the
+            // assignment succeeded, `location.href` read back the string the page had just written,
+            // and NOTHING HAPPENED. See the block comment above `__navigateTo`.
+            Object.defineProperty(o, 'href', {
+                get: function () { return href; },
+                set: function (u) { g.__navigateTo(u); },
+                enumerable: true, configurable: true
+            });
+            return o;
         };
+        // ── `__applyUrl` CHANGES THE URL. `__navigateTo` GOES THERE. They are not the same thing,
+        // and collapsing them is a regression in BOTH directions.
+        //
+        // `__applyUrl` is the SPA path: `history.pushState`, `replaceState`, and the host's own
+        // `popstate` replay (`apply_popstate`) all call it, and none of them may touch the network.
+        // `__navigateTo` is the LEGACY REDIRECT path — `location = u`, `location.href = u`,
+        // `location.assign/replace(u)`, `document.location = u` — every one of which is a real
+        // navigation in every browser, and every one of which did nothing here.
         g.__applyUrl = function (u) {
             u = String(u);
-            var loc = g.location, abs;
+            var loc = g.__loc, abs;
             if (/^[a-zA-Z][a-zA-Z0-9+.\-]*:\/\//.test(u)) abs = u;
             else if (u.charAt(0) === '?') abs = loc.origin + loc.pathname + u;
             else if (u.charAt(0) === '#') abs = loc.origin + loc.pathname + loc.search + u;
             else if (u.charAt(0) === '/') abs = loc.origin + u;
             else abs = loc.origin + loc.pathname.replace(/[^\/]*$/, '') + u;
-            g.location = g.__parseUrl(abs);
+            g.__loc = g.__parseUrl(abs);
         };
-        if (typeof g.location === 'undefined' || typeof g.location.pathname === 'undefined') {
-            g.location = g.__parseUrl("%URL%");
+        g.__navigateTo = function (u) {
+            g.__applyUrl(u);
+            // ⚠ THE HOST PERFORMS IT, NOT THE PAGE — the same contract as `Page::meta_refresh`,
+            // `take_scroll_requests` and `take_form_submits`. A page does not own the tab it is
+            // displayed in. The LAST one wins: a script that assigns twice in one turn is going to
+            // the second place, exactly as a browser would.
+            g.__pendingNav = g.__loc.href;
+        };
+        if (!g.__loc || typeof g.__loc.pathname === 'undefined') {
+            g.__loc = g.__parseUrl("%URL%");
         }
+        // ⚠⚠ `location` IS AN ACCESSOR ON THE GLOBAL, and that is the only way `window.location = u`
+        // can work. As a data property the bare assignment REPLACED THE LOCATION OBJECT WITH A
+        // STRING: measured, `typeof location` became `"string"` and every later `location.pathname`
+        // on the page read `undefined`. The redirect did not happen AND the object was destroyed.
+        Object.defineProperty(g, 'location', {
+            get: function () { return g.__loc; },
+            set: function (v) { g.__navigateTo(String(v)); },
+            configurable: true
+        });
         // document.location IS window.location (the spec aliases them), and document.URL /
         // documentURI are read-only spellings of the live href. `__applyUrl` REPLACES g.location
         // wholesale on every SPA navigation, so these must be ACCESSORS onto g.location — a copied
@@ -22807,7 +22870,7 @@ const WINDOW_PRELUDE: &str = r#"
             try {
                 Object.defineProperty(g.document, 'location', {
                     get: function () { return g.location; },
-                    set: function (v) { g.__applyUrl(String(v)); },
+                    set: function (v) { g.__navigateTo(String(v)); },
                     configurable: true
                 });
                 Object.defineProperty(g.document, 'URL', {

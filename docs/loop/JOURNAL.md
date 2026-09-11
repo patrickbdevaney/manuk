@@ -108917,3 +108917,188 @@ NEXT, in order:
    DataDome's marker sits inside a 981 KB **real page** so it must not be used.
 
 WIKI: docs/wiki/a-document-whose-only-content-is-a-redirect.md
+
+## Tick 1505 — `location.href = "/x"` did nothing, and did not throw (2026-09-11)
+
+TICK SHAPE: capability
+
+t1504's steer said the two rows it had just relabelled were now OURS and unscored: *"we fetched the
+page and FAILED TO PAINT IT"*. Probed one. The engine was not painting the page badly — **it was
+never arriving at the page.**
+
+### THE MOST COMMON REDIRECT IDIOM ON THE WEB WAS NOT IMPLEMENTED
+
+A fixture that assigns through each spelling and encodes the result in an element id:
+
+```text
+                                    BEFORE                                  CHROME
+  location.href = "/dest1"          href reads back "/dest1", UNRESOLVED     navigates
+  location.assign("/dest2")         href reads the absolute url              navigates
+  window.location = "/dest3"        typeof location becomes "string"         navigates
+```
+
+The BOM shim built `window.location` as a **plain object**. `href` was a data property, so the
+assignment wrote it and returned. `assign`/`replace` reached `__applyUrl` — the *single-page app*
+path, which rewrites the URL object and never touches the network. And the bare assignment replaced
+the whole Location object **with a string**, after which every later `location.pathname` on the page
+read `undefined`. Four spellings, one missing capability, **and not one of them threw.**
+
+⚠ **A fourth reading in that probe was an ARTEFACT, and checking it is why it is not a finding.**
+`document.URL` came back `undefined` — but only because the row before it had just destroyed
+`location`. Re-run in isolation it is correct. *A probe that runs its cases in one document shares
+state between them, and the cheapest way to tell a finding from a consequence is to run the
+suspicious one alone.*
+
+### THE FIX, AND THE LINE IT MUST NOT CROSS
+
+`location` is now an **accessor on the global** (the only way `window.location = u` can be anything
+but a clobber), `href` is an **accessor on the Location object**, and all four spellings route
+through a new `__navigateTo`.
+
+> ⚠⚠⚠ **`__applyUrl` CHANGES THE URL. `__navigateTo` GOES THERE. They are not the same thing.**
+
+`history.pushState`, `replaceState` and the host's own `popstate` replay all call `__applyUrl`, and
+**none of them may touch the network**. A fix that reported a navigation from the shared function
+would turn every SPA route change into a full network re-fetch — worse than the bug, and completely
+invisible to a test that only checks that redirects now work.
+
+```
+  M1  href a data property again                RED   hrefSet reports none
+  M2  location a data property on the global    RED   bareSet reports none
+  M3  assign/replace back on __applyUrl         RED   assign + replace report none
+  M4  report the navigation from __applyUrl     RED   pushState/replaceState start navigating
+  M5  drop the fragment refusal                 RED   hashOnly navigates
+  M6  drop the SELF-TARGET refusal              GREEN <- INERT GUARD, deleted
+  M7  report the raw string, unresolved         RED   every row loses its origin
+  clean                                         GREEN
+```
+
+⭐⭐ **M6 — the refusal had two clauses and one of them could never be checked.** It read
+`next == self.final_url || strip_fragment(&next) == strip_fragment(&self.final_url)`, and **equal
+strings have equal fragment-stripped prefixes**: the second comparison had always answered every case
+the first one did. Same shape as t1504's `==`-refusal (`string_literal_at` already demanded a quote,
+so refusing `==`/`=>` by name was unreachable) and t1403's original. **Fourth instance in this arc,
+second in two ticks — *a clause whose precondition is implied by the clause beside it is not defence
+in depth, it is a claim nobody can check.*** Deleted; the coupling is written where the survivor is.
+
+### ⭐⭐⭐ IT CLOSED AN ASYMMETRY THAT ONE TICK EARLIER HAD BEEN WRITTEN DOWN AS A RULE
+
+t1504 taught the fidelity **oracle** to follow a script-redirect stub. The fidelity loop's own side
+follows `<meta refresh>` and nothing else — under a comment that says, verbatim, *"BOTH SIDES MUST
+FOLLOW THE SAME REDIRECT (t1487) … an engine that stops at the stub is being diffed against a
+DIFFERENT DOCUMENT."*
+
+So for one tick the oracle scored `house.udn.com/house/index` (441 elements) and our side scored the
+195-byte stub (1). t1504's journal read that relabelling as *the engine's bug becoming visible*.
+**The attribution was right and the mechanism was wrong**: the instrument was diffing two documents.
+The honest reason it was one-sided is in the fix — our side *could not* have been symmetric, because
+following a script redirect requires the engine to perform one, and it could not.
+
+### THE MEASUREMENT — SAME-BINARY CONTROL, BOTH SIDES BUILT IN THIS TICK
+
+WIP moved to `/tmp`, the tracked files `git checkout --`'d back to HEAD, `manuk-wpt` rebuilt,
+measured, WIP restored, rebuilt. Not a stored row diffed against a fresh number (t1407).
+
+```text
+                          BEFORE (HEAD)                        AFTER (this tick)
+  house.udn.com           UNMEAS  coverage  0.2%  441 missing   ok  coverage  81.7%   82 missing
+  venus.zeronline.cloud   UNMEAS  coverage  3.8%   25 missing   ok  coverage 100.0%    0 missing
+                          sites 2 · scored 0                   sites 2 · scored 2
+```
+
+Two rows that had **never** yielded a scored tree now do, and `venus.zeronline.cloud` renders every
+element the oracle does. That is the board's binding constraint — **P1, the scorability ceiling** —
+and not a decimal on an already-scorable site. Neither reaches `shape >= 0.75`, so the certificate
+does not move, and that is the point: **scorability is upstream of shape, and the exit conjunction
+cannot be worked in the other order** — an unscored site contributes a zero to the shape bar that no
+amount of layout work can lift.
+
+`venus.zeronline.cloud` needed **two** scripted hops (`/` → `/administrator/` → `login.php`), which
+the shared hop bound handles for the same reason the declarative one has one.
+
+### THE RATCHET — 34 SITES, ZERO LOST
+
+This changes a code path every JS-bearing site touches, so the risk is a page that now navigates
+away from a document it used to score. Ran a 34-site scored slice of the CrUX trend corpus against
+the t1496 banked tags:
+
+```text
+  lost a score        1   ru.restaurantguru.com [css-starved-1]  -> re-ran ALONE at 73.3%,
+                          exactly its banked value. A CDN stylesheet timeout under --jobs 2.
+  lost shape >5 pts   0
+  gained >5 pts       5   twitch +19.5  probidas +26.7  friulioggi +22.5  pt88 +8.1  rockstaractu +6.4
+```
+
+⚠ The five gains are **not attributed to this tick** — the baseline is nine ticks old and a different
+binary (t1407's rule). The slice was run to answer one categorical question, and it answered it: no
+site lost a score.
+
+### LANDED
+
+```
+  engine/js/src/dom_bindings.rs   __navigateTo, href + location accessors, take_pending_nav
+  engine/js/src/lib.rs            take_script_navigation
+  engine/page/src/lib.rs          Page::take_script_navigation, strip_fragment
+  shell/src/gui.rs                follow_script_navigation, sharing redirect_hops with the
+                                  declarative follower — an alternating chain is ONE chain
+  tests/wpt/src/main.rs           the fidelity loop's own follower, closing the t1504 asymmetry
+  engine/page/tests/g_a_script_navigation_is_a_navigation.rs
+  docs/wiki/a-script-navigation-is-a-navigation.md
+```
+
+⚠ `location.replace` and `location.href =` differ in whether the current history entry survives, and
+the shell does not yet distinguish them; it takes the conservative half (no entry), because a
+redirect stub left in the back stack makes Back bounce straight to the destination. **Named residue,
+not an oversight.**
+
+### SELF-AUDIT + SURFACE AUDIT #92 (both fell due at this tick)
+
+**Self-audit: one open item, and it is the wall.** 2002s against a 300s target — observer-owned, and
+the number is not even fair (see the harness note below). Everything else green: 12 gates standing,
+29 gates declaring how to break themselves, 52 process defects each naming a closing mechanism.
+
+**Surface audit #92 found phantom #7, and this tick had just walked into it.** The map carried the
+`document.location` READ (gated, audit #31), the Navigation API (gated) and OAuth popups (gated) —
+**and no row at all for `location.href = "/x"`.** ⭐⭐⭐ *A capability is not on the map until its most
+common spelling is:* the map listed the exotic and the modern spelling of script navigation and
+omitted the ordinary one, and every reader scanning it would have called that class covered.
+
+⭐⭐⭐ **And it CORRECTED something this loop banked as outside proof.** t1403 banked *"Ladybird WPT
++3,366→+108/month = outside proof of the per-assert asymptote."* Fetched the primary source:
+*"our WPT score went from 2,079,020 to 2,088,677 this month, a gain of 9,657 subtests. For scale,
+July's gain was 108."* **+108 was one month; the next was ninety times larger at the same absolute
+score.** The direction survives — the months Ladybird spent on real sites are the months its WPT rate
+collapsed, which is what our own pivot predicts — but it is not an asymptote, and **an outside number
+needs a band too.** t1410's rule was never applied to it because it arrived as a citation, not a
+measurement.
+
+Interop 2026 reconciled clean: all **seventeen** focus areas already on the map. The finding came
+from the engine that is shipping, not from the standards bodies. Map 602 → 606 rows; the three new
+`unknown`s (incremental style invalidation, layout-result caching, declarative per-site compat rules)
+are **the mechanisms the t1501 constitution check ranked ⭐⭐ with no capability row behind them** —
+*a ranked steer with no row on the map is a steer nothing will ever measure.*
+
+### ⚠ HARNESS NOTE (observer-owned, recorded and not acted on)
+
+The first wall attempt went RED on `manuk-shell` in the `T · crate tests` section — **while `G3`,
+`G_TEARDOWN` and `G_RUNTIME_COUNT` in the SAME wall all reported that same suite at `77 passed`.**
+Re-run alone on a settled box: `rc=0`, 77 + 2 passed. The box was carrying an **external** 32-process
+workload at load 14 that is not this loop's (`miniconda3/bin/python3`, not mine). `_crate_suite`
+deliberately never retries an explicit `FAILED` — correctly, since that is how a real regression gets
+re-run until green — so the contention that G3's own retry loop absorbs lands as a hard red one
+section later. Two readings of one suite in one wall disagreeing is the signal. One line, as directed.
+
+NEXT, in order:
+1. ⭐⭐⭐ **Probe the cheapest of the three new `unknown` rows: does a style change on one node re-run
+   selector matching for the whole document?** This is the first time layout/style PERFORMANCE sits
+   on the map as a capability rather than as a budget, and t1408 (one task, 1054 full re-layouts,
+   125s) says the answer matters.
+2. **`house.udn.com` is scored at coverage 81.7% with 82 missing and 359 misplaced** — a real page,
+   newly visible, with a named deficit. `fidelity --shape-dump` on it names the mechanism (t1378).
+3. **Ask the ORDINARY-SPELLING question of the rest of the map** (audit #92 rank 2): `document.all`,
+   `::-webkit-*`, `unicode-bidi` and the Navigation API are all rows describing an unusual spelling
+   of something common. Is the common spelling separately gated, or assumed?
+4. **`awlyaa.education.dz` is an F5 BIG-IP ASM block page served with HTTP 200** (t1504's #2,
+   untouched): `classify_fetch`'s 200-status wall test knows only Cloudflare's two markers.
+
+WIKI: docs/wiki/a-script-navigation-is-a-navigation.md
