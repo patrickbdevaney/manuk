@@ -13,20 +13,20 @@
 # (hang=0) vs MEASURED-only so the sampling bias is visible, not hidden.
 #
 # usage: tri-sweep.sh [--corpus F] [--limit N] [--jobs J] [--m1-timeout S] [--m2-timeout S] [--a11y-timeout S]
-#                     [--m1-from FILE] [--out DIR] [--no-a11y] [--no-m1]
+#                     [--m1-from FILE] [--out DIR] [--no-a11y] [--no-m1] [--no-m2]
 set -uo pipefail
 R=/home/patrickd/manuk
 CORPUS=$R/docs/bench/oracle-corpus.txt
 # M2TMO/AXTMO are GENEROUS on purpose: per-site runs relaunch the fetch (and a11y its own Chrome),
 # so a tight limit turns a slow FETCH into a false TIMEOUT=0 (obs. 2026-09-11: 50s starved blog.rust-lang,
 # MDN, docs.python — all normally high). Keep them generous; lower --jobs if the box is contended.
-LIMIT=0; JOBS=4; M1TMO=30; M2TMO=90; AXTMO=90; A11Y=1; M1=1; M1FROM=""
+LIMIT=0; JOBS=4; M1TMO=30; M2TMO=90; AXTMO=90; A11Y=1; M1=1; M2RUN=1; M1FROM=""
 OUT=/tmp/claude-1000/-home-patrickd-manuk/3538dee1-05ec-426b-a0b7-1512fbafcc55/scratchpad/trisweep
 while [ $# -gt 0 ]; do case "$1" in
   --corpus) CORPUS="$2"; shift 2;; --limit) LIMIT="$2"; shift 2;; --jobs) JOBS="$2"; shift 2;;
   --m1-timeout) M1TMO="$2"; shift 2;; --m2-timeout) M2TMO="$2"; shift 2;; --a11y-timeout) AXTMO="$2"; shift 2;;
   --m1-from) M1FROM="$2"; M1=0; shift 2;; --out) OUT="$2"; shift 2;;
-  --no-a11y) A11Y=0; shift;; --no-m1) M1=0; shift;;
+  --no-a11y) A11Y=0; shift;; --no-m1) M1=0; shift;; --no-m2) M2RUN=0; shift;;
   *) echo "unknown flag: $1"; exit 2;; esac; done
 
 MW=$R/target/release/manuk-wpt; DP=$R/target/debug/drive-probe; AX=$R/target/debug/a11y-score
@@ -84,12 +84,16 @@ run_m2() {
   printf '%s\t%s\t%s\t%s\n' "$url" "$rate" "$ceil" "$tag" >> "$M2MAP"
   printf '  M2 %-38s rate=%-6s %s\n' "${url:0:38}" "$rate" "$tag"
 }
-echo "▶ phase B (M2 drive-probe on ${#RURLS[@]} reachable, per-site tmo=${M2TMO}s jobs=$JOBS)…"
-for url in "${RURLS[@]}"; do
-  while [ "$(jobs -rp|wc -l)" -ge "$JOBS" ]; do wait -n 2>/dev/null||sleep 0.2; done
-  run_m2 "$url" &
-done; wait
-echo "  M2 measured: $(awk -F'\t' '$4=="OK"' "$M2MAP"|wc -l)/${#RURLS[@]}  (timeout: $(awk -F'\t' '$4=="TIMEOUT"' "$M2MAP"|wc -l))"
+if [ "$M2RUN" -eq 1 ]; then
+  echo "▶ phase B (M2 drive-probe on ${#RURLS[@]} reachable, per-site tmo=${M2TMO}s jobs=$JOBS)…"
+  for url in "${RURLS[@]}"; do
+    while [ "$(jobs -rp|wc -l)" -ge "$JOBS" ]; do wait -n 2>/dev/null||sleep 0.2; done
+    run_m2 "$url" &
+  done; wait
+  echo "  M2 measured: $(awk -F'\t' '$4=="OK"' "$M2MAP"|wc -l)/${#RURLS[@]}  (timeout: $(awk -F'\t' '$4=="TIMEOUT"' "$M2MAP"|wc -l))"
+else
+  echo "▶ phase B SKIPPED (--no-m2)"
+fi
 
 # ── Phase C: a11y-score PER SITE, SERIAL (a11y-score binds Chrome on port 9500; parallel procs collide). ──
 # Same fix as phase B: a per-site timeout so one hang scores F1 0 (tag TIMEOUT) instead of killing the batch.
