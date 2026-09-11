@@ -109314,3 +109314,97 @@ NEXT, in order:
    measures `0x14` against Chrome's `605x62`; two minimal fixtures do NOT reproduce it.
 
 WIKI: docs/wiki/an-unscored-site-is-not-addressable-by-the-term-it-fails.md
+
+## Tick 1508 — reading-order is OURS, and the trace that said so named the wrong subsystem (2026-09-11)
+
+TICK SHAPE: instrument
+
+t1507's corrected work order put `reading-order` SECOND at 52 addressable sites, one behind shape,
+and it has never been worked. First question: is it even ours?
+
+### THE DECISION THE LOOP HAS OWED SINCE t1084
+
+`jarring_reading_order` carries a report-only partition built over three ticks, under a comment that
+says *"**THE THIRD PARTITION, AND IT IS THE ONE THE LOOP OWES A DECISION ON (t1084)** … Counted, not
+filtered — t1034's rule, and it is the rule precisely because this is the shape where a filter would
+be a threshold tuned to move a number."* If most inversions involve a zero-area box, an off-screen
+box, or an in-flow/out-of-flow pair, then `reading-order` measures the INSTRUMENT and its 52 sites
+are a mirage. **It had never been measured on the cohort that decides the bar.**
+
+The jarring bar is per-site CLEAN, so the deciding sites are the ones a pair or two away. Of 52
+scored sites with inversions, **17 have <=2**, and 7 of those already pass the shape floor.
+
+```text
+  www.lyreco.com     1 inversion  = 1 on-screen · 0 zero-area · 0 parked · 0 mixed-flow
+  www.jatekshop.eu   1 inversion  = 1 on-screen · 0 zero-area · 0 parked · 0 mixed-flow
+  rockstaractu.com   2 inversions = 2 on-screen · 0 zero-area · 0 parked · 0 mixed-flow
+  oilprice.com       2 inversions = 2 on-screen · 0 zero-area · 0 parked · 0 mixed-flow
+```
+
+⭐⭐⭐ **Six of six on-screen, zero artifacts.** The t1084 concern is real for the big-count sites
+(`www.ta3lemkonline.com` alone is 415 pairs of a corpus-wide 1457) and **does not apply at all to the
+tail that decides the bar.** `reading-order` is an ENGINE target, the partition is now a decision
+rather than a threshold, and the term keeps its rank. ⚠ Each of the four is ONE or TWO containers,
+not a dozen problems — `RO-GROUPS` says the biggest contributes 1 of 1 on both lyreco and jatekshop.
+
+### ⚠⚠⚠ AND THEN THE TRACE NAMED THE WRONG SUBSYSTEM
+
+`MANUK_RO_TRACE=1` on lyreco printed, on CONSECUTIVE lines:
+
+```text
+  chrome  h3 [127 205 747 42] static/block   div [886 187 187 63] static/block
+  chrome reads div first, we read h3 first  (BLOCK in Chrome, INLINE here - we collapsed two rows onto one)
+```
+
+The first line is each box's real `position/display` — **`block` in Chrome, on both boxes.** The
+second says *"BLOCK in Chrome, INLINE here"*, and it does **not mean `display`**: it meant which AXIS
+separates the pair. ⭐⭐⭐ **Two adjacent lines, the same two words, two different meanings** — and
+this tick read the second as a computed-`display` divergence and went looking for a `display` bug
+that is not there. t1415's rule at its cleanest: *a diagnostic that reports the wrong thing does not
+merely fail to help, it ACCUSES.*
+
+⭐⭐ **It survived because the sentence had no way to be contradicted by the data it sits next to**:
+`Seen::display` was already carried, already printed one line above, and never read here. The axis is
+now named as an axis, and `display` is consulted and reported SEPARATELY — **and the NEGATIVE is the
+useful half**: *"computed display AGREES on both boxes"* closes a whole line of investigation in one
+line of output, where the old wording had actively opened it.
+
+### WHAT THE CORRECTED TRACE SAYS THE MECHANISM IS
+
+```text
+  www.lyreco.com  h3   chrome [127 205 747 42]   ours [127 184 759 84]   dy -21
+```
+
+Our `<h3>` is 12px wider and **exactly twice as tall** — two line boxes where Chrome has one. A
+two-line h3 fills the flex row and starts at its top, so it reads before the `div` beside it that
+Chrome reads first. **The inversion is a CONSEQUENCE**; the defect is that our text measures wide
+enough to wrap where Chrome's does not — the font-metrics class (t1342-1343), reached from a
+reading-order symptom. ⚠ `jatekshop` is the mirror (`SIDE BY SIDE in Chrome, STACKED here`), display
+also agreeing, its diverging box 79 tall against Chrome's 64: **same class, opposite sign.**
+
+```
+  M1 BLOCK/INLINE back in the axis wording   RED     M4 compare display on the FIRST box only  RED
+  M2 drop the display comparison             RED     M5 an EMPTY display counts as a value     RED
+  M3 the agreement case prints nothing       RED     M6 the axis ignores its tolerance         RED
+  clean                                      GREEN
+```
+
+⚠ **The fixture's TOLERANCE is load-bearing and the first draft had it wrong.** Chrome separates the
+lyreco pair by 18px and we separate it by 3px; at `tol = 2` both engines read STACKED and the
+interesting case never appears. *A fixture with the wrong tolerance tests a different question* —
+third time in three ticks that a fixture's own arithmetic was the thing that was wrong.
+
+### THE RATCHET
+
+No engine behaviour changed, no site moved, no banked mark touched. `inversion_note` was EXTRACTED
+from `ro_trace` so that it could be gated at all — the annotation had been unreachable from any test.
+
+NEXT, in order:
+1. ⭐⭐⭐ **`www.lyreco.com`'s `<h3>` wraps to two lines where Chrome fits one, at a box 12px WIDER
+   than Chrome's.** Wider box + more wrapping = our text measures wide. One site, one element, both
+   rects known, `display` ruled out. Arbitrate against the FONT FILE (t1367-1374), not the oracle.
+2. ⭐⭐ **`jatekshop` is the same class with the opposite sign** — a free control arm for any fix.
+3. **`overlap` is third in the work order at 42 sites and also never worked.** Same shape of
+   question as this tick asked of reading-order: measure before grinding.
+
+WIKI: docs/wiki/reading-order-is-an-engine-target-and-the-trace-said-display.md

@@ -2950,6 +2950,15 @@
   - L19 · The column
   - L41 · What it is, exactly
 
+## `reading-order` is an ENGINE target, not an instrument property — and the decision was 420 ticks overdue
+`docs/wiki/reading-order-is-an-engine-target-and-the-trace-said-display.md`
+
+  - L6 · The decision the loop has owed since t1084
+  - L21 · The measurement — and it is unambiguous
+  - L44 · ⚠⚠⚠ And then the trace named the wrong subsystem
+  - L76 · What the corrected trace then says the mechanism is
+  - L91 · Where it is
+
 ## THE WIKI — what we durably KNOW, organised by subsystem
 `docs/wiki/README.md`
 
@@ -3608,4 +3617,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3007 sections across 149 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3012 sections across 150 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

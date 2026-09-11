@@ -1190,6 +1190,60 @@ pub fn jarring_reading_order(
 /// four: the point is to name a MECHANISM, and a fifth instance of the same one is noise.
 const RO_TRACE_MAX: usize = 4;
 
+/// **The one-line diagnosis of an inversion: which AXIS separates the pair, and whether `display`
+/// actually disagrees.**
+///
+/// ⚠⚠⚠ **THIS SENTENCE USED TO SAY `BLOCK` AND `INLINE`, AND IT DID NOT MEAN `display`.** It meant
+/// *which axis separates the two boxes* — stacked in different rows, or side by side in one. But the
+/// line printed DIRECTLY ABOVE it prints each box's real `position/display`, and on
+/// `www.lyreco.com` that line reads `static/block  static/block` for both boxes in Chrome while this
+/// one read *"BLOCK in Chrome, INLINE here"*. **Two adjacent lines, the same two words, two
+/// different meanings** — and the second looks exactly like a computed-`display` divergence that is
+/// not there. A reader (this loop, at t1508) goes looking for a `display` bug and finds none.
+/// t1415's rule: *a diagnostic that reports the wrong thing does not merely fail to help, it
+/// ACCUSES.*
+///
+/// ⭐⭐ **The collision survived because the sentence had no way to be contradicted by the data it
+/// sits next to**: `Seen::display` was already carried, already printed one line above, and never
+/// read here. So the axis is now named as an axis, and `display` is consulted and reported
+/// SEPARATELY — including the negative, which is the useful half: *"computed display AGREES on both
+/// boxes"* is what closes a whole line of investigation in one line of output.
+#[allow(clippy::too_many_arguments)]
+pub fn inversion_note(
+    ca: &Seen,
+    cb: &Seen,
+    ma: &Seen,
+    mb: &Seen,
+    leaf_a: &str,
+    leaf_b: &str,
+    tol: i64,
+) -> String {
+    let vertical = |p: &Seen, q: &Seen| p.rect[1] + tol < q.rect[1] || q.rect[1] + tol < p.rect[1];
+    let axis = match (vertical(ca, cb), vertical(ma, mb)) {
+        (true, true) => "STACKED in both engines - the two boxes swapped ROWS",
+        (true, false) => "STACKED in Chrome, SIDE BY SIDE here - we collapsed two rows onto one",
+        (false, true) => "SIDE BY SIDE in Chrome, STACKED here - we broke one row into two",
+        (false, false) => "SIDE BY SIDE in both engines - the two boxes swapped COLUMNS",
+    };
+    let disp = |c: &Seen, m: &Seen, which: &str| -> Option<String> {
+        (!c.display.is_empty() && !m.display.is_empty() && c.display != m.display).then(|| {
+            format!(
+                "{which} display {} in Chrome, {} here",
+                c.display, m.display
+            )
+        })
+    };
+    let displays: Vec<String> = [disp(ca, ma, leaf_a), disp(cb, mb, leaf_b)]
+        .into_iter()
+        .flatten()
+        .collect();
+    if displays.is_empty() {
+        format!("{axis}; computed display AGREES on both boxes")
+    } else {
+        format!("{axis}; {}", displays.join(", "))
+    }
+}
+
 /// **`MANUK_RO_TRACE=1` — WHICH BOX MOVED, ON WHICH AXIS, AND WHERE THE TWO ENGINES PART.**
 ///
 /// The reading-order exemplar names two sibling paths and **nothing else**, which is exactly the
@@ -1265,18 +1319,26 @@ fn ro_trace<K: std::fmt::Display + Eq + std::hash::Hash>(
         // that reads differently because the boxes swapped ROWS is a block-flow defect, and one that
         // reads differently while sharing a row is an inline / float / direction defect. Those are
         // not the same tick, and the exemplar line cannot tell them apart.
-        let vertical =
-            |p: &Seen, q: &Seen| p.rect[1] + tol < q.rect[1] || q.rect[1] + tol < p.rect[1];
-        let axis = match (vertical(&ca, &cb), vertical(&ma, &mb)) {
-            (true, true) => "BLOCK axis in both engines - the two boxes swapped ROWS",
-            (true, false) => "BLOCK in Chrome, INLINE here - we collapsed two rows onto one",
-            (false, true) => "INLINE in Chrome, BLOCK here - we broke one row into two",
-            (false, false) => "INLINE axis in both engines - the two boxes swapped COLUMNS",
-        };
+        // ⚠⚠⚠ **THIS SENTENCE USED THE WORDS `BLOCK` AND `INLINE`, AND IT DOES NOT MEAN `display`.**
+        //
+        // It meant *which axis separates the two boxes* — stacked in different rows, or side by side
+        // in one. But the line printed DIRECTLY ABOVE it is `one()`, which prints each box's real
+        // `position/display`, and on `www.lyreco.com` that line reads `static/block  static/block`
+        // for both boxes in Chrome while this one read *"BLOCK in Chrome, INLINE here"*. Two adjacent
+        // lines, the same two words, two different meanings, and the second one looks like a
+        // computed-`display` divergence that is not there. **A reader — this loop, at t1508 — goes
+        // looking for a `display` bug and finds none.** t1415's rule: a diagnostic that reports the
+        // wrong thing does not merely fail to help, it ACCUSES.
+        //
+        // So the axis is named as an axis (`STACKED` / `SIDE BY SIDE`), and `display` is consulted
+        // and reported SEPARATELY — it is already in `Seen` and was never read here, which is the
+        // reason the collision went unnoticed: the sentence had no way to be contradicted by the
+        // data it sits next to.
         eprintln!(
-            "      chrome reads {} first, we read {} first  ({axis})",
+            "      chrome reads {} first, we read {} first  ({})",
             if *co < 0 { leaf(a) } else { leaf(b) },
             if *mo < 0 { leaf(a) } else { leaf(b) },
+            inversion_note(&ca, &cb, &ma, &mb, &leaf(a), &leaf(b), tol),
         );
         // The moved box is the one whose delta is larger; walk ITS ancestry, exactly as HOVF-TRACE
         // does, because a box lands in the wrong row because of something ABOVE it.
@@ -1429,6 +1491,126 @@ mod tests {
             font: String::new(),
             position: String::new(),
         }
+    }
+
+    fn seen_disp(tag: &str, rect: [i64; 4], display: &str) -> Seen {
+        Seen {
+            display: display.into(),
+            ..seen(tag, rect)
+        }
+    }
+
+    /// **G_AN_INVERSION_NOTE_NAMES_AN_AXIS_AND_NOT_A_DISPLAY.**
+    ///
+    /// The note used to read *"BLOCK in Chrome, INLINE here"* and it did NOT mean `display` — it
+    /// meant which axis separated the pair. The line printed directly above it prints each box's
+    /// real `position/display`, so on `www.lyreco.com` the trace said `static/block static/block`
+    /// and then, on the next line, *"BLOCK in Chrome, INLINE here"*. **Two adjacent lines, the same
+    /// two words, two different meanings.** t1508 read it as a computed-`display` divergence and
+    /// went looking for a `display` bug that is not there — t1415's rule, and the reason a
+    /// diagnostic is not a free thing to leave imprecise.
+    ///
+    /// Mutations that must turn this red:
+    ///   1. put `BLOCK`/`INLINE` back in the axis wording      -> row 1 sees a display word
+    ///   2. drop the display comparison entirely               -> row 3's real divergence is silent
+    ///   3. make the agreement case print nothing              -> row 1 loses the useful NEGATIVE
+    ///   4. compare display on only ONE of the two boxes       -> row 4 goes unreported
+    #[test]
+    fn an_inversion_note_names_an_axis_and_not_a_display() {
+        // ── ROW 1: the `www.lyreco.com` shape. Chrome stacks the pair, we put them side by side,
+        //    and BOTH boxes agree on `display` in both engines. The note must say so — the negative
+        //    is the useful half, because it closes a line of investigation in one line of output.
+        let n = inversion_note(
+            &seen("h3", [127, 205, 747, 42]),
+            &seen("div", [886, 187, 187, 63]),
+            &seen("h3", [127, 184, 759, 84]),
+            &seen("div", [886, 187, 187, 63]),
+            "h3",
+            "div",
+            // ⚠ The REAL sweep tolerance, and it decides this row: Chrome separates the pair by 18px
+            // and we separate it by 3px. At tol 2 both engines read as STACKED and the interesting
+            // case never appears — a fixture with the wrong tolerance tests a different question.
+            8,
+        );
+        assert!(
+            n.contains("STACKED in Chrome, SIDE BY SIDE here"),
+            "the axis must be named as an AXIS: {n}"
+        );
+        assert!(
+            n.contains("computed display AGREES on both boxes"),
+            "and the negative must be stated, not left to silence: {n}"
+        );
+        assert!(
+            !n.contains("BLOCK") && !n.contains("INLINE"),
+            "⚠ `BLOCK` and `INLINE` are `display` VALUES in this codebase and the line above this \
+             one prints the real ones — the axis wording must not borrow them: {n}"
+        );
+
+        // ── ROW 2: the mirror. We stack what Chrome puts in one row.
+        let n2 = inversion_note(
+            &seen("img", [906, 811, 50, 50]),
+            &seen("div", [966, 804, 91, 64]),
+            &seen("img", [906, 811, 50, 50]),
+            &seen("div", [966, 897, 91, 64]),
+            "img",
+            "div",
+            8,
+        );
+        assert!(
+            n2.contains("SIDE BY SIDE in Chrome, STACKED here"),
+            "got {n2}"
+        );
+
+        // ── ROW 3: a REAL display divergence on the first box must be named, with both values.
+        let n3 = inversion_note(
+            &seen_disp("h3", [127, 205, 747, 42], "block"),
+            &seen("div", [886, 187, 187, 63]),
+            &seen_disp("h3", [127, 184, 759, 84], "inline"),
+            &seen("div", [886, 187, 187, 63]),
+            "h3",
+            "div",
+            8,
+        );
+        assert!(
+            n3.contains("h3 display block in Chrome, inline here"),
+            "a real display divergence must be named with BOTH values: {n3}"
+        );
+        assert!(
+            !n3.contains("AGREES"),
+            "and it must not also claim agreement: {n3}"
+        );
+
+        // ── ROW 4: the SECOND box is the one that diverges. A comparison written for `a` only
+        //    passes rows 1-3 and misses half the real cases.
+        let n4 = inversion_note(
+            &seen("h3", [127, 205, 747, 42]),
+            &seen_disp("div", [886, 187, 187, 63], "flex"),
+            &seen("h3", [127, 205, 747, 42]),
+            &seen_disp("div", [886, 300, 187, 63], "block"),
+            "h3",
+            "div",
+            8,
+        );
+        assert!(
+            n4.contains("div display flex in Chrome, block here"),
+            "the note must check BOTH boxes, not just the first: {n4}"
+        );
+
+        // ── ROW 5: an EMPTY display string is an ABSENCE, not a value. Chrome not reporting one
+        //    must never read as "Chrome says empty-string and we say block".
+        let n5 = inversion_note(
+            &seen_disp("h3", [127, 205, 747, 42], ""),
+            &seen("div", [886, 187, 187, 63]),
+            &seen_disp("h3", [127, 184, 759, 84], "block"),
+            &seen("div", [886, 187, 187, 63]),
+            "h3",
+            "div",
+            8,
+        );
+        assert!(
+            n5.contains("AGREES"),
+            "an unreported display is an ABSENCE and cannot be half of a divergence: {n5}"
+        );
     }
 
     fn seen_font(tag: &str, rect: [i64; 4], font: &str) -> Seen {
