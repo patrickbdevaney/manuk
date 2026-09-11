@@ -108732,3 +108732,77 @@ distinguish "the app threw" from "the app rendered four tags on purpose", and ev
 hypothesis about this cohort needs it.
 
 WIKI: docs/wiki/the-engine-boots-it-and-the-oracle-cannot.md
+
+## Tick 1503 — the proxy rewrites a HOST, and a site is a set of hosts (2026-09-11)
+
+TICK SHAPE: instrument
+
+t1502's own steer, executed: capture the **proxied** render's console, because `--dump-dom` + an
+open-tag count cannot tell "the app threw" from "the app rendered four tags on purpose".
+
+### THE INSTRUMENT
+
+`--enable-logging=stderr --v=1` on the PROXIED invocation only, plus `proxied_console_lines` — a pure
+function, testable without a browser, exactly as `probe_absence_observation` (t1487) is.
+
+```
+  M1  filter on `ERROR:` alone      RED   leaves ONLY Chrome's own GCM chatter — browser noise
+                                          reported as the page's dying words
+  M2  silence returns vec![]        RED   caller prints nothing; "it logged nothing" becomes
+                                          indistinguishable from "we did not look"
+  M3  uncapped                      RED   a boot loop floods the row it is explaining
+  clean                             GREEN
+```
+
+### ⭐⭐⭐ FIRST RUN NAMED A MECHANISM — AND IT IS THE PROXY'S, NOT THE ENGINE'S
+
+```text
+  allticketscol.com
+    INFO:CONSOLE  "Access to fetch at 'https://back.allticketscol.com/api/eventos/even…" blocked
+    INFO:CONSOLE  "Access to fetch at 'https://back.allticketscol.com/api/eventos/ciud…" blocked
+```
+
+The app's data lives on **`back.allticketscol.com`** — a *sibling subdomain*. `rewrite_document`
+rewrites references to the document's **own host**; `back.` is a different host, so it is left alone,
+correctly and uselessly. From `127.0.0.1` those calls are cross-origin, the API's CORS header names the
+live origin, every fetch is refused, and the app renders its shell.
+
+**The generalisation is the finding: a site is not one host.** Documents on one origin, the API on
+another, CDN and media on more. A same-host rewrite covers the first and silently drops the rest — and
+it is invisible in a tag count, because the shell renders.
+
+### THE TWO THAT STAYED SILENT — WHICH IS ALSO AN OBSERVATION
+
+| site | proxied console | ruled out |
+|---|---|---|
+| allticketscol.com | CORS to `back.allticketscol.com` | — **named** |
+| comix.to | Chrome-internal GCM only | it did **not** throw |
+| house.udn.com | nothing at all | it did **not** throw |
+
+A page that renders four tags while saying nothing is *deciding* to. That is a routing guard, a feature
+detect or a bot shell — a different class from an exception, and the next probe for those two is the
+**response body**, not the console.
+
+### THE RATCHET
+
+No engine change. `oracle-module-shell` rows were already refusals under the fixed denominator and stay
+counted against the bar; what moved is that one of the three now has a NAMED cause on the oracle's side
+of the line, which is what a refusal tag is for.
+
+### LANDED
+
+```
+  tests/wpt/src/chrome.rs     proxied_console_lines + the PROXIED CONSOLE block   (+1 gate, 3 mutations)
+  docs/wiki/the-proxy-rewrites-a-host-not-a-site.md
+```
+
+⚠ **Rule banked:** *a negative observation is only worth what its instrument could have shown.* Three
+hypotheses died in t1502 by reading documents; the fourth needed the page's own voice, and one run of
+it reached a mechanism no further reading would have.
+
+NEXT: the proxy's rewrite is **host-scoped where the site is origin-scoped**. Price it before building:
+grep the fidelity corpus's refused rows for how many client-rendered sites fetch a *sibling subdomain*
+(`api.`, `back.`, `cdn.`) — if it is one of 200 this is a note, and if it is the cohort it is the
+`oracle-module-shell` fix. **The count decides, not the mechanism's elegance.**
+
+WIKI: docs/wiki/the-proxy-rewrites-a-host-not-a-site.md

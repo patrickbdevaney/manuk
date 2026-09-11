@@ -3407,6 +3407,15 @@
   - L34 · One named sub-mechanism, and only one
   - L50 · What this decides
 
+## The proxy rewrites a HOST; a site is a set of hosts
+`docs/wiki/the-proxy-rewrites-a-host-not-a-site.md`
+
+  - L5 · The question that could not be asked
+  - L16 · The instrument
+  - L40 · ⭐⭐⭐ THE MECHANISM: THE PROXY REWRITES A HOST, AND A SITE IS A SET OF HOSTS
+  - L64 · The two that stayed silent
+  - L76 · The rule
+
 ## The refusing oracle runs in two seconds
 `docs/wiki/the-refusing-oracle-runs-in-two-seconds.md`
 
@@ -3560,4 +3569,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2979 sections across 144 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2984 sections across 145 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

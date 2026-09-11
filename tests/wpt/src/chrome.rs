@@ -693,6 +693,39 @@ pub fn capture_seen_all_paths(
     Ok(seen)
 }
 
+/// **What the proxied page said while failing to build itself**, as lines fit to print.
+///
+/// Chrome's `--enable-logging=stderr` interleaves the PAGE's console with its own internals — GCM
+/// registration failures, font-service chatter, sandbox notes — and only the page's lines answer the
+/// question. `INFO:CONSOLE` is Chrome's own marker for a page-originated message; a bare `ERROR:` row
+/// is kept too, because a page that dies on a network policy is reported that way and that is exactly
+/// the case this exists for.
+///
+/// ⚠ **Capped, and the empty case says so out loud.** A page in a boot loop emits thousands of
+/// identical lines, and a diagnostic that floods is the same failure as one that is silent (t1480's
+/// dedupe, same argument). And *silence is itself an observation* — `comix.to` renders four tags
+/// while logging nothing at all, which rules out "it threw" without naming what it did instead.
+///
+/// A pure function so the classification is testable without a browser, exactly as
+/// `probe_absence_observation` is.
+pub fn proxied_console_lines(stderr: &str) -> Vec<String> {
+    let lines: Vec<String> = stderr
+        .lines()
+        .filter(|l| {
+            l.contains("INFO:CONSOLE") || l.contains("ERROR:CONSOLE") || l.contains("ERROR:")
+        })
+        .take(6)
+        .map(|l| l.trim().to_string())
+        .collect();
+    if lines.is_empty() {
+        return vec![
+            "silent — the page logged nothing, so it did not throw its way to this shell"
+                .to_string(),
+        ];
+    }
+    lines
+}
+
 /// **Try the one-origin reference for a site the caller has already decided needs one.**
 ///
 /// `capture_seen_all_paths` decides up front, on a SHELL FLOOR over the oracle's element count —
@@ -751,6 +784,23 @@ fn one_origin_reference(
     let mut pcmd = Command::new(&chrome);
     pcmd.args(base_flags(vw, vh))
         .arg("--virtual-time-budget=6000")
+        // ── **ASK THE PROXIED RENDER WHAT WENT WRONG, INSTEAD OF GUESSING** (t1503). ───────────
+        //
+        // The refusal below compares open-tag counts, so a proxied app that throws on line one is
+        // indistinguishable from one that renders four tags on purpose. t1502 spent a whole tick
+        // refuting three hypotheses about that difference — absolute same-origin URLs in the bundle,
+        // `upgrade-insecure-requests`, a page-supplied `<base href>` — and all three were wrong, at
+        // the cost of a probe each.
+        //
+        // `--enable-logging=stderr --v=1` makes Chrome print the page's console to stderr, which
+        // `output_with_deadline` already captures. This is `report_probe_absence`'s move (t1487) one
+        // instrument over: *a refusal that names what it OBSERVED beats one that names a cause.*
+        //
+        // ⚠ On the PROXIED run only. The live acceptance render and every other Chrome invocation
+        // stay quiet, because this costs a few hundred lines of stderr on a healthy page and the
+        // question is only ever live for the ~11-row cohort that reaches here.
+        .arg("--enable-logging=stderr")
+        .arg("--v=1")
         .arg("--dump-dom")
         .arg(proxy.document_url());
     let pout = output_with_deadline(pcmd, secs)?;
@@ -777,6 +827,14 @@ fn one_origin_reference(
         // diff of tag histograms — so it is printed here rather than rediscovered by hand. The
         // cohort is ~11 sites, so this is never noise on a healthy sweep.
         let (a, b) = crate::proxy::tag_delta(&ldump, &pdump);
+        // **What the proxied page SAID while failing to build itself.** Chrome prefixes console
+        // output with its own severity/source; the page's own lines are the ones worth reading, so
+        // the filter keeps `CONSOLE`/`ERROR` rows and drops Chrome's internal chatter. Capped,
+        // because a page in a boot loop can produce thousands of identical lines and a diagnostic
+        // that floods is the same failure as one that is silent (t1480's dedupe, same argument).
+        for l in proxied_console_lines(&String::from_utf8_lossy(&pout.stderr)) {
+            eprintln!("    PROXIED CONSOLE: {l}");
+        }
         eprintln!(
             "  PROXY REFERENCE REFUSED: one-origin render carries {proxy_n} open tags against the \
              live page's {live_n} — a half-built reference is strictly WORSE than an honest shell, \
@@ -2065,5 +2123,42 @@ mod meta_refresh_and_probe_absence_tests {
                  sites: {o}"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod proxied_console_tests {
+    use super::proxied_console_lines;
+
+    /// **Proven red** by dropping the `INFO:CONSOLE` filter (Chrome's internals drown the page's own
+    /// lines), and by returning an empty vec for a silent run (the caller then prints nothing and
+    /// silence becomes indistinguishable from "we did not look").
+    #[test]
+    fn the_page_s_own_lines_survive_and_silence_is_reported() {
+        // A real capture: the page's message, and Chrome's own chatter beside it.
+        let err = "[1:1:0911/051349.6:INFO:CONSOLE:359] \"No hay Meta Pixel\", source: http://127.0.0.1:8\n                   [1:2:0911/051350.5:ERROR:google_apis/gcm/engine/registration_request.cc:290] Registration response error\n                   [1:1:0911/051350.0:INFO:CONSOLE:0] \"Access to fetch at 'https://back.example.com/api' blocked\"\n";
+        let out = proxied_console_lines(err);
+        assert!(
+            out.iter().any(|l| l.contains("Access to fetch")),
+            "the page's own CORS message is the answer this exists for: {out:?}"
+        );
+        assert!(out.iter().any(|l| l.contains("No hay Meta Pixel")));
+
+        // ⚠ SILENCE IS AN OBSERVATION, and it must be reported as one. `comix.to` renders four tags
+        //   while logging nothing, which rules out "it threw" — a caller handed an empty vec would
+        //   print nothing and could not tell that from "we did not look".
+        let quiet = proxied_console_lines("");
+        assert_eq!(quiet.len(), 1);
+        assert!(
+            quiet[0].contains("silent"),
+            "a silent run must SAY it was silent: {quiet:?}"
+        );
+
+        // Capped: a boot loop must not flood the row it is explaining.
+        let flood = (0..500)
+            .map(|i| format!("[1:1:x:INFO:CONSOLE:{i}] \"boom\""))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert_eq!(proxied_console_lines(&flood).len(), 6);
     }
 }
