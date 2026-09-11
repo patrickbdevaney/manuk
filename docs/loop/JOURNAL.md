@@ -108080,3 +108080,71 @@ NEXT, in order, and step 2 is the one that decides:
 *A revert with a full measurement is not a lost tick* (t1420).
 
 WIKI: docs/wiki/the-numeric-font-weight-was-refused.md
+
+## Tick 1493 — a `@font-face` declares its own weight (2026-09-10)
+
+TICK SHAPE: capability
+
+Step 1 of t1492's own refusal plan, and it moves the suite that refused it.
+
+### THE NUMBER §5.2 MATCHES AGAINST WAS NEVER CARRIED
+
+CSS Fonts §5.2 matches a requested weight against the **`@font-face` block's own `font-weight`
+DESCRIPTOR**, not the weight inside the font file. `manuk_css::FontFace` carried `family`, `srcs`,
+`unicode_range` — and **no weight at all**, so the registry had only ever known the file's.
+
+```text
+  wpt css/css-fonts/variations
+    clean tree, two runs      237/468   242/468
+    with the descriptor       247/468   247/468
+  wpt css/css-fonts (area)    4092/7552 — exactly its banked mark · HANG/CRASH 0
+  wpt css/css-text            2900      — flat
+```
+
+⚠ The sub-area is up and stable across two runs; the AREA total is flat at its mark, so the gain sits
+inside the area's own noise. Both reported, not the flattering one.
+
+### ⭐⭐ THE FIXTURE INVERTS THE TWO, WHICH IS THE ONLY WAY TO TELL THEM APART
+
+Two blocks, one family: the block declaring **400** points at the **BOLD** file and the one declaring
+**700** at the **REGULAR** file.
+
+```text
+  Chrome    a(400)=320   b(700)=312     <- the DECLARATION wins, inverted from the files
+  before    a(400)=312   b(700)=320     <- the FILE wins
+```
+
+A fixture whose declarations agreed with its files could not discriminate at all.
+
+⚠ `None` is *"the block did not say"* and falls back to the file's weight — the OLD behaviour exactly,
+so no page that was right becomes wrong. ⚠ A **reversed** range is INVALID, not swapped
+(`font-descriptor-range-reversed` is a real test, and swapping passes it for the wrong reason).
+⚠ `normal`/`bold` are 400/700 in the descriptor too.
+
+### ⭐⭐⭐ AND IT ANSWERS STEP 2 OF THE PLAN
+
+t1492 asked whether its −92 was the weight KEY or the missing DESCRIPTOR. **It was the key**: with the
+descriptor present and the coarse rule unchanged, `variations` sits *above* the clean-tree band. Step 3
+— re-attempting the numeric key — now has its prerequisite in place and `variations` as a gate rather
+than a casualty.
+
+### LANDED
+
+```
+  engine/css/lib.rs    FontFace::weight + parse_font_face_weight (one value or two; normal/bold;
+                       a reversed range is INVALID)
+  engine/text/lib.rs   the webfont map keys on (id, declared) and matches the DECLARATION
+  engine/page/lib.rs   the descriptor threaded to register_named_font
+  gate  g_a_font_face_declares_its_own_weight   RED under 4 named mutations
+  vacuity arm: BOTH faces must arrive (2,2), or the widths are a fallback's
+  parser arms: the reversed-range and "did not say" cases, which the rendered arm cannot reach
+  css/css-fonts 4092 (the mark) · css/css-text 2900 (flat) · HANG/CRASH 0 in both
+  Bar 0: no hang, no crash, no panic
+```
+
+NEXT: step 3. Re-attempt `FontKey { weight: u16 }` — 30 sites, mechanical, most already computing
+`bold` FROM a weight they hold — now with the descriptor carried and `variations` as the gate. ⚠ The
+t1492 measurement stands as the bar to clear: it must not fall below 247, and the two Chrome fixtures
+(system `Lato` 300..900, and a graded `@font-face` set including §5.2's 450 tie) are already written.
+
+WIKI: docs/wiki/a-font-face-declares-its-own-weight.md

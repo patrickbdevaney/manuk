@@ -10614,7 +10614,7 @@ impl Page {
                 }
                 for url in &urls {
                     if let Some(data) = fetch_font_bytes(url).await {
-                        fonts.register_named_font(&ff.family, data);
+                        fonts.register_named_font(&ff.family, data, ff.weight);
                         // **A FONT THAT ARRIVES IS A REASON TO RE-LAY-OUT, and it was not one.**
                         // Every text box was measured with the fallback face; the new face has
                         // different advances, so every line box, wrap point and content height in

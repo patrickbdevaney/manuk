@@ -3436,6 +3436,17 @@ pub struct FontFace {
     /// render deadline. `unicode-range` is how the right face is chosen *and* how the other
     /// ninety-nine are never asked for.
     pub unicode_range: Option<Vec<(u32, u32)>>,
+    /// **The `font-weight` DESCRIPTOR, inclusive — the number CSS Fonts §5.2 matches against.**
+    ///
+    /// ⚠ Not the weight inside the font FILE, which is what this engine matched on until t1493 and
+    /// what cost `wpt css/css-fonts/variations` 92 subtests when t1492 built §5.2's closest-match over
+    /// it. A block may declare `font-weight: 600` for a file whose internal weight is 400, and the
+    /// DECLARATION is what a page asking for 600 must get.
+    ///
+    /// `None` means the face did not say — which the spec's default makes `400 400`, but the caller
+    /// decides that, because *"did not say"* and *"said 400"* are different facts and only one of them
+    /// can be overridden by a sibling block.
+    pub weight: Option<(u16, u16)>,
 }
 
 /// One selector of one rule, with the scope + source order it was seen at.
@@ -3666,6 +3677,7 @@ fn parse_font_face_block(block: &str) -> Option<FontFace> {
     let mut family = None;
     let mut srcs = Vec::new();
     let mut unicode_range = None;
+    let mut weight = None;
     for d in parse_declarations(block) {
         match d.name.as_str() {
             "font-family" => {
@@ -3692,6 +3704,7 @@ fn parse_font_face_block(block: &str) -> Option<FontFace> {
                 }
             }
             "unicode-range" => unicode_range = parse_unicode_range(&d.value),
+            "font-weight" => weight = parse_font_face_weight(&d.value),
             _ => {}
         }
     }
@@ -3700,7 +3713,43 @@ fn parse_font_face_block(block: &str) -> Option<FontFace> {
         family,
         srcs,
         unicode_range,
+        weight,
     })
+}
+
+/// **The `@font-face` `font-weight` DESCRIPTOR, as an inclusive range.**
+///
+/// ⚠⚠ **THIS IS THE NUMBER CSS FONTS §5.2 MATCHES AGAINST, AND IT IS NOT THE ONE INSIDE THE FONT
+/// FILE.** t1492 built §5.2's closest-match over each registered face's fontdb weight and regressed
+/// `wpt css/css-fonts/variations` by 92 subtests; the failing assertions named it exactly —
+/// *"@font-face matching for weight 420 should be mapped to CSSTest Weights 600"*, where the file's
+/// own weight says something else entirely. A `@font-face` block may legitimately declare
+/// `font-weight: 600` for a file whose internal weight is 400, and the DECLARATION is what wins.
+///
+/// The descriptor takes one value or two (`font-weight: 100 900`, the variable-font range form).
+/// `normal` is 400 and `bold` is 700 — the same keywords the property takes, and a sheet that writes
+/// them here is not rare. Anything unparseable yields `None`, which the caller reads as *"this face
+/// did not say"* and must not confuse with `Some((400, 400))`.
+fn parse_font_face_weight(v: &str) -> Option<(u16, u16)> {
+    let one = |t: &str| -> Option<u16> {
+        match t.to_ascii_lowercase().as_str() {
+            "normal" => Some(400),
+            "bold" => Some(700),
+            other => other
+                .parse::<f32>()
+                .ok()
+                .map(|f| f.round().clamp(1.0, 1000.0) as u16),
+        }
+    };
+    let mut it = v.split_whitespace();
+    let lo = one(it.next()?)?;
+    let hi = match it.next() {
+        Some(t) => one(t)?,
+        None => lo,
+    };
+    // A reversed range is what the `font-descriptor-range-reversed` tests are about: the spec says
+    // such a descriptor is INVALID, not that it should be silently swapped.
+    (lo <= hi).then_some((lo, hi))
 }
 
 /// Parse a `unicode-range` descriptor into inclusive codepoint spans.

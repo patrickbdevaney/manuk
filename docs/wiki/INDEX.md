@@ -57,6 +57,15 @@
   - L29 · ⭐⭐⭐ The runner already had the answer
   - L49 · What it cost
 
+## A `@font-face` declares its own weight
+`docs/wiki/a-font-face-declares-its-own-weight.md`
+
+  - L5 · The number §5.2 matches against was never carried
+  - L15 · Why it is its own tick
+  - L40 · The fixture inverts the two, which is the only way to tell them apart
+  - L52 · Three details the gate pins
+  - L65 · Where this leaves the plan
+
 ## The agent's click was a second, wrong implementation of the click's activation behaviour
 `docs/wiki/agent-activation-behaviour.md`
 
@@ -3473,4 +3482,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-2932 sections across 134 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+2937 sections across 135 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

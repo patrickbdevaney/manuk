@@ -12012,3 +12012,32 @@ there a stylesheet source at all — not on a heuristic.
 **Status:** landed t1490; Chrome-byte-identical on an Ahem fixture (`dcl:96 load:160 t0:160`), WPT
 `html/semantics` 6297/11635 with HANG/CRASH 0 (the banked mark), `css/css-fonts` flat. Gated by
 `g_load_fires_after_the_webfont_arrives` under two mutations, one of which reproduces the Bar 0.
+
+## The self-hosted font whose blocks say one thing and whose files say another
+
+**The class:** every self-hosted webfont pipeline. Subsetters, build tools and icon fonts routinely
+emit `@font-face { font-family: "Brand"; font-weight: 600; src: url(brand-semibold.woff2) }` where the
+file's own internal weight says something else entirely — 400, or nothing useful. CSS Fonts §5.2
+matches against the **block's declared descriptor**, and an engine that matches on the file picks the
+wrong face for every weight the two disagree about.
+
+**Carry the descriptor before implementing the matching.** Building §5.2's closest-match over the
+file's weight is *worse* than a coarse bold/not-bold test over it: the coarse rule is obviously
+approximate, while a precise rule over the wrong input is confidently wrong. Measured here as −92
+subtests on `css/css-fonts/variations`, whose assertions say it in as many words.
+
+**Invert the fixture or it proves nothing.** A test whose `@font-face` declarations agree with its
+files cannot tell "matched the declaration" from "matched the file". Point the block declaring 400 at
+the bold file and the block declaring 700 at the regular one; the widths then come out inverted, and
+only one implementation produces that.
+
+**⚠ "Did not say" is not "said 400".** A block with no `font-weight` must fall back to the file's own
+weight — that is the pre-existing behaviour and the only safe default — while a block that declares
+must override it. Collapsing the two makes every undeclared face claim 400.
+
+**⚠ And a reversed range is invalid, not swapped.** `font-weight: 900 100` is an invalid descriptor per
+spec; silently normalising it passes the tests that check this for the wrong reason.
+
+**Status:** landed t1493; `css/css-fonts/variations` 237–242 → 247/247 (two runs each), area total at
+its banked mark, HANG/CRASH 0. Gated by `g_a_font_face_declares_its_own_weight` under four mutations,
+Chrome-arbitrated on an inverted fixture.

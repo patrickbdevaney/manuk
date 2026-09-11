@@ -264,7 +264,15 @@ pub struct FontContext {
     family_ids: RefCell<HashMap<String, u32>>,
     /// `@font-face` family name (lowercase) → the registered face ids, so a web font
     /// resolves under its CSS-declared name even if the file's internal name differs.
-    webfonts: RefCell<HashMap<String, Vec<fontdb::ID>>>,
+    /// `@font-face` family (lowercased) → the faces registered for it, each with **the weight range
+    /// its own `@font-face` block DECLARED** — which is what CSS Fonts §5.2 matches against, and is
+    /// not the weight inside the font file. See `manuk_css::FontFace::weight`, and t1492's refusal
+    /// for what matching on the file's weight costs (`css-fonts/variations`, −92).
+    ///
+    /// `None` is *"the block did not say"*; the spec's default for a `@font-face` with no
+    /// `font-weight` is `400 400`, and the selector below applies that rather than storing it, so the
+    /// two facts stay distinguishable at the seam.
+    webfonts: RefCell<HashMap<String, Vec<(fontdb::ID, Option<(u16, u16)>)>>>,
     /// **Every family name an `@font-face` rule DECLARED**, lowercased — whether or not any of its
     /// `src`s actually loaded.
     ///
@@ -621,7 +629,7 @@ impl FontContext {
             .insert(format!("{}\u{1}{url}", family.to_ascii_lowercase()))
     }
 
-    pub fn register_named_font(&self, family: &str, data: Vec<u8>) {
+    pub fn register_named_font(&self, family: &str, data: Vec<u8>, weight: Option<(u16, u16)>) {
         let before: std::collections::HashSet<fontdb::ID> =
             self.db.borrow().faces().map(|f| f.id).collect();
         self.db.borrow_mut().load_font_data(data);
@@ -637,7 +645,7 @@ impl FontContext {
                 .borrow_mut()
                 .entry(family.to_ascii_lowercase())
                 .or_default()
-                .extend(new_ids);
+                .extend(new_ids.into_iter().map(|id| (id, weight)));
         }
     }
 
@@ -890,15 +898,46 @@ impl FontContext {
             // case-sensitive query. Lower it here, or a webfont declared `"Fira Sans"` stops resolving.
             let lower = n.to_ascii_lowercase();
             if let Some(ids) = self.webfonts.borrow().get(&lower) {
-                if let Some(&id) = ids.iter().find(|&&id| {
-                    self.db.borrow().face(id).is_some_and(|f| {
-                        (f.weight == fontdb::Weight::BOLD) == key.bold
-                            && (f.style != fontdb::Style::Normal) == key.italic
-                    })
+                // ── **MATCH ON THE DECLARED WEIGHT, NOT THE FILE'S** (t1493). ──────────────────
+                //
+                // The rule is unchanged — still the coarse bold/not-bold test the boolean key can
+                // express — and only its INPUT moves. CSS Fonts §5.2 matches against the
+                // `@font-face` block's own `font-weight` descriptor, and a block may legitimately
+                // declare `font-weight: 600` for a file whose internal weight is 400. Until now this
+                // read `f.weight` and could not see the declaration at all.
+                //
+                // t1492 measured what that costs: building §5.2's closest-match over `f.weight`
+                // regressed `wpt css/css-fonts/variations` by 92 subtests, and the failing assertions
+                // said so in as many words — *"@font-face matching for weight 420 should be mapped to
+                // CSSTest Weights 600"*. The descriptor is the prerequisite, which is why it comes
+                // first and alone.
+                //
+                // ⚠ `None` falls back to the file's weight, which is the OLD behaviour exactly — so a
+                // block that declares nothing is unaffected, and the change is confined to blocks
+                // that do.
+                let is_bold = |id: fontdb::ID, declared: Option<(u16, u16)>| -> bool {
+                    match declared {
+                        // The spec's match is against the RANGE; for a boolean question the honest
+                        // reduction is "does this range reach bold at all".
+                        Some((_, hi)) => hi >= 600,
+                        None => self
+                            .db
+                            .borrow()
+                            .face(id)
+                            .is_some_and(|f| f.weight == fontdb::Weight::BOLD),
+                    }
+                };
+                if let Some(&(id, _)) = ids.iter().find(|&&(id, declared)| {
+                    is_bold(id, declared) == key.bold
+                        && self
+                            .db
+                            .borrow()
+                            .face(id)
+                            .is_some_and(|f| (f.style != fontdb::Style::Normal) == key.italic)
                 }) {
                     return Some(id);
                 }
-                return ids.first().copied();
+                return ids.first().map(|&(id, _)| id);
             }
         }
         let family = match key.family {

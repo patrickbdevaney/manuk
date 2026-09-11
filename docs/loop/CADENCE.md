@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1165** | ticks 1–1491 |
-| median tick cycle | **33m** | 1164 intervals |
-| median, last 10 | **73m** | 10 intervals |
+| ticks landed | **1166** | ticks 1–1492 |
+| median tick cycle | **33m** | 1165 intervals |
+| median, last 10 | **68m** | 10 intervals |
 | fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.79** | 1477.8h elapsed |
-| median verify wall | **67s** | 1104 ticks |
+| **ticks per hour** | **0.79** | 1479.1h elapsed |
+| median verify wall | **67s** | 1105 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **579**
+* **live gates**: 27 → **580**
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**538 of 1165 ticks** (46%) moved a
+**538 of 1166 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -1262,5 +1262,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1488** | 2026-09-10 13:43 | 89m | capability | 8m | +514/−43 | 578 | 81 | 56.0% · | a survey refused its own hypothesis and named the bug on the way past (2026-09-10) |
 | **1490** | 2026-09-10 17:09 | 3.4h | capability | 8m | +267/−82 | 579 | 81 | 56.0% · | `load` fires after the webfont arrives (2026-09-10) |
 | **1491** | 2026-09-10 18:53 | 1.7h | instrument | 8m | +202/−42 | 579 | 81 | 56.0% · | pricing the `bold: bool` collapse (2026-09-10) |
+| **1492** | 2026-09-10 20:11 | 78m | refusal | 8m | +545/−53 | 580 | 81 | 56.0% · | the numeric font weight was REFUSED (2026-09-10) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

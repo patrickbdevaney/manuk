@@ -12463,3 +12463,78 @@ so cargo rebuilds); only the state after the restore is poisoned.
    is not a function` says the OBJECT is wrong, not that the method is missing: probe before building.
 3. ⚠ **Promote the vacuity rule to PART VI prose.** Four findings in four ticks came from one
    assertion shape, and it is currently folklore carried in gate doc comments.
+
+---
+
+## Check #144 — tick 1493
+
+Re-read `CONSTITUTION.MD` (PART VII, the invariants) and `docs/loop/V1-SCOPE.md` against ticks
+1485–1493.
+
+### GATE OR SCOREBOARD?
+
+**Gate, and this window contains the loop's first RANKED REFUSAL of its own mandate.** Surface audit
+#90 and t1485 measured the mandate's binding constraint and it did not hold: of 87 refused sites on
+the 200-site corpus, **ORIGIN 58 · METHOD 23 · ENGINE 6**. The mandate aims every tick at a term worth
+six sites in two hundred.
+
+⭐⭐⭐ **AND FOUR TICKS EXECUTED IT ANYWAY, CORRECTLY, BEFORE ANYONE MEASURED.** t1480–1483 each found
+a real, shared, Chrome-arbitrated defect and each is banked. *A mandate can name the wrong bottleneck
+and still point at good work* — and the only way to tell is to measure what it claims, which is what
+P0 was for and what had not been done for four ticks.
+
+### PART VI CORRECTIONS
+
+* **NEW, and it is the window's most transferable finding:** *an inert mutation is a question about
+  the FIXTURE, and the answer can be a defect in the thing under test.* t1489's `assign`-vs-accumulate
+  mutation did not go red; asking why showed **neither was right**, and the counter it exposed had
+  been about to steer a whole tick to the wrong conclusion (`pivaldi 20 of 122` was an artefact;
+  keyed per face it is 20 of 20). Twice more the same shape: `FontKey::is_bold` had **zero callers**
+  and was deleted rather than gated, and the `@font-face` arm of the weight gate was missing entirely
+  until two mutations came back green.
+* **NEW:** *price a refactor before writing it, and the price can be MIXED.* t1491 priced the
+  `bold: bool` collapse at **285 of 584** near-bar misses — and at **zero** on the worst site in the
+  cohort. A second mechanism was hiding behind an aggregate that looked like one problem. Written
+  first, the refactor would have landed, been correct, and left that site untouched **with no way to
+  tell, because the aggregate would have moved.**
+* **NEW:** *"idempotent for FETCHING" is not "free to call twice."* t1490 added an idempotent phase to
+  the pre-`load` path and it was a Bar 0 twice over — a second full relayout on a page it could not
+  change, and then an unbounded deadline. **Both were the COST of a wait rather than the wait itself.**
+* **VI.3 — the aperture rule is STILL not in prose.** Tenth check.
+* **I5 — `ORACLE_CRAWLED: 0`. EIGHTEENTH check.**
+
+### THE INVARIANTS
+
+**I3 — held, and it did the hardest work of the arc.** t1492 was built, worked, and was
+Chrome-byte-identical on two fixtures — and was **reverted whole** for −92 on
+`css/css-fonts/variations`. *A revert with a full measurement is not a lost tick*: the refusal
+established what §5.2 actually matches against, which t1493 then carried, and `variations` came back
+**above** the clean-tree band. The refusal was worth more than the tick would have been.
+
+**I2 — held.** Nothing forked. The `@font-face` descriptor went into our own `FontFace`; the weight
+question was handed to `fontdb::Query`, which implements §5.2, rather than reimplemented — and when
+that turned out to regress, it was reverted rather than special-cased.
+
+**I1, I4, I6, I7, I8 — not bent.**
+
+### PART VII / V1-SCOPE
+
+Every tick is browser capability or the instrument that measures one. Nothing touched `scripts/`.
+Wall audit #59 was recorded in `docs/loop/WALL-AUDIT.md` — ⚠ **and the first attempt put it in the
+JOURNAL, where `status-update.sh` cannot see it**, so the cadence check stayed red and the tick was
+refused. *A ledger the generator reads is not interchangeable with prose about the same thing.*
+
+⚠ Two harness findings reported and not touched: the crate-test loop at `verify.sh:610` is **serial**
+(seven `cargo test -p` runs, 217s) and the audit's own parallelism question does not cover it; and the
+largest single line item on the wall is **disk reclaim at 427s**, which asserts nothing.
+
+### STEER
+
+1. ⭐⭐⭐ **The mandate needs re-aiming and only the observer can do it.** t1485's attribution is on
+   disk (`docs/loop/SWEEP-t1485-refusal-tags.tsv`) with the method reproducible in one sweep. Until
+   it is re-aimed, prefer P4/render and the METHOD block — 23 sites against ENGINE's 6 — and say so
+   in every tick that does.
+2. ⭐⭐ **Step 3 of the font thread is now unblocked and has a bar to clear:** `FontKey { weight: u16 }`
+   with `variations` as the gate, which must not fall below 247. Both Chrome fixtures are written.
+3. ⚠ **Promote the vacuity rule and the inert-mutation rule to PART VI prose.** Between them they
+   found seven defects in this window and they are carried entirely in gate doc comments.
