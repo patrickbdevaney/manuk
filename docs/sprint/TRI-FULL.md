@@ -44,5 +44,7 @@ not comparable to the 10-site numbers in TRI-BAND.tsv.
 ## Caveats
 
 - One run, not a band. The cited 10-site M1 SHAPE (85.0-85.7) and the measured one (71.3-71.7) differ by about
-  14 points (R0.4.a.b.a is open), so treat these as a single sample until a 3-run full band is measured.
+  14 points. R0.4.a.b.a found the cause: the cited 85.5 is a 3-site mean at the 30 s timeout, and the band is a
+  6-site mean at 120 s (`docs/sprint/TRI-BAND-DIFF.md`). The 85.0 and 85.7 values have no file on disk. Treat the
+  full-corpus numbers above as a single sample until a 3-run full band is measured.
 - M1 timeouts were set at 120 s to match R0.4.a.a; a different timeout changes the reachable set.
