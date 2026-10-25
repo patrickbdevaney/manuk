@@ -13,3 +13,13 @@ Check: `scripts/m1-empty-check.sh` (each cited line must appear verbatim in its 
 Neither site is a blank render (the page never reached the renderer) or an oracle-empty case (the oracle was not consulted, since fidelity stopped at the origin response).
 
 The EMPTY bucket is produced by `scripts/tri-classify.sh`'s catch-all, which does not read these `UNMEASURABLE [...]` labels. R0.4.a.a.a.a now tags them BOTWALL (bot-wall-NNN) and BLANK (empty-NNN) in `scripts/tri-sweep.sh`.
+
+## Follow-up R0.4.a.a.a.b: plain curl of amazon.com
+
+Evidence: `docs/sprint/m1-empty/amazon.curl.txt` (gate `scripts/m1-amazon-curl-check.sh`). Under plain curl the origin does not reproduce the 202 zero-byte answer:
+
+- `curl -i https://amazon.com/` returns `HTTP/1.1 301 Moved Permanently`, 163 bytes, `Location: https://www.amazon.com/`.
+- `curl -sSL https://amazon.com/` ends at `https://www.amazon.com/` with status 200 and 1,267,772 bytes (1 redirect).
+- With a desktop-browser User-Agent, the 301 repeats (2 of 2 runs); one `-L` run ended in `Connection reset by peer`.
+
+So the empty-202 is not visible to a plain HTTP client here. It is not shown to be an anti-bot response, and it is not shown to be absent under manuk's own request. The amazon row stays `[empty-202]` (blank origin response), not `[bot-wall]`. Follow-up: R0.4.a.a.a.b.a reproduces the request through manuk's own fetch.

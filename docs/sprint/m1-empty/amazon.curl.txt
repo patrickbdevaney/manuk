@@ -1,0 +1,31 @@
+# plain curl (no -A, no -L) of https://amazon.com/ on 2026-10-25T06:11:23Z, chrome_ver=145.0.7632.116
+## curl -sS -i https://amazon.com/
+HTTP/1.1 301 Moved Permanently^M
+Server: Server^M
+Date: Sun, 25 Oct 2026 06:11:24 GMT^M
+Content-Type: text/html^M
+Transfer-Encoding: chunked^M
+Connection: keep-alive^M
+Location: https://www.amazon.com/^M
+x-amz-rid: SHK5FVHZME2DNRRXGDDA^M
+Vary: User-Agent,Accept-Encoding^M
+^M
+<html>^M
+<head><title>301 Moved Permanently</title></head>^M
+<body>^M
+<center><h1>301 Moved Permanently</h1></center>^M
+<hr><center>Server</center>^M
+</body>^M
+</html>^M
+
+## curl -sS -o /dev/null -w 'status=%{http_code} size=%{size_download}' https://amazon.com/
+status=301 size=163
+## curl -sSL -o /dev/null -w 'final=%{url_effective} status=%{http_code} size=%{size_download} redirects=%{num_redirects}' https://amazon.com/
+final=https://www.amazon.com/ status=200 size=1267772 redirects=1
+
+## follow-up: same URL with a desktop-browser User-Agent, no -L (does the 202 reproduce?)
+run1 status=301 size=163 location=https://www.amazon.com/
+run2 status=301 size=163 location=https://www.amazon.com/
+## same, with -L
+curl: (35) Recv failure: Connection reset by peer
+final=https://www.amazon.com/ status=301 size=0
