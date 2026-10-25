@@ -637,9 +637,16 @@ impl AgentBrowser {
         // scorer's keywords drop 1-char tokens, so `Radio A`/`Radio B`/`Radio C` tie on `radio`
         // alone (t1402). Only taken when unambiguous; otherwise fall through.
         {
-            let norm = |s: &str| s.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase();
+            let norm = |s: &str| {
+                s.split_whitespace()
+                    .collect::<Vec<_>>()
+                    .join(" ")
+                    .to_lowercase()
+            };
             let want = norm(name);
-            let mut hit = tree.iter().filter(|n| n.role.matches(role) && norm(&n.name) == want);
+            let mut hit = tree
+                .iter()
+                .filter(|n| n.role.matches(role) && norm(&n.name) == want);
             if let (Some(n), None) = (hit.next(), hit.next()) {
                 if !want.is_empty() {
                     return Ok(n.node);

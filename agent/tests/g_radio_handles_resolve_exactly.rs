@@ -25,14 +25,26 @@ fn each_radio_resolves_to_itself() {
     let path = std::env::temp_dir().join("g_radio_handles.html");
     std::fs::write(&path, HTML).unwrap();
     let mut b = AgentBrowser::new(1024, 768);
-    rt.block_on(async { b.navigate(&format!("file://{}", path.display())).await.unwrap() });
+    rt.block_on(async {
+        b.navigate(&format!("file://{}", path.display()))
+            .await
+            .unwrap()
+    });
     let tree = b.a11y_tree().unwrap();
-    let name_of = |id| tree.iter().find(|n| n.node == id).map(|n| n.name.trim().to_string());
+    let name_of = |id| {
+        tree.iter()
+            .find(|n| n.node == id)
+            .map(|n| n.name.trim().to_string())
+    };
 
     let mut seen = std::collections::HashSet::new();
     for want in ["Radio A", "Radio B", "Radio C", "Radio AB"] {
         let id = b.resolve_handle(&Role::Radio, want).expect(want);
-        assert_eq!(name_of(id).as_deref(), Some(want), "resolve_handle({want:?}) returned the wrong radio");
+        assert_eq!(
+            name_of(id).as_deref(),
+            Some(want),
+            "resolve_handle({want:?}) returned the wrong radio"
+        );
         assert!(seen.insert(id.0), "{want} collided with an earlier radio");
     }
 }

@@ -69,7 +69,12 @@ fn worth(n: &A11yNode) -> bool {
 fn entry(n: &A11yNode) -> Entry {
     let mut st = n.state.clone();
     let value = st.value.take();
-    Entry { role: role_str(&n.role), name: clip(&n.name), state: st.render().trim().to_string(), value }
+    Entry {
+        role: role_str(&n.role),
+        name: clip(&n.name),
+        state: st.render().trim().to_string(),
+        value,
+    }
 }
 
 fn arg_str<'a>(a: &'a Map<String, Value>, k: &str) -> Option<&'a str> {
@@ -78,7 +83,13 @@ fn arg_str<'a>(a: &'a Map<String, Value>, k: &str) -> Option<&'a str> {
 
 impl<B: Backend> Session<B> {
     pub fn new(b: B) -> Self {
-        Session { b, ids: HashMap::new(), rev: HashMap::new(), next: 1, snap: None }
+        Session {
+            b,
+            ids: HashMap::new(),
+            rev: HashMap::new(),
+            next: 1,
+            snap: None,
+        }
     }
 
     pub fn backend(&self) -> &B {
@@ -106,13 +117,23 @@ impl<B: Backend> Session<B> {
     }
 
     fn parse_handle(s: &str) -> Result<u32> {
-        s.trim().trim_start_matches('[').trim_end_matches(']').trim_start_matches('h').parse().map_err(|_| anyhow!("bad handle {s:?}: expected like \"h12\""))
+        s.trim()
+            .trim_start_matches('[')
+            .trim_end_matches(']')
+            .trim_start_matches('h')
+            .parse()
+            .map_err(|_| anyhow!("bad handle {s:?}: expected like \"h12\""))
     }
 
     fn resolve<'t>(&self, tree: &'t A11yNode, hs: &str) -> Result<(u32, &'t A11yNode)> {
         let h = Self::parse_handle(hs)?;
-        let id = self.rev.get(&h).ok_or_else(|| anyhow!("h{h} is unknown (handles are per-page; call observe to list them)"))?;
-        let n = tree.iter().find(|n| n.node == *id).ok_or_else(|| anyhow!("STALE: h{h} is no longer on the page (call observe)"))?;
+        let id = self.rev.get(&h).ok_or_else(|| {
+            anyhow!("h{h} is unknown (handles are per-page; call observe to list them)")
+        })?;
+        let n = tree
+            .iter()
+            .find(|n| n.node == *id)
+            .ok_or_else(|| anyhow!("STALE: h{h} is no longer on the page (call observe)"))?;
         Ok((h, n))
     }
 
@@ -161,7 +182,11 @@ impl<B: Backend> Session<B> {
                 continue;
             }
             let h = self.handle(n.node);
-            let keep = n.role.is_interactive() || matches!(n.role, Role::Heading { .. } | Role::Dialog | Role::AlertDialog);
+            let keep = n.role.is_interactive()
+                || matches!(
+                    n.role,
+                    Role::Heading { .. } | Role::Dialog | Role::AlertDialog
+                );
             out.push((keep, Self::fmt_entry(h, &entry(n), off)));
         }
         out
@@ -202,8 +227,17 @@ impl<B: Backend> Session<B> {
         }
         let mut parts: Vec<_> = cut.into_iter().collect();
         parts.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
-        let parts: Vec<String> = parts.iter().take(6).map(|(r, n)| format!("{n} {r}")).collect();
-        let _ = writeln!(out, "… cut {cut_n} of {} lines to fit {budget_tokens} tokens ({}); {hint}", lines.len(), parts.join(", "));
+        let parts: Vec<String> = parts
+            .iter()
+            .take(6)
+            .map(|(r, n)| format!("{n} {r}"))
+            .collect();
+        let _ = writeln!(
+            out,
+            "… cut {cut_n} of {} lines to fit {budget_tokens} tokens ({}); {hint}",
+            lines.len(),
+            parts.join(", ")
+        );
         out
     }
 
@@ -226,10 +260,20 @@ impl<B: Backend> Session<B> {
                         let _ = write!(l, " name {:?}→{:?}", p.name, e.name);
                     }
                     if p.value != e.value {
-                        let _ = write!(l, " ={}→{}", p.value.as_deref().unwrap_or(""), e.value.as_deref().unwrap_or(""));
+                        let _ = write!(
+                            l,
+                            " ={}→{}",
+                            p.value.as_deref().unwrap_or(""),
+                            e.value.as_deref().unwrap_or("")
+                        );
                     }
                     if p.state != e.state {
-                        let _ = write!(l, " [{}]→[{}]", p.state.trim_matches(|c| c == '[' || c == ']'), e.state.trim_matches(|c| c == '[' || c == ']'));
+                        let _ = write!(
+                            l,
+                            " [{}]→[{}]",
+                            p.state.trim_matches(|c| c == '[' || c == ']'),
+                            e.state.trim_matches(|c| c == '[' || c == ']')
+                        );
                     }
                     out.push(l);
                 }
@@ -250,8 +294,18 @@ impl<B: Backend> Session<B> {
 
     pub async fn call(&mut self, tool: &str, a: &Map<String, Value>) -> Result<Output> {
         match tool {
-            "navigate" => self.navigate(arg_str(a, "url").ok_or_else(|| anyhow!("navigate needs `url`"))?).await.map(Output::Text),
-            "observe" => self.observe(arg_str(a, "mode").unwrap_or("full"), a.get("budget_tokens").and_then(Value::as_u64).map(|n| n as usize)).map(Output::Text),
+            "navigate" => self
+                .navigate(arg_str(a, "url").ok_or_else(|| anyhow!("navigate needs `url`"))?)
+                .await
+                .map(Output::Text),
+            "observe" => self
+                .observe(
+                    arg_str(a, "mode").unwrap_or("full"),
+                    a.get("budget_tokens")
+                        .and_then(Value::as_u64)
+                        .map(|n| n as usize),
+                )
+                .map(Output::Text),
             "act" => self
                 .act(
                     arg_str(a, "handle").ok_or_else(|| anyhow!("act needs `handle`"))?,
@@ -268,9 +322,15 @@ impl<B: Backend> Session<B> {
                 )
                 .await
                 .map(Output::Text),
-            "scroll" => self.scroll(arg_str(a, "to"), a.get("dy").and_then(Value::as_f64)).map(Output::Text),
-            "extract" => self.extract(arg_str(a, "format").unwrap_or("text"), arg_str(a, "scope")).map(Output::Text),
-            "find" => self.find(arg_str(a, "query").ok_or_else(|| anyhow!("find needs `query`"))?).map(Output::Text),
+            "scroll" => self
+                .scroll(arg_str(a, "to"), a.get("dy").and_then(Value::as_f64))
+                .map(Output::Text),
+            "extract" => self
+                .extract(arg_str(a, "format").unwrap_or("text"), arg_str(a, "scope"))
+                .map(Output::Text),
+            "find" => self
+                .find(arg_str(a, "query").ok_or_else(|| anyhow!("find needs `query`"))?)
+                .map(Output::Text),
             "screenshot" => {
                 let png = self.b.screenshot_png()?;
                 let note = match arg_str(a, "handle") {
@@ -288,7 +348,11 @@ impl<B: Backend> Session<B> {
         self.new_document();
         let tree = self.b.tree()?;
         self.snap = Some(self.snapshot(&tree));
-        let body = Self::fit(self.lines(&tree, false), DEFAULT_BUDGET_TOKENS, "use find(query) or observe(mode=viewport)");
+        let body = Self::fit(
+            self.lines(&tree, false),
+            DEFAULT_BUDGET_TOKENS,
+            "use find(query) or observe(mode=viewport)",
+        );
         Ok(format!("{UNTRUSTED}\n{}\n{body}", self.header()))
     }
 
@@ -299,17 +363,33 @@ impl<B: Backend> Session<B> {
         let out = match mode {
             "full" | "viewport" => {
                 let lines = self.lines(&tree, mode == "viewport");
-                let hint = if mode == "full" { "use find(query) or observe(mode=viewport)" } else { "scroll, then observe again" };
-                format!("{UNTRUSTED}\n{}\n{}", self.header(), Self::fit(lines, budget, hint))
+                let hint = if mode == "full" {
+                    "use find(query) or observe(mode=viewport)"
+                } else {
+                    "scroll, then observe again"
+                };
+                format!(
+                    "{UNTRUSTED}\n{}\n{}",
+                    self.header(),
+                    Self::fit(lines, budget, hint)
+                )
             }
             "diff" => match self.snap.take() {
                 None => {
                     let lines = self.lines(&tree, false);
-                    format!("{UNTRUSTED}\n{}\n(no earlier observation: full)\n{}", self.header(), Self::fit(lines, budget, "use find(query)"))
+                    format!(
+                        "{UNTRUSTED}\n{}\n(no earlier observation: full)\n{}",
+                        self.header(),
+                        Self::fit(lines, budget, "use find(query)")
+                    )
                 }
                 Some(prev) => {
                     let d = self.diff_lines(&prev, &now);
-                    let body = if d.is_empty() { "no change".to_string() } else { d.join("\n") };
+                    let body = if d.is_empty() {
+                        "no change".to_string()
+                    } else {
+                        d.join("\n")
+                    };
                     format!("{UNTRUSTED}\n{}\n{body}", self.header())
                 }
             },
@@ -349,21 +429,33 @@ impl<B: Backend> Session<B> {
             self.new_document();
             let tree = self.b.tree()?;
             self.snap = Some(self.snapshot(&tree));
-            let body = Self::fit(self.lines(&tree, false), DEFAULT_BUDGET_TOKENS / 2, "use find(query) or observe(mode=viewport)");
-            return Ok(format!("{evidence}\nnavigated: {url_before} → {url_now}\n{UNTRUSTED}\n{}\n{body}", self.header()));
+            let body = Self::fit(
+                self.lines(&tree, false),
+                DEFAULT_BUDGET_TOKENS / 2,
+                "use find(query) or observe(mode=viewport)",
+            );
+            return Ok(format!(
+                "{evidence}\nnavigated: {url_before} → {url_now}\n{UNTRUSTED}\n{}\n{body}",
+                self.header()
+            ));
         }
         let tree = self.b.tree()?;
         let after = self.snapshot(&tree);
         let d = self.diff_lines(&before, &after);
         self.snap = Some(after);
-        let body = if d.is_empty() { "no change".to_string() } else { d.join("\n") };
+        let body = if d.is_empty() {
+            "no change".to_string()
+        } else {
+            d.join("\n")
+        };
         Ok(format!("{UNTRUSTED}\n{body}\nurl: unchanged   {evidence}"))
     }
 
     async fn act(&mut self, hs: &str, action: &str, value: Option<&str>) -> Result<String> {
         let tree = self.b.tree()?;
         let (h, n) = self.resolve(&tree, hs)?;
-        let (node, role, checked, disabled) = (n.node, n.role.clone(), n.state.checked, n.state.disabled);
+        let (node, role, checked, disabled) =
+            (n.node, n.role.clone(), n.state.checked, n.state.disabled);
         if disabled {
             bail!("h{h} is disabled; nothing was clicked");
         }
@@ -399,7 +491,11 @@ impl<B: Backend> Session<B> {
             "focus" | "hover" => bail!("action {action:?} is not supported by this backend (no focus/hover model); use click or type"),
             a => bail!("unknown action {a:?}: use click, check, select"),
         };
-        self.effect(before, &url_before, &format!("verified: target was topmost at dispatch; {outcome}"))
+        self.effect(
+            before,
+            &url_before,
+            &format!("verified: target was topmost at dispatch; {outcome}"),
+        )
     }
 
     async fn type_(&mut self, hs: &str, text: &str, submit: bool) -> Result<String> {
@@ -407,9 +503,22 @@ impl<B: Backend> Session<B> {
         let (h, n) = self.resolve(&tree, hs)?;
         let node = n.node;
         if n.state.disabled || n.state.readonly {
-            bail!("h{h} is {}; nothing was typed", if n.state.disabled { "disabled" } else { "read-only" });
+            bail!(
+                "h{h} is {}; nothing was typed",
+                if n.state.disabled {
+                    "disabled"
+                } else {
+                    "read-only"
+                }
+            );
         }
-        self.verify_landing(h, node).map_err(|e| anyhow!("{}", e.to_string().replace("nothing was clicked", "nothing was typed")))?;
+        self.verify_landing(h, node).map_err(|e| {
+            anyhow!(
+                "{}",
+                e.to_string()
+                    .replace("nothing was clicked", "nothing was typed")
+            )
+        })?;
         let before = self.snapshot(&tree);
         let url_before = self.b.url();
         self.b.type_text(node, text)?;
@@ -424,12 +533,17 @@ impl<B: Backend> Session<B> {
         let tree = self.b.tree()?;
         let vis_before: std::collections::HashSet<u64> = {
             let vp = self.b.viewport();
-            tree.iter().filter(|n| worth(n) && n.bbox.is_some_and(|b| b.intersects(&vp))).map(|n| n.node.0).collect()
+            tree.iter()
+                .filter(|n| worth(n) && n.bbox.is_some_and(|b| b.intersects(&vp)))
+                .map(|n| n.node.0)
+                .collect()
         };
         let delta = match (to, dy) {
             (Some(hs), _) => {
                 let (_, n) = self.resolve(&tree, hs)?;
-                let b = n.bbox.ok_or_else(|| anyhow!("{hs} has no box to scroll to"))?;
+                let b = n
+                    .bbox
+                    .ok_or_else(|| anyhow!("{hs} has no box to scroll to"))?;
                 let vp = self.b.viewport();
                 b.y - vp.height / 3.0 - vp.y
             }
@@ -440,14 +554,28 @@ impl<B: Backend> Session<B> {
         let tree = self.b.tree()?;
         let vp = self.b.viewport();
         let mut fresh = Vec::new();
-        for n in tree.iter().filter(|n| worth(n) && n.bbox.is_some_and(|b| b.intersects(&vp))) {
+        for n in tree
+            .iter()
+            .filter(|n| worth(n) && n.bbox.is_some_and(|b| b.intersects(&vp)))
+        {
             if !vis_before.contains(&n.node.0) {
                 let h = self.handle(n.node);
-                fresh.push((n.role.is_interactive(), format!("+{}", Self::fmt_entry(h, &entry(n), ""))));
+                fresh.push((
+                    n.role.is_interactive(),
+                    format!("+{}", Self::fmt_entry(h, &entry(n), "")),
+                ));
             }
         }
-        let body = if fresh.is_empty() { "nothing new in view".to_string() } else { Self::fit(fresh, 2000, "use observe(mode=viewport)") };
-        Ok(format!("{UNTRUSTED}\nscrolled to y={:.0} of {:.0}\n{body}", self.b.scroll_y(), self.b.content_height()))
+        let body = if fresh.is_empty() {
+            "nothing new in view".to_string()
+        } else {
+            Self::fit(fresh, 2000, "use observe(mode=viewport)")
+        };
+        Ok(format!(
+            "{UNTRUSTED}\nscrolled to y={:.0} of {:.0}\n{body}",
+            self.b.scroll_y(),
+            self.b.content_height()
+        ))
     }
 
     fn extract(&mut self, format: &str, scope: Option<&str>) -> Result<String> {
@@ -460,14 +588,24 @@ impl<B: Backend> Session<B> {
         let out = match format {
             "text" => match scoped {
                 None => self.b.page_text()?,
-                Some(s) => s.iter().filter(|n| !n.name.is_empty()).map(|n| n.name.as_str()).collect::<Vec<_>>().join("\n"),
+                Some(s) => s
+                    .iter()
+                    .filter(|n| !n.name.is_empty())
+                    .map(|n| n.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join("\n"),
             },
             "markdown" => {
                 let mut md = String::new();
                 for n in root.iter() {
                     if let Role::Heading { level } = n.role {
                         if !n.name.is_empty() {
-                            let _ = writeln!(md, "{} {}\n", "#".repeat(level.clamp(1, 6) as usize), clip(&n.name));
+                            let _ = writeln!(
+                                md,
+                                "{} {}\n",
+                                "#".repeat(level.clamp(1, 6) as usize),
+                                clip(&n.name)
+                            );
                         }
                     }
                 }
@@ -483,7 +621,9 @@ impl<B: Backend> Session<B> {
                         }
                     }
                     Some(s) => {
-                        for n in s.iter().filter(|n| !n.name.is_empty() && !matches!(n.role, Role::Heading { .. })) {
+                        for n in s.iter().filter(|n| {
+                            !n.name.is_empty() && !matches!(n.role, Role::Heading { .. })
+                        }) {
                             let _ = writeln!(md, "{}", n.name);
                         }
                     }
@@ -496,7 +636,12 @@ impl<B: Backend> Session<B> {
                     let cells: Vec<String> = r
                         .children
                         .iter()
-                        .filter(|c| matches!(c.role, Role::Cell | Role::ColumnHeader | Role::RowHeader | Role::GridCell))
+                        .filter(|c| {
+                            matches!(
+                                c.role,
+                                Role::Cell | Role::ColumnHeader | Role::RowHeader | Role::GridCell
+                            )
+                        })
                         .map(|c| clip(&c.name))
                         .collect();
                     let _ = writeln!(rows, "| {} |", cells.join(" | "));
@@ -550,7 +695,11 @@ impl<B: Backend> Session<B> {
         let mut out = String::from(UNTRUSTED);
         for (_, _, n) in scored.into_iter().take(8) {
             let h = self.handle(n.node);
-            let _ = write!(out, "\n{}", Self::fmt_entry(h, &entry(n), Self::offscreen(n, &vp)));
+            let _ = write!(
+                out,
+                "\n{}",
+                Self::fmt_entry(h, &entry(n), Self::offscreen(n, &vp))
+            );
         }
         Ok(out)
     }

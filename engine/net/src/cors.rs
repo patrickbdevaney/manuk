@@ -10,11 +10,9 @@
 //! **What this module is, and is not.** It implements the *response* CORS check — the decision
 //! made once a cross-origin response has landed. A blocked read is surfaced to the page exactly as
 //! Chromium surfaces it: as a **network failure** (the host settles the request with `status == 0`,
-//! and the page's `fetch()` Promise rejects with a `TypeError`). It does **not** yet implement the
-//! CORS *preflight* (the `OPTIONS` round-trip a non-simple request — custom headers, a non-simple
-//! method — must pass before it is even sent). Preflight is a documented follow-on; the response
-//! check is the part that gates the common case (a simple cross-origin GET to a JSON API), and
-//! without it every cross-origin body leaked to the page.
+//! and the page's `fetch()` Promise rejects with a `TypeError`). The *preflight* (the `OPTIONS`
+//! round-trip a non-simple request must pass before it is even sent) is [`needs_preflight`] +
+//! [`preflight_response_allows`], driven by `manuk_net::cors_preflight`.
 
 use url::Url;
 
@@ -79,6 +77,120 @@ pub fn fetch_response_readable(
     }
     // Exact-origin echo: readable uncredentialed; a credentialed read also needs ACAC: true.
     !with_credentials || credentials_allowed()
+}
+
+/// Request headers a page may set without triggering a preflight (the CORS-safelisted set; the
+/// `Content-Type` value is checked separately).
+const SAFELISTED_HEADERS: &[&str] = &[
+    "accept",
+    "accept-language",
+    "content-language",
+    "content-type",
+    "range",
+    "origin",
+];
+
+/// Does a cross-origin request with this method and these author headers require a preflight
+/// (`OPTIONS`) before it may be sent? Non-simple method, a non-safelisted header, or a
+/// `Content-Type` other than form-urlencoded / multipart / text-plain.
+pub fn needs_preflight(method: &str, headers: &[(String, String)]) -> bool {
+    let m = if method.is_empty() { "GET" } else { method };
+    if !["GET", "HEAD", "POST"]
+        .iter()
+        .any(|s| m.eq_ignore_ascii_case(s))
+    {
+        return true;
+    }
+    headers.iter().any(|(k, v)| {
+        let k = k.to_ascii_lowercase();
+        if !SAFELISTED_HEADERS.contains(&k.as_str()) {
+            return true;
+        }
+        if k == "content-type" {
+            let essence = v
+                .split(';')
+                .next()
+                .unwrap_or("")
+                .trim()
+                .to_ascii_lowercase();
+            return !matches!(
+                essence.as_str(),
+                "application/x-www-form-urlencoded" | "multipart/form-data" | "text/plain"
+            );
+        }
+        false
+    })
+}
+
+/// The non-safelisted header names a preflight must announce, lowercase, sorted, comma-joined.
+pub fn preflight_request_headers(headers: &[(String, String)]) -> String {
+    let mut names: Vec<String> = headers
+        .iter()
+        .map(|(k, _)| k.to_ascii_lowercase())
+        .filter(|k| {
+            !["accept", "accept-language", "content-language", "origin"].contains(&k.as_str())
+        })
+        .collect();
+    names.sort();
+    names.dedup();
+    names.join(",")
+}
+
+/// Does the preflight *response* grant the actual request? Status must be 2xx, ACAO must allow
+/// `page_origin` (or `*` when uncredentialed), `Access-Control-Allow-Methods` must list the method
+/// (unless it is GET/HEAD/POST) and `Access-Control-Allow-Headers` every announced header.
+pub fn preflight_response_allows(
+    page_origin: &str,
+    status: u16,
+    response_headers: &[(String, String)],
+    method: &str,
+    request_headers: &[(String, String)],
+) -> bool {
+    if !(200..300).contains(&status) {
+        return false;
+    }
+    let header = |name: &str| {
+        response_headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(name))
+            .map(|(_, v)| v.trim())
+    };
+    match header("access-control-allow-origin") {
+        Some("*") => {}
+        Some(v) if v == page_origin => {}
+        _ => return false,
+    }
+    let list = |name: &str| -> Vec<String> {
+        header(name)
+            .unwrap_or("")
+            .split(',')
+            .map(|s| s.trim().to_ascii_lowercase())
+            .filter(|s| !s.is_empty())
+            .collect()
+    };
+    let m = if method.is_empty() { "GET" } else { method };
+    if !["GET", "HEAD", "POST"]
+        .iter()
+        .any(|s| m.eq_ignore_ascii_case(s))
+    {
+        let allowed = list("access-control-allow-methods");
+        if !allowed
+            .iter()
+            .any(|a| a == "*" || a.eq_ignore_ascii_case(m))
+        {
+            return false;
+        }
+    }
+    let wanted = preflight_request_headers(request_headers);
+    if !wanted.is_empty() {
+        let allowed = list("access-control-allow-headers");
+        for w in wanted.split(',') {
+            if !allowed.iter().any(|a| a == "*" || a == w) {
+                return false;
+            }
+        }
+    }
+    true
 }
 
 #[cfg(test)]
@@ -205,6 +317,78 @@ mod tests {
                 ("access-control-allow-credentials", "true"),
             ]),
             true,
+        ));
+    }
+}
+
+#[cfg(test)]
+mod preflight_tests {
+    use super::*;
+    fn h(p: &[(&str, &str)]) -> Vec<(String, String)> {
+        p.iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn preflight_classification() {
+        assert!(!needs_preflight("GET", &[]));
+        assert!(!needs_preflight(
+            "POST",
+            &h(&[("Content-Type", "text/plain;charset=UTF-8")])
+        ));
+        assert!(needs_preflight(
+            "POST",
+            &h(&[("Content-Type", "application/json")])
+        ));
+        assert!(needs_preflight("PUT", &[]));
+        assert!(needs_preflight("DELETE", &[]));
+        assert!(needs_preflight("GET", &h(&[("Authorization", "x")])));
+        assert!(!needs_preflight("GET", &h(&[("Accept", "*/*")])));
+    }
+
+    #[test]
+    fn preflight_response() {
+        let ok = h(&[
+            ("Access-Control-Allow-Origin", "https://a.example"),
+            ("Access-Control-Allow-Methods", "PUT, DELETE"),
+            ("Access-Control-Allow-Headers", "Authorization"),
+        ]);
+        let req = h(&[("authorization", "x")]);
+        assert!(preflight_response_allows(
+            "https://a.example",
+            204,
+            &ok,
+            "PUT",
+            &req
+        ));
+        assert!(!preflight_response_allows(
+            "https://b.example",
+            204,
+            &ok,
+            "PUT",
+            &req
+        ));
+        assert!(!preflight_response_allows(
+            "https://a.example",
+            403,
+            &ok,
+            "PUT",
+            &req
+        ));
+        assert!(!preflight_response_allows(
+            "https://a.example",
+            204,
+            &ok,
+            "PATCH",
+            &req
+        ));
+        assert!(!preflight_response_allows(
+            "https://a.example",
+            204,
+            &ok,
+            "PUT",
+            &h(&[("x-other", "1")])
         ));
     }
 }

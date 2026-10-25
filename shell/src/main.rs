@@ -41,7 +41,12 @@ fn main() -> Result<()> {
         .with_writer(std::io::stderr)
         .init();
 
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    // W3.10: opt out of the private-network egress guard (public page -> loopback/LAN/link-local).
+    if let Some(i) = args.iter().position(|a| a == "--allow-private-network") {
+        args.remove(i);
+        manuk_net::egress::set_allow_private_network(true);
+    }
     let result = match args.first().map(String::as_str) {
         Some("render") => cmd_render(&args[1..]),
         Some("browse") => cmd_browse(&args[1..]),

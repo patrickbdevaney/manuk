@@ -6,8 +6,8 @@ use std::sync::Arc;
 use anyhow::Result;
 use manuk_agent::AgentBrowser;
 use rmcp::model::{
-    CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, ListToolsResult, PaginatedRequestParams,
-    ServerCapabilities, ServerConfig, Tool,
+    CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, ListToolsResult,
+    PaginatedRequestParams, ServerCapabilities, ServerConfig, Tool,
 };
 use rmcp::service::RequestContext;
 use rmcp::{ErrorData as McpError, RoleServer, ServerHandler, ServiceExt};
@@ -25,18 +25,26 @@ struct Job {
 }
 
 /// Spawn the session thread around any backend built *on that thread* (it need not be `Send`).
-pub fn spawn_session<B: Backend + 'static>(make: impl FnOnce() -> B + Send + 'static) -> mpsc::UnboundedSender<Job> {
+pub fn spawn_session<B: Backend + 'static>(
+    make: impl FnOnce() -> B + Send + 'static,
+) -> mpsc::UnboundedSender<Job> {
     let (tx, mut rx) = mpsc::unbounded_channel::<Job>();
     std::thread::Builder::new()
         .name("manuk-session".into())
         // The engine recurses deeply on real pages.
         .stack_size(256 * 1024 * 1024)
         .spawn(move || {
-            let rt = tokio::runtime::Builder::new_current_thread().enable_all().build().expect("session runtime");
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("session runtime");
             rt.block_on(async move {
                 let mut s = Session::new(make());
                 while let Some(job) = rx.recv().await {
-                    let r = s.call(&job.tool, &job.args).await.map_err(|e| format!("{e:#}"));
+                    let r = s
+                        .call(&job.tool, &job.args)
+                        .await
+                        .map_err(|e| format!("{e:#}"));
                     let _ = job.reply.send(r);
                 }
             });
@@ -52,7 +60,10 @@ pub struct ManukMcp {
 }
 
 fn schema(props: Value, required: &[&str]) -> Map<String, Value> {
-    let Value::Object(m) = json!({"type": "object", "properties": props, "required": required}) else { unreachable!() };
+    let Value::Object(m) = json!({"type": "object", "properties": props, "required": required})
+    else {
+        unreachable!()
+    };
     m
 }
 
@@ -72,7 +83,10 @@ fn tools() -> Vec<Tool> {
 
 impl ManukMcp {
     pub fn new(tx: mpsc::UnboundedSender<Job>) -> Self {
-        ManukMcp { tx, tools: Arc::new(tools()) }
+        ManukMcp {
+            tx,
+            tools: Arc::new(tools()),
+        }
     }
 }
 
@@ -82,7 +96,11 @@ impl ServerHandler for ManukMcp {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
     }
 
-    async fn list_tools(&self, _r: Option<PaginatedRequestParams>, _c: RequestContext<RoleServer>) -> Result<ListToolsResult, McpError> {
+    async fn list_tools(
+        &self,
+        _r: Option<PaginatedRequestParams>,
+        _c: RequestContext<RoleServer>,
+    ) -> Result<ListToolsResult, McpError> {
         let mut r = ListToolsResult::default();
         r.tools = (*self.tools).clone();
         Ok(r)
@@ -92,17 +110,32 @@ impl ServerHandler for ManukMcp {
         self.tools.iter().find(|t| t.name == name).cloned()
     }
 
-    async fn call_tool(&self, req: CallToolRequestParams, _c: RequestContext<RoleServer>) -> Result<CallToolResponse, McpError> {
+    async fn call_tool(
+        &self,
+        req: CallToolRequestParams,
+        _c: RequestContext<RoleServer>,
+    ) -> Result<CallToolResponse, McpError> {
         let (reply, rx) = oneshot::channel();
-        let job = Job { tool: req.name.to_string(), args: req.arguments.unwrap_or_default(), reply };
-        self.tx.send(job).map_err(|_| McpError::internal_error("session thread is gone", None))?;
-        let res = rx.await.map_err(|_| McpError::internal_error("session thread dropped the call", None))?;
+        let job = Job {
+            tool: req.name.to_string(),
+            args: req.arguments.unwrap_or_default(),
+            reply,
+        };
+        self.tx
+            .send(job)
+            .map_err(|_| McpError::internal_error("session thread is gone", None))?;
+        let res = rx
+            .await
+            .map_err(|_| McpError::internal_error("session thread dropped the call", None))?;
         Ok(match res {
             Ok(Output::Text(t)) => CallToolResult::success(vec![ContentBlock::text(t)]),
             Ok(Output::Image { png, note }) => {
                 use base64::Engine;
                 let b64 = base64::engine::general_purpose::STANDARD.encode(png);
-                CallToolResult::success(vec![ContentBlock::text(note), ContentBlock::image(b64, "image/png")])
+                CallToolResult::success(vec![
+                    ContentBlock::text(note),
+                    ContentBlock::image(b64, "image/png"),
+                ])
             }
             Err(e) => CallToolResult::error(vec![ContentBlock::text(e)]),
         }
@@ -112,7 +145,10 @@ impl ServerHandler for ManukMcp {
 
 pub fn run_stdio(width: u32, height: u32) -> Result<()> {
     let tx = spawn_session(move || AgentBrowser::new(width, height));
-    let rt = tokio::runtime::Builder::new_multi_thread().worker_threads(2).enable_all().build()?;
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(2)
+        .enable_all()
+        .build()?;
     rt.block_on(async move {
         let svc = ManukMcp::new(tx).serve(rmcp::transport::stdio()).await?;
         svc.waiting().await?;

@@ -36,7 +36,9 @@ fn describe(a: Activation) -> String {
         Activation::Navigated(u) => format!("followed link to {u}"),
         Activation::Submitted(u) => format!("submitted form to {u}"),
         Activation::Toggled(on) => format!("toggled {}", if on { "on" } else { "off" }),
-        Activation::Disclosed(open) => format!("disclosure {}", if open { "opened" } else { "closed" }),
+        Activation::Disclosed(open) => {
+            format!("disclosure {}", if open { "opened" } else { "closed" })
+        }
         Activation::Inert => "dispatched click (no built-in activation behaviour)".into(),
     }
 }
@@ -57,7 +59,12 @@ impl Backend for AgentBrowser {
     }
     fn viewport(&self) -> Rect {
         let (w, h) = AgentBrowser::viewport(self);
-        Rect { x: 0.0, y: self.scroll_offset(), width: w as f32, height: h as f32 }
+        Rect {
+            x: 0.0,
+            y: self.scroll_offset(),
+            width: w as f32,
+            height: h as f32,
+        }
     }
     fn scroll_y(&self) -> f32 {
         self.scroll_offset()
@@ -81,7 +88,12 @@ impl Backend for AgentBrowser {
         Ok(self.observe()?.text)
     }
     fn links(&self) -> Result<Vec<(String, String)>> {
-        Ok(self.observe()?.links.into_iter().map(|l| (l.text, l.href)).collect())
+        Ok(self
+            .observe()?
+            .links
+            .into_iter()
+            .map(|l| (l.text, l.href))
+            .collect())
     }
     fn screenshot_png(&self) -> Result<Vec<u8>> {
         AgentBrowser::screenshot_png(self)

@@ -23,9 +23,17 @@ impl Client {
             .expect("spawn manuk-mcp");
         let tx = child.stdin.take().unwrap();
         let rx = BufReader::new(child.stdout.take().unwrap());
-        let mut c = Client { child, tx, rx, id: 0 };
+        let mut c = Client {
+            child,
+            tx,
+            rx,
+            id: 0,
+        };
         let init = c.rpc("initialize", json!({"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}));
-        assert!(init["result"]["capabilities"]["tools"].is_object(), "{init}");
+        assert!(
+            init["result"]["capabilities"]["tools"].is_object(),
+            "{init}"
+        );
         c.send(json!({"jsonrpc": "2.0", "method": "notifications/initialized"}));
         c
     }
@@ -39,7 +47,10 @@ impl Client {
         self.send(json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}));
         loop {
             let mut line = String::new();
-            assert!(self.rx.read_line(&mut line).unwrap() > 0, "server closed stdout");
+            assert!(
+                self.rx.read_line(&mut line).unwrap() > 0,
+                "server closed stdout"
+            );
             let v: Value = serde_json::from_str(&line).unwrap();
             if v["id"] == json!(id) {
                 return v;
@@ -50,7 +61,15 @@ impl Client {
     fn tool(&mut self, name: &str, args: Value) -> (bool, String) {
         let r = self.rpc("tools/call", json!({"name": name, "arguments": args}));
         let res = &r["result"];
-        let text = res["content"].as_array().map(|c| c.iter().filter_map(|b| b["text"].as_str()).collect::<Vec<_>>().join("\n")).unwrap_or_default();
+        let text = res["content"]
+            .as_array()
+            .map(|c| {
+                c.iter()
+                    .filter_map(|b| b["text"].as_str())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            })
+            .unwrap_or_default();
         (res["isError"].as_bool().unwrap_or(false), text)
     }
 }
@@ -61,12 +80,18 @@ impl Drop for Client {
 }
 
 fn fixture(name: &str) -> String {
-    format!("file://{}/tests/fixtures/{name}", env!("CARGO_MANIFEST_DIR"))
+    format!(
+        "file://{}/tests/fixtures/{name}",
+        env!("CARGO_MANIFEST_DIR")
+    )
 }
 
 /// The handle of the first line containing `needle`.
 fn handle_of(text: &str, needle: &str) -> String {
-    let line = text.lines().find(|l| l.contains(needle)).unwrap_or_else(|| panic!("no line with {needle:?} in:\n{text}"));
+    let line = text
+        .lines()
+        .find(|l| l.contains(needle))
+        .unwrap_or_else(|| panic!("no line with {needle:?} in:\n{text}"));
     let start = line.find("[h").unwrap();
     let end = line[start..].find(']').unwrap() + start;
     line[start + 1..end].to_string()
@@ -76,8 +101,22 @@ fn handle_of(text: &str, needle: &str) -> String {
 fn lists_the_tool_surface() {
     let mut c = Client::start();
     let r = c.rpc("tools/list", json!({}));
-    let names: Vec<&str> = r["result"]["tools"].as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap()).collect();
-    for want in ["navigate", "observe", "act", "type", "scroll", "extract", "find", "screenshot"] {
+    let names: Vec<&str> = r["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["name"].as_str().unwrap())
+        .collect();
+    for want in [
+        "navigate",
+        "observe",
+        "act",
+        "type",
+        "scroll",
+        "extract",
+        "find",
+        "screenshot",
+    ] {
         assert!(names.contains(&want), "missing {want}: {names:?}");
     }
 }
@@ -93,7 +132,10 @@ fn scripted_session_navigates_clicks_and_reads_the_diff() {
     // click → the effect comes back with the call: a dialog appears, qty changes.
     let (err, eff) = c.tool("act", json!({"handle": add, "action": "click"}));
     assert!(!err, "{eff}");
-    assert!(eff.contains("+[h") && eff.contains("dialog \"Cart (1 item)\""), "no dialog in diff:\n{eff}");
+    assert!(
+        eff.contains("+[h") && eff.contains("dialog \"Cart (1 item)\""),
+        "no dialog in diff:\n{eff}"
+    );
     assert!(eff.contains("verified: target was topmost"), "{eff}");
     assert!(eff.contains("url: unchanged"), "{eff}");
 
@@ -107,13 +149,23 @@ fn scripted_session_navigates_clicks_and_reads_the_diff() {
     assert!(!err, "{t}");
     assert!(t.contains("=2→7") || t.contains("=1→7"), "{t}");
     // R1.2: the change is a `~` line carrying the SAME handle the agent typed into
-    assert!(t.lines().any(|l| l.starts_with(&format!("~[{q}]")) && l.contains('→')), "no ~[{q}] line:\n{t}");
+    assert!(
+        t.lines()
+            .any(|l| l.starts_with(&format!("~[{q}]")) && l.contains('→')),
+        "no ~[{q}] line:\n{t}"
+    );
 
     // checkbox toggles and is verified through state, idempotently
     let gift = handle_of(&full, "checkbox");
     let (_, on) = c.tool("act", json!({"handle": gift, "action": "check"}));
-    assert!(on.contains("unchecked]→[checked") || on.contains("checked"), "{on}");
-    assert!(on.lines().any(|l| l.starts_with(&format!("~[{gift}]"))), "no ~[{gift}] line:\n{on}");
+    assert!(
+        on.contains("unchecked]→[checked") || on.contains("checked"),
+        "{on}"
+    );
+    assert!(
+        on.lines().any(|l| l.starts_with(&format!("~[{gift}]"))),
+        "no ~[{gift}] line:\n{on}"
+    );
     let (_, again) = c.tool("act", json!({"handle": gift, "action": "check"}));
     assert!(again.contains("already checked"), "{again}");
 
@@ -122,7 +174,10 @@ fn scripted_session_navigates_clicks_and_reads_the_diff() {
     let co = handle_of(&full, "link \"Checkout\"");
     let (err, go) = c.tool("act", json!({"handle": co}));
     assert!(!err, "{go}");
-    assert!(go.contains("navigated:") && go.contains("Order received"), "{go}");
+    assert!(
+        go.contains("navigated:") && go.contains("Order received"),
+        "{go}"
+    );
     // the old page's handle is gone
     let (err, stale) = c.tool("act", json!({"handle": add}));
     assert!(err && stale.contains("unknown"), "{stale}");
@@ -134,26 +189,41 @@ fn covered_target_fails_loudly_with_the_reason() {
     let (_, nav) = c.tool("navigate", json!({"url": fixture("shop.html")}));
     let covered = handle_of(&nav, "Covered button");
     let (err, msg) = c.tool("act", json!({"handle": covered}));
-    assert!(err, "clicking a covered button must be an error, got:\n{msg}");
-    assert!(msg.contains("covered by [h") && msg.contains("cookie banner"), "{msg}");
+    assert!(
+        err,
+        "clicking a covered button must be an error, got:\n{msg}"
+    );
+    assert!(
+        msg.contains("covered by [h") && msg.contains("cookie banner"),
+        "{msg}"
+    );
 }
 
 #[test]
 fn find_scroll_extract_and_budget() {
     let mut c = Client::start();
     let (_, nav) = c.tool("navigate", json!({"url": fixture("shop.html")}));
-    assert!(nav.contains("↓offscreen"), "far content should be marked offscreen:\n{nav}");
+    assert!(
+        nav.contains("↓offscreen"),
+        "far content should be marked offscreen:\n{nav}"
+    );
     let (_, f) = c.tool("find", json!({"query": "footer link"}));
     assert!(f.lines().nth(1).unwrap().contains("Footer link"), "{f}");
     let h = handle_of(&f, "Footer link");
     let (err, s) = c.tool("scroll", json!({"to": h}));
     assert!(!err && s.contains("scrolled to y="), "{s}");
     let (_, vp) = c.tool("observe", json!({"mode": "viewport"}));
-    assert!(vp.contains("Footer link") && !vp.contains("Add to cart"), "{vp}");
+    assert!(
+        vp.contains("Footer link") && !vp.contains("Add to cart"),
+        "{vp}"
+    );
     let (_, md) = c.tool("extract", json!({"format": "markdown"}));
     assert!(md.contains("# Widget Shop"), "{md}");
     let (_, tiny) = c.tool("observe", json!({"mode": "full", "budget_tokens": 40}));
-    assert!(tiny.contains("… cut ") && tiny.len() < 40 * 4 + 600, "{tiny}");
+    assert!(
+        tiny.contains("… cut ") && tiny.len() < 40 * 4 + 600,
+        "{tiny}"
+    );
     let (err, bad) = c.tool("act", json!({"handle": "h9999"}));
     assert!(err, "{bad}");
     let (err, shot) = c.rpc_image_len();
@@ -163,7 +233,13 @@ fn find_scroll_extract_and_budget() {
 impl Client {
     fn rpc_image_len(&mut self) -> (bool, usize) {
         let r = self.rpc("tools/call", json!({"name": "screenshot", "arguments": {}}));
-        let img = r["result"]["content"].as_array().unwrap().iter().find(|b| b["type"] == "image").map(|b| b["data"].as_str().unwrap().len()).unwrap_or(0);
+        let img = r["result"]["content"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|b| b["type"] == "image")
+            .map(|b| b["data"].as_str().unwrap().len())
+            .unwrap_or(0);
         (r["result"]["isError"].as_bool().unwrap_or(false), img)
     }
 }
@@ -175,16 +251,27 @@ fn modal_over_a_button_is_occluded_until_dismissed() {
     let buy = handle_of(&nav, "button \"Buy now\"");
     let name = handle_of(&nav, "textbox");
     let (err, msg) = c.tool("act", json!({"handle": buy}));
-    assert!(err && msg.contains("OCCLUDED") && msg.contains("covered by [h") && msg.contains("Sign up dialog"), "{msg}");
+    assert!(
+        err && msg.contains("OCCLUDED")
+            && msg.contains("covered by [h")
+            && msg.contains("Sign up dialog"),
+        "{msg}"
+    );
     // typing into a covered field is refused too, and nothing was changed
     let (err, msg) = c.tool("type", json!({"handle": name, "text": "x"}));
-    assert!(err && msg.contains("OCCLUDED") && msg.contains("nothing was typed"), "{msg}");
+    assert!(
+        err && msg.contains("OCCLUDED") && msg.contains("nothing was typed"),
+        "{msg}"
+    );
     // dismiss the dialog, and the same handle now clicks
     let close = handle_of(&nav, "Dismiss");
     let (err, eff) = c.tool("act", json!({"handle": close}));
     assert!(!err, "{eff}");
     let (err, eff) = c.tool("act", json!({"handle": buy}));
-    assert!(!err && eff.contains("verified: target was topmost") && eff.contains("bought"), "{eff}");
+    assert!(
+        !err && eff.contains("verified: target was topmost") && eff.contains("bought"),
+        "{eff}"
+    );
     // the dismissed dialog's own button is gone: stale, loudly
     let (err, msg) = c.tool("act", json!({"handle": close}));
     assert!(err && msg.contains("STALE"), "{msg}");

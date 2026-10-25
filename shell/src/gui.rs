@@ -3198,6 +3198,32 @@ impl App {
                             hdrs.push(("origin", po.as_str()));
                         }
                     }
+                    // **CORS preflight (W3.10):** a non-simple cross-origin request is not even sent
+                    // unless the server's OPTIONS answer allows it; the page sees a network failure.
+                    if cross_origin {
+                        if let Some(po) = &page_origin {
+                            let allowed = manuk_net::cors_preflight(po, &url, &method, &headers)
+                                .await
+                                .unwrap_or(false);
+                            if !allowed {
+                                tracing::info!(url = %url, "page fetch blocked: CORS preflight not allowed");
+                                let _ = proxy.send_event(NavEvent::PageFetchStream {
+                                    gen,
+                                    id,
+                                    event: manuk_page::FetchStreamEvent::Head {
+                                        status: 0,
+                                        headers: Vec::new(),
+                                    },
+                                });
+                                let _ = proxy.send_event(NavEvent::PageFetchStream {
+                                    gen,
+                                    id,
+                                    event: manuk_page::FetchStreamEvent::End,
+                                });
+                                return;
+                            }
+                        }
+                    }
                     let bytes = manuk_net::Bytes::from(body.into_bytes());
 
                     // **Streamed, not buffered.** `Head` goes up the moment the response headers

@@ -37,6 +37,7 @@ pub mod aia;
 pub mod cookies;
 
 pub mod cors;
+pub mod egress;
 /// E7 storage layer — RFC 6265 cookie jar.
 pub mod webstorage;
 
@@ -99,7 +100,8 @@ const ACCEPT_LANGUAGE_STR: &str = "en-US,en;q=0.9";
 /// Maximum number of 3xx redirects to follow before giving up.
 const MAX_REDIRECTS: usize = 10;
 
-type NetClient = Client<HttpsConnector<HttpConnector>, Full<Bytes>>;
+type NetConnector = HttpsConnector<HttpConnector<egress::GuardResolver>>;
+type NetClient = Client<NetConnector, Full<Bytes>>;
 
 /// The process-global pooled client. Cheap to clone; reuses idle connections
 /// (default 90s keep-alive), so sequential same-origin fetches skip the TLS
@@ -109,19 +111,28 @@ type NetClient = Client<HttpsConnector<HttpConnector>, Full<Bytes>>;
 /// preconnect's TLS handshake populates the **same session cache** the real
 /// navigation resumes from (a warm preconnect saves the TLS round-trips even though
 /// the raw socket itself is not adopted by the pool).
-fn connector() -> HttpsConnector<HttpConnector> {
-    static CONN: OnceLock<HttpsConnector<HttpConnector>> = OnceLock::new();
-    CONN.get_or_init(|| {
-        // Install a rustls crypto provider once (idempotent).
-        let _ = rustls::crypto::ring::default_provider().install_default();
-        hyper_rustls::HttpsConnectorBuilder::new()
-            .with_tls_config(aia::client_config())
-            .https_or_http()
-            .enable_http1()
-            .enable_http2()
-            .build()
-    })
-    .clone()
+fn connector() -> NetConnector {
+    static CONN: OnceLock<NetConnector> = OnceLock::new();
+    CONN.get_or_init(|| build_connector(true)).clone()
+}
+
+/// The embedder's own connector (LLM endpoint etc.): same TLS config, no egress guard.
+fn trusted_connector() -> NetConnector {
+    static CONN: OnceLock<NetConnector> = OnceLock::new();
+    CONN.get_or_init(|| build_connector(false)).clone()
+}
+
+fn build_connector(guarded: bool) -> NetConnector {
+    // Install a rustls crypto provider once (idempotent).
+    let _ = rustls::crypto::ring::default_provider().install_default();
+    let mut http = HttpConnector::new_with_resolver(egress::GuardResolver { guarded });
+    http.enforce_http(false);
+    hyper_rustls::HttpsConnectorBuilder::new()
+        .with_tls_config(aia::client_config())
+        .https_or_http()
+        .enable_http1()
+        .enable_http2()
+        .wrap_connector(http)
 }
 
 /// **THE async runtime. Singular. (METHODOLOGY Part 25.1.)**
@@ -185,6 +196,20 @@ fn client() -> &'static NetClient {
             .http2_max_header_list_size(HTTP2_MAX_HEADER_LIST_SIZE)
             .build(connector())
     })
+}
+
+fn trusted_client() -> &'static NetClient {
+    static CLIENT: OnceLock<NetClient> = OnceLock::new();
+    CLIENT.get_or_init(|| {
+        Client::builder(TokioExecutor::new())
+            .http2_max_header_list_size(HTTP2_MAX_HEADER_LIST_SIZE)
+            .build(trusted_connector())
+    })
+}
+
+tokio::task_local! {
+    /// Set around embedder-originated requests (no page initiator): exempt from the egress guard.
+    static TRUSTED: ();
 }
 
 /// The negotiated HTTP version of a response.
@@ -1366,6 +1391,7 @@ pub fn is_local_url(url: &str) -> bool {
 /// this exact; in the multi-tab GUI it names the most recent navigation, which is why the frame
 /// loader and `contentDocument` ALSO check the embedding document directly rather than trusting it.
 pub fn set_top_level_document(url: &str) {
+    egress::note_top_level(url);
     WEB_DOCUMENT_ACTIVE.store(!is_local_url(url), std::sync::atomic::Ordering::SeqCst);
 }
 
@@ -1769,6 +1795,41 @@ async fn warm_origin(target: &str) -> bool {
     conn.call(uri).await.is_ok()
 }
 
+/// **CORS preflight.** For a cross-origin request that needs one ([`cors::needs_preflight`]), send
+/// the `OPTIONS` and return whether the server allowed the real request. `Ok(true)` also when no
+/// preflight is needed. The real request must not be sent on `Ok(false)`/`Err`.
+pub async fn cors_preflight(
+    page_origin: &str,
+    url: &str,
+    method: &str,
+    headers: &[(String, String)],
+) -> Result<bool> {
+    if !cors::needs_preflight(method, headers) {
+        return Ok(true);
+    }
+    let m = if method.is_empty() { "GET" } else { method };
+    let announced = cors::preflight_request_headers(headers);
+    let mut h: Vec<(&str, &str)> = vec![
+        ("origin", page_origin),
+        ("access-control-request-method", m),
+    ];
+    if !announced.is_empty() {
+        h.push(("access-control-request-headers", &announced));
+    }
+    let u = Url::parse(url).with_context(|| format!("invalid URL: {url}"))?;
+    // No cookies, no redirects: a preflight is anonymous and a redirected one fails.
+    let resp = send_raw("OPTIONS", &u, &h, Bytes::new()).await?;
+    let status = resp.status().as_u16();
+    let rh = collect_headers(&resp);
+    Ok(cors::preflight_response_allows(
+        page_origin,
+        status,
+        &rh,
+        m,
+        headers,
+    ))
+}
+
 /// A general single request (no redirect following): any method, extra headers, and
 /// a request body. Used for API calls (e.g. `POST` JSON to an LLM endpoint).
 pub async fn request(
@@ -1793,6 +1854,12 @@ pub async fn request_from(
 ) -> Result<Response> {
     let u = Url::parse(url).with_context(|| format!("invalid URL: {url}"))?;
     let init = initiator.and_then(|s| Url::parse(s).ok());
+    if init.is_none() && initiator.is_none() {
+        // No page behind this call: the embedder's own API request (e.g. a local LLM on loopback).
+        return TRUSTED
+            .scope((), send_once(method, &u, headers, body, None))
+            .await;
+    }
     send_once(method, &u, headers, body, init.as_ref()).await
 }
 
@@ -1950,6 +2017,10 @@ async fn send_raw(
         "http" | "https" => {}
         other => bail!("unsupported URL scheme: {other}"),
     }
+    let trusted = TRUSTED.try_with(|_| ()).is_ok();
+    if !trusted {
+        egress::check_url_literal(url)?;
+    }
 
     let mut builder = Request::builder()
         .method(method)
@@ -1975,8 +2046,8 @@ async fn send_raw(
     }
     let req = builder.body(Full::new(body)).context("building request")?;
 
-    client()
-        .request(req)
+    let c = if trusted { trusted_client() } else { client() };
+    c.request(req)
         .await
         .with_context(|| format!("request to {url} failed"))
 }

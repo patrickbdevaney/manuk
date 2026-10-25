@@ -238,6 +238,12 @@
   - L188 · ⚠ The instrument's own first reading was contaminated, and the second is the one above
   - L204 · ⚠ And the histogram key had a space in it
 
+## A public page could make the browser dial 127.0.0.1 — the guard lives where DNS is resolved
+`docs/wiki/a-public-page-cannot-dial-the-lan.md`
+
+  - L5 · Mechanism
+  - L19 · Not covered
+
 ## ARCHITECTURE — concurrency, process model, memory, and the REASONING
 `docs/wiki/architecture.md`
 
@@ -3685,4 +3691,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3052 sections across 157 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3054 sections across 158 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
