@@ -16,7 +16,7 @@ fontdb.workspace = true
 fontdue.workspace = true
 tracing.workspace = true
 # Bounded shaped-run/measure cache (A3). Pure-Rust, cross-platform.
-lru = "0.12"
+lru = "0.18"
 # swash — the rasterizer of the Parley text stack: subpixel glyph positioning, hinting,
 # and (future) color/emoji + shaping. Replaces fontdue for glyph rasterization; fontdue
 # is retained for measurement so advance widths (and thus layout/parity) are unchanged.

@@ -61,7 +61,7 @@ hyper-rustls = { version = "0.27", default-features = false, features = ["http1"
 http = "1"
 http-body-util = "0.1"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
-webpki-roots = "0.26"
+webpki-roots = "1"
 rustls-pki-types = "1"
 # Streaming body decode (Content-Encoding) — feature-gated, pulls only what we use.
 async-compression = { version = "0.4", default-features = false, features = ["tokio", "gzip", "brotli", "deflate", "zlib"] }

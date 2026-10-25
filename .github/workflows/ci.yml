@@ -85,6 +85,9 @@ jobs:
           echo "BINDGEN_EXTRA_CLANG_ARGS=-I${CXX_INC} -I${CXX_INC}/x86_64-linux-gnu" >> "$GITHUB_ENV"
       - name: fmt
         run: cargo fmt --all --check
+      # RustSec advisories gate (deny.toml carries the reasoned ignores). Pinned to the version it was green on.
+      - name: cargo deny advisories
+        run: cargo install cargo-deny --locked --version 0.20.2 && cargo deny check advisories
       # The HEADLESS build first — the leanest, most-portable config, and the one mac/windows also run.
       # It must be green: it is the demo/agent substrate and has no display/GPU/JS dependency.
       # Every build/test goes through `ci-run.sh`, which re-emits the real error as a `::error::`

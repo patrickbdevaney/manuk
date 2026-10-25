@@ -1,0 +1,15 @@
+# cargo-deny policy. R1.5: advisories gate (`cargo deny check advisories`). W3.2 tightens sources + bans.
+[advisories]
+version = 2
+yanked = "deny"
+# Every ignore carries a reason and must be revisited when the named upstream moves.
+ignore = [
+  # quick-xml 0.39 is reached only through wayland-scanner, a build-time proc-macro that parses the
+  # trusted protocol XML shipped in wayland-protocols; no untrusted XML ever reaches it.
+  { id = "RUSTSEC-2026-0194", reason = "quick-xml only via wayland-scanner build-time proc-macro, trusted input" },
+  { id = "RUSTSEC-2026-0195", reason = "quick-xml only via wayland-scanner build-time proc-macro, trusted input" },
+  # Unmaintained (not vulnerable) crates with no drop-in successor in the pinned stylo/cosmic-text/winit stack.
+  { id = "RUSTSEC-2024-0436", reason = "paste: unmaintained, proc-macro only, no runtime code; transitive" },
+  { id = "RUSTSEC-2026-0206", reason = "rustybuzz unmaintained; shaping stack replaced with the text-stack move, tracked in graph" },
+  { id = "RUSTSEC-2026-0192", reason = "ttf-parser unmaintained; transitive via font stack, revisit with rustybuzz" },
+]

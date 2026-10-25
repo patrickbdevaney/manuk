@@ -62,7 +62,7 @@ tracing.workspace = true
 # Feature-gated. Pulled only with a `spidermonkey*` feature. `default-features = false`
 # so the ICU-carrying `intl` default can be opted OUT of by `spidermonkey-noicu`;
 # `spidermonkey` re-enables the full default set explicitly.
-mozjs = { version = "0.18", optional = true, default-features = false }
+mozjs = { version = "=0.15.20", optional = true, default-features = false }
 
 # OS CSPRNG (`getrandom(2)` / `/dev/urandom` on Linux) behind `crypto.getRandomValues` and
 # `crypto.randomUUID`. Optional + gated to `_sm`: it is only reachable from the SpiderMonkey
