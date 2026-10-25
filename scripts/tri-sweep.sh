@@ -44,18 +44,22 @@ echo "▶ TRI-SWEEP: ${#ROWS[@]} sites  jobs=$JOBS  m1-timeout=${M1TMO}s  corpus
 # ── Phase A: M1 fidelity per-site, ISOLATED --out (this is also the REACHABILITY signal). ──
 # Bot-wall sites fail here in <=M1TMO and are then SKIPPED by M2/a11y (which otherwise hang their own fetch).
 run_m1() {
-  local cat="$1" url="$2" iso o cov shape vis paths st
-  iso="$OUT/iso/$(printf '%s' "$url"|md5sum|cut -c1-10)"; mkdir -p "$iso"
-  o=$(timeout "$M1TMO" nice -n 15 "$MW" fidelity --urls "$url" --out "$iso" 2>&1)
+  local cat="$1" url="$2" iso o cov shape vis paths st rc key
+  key=$(printf '%s' "$url"|md5sum|cut -c1-10); iso="$OUT/iso/$key"; mkdir -p "$iso"
+  # stdout+stderr are parsed together, but stderr is also kept per site so a non-reachable verdict has a reason on disk
+  o=$(timeout "$M1TMO" nice -n 15 "$MW" fidelity --urls "$url" --out "$iso" 2>"$OUT/err/$key.m1.log"); rc=$?
+  o="$o"$'\n'"$(cat "$OUT/err/$key.m1.log")"
   cov=$(printf '%s' "$o"|grep -oE 'structural: [0-9.]+%'|grep -oE '[0-9.]+'|head -1)
   paths=$(printf '%s' "$o"|grep -oE 'oracle [0-9]+ paths'|grep -oE '[0-9]+'|head -1)
   shape=$(printf '%s' "$o"|grep -oE 'SHAPE: [0-9.]+%'|grep -oE '[0-9.]+'|head -1)
   vis=$(printf '%s' "$o"|grep -oE 'MEAN VISUAL: +[0-9.]+'|grep -oE '[0-9.]+'|head -1)
-  if   printf '%s' "$o"|grep -qiE 'segmentation fault|SIGSEGV|panicked'; then st=CRASH
+  if   [ "$rc" -eq 124 ]; then st=TIMEOUT
+  elif [ "$rc" -ge 128 ] || printf '%s' "$o"|grep -qiE 'segmentation fault|SIGSEGV|panicked'; then st=CRASH
   elif [ "${paths:-0}" -ge 10 ] 2>/dev/null; then st=OK
   elif [ "${paths:-0}" -gt 0 ] 2>/dev/null; then st=LOW_SAMPLE
   elif [ -n "${vis:-}" ]; then st=NO_STRUCT
-  else st=UNREACHABLE; fi
+  elif printf '%s' "$o"|grep -qiE 'fetch.*failed|FETCH FAILED|navigation|dns error|connection refused'; then st=NAVFAIL
+  else st=EMPTY; fi
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$cat" "$url" "$st" "${cov:-}" "${shape:-}" "${vis:-}" "${paths:-0}" >> "$M1M2"
   printf '  %-11s %-38s %-11s cov=%-6s shape=%-6s\n' "$cat" "${url:0:38}" "$st" "${cov:-–}" "${shape:-–}"
 }
