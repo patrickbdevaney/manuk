@@ -1,0 +1,26 @@
+0	epoch	1792956703224396
+14355	dns	basescan.org	14325
+72298	connect	basescan.org	72276
+169608	req	https://basescan.org/	0	169606	403	HTTP/2.0	-	GET
+169706	body	https://basescan.org/	5527
+169853	phase	html parse	123
+169887	phase	external scripts	23
+169900	phase	module graph prefetch	3
+169910	phase	blocking stylesheets	0
+220568	cascade	60
+221045	layout	460
+221072	phase	cascade+layout+blocking scripts	51151
+221292	phase	deferred scripts	208
+222122	phase	DOMContentLoaded	817
+222829	phase	subframes (pre-load)	691
+222848	phase	initial images+masks	6
+223296	phase	load event	437
+223373	phase	finish_loading: external CSS	61
+223391	phase	finish_loading: dynamic scripts	7
+223405	phase	finish_loading: subframes	4
+223433	phase	finish_loading: page fetches	18
+223448	phase	finish_loading: images	4
+223458	phase	finish_loading: icon masks	0
+223468	phase	finish_loading: background images	0
+223680	mark	navigate_returned
+223716	mark	a11y_built

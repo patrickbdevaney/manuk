@@ -191,10 +191,10 @@ def manuk_phases(ev, wall_s, wall0_unix_us, end_unix_us):
     }
 
 
-def run_manuk(binary, url, timeout, trace_dir=None, run=0):
+def run_manuk(binary, url, timeout, trace_dir=None, run=0, extra_env=None, engine="manuk"):
     tf = tempfile.NamedTemporaryFile(prefix="perf1-trace-", suffix=".tsv", delete=False)
     tf.close()
-    env = dict(os.environ, MANUK_NET_TRACE=tf.name)
+    env = dict(os.environ, MANUK_NET_TRACE=tf.name, **(extra_env or {}))
     t0 = time.monotonic()
     u0 = int(time.time() * 1e6)
     try:
@@ -211,13 +211,24 @@ def run_manuk(binary, url, timeout, trace_dir=None, run=0):
         slug = "".join(ch if ch.isalnum() else "_" for ch in url)[:80]
         shutil.copy(tf.name, os.path.join(trace_dir, f"{slug}.run{run}.tsv"))
     os.unlink(tf.name)
-    out = {"engine": "manuk", "url": url, "status": status, "rc": rc, "wall_s": wall}
+    out = {"engine": engine, "url": url, "status": status, "rc": rc, "wall_s": wall}
     if status == "OK":
         res = manuk_phases(parse_trace(text), wall, u0, u1)
         if res is None:
             out["status"] = "NOTRACE"
         else:
             out.update(res)
+    return out
+
+
+def env_pairs(spec):
+    """'K=V,K2=V2' -> {'K': 'V', 'K2': 'V2'}; empty string -> {}."""
+    out = {}
+    for kv in filter(None, (x.strip() for x in spec.split(","))):
+        k, _, v = kv.partition("=")
+        if not k or not _:
+            sys.exit(f"bad env pair {kv!r}: want K=V")
+        out[k] = v
     return out
 
 
@@ -551,6 +562,10 @@ def main():
     ap.add_argument("--timeout", type=float, default=60.0)
     ap.add_argument("--urls", help="override: file of URLs (one per line), skips the suite lookup")
     ap.add_argument("--engines", default="manuk,chrome")
+    ap.add_argument("--manuk-b", help="paired mode: second manuk binary, interleaved per URL and run with the "
+                    "first (engine 'manuk' = arm A, 'manuk-b' = arm B); no Chrome arm is run")
+    ap.add_argument("--env-a", default="", help="paired mode: extra env for arm A, e.g. K=V,K2=V2")
+    ap.add_argument("--env-b", default="", help="paired mode: extra env for arm B, e.g. MANUK_MAX_CONNS_PER_HOST=1")
     ap.add_argument("--report-only", action="store_true")
     ap.add_argument("--self-test", action="store_true")
     a = ap.parse_args()
@@ -577,6 +592,24 @@ def main():
     raw = os.path.join(a.out, "runs.jsonl")
     commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True).stdout.strip()
     engines = a.engines.split(",")
+    if a.manuk_b and not a.report_only:
+        # paired same-minute A/B: each (run, URL) runs arm A then B, or B then A on odd runs, so a
+        # slow remote origin hits both arms in the same minute. Rows go to <out>/paired.jsonl so
+        # they never mix with the Chrome sweep in runs.jsonl.
+        arms = [("manuk", a.manuk, env_pairs(a.env_a)), ("manuk-b", a.manuk_b, env_pairs(a.env_b))]
+        praw = os.path.join(a.out, "paired.jsonl")
+        with open(praw, "a") as f:
+            for run in range(1, a.runs + 1):
+                for url in urls:
+                    for eng, binary, env in (arms if run % 2 else arms[::-1]):
+                        tdir = os.path.join(a.out, "traces", eng)
+                        r = run_manuk(binary, url, a.timeout, tdir, run, env, eng)
+                        r.update(run=run, chrome_ver=pin, commit=commit, binary=binary, env=env)
+                        f.write(json.dumps(r) + "\n")
+                        f.flush()
+                        print(f"run{run} {eng:8} {r['status']:8} subres={r.get('phases_s', {}).get('subres_fetch', 0):6.2f} "
+                              f"settle={r.get('phases_s', {}).get('settle', 0):6.2f} {url}", file=sys.stderr)
+        return
     if not a.report_only:
         r01 = _r01()
         with open(raw, "a") as f:

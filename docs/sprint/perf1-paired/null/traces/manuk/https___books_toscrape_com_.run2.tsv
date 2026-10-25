@@ -1,0 +1,110 @@
+0	epoch	1792956308861107
+12528	dns	books.toscrape.com	12501
+113113	connect	books.toscrape.com	113093
+247738	req	https://books.toscrape.com/	0	247734	200	HTTP/2.0	-	GET
+293652	body	https://books.toscrape.com/	51294
+295671	phase	html parse	1950
+296421	dns	ajax.googleapis.com	605
+322801	connect	ajax.googleapis.com	26987
+364788	req	http://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js	295809	68959	200	HTTP/1.1	92629	GET
+382586	req	https://books.toscrape.com/static/oscar/js/bootstrap-datetimepicker/bootstrap-datetimepicker.css	293918	88666	200	HTTP/2.0	-	GET
+383512	body	https://books.toscrape.com/static/oscar/js/bootstrap-datetimepicker/bootstrap-datetimepicker.css	12351
+431497	req	https://books.toscrape.com/static/oscar/css/datetimepicker.css	383593	47903	200	HTTP/2.0	-	GET
+431583	body	https://books.toscrape.com/static/oscar/css/datetimepicker.css	352
+432530	req	https://books.toscrape.com/static/oscar/js/bootstrap3/bootstrap.min.js	383608	48921	200	HTTP/2.0	-	GET
+433990	body	https://books.toscrape.com/static/oscar/js/bootstrap3/bootstrap.min.js	31819
+434904	req	https://books.toscrape.com/static/oscar/js/oscar/ui.js	383655	51248	200	HTTP/2.0	-	GET
+435696	body	https://books.toscrape.com/static/oscar/js/oscar/ui.js	13966
+436129	req	https://books.toscrape.com/media/cache/be/f4/bef44da28c98f905a3ebec0b87be8530.jpg	383645	52483	200	HTTP/2.0	11932	GET
+478056	req	https://books.toscrape.com/media/cache/26/0c/260c6ae16bce31c8f8c95daddd9f4a1c.jpg	383698	94357	200	HTTP/2.0	7095	GET
+478097	body	https://books.toscrape.com/media/cache/be/f4/bef44da28c98f905a3ebec0b87be8530.jpg	11932
+478108	body	https://books.toscrape.com/media/cache/26/0c/260c6ae16bce31c8f8c95daddd9f4a1c.jpg	7095
+478142	req	https://books.toscrape.com/media/cache/10/48/1048f63d3b5061cd2f424d20b3f9b666.jpg	383723	94418	200	HTTP/2.0	8157	GET
+478198	body	https://books.toscrape.com/media/cache/10/48/1048f63d3b5061cd2f424d20b3f9b666.jpg	8157
+478216	req	https://books.toscrape.com/media/cache/09/a3/09a3aef48557576e1a85ba7efea8ecb7.jpg	383757	94458	200	HTTP/2.0	9581	GET
+481143	body	https://books.toscrape.com/media/cache/09/a3/09a3aef48557576e1a85ba7efea8ecb7.jpg	9581
+481265	req	https://books.toscrape.com/static/oscar/css/styles.css	383670	97594	200	HTTP/2.0	-	GET
+481278	req	https://books.toscrape.com/media/cache/2c/da/2cdad67c44b002e7ead0cc35693c0e8b.jpg	383682	97595	200	HTTP/2.0	9876	GET
+481312	body	https://books.toscrape.com/media/cache/2c/da/2cdad67c44b002e7ead0cc35693c0e8b.jpg	9876
+494051	body	http://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js	92629
+521988	req	https://books.toscrape.com/media/cache/3d/54/3d54940e57e662c4dd1f3ff00c78cc64.jpg	383793	138192	200	HTTP/2.0	9693	GET
+525111	body	https://books.toscrape.com/media/cache/3d/54/3d54940e57e662c4dd1f3ff00c78cc64.jpg	9693
+525171	req	https://books.toscrape.com/media/cache/be/a5/bea5697f2534a2f86a3ef27b5a8c12a6.jpg	383869	141301	200	HTTP/2.0	7986	GET
+525276	req	https://books.toscrape.com/media/cache/68/33/68339b4c9bc034267e1da611ab3b34f8.jpg	383928	141347	200	HTTP/2.0	9798	GET
+525311	req	https://books.toscrape.com/media/cache/58/46/5846057e28022268153beff6d352b06c.jpg	383914	141396	200	HTTP/2.0	3915	GET
+525349	body	https://books.toscrape.com/media/cache/be/a5/bea5697f2534a2f86a3ef27b5a8c12a6.jpg	7986
+525358	body	https://books.toscrape.com/media/cache/58/46/5846057e28022268153beff6d352b06c.jpg	3915
+525511	req	https://books.toscrape.com/media/cache/3e/ef/3eef99c9d9adef34639f510662022830.jpg	383740	141769	200	HTTP/2.0	4062	GET
+525528	req	https://books.toscrape.com/media/cache/0b/bc/0bbcd0a6f4bcd81ccb1049a52736406e.jpg	383782	141746	200	HTTP/2.0	10883	GET
+525512	req	https://books.toscrape.com/media/cache/27/a5/27a53d0bb95bdd88288eaf66c9230d7e.jpg	383764	141748	200	HTTP/2.0	11095	GET
+525559	req	https://books.toscrape.com/media/cache/66/88/66883b91f6804b2323c8369331cb7dd1.jpg	383900	141658	200	HTTP/2.0	8783	GET
+525555	req	https://books.toscrape.com/media/cache/5b/88/5b88c52633f53cacf162c15f4f823153.jpg	383700	141843	200	HTTP/2.0	7864	GET
+525550	req	https://books.toscrape.com/media/cache/55/33/553310a7162dfbc2c6d19a84da0df9e1.jpg	383748	141800	200	HTTP/2.0	2919	GET
+525580	body	https://books.toscrape.com/media/cache/68/33/68339b4c9bc034267e1da611ab3b34f8.jpg	9798
+525582	req	https://books.toscrape.com/media/cache/94/b1/94b1b8b244bce9677c2f29ccc890d4d2.jpg	383806	141775	200	HTTP/2.0	12405	GET
+525583	req	https://books.toscrape.com/media/cache/32/51/3251cf3a3412f53f339e42cac2134093.jpg	383709	141873	200	HTTP/2.0	8442	GET
+525601	req	https://books.toscrape.com/media/cache/81/c4/81c4a973364e17d01f217e1188253d5e.jpg	383884	141716	200	HTTP/2.0	11990	GET
+525636	req	https://books.toscrape.com/static/oscar/js/bootstrap-datetimepicker/bootstrap-datetimepicker.js	383832	141802	200	HTTP/2.0	-	GET
+529226	body	https://books.toscrape.com/media/cache/3e/ef/3eef99c9d9adef34639f510662022830.jpg	4062
+529242	body	https://books.toscrape.com/media/cache/55/33/553310a7162dfbc2c6d19a84da0df9e1.jpg	2919
+529237	body	https://books.toscrape.com/media/cache/27/a5/27a53d0bb95bdd88288eaf66c9230d7e.jpg	11095
+529330	body	https://books.toscrape.com/media/cache/94/b1/94b1b8b244bce9677c2f29ccc890d4d2.jpg	12405
+529443	body	https://books.toscrape.com/media/cache/5b/88/5b88c52633f53cacf162c15f4f823153.jpg	7864
+529477	body	https://books.toscrape.com/media/cache/66/88/66883b91f6804b2323c8369331cb7dd1.jpg	8783
+529516	body	https://books.toscrape.com/media/cache/32/51/3251cf3a3412f53f339e42cac2134093.jpg	8442
+529583	body	https://books.toscrape.com/media/cache/81/c4/81c4a973364e17d01f217e1188253d5e.jpg	11990
+529624	body	https://books.toscrape.com/static/oscar/js/bootstrap-datetimepicker/bootstrap-datetimepicker.js	55331
+569228	body	https://books.toscrape.com/media/cache/0b/bc/0bbcd0a6f4bcd81ccb1049a52736406e.jpg	10883
+573670	req	https://books.toscrape.com/media/cache/92/27/92274a95b7c251fea59a2b8a78275ab4.jpg	383974	189692	200	HTTP/2.0	10740	GET
+573696	req	https://books.toscrape.com/static/oscar/js/bootstrap-datetimepicker/locales/bootstrap-datetimepicker.all.js	383980	189714	200	HTTP/2.0	-	GET
+573700	req	https://books.toscrape.com/media/cache/54/60/54607fe8945897cdcced0044103b10b6.jpg	383952	189745	200	HTTP/2.0	9992	GET
+573732	body	https://books.toscrape.com/media/cache/92/27/92274a95b7c251fea59a2b8a78275ab4.jpg	10740
+573770	body	https://books.toscrape.com/media/cache/54/60/54607fe8945897cdcced0044103b10b6.jpg	9992
+573991	body	https://books.toscrape.com/static/oscar/js/bootstrap-datetimepicker/locales/bootstrap-datetimepicker.all.js	31995
+574292	body	https://books.toscrape.com/static/oscar/css/styles.css	215100
+574992	phase	external scripts	279308
+575118	phase	module graph prefetch	115
+585945	phase	blocking stylesheets	10815
+725630	cascade	3686
+730803	layout	5150
+732818	phase	cascade+layout+blocking scripts	146855
+781296	phase	deferred scripts	48461
+799320	cascade	9388
+826694	layout	27356
+844645	cascade	9315
+872190	layout	27529
+888761	cascade	7717
+915961	layout	27178
+933878	cascade	7989
+961304	layout	27409
+978901	cascade	7735
+1006238	layout	27320
+1022770	cascade	7603
+1049889	layout	27097
+1070709	cascade	8607
+1097799	layout	27074
+1102296	phase	DOMContentLoaded	320972
+1210056	req	https://books.toscrape.com/static/oscar/fonts/fontawesome-webfont.eot%3Fv=3.2.1	1162306	47749	200	HTTP/2.0	37405	GET
+1210375	body	https://books.toscrape.com/static/oscar/fonts/fontawesome-webfont.eot%3Fv=3.2.1	37405
+1210845	req	https://books.toscrape.com/static/oscar/fonts/glyphicons-halflings-regular.eot%3F	1162276	48568	200	HTTP/2.0	20127	GET
+1257880	body	https://books.toscrape.com/static/oscar/fonts/glyphicons-halflings-regular.eot%3F	20127
+1259396	req	https://books.toscrape.com/static/oscar/fonts/fontawesome-webfont.eot%3F	1210412	48984	200	HTTP/2.0	37405	GET
+1261298	body	https://books.toscrape.com/static/oscar/fonts/fontawesome-webfont.eot%3F	37405
+1306413	req	https://books.toscrape.com/static/oscar/fonts/glyphicons-halflings-regular.woff	1257918	48495	200	HTTP/2.0	23424	GET
+1306695	body	https://books.toscrape.com/static/oscar/fonts/glyphicons-halflings-regular.woff	23424
+1353845	req	https://books.toscrape.com/static/oscar/fonts/fontawesome-webfont.woff%3Fv=3.2.1	1261330	92514	200	HTTP/2.0	43572	GET
+1354257	body	https://books.toscrape.com/static/oscar/fonts/fontawesome-webfont.woff%3Fv=3.2.1	43572
+1369309	cascade	7817
+1397828	layout	28505
+1399460	phase	subframes (pre-load)	297148
+1433001	phase	initial images+masks	33527
+1435724	phase	load event	2709
+1451267	phase	finish_loading: external CSS	15523
+1451323	phase	finish_loading: dynamic scripts	41
+1451479	phase	finish_loading: subframes	143
+1451522	phase	finish_loading: page fetches	33
+1451640	phase	finish_loading: images	107
+1451658	phase	finish_loading: icon masks	7
+1451692	phase	finish_loading: background images	24
+1452941	mark	navigate_returned
+1453991	mark	a11y_built

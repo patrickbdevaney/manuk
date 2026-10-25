@@ -1,0 +1,28 @@
+0	epoch	1792957357645909
+52770	dns	example.com	52742
+135329	connect	example.com	135308
+244302	req	https://example.com/	0	244298	200	HTTP/2.0	-	GET
+249123	body	https://example.com/	577
+249247	phase	html parse	89
+326207	req	https://example.com/s.js	249309	76894	200	HTTP/2.0	-	GET
+326300	body	https://example.com/s.js	1963
+326357	phase	external scripts	77099
+326371	phase	module graph prefetch	3
+326391	phase	blocking stylesheets	10
+377215	cascade	53
+427273	layout	50039
+427322	phase	cascade+layout+blocking scripts	100920
+427674	phase	deferred scripts	341
+428777	phase	DOMContentLoaded	1089
+429353	phase	subframes (pre-load)	554
+429946	phase	initial images+masks	580
+430391	phase	load event	433
+430441	phase	finish_loading: external CSS	33
+430453	phase	finish_loading: dynamic scripts	2
+430468	phase	finish_loading: subframes	5
+430529	phase	finish_loading: page fetches	50
+430544	phase	finish_loading: images	5
+430554	phase	finish_loading: icon masks	0
+430565	phase	finish_loading: background images	1
+430774	mark	navigate_returned
+430822	mark	a11y_built
