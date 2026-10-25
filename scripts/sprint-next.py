@@ -11,7 +11,8 @@ Two rules keep follow-ups from starving the plan (observer, 2026-10-25: one nigh
 - a FOLLOW-UP of a BLOCKED node (`X.a` under `X`) may run: it is how its parent gets unblocked,
   so a dep on its own blocked ancestor counts as met;
 - a follow-up two or more levels deep (`X.a.b`) is demoted two rings, unless some unfinished node
-  depends on it, so it never outranks the next ring's planned work.
+  depends on it or the observer placed it (a DIAGONAL note), so it never outranks the next ring's
+  planned work.
 """
 import csv
 import sys
@@ -52,7 +53,8 @@ def main() -> int:
             continue
         if all(met(r["id"], d) for d in deps_of[r["id"]]):
             ring = int(r["ring"])
-            if depth(r["id"]) >= 2 and r["id"] not in needed:
+            planned = "DIAGONAL" in r["notes"]  # placed by the observer, so not drift
+            if depth(r["id"]) >= 2 and r["id"] not in needed and not planned:
                 ring += 2
             ready.append((ring, int(r["pri"]), i, r))
     if not ready:
