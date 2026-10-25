@@ -31,7 +31,7 @@ while [ $# -gt 0 ]; do case "$1" in
   *) echo "unknown flag: $1"; exit 2;; esac; done
 
 MW=${MW:-$R/target/release/manuk-wpt}; DP=${DP:-$R/target/debug/drive-probe}; AX=${AX:-$R/target/debug/a11y-score}
-PERSIST=${PERSIST:-$R/docs/bench}; CHROME_VER=${MANUK_CHROME_PIN:-unpinned}
+KEEP_PATHS_RE=${KEEP_PATHS_RE:-usa\.gov}; PERSIST=${PERSIST:-$R/docs/bench}; CHROME_VER=${MANUK_CHROME_PIN:-unpinned}
 for b in "$MW" "$DP" "$AX"; do [ -x "$b" ] || { echo "✗ missing: $b"; exit 1; }; done
 [ -n "${TRI_NO_CHROME_CHECK:-}" ] || command -v google-chrome >/dev/null || { echo "✗ google-chrome required"; exit 1; }
 mkdir -p "$OUT/iso" "$OUT/err"; ATTR="$OUT/attrib.tsv"; : > "$ATTR"; M2MAP="$OUT/m2.tsv"; M1M2="$OUT/m1m2.tsv"; AXF="$OUT/a11y.tsv"; FINAL="$OUT/results.tsv"
@@ -70,6 +70,8 @@ run_m1() {
   of=$(ls "$iso"/*.oracle-paths.tsv 2>/dev/null|head -1); ef=$(ls "$iso"/*.engine-fetch.html 2>/dev/null|head -1)
   osha=-; esha=-; [ -n "$of" ] && osha=$(sha256sum "$of"|cut -c1-64); [ -n "$ef" ] && esha=$(sha256sum "$ef"|cut -c1-64)
   printf '%s\t%s\t%s\t%s\t%s\n' "$url" "$osha" "$esha" "${paths:-0}" "$CHROME_VER" >> "$ATTR"
+  # R0.4.a.b.a.a.a.a: keep the oracle path+rect file itself for sites matching KEEP_PATHS_RE (default usa.gov), so two runs can be diffed later
+  [ -n "$of" ] && printf '%s' "$url"|grep -qE "$KEEP_PATHS_RE" && { mkdir -p "$OUT/keep"; cp "$of" "$OUT/keep/$key.oracle-paths.tsv"; printf '%s\t%s\n' "$key" "$(basename "$of" .oracle-paths.tsv)" >> "$OUT/keep/names.tsv"; }
   printf '  %-11s %-38s %-11s cov=%-6s shape=%-6s\n' "$cat" "${url:0:38}" "$st" "${cov:-–}" "${shape:-–}"
 }
 if [ -n "$M1FROM" ]; then
@@ -143,6 +145,7 @@ awk -F'\t' '
 mkdir -p "$PERSIST"; PF="$PERSIST/tri-sweep-$(date +%Y%m%d-%H%M%S).tsv"
 { printf 'cat\turl\tm1_status\tcov\tshape\tvis\tpaths\tm2_tag\tm2_rate\tm2_ceil\tm2_targets\tm2_drivable\tm2_ungrounded\tm2_ambiguous\tm2_mishit\ta11y_tag\ta11y_prec\ta11y_rec\ta11y_f1\tchrome_ver\n'; cat "$FINAL"; } > "$PF"
 { printf 'url\toracle_sha256\tengine_fetch_sha256\toracle_paths\tchrome_ver\n'; cat "$ATTR"; } > "${PF%.tsv}.attrib.tsv"
+if [ -s "$OUT/keep/names.tsv" ]; then mkdir -p "$PERSIST/oracle-paths"; while IFS=$'\t' read -r k nm; do cp "$OUT/keep/$k.oracle-paths.tsv" "$PERSIST/oracle-paths/$(basename "$PF" .tsv).$nm.oracle-paths.tsv"; done < "$OUT/keep/names.tsv"; fi
 echo "  attribution sidecar → ${PF%.tsv}.attrib.tsv"
 echo "  persisted per-site rows → $PF   (stderr logs: $OUT/err/)"
 echo ""; echo "=== DONE $(date '+%F %T') → $FINAL"
