@@ -1,0 +1,13 @@
+row	source	commit	chrome_ver	sites	reach	cov	shape	m2_full	m2_meas	ax_full	ax_meas	note
+run1	tri-sweep-20261024-225412.tsv	c28d82bd	145.0.7632.116	200	42	86.75	69.43	79.79	81.74	72.06	73.82	band run
+run2	tri-sweep-20261024-232725.tsv	c28d82bd	145.0.7632.116	200	49	83.30	66.87	73.13	73.13	73.64	73.64	band run
+run3	tri-sweep-20261024-235659.tsv	c28d82bd	145.0.7632.116	200	40	85.89	68.84	74.88	76.80	73.53	73.53	band run
+run4	tri-sweep-20261025-002803.tsv	c28d82bd	145.0.7632.116	200	44	81.40	67.42	72.04	73.72	68.50	68.50	self-agreement run
+band	cov	[83.30,86.75]	run4=81.40	inside=False
+band	shape	[66.87,69.43]	run4=67.42	inside=True
+band	m2_full	[73.13,79.79]	run4=72.04	inside=False
+band	m2_meas	[73.13,81.74]	run4=73.72	inside=True
+band	ax_full	[72.06,73.64]	run4=68.50	inside=False
+band	ax_meas	[73.53,73.82]	run4=68.50	inside=False
+verdict	self-agreement	FAIL	3 of 6 metrics outside the 3-run band (cov, m2_full, ax_full, ax_meas); run4 ax_meas=68.50 far below band	commit: engine-identical to c28d82bd (engine/ agent/ tests/wpt unchanged); measured at HEAD 56d1e239
+note	reachable set varies run to run (40/42/44/49 sites reach); every metric is over that set, so run-to-run noise is the live-web reachability, not only the instrument

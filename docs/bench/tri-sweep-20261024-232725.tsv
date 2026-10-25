@@ -1,0 +1,201 @@
+cat	url	m1_status	cov	shape	vis	paths	m2_tag	m2_rate	m2_ceil	m2_targets	m2_drivable	m2_ungrounded	m2_ambiguous	m2_mishit	a11y_tag	a11y_prec	a11y_rec	a11y_f1	chrome_ver
+TAIL	https://lp.rsaiben.com/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://service.smt.docomo.ne.jp/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.naukri.com/	OK	30.5	55.6	86.6	59	OK	90.2	100.0	41	37	0	4	0	OK	1.0	25.0	1.9	145.0.7632.116
+HEAD	https://comix.to/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://secure.paymentech.com/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://sip777man.site/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://www.kantorsupersam.pl/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://dla7h4u1.com/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.mangago.me/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://fdown.net/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.ebay.com/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.agoda.com/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://www.villaggioposeidone.it/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://cloud.ssktco-op.com/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://bill.pitc.com.pk/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://admin.munchbakery.com/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://creaturecock.com/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.ikea.com/	OK	80.5	64.3	54.2	898	OK	17.0	18.2	159	27	17	2	113	OK	100.0	86.3	92.6	145.0.7632.116
+TAIL	https://allticketscol.com/	OK	91.2	67.1	14.2	80	OK	61.5	64.4	174	107	2	65	0	OK	83.5	82.8	83.1	145.0.7632.116
+HEAD	https://bbs.ruliweb.com/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.otomoto.pl/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://payb.jp/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://packages.booking.com/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://www.dapam-sirius.fr/	OK	100.0	96.7	79.1	30	OK	100.0	100.0	8	8	0	0	0	OK	100.0	100.0	100.0	145.0.7632.116
+HEAD	https://mangaraw.ac/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://aternos.org/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://missav.live/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://pivaldi.restoplace.ws/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://ebanking.bdm-sa.com/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.bilibili.com/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://www.taphouse23.com/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://tukrd.com/	OK	100.0	80.4	74.1	46	OK	100.0	100.0	9	9	0	0	0	OK	100.0	100.0	100.0	145.0.7632.116
+HEAD	https://vk.com/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://meet.google.com/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://www.ta3lemkonline.com/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.amazon.com.be/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://zainascarfs.com/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://client.dkitrxmdwoqruvsi.net/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.amazon.com.mx/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://phone.uslowcosthousing.com/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://beb88run.xyz/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://people.com/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://www.datacareservices.com/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://toyhou.se/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.paypal.com/	OK	88.5	66.4	31.4	625	OK	27.8	29.6	108	30	2	8	68	OK	57.7	90.9	70.6	145.0.7632.116
+HEAD	https://cibnext.icici.bank.in/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://atendimentomondial.zendesk.com/	OK	59.3	6.9	57.6	221	OK	86.7	100.0	30	26	0	4	0	OK	3.4	30.0	6.1	145.0.7632.116
+TAIL	https://www.cuneocronaca.it/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://linkmake.in/	OK	100.0	79.7	87.8	74	OK	100.0	100.0	9	9	0	0	0	OK	100.0	66.7	80.0	145.0.7632.116
+HEAD	https://255md.com/	OK	100.0	88.4	94.8	43	OK	100.0	100.0	8	8	0	0	0	OK	100.0	100.0	100.0	145.0.7632.116
+TAIL	https://ofero.id/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://morikoshi.net/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://probidas.lt/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://777juegos.com/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://ru.restaurantguru.com/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://stdn.iau.ir/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://redinfor.com.pe/	OK	95.0	84.2	99.1	40	OK	20.0	20.0	5	1	0	0	4	OK	81.8	40.9	54.5	145.0.7632.116
+HEAD	https://janitorai.com/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.marktplaats.nl/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://desiviral.net/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://profissionaliza.cademi.com.br/	OK	100.0	84.6	81.2	26	OK	100.0	100.0	6	6	0	0	0	OK	100.0	80.0	88.9	145.0.7632.116
+TAIL	https://mydogcot.com/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://awlyaa.education.dz/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://simplepdf.com/	OK	84.4	90.5	75.5	199	OK	94.4	100.0	54	51	0	3	0	OK	100.0	68.9	81.6	145.0.7632.116
+HEAD	https://www.livescore.cz/	OK	100.0	100.0	51.7	5123	OK	1.4	100.0	1828	25	0	1803	0	OK	100.0	60.8	75.6	145.0.7632.116
+HEAD	https://www.repubblica.it/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://www.library.chiyoda.tokyo.jp/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://www.timeline.com/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://mobcup.fm/	OK	88.2	100.0	46.7	34	OK	100.0	100.0	6	6	0	0	0	OK	90.9	50.0	64.5	145.0.7632.116
+TAIL	https://admin.zoomph.com/	OK	100.0	58.8	93.4	34	OK	100.0	100.0	4	4	0	0	0	OK	83.3	55.6	66.7	145.0.7632.116
+TAIL	https://7info.ru/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://m.youm7.com/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://littlecaesarsbcs.libellum.com.mx/	OK	100.0	97.4	70.2	78	OK	6.9	6.9	29	2	18	0	9	OK	97.1	94.3	95.7	145.0.7632.116
+HEAD	https://momon-ga.com/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.5movierulz.discount/	OK	100.0	79.0	69.9	439	OK	87.4	100.0	127	111	0	16	0	OK	99.0	99.7	99.3	145.0.7632.116
+TAIL	https://e8c76.com/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://ww1.goojara.to/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://fr.download.it/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://cloud.email.cruzeirodosul.edu.br/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://esaj.tjsp.jus.br/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://merchant.upi9.pro/	OK	100.0	80.9	71.1	47	OK	100.0	100.0	5	5	0	0	0	OK	100.0	60.0	75.0	145.0.7632.116
+TAIL	https://pordentrodetudo.com.br/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.mobile.bg/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://tracker.shadowfax.in/	OK	7.7	0.0		13	OK	100.0	100.0	2	2	0	0	0	OK	100.0	75.0	85.7	145.0.7632.116
+TAIL	https://dedebet252.com/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://bhramarah.in/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://chat.google.com/	OK	100.0	88.1	98.2	59	OK	8.8	8.8	91	8	83	0	0	OK	100.0	98.1	99.0	145.0.7632.116
+TAIL	https://portagelearning.edu/	OK	12.1	52.4	14.1	173	OK	86.2	94.8	58	50	0	5	3	OK	86.1	87.3	86.7	145.0.7632.116
+TAIL	https://aksesjambi.com/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.kicktipp.com/	OK	100.0	92.5	83.8	93	OK	100.0	100.0	26	26	0	0	0	OK	66.7	84.8	74.7	145.0.7632.116
+TAIL	https://ab.asimakog.eu.org/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://haraj.com.sa/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://alastonsuomi.com/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://altogel.fit/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://www.kroftools.com/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://www.kuechenmomente.de/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://hipmiluwuutara.org/	OK	100.0	80.0	85.4	10	OK	100.0	100.0	1	1	0	0	0	OK	100.0	100.0	100.0	145.0.7632.116
+HEAD	https://id.vk.ru/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://videa.hu/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://seduniaselat.com/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.tz.de/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://www.waitaly.net/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://www.wdimax.com/	OK	99.7	97.3	88.4	377	OK	54.1	96.7	122	66	1	53	2	OK	100.0	99.5	99.7	145.0.7632.116
+HEAD	https://coinmarketcap.com/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://nitter.net/	OK	100.0	95.0	94.0	40	OK	100.0	100.0	5	5	0	0	0	OK	86.5	82.1	84.2	145.0.7632.116
+HEAD	https://gw.geneanet.org/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://sports.yahoo.com/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://123moviesfree.day/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://gismart.com/	OK	98.3	81.9	35.5	286	OK	87.5	100.0	16	14	0	2	0	OK	100.0	72.1	83.8	145.0.7632.116
+TAIL	https://hnhbkis.edu.in/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://rpsc.rajasthan.gov.in/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://funinjeet.com/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://virtual.lapampa.edu.ar/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.bolde.com/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://rockstaractu.com/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://dashboard.twitch.tv/	OK	36.5	53.4	83.5	159	OK	0.0	0.0	0	0	0	0	0	OK	100.0	8.0	14.8	145.0.7632.116
+TAIL	https://experiencia.pichincha.com/	OK	32.4	16.7	96.6	37	OK	100.0	100.0	3	3	0	0	0	OK	100.0	75.0	85.7	145.0.7632.116
+TAIL	https://pt88.app/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://mkp.gem.gov.in/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://pasarbokep.com/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://bhfudbal.ba/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://sestra.cc/	OK	99.3	92.2	55.6	428	OK	99.0	99.0	104	103	0	0	1	OK	9.6	17.8	12.5	145.0.7632.116
+HEAD	https://developers.google.com/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://www.hdnails.it/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://webfenix.movilidadbogota.gov.co/	OK	90.0	11.1		50	OK	100.0	100.0	1	1	0	0	0	OK	85.7	85.7	85.7	145.0.7632.116
+HEAD	https://celeb.gate.cc/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://oilprice.com/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://mayatoys.in/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.fragrantica.com/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://ru4.bongacams-ru.com/	OK	88.6	100.0	64.9	44	OK	100.0	100.0	4	4	0	0	0	OK	37.5	0.6	1.1	145.0.7632.116
+TAIL	https://www.arw.ro/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.blick.ch/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.woolworths.com.au/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://redemoura.gupy.io/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.netvasco.com.br/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://ioi-russia.vdi.mipt.ru/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.cbse.gov.in/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://neutypechic.com/	CRASH				0									145.0.7632.116
+HEAD	https://fr.bongacams.com/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.hemnet.se/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://nortenoticia.com.br/	OK	99.4	41.5	31.2	678	OK	17.1	33.3	111	19	0	90	2	OK	89.4	91.0	90.2	145.0.7632.116
+TAIL	https://nysainfo.pl/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://meuconsultordigital.com.br/	OK	97.5	45.2	100.0	485	OK	52.6	57.9	19	10	0	9	0	OK	98.2	93.0	95.5	145.0.7632.116
+HEAD	https://ubys.bingol.edu.tr/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://portal.ensuretyfinance.com/	OK	100.0	86.4	93.8	22	OK	100.0	100.0	5	5	0	0	0	OK	100.0	75.0	85.7	145.0.7632.116
+HEAD	https://hope.cap-systems.org/	OK	100.0	0.0	96.9	17	OK	100.0	100.0	4	4	0	0	0	OK	100.0	100.0	100.0	145.0.7632.116
+HEAD	https://www.mobile.ir/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://venus.zeronline.cloud/	UNREACHABLE				0									145.0.7632.116
+TAIL	https://www.jazzguitar.be/	OK	0.6	0.0		485	OK	0.0	0.0	0	0	0	0	0	OK	100.0	20.0	33.3	145.0.7632.116
+HEAD	https://www.alphanews.live/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.freesupertips.com/	OK	97.5	86.7	15.8	1122	OK	66.2	70.5	207	137	22	18	30	OK	91.2	92.1	91.7	145.0.7632.116
+HEAD	https://linxonline.co.pierce.wa.us/	OK	100.0	43.2	54.8	185	OK	100.0	100.0	1	1	0	0	0	OK	0.0	0.0	0.0	145.0.7632.116
+HEAD	https://patrickmorin.com/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.broshurko.bg/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.nautica.com/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://app.ordertime.com/	OK	100.0	100.0	99.9	29	OK	100.0	100.0	6	6	0	0	0	OK	100.0	90.9	95.2	145.0.7632.116
+HEAD	https://lms.sltc.ac.lk/	OK	100.0	90.0	86.6	130	OK	80.0	100.0	10	8	0	2	0	OK	97.9	87.0	92.2	145.0.7632.116
+HEAD	https://mexcbt.ed-cl.com/	OK	92.6	0.0	10.9	27	OK	100.0	100.0	4	4	0	0	0	OK	90.0	81.8	85.7	145.0.7632.116
+HEAD	https://xhdesign.today/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://ticket.jfa.jp/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.crazyshop.pl/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://mirai-compass.net/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://house.udn.com/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.friulioggi.it/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://pogoda.by/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://d2rwkn96gppqo1.cloudfront.net/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.trivago.be/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.trivago.de/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.trivago.fr/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.trivago.jp/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://secure5.entertimeonline.com/	OK	100.0	69.2	94.3	39	OK	100.0	100.0	5	5	0	0	0	OK	64.3	60.0	62.1	145.0.7632.116
+HEAD	https://www.trivago.pl/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.monopolybingogame.com/	OK	9.2	60.0	5.5	271	OK	56.2	87.5	16	9	1	5	1	OK	92.3	67.4	77.9	145.0.7632.116
+HEAD	https://www.mundotoro.com/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://donate.onenation.org.au/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.aftenbladet.no/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.puentedemando.com/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.jatekshop.eu/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://v8m5e6.com/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://cyoinatu-onna.com/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://forums.moneysavingexpert.com/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://aims.ucc-caloocan.edu.ph/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://swiftspinus.com/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://sparkivo.pro/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://acesso.pagbank.com.br/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://a1.ro/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.razaoautomovel.com/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://crm.majoo.id/	OK	92.5	61.2	40.9	53	OK	14.3	14.3	7	1	0	0	6	OK	90.0	52.9	66.7	145.0.7632.116
+HEAD	https://promo.golesliga1max.pe/	OK	100.0	74.6	61.4	59	OK	100.0	100.0	5	5	0	0	0	OK	100.0	91.4	95.5	145.0.7632.116
+HEAD	https://www.smecel.com.br/	OK	100.0	53.2	66.0	47	OK	80.0	100.0	10	8	0	2	0	OK	100.0	100.0	100.0	145.0.7632.116
+HEAD	https://possssno.sbs/	OK	100.0	92.0	43.2	575	OK	94.7	95.9	170	161	0	4	5	OK	87.1	87.5	87.3	145.0.7632.116
+HEAD	https://serennu.com/	OK	100.0	82.0	74.2	61	OK	93.5	93.5	31	29	0	0	2	OK	100.0	59.3	74.5	145.0.7632.116
+HEAD	https://www.radec.com.mx/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://basescan.org/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://app.levelupxx69.online/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://lms12.tvu.ac.ir/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.heart.org/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://booking.directferries.com/	OK	10.0	50.0		20	OK	0.0	0.0	0	0	0	0	0	OK	100.0	14.3	25.0	145.0.7632.116
+HEAD	https://www.lyreco.com/	UNREACHABLE				0									145.0.7632.116
+HEAD	https://www.unoeste.br/	UNREACHABLE				0									145.0.7632.116
