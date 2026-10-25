@@ -1,0 +1,16 @@
+# UA A/B on https://www.amazon.com/ (same network, same minute, no -L, raw first status line + x-amzn-waf-action), captured 2026-10-25T10:53:19Z, chrome_ver=145.0.7632.116
+# three UAs, recorded whatever they return; no tuning
+== ua=manuk ua_string="Mozilla/5.0 (X11; Linux; x86_64) Manuk/1.0.0 (+standards)"
+status_line: HTTP/2 202 
+raw: x-amzn-waf-action: challenge
+raw: (x-amzn-waf-action: 1 present-lines)
+chrome_ver=145.0.7632.116
+== ua=curl ua_string="curl default: curl 8.9.1"
+status_line: HTTP/2 200 
+raw: (x-amzn-waf-action: 0 present-lines)
+chrome_ver=145.0.7632.116
+== ua=chrome ua_string="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.7632.116 Safari/537.36"
+status_line: HTTP/2 202 
+raw: x-amzn-waf-action: challenge
+raw: (x-amzn-waf-action: 1 present-lines)
+chrome_ver=145.0.7632.116
