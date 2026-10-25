@@ -33,6 +33,7 @@ use tokio::io::AsyncReadExt;
 use tokio_util::io::StreamReader;
 use url::Url;
 
+pub mod aia;
 pub mod cookies;
 
 pub mod cors;
@@ -114,7 +115,7 @@ fn connector() -> HttpsConnector<HttpConnector> {
         // Install a rustls crypto provider once (idempotent).
         let _ = rustls::crypto::ring::default_provider().install_default();
         hyper_rustls::HttpsConnectorBuilder::new()
-            .with_webpki_roots()
+            .with_tls_config(aia::client_config())
             .https_or_http()
             .enable_http1()
             .enable_http2()
@@ -1341,7 +1342,8 @@ async fn stream_attachment_to_disk<R: tokio::io::AsyncRead + Unpin>(
 
 /// Is the top-level document a **web** document (anything but a `file:` URL or a bare local path)?
 /// Set at every top-level navigation by [`set_top_level_document`]; read by every local-file loader.
-static WEB_DOCUMENT_ACTIVE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static WEB_DOCUMENT_ACTIVE: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
 
 /// `true` for a URL that names the local disk: `file:` or a bare path with no scheme at all.
 /// `data:`/`about:`/`blob:` are NOT local — they are opaque origins and get no disk access.
