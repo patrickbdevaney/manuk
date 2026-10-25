@@ -742,6 +742,11 @@ impl AgentBrowser {
         self.submit_form_at(anchor).await
     }
 
+    /// Submit the form that owns `anchor`, addressed by stable handle (the MCP `type(submit)` path).
+    pub async fn submit_at(&mut self, anchor: manuk_dom::NodeId) -> Result<Activation> {
+        self.submit_form_at(anchor).await
+    }
+
     async fn submit_form_at(&mut self, anchor: manuk_dom::NodeId) -> Result<Activation> {
         let form = {
             let page = self.page.as_ref().context("no page loaded")?;

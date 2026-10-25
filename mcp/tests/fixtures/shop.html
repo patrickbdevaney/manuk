@@ -1,0 +1,20 @@
+<!doctype html><html><head><title>Shop</title><style>
+#cover{position:absolute;left:0;top:0;width:300px;height:60px;background:#eee;z-index:10}
+</style></head><body>
+<h1>Widget Shop</h1>
+<button id="add">Add to cart</button>
+<label>Qty <input id="qty" type="text" value="1"></label>
+<label><input type="checkbox" id="gift"> Gift wrap</label>
+<a href="result.html">Checkout</a>
+<form action="result.html" method="get"><label>Search <input name="q" type="text"></label><button type="submit">Go</button></form>
+<div style="height:60px"></div>
+<div style="position:relative;height:60px"><button id="hidden-under">Covered button</button><div id="cover" role="dialog" aria-label="cookie banner">cookie banner</div></div>
+<div style="height:2000px"></div>
+<h2 id="far">Far away</h2><a href="result.html">Footer link</a>
+<script>
+document.getElementById('add').addEventListener('click', function(){
+  var d=document.createElement('div'); d.setAttribute('role','dialog'); d.setAttribute('aria-label','Cart (1 item)');
+  d.innerHTML='<button>Close cart</button>'; document.body.appendChild(d);
+  document.getElementById('qty').value='2';
+});
+</script></body></html>
