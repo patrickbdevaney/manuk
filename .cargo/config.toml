@@ -44,7 +44,11 @@ rustflags = ["-C", "target-feature=+crt-static"]
 # exports `RUSTC_WRAPPER=sccache` **only if sccache is actually on PATH**, and CI installs it explicitly.
 # Same caching, no hard dependency.
 
-# SpiderMonkey prebuilt (~1.14M LOC C++) is curl'd at build time; verify its GitHub artifact attestation
-# and FAIL the build if it cannot be verified (needs `gh` on PATH). Default is "lenient" (warn + continue).
+# SpiderMonkey prebuilt (~1.14M LOC C++) is pinned by scripts/mozjs-fetch.sh (sha256 + GitHub artifact
+# attestation when gh is authenticated). Run that script before cargo: MOZJS_ARCHIVE points at its output,
+# so mozjs_sys never takes its own download path. mozjs_sys's own attestation check ignores gh's exit
+# status (Command::output is Ok on non-zero), so it is not what protects the build; the script is.
+# Non-linux hosts export MOZJS_ARCHIVE themselves ([env] never overrides an existing variable).
 [env]
 MOZJS_ATTESTATION = "strict"
+MOZJS_ARCHIVE = { value = "target/mozjs-verified/libmozjs-x86_64-unknown-linux-gnu.tar.gz", relative = true }

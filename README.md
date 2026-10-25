@@ -235,6 +235,10 @@ cp .env.example .env            # then set your provider credential in it
 cargo run -p manuk-agent --bin agent-run -- "What is this page's main heading?" https://example.com/
 
 # JavaScript via SpiderMonkey; live cascade via Stylo (heavy features) -------
+# Before any spidermonkey build: fetch the pinned SpiderMonkey prebuilt. The script sha256-checks it
+# against the pin in scripts/mozjs-fetch.sh and, when `gh` is authenticated (`gh auth login`, or
+# GH_TOKEN), runs `gh attestation verify`. Cargo refuses to link anything else (MOZJS_ARCHIVE in .cargo/config.toml).
+./scripts/mozjs-fetch.sh
 cargo test -p manuk-js --features spidermonkey
 cargo test -p manuk-css --features stylo
 

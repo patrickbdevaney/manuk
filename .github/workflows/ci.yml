@@ -52,6 +52,11 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      # The pinned SpiderMonkey archive is sha256-checked and, with GH_TOKEN, attested before cargo links it.
+      - name: pinned SpiderMonkey archive (sha256 + attestation)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/mozjs-fetch.sh
       # mozjs's bindgen needs libclang, and — per docs/wiki/build-and-dependencies.md — bindgen's
       # libclang does NOT inherit the clang driver's gcc-toolchain probe, so the C++ stdlib include
       # path must be handed to it explicitly or the build dies with `'utility' file not found`.

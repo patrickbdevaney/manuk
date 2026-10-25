@@ -13,6 +13,9 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
+# The pinned SpiderMonkey archive must be verified before any cargo step links it (see scripts/mozjs-fetch.sh).
+./scripts/mozjs-fetch.sh >/dev/null || { echo "✗ mozjs-fetch: the SpiderMonkey archive is not the pinned one — the wall is RED" >&2; exit 1; }
+
 # Snapshot the tree before doing anything. PROCESS #37: `git checkout` is a delete, and I have
 # run it on uncommitted work twice. This makes that recoverable. It is free when nothing has changed.
 ./scripts/snap.sh || true
