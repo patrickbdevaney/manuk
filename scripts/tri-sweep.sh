@@ -121,7 +121,10 @@ fi
 awk -F'\t' '
   FILENAME==m2{mr[$1]=$2; mc[$1]=$3; mt[$1]=$4; mx[$1]=$5"\t"$6"\t"$7"\t"$8"\t"$9; next}
   FILENAME==ax{ap[$1]=$2; ar[$1]=$3; af[$1]=$4; at[$1]=$5; next}
-  {print $0"\t"mt[$2]"\t"mr[$2]"\t"mc[$2]"\t"mx[$2]"\t"at[$2]"\t"ap[$2]"\t"ar[$2]"\t"af[$2]"\t"cv}
+  # a site M1 did not reach is never driven or scored: tag it SKIPPED, never leave the cell empty (an empty tag hides the skip)
+  {mtag=(($2 in mt)?mt[$2]:"SKIPPED"); atag=(($2 in at)?at[$2]:"SKIPPED");
+   # empty numeric cells are padded so every row keeps 20 fields and chrome_ver stays in its column
+   print $0"\t"mtag"\t"mr[$2]"\t"mc[$2]"\t"(($2 in mx)?mx[$2]:"\t\t\t\t")"\t"atag"\t"ap[$2]"\t"ar[$2]"\t"af[$2]"\t"cv}
 ' m2="$M2MAP" ax="$AXF" cv="$CHROME_VER" "$M2MAP" "$AXF" "$M1M2" > "$FINAL"
 # persisted per-site rows (survive the run; $OUT is scratch). One file per run, never overwritten.
 mkdir -p "$PERSIST"; PF="$PERSIST/tri-sweep-$(date +%Y%m%d-%H%M%S).tsv"
