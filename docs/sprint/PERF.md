@@ -663,3 +663,19 @@ ebanking.bdm-sa.com) move 2x between sweeps, while the origins that are stable i
 (Wikipedia x4 pages 1.0-2.3 s -> 0.64-0.79 s; books.toscrape.com 0.76 -> 0.55 s; 10 -> 3 connections on Wikipedia).
 The <=24 s bar was met by one sweep of three, so PERF.1.1 is recorded BLOCKED on that bar, not DONE. The remaining time is
 the serial waterfall (fonts, then images, start after cascade/layout; HTTP/1.1 ebanking is six-wide at 190 ms RTT).
+
+## PERF.1.2 results (chrome_ver=145.0.7632.116; manuk only, Chrome rows unchanged above)
+
+`scripts/perf1-settle-gate.py <runs.jsonl> [--nodes BASE NEW]`: Σ over 20 URLs of the per-URL median of manuk `settle`, 3 runs each
+(raw rows and traces: `docs/sprint/perf1-pf12b/`).
+
+| arm | Σ settle s |
+|---|---|
+| baseline (perf1/runs.jsonl) | 22.48 |
+| after fix 1 (fingerprint stores the clean hash), sweep | 16.54 |
+| after fixes 1-3 (+ deferred-scripts leaves fingerprint current, bg images once per url), sweep | 13.67 |
+
+Bar was <= 11 s: **not met**. Wikipedia Alan_Turing `subframes (pre-load)` 2117 -> 28 ms, `dynamic scripts` 2984 -> 1050 ms (full cascade+layout
+ran twice per phase on identical inputs). a11y node counts base vs new: max drift 0.04 % (comix.to, live page), 0 on the other 19;
+mutant (`finish_loading_inner` returns at once) drifts 1.4-78 % on 6 URLs -> node check RED. Remaining top URLs: puentedemando.com 3.78 s,
+ordertime.com 1.95 s (one 1.6 s script evaluation), Rust/Python/Turing Wikipedia 1.2-1.5 s each (script eval + one dirty restyle per phase).

@@ -1,0 +1,184 @@
+0	epoch	1792949990483013
+784	dns	comix.to	763
+57026	connect	comix.to	57011
+256186	req	https://comix.to/	0	256182	200	HTTP/2.0	-	GET
+433119	body	https://comix.to/	422286
+435124	dns	fonts.googleapis.com	518
+435441	phase	html parse	2000
+435965	dns	static.cloudflareinsights.com	463
+450209	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/main-tngyyv-DiuFnKqF.css	434543	15664	200	HTTP/2.0	-	GET
+454433	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/main-tngyyv-DiuFnKqF.css	314672
+468772	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/vendor-tngyyv-C4KpSAGO.css	454537	14232	200	HTTP/2.0	-	GET
+468928	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/vendor-tngyyv-C4KpSAGO.css	6847
+470002	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/main-tngyyv-BXRIeb85.js	454518	15482	200	HTTP/2.0	-	GET
+473061	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/main-tngyyv-BXRIeb85.js	216980
+510164	connect	static.cloudflareinsights.com	74664
+553154	connect	fonts.googleapis.com	118566
+619303	req	https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092	435491	183808	200	HTTP/2.0	-	GET
+624619	body	https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092	31853
+631322	phase	external scripts	195867
+647282	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-B9_WbCp7.js	633907	13373	200	HTTP/2.0	-	GET
+647347	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-B9_WbCp7.js	723
+652440	req	https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap	434563	217876	200	HTTP/2.0	-	GET
+657720	body	https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap	1539
+706903	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-3EzBHWdO.js	647418	59482	200	HTTP/2.0	-	GET
+711406	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-3EzBHWdO.js	309333
+727708	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/apicore-tngyyv-CvZK--kg.js	712902	14804	200	HTTP/2.0	-	GET
+730145	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/apicore-tngyyv-CvZK--kg.js	167432
+748294	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-BDBpVrxZ.js	734905	13387	200	HTTP/2.0	-	GET
+748385	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-BDBpVrxZ.js	7191
+761141	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-CFoYlfW0.js	748553	12586	200	HTTP/2.0	-	GET
+761537	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-CFoYlfW0.js	63190
+825626	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/secure-tngyyv-3ONCGpAA.js	766020	59603	200	HTTP/2.0	-	GET
+826430	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/secure-tngyyv-3ONCGpAA.js	68129
+845246	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-7Iq2DQL5.js	827574	17670	200	HTTP/2.0	-	GET
+845311	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-7Iq2DQL5.js	375
+859595	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-DEEjT4qg.js	845369	14225	200	HTTP/2.0	-	GET
+859647	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-DEEjT4qg.js	1877
+873873	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-DIZZABpj.js	859727	14145	200	HTTP/2.0	-	GET
+873936	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-DIZZABpj.js	545
+886142	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-CFChVsvw.js	874000	12140	200	HTTP/2.0	-	GET
+886210	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-CFChVsvw.js	734
+901194	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-BkerMytJ2.js	886278	14914	200	HTTP/2.0	-	GET
+901830	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-BkerMytJ2.js	123541
+927026	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-9jhqjN-f.js	909182	17842	200	HTTP/2.0	-	GET
+927117	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-9jhqjN-f.js	10303
+987710	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-CJtSxeNt.js	927839	59868	200	HTTP/2.0	-	GET
+987840	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-CJtSxeNt.js	10856
+1003406	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-CCG43boQ.js	988860	14543	200	HTTP/2.0	-	GET
+1003503	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-CCG43boQ.js	6367
+1021486	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-DdDsjOA5.js	1004381	17104	200	HTTP/2.0	-	GET
+1021621	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-DdDsjOA5.js	12710
+1037681	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-DkIlpyJX.js	1023026	14654	200	HTTP/2.0	-	GET
+1037773	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-DkIlpyJX.js	7925
+1049993	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-Bc9oKYum.js	1038461	11531	200	HTTP/2.0	-	GET
+1050065	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-Bc9oKYum.js	2083
+1062295	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-CBOeIZtE2.js	1050307	11986	200	HTTP/2.0	-	GET
+1062352	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-CBOeIZtE2.js	1753
+1074196	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-BStHWUIt.js	1062437	11757	200	HTTP/2.0	-	GET
+1074255	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-BStHWUIt.js	2232
+1087233	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-DOV8Xn4t2.js	1074344	12887	200	HTTP/2.0	-	GET
+1087918	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-DOV8Xn4t2.js	66247
+1106646	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-BLyeLkay.js	1092357	14288	200	HTTP/2.0	-	GET
+1106847	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-BLyeLkay.js	35239
+1129879	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-60CPpgLj2.js	1111018	18860	200	HTTP/2.0	-	GET
+1130496	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-60CPpgLj2.js	58818
+1146596	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-Ct2kFU_9.js	1132585	14010	200	HTTP/2.0	-	GET
+1146745	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-Ct2kFU_9.js	21362
+1206816	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-BkksdytX.js	1148764	58049	200	HTTP/2.0	-	GET
+1206904	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-BkksdytX.js	2675
+1217595	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-fbQGGP8G2.js	1207134	10459	200	HTTP/2.0	-	GET
+1217697	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-fbQGGP8G2.js	4781
+1235120	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv---cLz8Wt.js	1218116	17003	200	HTTP/2.0	-	GET
+1235201	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv---cLz8Wt.js	870
+1252539	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-Cuzjn1Vk2.js	1235311	17227	200	HTTP/2.0	-	GET
+1252627	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-Cuzjn1Vk2.js	1226
+1267190	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-NaWNJAJX2.js	1252698	14490	200	HTTP/2.0	-	GET
+1267306	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-NaWNJAJX2.js	7895
+1280801	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-DMRG-v92.js	1268073	12726	200	HTTP/2.0	-	GET
+1280892	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-DMRG-v92.js	3489
+1297436	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-C7R415lE.js	1281112	16322	200	HTTP/2.0	-	GET
+1297551	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-C7R415lE.js	10068
+1313195	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-DuXn-BUI.js	1298399	14794	200	HTTP/2.0	-	GET
+1313280	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-DuXn-BUI.js	2195
+1327113	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-DToUtMjH.js	1313465	13646	200	HTTP/2.0	-	GET
+1327182	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-DToUtMjH.js	4002
+1346656	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-CyAyJrLC.js	1327460	19193	200	HTTP/2.0	-	GET
+1346773	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-CyAyJrLC.js	8200
+1357843	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-Cz0VJGhb.js	1347178	10662	200	HTTP/2.0	-	GET
+1358018	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-Cz0VJGhb.js	15839
+1381049	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-Bx5nG8EX.js	1359076	21971	200	HTTP/2.0	-	GET
+1381168	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-Bx5nG8EX.js	12693
+1402359	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-Cby2iu5L.js	1390527	11831	200	HTTP/2.0	-	GET
+1402446	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-Cby2iu5L.js	518
+1413223	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-Yur2QIgI.js	1402500	10721	200	HTTP/2.0	-	GET
+1413295	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-Yur2QIgI.js	2244
+1427962	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-DAyIsNDF.js	1413538	14422	200	HTTP/2.0	-	GET
+1428028	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-DAyIsNDF.js	653
+1444939	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv--gRr27mK.js	1428108	16830	200	HTTP/2.0	-	GET
+1445035	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv--gRr27mK.js	5689
+1458042	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-DVu-fzyp.js	1445354	12686	200	HTTP/2.0	-	GET
+1458111	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-DVu-fzyp.js	4867
+1471785	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-mHTVjHAH.js	1458235	13549	200	HTTP/2.0	-	GET
+1471881	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-mHTVjHAH.js	897
+1487053	req	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-DzEaYHxD.js	1472035	15016	200	HTTP/2.0	-	GET
+1487166	body	https://comix.to/assets/build/35595e3de3c99889c1aa70/dist/tngyyv-DzEaYHxD.js	10407
+1487777	phase	module graph prefetch	856439
+1487802	phase	blocking stylesheets	13
+1549239	cascade	48
+1557613	layout	8348
+1559360	phase	cascade+layout+blocking scripts	71545
+1852737	cascade	38893
+2452386	layout	599618
+2518683	cascade	37115
+2968811	layout	450100
+3033717	cascade	33280
+3485798	layout	452055
+3580409	cascade	35429
+4049254	layout	468817
+4112500	cascade	31776
+4577199	layout	464664
+4669358	cascade	30322
+5135233	layout	465846
+5198489	cascade	31358
+5662944	layout	464425
+5747397	cascade	30209
+6213430	layout	466001
+6274318	cascade	28608
+6737018	layout	462670
+6799474	cascade	28853
+7259414	layout	459912
+7307794	cascade	3427
+7308006	layout	184
+7314298	phase	deferred scripts	5754923
+7315491	phase	DOMContentLoaded	1178
+7363316	req	https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap	7340945	22370	200	HTTP/2.0	-	GET
+7364249	body	https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap	1522
+7387099	dns	fonts.gstatic.com	840
+7469762	connect	fonts.gstatic.com	83504
+7551414	req	https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbY2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKxjPQ.ttf	7386248	165163	200	HTTP/2.0	52983	GET
+7607710	body	https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbY2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKxjPQ.ttf	112172
+7607842	req	https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbY2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8-qxjPQ.ttf	7469907	137934	200	HTTP/2.0	54233	GET
+7633218	body	https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbY2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8-qxjPQ.ttf	112204
+7633313	req	https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbY2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8FqtjPQ.ttf	7469942	163370	200	HTTP/2.0	54358	GET
+7646497	body	https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbY2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8FqtjPQ.ttf	112160
+7646573	req	https://fonts.gstatic.com/s/poppins/v24/pxiEyp8kv8JHgFVrFJA.ttf	7469964	176608	200	HTTP/2.0	69472	GET
+7658214	body	https://fonts.gstatic.com/s/poppins/v24/pxiEyp8kv8JHgFVrFJA.ttf	154628
+7658280	req	https://fonts.gstatic.com/s/poppins/v24/pxiByp8kv8JHgFVrLGT9V1s.ttf	7469998	188281	200	HTTP/2.0	68742	GET
+7667438	req	https://fonts.gstatic.com/s/poppins/v24/pxiByp8kv8JHgFVrLEj6V1s.ttf	7470021	197416	200	HTTP/2.0	69206	GET
+7671771	body	https://fonts.gstatic.com/s/poppins/v24/pxiByp8kv8JHgFVrLGT9V1s.ttf	152860
+7673986	body	https://fonts.gstatic.com/s/poppins/v24/pxiByp8kv8JHgFVrLEj6V1s.ttf	151516
+7674058	req	https://fonts.gstatic.com/s/poppins/v24/pxiByp8kv8JHgFVrLCz7V1s.ttf	7608259	65798	200	HTTP/2.0	68564	GET
+7679628	body	https://fonts.gstatic.com/s/poppins/v24/pxiByp8kv8JHgFVrLCz7V1s.ttf	150292
+7679701	req	https://fonts.gstatic.com/s/geist/v5/gyBhhwUxId8gMGYQMKR3pzfaWI_RnOM4nQ.ttf	7608291	71409	200	HTTP/2.0	36820	GET
+7681044	req	https://fonts.gstatic.com/s/geist/v5/gyBhhwUxId8gMGYQMKR3pzfaWI_RruM4nQ.ttf	7608321	72722	200	HTTP/2.0	37624	GET
+7682987	body	https://fonts.gstatic.com/s/geist/v5/gyBhhwUxId8gMGYQMKR3pzfaWI_RnOM4nQ.ttf	72916
+7683799	body	https://fonts.gstatic.com/s/geist/v5/gyBhhwUxId8gMGYQMKR3pzfaWI_RruM4nQ.ttf	72996
+7683927	req	https://fonts.gstatic.com/s/geist/v5/gyBhhwUxId8gMGYQMKR3pzfaWI_RQuQ4nQ.ttf	7608344	75581	200	HTTP/2.0	37710	GET
+7685638	body	https://fonts.gstatic.com/s/geist/v5/gyBhhwUxId8gMGYQMKR3pzfaWI_RQuQ4nQ.ttf	73048
+7685726	req	https://fonts.gstatic.com/s/geist/v5/gyBhhwUxId8gMGYQMKR3pzfaWI_Re-Q4nQ.ttf	7608362	77363	200	HTTP/2.0	37786	GET
+7687507	body	https://fonts.gstatic.com/s/geist/v5/gyBhhwUxId8gMGYQMKR3pzfaWI_Re-Q4nQ.ttf	72984
+7687611	req	https://fonts.gstatic.com/s/geistmono/v6/or3yQ6H-1_WfwkMZI_qYPLs1a-t7PU0AbeE9KJ5T.ttf	7608377	79232	200	HTTP/2.0	35339	GET
+7691776	req	https://fonts.gstatic.com/s/geistmono/v6/or3yQ6H-1_WfwkMZI_qYPLs1a-t7PU0AbeEPKJ5T.ttf	7608393	83382	200	HTTP/2.0	36269	GET
+7693165	body	https://fonts.gstatic.com/s/geistmono/v6/or3yQ6H-1_WfwkMZI_qYPLs1a-t7PU0AbeEPKJ5T.ttf	71212
+7693256	body	https://fonts.gstatic.com/s/geistmono/v6/or3yQ6H-1_WfwkMZI_qYPLs1a-t7PU0AbeE9KJ5T.ttf	71160
+7693364	req	https://fonts.gstatic.com/s/geistmono/v6/or3yQ6H-1_WfwkMZI_qYPLs1a-t7PU0AbeHjL55T.ttf	7608410	84952	200	HTTP/2.0	36313	GET
+7694731	body	https://fonts.gstatic.com/s/geistmono/v6/or3yQ6H-1_WfwkMZI_qYPLs1a-t7PU0AbeHjL55T.ttf	71148
+7723036	cascade	2956
+7723183	layout	124
+7724657	phase	subframes (pre-load)	409149
+7724681	phase	initial images+masks	11
+7785244	phase	load event	60553
+7819108	phase	finish_loading: external CSS	33832
+7819133	phase	finish_loading: dynamic scripts	4
+7819149	phase	finish_loading: subframes	6
+7872202	req	https://comix.to/cdn-cgi/rum?	7819373	52826	404	HTTP/2.0	-	POST
+7872285	body	https://comix.to/cdn-cgi/rum?	518
+7948662	req	https://comix.to/api/v1/user	7819348	129311	200	HTTP/2.0	-	GET
+7950071	body	https://comix.to/api/v1/user	29
+7952339	phase	finish_loading: page fetches	133180
+7952368	phase	finish_loading: images	12
+7952379	phase	finish_loading: icon masks	1
+7952389	phase	finish_loading: background images	1
+7952681	mark	navigate_returned
+7952744	mark	a11y_built

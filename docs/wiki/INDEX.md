@@ -282,6 +282,13 @@
   - L303 · A frame is a bitmap, so its pixels need explicit refreshing (tick 232)
   - L331 · The agent's click point IS layout geometry, so a containing-block bug is an actuation bug (I3)
 
+## A restyle that just ran must leave the cascade fingerprint current
+`docs/wiki/a-restyle-that-just-ran-must-leave-the-cascade-fingerprint-current.md`
+
+  - L5 · Mechanism (engine/page/src/lib.rs)
+  - L16 · What is NOT fixed (the remaining settle)
+  - L22 · Gate hygiene
+
 ## A rotated run's fields are a mixed frame
 `docs/wiki/a-rotated-runs-fields-are-a-mixed-frame.md`
 
@@ -3710,4 +3717,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3061 sections across 161 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3064 sections across 162 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -15,7 +15,7 @@
 | median tick cycle | **33m** | 1186 intervals |
 | median, last 10 | **32m** | 10 intervals |
 | fastest / slowest | 5s / 43.8d | |
-| **ticks per hour** | **0.46** | 2552.1h elapsed |
+| **ticks per hour** | **0.46** | 2553.0h elapsed |
 | median verify wall | **67s** | 1126 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -1283,6 +1283,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1513** | 2026-09-11 17:03 | 29m | instrument | 8m | +241/−42 | 583 | 81 | 56.0% · | the oracle renders every site from `file://`, so a self-hosted webfont is CORS-blocked (20 |
 | **1514** | 2026-09-11 17:31 | 28m | instrument | 8m | +273/−42 | 583 | 81 | 56.0% · | one flag, and two refusal cohorts stop existing (2026-09-11) |
 | **1515** | 2026-09-11 17:54 | 23m | instrument | 8m | +363/−44 | 583 | 81 | 56.0% · | the reference got honest in both directions (2026-09-11) |
-| **1516** | 2026-10-25 13:09 | 43.8d | instrument | 8m | +25462/−59 | 585 | 81 | 56.0% · | the loop re-derived a rule it had already banked (2026-09-11) |
+| **1516** | 2026-10-25 14:06 | 43.8d | instrument | 8m | +8136/−84 | 585 | 81 | 56.0% · | the loop re-derived a rule it had already banked (2026-09-11) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

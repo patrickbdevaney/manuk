@@ -1201,6 +1201,38 @@ async fn fetch_font_bytes(url: &str) -> Option<Vec<u8>> {
     }
 }
 
+/// A fingerprint of everything the cascade reads: the style sources (by CONTENT), the shape of the
+/// tree and the viewport; with `with_dirty`, also which nodes a script has touched since the last
+/// pass (a mutation that keeps the node count identical must still invalidate).
+fn cascade_fingerprint(
+    dom: &Dom,
+    sources: &[StyleSource],
+    external: &HashMap<String, String>,
+    viewport_width: f32,
+    with_dirty: bool,
+) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    for src in sources {
+        match src {
+            StyleSource::Inline(css, m) => (0u8, css, m).hash(&mut h),
+            // The URL is not enough: the same href can resolve to different bytes across a load (a
+            // 404 the first time, a hit the second). Hash the CONTENT we will actually cascade.
+            StyleSource::External(url, m) => (1u8, url, m, external.get(url)).hash(&mut h),
+        }
+    }
+    dom.descendants(dom.root()).count().hash(&mut h);
+    viewport_width.to_bits().hash(&mut h);
+    if with_dirty {
+        for n in dom.descendants(dom.root()) {
+            if dom.is_dirty(n) {
+                n.hash(&mut h);
+            }
+        }
+    }
+    h.finish()
+}
+
 /// Collect the page's stylesheet sources (inline + external) in document order.
 ///
 /// **Walks the FLAT tree, not the light tree.** A `<style>` inside a shadow root is not a descendant
@@ -5296,6 +5328,25 @@ impl Page {
                 restyle_and_layout(&self.dom, &sheets, fonts, viewport_width, &self.images);
             self.reapply_scroll_offsets();
             self.content_height = self.root_box.rect.height;
+            // **This pass IS the full restyle the next `apply_stylesheets` would run, so say so**
+            // (PERF.1.2). It left the dirt set and the fingerprint stale, so the very next phase
+            // (`subframes (pre-load)` -> `fetch_and_apply_stylesheets`) cascaded and laid out the same
+            // tree again: 350 ms of Wikipedia's settle for a document that had not moved. The same
+            // three lines every other relayout site ends with, plus the sticky flag only
+            // `apply_stylesheets` used to recompute.
+            self.has_sticky = self
+                .styles
+                .values()
+                .any(|s| s.position == manuk_css::Position::Sticky);
+            self.dom.clear_all_dirty();
+            let sources = self.cascade_sources(&self.external_css);
+            self.last_cascade = Some(cascade_fingerprint(
+                &self.dom,
+                &sources,
+                &self.external_css,
+                viewport_width,
+                false,
+            ));
         }
         ran
     }
@@ -6648,6 +6699,7 @@ impl Page {
                 // below once it has.
                 self.dyn_scripts_ran.insert(node);
                 let Some(ctx) = &self.js else { continue };
+                let t0 = std::time::Instant::now();
                 let rects: HashMap<manuk_dom::NodeId, [f32; 4]> = self
                     .root_box
                     .node_rects(&self.dom)
@@ -7860,18 +7912,36 @@ impl Page {
         if targets.is_empty() {
             return 0;
         }
+        // **One fetch and one decode per DISTINCT url, not per node** (PERF.1.2). A sprite or icon
+        // background sits on hundreds of elements; each node used to fetch (a `data:` url is
+        // re-decoded from base64) and rasterise its own copy — 385 ms of the Wikipedia settle.
+        let mut distinct: Vec<String> = Vec::new();
+        {
+            let mut seen = std::collections::HashSet::new();
+            for (_, url) in &targets {
+                if seen.insert(url.clone()) {
+                    distinct.push(url.clone());
+                }
+            }
+        }
         let fetched = collect_before_deadline(
-            targets
+            distinct
                 .into_iter()
-                .map(|(n, url)| async move { (n, fetch_image_bytes(&url).await, url) }),
+                .map(|url| async move { (fetch_image_bytes(&url).await, url) }),
             self.load_deadline,
         )
         .await;
+        let decoded: HashMap<String, std::rc::Rc<manuk_paint::DecodedImage>> = fetched
+            .into_iter()
+            .filter_map(|(bytes, url)| {
+                let img = decode_bitmap(&bytes?, &url)?;
+                Some((url, std::rc::Rc::new(img)))
+            })
+            .collect();
         let mut count = 0usize;
-        for (node, bytes, url) in fetched {
-            let Some(bytes) = bytes else { continue };
-            if let Some(img) = decode_bitmap(&bytes, &url) {
-                self.images.insert(node, std::rc::Rc::new(img));
+        for (node, url) in targets {
+            if let Some(img) = decoded.get(&url) {
+                self.images.insert(node, img.clone());
                 count += 1;
             }
         }
@@ -10225,20 +10295,9 @@ impl Page {
         collect_subresources(&self.dom, &self.final_url)
     }
 
-    /// Re-style + re-lay-out with external stylesheets applied (D4 render-blocking
-    /// CSS). `external` maps each `<link>`'s resolved URL → its CSS text; inline
-    /// `<style>` and external sheets are combined in **document order** so cascade
-    /// precedence is correct. Returns the resulting [`RestyleDamage`].
-    ///
-    /// Callers fetch the CSS (via [`fetch_and_apply_stylesheets`](Self::fetch_and_apply_stylesheets)
-    /// or their own network path) and hand the texts here — keeping this core
-    /// deterministic and testable.
-    pub fn apply_stylesheets(
-        &mut self,
-        external: &HashMap<String, String>,
-        fonts: &FontContext,
-        viewport_width: f32,
-    ) -> RestyleDamage {
+    /// The style sources the cascade runs over: the document's own `<style>`/`<link>` sources, with
+    /// every `@import`ed sheet in `external` that the document does not name itself placed first.
+    fn cascade_sources(&self, external: &HashMap<String, String>) -> Vec<StyleSource> {
         let mut sources = collect_style_sources(&self.dom, &self.final_url);
         // ⚠⚠⚠ **AN `@import`ED SHEET WAS DELIVERING ITS `@font-face`s AND NOT ONE OF ITS RULES.**
         //
@@ -10277,6 +10336,24 @@ impl Page {
             all.append(&mut sources);
             sources = all;
         }
+        sources
+    }
+
+    /// Re-style + re-lay-out with external stylesheets applied (D4 render-blocking
+    /// CSS). `external` maps each `<link>`'s resolved URL → its CSS text; inline
+    /// `<style>` and external sheets are combined in **document order** so cascade
+    /// precedence is correct. Returns the resulting [`RestyleDamage`].
+    ///
+    /// Callers fetch the CSS (via [`fetch_and_apply_stylesheets`](Self::fetch_and_apply_stylesheets)
+    /// or their own network path) and hand the texts here — keeping this core
+    /// deterministic and testable.
+    pub fn apply_stylesheets(
+        &mut self,
+        external: &HashMap<String, String>,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) -> RestyleDamage {
+        let sources = self.cascade_sources(external);
 
         // **Do not re-cascade a document whose inputs have not changed.**
         //
@@ -10293,29 +10370,12 @@ impl Page {
         // So fingerprint what the cascade actually depends on — the style sources and the shape of
         // the tree — and skip the work when neither moved. A script that DID mutate the DOM or inject
         // a sheet changes the fingerprint and gets its restyle, which is the whole point.
-        let fp = {
-            use std::hash::{Hash, Hasher};
-            let mut h = std::collections::hash_map::DefaultHasher::new();
-            for src in &sources {
-                match src {
-                    StyleSource::Inline(css, m) => (0u8, css, m).hash(&mut h),
-                    // The URL is not enough: the same href can resolve to different bytes across a
-                    // load (a 404 the first time, a hit the second). Hash the CONTENT we will
-                    // actually cascade, which is the thing the result depends on.
-                    StyleSource::External(url, m) => (1u8, url, m, external.get(url)).hash(&mut h),
-                }
-            }
-            self.dom.descendants(self.dom.root()).count().hash(&mut h);
-            viewport_width.to_bits().hash(&mut h);
-            // A mutation that keeps the node count identical (an attribute or class change, which is
-            // how every SPA toggles state) must still invalidate.
-            for n in self.dom.descendants(self.dom.root()) {
-                if self.dom.is_dirty(n) {
-                    n.hash(&mut h);
-                }
-            }
-            h.finish()
-        };
+        // `clean_fp` is the SAME inputs with no dirty node: what `last_cascade` must hold once this
+        // pass has applied the dirt. Storing `fp` instead made the NEXT call (dirty set now cleared)
+        // hash differently and re-run a full cascade+layout over inputs nothing had changed — twice
+        // per phase on Wikipedia (PERF.1.2).
+        let clean_fp = cascade_fingerprint(&self.dom, &sources, external, viewport_width, false);
+        let fp = cascade_fingerprint(&self.dom, &sources, external, viewport_width, true);
         self.external_css = external.clone();
         if self.last_cascade == Some(fp) && !self.styles.is_empty() {
             tracing::debug!("cascade inputs unchanged — skipping a full restyle");
@@ -10367,6 +10427,7 @@ impl Page {
         self.set_root_box(root);
         self.content_height = self.root_box.content_bottom();
         self.dom.clear_all_dirty();
+        self.last_cascade = Some(clean_fp);
         damage
     }
 

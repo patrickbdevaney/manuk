@@ -1,0 +1,308 @@
+0	epoch	1792950172279336
+155357	dns	www.puentedemando.com	155329
+635639	connect	www.puentedemando.com	635617
+839293	req	https://www.puentedemando.com/	0	839291	200	HTTP/2.0	-	GET
+1147260	body	https://www.puentedemando.com/	151311
+1152078	phase	html parse	4675
+1454290	req	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/bootstrap/bootstrap.min.css	1147821	306468	200	HTTP/2.0	-	GET
+1454987	body	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/bootstrap/bootstrap.min.css	193554
+1761713	req	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/popup/magnific-popup.css	1455101	306610	200	HTTP/2.0	-	GET
+1761731	req	https://www.puentedemando.com/wp-includes/js/jquery/jquery.min.js	1455075	306655	200	HTTP/2.0	-	GET
+1761758	req	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/odometer/odometer-theme-default.css	1455143	306614	200	HTTP/2.0	-	GET
+1761719	req	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/nice-select/nice-select.css	1455157	306560	200	HTTP/2.0	-	GET
+1761810	body	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/popup/magnific-popup.css	7192
+1761731	req	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/swiper/swiper-bundle.min.css	1455129	306601	200	HTTP/2.0	-	GET
+1761831	body	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/odometer/odometer-theme-default.css	3563
+1761874	body	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/nice-select/nice-select.css	3394
+1761939	body	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/swiper/swiper-bundle.min.css	16375
+1762258	body	https://www.puentedemando.com/wp-includes/js/jquery/jquery.min.js	87553
+2068825	req	https://www.puentedemando.com/wp-content/plugins/wp-audio-posts//assets/styles/css/style.min.css	1455188	613634	200	HTTP/2.0	-	GET
+2068844	req	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/css/style.css	1455174	613669	200	HTTP/2.0	-	GET
+2068917	body	https://www.puentedemando.com/wp-content/plugins/wp-audio-posts//assets/styles/css/style.min.css	1192
+2069768	body	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/css/style.css	322976
+2376082	req	https://www.puentedemando.com/wp-includes/js/jquery/jquery-migrate.min.js	1455206	920874	200	HTTP/2.0	-	GET
+2376086	req	https://www.puentedemando.com/wp-content/themes/puentedemando/assets/styles/css/style.min.css	1455221	920864	200	HTTP/2.0	-	GET
+2376180	body	https://www.puentedemando.com/wp-includes/js/jquery/jquery-migrate.min.js	13577
+2376212	req	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/jquery/jquery.js	1455235	920976	200	HTTP/2.0	-	GET
+2376265	body	https://www.puentedemando.com/wp-content/themes/puentedemando/assets/styles/css/style.min.css	36331
+2488875	req	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/fontawesome/fontawesome-pro.min.css	1455259	1033614	200	HTTP/2.0	-	GET
+2488961	body	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/jquery/jquery.js	146610
+2579359	body	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/fontawesome/fontawesome-pro.min.css	278088
+2579611	req	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/bootstrap/bootstrap.bundle.min.js	1455267	1124342	200	HTTP/2.0	-	GET
+2594838	body	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/bootstrap/bootstrap.bundle.min.js	79693
+2603557	req	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/popup/jquery.magnific-popup.min.js	1455283	1148272	200	HTTP/2.0	-	GET
+2603684	body	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/popup/jquery.magnific-popup.min.js	20216
+2617776	req	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/swiper/swiper-bundle.min.js	1455307	1162467	200	HTTP/2.0	-	GET
+2639005	body	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/swiper/swiper-bundle.min.js	165543
+2640553	req	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/odometer/odometer.min.js	1455323	1185229	200	HTTP/2.0	-	GET
+2640645	body	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/odometer/odometer.min.js	9896
+2642552	req	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/odometer/waypoints.min.js	1455339	1187212	200	HTTP/2.0	-	GET
+2642613	body	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/odometer/waypoints.min.js	9028
+2643560	req	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/menu/meanmenu.min.js	1455357	1188202	200	HTTP/2.0	-	GET
+2643643	body	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/menu/meanmenu.min.js	11264
+2643668	req	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/backtop/backToTop.js	1455378	1188289	200	HTTP/2.0	-	GET
+2643700	body	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/backtop/backToTop.js	1102
+2648551	req	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/isotope/isotope.pkgd.min.js	1455396	1193154	200	HTTP/2.0	-	GET
+2648731	body	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/isotope/isotope.pkgd.min.js	35445
+2648757	req	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/isotope/imagesloaded.pkgd.min.js	1455411	1193345	200	HTTP/2.0	-	GET
+2648812	body	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/isotope/imagesloaded.pkgd.min.js	5485
+2650553	req	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/wow/wow.js	1455433	1195120	200	HTTP/2.0	-	GET
+2650646	body	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/wow/wow.js	8182
+2650672	req	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/common-js/common.js	1455449	1195222	200	HTTP/2.0	-	GET
+2650720	body	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/common-js/common.js	5423
+2651574	req	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/js/main.js	1455469	1196104	200	HTTP/2.0	-	GET
+2651627	body	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/js/main.js	7760
+2651651	req	https://www.puentedemando.com/wp-content/uploads/siteground-optimizer-assets/wpap-site-js.min.js	1455484	1196167	200	HTTP/2.0	-	GET
+2651675	body	https://www.puentedemando.com/wp-content/uploads/siteground-optimizer-assets/wpap-site-js.min.js	36
+2652571	req	https://www.puentedemando.com/wp-content/uploads/siteground-optimizer-assets/pdm-brevo-newsletter.min.js	1455501	1197069	200	HTTP/2.0	-	GET
+2652614	body	https://www.puentedemando.com/wp-content/uploads/siteground-optimizer-assets/pdm-brevo-newsletter.min.js	3030
+2652637	req	https://www.puentedemando.com/wp-content/uploads/siteground-optimizer-assets/pdm-public-events.min.js	1455518	1197119	200	HTTP/2.0	-	GET
+2652679	body	https://www.puentedemando.com/wp-content/uploads/siteground-optimizer-assets/pdm-public-events.min.js	4081
+2654976	phase	external scripts	1502883
+2655243	phase	module graph prefetch	254
+2655269	phase	blocking stylesheets	15
+3283484	cascade	70565
+3512730	layout	229217
+3534080	cascade	5598
+3575508	layout	41405
+3582792	phase	cascade+layout+blocking scripts	927511
+4105707	cascade	67415
+4329710	layout	223978
+4336050	phase	deferred scripts	753241
+4438892	cascade	60300
+4662892	layout	223974
+4677361	phase	DOMContentLoaded	341295
+5019448	dns	fonts.googleapis.com	824
+5100633	connect	fonts.googleapis.com	82012
+5173978	req	https://fonts.googleapis.com/css2?family=Host+Grotesk:ital,wght@0,300..800;1,300..800&display=swap	5018611	155365	200	HTTP/2.0	-	GET
+5183908	body	https://fonts.googleapis.com/css2?family=Host+Grotesk:ital,wght@0,300..800;1,300..800&display=swap	2814
+5259494	dns	fonts.gstatic.com	13678
+5341055	connect	fonts.gstatic.com	95241
+5414053	req	https://fonts.gstatic.com/s/googlesans/v71/4Ua_rENHsxJlGDuGo1OIlJfC6l_24rlCK1Yo_Iqcsih3SAyH6cAwhX9RFD48TE63OOYKtrwEIKli.ttf	5341158	72893	200	HTTP/2.0	702818	GET
+5448243	req	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/fontawesome/webfonts/fa-brands-400.woff2	5245703	202538	200	HTTP/2.0	119584	GET
+5505484	req	https://fonts.gstatic.com/s/googlesans/v71/4Ua_rENHsxJlGDuGo1OIlJfC6l_24rlCK1Yo_Iqcsih3SAyH6cAwhX9RFD48TE63OOYKtrw2IKli.ttf	5341172	164311	200	HTTP/2.0	795800	GET
+5534832	req	https://fonts.gstatic.com/s/googlesans/v71/4Ua9rENHsxJlGDuGo1OIlL3L2JB874GPhFI9_IqmuRqGpjeaLi42kO8QvnQOs5beU3yksanMY3Mhpyw.ttf	5341116	193715	200	HTTP/2.0	864898	GET
+5540229	req	https://fonts.gstatic.com/s/googlesans/v71/4Ua9rENHsxJlGDuGo1OIlL3L2JB874GPhFI9_IqmuRqGpjeaLi42kO8QvnQOs5beU3yksanMY6Ympyw.ttf	5341144	199083	200	HTTP/2.0	812728	GET
+5543088	req	https://fonts.gstatic.com/s/googlesans/v71/4Ua9rENHsxJlGDuGo1OIlL3L2JB874GPhFI9_IqmuRqGpjeaLi42kO8QvnQOs5beU3yksanMY58mpyw.ttf	5341132	201955	200	HTTP/2.0	897013	GET
+5604675	body	https://fonts.gstatic.com/s/googlesans/v71/4Ua_rENHsxJlGDuGo1OIlJfC6l_24rlCK1Yo_Iqcsih3SAyH6cAwhX9RFD48TE63OOYKtrwEIKli.ttf	1903204
+5608259	req	https://fonts.gstatic.com/s/googlesans/v71/4Ua9rENHsxJlGDuGo1OIlL3L2JB874GPhFI9_IqmuRqGpjeaLi42kO8QvnQOs5beU3yksanMY0Ehpyw.ttf	5245810	362448	200	HTTP/2.0	774411	GET
+5614616	body	https://fonts.gstatic.com/s/googlesans/v71/4Ua_rENHsxJlGDuGo1OIlJfC6l_24rlCK1Yo_Iqcsih3SAyH6cAwhX9RFD48TE63OOYKtrw2IKli.ttf	1906032
+5617531	body	https://fonts.gstatic.com/s/googlesans/v71/4Ua9rENHsxJlGDuGo1OIlL3L2JB874GPhFI9_IqmuRqGpjeaLi42kO8QvnQOs5beU3yksanMY6Ympyw.ttf	1966788
+5619049	body	https://fonts.gstatic.com/s/googlesans/v71/4Ua9rENHsxJlGDuGo1OIlL3L2JB874GPhFI9_IqmuRqGpjeaLi42kO8QvnQOs5beU3yksanMY3Mhpyw.ttf	1967252
+5619590	body	https://fonts.gstatic.com/s/googlesans/v71/4Ua9rENHsxJlGDuGo1OIlL3L2JB874GPhFI9_IqmuRqGpjeaLi42kO8QvnQOs5beU3yksanMY58mpyw.ttf	1967344
+5623081	body	https://fonts.gstatic.com/s/googlesans/v71/4Ua9rENHsxJlGDuGo1OIlL3L2JB874GPhFI9_IqmuRqGpjeaLi42kO8QvnQOs5beU3yksanMY0Ehpyw.ttf	1964944
+5631276	req	https://fonts.gstatic.com/s/googlesans/v71/4Ua_rENHsxJlGDuGo1OIlJfC6l_24rlCK1Yo_Iqcsih3SAyH6cAwhX9RFD48TE63OOYKtrzjJ6li.ttf	5606999	24276	200	HTTP/2.0	747595	GET
+5634018	req	https://fonts.gstatic.com/s/hostgrotesk/v5/co3SmWBnlCJ3U42vbbfdwMjZoULo4bgYM-BIrC-NJlWj_g.ttf	5607031	26985	200	HTTP/2.0	31295	GET
+5636268	body	https://fonts.gstatic.com/s/hostgrotesk/v5/co3SmWBnlCJ3U42vbbfdwMjZoULo4bgYM-BIrC-NJlWj_g.ttf	56188
+5636310	req	https://fonts.gstatic.com/s/hostgrotesk/v5/co3UmWBnlCJ3U42vbbfdwMjzqHAXOdFzqU5PubnOzhY.ttf	5607114	29196	200	HTTP/2.0	28901	GET
+5636591	body	https://fonts.gstatic.com/s/hostgrotesk/v5/co3UmWBnlCJ3U42vbbfdwMjzqHAXOdFzqU5PubnOzhY.ttf	55084
+5638489	req	https://fonts.gstatic.com/s/hostgrotesk/v5/co3UmWBnlCJ3U42vbbfdwMjzqHAXOdFzqU5PuefOzhY.ttf	5607129	31359	200	HTTP/2.0	29442	GET
+5638692	body	https://fonts.gstatic.com/s/hostgrotesk/v5/co3UmWBnlCJ3U42vbbfdwMjzqHAXOdFzqU5PuefOzhY.ttf	55108
+5639569	req	https://fonts.gstatic.com/s/hostgrotesk/v5/co3SmWBnlCJ3U42vbbfdwMjZoULo4bgYM-BIrC-NwVKj_g.ttf	5607082	32479	200	HTTP/2.0	31302	GET
+5639803	req	https://fonts.gstatic.com/s/hostgrotesk/v5/co3UmWBnlCJ3U42vbbfdwMjzqHAXOdFzqU5PudXOzhY.ttf	5607145	32657	200	HTTP/2.0	29448	GET
+5640048	body	https://fonts.gstatic.com/s/hostgrotesk/v5/co3UmWBnlCJ3U42vbbfdwMjzqHAXOdFzqU5PudXOzhY.ttf	55124
+5641013	body	https://fonts.gstatic.com/s/hostgrotesk/v5/co3SmWBnlCJ3U42vbbfdwMjZoULo4bgYM-BIrC-NwVKj_g.ttf	56232
+5641644	body	https://fonts.gstatic.com/s/googlesans/v71/4Ua_rENHsxJlGDuGo1OIlJfC6l_24rlCK1Yo_Iqcsih3SAyH6cAwhX9RFD48TE63OOYKtrzjJ6li.ttf	1905536
+5642561	req	https://fonts.gstatic.com/s/hostgrotesk/v5/co3UmWBnlCJ3U42vbbfdwMjzqHAXOdFzqU5PuQDJzhY.ttf	5607176	35384	200	HTTP/2.0	29395	GET
+5642772	body	https://fonts.gstatic.com/s/hostgrotesk/v5/co3UmWBnlCJ3U42vbbfdwMjzqHAXOdFzqU5PuQDJzhY.ttf	55012
+5642802	req	https://fonts.gstatic.com/s/hostgrotesk/v5/co3UmWBnlCJ3U42vbbfdwMjzqHAXOdFzqU5PuWfJzhY.ttf	5607205	35597	200	HTTP/2.0	29023	GET
+5643003	body	https://fonts.gstatic.com/s/hostgrotesk/v5/co3UmWBnlCJ3U42vbbfdwMjzqHAXOdFzqU5PuWfJzhY.ttf	55080
+5643031	req	https://fonts.gstatic.com/s/hostgrotesk/v5/co3UmWBnlCJ3U42vbbfdwMjzqHAXOdFzqU5PuTnJzhY.ttf	5607162	35869	200	HTTP/2.0	29433	GET
+5643230	body	https://fonts.gstatic.com/s/hostgrotesk/v5/co3UmWBnlCJ3U42vbbfdwMjzqHAXOdFzqU5PuTnJzhY.ttf	55104
+5659361	req	https://fonts.gstatic.com/s/hostgrotesk/v5/co3SmWBnlCJ3U42vbbfdwMjZoULo4bgYM-BIrC-N-FKj_g.ttf	5607065	52294	200	HTTP/2.0	31382	GET
+5659860	body	https://fonts.gstatic.com/s/hostgrotesk/v5/co3SmWBnlCJ3U42vbbfdwMjZoULo4bgYM-BIrC-N-FKj_g.ttf	56332
+5722311	req	https://fonts.gstatic.com/s/hostgrotesk/v5/co3SmWBnlCJ3U42vbbfdwMjZoULo4bgYM-BIrC-NplKj_g.ttf	5607098	115212	200	HTTP/2.0	30886	GET
+5722870	body	https://fonts.gstatic.com/s/hostgrotesk/v5/co3SmWBnlCJ3U42vbbfdwMjZoULo4bgYM-BIrC-NplKj_g.ttf	56308
+5732606	req	https://fonts.gstatic.com/s/googlesans/v71/4Ua_rENHsxJlGDuGo1OIlJfC6l_24rlCK1Yo_Iqcsih3SAyH6cAwhX9RFD48TE63OOYKtrzaJ6li.ttf	5606976	125629	200	HTTP/2.0	825658	GET
+5755751	body	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/fontawesome/webfonts/fa-brands-400.woff2	119584
+5758937	req	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/fontawesome/webfonts/fa-light-300.woff2	5245737	513199	200	HTTP/2.0	465352	GET
+5770387	body	https://fonts.gstatic.com/s/googlesans/v71/4Ua_rENHsxJlGDuGo1OIlJfC6l_24rlCK1Yo_Iqcsih3SAyH6cAwhX9RFD48TE63OOYKtrzaJ6li.ttf	1906192
+5811741	req	https://fonts.gstatic.com/s/hostgrotesk/v5/co3SmWBnlCJ3U42vbbfdwMjZoULo4bgYM-BIrC-NFFWj_g.ttf	5607047	204692	200	HTTP/2.0	31350	GET
+5812244	body	https://fonts.gstatic.com/s/hostgrotesk/v5/co3SmWBnlCJ3U42vbbfdwMjZoULo4bgYM-BIrC-NFFWj_g.ttf	56320
+5841639	req	https://fonts.gstatic.com/s/hostgrotesk/v5/co3SmWBnlCJ3U42vbbfdwMjZoULo4bgYM-BIrC-NeFWj_g.ttf	5607016	234622	200	HTTP/2.0	30766	GET
+5842092	body	https://fonts.gstatic.com/s/hostgrotesk/v5/co3SmWBnlCJ3U42vbbfdwMjZoULo4bgYM-BIrC-NeFWj_g.ttf	56204
+6371635	body	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/fontawesome/webfonts/fa-light-300.woff2	465352
+6384193	req	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/fontawesome/webfonts/fa-regular-400.woff2	5245751	1138441	200	HTTP/2.0	425684	GET
+6521500	body	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/fontawesome/webfonts/fa-regular-400.woff2	425684
+6533256	req	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/fontawesome/webfonts/fa-solid-900.woff2	5245765	1287490	200	HTTP/2.0	354296	GET
+6684486	body	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/fontawesome/webfonts/fa-solid-900.woff2	354296
+6699716	req	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/fontawesome/webfonts/fa-duotone-900.woff2	5245724	1453991	404	HTTP/2.0	-	GET
+6699898	body	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/fontawesome/webfonts/fa-duotone-900.woff2	66855
+6700809	req	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/fontawesome/webfonts/fa-thin-100.woff2	5245779	1455028	404	HTTP/2.0	-	GET
+6701466	body	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/fontawesome/webfonts/fa-thin-100.woff2	66855
+7645597	req	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/fontawesome/webfonts/fa-duotone-900.ttf	6699953	945641	404	HTTP/2.0	-	GET
+7646767	body	https://www.puentedemando.com/wp-content/themes/puentedemando/pdm-theme/assets/vandor/fontawesome/webfonts/fa-duotone-900.ttf	66855
+7678762	phase	subframes (pre-load)	3001378
+7707518	req	https://www.puentedemando.com/wp-content/themes/puentedemando/assets/images/logo-footer.svg	7679120	28397	200	HTTP/2.0	-	GET
+7707648	body	https://www.puentedemando.com/wp-content/themes/puentedemando/assets/images/logo-footer.svg	13905
+7709635	req	https://www.puentedemando.com/wp-content/themes/puentedemando/assets/images/logo-header.svg	7679142	30491	200	HTTP/2.0	-	GET
+7709750	body	https://www.puentedemando.com/wp-content/themes/puentedemando/assets/images/logo-header.svg	13904
+7717503	req	https://www.puentedemando.com/wp-content/uploads/Newsletter_1700x200_Trasmed.jpg	7679157	38345	200	HTTP/2.0	54262	GET
+7734489	body	https://www.puentedemando.com/wp-content/uploads/Newsletter_1700x200_Trasmed.jpg	54262
+7742506	req	https://www.puentedemando.com/wp-content/uploads/cma-terminals-entra-terminal-contenedores-nador-west-med.jpg	7679171	63333	200	HTTP/2.0	22126	GET
+7744491	body	https://www.puentedemando.com/wp-content/uploads/cma-terminals-entra-terminal-contenedores-nador-west-med.jpg	22126
+7749501	req	https://www.puentedemando.com/wp-content/themes/puentedemando/assets/images/pdm-avatar-placeholder.png	7679186	70314	200	HTTP/2.0	8663	GET
+7749528	body	https://www.puentedemando.com/wp-content/themes/puentedemando/assets/images/pdm-avatar-placeholder.png	8663
+7756505	req	https://www.puentedemando.com/wp-content/uploads/msc-cma-cgm-recuperan-canal-suez-servicio-valencia-544x576.jpg	7679205	77299	200	HTTP/2.0	15190	GET
+7756558	body	https://www.puentedemando.com/wp-content/uploads/msc-cma-cgm-recuperan-canal-suez-servicio-valencia-544x576.jpg	15190
+7763503	req	https://www.puentedemando.com/wp-content/uploads/record-pedidos-portacontenedores-riesgo-exceso-capacidad-828x475.jpg	7679224	84278	200	HTTP/2.0	49654	GET
+7778494	body	https://www.puentedemando.com/wp-content/uploads/record-pedidos-portacontenedores-riesgo-exceso-capacidad-828x475.jpg	49654
+7778533	req	https://www.puentedemando.com/wp-content/uploads/Foto-Alba-90x90.png	7679236	99295	200	HTTP/2.0	1106	GET
+7778580	body	https://www.puentedemando.com/wp-content/uploads/Foto-Alba-90x90.png	1106
+7786503	req	https://www.puentedemando.com/wp-content/uploads/Espana-2030-828x475.jpeg	7679250	107251	200	HTTP/2.0	75702	GET
+7814490	body	https://www.puentedemando.com/wp-content/uploads/Espana-2030-828x475.jpeg	75702
+7822507	req	https://www.puentedemando.com/wp-content/uploads/A1-828x475.png	7679262	143244	200	HTTP/2.0	24802	GET
+7825491	body	https://www.puentedemando.com/wp-content/uploads/A1-828x475.png	24802
+7833503	req	https://www.puentedemando.com/wp-content/uploads/portaaviones-hms-queen-elizabeth-puertas-abiertas-gibraltar-828x475.jpg	7679276	154226	200	HTTP/2.0	51684	GET
+7848485	body	https://www.puentedemando.com/wp-content/uploads/portaaviones-hms-queen-elizabeth-puertas-abiertas-gibraltar-828x475.jpg	51684
+7856503	req	https://www.puentedemando.com/wp-content/uploads/boluda-towage-nuevos-remolcadores-italia-828x475.jpg	7679289	177213	200	HTTP/2.0	75858	GET
+7884489	body	https://www.puentedemando.com/wp-content/uploads/boluda-towage-nuevos-remolcadores-italia-828x475.jpg	75858
+7888504	req	https://www.puentedemando.com/wp-content/uploads/francia-estudia-prolongar-vida-util-portaaviones-charles-de-gaulle-2040-828x475.jpg	7679303	209200	200	HTTP/2.0	8382	GET
+7888529	body	https://www.puentedemando.com/wp-content/uploads/francia-estudia-prolongar-vida-util-portaaviones-charles-de-gaulle-2040-828x475.jpg	8382
+7895502	req	https://www.puentedemando.com/wp-content/uploads/Ceuta-1-1-544x665.jpeg	7679314	216187	200	HTTP/2.0	27972	GET
+7900491	body	https://www.puentedemando.com/wp-content/uploads/Ceuta-1-1-544x665.jpeg	27972
+7908507	req	https://www.puentedemando.com/wp-content/uploads/ACOESTE-1-544x461.jpg	7679326	229180	200	HTTP/2.0	39912	GET
+7918486	body	https://www.puentedemando.com/wp-content/uploads/ACOESTE-1-544x461.jpg	39912
+7926501	req	https://www.puentedemando.com/wp-content/uploads/BIENVENIDOS-A-BORDO_1700x200_news_home_pc.jpg	7679339	247161	200	HTTP/2.0	34042	GET
+7933509	body	https://www.puentedemando.com/wp-content/uploads/BIENVENIDOS-A-BORDO_1700x200_news_home_pc.jpg	34042
+7941517	req	https://www.puentedemando.com/wp-content/uploads/Juan-Carlos-Diaz-Lorenzo-Puentedemando-90x90.webp	7679364	262152	200	HTTP/2.0	1572	GET
+7941565	body	https://www.puentedemando.com/wp-content/uploads/Juan-Carlos-Diaz-Lorenzo-Puentedemando-90x90.webp	1572
+7941595	req	https://www.puentedemando.com/wp-content/uploads/Ceuta-1-1-382x308.jpeg	7679350	262244	200	HTTP/2.0	14642	GET
+7941616	body	https://www.puentedemando.com/wp-content/uploads/Ceuta-1-1-382x308.jpeg	14642
+7949507	req	https://www.puentedemando.com/wp-content/uploads/msc-encarga-20-portacontenedores-24000-teu-astillero-chino-828x475.webp	7679377	270129	200	HTTP/2.0	67862	GET
+7973487	body	https://www.puentedemando.com/wp-content/uploads/msc-encarga-20-portacontenedores-24000-teu-astillero-chino-828x475.webp	67862
+7980507	req	https://www.puentedemando.com/wp-content/uploads/M-Pinto-382x308.jpeg	7679389	301116	200	HTTP/2.0	15462	GET
+7980531	body	https://www.puentedemando.com/wp-content/uploads/M-Pinto-382x308.jpeg	15462
+7987509	req	https://www.puentedemando.com/wp-content/uploads/Bol-1-382x308.jpg	7679403	308105	200	HTTP/2.0	20418	GET
+7989820	body	https://www.puentedemando.com/wp-content/uploads/Bol-1-382x308.jpg	20418
+7997534	req	https://www.puentedemando.com/wp-content/uploads/china-zorrilla-ferry-electrico-argentina-uruguay-828x475.jpg	7679417	318115	200	HTTP/2.0	48544	GET
+8011510	body	https://www.puentedemando.com/wp-content/uploads/china-zorrilla-ferry-electrico-argentina-uruguay-828x475.jpg	48544
+8019509	req	https://www.puentedemando.com/wp-content/uploads/navantia-prepara-botadura-fragata-roger-de-lauria-27-octubre-382x308.jpg	7679432	340076	200	HTTP/2.0	17374	GET
+8020492	body	https://www.puentedemando.com/wp-content/uploads/navantia-prepara-botadura-fragata-roger-de-lauria-27-octubre-382x308.jpg	17374
+8027513	req	https://www.puentedemando.com/wp-content/uploads/maritime-global-services-nave-punta-langosteira-382x308.jpg	7679445	348067	200	HTTP/2.0	21718	GET
+8030489	body	https://www.puentedemando.com/wp-content/uploads/maritime-global-services-nave-punta-langosteira-382x308.jpg	21718
+8036506	req	https://www.puentedemando.com/wp-content/uploads/buque-armada-86-04-malaga-drones-submarinos-828x475.jpg	7679462	357043	200	HTTP/2.0	40782	GET
+8048486	body	https://www.puentedemando.com/wp-content/uploads/buque-armada-86-04-malaga-drones-submarinos-828x475.jpg	40782
+8055893	req	https://www.puentedemando.com/wp-content/uploads/puerto-sevilla-adjudica-gestion-astillero-ag-seville-shipyard-382x308.jpg	7679478	376412	200	HTTP/2.0	27548	GET
+8061491	body	https://www.puentedemando.com/wp-content/uploads/puerto-sevilla-adjudica-gestion-astillero-ag-seville-shipyard-382x308.jpg	27548
+8067502	req	https://www.puentedemando.com/wp-content/uploads/metanero-200000-m3-propulsion-hibrida-electrica-shell-gtt-382x308.jpg	7679493	388008	200	HTTP/2.0	12096	GET
+8067530	body	https://www.puentedemando.com/wp-content/uploads/metanero-200000-m3-propulsion-hibrida-electrica-shell-gtt-382x308.jpg	12096
+8074507	req	https://www.puentedemando.com/wp-content/uploads/eni-primera-plataforma-ccs-marina-mundo-reino-unido-828x475.jpg	7679508	394998	200	HTTP/2.0	59712	GET
+8094490	body	https://www.puentedemando.com/wp-content/uploads/eni-primera-plataforma-ccs-marina-mundo-reino-unido-828x475.jpg	59712
+8101506	req	https://www.puentedemando.com/wp-content/uploads/SP60-382x308.jpeg	7679521	421983	200	HTTP/2.0	22614	GET
+8104493	body	https://www.puentedemando.com/wp-content/uploads/SP60-382x308.jpeg	22614
+8111507	req	https://www.puentedemando.com/wp-content/uploads/Rem-0-copia.jpeg	7679534	431972	200	HTTP/2.0	71146	GET
+8137490	body	https://www.puentedemando.com/wp-content/uploads/Rem-0-copia.jpeg	71146
+8144694	req	https://www.puentedemando.com/wp-content/uploads/Petrolero-1.jpeg	7679552	465141	200	HTTP/2.0	67212	GET
+8167498	body	https://www.puentedemando.com/wp-content/uploads/Petrolero-1.jpeg	67212
+8175507	req	https://www.puentedemando.com/wp-content/uploads/patrullero-medas-estacion-armas-sentinel-2.jpg	7679566	495940	200	HTTP/2.0	107308	GET
+8217489	body	https://www.puentedemando.com/wp-content/uploads/patrullero-medas-estacion-armas-sentinel-2.jpg	107308
+8224510	req	https://www.puentedemando.com/wp-content/uploads/Ocean_Marlin.jpeg	7679580	544929	200	HTTP/2.0	54842	GET
+8241487	body	https://www.puentedemando.com/wp-content/uploads/Ocean_Marlin.jpeg	54842
+8249505	req	https://www.puentedemando.com/wp-content/uploads/armada-marine-instruments-colaboran-vigilancia-maritima.jpg	7679594	569910	200	HTTP/2.0	54452	GET
+8266488	body	https://www.puentedemando.com/wp-content/uploads/armada-marine-instruments-colaboran-vigilancia-maritima.jpg	54452
+8273503	req	https://www.puentedemando.com/wp-content/uploads/portaaviones-hms-queen-elizabeth-puertas-abiertas-gibraltar.jpg	7679610	593891	200	HTTP/2.0	78622	GET
+8296492	body	https://www.puentedemando.com/wp-content/uploads/portaaviones-hms-queen-elizabeth-puertas-abiertas-gibraltar.jpg	78622
+8301503	req	https://www.puentedemando.com/wp-content/uploads/francia-estudia-prolongar-vida-util-portaaviones-charles-de-gaulle-2040.jpg	7679628	621873	200	HTTP/2.0	11642	GET
+8301528	body	https://www.puentedemando.com/wp-content/uploads/francia-estudia-prolongar-vida-util-portaaviones-charles-de-gaulle-2040.jpg	11642
+8305504	req	https://www.puentedemando.com/wp-content/uploads/hapag-lloyd-cruises-modernizara-dos-cruceros-lujo-2027.jpg	7679642	625861	200	HTTP/2.0	40212	GET
+8314527	body	https://www.puentedemando.com/wp-content/uploads/hapag-lloyd-cruises-modernizara-dos-cruceros-lujo-2027.jpg	40212
+8319550	req	https://www.puentedemando.com/wp-content/uploads/puerto-malaga-cruceros-otono-113-escalas-165000-pasajeros.jpg	7679657	639892	200	HTTP/2.0	53206	GET
+8329488	body	https://www.puentedemando.com/wp-content/uploads/puerto-malaga-cruceros-otono-113-escalas-165000-pasajeros.jpg	53206
+8334506	req	https://www.puentedemando.com/wp-content/uploads/royal-clipper-velero-lujo-ibiza-cinco-mastiles.jpg	7679672	654833	200	HTTP/2.0	45484	GET
+8343513	body	https://www.puentedemando.com/wp-content/uploads/royal-clipper-velero-lujo-ibiza-cinco-mastiles.jpg	45484
+8347507	req	https://www.puentedemando.com/wp-content/uploads/ACOESTE-1.jpg	7679685	667821	200	HTTP/2.0	76636	GET
+8363161	body	https://www.puentedemando.com/wp-content/uploads/ACOESTE-1.jpg	76636
+8366505	req	https://www.puentedemando.com/wp-content/uploads/SP60.jpeg	7679698	686805	200	HTTP/2.0	120488	GET
+8389508	body	https://www.puentedemando.com/wp-content/uploads/SP60.jpeg	120488
+8392531	req	https://www.puentedemando.com/wp-content/uploads/Bandera-de-Italia-1024x719.webp	7679714	712815	200	HTTP/2.0	51982	GET
+8400540	body	https://www.puentedemando.com/wp-content/uploads/Bandera-de-Italia-1024x719.webp	51982
+8403528	req	https://www.puentedemando.com/wp-content/uploads/posible-naufragio-mas-antiguo-mundo-turquia.jpg	7679727	723799	200	HTTP/2.0	43850	GET
+8408563	body	https://www.puentedemando.com/wp-content/uploads/posible-naufragio-mas-antiguo-mundo-turquia.jpg	43850
+8411554	req	https://www.puentedemando.com/wp-content/uploads/AAE-1-copia.jpeg	7679741	731811	200	HTTP/2.0	60768	GET
+8419568	body	https://www.puentedemando.com/wp-content/uploads/AAE-1-copia.jpeg	60768
+8421582	req	https://www.puentedemando.com/wp-content/uploads/Bahia-de-Malaga.jpg	7679756	741824	200	HTTP/2.0	100666	GET
+8435525	body	https://www.puentedemando.com/wp-content/uploads/Bahia-de-Malaga.jpg	100666
+8436560	req	https://www.puentedemando.com/wp-content/uploads/msc-cma-cgm-recuperan-canal-suez-servicio-valencia-150x150.jpg	7679790	756769	200	HTTP/2.0	2624	GET
+8436583	body	https://www.puentedemando.com/wp-content/uploads/msc-cma-cgm-recuperan-canal-suez-servicio-valencia-150x150.jpg	2624
+8436613	req	https://www.puentedemando.com/wp-content/uploads/cma-terminals-entra-terminal-contenedores-nador-west-med-150x150.jpg	7679774	756839	200	HTTP/2.0	2556	GET
+8436634	body	https://www.puentedemando.com/wp-content/uploads/cma-terminals-entra-terminal-contenedores-nador-west-med-150x150.jpg	2556
+9383534	phase	initial images+masks	1704754
+9482533	phase	load event	98968
+9911673	phase	finish_loading: external CSS	429024
+9912611	dns	www.googletagmanager.com	562
+9941767	req	https://www.puentedemando.com/wp-includes/js/wp-emoji-release.min.js	9912067	29699	200	HTTP/2.0	-	GET
+9941891	body	https://www.puentedemando.com/wp-includes/js/wp-emoji-release.min.js	22752
+9993565	connect	www.googletagmanager.com	81519
+10079277	req	https://www.googletagmanager.com/gtm.js?id=GTM-PFF6FPHT	9912037	167239	200	HTTP/2.0	126217	GET
+10156769	body	https://www.googletagmanager.com/gtm.js?id=GTM-PFF6FPHT	372926
+10609156	dns	cdn-cookieyes.com	739
+10638182	req	https://www.googletagmanager.com/gtag/js?id=G-ED6L02T41E&cx=c&gtm=4e6al1	10608539	29641	200	HTTP/2.0	161519	GET
+10667715	body	https://www.googletagmanager.com/gtag/js?id=G-ED6L02T41E&cx=c&gtm=4e6al1	478516
+10669610	connect	cdn-cookieyes.com	61196
+10696734	dns	www.clarity.ms	88287
+10754440	req	https://cdn-cookieyes.com/client_data/3a2971d4d400b64c44bd92622c7bbcb4/script.js	10608405	146034	200	HTTP/2.0	-	GET
+10764590	body	https://cdn-cookieyes.com/client_data/3a2971d4d400b64c44bd92622c7bbcb4/script.js	24074
+11591495	connect	www.clarity.ms	983049
+11898883	req	https://www.clarity.ms/tag/wjbl94t2al?ref=gtm	10608442	1290440	200	HTTP/1.1	726	GET
+11898920	body	https://www.clarity.ms/tag/wjbl94t2al?ref=gtm	726
+12372735	req	https://cdn-cookieyes.com/client_data/3a2971d4d400b64c44bd92622c7bbcb4/banner.js	12353989	18744	200	HTTP/2.0	-	GET
+12373189	body	https://cdn-cookieyes.com/client_data/3a2971d4d400b64c44bd92622c7bbcb4/banner.js	25714
+12405672	dns	scripts.clarity.ms	51703
+12528457	connect	scripts.clarity.ms	174491
+12612239	req	https://scripts.clarity.ms/0.8.72/clarity.js	12353957	258280	200	HTTP/2.0	-	GET
+12619762	body	https://scripts.clarity.ms/0.8.72/clarity.js	73523
+13087730	phase	finish_loading: dynamic scripts	3176021
+13088198	phase	finish_loading: subframes	442
+13100967	req	https://cdn-cookieyes.com/client_data/3a2971d4d400b64c44bd92622c7bbcb4/K7rvIvDT.json	13088953	12012	200	HTTP/2.0	44	GET
+13101001	body	https://cdn-cookieyes.com/client_data/3a2971d4d400b64c44bd92622c7bbcb4/K7rvIvDT.json	44
+13117947	dns	www.google-analytics.com	29134
+13130742	dns	log.cookieyes.com	41950
+13196975	connect	log.cookieyes.com	108185
+13226608	connect	www.google-analytics.com	137796
+13308525	dns	s.clarity.ms	219674
+13323184	req	https://www.google-analytics.com/g/collect?v=2&tid=G-ED6L02T41E&gtm=45je6al1v9119762007za20ozb9250928914zd9250928914xf1&_p=1792950175428&gcs=G101&gcd=13p3t3t3t5l1&npa=0&dma=0&gdid=dY2Q2ZW&_eu=EA&cid=585047685.1792950184&frm=0&ir=1&ngs=1&pscdl=denied&rcb=14&sr=1024x720&uaa=x86_64&uab=64&uafvl=Manuk%3B1.0.0%7CNot.A%252FBrand%3B24.0.0.0&uam=&uamb=0&uap=Linux&uapv=&uaw=0&ul=en-us&_s=1&tag_exp=115938465~115938469~118897920~118897930~120213116~120385423~120469145~120469153~121246026~121246034&sid=1792950184&sct=1&seg=0&dl=https%3A%2F%2Fwww.puentedemando.com%2F&dt=Noticias%20Navales%2C%20Puertos%20y%20Log%C3%ADstica%20%7C%20Puente%20de%20Mando&_tu=CA&en=page_view&_fv=1&_nsi=1&_ss=1&tfd=8844	13088809	234373	204	HTTP/2.0	0	POST
+13328253	body	https://www.google-analytics.com/g/collect?v=2&tid=G-ED6L02T41E&gtm=45je6al1v9119762007za20ozb9250928914zd9250928914xf1&_p=1792950175428&gcs=G101&gcd=13p3t3t3t5l1&npa=0&dma=0&gdid=dY2Q2ZW&_eu=EA&cid=585047685.1792950184&frm=0&ir=1&ngs=1&pscdl=denied&rcb=14&sr=1024x720&uaa=x86_64&uab=64&uafvl=Manuk%3B1.0.0%7CNot.A%252FBrand%3B24.0.0.0&uam=&uamb=0&uap=Linux&uapv=&uaw=0&ul=en-us&_s=1&tag_exp=115938465~115938469~118897920~118897930~120213116~120385423~120469145~120469153~121246026~121246034&sid=1792950184&sct=1&seg=0&dl=https%3A%2F%2Fwww.puentedemando.com%2F&dt=Noticias%20Navales%2C%20Puertos%20y%20Log%C3%ADstica%20%7C%20Puente%20de%20Mando&_tu=CA&en=page_view&_fv=1&_nsi=1&_ss=1&tfd=8844	0
+13381909	req	https://log.cookieyes.com/api/v1/log	13088784	293124	200	HTTP/2.0	2	POST
+13382125	body	https://log.cookieyes.com/api/v1/log	2
+13535001	connect	s.clarity.ms	446151
+13740477	req	https://www.puentedemando.com/wp-json/pdm/v1/track	13088711	651763	200	HTTP/2.0	11	POST
+13740512	body	https://www.puentedemando.com/wp-json/pdm/v1/track	11
+13740532	req	https://www.puentedemando.com/wp-json/pdm/v1/track	13088740	651791	200	HTTP/2.0	11	POST
+13740567	body	https://www.puentedemando.com/wp-json/pdm/v1/track	11
+13740584	req	https://www.puentedemando.com/wp-json/pdm/v1/track	13088756	651827	200	HTTP/2.0	11	POST
+13740603	body	https://www.puentedemando.com/wp-json/pdm/v1/track	11
+13740623	req	https://www.puentedemando.com/wp-json/pdm/v1/track	13088772	651848	200	HTTP/2.0	11	POST
+13740647	body	https://www.puentedemando.com/wp-json/pdm/v1/track	11
+13944040	req	https://s.clarity.ms/collect	13088846	855192	204	HTTP/1.1	-	POST
+13944064	body	https://s.clarity.ms/collect	0
+13961253	req	https://cdn-cookieyes.com/client_data/3a2971d4d400b64c44bd92622c7bbcb4/config/UqVtxATg.json	13948836	12415	200	HTTP/2.0	-	GET
+13961715	body	https://cdn-cookieyes.com/client_data/3a2971d4d400b64c44bd92622c7bbcb4/config/UqVtxATg.json	44744
+13983895	req	https://cdn-cookieyes.com/client_data/3a2971d4d400b64c44bd92622c7bbcb4/translations/8P8QYlfw.json	13966901	16993	200	HTTP/2.0	-	GET
+13983947	body	https://cdn-cookieyes.com/client_data/3a2971d4d400b64c44bd92622c7bbcb4/translations/8P8QYlfw.json	1999
+13997662	req	https://cdn-cookieyes.com/client_data/3a2971d4d400b64c44bd92622c7bbcb4/audit-table/PQ732QqO.json	13985043	12618	200	HTTP/2.0	-	GET
+13997718	body	https://cdn-cookieyes.com/client_data/3a2971d4d400b64c44bd92622c7bbcb4/audit-table/PQ732QqO.json	2080
+14179257	cascade	66407
+14424178	layout	244880
+14463753	dns	s.clarity.ms	33348
+14559047	req	https://s.clarity.ms/collect	14430364	128681	204	HTTP/1.1	-	POST
+14559079	body	https://s.clarity.ms/collect	0
+14664187	connect	s.clarity.ms	233785
+14970839	req	https://s.clarity.ms/collect	14430397	540440	204	HTTP/1.1	-	POST
+14970867	body	https://s.clarity.ms/collect	0
+14972312	phase	finish_loading: page fetches	1884101
+14985474	req	https://cdn-cookieyes.com/assets/images/close.svg	14972716	12757	200	HTTP/2.0	-	GET
+14985536	body	https://cdn-cookieyes.com/assets/images/close.svg	1345
+14998796	dns	s.w.org	26040
+15290700	connect	s.w.org	317946
+15302616	req	https://s.w.org/images/core/emoji/17.0.2/svg/1f1ea-1f1f8.svg	14972748	329867	200	HTTP/2.0	-	GET
+15302675	body	https://s.w.org/images/core/emoji/17.0.2/svg/1f1ea-1f1f8.svg	629
+15303630	req	https://s.w.org/images/core/emoji/17.0.2/svg/1f1ee-1f1f9.svg	15290781	12848	200	HTTP/2.0	270	GET
+15303651	body	https://s.w.org/images/core/emoji/17.0.2/svg/1f1ee-1f1f9.svg	270
+15303681	req	https://s.w.org/images/core/emoji/17.0.2/svg/1f1ec-1f1e7.svg	15290764	12916	200	HTTP/2.0	-	GET
+15303725	body	https://s.w.org/images/core/emoji/17.0.2/svg/1f1ec-1f1e7.svg	1183
+15550077	phase	finish_loading: images	577749
+15550119	phase	finish_loading: icon masks	23
+15550235	phase	finish_loading: background images	106
+15556241	mark	navigate_returned
+15558824	mark	a11y_built
