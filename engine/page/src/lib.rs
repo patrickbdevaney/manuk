@@ -277,6 +277,9 @@ fn restyle_and_layout(
         styles = cascade_styles_keeping_icb(dom, sheets);
     }
     let us_cascade = t_cascade.elapsed().as_micros() as u64;
+    if manuk_net::nettrace::enabled() {
+        manuk_net::nettrace::emit("cascade", &format!("{us_cascade}")); // at ITS end, before layout
+    }
     // **BETWEEN the cascade and the layout, every time.** See `apply_natural_sizes`: a decoded
     // image's intrinsic size is not in any stylesheet, so a cascade that rebuilds the style map
     // erases it, and the picture becomes a full-width strip of zero height.
@@ -291,6 +294,9 @@ fn restyle_and_layout(
         cq_relaid = true;
     }
     let us_cq = t_cq.elapsed().as_micros() as u64;
+    if manuk_net::nettrace::enabled() {
+        manuk_net::nettrace::emit("layout", &format!("{}", us_layout + us_cq));
+    }
     if (us_cascade + us_layout + us_cq) / 1000 >= 100 {
         tracing::info!(
             cascade_ms = us_cascade / 1000,
@@ -4227,6 +4233,12 @@ impl Page {
             let hits = drain_ceiling_hits_or_zero();
             let ms = at.elapsed().as_millis() as u64;
             *accounted += ms;
+            if manuk_net::nettrace::enabled() {
+                manuk_net::nettrace::emit(
+                    "phase",
+                    &format!("{name}\t{}", at.elapsed().as_micros()),
+                );
+            }
             tracing::info!(
                 phase = name,
                 ms,
@@ -4860,6 +4872,12 @@ impl Page {
         let mut phase = |name: &'static str| -> bool {
             if let Some(prev) = last_name.take() {
                 let hits = manuk_js::event_loop::drain_ceiling_hits();
+                if manuk_net::nettrace::enabled() {
+                    manuk_net::nettrace::emit(
+                        "phase",
+                        &format!("finish_loading: {prev}\t{}", last_at.elapsed().as_micros()),
+                    );
+                }
                 tracing::info!(
                     phase = prev,
                     ms = last_at.elapsed().as_millis() as u64,

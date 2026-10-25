@@ -151,6 +151,12 @@
   - L32 · Four details that are easy to get subtly wrong
   - L53 · The gate that predicted this tick
 
+## A page load has nine phases, and `MANUK_NET_TRACE` makes them add up
+`docs/wiki/a-load-has-nine-phases-and-a-trace-that-adds-up.md`
+
+  - L5 · Mechanism
+  - L18 · Limits
+
 ## A lockstep gate scoped to one value
 `docs/wiki/a-lockstep-gate-scoped-to-one-value.md`
 
@@ -3698,4 +3704,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3057 sections across 159 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3059 sections across 160 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

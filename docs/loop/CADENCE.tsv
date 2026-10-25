@@ -1185,4 +1185,4 @@ tick	sha	epoch	iso	delta_s	shape	wall_s	files	added	deleted	gates	claims	wpt_pas
 1513	a4770f10	1789160629	2026-09-11T17:03:49-04:00	1767	instrument	465	7	241	42	583	81	3896	6960	0	642	0	the oracle renders every site from `file://`, so a self-hosted webfont is CORS-blocked (2026-09-11)
 1514	e1c65241	1789162288	2026-09-11T17:31:28-04:00	1659	instrument	465	8	273	42	583	81	3896	6960	0	642	0	one flag, and two refusal cohorts stop existing (2026-09-11)
 1515	8dc0f404	1789163678	2026-09-11T17:54:38-04:00	1390	instrument	465	8	363	44	583	81	3896	6960	0	642	0	the reference got honest in both directions (2026-09-11)
-1516	efd95d4a	1792939468	2026-10-25T10:44:28-04:00	3775790	instrument	465	19	800	44	585	81	3896	6960	0	642	0	the loop re-derived a rule it had already banked (2026-09-11)
+1516	0fca8a2f	1792943655	2026-10-25T11:54:15-04:00	3779977	instrument	465	81	10445	47	585	81	3896	6960	0	642	0	the loop re-derived a rule it had already banked (2026-09-11)

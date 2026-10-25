@@ -160,8 +160,15 @@ impl tower_service::Service<Name> for GuardResolver {
     fn call(&mut self, name: Name) -> Self::Future {
         let guarded = self.guarded;
         Box::pin(async move {
+            let t = std::time::Instant::now();
             let addrs: Vec<SocketAddr> =
                 tokio::net::lookup_host((name.as_str(), 0)).await?.collect();
+            if crate::nettrace::enabled() {
+                crate::nettrace::emit(
+                    "dns",
+                    &format!("{}\t{}", name.as_str(), t.elapsed().as_micros()),
+                );
+            }
             if !guarded || !guard_active() {
                 return Ok(addrs.into_iter());
             }

@@ -46,7 +46,9 @@ async fn main() -> Result<()> {
         .await
         .with_context(|| format!("loading {url}"))?;
 
+    manuk_net::nettrace::emit("mark", "navigate_returned");
     let tree = browser.a11y_tree().context("building the a11y tree")?;
+    manuk_net::nettrace::emit("mark", "a11y_built");
     let nodes: Vec<serde_json::Value> = tree
         .iter()
         .map(|n| {

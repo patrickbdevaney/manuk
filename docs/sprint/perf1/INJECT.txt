@@ -1,0 +1,12 @@
+PERF.1 sleep-injection gate: https://example.com/, manuk arm, 3 runs each, median phase seconds
+mutation: std::thread::sleep(500 ms) inserted right after cascade_styles() in engine/page restyle_and_layout (reverted after)
+chrome_ver=145.0.7632.116 (unused by this manuk-only check)
+dns           base 0.001 mutated 0.001 delta +0.000
+connect_tls   base 0.060 mutated 0.063 delta +0.003
+doc_fetch     base 0.088 mutated 0.092 delta +0.003
+subres_fetch  base 0.053 mutated 0.069 delta +0.016
+parse         base 0.000 mutated 0.000 delta -0.000
+cascade       base 0.000 mutated 0.500 delta +0.500
+layout        base 0.052 mutated 0.049 delta -0.002
+script        base 0.052 mutated 0.051 delta -0.001
+settle        base 0.003 mutated 0.003 delta -0.000

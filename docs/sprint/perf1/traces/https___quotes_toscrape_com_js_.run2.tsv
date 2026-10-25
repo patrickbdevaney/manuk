@@ -1,0 +1,60 @@
+0	epoch	1792942770615378
+12241	dns	quotes.toscrape.com	12218
+104062	connect	quotes.toscrape.com	104045
+230808	req	https://quotes.toscrape.com/js/	0	230805	200	HTTP/2.0	-
+231841	body	https://quotes.toscrape.com/js/	5808
+232108	phase	html parse	218
+356829	req	https://quotes.toscrape.com/static/bootstrap.min.css	231989	124837	200	HTTP/2.0	-
+398841	req	https://quotes.toscrape.com/static/jquery.js	232153	166685	200	HTTP/2.0	-
+403480	req	https://quotes.toscrape.com/static/main.css	232012	171467	200	HTTP/2.0	-
+403561	body	https://quotes.toscrape.com/static/main.css	1368
+403849	body	https://quotes.toscrape.com/static/jquery.js	84345
+403854	body	https://quotes.toscrape.com/static/bootstrap.min.css	125934
+403897	phase	external scripts	171776
+403921	phase	module graph prefetch	13
+448743	req	https://quotes.toscrape.com/static/main.css	403670	45072	304	HTTP/2.0	-
+448769	body	https://quotes.toscrape.com/static/main.css	0
+494811	req	https://quotes.toscrape.com/static/bootstrap.min.css	403905	90902	304	HTTP/2.0	-
+494849	body	https://quotes.toscrape.com/static/bootstrap.min.css	0
+495010	phase	blocking stylesheets	91076
+617746	cascade	727
+621616	layout	3848
+622507	phase	cascade+layout+blocking scripts	127473
+643463	phase	deferred scripts	20944
+644860	phase	DOMContentLoaded	1380
+650672	dns	fonts.googleapis.com	672
+732050	connect	fonts.googleapis.com	82051
+806328	req	https://fonts.googleapis.com/css?family=Raleway:400,700	649990	156337	200	HTTP/2.0	-
+816161	body	https://fonts.googleapis.com/css?family=Raleway:400,700	398
+869586	req	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.eot	825537	44047	404	HTTP/2.0	-
+869647	body	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.eot	207
+913174	req	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.eot?#iefix	869684	43489	404	HTTP/2.0	-
+913232	body	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.eot?#iefix	207
+958831	req	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.woff2	913261	45569	404	HTTP/2.0	-
+958876	body	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.woff2	207
+1006485	req	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.woff	958907	47574	404	HTTP/2.0	-
+1006586	body	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.woff	207
+1054538	req	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.ttf	1006639	47896	404	HTTP/2.0	-
+1054613	body	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.ttf	207
+1099885	req	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.svg#glyphicons_halflingsregular	1054671	45210	404	HTTP/2.0	-
+1099962	body	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.svg#glyphicons_halflingsregular	207
+1101977	dns	fonts.gstatic.com	672
+1184113	connect	fonts.gstatic.com	82808
+1257853	req	https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVvaorCIPrQ.ttf	1101292	156558	200	HTTP/2.0	29379
+1302810	body	https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVvaorCIPrQ.ttf	49552
+1348878	req	https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVs9pbCIPrQ.ttf	1302917	45957	200	HTTP/2.0	29703
+1367540	body	https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVs9pbCIPrQ.ttf	49512
+1387011	cascade	3246
+1387698	layout	670
+1388487	phase	subframes (pre-load)	743611
+1388527	phase	initial images+masks	22
+1389171	phase	load event	633
+1399352	phase	finish_loading: external CSS	10165
+1399373	phase	finish_loading: dynamic scripts	8
+1399416	phase	finish_loading: subframes	33
+1399455	phase	finish_loading: page fetches	29
+1399484	phase	finish_loading: images	18
+1399496	phase	finish_loading: icon masks	1
+1399516	phase	finish_loading: background images	1
+1399839	mark	navigate_returned
+1400042	mark	a11y_built

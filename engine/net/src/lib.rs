@@ -38,6 +38,7 @@ pub mod cookies;
 
 pub mod cors;
 pub mod egress;
+pub mod nettrace;
 pub mod storage_state;
 /// E7 storage layer — RFC 6265 cookie jar.
 pub mod webstorage;
@@ -102,7 +103,42 @@ const ACCEPT_LANGUAGE_STR: &str = "en-US,en;q=0.9";
 const MAX_REDIRECTS: usize = 10;
 
 type NetConnector = HttpsConnector<HttpConnector<egress::GuardResolver>>;
-type NetClient = Client<NetConnector, Full<Bytes>>;
+type NetClient = Client<TimedConnector, Full<Bytes>>;
+
+/// The pooled client's connector, wrapped so a NEW connection (DNS + TCP + TLS) is timed for
+/// `MANUK_NET_TRACE`. Pure delegation otherwise.
+#[derive(Clone)]
+struct TimedConnector(NetConnector);
+
+impl tower_service::Service<hyper::Uri> for TimedConnector {
+    type Response = <NetConnector as tower_service::Service<hyper::Uri>>::Response;
+    type Error = <NetConnector as tower_service::Service<hyper::Uri>>::Error;
+    type Future = std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send>,
+    >;
+
+    fn poll_ready(
+        &mut self,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        self.0.poll_ready(cx)
+    }
+
+    fn call(&mut self, uri: hyper::Uri) -> Self::Future {
+        let fut = self.0.call(uri.clone());
+        Box::pin(async move {
+            let t = std::time::Instant::now();
+            let r = fut.await;
+            if nettrace::enabled() {
+                nettrace::emit(
+                    "connect",
+                    &format!("{}\t{}", uri.host().unwrap_or(""), t.elapsed().as_micros()),
+                );
+            }
+            r
+        })
+    }
+}
 
 /// The process-global pooled client. Cheap to clone; reuses idle connections
 /// (default 90s keep-alive), so sequential same-origin fetches skip the TLS
@@ -195,7 +231,7 @@ fn client() -> &'static NetClient {
     CLIENT.get_or_init(|| {
         Client::builder(TokioExecutor::new())
             .http2_max_header_list_size(HTTP2_MAX_HEADER_LIST_SIZE)
-            .build(connector())
+            .build(TimedConnector(connector()))
     })
 }
 
@@ -204,7 +240,7 @@ fn trusted_client() -> &'static NetClient {
     CLIENT.get_or_init(|| {
         Client::builder(TokioExecutor::new())
             .http2_max_header_list_size(HTTP2_MAX_HEADER_LIST_SIZE)
-            .build(trusted_connector())
+            .build(TimedConnector(trusted_connector()))
     })
 }
 
@@ -1576,7 +1612,15 @@ pub async fn fetch_streaming<F: FnMut(&[u8])>(url: &str, mut on_chunk: F) -> Res
         let http_version = resp.version().into();
         let headers = collect_headers(&resp);
         let encoding = content_encoding(&resp);
-        stream_body_decoded(resp.into_body(), encoding.as_deref(), &mut on_chunk).await?;
+        let mut streamed = 0usize;
+        stream_body_decoded(resp.into_body(), encoding.as_deref(), &mut |c: &[u8]| {
+            streamed += c.len();
+            on_chunk(c)
+        })
+        .await?;
+        if nettrace::enabled() {
+            nettrace::emit("body", &format!("{current}\t{streamed}"));
+        }
         return Ok(ResponseMeta {
             status,
             headers,
@@ -1997,6 +2041,9 @@ async fn send_once(
     let encoding = content_encoding(&resp);
 
     let decoded = read_body_decoded(resp.into_body(), encoding.as_deref()).await?;
+    if nettrace::enabled() {
+        nettrace::emit("body", &format!("{url}\t{}", decoded.len()));
+    }
 
     Ok(Response {
         status,
@@ -2077,9 +2124,28 @@ async fn send_raw(
     let req = builder.body(Full::new(body)).context("building request")?;
 
     let c = if trusted { trusted_client() } else { client() };
-    c.request(req)
+    let t_start = nettrace::now_us();
+    let resp = c
+        .request(req)
         .await
-        .with_context(|| format!("request to {url} failed"))
+        .with_context(|| format!("request to {url} failed"))?;
+    if nettrace::enabled() {
+        let clen = resp
+            .headers()
+            .get(hyper::header::CONTENT_LENGTH)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("-");
+        nettrace::emit(
+            "req",
+            &format!(
+                "{url}\t{t_start}\t{}\t{}\t{:?}\t{clen}",
+                nettrace::now_us() - t_start,
+                resp.status().as_u16(),
+                resp.version()
+            ),
+        );
+    }
+    Ok(resp)
 }
 
 fn collect_headers(resp: &hyper::Response<Incoming>) -> Vec<(String, String)> {
