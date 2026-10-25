@@ -23253,7 +23253,13 @@ unsafe fn host_log(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
 unsafe fn host_crypto_random_hex(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let n = arg_u32(cx, vp, argc, 0).unwrap_or(0).min(65536) as usize;
     let mut buf = vec![0u8; n];
-    match getrandom::fill(&mut buf) {
+    let filled = if crate::determinism::enabled() {
+        crate::determinism::fill(&mut buf);
+        Ok(())
+    } else {
+        getrandom::fill(&mut buf)
+    };
+    match filled {
         Ok(()) => {
             use std::fmt::Write as _;
             let mut hex = String::with_capacity(n * 2);

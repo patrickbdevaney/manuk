@@ -1,0 +1,34 @@
+<!doctype html>
+<title>determinism fixture</title>
+<h1 id="h">pending</h1>
+<div id="out"></div>
+<script>
+  var out = document.getElementById('out');
+  function line(k, v) {
+    var li = document.createElement('h2');
+    li.textContent = k + '=' + v;
+    out.appendChild(li);
+  }
+  line('date_now', Date.now());
+  line('new_date', new Date().toISOString());
+  line('date_string_prefix', Date().slice(0, 15));
+  line('perf', Math.floor(performance.now() * 1000));
+  line('rand', [Math.random(), Math.random(), Math.random()].join(','));
+  line('uuid', crypto.randomUUID());
+  var a = new Uint32Array(3); crypto.getRandomValues(a);
+  line('grv', Array.prototype.join.call(a, ','));
+  // A busy-wait on the clock: terminates after a machine-speed-dependent number of iterations on a
+  // wall clock, after exactly the same number on the logical one.
+  var s = Date.now(), n = 0;
+  while (Date.now() - s < 20) { n++; }
+  line('spin', n);
+  // Interleaved timers: the order and the clock each one sees.
+  var order = [];
+  setTimeout(function () { order.push('b@' + Math.round(performance.now())); }, 50);
+  setTimeout(function () { order.push('a@' + Math.round(performance.now())); }, 10);
+  setTimeout(function () {
+    order.push('c@' + Math.round(performance.now()));
+    line('timers', order.join(' '));
+    document.getElementById('h').textContent = 'done';
+  }, 200);
+</script>

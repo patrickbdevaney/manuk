@@ -13,7 +13,7 @@
 //! measurement; the Chrome half is CDP `Accessibility.getFullAXTree`.
 //!
 //! ```text
-//!   a11y-dump <url>                       # JSON array of semantic nodes, document order
+//!   a11y-dump [--deterministic] <url>     # JSON array of semantic nodes, document order
 //! ```
 //!
 //! Emits every node the tree holds — including the `generic` containers a comparison will want to drop
@@ -34,7 +34,11 @@ async fn main() -> Result<()> {
         .with_writer(std::io::stderr)
         .init();
 
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    if let Some(i) = args.iter().position(|a| a == "--deterministic") {
+        args.remove(i);
+        manuk_js::determinism::enable();
+    }
     if args.is_empty() {
         bail!("usage: a11y-dump <url>");
     }

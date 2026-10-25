@@ -15,6 +15,7 @@ path = "src/main.rs"
 
 [dependencies]
 manuk-agent.workspace = true
+manuk-js.workspace = true
 manuk-a11y.workspace = true
 manuk-dom.workspace = true
 manuk-net.workspace = true

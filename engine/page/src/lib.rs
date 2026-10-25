@@ -2732,7 +2732,11 @@ pub fn load_budget() -> std::time::Duration {
         let ms = std::env::var("MANUK_LOAD_BUDGET_MS")
             .ok()
             .and_then(|v| v.parse::<u64>().ok())
-            .unwrap_or(12_000);
+            .unwrap_or(if manuk_js::determinism::enabled() {
+                manuk_js::determinism::LOAD_BACKSTOP_MS
+            } else {
+                12_000
+            });
         std::time::Duration::from_millis(ms)
     })
 }

@@ -157,10 +157,15 @@ pub fn clear_convergence_state() {
 /// reflows never reaches one. Sharing the constant rather than inventing a second one keeps there
 /// being ONE statement of how long a page is worth.
 pub fn max_drain_ms() -> u128 {
+    let default = if crate::determinism::enabled() {
+        crate::determinism::DRAIN_BACKSTOP_MS
+    } else {
+        DEFAULT_MAX_DRAIN_MS
+    };
     std::env::var("MANUK_MAX_DRAIN_MS")
         .ok()
         .and_then(|v| v.parse().ok())
-        .unwrap_or(DEFAULT_MAX_DRAIN_MS)
+        .unwrap_or(default)
 }
 
 /// See [`max_drain_ms`]. Chosen from the measured per-drain distribution across real sites.
@@ -8294,6 +8299,10 @@ pub fn install(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Result<()
     unsafe { crate::job_queue::install_once(raw_cx) }?;
     // BEFORE the prelude — the prelude's own `createTreeWalker` fallback calls `__defDoc`.
     eval(rt, global, DOC_PROTO_JS, "doc_proto.js")?;
+    if crate::determinism::enabled() {
+        crate::determinism::reset();
+        eval(rt, global, &crate::determinism::prelude_js(), "determinism.js")?;
+    }
     eval(rt, global, PRELUDE, "event_loop_prelude.js")?;
 
     // **AFTER the prelude, never before.** The prelude's inert-interface list creates a stub `Range`, so
