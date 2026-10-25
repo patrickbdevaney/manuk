@@ -292,8 +292,37 @@ impl<B: Backend> Session<B> {
 
     // ───────────────────────────── tools ─────────────────────────────
 
+    /// Export (default) or import Playwright storage-state JSON, to/from `path` when given.
+    fn storage_state(&mut self, action: &str, path: Option<&str>) -> Result<String> {
+        match action {
+            "export" => {
+                let text = serde_json::to_string_pretty(&self.b.export_storage_state()?)?;
+                let Some(p) = path else { return Ok(text) };
+                use std::os::unix::fs::OpenOptionsExt;
+                std::fs::OpenOptions::new()
+                    .write(true)
+                    .create(true)
+                    .truncate(true)
+                    .mode(0o600)
+                    .open(p)
+                    .and_then(|mut f| std::io::Write::write_all(&mut f, text.as_bytes()))?;
+                Ok(format!("storage state written to {p}"))
+            }
+            "import" => {
+                let p = path.ok_or_else(|| anyhow!("import needs `path`"))?;
+                let v: Value = serde_json::from_slice(&std::fs::read(p)?)?;
+                let (c, l) = self.b.import_storage_state(&v)?;
+                Ok(format!("imported {c} cookie(s), {l} localStorage key(s)"))
+            }
+            other => bail!("storage_state action must be export or import, got {other}"),
+        }
+    }
+
     pub async fn call(&mut self, tool: &str, a: &Map<String, Value>) -> Result<Output> {
         match tool {
+            "storage_state" => self
+                .storage_state(arg_str(a, "action").unwrap_or("export"), arg_str(a, "path"))
+                .map(Output::Text),
             "navigate" => self
                 .navigate(arg_str(a, "url").ok_or_else(|| anyhow!("navigate needs `url`"))?)
                 .await

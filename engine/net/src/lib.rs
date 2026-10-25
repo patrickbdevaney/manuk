@@ -38,6 +38,7 @@ pub mod cookies;
 
 pub mod cors;
 pub mod egress;
+pub mod storage_state;
 /// E7 storage layer — RFC 6265 cookie jar.
 pub mod webstorage;
 
@@ -1880,11 +1881,37 @@ pub fn cookie_store_path() -> std::path::PathBuf {
     dir.join("cookies.json")
 }
 
-fn cookie_jar() -> &'static std::sync::Mutex<cookies::CookieJar> {
+static EPHEMERAL: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Ephemeral mode (W3.4): cookies and `localStorage` live only in this process's memory. Nothing is
+/// read from or written to the profile directory, so an agent session neither inherits the
+/// human's logins nor leaves any behind. Idempotent; clears whatever was already loaded.
+pub fn set_ephemeral(on: bool) {
+    EPHEMERAL.store(on, std::sync::atomic::Ordering::SeqCst);
+    if on {
+        if let Ok(mut j) = cookie_jar().lock() {
+            j.clear();
+        }
+        webstorage::reset_in_memory();
+    }
+}
+
+pub fn is_ephemeral() -> bool {
+    EPHEMERAL.load(std::sync::atomic::Ordering::SeqCst)
+}
+
+pub(crate) fn cookie_jar() -> &'static std::sync::Mutex<cookies::CookieJar> {
     static JAR: std::sync::OnceLock<std::sync::Mutex<cookies::CookieJar>> =
         std::sync::OnceLock::new();
-    // Load persistent cookies from disk on first use, so a prior session's logins survive.
-    JAR.get_or_init(|| std::sync::Mutex::new(cookies::CookieJar::load_from(&cookie_store_path())))
+    // Load persistent cookies from disk on first use, so a prior session's logins survive —
+    // unless the process is ephemeral.
+    JAR.get_or_init(|| {
+        std::sync::Mutex::new(if is_ephemeral() {
+            cookies::CookieJar::new()
+        } else {
+            cookies::CookieJar::load_from(&cookie_store_path())
+        })
+    })
 }
 
 /// `document.cookie` (getter) for `url` — the **same jar the network uses**, minus `HttpOnly`
@@ -1919,6 +1946,9 @@ pub fn set_document_cookie(url: &str, assignment: &str) -> bool {
 /// Flush persistent cookies to disk. Call on navigation-commit and on quit so logins with a
 /// multi-week expiry survive a restart. Best-effort; a write failure is logged, not fatal.
 pub fn save_cookies() {
+    if is_ephemeral() {
+        return;
+    }
     if let Ok(jar) = cookie_jar().lock() {
         if let Err(e) = jar.save_to(&cookie_store_path()) {
             tracing::warn!(error = %e, "failed to persist cookies");

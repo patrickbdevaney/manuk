@@ -17,6 +17,7 @@ path = "src/main.rs"
 manuk-agent.workspace = true
 manuk-a11y.workspace = true
 manuk-dom.workspace = true
+manuk-net.workspace = true
 rmcp.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true

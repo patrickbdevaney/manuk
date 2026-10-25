@@ -3394,6 +3394,7 @@ dependencies = [
  "manuk-a11y",
  "manuk-agent",
  "manuk-dom",
+ "manuk-net",
  "rmcp",
  "serde_json",
  "tokio",

@@ -460,6 +460,39 @@ impl CookieJar {
         })
     }
 
+    /// Insert a cookie from an external storage-state file (Playwright JSON), replacing any
+    /// cookie with the same name/domain/path. `domain` with a leading dot is a domain cookie.
+    #[allow(clippy::too_many_arguments)]
+    pub fn import(
+        &mut self,
+        name: &str,
+        value: &str,
+        domain: &str,
+        path: &str,
+        secure: bool,
+        http_only: bool,
+        same_site: SameSite,
+        expires: Option<SystemTime>,
+    ) {
+        let host_only = !domain.starts_with('.');
+        let domain = domain.trim_start_matches('.').to_ascii_lowercase();
+        self.cookies
+            .retain(|c| !(c.name == name && c.domain == domain && c.path == path));
+        self.cookies.push(Cookie {
+            name: name.into(),
+            value: value.into(),
+            domain,
+            host_only,
+            path: path.into(),
+            secure,
+            http_only,
+            same_site,
+            expires,
+            creation: self.next_creation,
+        });
+        self.next_creation += 1;
+    }
+
     /// All live cookies (for inspection / the task manager).
     pub fn cookies(&self) -> impl Iterator<Item = &Cookie> {
         self.cookies.iter()

@@ -77,6 +77,7 @@ fn tools() -> Vec<Tool> {
         t("scroll", "Scroll to a handle (`to`) or by `dy` pixels. Returns the nodes newly in view.", schema(json!({"to": {"type": "string"}, "dy": {"type": "number"}}), &[])),
         t("extract", "Page content. format=text (default), markdown (headings + text + links) or table (rows of a table in scope). Optional scope handle.", schema(json!({"format": {"type": "string", "enum": ["markdown", "text", "table"]}, "scope": {"type": "string"}}), &[])),
         t("find", "Rank nodes by role/name/text match for a query (no model call). Returns up to 8 handles.", schema(json!({"query": {"type": "string"}}), &["query"])),
+        t("storage_state", "Export (default) or import this session's cookies + localStorage as Playwright storage-state JSON, to/from `path` (export without a path returns the JSON).", schema(json!({"action": {"type": "string", "enum": ["export", "import"]}, "path": {"type": "string"}}), &[])),
         t("screenshot", "PNG of the current viewport (opt-in; the expensive channel).", schema(json!({"handle": {"type": "string"}}), &[])),
     ]
 }

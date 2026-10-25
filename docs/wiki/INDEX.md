@@ -170,6 +170,12 @@
   - L67 · And the instrument was naming a cause it had never checked
   - L84 · The gate
 
+## An agent session starts with no cookies — isolation is a process property, not a flag per request
+`docs/wiki/an-agent-session-starts-with-no-cookies.md`
+
+  - L5 · Mechanism
+  - L19 · Limits
+
 ## An audio player reserves its space
 `docs/wiki/an-audio-player-reserves-its-space.md`
 
@@ -3692,4 +3698,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3055 sections across 158 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3057 sections across 159 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

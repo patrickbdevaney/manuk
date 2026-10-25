@@ -96,6 +96,9 @@ fn ensure_loaded(a: &mut Areas) {
         return;
     }
     a.loaded = true;
+    if crate::is_ephemeral() {
+        return;
+    }
     let Ok(text) = std::fs::read_to_string(store_path()) else {
         return;
     };
@@ -112,6 +115,32 @@ fn ensure_loaded(a: &mut Areas) {
             );
         }
         Err(e) => tracing::warn!(error = %e, "localStorage: could not parse; starting empty"),
+    }
+}
+
+/// Every origin that holds at least one key in `area`.
+pub fn origins(area: Area) -> Vec<String> {
+    let Ok(mut a) = state().lock() else {
+        return Vec::new();
+    };
+    ensure_loaded(&mut a);
+    let map = match area {
+        Area::Local => &a.local,
+        Area::Session => &a.session,
+    };
+    map.iter()
+        .filter(|(_, m)| !m.is_empty())
+        .map(|(o, _)| o.clone())
+        .collect()
+}
+
+/// Drop every stored key (both areas) without touching disk.
+pub fn reset_in_memory() {
+    if let Ok(mut a) = state().lock() {
+        a.local.clear();
+        a.session.clear();
+        a.loaded = true;
+        a.dirty = false;
     }
 }
 
@@ -209,6 +238,9 @@ pub fn keys(area: Area, origin: &str) -> Vec<String> {
 /// Flush `localStorage` to the profile. Call on navigation-commit and on quit — the same points the
 /// cookie jar is flushed. Best-effort; a write failure is logged, not fatal.
 pub fn save() {
+    if crate::is_ephemeral() {
+        return;
+    }
     let Ok(mut a) = state().lock() else {
         return;
     };
