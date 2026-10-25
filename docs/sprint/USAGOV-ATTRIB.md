@@ -159,3 +159,16 @@ fetch difference. Not measured: whether the flip is the only input (the wait-tim
 | r25 | 2286d97a1714 | 0 | 3 | 11 |
 | r26 | a6a6db2122b8 | 3 | 0 | 0 |
 <!-- oracle-capture:end -->
+
+## How usa.gov SHAPE is reported (node R0.4.a.b.a.a.a.a.a.a.a.a.a.a)
+
+chrome_ver=145.0.7632.116. The page's own JS hides three contact callouts in about 2 of 26 oracle loads, so the oracle DOM is one
+of two. SHAPE is therefore reported as a band over both DOMs, not a point: 82.1 to 84.6 across 22 stored one-site runs. Within one
+DOM the value still spreads by up to 1.7 points (the large DOM ranges 82.3 to 84.0, the small one 82.1 to 84.6), so the DOM alone
+does not fix SHAPE; the two outliers (runs 065805 and 065823) were not examined further. A usa.gov SHAPE move inside the band is
+not a regression signal. Gate: `scripts/usagov-shape-band-test.sh` recounts the table from the stored sweep files.
+
+<!-- shape-band:begin | oracle sha | runs | min shape | max shape | -->
+| 2286d97a1714 | 19 | 82.3 | 84.0 |
+| a6a6db2122b8 | 3 | 82.1 | 84.6 |
+<!-- shape-band:end -->
