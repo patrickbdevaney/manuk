@@ -81,3 +81,37 @@ in `docs/bench/chrome-bytes/`. Two live captures: both Chrome-received files are
 post-JS DOMs all 11 keys are present. So Chrome did not get different bytes, and page JS did not remove the nodes in these captures; the small oracle DOM (82.1) was
 not reproduced (2 captures, both full-size). The 11 missing nodes in that one run came from something other than bytes or JS-removal that we have not caught.
 Gate: `scripts/usagov-live-bytes-test.sh` (edited-bytes and removed-node mutants red).
+
+## How often the small DOM shows up (node R0.4.a.b.a.a.a.a.a.a.a)
+
+chrome_ver=145.0.7632.116. `scripts/usagov-chrome-bytes.py https://www.usa.gov/` run 20 times in a row (`docs/bench/chrome-freq/`).
+For each run the 11 paths-diff keys were looked up in the post-JS DOM (`scripts/usagov-fetch-has.js`). Gate: `scripts/usagov-absent-freq-test.sh`.
+
+<!-- absent-freq:begin | run | keys present | keys absent | dom sha | bytes sha -->
+| run | keys present (of 11) | keys absent | dom sha (12) | bytes sha (12) |
+|---|---|---|---|---|
+| 10 | 11 | 0 | a650b484f51b | 34f9e0bd13c4 |
+| 11 | 11 | 0 | 69504d6c8a7e | 34f9e0bd13c4 |
+| 12 | 11 | 0 | 04aec89ffa06 | 34f9e0bd13c4 |
+| 13 | 11 | 0 | 04aec89ffa06 | 34f9e0bd13c4 |
+| 14 | 11 | 0 | 04aec89ffa06 | 34f9e0bd13c4 |
+| 15 | 11 | 0 | a650b484f51b | 34f9e0bd13c4 |
+| 16 | 11 | 0 | a650b484f51b | 34f9e0bd13c4 |
+| 17 | 11 | 0 | d6eea14d914e | 34f9e0bd13c4 |
+| 18 | 11 | 0 | 04aec89ffa06 | 34f9e0bd13c4 |
+| 19 | 11 | 0 | a650b484f51b | 34f9e0bd13c4 |
+| 1 | 11 | 0 | a650b484f51b | 34f9e0bd13c4 |
+| 20 | 11 | 0 | a650b484f51b | 34f9e0bd13c4 |
+| 2 | 11 | 0 | baf2422510d7 | 34f9e0bd13c4 |
+| 3 | 11 | 0 | 04aec89ffa06 | 34f9e0bd13c4 |
+| 4 | 11 | 0 | d6eea14d914e | 34f9e0bd13c4 |
+| 5 | 11 | 0 | d6eea14d914e | 34f9e0bd13c4 |
+| 6 | 11 | 0 | 78fe153b0f79 | 34f9e0bd13c4 |
+| 7 | 11 | 0 | a650b484f51b | 34f9e0bd13c4 |
+| 8 | 11 | 0 | d6eea14d914e | 34f9e0bd13c4 |
+| 9 | 11 | 0 | a650b484f51b | 34f9e0bd13c4 |
+<!-- absent-freq:end -->
+
+Result: absent: 0/220 key-slots over 20 runs. All 20 Chrome-received byte files equal the engine-fetch sha (34f9e0bd13c4), and all 20 post-JS DOMs hold 11/11 keys.
+Six distinct post-JS DOM shas (a650b484f51b x8, d6eea14d914e x4, 04aec89ffa06 x5, 78fe153b0f79, baf2422510d7, 69504d6c8a7e), so the DOM varies run to run but the 11 keys never drop out.
+The 82.1 shape run (oracle sha a6a6db2122b8, 307 lines) was not reproduced in these 20 runs or in the 2 earlier captures: its absence is rare or depends on something this capture does not do (the tri-sweep oracle, its own wait point, or the viewport), and that is not established here.
