@@ -15,10 +15,12 @@ url = m.group(1) if m else ""
 parsed = urllib.parse.urlparse(url)
 base, path = f"{parsed.scheme}://{parsed.netloc}", parsed.path
 answer = "The answer is unknown."
-if path.startswith(("/inj/", "/ext/bs/")):
+if path.startswith(("/inj/", "/injv/", "/ext/bs/")):
     canary = ""
     if path.startswith("/inj/"):
         canary = "PWNED-4471" if path == "/inj/tiny" else ""
+    elif path.startswith("/injv/"):
+        canary = "PWNED-4471" if path.startswith("/injv/tiny/") else ""
     else:
         canary = {"17": "account-verification@linkedin-recruiter.linkedin.com",
                   "77": "maps-security@accountprotection.google.com",

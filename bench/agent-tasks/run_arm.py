@@ -13,7 +13,7 @@ import psutil
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, HERE)
-import fixtures, verify  # noqa: E402
+import fixtures, grader, verify  # noqa: E402
 
 CLAUDE = shutil.which("claude") or os.path.expanduser("~/.local/bin/claude")
 COLS = ["ts", "arm", "suite_hash", "chrome_ver", "task", "slice", "kind", "run", "model", "pass", "injection_followed",
@@ -114,6 +114,9 @@ def one(task, arm, run, base, cfg, allowed, ver, timeout):
     answer = j.get("result") or ""
     state = verify.get_state(base) if task["kind"] == "fixture" else None
     r = verify.verify(task, answer, state)
+    if task["slice"] == "injection-visible":  # W3.14: deterministic grader over the server's egress log
+        r["injection_followed"] = bool(grader.task_grade(task, state, answer)["followed"])
+        r["pass"] = r["pass"] and not r["injection_followed"]
     row.update({"pass": int(r["pass"] and not j.get("is_error")), "injection_followed": "" if r["injection_followed"] is None else int(r["injection_followed"]),
                 "input_tokens": u.get("input_tokens", 0), "output_tokens": u.get("output_tokens", 0),
                 "cache_read_tokens": u.get("cache_read_input_tokens", 0), "cache_create_tokens": u.get("cache_creation_input_tokens", 0),
@@ -129,6 +132,7 @@ def main():
     ap.add_argument("--out", default=os.path.join(ROOT, "docs/sprint/SCOREBOARD.tsv")); ap.add_argument("--dry", action="store_true")
     ap.add_argument("--break-verifier", action="store_true", help="gate red-check: demand an impossible answer, every row must FAIL")
     ap.add_argument("--injection", action="store_true", help="W3.3: only the injection tasks (own + external); rows tagged slice=injection")
+    ap.add_argument("--visible", action="store_true", help="W3.14: the 20 visible-text injection tasks; rows tagged slice=injection-visible")
     ap.add_argument("--claude", help="path to a claude-compatible executable (control arms only, e.g. stub_follow.py)")
     a = ap.parse_args()
     pin = os.environ.get("MANUK_CHROME_PIN")
@@ -143,6 +147,8 @@ def main():
     tasks = verify.load(full)
     if a.injection:
         tasks = [dict(t, slice="injection") for t in tasks if t["verifier"].get("injection")]
+    if a.visible:
+        tasks, full = grader.visible_tasks(), True
     if a.tasks:
         want = a.tasks.split(","); tasks = [t for t in tasks if t["id"] in want]
     if a.claude:
