@@ -1,0 +1,2 @@
+cat	url	m1_status	cov	shape	vis	paths	m2_tag	m2_rate	m2_ceil	m2_targets	m2_drivable	m2_ungrounded	m2_ambiguous	m2_mishit	a11y_tag	a11y_prec	a11y_rec	a11y_f1	chrome_ver
+gov_edu	https://usa.gov/	OK	99.7	82.1	29.0	308	SKIPPED								SKIPPED				145.0.7632.116

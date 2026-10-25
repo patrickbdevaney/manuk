@@ -18,7 +18,10 @@ fn main() {
             println!("request_url: {url}");
             println!("final_url: {}", resp.final_url);
             println!("body_bytes: {}", resp.body.len());
-            println!("content_type: {}", resp.header("content-type").unwrap_or("-"));
+            println!(
+                "content_type: {}",
+                resp.header("content-type").unwrap_or("-")
+            );
             println!("server: {}", resp.header("server").unwrap_or("-"));
             println!("user_agent: {}", manuk_net::user_agent());
         }

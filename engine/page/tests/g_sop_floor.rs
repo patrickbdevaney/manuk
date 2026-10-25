@@ -96,7 +96,9 @@ fn a_web_page_cannot_read_the_disk_or_another_origins_frame() {
     ));
     let web_url = format!("http://{addr}/");
     let (html, final_url) = rt.block_on(manuk_page::fetch_html(&web_url)).unwrap();
-    let page = rt.block_on(manuk_page::Page::load_async(&html, &final_url, &fonts, 800.0));
+    let page = rt.block_on(manuk_page::Page::load_async(
+        &html, &final_url, &fonts, 800.0,
+    ));
     let framed = page.rendered_iframe_urls().join(",");
     println!("SOP A: web page rendered frames = {framed:?}");
     assert!(
@@ -109,10 +111,16 @@ fn a_web_page_cannot_read_the_disk_or_another_origins_frame() {
     let sibling = dir.join("sibling.html");
     std::fs::write(&sibling, "<p>SIBLING</p>").unwrap();
     let parent = dir.join("parent.html");
-    std::fs::write(&parent, "<!doctype html><iframe src=\"sibling.html\"></iframe>").unwrap();
+    std::fs::write(
+        &parent,
+        "<!doctype html><iframe src=\"sibling.html\"></iframe>",
+    )
+    .unwrap();
     let parent_url = format!("file://{}", parent.display());
     let (html, final_url) = rt.block_on(manuk_page::fetch_html(&parent_url)).unwrap();
-    let page = rt.block_on(manuk_page::Page::load_async(&html, &final_url, &fonts, 800.0));
+    let page = rt.block_on(manuk_page::Page::load_async(
+        &html, &final_url, &fonts, 800.0,
+    ));
     let framed = page.rendered_iframe_urls().join(",");
     println!("SOP A': local page rendered frames = {framed:?}");
     assert!(
@@ -130,9 +138,21 @@ fn a_web_page_cannot_read_the_disk_or_another_origins_frame() {
     let mut page = manuk_page::Page::load(parent_html, "https://parent.test/", &fonts, 900.0);
     let root = page.dom().root();
     let fr = manuk_css::query_selector_all(page.dom(), root, "iframe");
-    page.render_iframe(fr[0], "<p>OTHER-ORIGIN-CANARY</p>", "https://bank.test/statement", &fonts, 0);
+    page.render_iframe(
+        fr[0],
+        "<p>OTHER-ORIGIN-CANARY</p>",
+        "https://bank.test/statement",
+        &fonts,
+        0,
+    );
     page.render_iframe(fr[1], "<p>DATA-CANARY</p>", "data:text/html,x", &fonts, 0);
-    page.render_iframe(fr[2], "<p>SAME-CANARY</p>", "https://parent.test/child", &fonts, 0);
+    page.render_iframe(
+        fr[2],
+        "<p>SAME-CANARY</p>",
+        "https://parent.test/child",
+        &fonts,
+        0,
+    );
     page.eval_for_test(PROBE);
     let dom = page.dom();
     let got = manuk_css::query_selector_all(dom, dom.root(), "#__sop__")
@@ -153,8 +173,15 @@ fn a_web_page_cannot_read_the_disk_or_another_origins_frame() {
     // ── C: each layer, alone. ───────────────────────────────────────────────────────────────────────
     // C1 — the net layer refuses `file:` to a web INITIATOR, even while the navigation policy is local.
     manuk_net::set_top_level_document(&parent_url);
-    let r = rt.block_on(manuk_net::fetch_from(&secret_url, Some("https://evil.test/")));
-    assert!(r.is_err(), "C1: manuk_net served file: to a web initiator: {:?}", r.map(|x| x.status));
+    let r = rt.block_on(manuk_net::fetch_from(
+        &secret_url,
+        Some("https://evil.test/"),
+    ));
+    assert!(
+        r.is_err(),
+        "C1: manuk_net served file: to a web initiator: {:?}",
+        r.map(|x| x.status)
+    );
     // C2 — with no initiator, the top-level navigation decides: a web document gets nothing.
     // ⚠ A FRESH file, never requested before: manuk_net does not retry a URL that already failed in this
     // navigation, so asking for `secret_url` again would be refused by that negative cache whatever the
@@ -163,15 +190,30 @@ fn a_web_page_cannot_read_the_disk_or_another_origins_frame() {
     std::fs::write(&c2, "<p>C2</p>").unwrap();
     manuk_net::set_top_level_document("https://evil.test/");
     let r = rt.block_on(manuk_net::fetch(&format!("file://{}", c2.display())));
-    assert!(r.is_err(), "C2: manuk_net served file: while a web document was the top level");
+    assert!(
+        r.is_err(),
+        "C2: manuk_net served file: while a web document was the top level"
+    );
     // The vacuity read uses a DIFFERENT file: manuk_net does not retry a URL that already failed in
     // this navigation, so re-reading `secret_url` would only measure that negative cache.
     manuk_net::set_top_level_document(&parent_url);
     let r = rt.block_on(manuk_net::fetch(&format!("file://{}", sibling.display())));
-    assert!(r.is_ok(), "C2 vacuity: a local top-level document must still read local files: {:?}", r.err());
+    assert!(
+        r.is_ok(),
+        "C2 vacuity: a local top-level document must still read local files: {:?}",
+        r.err()
+    );
     // C3 — URL resolution: a web base never resolves into the disk; a file: base still does.
-    assert_eq!(manuk_page::resolve_url("https://evil.test/", &secret_url), "about:blank", "C3");
-    assert_eq!(manuk_page::resolve_url(&parent_url, "sibling.html"), format!("file://{}", sibling.display()), "C3 vacuity");
+    assert_eq!(
+        manuk_page::resolve_url("https://evil.test/", &secret_url),
+        "about:blank",
+        "C3"
+    );
+    assert_eq!(
+        manuk_page::resolve_url(&parent_url, "sibling.html"),
+        format!("file://{}", sibling.display()),
+        "C3 vacuity"
+    );
 
     let _ = std::fs::remove_dir_all(&dir);
 }

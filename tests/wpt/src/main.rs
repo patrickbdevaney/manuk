@@ -1081,6 +1081,11 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
             rows.push(manuk_wpt::fidelity::Fidelity::unmeasured(&name, reason));
             continue;
         };
+        // R0.4.a.b.a.a.a: the bytes our own fetch returned, kept so a sweep can hash them per site.
+        let _ = std::fs::write(
+            out.join(format!("{name}.engine-fetch.html")),
+            html.as_bytes(),
+        );
         let page = rt.block_on(async {
             let mut p = Page::load_async(&html, &final_url, fonts, vw as f32).await;
             p.finish_loading(fonts, vw as f32).await;
@@ -1580,6 +1585,24 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                     // Rect-only Box4 views for the placement scorers (SHAPE / coverage / first-
                     // divergence still take bare box maps); the jarring invariants below read the
                     // `Seen` maps directly.
+                    // R0.4.a.b.a.a.a: the oracle's final path+rect set (post sig-strip, post retry), sorted,
+                    // kept so a sweep can hash it and attribute a SHAPE move to the oracle side or ours.
+                    {
+                        let mut lines: Vec<String> = cseen
+                            .iter()
+                            .map(|(k, v)| {
+                                format!(
+                                    "{k}\t{}\t{}\t{}\t{}",
+                                    v.rect[0], v.rect[1], v.rect[2], v.rect[3]
+                                )
+                            })
+                            .collect();
+                        lines.sort();
+                        let _ = std::fs::write(
+                            out.join(format!("{name}.oracle-paths.tsv")),
+                            lines.join("\n"),
+                        );
+                    }
                     let cmap: std::collections::HashMap<String, [i64; 4]> =
                         cseen.iter().map(|(k, v)| (k.clone(), v.rect)).collect();
                     let mboxes: std::collections::HashMap<String, [i64; 4]> =

@@ -11,12 +11,12 @@
 
 | | value | over |
 |---|---|---|
-| ticks landed | **1186** | ticks 1–1515 |
-| median tick cycle | **33m** | 1185 intervals |
+| ticks landed | **1187** | ticks 1–1516 |
+| median tick cycle | **33m** | 1186 intervals |
 | median, last 10 | **32m** | 10 intervals |
-| fastest / slowest | 5s / 7.0d | |
-| **ticks per hour** | **0.79** | 1500.9h elapsed |
-| median verify wall | **67s** | 1125 ticks |
+| fastest / slowest | 5s / 43.5d | |
+| **ticks per hour** | **0.47** | 2545.6h elapsed |
+| median verify wall | **67s** | 1126 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
 The **cycle** is the real unit: implement → debug → verify wall → land. The wall is only part of
@@ -27,11 +27,11 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **583**
+* **live gates**: 27 → **584**
 * **✅ rows in the capability ledger**: 144 → **642**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
-**542 of 1186 ticks** (46%) moved a
+**542 of 1187 ticks** (46%) moved a
 user-visible capability. The rest were instruments, infrastructure and corrections — and the
 ledger says the corrections were not overhead: three of its top three priorities were phantoms,
 and finding that out redirected everything after it.
@@ -1283,5 +1283,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1513** | 2026-09-11 17:03 | 29m | instrument | 8m | +241/−42 | 583 | 81 | 56.0% · | the oracle renders every site from `file://`, so a self-hosted webfont is CORS-blocked (20 |
 | **1514** | 2026-09-11 17:31 | 28m | instrument | 8m | +273/−42 | 583 | 81 | 56.0% · | one flag, and two refusal cohorts stop existing (2026-09-11) |
 | **1515** | 2026-09-11 17:54 | 23m | instrument | 8m | +363/−44 | 583 | 81 | 56.0% · | the reference got honest in both directions (2026-09-11) |
+| **1516** | 2026-10-25 06:38 | 43.5d | instrument | 8m | +194/−18 | 584 | 81 | 56.0% · | the loop re-derived a rule it had already banked (2026-09-11) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*

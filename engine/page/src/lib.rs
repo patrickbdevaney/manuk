@@ -449,7 +449,11 @@ fn media_type_rejected(mime: &str) -> bool {
 /// and therefore cross-origin to everything, including another `data:` (W3.1).
 fn frame_same_origin(embedder: &str, framed: &str) -> bool {
     let f = framed.trim();
-    if f.is_empty() || f.eq_ignore_ascii_case("about:blank") || f.eq_ignore_ascii_case("about:srcdoc") || f == embedder {
+    if f.is_empty()
+        || f.eq_ignore_ascii_case("about:blank")
+        || f.eq_ignore_ascii_case("about:srcdoc")
+        || f == embedder
+    {
         return true;
     }
     if manuk_net::is_local_url(embedder) && manuk_net::is_local_url(f) {
@@ -480,7 +484,11 @@ pub fn resolve_url(base: &str, href: &str) -> String {
     let resolved = base_url.as_ref().and_then(|b| b.join(href).ok());
     match (base_url, resolved) {
         (Some(b), Some(u)) if b.scheme() != "file" && u.scheme() == "file" => {
-            tracing::warn!(base, href, "refused: a web document may not reference a local file (SOP floor)");
+            tracing::warn!(
+                base,
+                href,
+                "refused: a web document may not reference a local file (SOP floor)"
+            );
             "about:blank".to_string()
         }
         (_, Some(u)) => u.to_string(),

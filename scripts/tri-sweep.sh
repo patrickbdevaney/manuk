@@ -34,7 +34,7 @@ MW=${MW:-$R/target/release/manuk-wpt}; DP=${DP:-$R/target/debug/drive-probe}; AX
 PERSIST=${PERSIST:-$R/docs/bench}; CHROME_VER=${MANUK_CHROME_PIN:-unpinned}
 for b in "$MW" "$DP" "$AX"; do [ -x "$b" ] || { echo "✗ missing: $b"; exit 1; }; done
 [ -n "${TRI_NO_CHROME_CHECK:-}" ] || command -v google-chrome >/dev/null || { echo "✗ google-chrome required"; exit 1; }
-mkdir -p "$OUT/iso" "$OUT/err"; M2MAP="$OUT/m2.tsv"; M1M2="$OUT/m1m2.tsv"; AXF="$OUT/a11y.tsv"; FINAL="$OUT/results.tsv"
+mkdir -p "$OUT/iso" "$OUT/err"; ATTR="$OUT/attrib.tsv"; : > "$ATTR"; M2MAP="$OUT/m2.tsv"; M1M2="$OUT/m1m2.tsv"; AXF="$OUT/a11y.tsv"; FINAL="$OUT/results.tsv"
 : > "$M2MAP"; : > "$M1M2"; : > "$AXF"
 
 sel() { grep -vE '^#|^$' "$CORPUS" | awk 'NF>=2{n[$1]++;print n[$1]"\t"$1"\t"$2}' | sort -k1,1n -k2,2 | cut -f2-; }
@@ -63,6 +63,11 @@ run_m1() {
   elif printf '%s' "$o"|grep -qE 'UNMEASURABLE \[empty-[0-9]+\]'; then st=BLANK
   else st=EMPTY; fi
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$cat" "$url" "$st" "${cov:-}" "${shape:-}" "${vis:-}" "${paths:-0}" >> "$M1M2"
+  # R0.4.a.b.a.a.a: attribution sidecar — sha256 of the oracle's path+rect set and of our own fetched HTML ("-" if the side wrote nothing)
+  local osha esha of ef
+  of=$(ls "$iso"/*.oracle-paths.tsv 2>/dev/null|head -1); ef=$(ls "$iso"/*.engine-fetch.html 2>/dev/null|head -1)
+  osha=-; esha=-; [ -n "$of" ] && osha=$(sha256sum "$of"|cut -c1-64); [ -n "$ef" ] && esha=$(sha256sum "$ef"|cut -c1-64)
+  printf '%s\t%s\t%s\t%s\t%s\n' "$url" "$osha" "$esha" "${paths:-0}" "$CHROME_VER" >> "$ATTR"
   printf '  %-11s %-38s %-11s cov=%-6s shape=%-6s\n' "$cat" "${url:0:38}" "$st" "${cov:-–}" "${shape:-–}"
 }
 if [ -n "$M1FROM" ]; then
@@ -135,6 +140,8 @@ awk -F'\t' '
 # persisted per-site rows (survive the run; $OUT is scratch). One file per run, never overwritten.
 mkdir -p "$PERSIST"; PF="$PERSIST/tri-sweep-$(date +%Y%m%d-%H%M%S).tsv"
 { printf 'cat\turl\tm1_status\tcov\tshape\tvis\tpaths\tm2_tag\tm2_rate\tm2_ceil\tm2_targets\tm2_drivable\tm2_ungrounded\tm2_ambiguous\tm2_mishit\ta11y_tag\ta11y_prec\ta11y_rec\ta11y_f1\tchrome_ver\n'; cat "$FINAL"; } > "$PF"
+{ printf 'url\toracle_sha256\tengine_fetch_sha256\toracle_paths\tchrome_ver\n'; cat "$ATTR"; } > "${PF%.tsv}.attrib.tsv"
+echo "  attribution sidecar → ${PF%.tsv}.attrib.tsv"
 echo "  persisted per-site rows → $PF   (stderr logs: $OUT/err/)"
 echo ""; echo "=== DONE $(date '+%F %T') → $FINAL"
 echo "cols: see header of persisted file"

@@ -1341,7 +1341,8 @@ async fn stream_attachment_to_disk<R: tokio::io::AsyncRead + Unpin>(
 
 /// Is the top-level document a **web** document (anything but a `file:` URL or a bare local path)?
 /// Set at every top-level navigation by [`set_top_level_document`]; read by every local-file loader.
-static WEB_DOCUMENT_ACTIVE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static WEB_DOCUMENT_ACTIVE: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
 
 /// `true` for a URL that names the local disk: `file:` or a bare path with no scheme at all.
 /// `data:`/`about:`/`blob:` are NOT local — they are opaque origins and get no disk access.
