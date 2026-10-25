@@ -1,0 +1,33 @@
+{
+  "_doc": "Evidence-page map for verify.py --live-audit. Tasks not listed use their start_url. Where the expected answer lives on a page the agent reaches by navigation (detail/category/tag/author pages), or on the JSON/HTML endpoint a JS page renders from, that page is listed here. This file is an audit aid: it is NOT hashed into the suite version and changing it never changes a frozen task. 'count' rules: an answer that is a number is checked as the sum of class=\"<class>\" elements across the listed pages (paginated categories list every page).",
+  "evidence": {
+    "L04": "https://books.toscrape.com/catalogue/a-light-in-the-attic_1000/index.html",
+    "L05": "https://books.toscrape.com/catalogue/a-light-in-the-attic_1000/index.html",
+    "L06": "https://books.toscrape.com/catalogue/page-2.html",
+    "L10": "https://quotes.toscrape.com/author/Jane-Austen/",
+    "L12": "https://quotes.toscrape.com/api/quotes?page=2",
+    "L13": "https://quotes.toscrape.com/page/2/",
+    "L21": "https://en.wikipedia.org/wiki/Alan_Turing"
+  },
+  "count": {
+    "L03": {
+      "class": "product_pod",
+      "pages": [
+        "https://books.toscrape.com/catalogue/category/books/mystery_3/index.html",
+        "https://books.toscrape.com/catalogue/category/books/mystery_3/page-2.html"
+      ]
+    },
+    "L09": {
+      "class": "quote",
+      "pages": [
+        "https://quotes.toscrape.com/tag/love/"
+      ]
+    },
+    "L23": {
+      "class": "product_pod",
+      "pages": [
+        "https://books.toscrape.com/catalogue/category/books/travel_2/index.html"
+      ]
+    }
+  }
+}
