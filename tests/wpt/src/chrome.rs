@@ -837,6 +837,15 @@ pub fn capture_seen_all_paths(
     // already asks exactly the right question — *"did Chrome run the script?"* — and for five ticks
     // nobody heard it, because the caller discarded the error.
     let dump = String::from_utf8_lossy(&out.stdout);
+    // R0.4.a.b.a.a.a.a.a.a.a.a.a: opt-in (MANUK_ORACLE_DUMP_DIR) — keep the HTML the oracle fetched and the post-JS DOM
+    // Chrome dumped, so two runs that disagree can be compared at the capture point. Off by default; no effect on scoring.
+    if let Some(dir) = std::env::var_os("MANUK_ORACLE_DUMP_DIR") {
+        let dir = std::path::PathBuf::from(dir);
+        let _ = std::fs::create_dir_all(&dir);
+        let tag = stable_tag(url);
+        let _ = std::fs::write(dir.join(format!("{tag}.oracle-fetch.html")), &html);
+        let _ = std::fs::write(dir.join(format!("{tag}.oracle-dom.html")), dump.as_bytes());
+    }
     let seen = parse_seen_probe_json(&dump).map_err(|_| {
         report_probe_absence(&dump);
         Unmeasurable::ProbeBlocked

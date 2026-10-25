@@ -179,8 +179,13 @@ async fn click(b: &mut AgentBrowser, role: Role, name: &str) -> Activation {
         .unwrap_or_else(|e| panic!("{role:?} {name:?} activation errored: {e}"))
 }
 
+/// `manuk_net`'s "is the top-level document a web page" flag is process-global, and the first test navigates to a
+/// `data:` URL while the second reads `file://` — run in parallel the second is refused. One test at a time.
+static ONE_AT_A_TIME: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 #[tokio::test]
 async fn the_agents_click_performs_the_platforms_activation_behaviour() {
+    let _serial = ONE_AT_A_TIME.lock().await;
     let mut b = AgentBrowser::new(800, 900);
     b.navigate(&data_url(HTML)).await.unwrap();
 
@@ -402,6 +407,7 @@ async fn the_agents_click_performs_the_platforms_activation_behaviour() {
 /// network. Split out because a navigation replaces the page the arms above observe.
 #[tokio::test]
 async fn a_click_on_inner_markup_still_reaches_the_link_and_the_submit_button() {
+    let _serial = ONE_AT_A_TIME.lock().await;
     let dir = std::env::temp_dir().join(format!("manuk-g-activation-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(

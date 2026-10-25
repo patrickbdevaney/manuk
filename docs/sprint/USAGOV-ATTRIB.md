@@ -138,3 +138,24 @@ The 82.1 shape run (oracle sha a6a6db2122b8, 307 lines) was not reproduced in th
 <!-- oracle-freq:end -->
 
 Result: small DOM (a6a6db2122b8) in 1/12 fresh tri-sweep runs (run 20261025-071351; 307 oracle lines, 0 of the 11 keys); the other 11 runs hit the larger DOM (2286d97a1714, 318 lines, 11/11 keys). Standalone Chrome captures (22) never lost the keys, so the drop is rare (~1 in 12) and arises in the tri-sweep oracle path, where the same run's engine fetch is byte-identical to the others; the specific cause (wait point, viewport, load order) is not yet established.
+
+## What differs at the oracle capture point (node R0.4.a.b.a.a.a.a.a.a.a.a.a)
+
+chrome_ver=145.0.7632.116. `MANUK_ORACLE_DUMP_DIR` (opt-in, `tests/wpt/src/chrome.rs` `capture_seen_all_paths`) now writes the HTML the oracle
+fetched and the post-JS DOM Chrome dumped. 26 fresh `manuk-wpt fidelity --urls https://usa.gov/` runs: 24 large (2286d97a1714), 2 small (a6a6db2122b8;
+runs 20 and 26). Gate: `scripts/usagov-oracle-capture-test.sh`; dumps for 2 small + 3 large runs are in `docs/bench/oracle-dom/`.
+
+Result: the oracle's fetched HTML is byte-identical in all 5 stored runs (sha 34f9e0bd13c4, same as the engine fetch); the post-JS DOMs differ. In the small
+runs page JS hides all three `data-contact-callout` nodes (`#top-phone-mobile-menu`, `#top-phone`, `#footer-phone`: attribute `visible` to `hidden`, `style="display: none;"`),
+so the 11 keys (their subtrees) have no box and are not in the path file. Source: the site's `newFooter.js` runs `injectCSS()` (the hide) when `shouldDisplay()`
+is false, and `shouldDisplay()` is `Math.random()<0.8` (excerpt in `docs/bench/oracle-dom/callout-js-excerpt.txt`), after fetching a wait-time JSON whose
+`timestamp` must be under 600 s old. So the small DOM is a 20% coin flip inside the page (observed 2 of 26 here; 1 of 12 in the earlier sweep), not a Chrome or
+fetch difference. Not measured: whether the flip is the only input (the wait-time feed returned `-1` seconds when read once).
+
+<!-- oracle-capture:begin | run | oracle sha (12) | hidden | visible | keys present (of 11) -->
+| r19 | 2286d97a1714 | 0 | 3 | 11 |
+| r20 | a6a6db2122b8 | 3 | 0 | 0 |
+| r21 | 2286d97a1714 | 0 | 3 | 11 |
+| r25 | 2286d97a1714 | 0 | 3 | 11 |
+| r26 | a6a6db2122b8 | 3 | 0 | 0 |
+<!-- oracle-capture:end -->
