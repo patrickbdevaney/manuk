@@ -4,12 +4,8 @@ version = 2
 yanked = "deny"
 # Every ignore carries a reason and must be revisited when the named upstream moves.
 ignore = [
-  # quick-xml 0.39 is reached only through wayland-scanner, a build-time proc-macro that parses the
-  # trusted protocol XML shipped in wayland-protocols; no untrusted XML ever reaches it.
-  { id = "RUSTSEC-2026-0194", reason = "quick-xml only via wayland-scanner build-time proc-macro, trusted input" },
-  { id = "RUSTSEC-2026-0195", reason = "quick-xml only via wayland-scanner build-time proc-macro, trusted input" },
-  # Unmaintained (not vulnerable) crates with no drop-in successor in the pinned stylo/cosmic-text/winit stack.
-  { id = "RUSTSEC-2024-0436", reason = "paste: unmaintained, proc-macro only, no runtime code; transitive" },
-  { id = "RUSTSEC-2026-0206", reason = "rustybuzz unmaintained; shaping stack replaced with the text-stack move, tracked in graph" },
-  { id = "RUSTSEC-2026-0192", reason = "ttf-parser unmaintained; transitive via font stack, revisit with rustybuzz" },
+  # R1.5.b dropped RUSTSEC-2026-0194/0195 (quick-xml) and RUSTSEC-2026-0206 (rustybuzz) by moving resvg 0.44->0.49,
+  # fontdb 0.23->0.24 and wayland-scanner 0.31.11. What remains is unmaintained-only (not vulnerable):
+  { id = "RUSTSEC-2024-0436", reason = "paste: proc-macro only, no runtime code; only via re_rav1d (AV1), whose alternatives (rav1d-safe) also pull paste and are AGPL" },
+  { id = "RUSTSEC-2026-0192", reason = "ttf-parser: 0.21 via fontdue (layout metrics, replacement changes advance widths = parity risk) and 0.25 via winit->sctk-adwaita->ab_glyph; see GRAPH R1.5.b.a" },
 ]

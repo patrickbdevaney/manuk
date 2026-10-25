@@ -91,7 +91,7 @@ taffy = "0.12"
 accesskit = "0.24"
 
 # --- text (Reuse) ---
-fontdb = "0.23"
+fontdb = "0.24"
 fontdue = "0.9"
 
 # --- paint / raster ---

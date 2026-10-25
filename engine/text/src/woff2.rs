@@ -883,37 +883,21 @@ mod tests {
             "decoded face must have a family name"
         );
         // And the face data round-trips through swash (the actual rasterizer path)
-        // and yields a real outline via ttf-parser (exercises the glyf/loca transform).
+        // and yields a real outline via swash (exercises the glyf/loca transform).
         let id = face.id;
         let ok = db
             .with_face_data(id, |data, index| {
                 let swash_ok = swash::FontRef::from_index(data, index as usize).is_some();
-                let ttf = ttf_parser::Face::parse(data, index).expect("ttf-parser parses sfnt");
-                // Some glyph in the reconstructed glyf table must produce outline commands.
-                struct Sink(u32);
-                impl ttf_parser::OutlineBuilder for Sink {
-                    fn move_to(&mut self, _: f32, _: f32) {
-                        self.0 += 1;
-                    }
-                    fn line_to(&mut self, _: f32, _: f32) {
-                        self.0 += 1;
-                    }
-                    fn quad_to(&mut self, _: f32, _: f32, _: f32, _: f32) {
-                        self.0 += 1;
-                    }
-                    fn curve_to(&mut self, _: f32, _: f32, _: f32, _: f32, _: f32, _: f32) {
-                        self.0 += 1;
-                    }
-                    fn close(&mut self) {}
-                }
-                let mut outlined = false;
-                for g in 0..ttf.number_of_glyphs() {
-                    let mut s = Sink(0);
-                    if ttf.outline_glyph(ttf_parser::GlyphId(g), &mut s).is_some() && s.0 > 0 {
-                        outlined = true;
-                        break;
-                    }
-                }
+                let font =
+                    swash::FontRef::from_index(data, index as usize).expect("swash parses sfnt");
+                // Some glyph in the reconstructed glyf table must produce outline points.
+                let mut ctx = swash::scale::ScaleContext::new();
+                let mut scaler = ctx.builder(font).size(16.0).build();
+                let outlined = (0..font.metrics(&[]).glyph_count).any(|g| {
+                    scaler
+                        .scale_outline(g)
+                        .is_some_and(|o| !o.points().is_empty())
+                });
                 swash_ok && outlined
             })
             .unwrap_or(false);
