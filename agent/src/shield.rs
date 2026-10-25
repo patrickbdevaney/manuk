@@ -10,8 +10,8 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use manuk_dom::NodeId;
 use manuk_css::Rgba;
+use manuk_dom::NodeId;
 use manuk_layout::{BoxContent, LayoutBox, TextFragment};
 
 /// Contrast ratio (WCAG relative luminance) below which text counts as camouflaged. WCAG's own
@@ -110,7 +110,9 @@ fn walk(b: &LayoutBox, mut ctx: Ctx, w: &mut Walk) {
             ctx.box_reason = Some("opacity");
         } else if b.hidden {
             ctx.box_reason = Some("visibility");
-        } else if (b.rect.width <= 1.0 || b.rect.height <= 1.0) && !matches!(&b.content, BoxContent::Inline(f) if f.is_empty()) {
+        } else if (b.rect.width <= 1.0 || b.rect.height <= 1.0)
+            && !matches!(&b.content, BoxContent::Inline(f) if f.is_empty())
+        {
             ctx.box_reason = Some("zero-size");
         }
     }
@@ -163,8 +165,20 @@ pub fn analyze(root: &LayoutBox, viewport_w: f32) -> Shield {
         hidden_nodes: HashMap::new(),
         seen_nodes: HashSet::new(),
     };
-    let white = Rgba { r: 255, g: 255, b: 255, a: 255 };
-    walk(root, Ctx { box_reason: None, bg: white }, &mut w);
+    let white = Rgba {
+        r: 255,
+        g: 255,
+        b: 255,
+        a: 255,
+    };
+    walk(
+        root,
+        Ctx {
+            box_reason: None,
+            bg: white,
+        },
+        &mut w,
+    );
 
     let mut text = String::new();
     let mut prev: Option<&TextFragment> = None;
@@ -197,17 +211,42 @@ mod tests {
 
     #[test]
     fn contrast_black_white_is_21_and_same_is_1() {
-        let k = Rgba { r: 0, g: 0, b: 0, a: 255 };
-        let w = Rgba { r: 255, g: 255, b: 255, a: 255 };
+        let k = Rgba {
+            r: 0,
+            g: 0,
+            b: 0,
+            a: 255,
+        };
+        let w = Rgba {
+            r: 255,
+            g: 255,
+            b: 255,
+            a: 255,
+        };
         assert!((contrast(k, w) - 21.0).abs() < 0.01);
         assert!((contrast(w, w) - 1.0).abs() < 1e-4);
     }
 
     #[test]
     fn near_white_on_white_is_camouflage_grey_is_not() {
-        let w = Rgba { r: 255, g: 255, b: 255, a: 255 };
-        let near = Rgba { r: 250, g: 250, b: 250, a: 255 };
-        let grey = Rgba { r: 119, g: 119, b: 119, a: 255 };
+        let w = Rgba {
+            r: 255,
+            g: 255,
+            b: 255,
+            a: 255,
+        };
+        let near = Rgba {
+            r: 250,
+            g: 250,
+            b: 250,
+            a: 255,
+        };
+        let grey = Rgba {
+            r: 119,
+            g: 119,
+            b: 119,
+            a: 255,
+        };
         assert!(contrast(near, w) < MIN_CONTRAST);
         assert!(contrast(grey, w) >= MIN_CONTRAST);
     }

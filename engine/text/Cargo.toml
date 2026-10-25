@@ -13,6 +13,8 @@ description = "Text shaping + font discovery. fontdb + fontdue (swash/Parley fam
 
 [dependencies]
 fontdb.workspace = true
+# Already in the lockfile via fontdb's `memmap`; used here so a face's bytes are mapped, not copied.
+memmap2 = "0.9"
 fontdue.workspace = true
 tracing.workspace = true
 # Bounded shaped-run/measure cache (A3). Pure-Rust, cross-platform.

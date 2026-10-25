@@ -17,9 +17,9 @@
 use anyhow::{anyhow, Context, Result};
 use manuk_page::{fetch_html, Link, Page};
 
+pub mod forms;
 /// §4b — HTML form model (find form, read fields, build a GET submission URL).
 pub mod shield;
-pub mod forms;
 
 /// Scoring the a11y tree against Chrome's — the versioned instrument behind Track B's node-match
 /// bar, reporting precision and F1 rather than recall alone. Driven by the `a11y-score` binary.

@@ -272,8 +272,28 @@ type GlyphKey = (FaceId, u32, u16, u8);
 /// Owned font-file bytes + face index, so a swash `FontRef` (which borrows the data) can be
 /// built on demand for shaping/rasterization.
 struct FaceData {
-    data: Vec<u8>,
+    data: FaceBytes,
     index: u32,
+}
+
+/// A face's file bytes. System fonts are memory-mapped, not copied: the colour-emoji face and the
+/// CJK collection are tens of MB each, and reading them whole was ~40 ms of the first layout of a
+/// one-paragraph page. Pages are faulted in only for the tables a lookup actually touches.
+enum FaceBytes {
+    Owned(Vec<u8>),
+    Shared(std::sync::Arc<dyn AsRef<[u8]> + Sync + Send>),
+    Mapped(memmap2::Mmap),
+}
+
+impl std::ops::Deref for FaceBytes {
+    type Target = [u8];
+    fn deref(&self) -> &[u8] {
+        match self {
+            FaceBytes::Owned(v) => v,
+            FaceBytes::Shared(a) => (**a).as_ref(),
+            FaceBytes::Mapped(m) => m,
+        }
+    }
 }
 
 /// Family names tried (in order) as per-glyph fallback faces for coverage the primary font
@@ -306,7 +326,7 @@ pub struct FontContext {
     /// memoises as `None` so it is not retried per line box.
     face_fonts: RefCell<HashMap<FaceId, Option<Rc<fontdue::Font>>>>,
     /// Discovered fallback faces (lazy); per-`(face, char)` coverage memo.
-    fallbacks: RefCell<Option<Vec<FaceId>>>,
+    fallbacks: RefCell<Option<Vec<fontdb::ID>>>,
     coverage: RefCell<HashMap<(FaceId, char), bool>>,
     /// Per face: does it cover ALL of printable ASCII? One bool, memoised, so the ASCII fast path
     /// in [`FontContext::line_metrics_for_text`] costs a single lookup rather than a per-character
@@ -1072,12 +1092,21 @@ impl FontContext {
         if let Some(&fid) = self.face_by_dbid.borrow().get(&dbid) {
             return Some(fid);
         }
-        let fd = self.db.borrow().with_face_data(dbid, |data, index| {
-            Rc::new(FaceData {
-                data: data.to_vec(),
-                index,
-            })
-        })?;
+        let (source, index) = self.db.borrow().face_source(dbid)?;
+        let data = match source {
+            fontdb::Source::Binary(a) => FaceBytes::Shared(a),
+            fontdb::Source::SharedFile(_, a) => FaceBytes::Shared(a),
+            fontdb::Source::File(path) => {
+                let file = std::fs::File::open(&path).ok()?;
+                // SAFETY: a read-only private mapping of an installed font file; the same
+                // contract `fontdb::Database::with_face_data` relies on.
+                match unsafe { memmap2::Mmap::map(&file) } {
+                    Ok(m) => FaceBytes::Mapped(m),
+                    Err(_) => FaceBytes::Owned(std::fs::read(&path).ok()?),
+                }
+            }
+        };
+        let fd = Rc::new(FaceData { data, index });
         let mut faces = self.faces.borrow_mut();
         let fid = faces.len() as FaceId;
         faces.push(fd);
@@ -1124,8 +1153,11 @@ impl FontContext {
         (ch > 0.0).then_some(ch)
     }
 
-    /// The installed fallback faces, discovered once (lazy).
-    fn fallback_faces(&self) -> Vec<FaceId> {
+    /// The installed fallback faces' database ids, discovered once (lazy). Only the id is looked up
+    /// here: `intern` copies the WHOLE font file, and the nine fallback families include the colour
+    /// emoji face and a CJK collection (tens of MB, once per CJK family) — copying them all on the
+    /// first character the primary face lacks was a fixed cost of ~40 ms on a one-paragraph page.
+    fn fallback_ids(&self) -> Vec<fontdb::ID> {
         if let Some(fbs) = self.fallbacks.borrow().as_ref() {
             return fbs.clone();
         }
@@ -1138,13 +1170,29 @@ impl FontContext {
                 style: fontdb::Style::Normal,
             };
             let found = self.db.borrow().query(&q);
-            if let Some(fid) = found.and_then(|id| self.intern(id)) {
+            if let Some(id) = found {
+                if !out.contains(&id) {
+                    out.push(id);
+                }
+            }
+        }
+        *self.fallbacks.borrow_mut() = Some(out.clone());
+        out
+    }
+
+    /// Every installed fallback face, interned (loads them all — see [`fallback_ids`]).
+    ///
+    /// [`fallback_ids`]: FontContext::fallback_faces
+    #[cfg(test)]
+    fn fallback_faces(&self) -> Vec<FaceId> {
+        let mut out = Vec::new();
+        for id in self.fallback_ids() {
+            if let Some(fid) = self.intern(id) {
                 if !out.contains(&fid) {
                     out.push(fid);
                 }
             }
         }
-        *self.fallbacks.borrow_mut() = Some(out.clone());
         out
     }
 
@@ -1208,9 +1256,13 @@ impl FontContext {
         if ch.is_whitespace() || ch.is_control() || self.face_covers(primary, ch) {
             return primary;
         }
-        for fb in self.fallback_faces() {
-            if fb != primary && self.face_covers(fb, ch) {
-                return fb;
+        // Interned one at a time, in order, so a face later in the list than the first that covers
+        // `ch` is never read from disk.
+        for id in self.fallback_ids() {
+            if let Some(fb) = self.intern(id) {
+                if fb != primary && self.face_covers(fb, ch) {
+                    return fb;
+                }
             }
         }
         primary
@@ -2414,5 +2466,41 @@ mod tests {
                 "non-PUA fallback must still work — otherwise row 4 proves nothing"
             );
         }
+    }
+
+    /// # G_FALLBACK_LAZY — resolving ONE uncovered character must not load every fallback face
+    ///
+    /// The first layout of a one-paragraph page cost ~50 ms because the first character the
+    /// primary face lacked interned (read whole) all nine fallback families — the colour-emoji face
+    /// and a CJK collection among them. Resolution is in list order and stops at the first face that
+    /// covers, so a CJK ideograph must leave every family after the CJK ones unread.
+    #[test]
+    fn resolving_one_fallback_character_loads_only_the_faces_it_walks() {
+        let f = FontContext::new();
+        let ids = f.fallback_ids();
+        let cjk = '\u{4E00}';
+        let mut walked = None;
+        for (i, &id) in ids.iter().enumerate() {
+            let fid = f.intern(id).unwrap();
+            if f.face_covers(fid, cjk) {
+                walked = Some(i);
+                break;
+            }
+        }
+        let Some(walked) = walked else { return }; // no CJK face on this host: nothing to prove
+        if walked + 1 >= ids.len() {
+            return; // the covering face is the last: laziness cannot be told from eagerness
+        }
+        let g = FontContext::new();
+        let primary = g.primary_face(FontKey::default()).expect("a primary face");
+        let before = g.faces.borrow().len();
+        let got = g.resolve_face(cjk, primary, None);
+        assert_ne!(got, primary, "the ideograph must fall back to the CJK face");
+        let loaded = g.faces.borrow().len() - before;
+        assert!(
+            loaded <= walked + 1,
+            "resolving U+4E00 loaded {loaded} faces; walking the list to index {walked} needs at most {}",
+            walked + 1
+        );
     }
 }

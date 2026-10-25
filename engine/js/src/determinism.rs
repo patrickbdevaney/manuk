@@ -31,8 +31,8 @@ static CRYPTO_STATE: AtomicU64 = AtomicU64::new(DEFAULT_SEED);
 pub fn enabled() -> bool {
     FORCED.load(Ordering::Relaxed)
         || std::env::var("MANUK_DETERMINISTIC")
-        .map(|v| !v.is_empty() && v != "0")
-        .unwrap_or(false)
+            .map(|v| !v.is_empty() && v != "0")
+            .unwrap_or(false)
 }
 
 /// The `--deterministic` flag of a binary: no env mutation, so it is safe after threads exist.

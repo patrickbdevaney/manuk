@@ -313,7 +313,10 @@ fn injection_shield_withholds_invisible_text() {
         assert!(text.contains("⚠hidden-text"), "{tool}: no marker:\n{text}");
     }
     let (_, obs) = c.tool("observe", json!({}));
-    assert!(obs.contains("Quarterly report") && obs.contains("Subscribe"), "{obs}");
+    assert!(
+        obs.contains("Quarterly report") && obs.contains("Subscribe"),
+        "{obs}"
+    );
     // Opt-out returns everything except display:none (which has no box at all).
     let (_, all) = c.tool("extract", json!({"include_hidden": true}));
     for h in &hidden[..7] {

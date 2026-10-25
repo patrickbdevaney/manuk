@@ -8301,7 +8301,12 @@ pub fn install(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Result<()
     eval(rt, global, DOC_PROTO_JS, "doc_proto.js")?;
     if crate::determinism::enabled() {
         crate::determinism::reset();
-        eval(rt, global, &crate::determinism::prelude_js(), "determinism.js")?;
+        eval(
+            rt,
+            global,
+            &crate::determinism::prelude_js(),
+            "determinism.js",
+        )?;
     }
     eval(rt, global, PRELUDE, "event_loop_prelude.js")?;
 

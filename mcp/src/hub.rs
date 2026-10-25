@@ -52,7 +52,11 @@ impl Entry {
             args: v["args"].as_object()?.clone(),
             ok: v["ok"].as_bool()?,
             diff_hash: hex("diff_hash")?,
-            req: v["req"].as_array()?.iter().filter_map(Value::as_u64).collect(),
+            req: v["req"]
+                .as_array()?
+                .iter()
+                .filter_map(Value::as_u64)
+                .collect(),
             storage_hash: hex("storage_hash")?,
         })
     }
@@ -89,12 +93,22 @@ impl<B: Backend> Hub<B> {
         if let Some(d) = &dir {
             let _ = std::fs::create_dir_all(d);
         }
-        Hub { make: Box::new(make), dir, pages: HashMap::new(), default: None, next: 0, salt }
+        Hub {
+            make: Box::new(make),
+            dir,
+            pages: HashMap::new(),
+            default: None,
+            next: 0,
+            salt,
+        }
     }
 
     fn fresh_id(&mut self) -> String {
         self.next += 1;
-        format!("p{:06x}", fnv(format!("{}:{}", self.salt, self.next).as_bytes()) & 0xff_ffff)
+        format!(
+            "p{:06x}",
+            fnv(format!("{}:{}", self.salt, self.next).as_bytes()) & 0xff_ffff
+        )
     }
 
     fn path(&self, id: &str) -> Option<PathBuf> {
@@ -110,15 +124,27 @@ impl<B: Backend> Hub<B> {
     }
 
     fn load(&self, id: &str) -> Result<Vec<Entry>, String> {
-        let p = self.path(id).ok_or_else(|| format!("unknown page {id:?} (no persisted log: set MANUK_ACTLOG_DIR)"))?;
-        let text = std::fs::read_to_string(&p).map_err(|_| format!("unknown page {id:?}: no log at {}", p.display()))?;
+        let p = self.path(id).ok_or_else(|| {
+            format!("unknown page {id:?} (no persisted log: set MANUK_ACTLOG_DIR)")
+        })?;
+        let text = std::fs::read_to_string(&p)
+            .map_err(|_| format!("unknown page {id:?}: no log at {}", p.display()))?;
         text.lines()
-            .map(|l| serde_json::from_str::<Value>(l).ok().and_then(|v| Entry::from_json(&v)).ok_or_else(|| format!("corrupt log line for {id}")))
+            .map(|l| {
+                serde_json::from_str::<Value>(l)
+                    .ok()
+                    .and_then(|v| Entry::from_json(&v))
+                    .ok_or_else(|| format!("corrupt log line for {id}"))
+            })
             .collect()
     }
 
     /// Run one entry's call and return `(ok, diff hash)`.
-    async fn run(s: &mut Session<B>, tool: &str, args: &Map<String, Value>) -> (Result<Output, String>, u64) {
+    async fn run(
+        s: &mut Session<B>,
+        tool: &str,
+        args: &Map<String, Value>,
+    ) -> (Result<Output, String>, u64) {
         let r = s.call(tool, args).await.map_err(|e| format!("{e:#}"));
         let h = match &r {
             Ok(Output::Text(t)) => fnv(t.as_bytes()),
@@ -132,7 +158,10 @@ impl<B: Backend> Hub<B> {
     async fn resume(&mut self, id: &str, seq: u64) -> Result<(), String> {
         let mut log = self.load(id)?;
         if (log.len() as u64) < seq {
-            return Err(format!("page handle {id}:{seq} is ahead of its log (length {})", log.len()));
+            return Err(format!(
+                "page handle {id}:{seq} is ahead of its log (length {})",
+                log.len()
+            ));
         }
         log.truncate(seq as usize);
         let mut s = Session::new((self.make)());
@@ -166,7 +195,11 @@ impl<B: Backend> Hub<B> {
                     .ok_or_else(|| format!("bad page handle {h:?}: expected \"<id>:<seq>\" as returned by the last call"))?;
                 match self.pages.get(id).map(|p| p.log.len() as u64) {
                     Some(n) if n == seq => {}
-                    Some(n) => return Err(format!("STALE page handle {h}: that page is at seq {n}; use {id}:{n}")),
+                    Some(n) => {
+                        return Err(format!(
+                            "STALE page handle {h}: that page is at seq {n}; use {id}:{n}"
+                        ))
+                    }
                     None => self.resume(id, seq).await?,
                 }
                 id.to_string()
@@ -197,7 +230,11 @@ impl<B: Backend> Hub<B> {
             };
             if let Some(p) = self.path(&id) {
                 use std::io::Write;
-                if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(p) {
+                if let Ok(mut f) = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(p)
+                {
                     let _ = writeln!(f, "{}", e.to_json(&id));
                 }
             }
@@ -206,7 +243,10 @@ impl<B: Backend> Hub<B> {
         let handle = format!("page: {id}:{seq}");
         match r {
             Ok(Output::Text(t)) => Ok(Output::Text(format!("{t}\n{handle}"))),
-            Ok(Output::Image { png, note }) => Ok(Output::Image { png, note: format!("{note}\n{handle}") }),
+            Ok(Output::Image { png, note }) => Ok(Output::Image {
+                png,
+                note: format!("{note}\n{handle}"),
+            }),
             Err(e) => Err(format!("{e}\n{handle}")),
         }
     }

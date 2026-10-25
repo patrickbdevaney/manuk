@@ -1899,6 +1899,12 @@
   - L1892 · Four causes eliminated, so the next probe is a bisect and not a guess
   - L1908 · THE SWEEP RUNNER MUST RE-SPAWN — fidelity EXITS ITS OWN PROCESS ON PURPOSE (t1344)
 
+## First layout: fallback fonts are interned lazily and system font bytes are mapped, not copied
+`docs/wiki/first-layout-font-fallback-is-lazy-and-mapped.md`
+
+  - L5 · Mechanism (engine/text/src/lib.rs)
+  - L15 · Limits
+
 ## `flex-direction: column` never shrank an item — one word, one axis
 `docs/wiki/flex-column-shrink.md`
 
@@ -3718,4 +3724,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3065 sections across 162 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3067 sections across 163 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

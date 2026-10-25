@@ -422,7 +422,11 @@ impl<B: Backend> Session<B> {
             DEFAULT_BUDGET_TOKENS,
             "use find(query) or observe(mode=viewport)",
         );
-        Ok(format!("{UNTRUSTED}{}\n{}\n{body}", self.warn(), self.header()))
+        Ok(format!(
+            "{UNTRUSTED}{}\n{}\n{body}",
+            self.warn(),
+            self.header()
+        ))
     }
 
     fn observe(&mut self, mode: &str, budget: Option<usize>) -> Result<String> {

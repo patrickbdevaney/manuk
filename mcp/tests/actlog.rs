@@ -79,13 +79,19 @@ impl Drop for Client {
     }
 }
 
-
 fn fixture(name: &str) -> String {
-    format!("file://{}/tests/fixtures/{name}", env!("CARGO_MANIFEST_DIR"))
+    format!(
+        "file://{}/tests/fixtures/{name}",
+        env!("CARGO_MANIFEST_DIR")
+    )
 }
 
 fn tmp(tag: &str) -> std::path::PathBuf {
-    let p = std::env::temp_dir().join(format!("manuk-actlog-{tag}-{}-{:?}", std::process::id(), std::time::Instant::now()));
+    let p = std::env::temp_dir().join(format!(
+        "manuk-actlog-{tag}-{}-{:?}",
+        std::process::id(),
+        std::time::Instant::now()
+    ));
     let _ = std::fs::remove_dir_all(&p);
     std::fs::create_dir_all(&p).unwrap();
     p
@@ -93,7 +99,10 @@ fn tmp(tag: &str) -> std::path::PathBuf {
 
 /// The handle of the first line containing `needle`.
 fn handle_of(text: &str, needle: &str) -> String {
-    let line = text.lines().find(|l| l.contains(needle)).unwrap_or_else(|| panic!("no line with {needle:?} in:\n{text}"));
+    let line = text
+        .lines()
+        .find(|l| l.contains(needle))
+        .unwrap_or_else(|| panic!("no line with {needle:?} in:\n{text}"));
     let start = line.find("[h").unwrap();
     let end = line[start..].find(']').unwrap() + start;
     line[start + 1..end].to_string()
@@ -101,7 +110,11 @@ fn handle_of(text: &str, needle: &str) -> String {
 
 /// The `page: <id>:<seq>` trailer of a tool result.
 fn page_of(text: &str) -> String {
-    text.lines().rev().find_map(|l| l.strip_prefix("page: ")).unwrap_or_else(|| panic!("no page handle in:\n{text}")).to_string()
+    text.lines()
+        .rev()
+        .find_map(|l| l.strip_prefix("page: "))
+        .unwrap_or_else(|| panic!("no page handle in:\n{text}"))
+        .to_string()
 }
 
 fn log_lines(dir: &std::path::Path) -> Vec<Value> {
@@ -121,11 +134,17 @@ fn script(dir: &std::path::Path) -> (String, Vec<String>) {
     let (e, nav) = c.tool("navigate", json!({"url": fixture("shop.html")}));
     assert!(!e, "{nav}");
     let add = handle_of(&nav, "button \"Add to cart\"");
-    let (e, eff) = c.tool("act", json!({"handle": add, "action": "click", "page": page_of(&nav)}));
+    let (e, eff) = c.tool(
+        "act",
+        json!({"handle": add, "action": "click", "page": page_of(&nav)}),
+    );
     assert!(!e && eff.contains("Cart (1 item)"), "{eff}");
     let (e, d) = c.tool("observe", json!({"mode": "diff", "page": page_of(&eff)}));
     assert!(!e, "{d}");
-    let hashes = log_lines(dir).iter().map(|v| v["diff_hash"].as_str().unwrap().to_string()).collect();
+    let hashes = log_lines(dir)
+        .iter()
+        .map(|v| v["diff_hash"].as_str().unwrap().to_string())
+        .collect();
     (page_of(&d), hashes)
 }
 
@@ -139,7 +158,10 @@ fn log_entries_carry_seq_handle_hash_and_storage_hash_and_replay_is_identical_3_
         assert_eq!(log.len(), 3);
         for (n, e) in log.iter().enumerate() {
             assert_eq!(e["seq"], json!(n + 1));
-            assert_eq!(e["handle"].as_str().unwrap(), format!("{}:{}", handle.split(':').next().unwrap(), n + 1));
+            assert_eq!(
+                e["handle"].as_str().unwrap(),
+                format!("{}:{}", handle.split(':').next().unwrap(), n + 1)
+            );
             assert!(e["storage_hash"].is_string() && e["req"].is_array());
         }
         // a fresh server replays the whole log against the fixture and verifies every hash
@@ -149,7 +171,10 @@ fn log_entries_carry_seq_handle_hash_and_storage_hash_and_replay_is_identical_3_
         assert!(t.contains("Cart (1 item)"), "{t}");
         runs.push(hashes);
     }
-    assert_eq!(runs[0], runs[1], "diff hashes differ between identical runs");
+    assert_eq!(
+        runs[0], runs[1],
+        "diff hashes differ between identical runs"
+    );
     assert_eq!(runs[1], runs[2]);
 }
 
@@ -157,11 +182,26 @@ fn log_entries_carry_seq_handle_hash_and_storage_hash_and_replay_is_identical_3_
 fn replay_refuses_a_log_whose_hashes_no_longer_match() {
     let dir = tmp("tamper");
     let (handle, _) = script(&dir);
-    let f = std::fs::read_dir(&dir).unwrap().next().unwrap().unwrap().path();
+    let f = std::fs::read_dir(&dir)
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
     let text = std::fs::read_to_string(&f).unwrap();
-    let mut lines: Vec<Value> = text.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+    let mut lines: Vec<Value> = text
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
     lines[1]["diff_hash"] = json!("0000000000000001");
-    std::fs::write(&f, lines.iter().map(|v| v.to_string() + "\n").collect::<String>()).unwrap();
+    std::fs::write(
+        &f,
+        lines
+            .iter()
+            .map(|v| v.to_string() + "\n")
+            .collect::<String>(),
+    )
+    .unwrap();
     let mut c = Client::start(&dir);
     let (err, t) = c.tool("observe", json!({"page": handle}));
     assert!(err && t.contains("REPLAY DIVERGED"), "{t}");
@@ -175,19 +215,28 @@ fn a_fresh_client_with_only_the_handle_continues_the_diff_from_the_same_state() 
         let mut a = Client::start(&dir);
         let (_, nav) = a.tool("navigate", json!({"url": fixture("shop.html")}));
         let add = handle_of(&nav, "button \"Add to cart\"");
-        let (_, eff) = a.tool("act", json!({"handle": add, "action": "click", "page": page_of(&nav)}));
+        let (_, eff) = a.tool(
+            "act",
+            json!({"handle": add, "action": "click", "page": page_of(&nav)}),
+        );
         handle = page_of(&eff);
         // client A is killed here (Drop) mid-task
     }
     let mut b = Client::start(&dir);
     let (err, d) = b.tool("observe", json!({"mode": "diff", "page": handle}));
     assert!(!err, "{d}");
-    assert!(d.contains("no change"), "diff baseline was not restored:\n{d}");
+    assert!(
+        d.contains("no change"),
+        "diff baseline was not restored:\n{d}"
+    );
     let (_, full) = b.tool("observe", json!({"mode": "full", "page": page_of(&d)}));
     assert!(full.contains("Cart (1 item)"), "{full}");
     // and it can keep acting on handles minted before the crash
     let qty = handle_of(&full, "textbox");
-    let (err, eff) = b.tool("type", json!({"handle": qty, "text": "7", "page": page_of(&full)}));
+    let (err, eff) = b.tool(
+        "type",
+        json!({"handle": qty, "text": "7", "page": page_of(&full)}),
+    );
     assert!(!err && eff.contains("~[h") && eff.contains("=2→7"), "{eff}");
 }
 
@@ -212,20 +261,37 @@ fn stale_or_malformed_handles_are_refused() {
 fn two_pages_in_one_server_do_not_cross_talk() {
     let dir = tmp("two");
     let mut c = Client::start(&dir);
-    let (_, a) = c.tool("navigate", json!({"url": fixture("shop.html"), "page": "new"}));
-    let (_, b) = c.tool("navigate", json!({"url": fixture("result.html"), "page": "new"}));
+    let (_, a) = c.tool(
+        "navigate",
+        json!({"url": fixture("shop.html"), "page": "new"}),
+    );
+    let (_, b) = c.tool(
+        "navigate",
+        json!({"url": fixture("result.html"), "page": "new"}),
+    );
     let (pa, pb) = (page_of(&a), page_of(&b));
     assert_ne!(pa.split(':').next(), pb.split(':').next());
-    assert!(a.contains("Widget Shop") && !b.contains("Widget Shop"), "{b}");
+    assert!(
+        a.contains("Widget Shop") && !b.contains("Widget Shop"),
+        "{b}"
+    );
     let add = handle_of(&a, "button \"Add to cart\"");
     let (err, eff) = c.tool("act", json!({"handle": add, "action": "click", "page": pa}));
     assert!(!err && eff.contains("Cart (1 item)"), "{eff}");
     let (_, ob) = c.tool("observe", json!({"mode": "full", "page": pb}));
-    assert!(!ob.contains("Cart (1 item)") && !ob.contains("Widget Shop"), "page B saw page A:\n{ob}");
+    assert!(
+        !ob.contains("Cart (1 item)") && !ob.contains("Widget Shop"),
+        "page B saw page A:\n{ob}"
+    );
     let (_, oa) = c.tool("observe", json!({"mode": "full", "page": page_of(&eff)}));
-    assert!(oa.contains("Cart (1 item)") && oa.contains("Widget Shop"), "{oa}");
+    assert!(
+        oa.contains("Cart (1 item)") && oa.contains("Widget Shop"),
+        "{oa}"
+    );
     // page A's log holds only A's calls
-    let log_a = std::fs::read_to_string(dir.join(format!("{}.jsonl", pa.split(':').next().unwrap()))).unwrap();
+    let log_a =
+        std::fs::read_to_string(dir.join(format!("{}.jsonl", pa.split(':').next().unwrap())))
+            .unwrap();
     assert_eq!(log_a.lines().count(), 3, "{log_a}");
     assert!(!log_a.contains("result.html"));
 }
@@ -267,12 +333,18 @@ fn req_field_carries_the_wire_request_ids_of_each_call() {
     assert!(!e, "{nav}");
     // the document + stylesheet + script: three requests issued by one navigate
     let go = handle_of(&nav, "button \"Go\"");
-    let (e, t) = c.tool("act", json!({"handle": go, "action": "click", "page": page_of(&nav)}));
+    let (e, t) = c.tool(
+        "act",
+        json!({"handle": go, "action": "click", "page": page_of(&nav)}),
+    );
     assert!(!e, "{t}");
     let log = log_lines(&dir);
     assert_eq!(log.len(), 2, "{log:?}");
     let nav_req = log[0]["req"].as_array().unwrap();
-    assert!(nav_req.len() >= 3, "navigate of a 2-subresource page must log its requests: {nav_req:?}");
+    assert!(
+        nav_req.len() >= 3,
+        "navigate of a 2-subresource page must log its requests: {nav_req:?}"
+    );
     // ids are unique and increasing within the navigate
     let ids: Vec<u64> = nav_req.iter().map(|v| v.as_u64().unwrap()).collect();
     assert!(ids.windows(2).all(|w| w[0] < w[1]), "{ids:?}");

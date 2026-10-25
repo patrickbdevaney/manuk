@@ -679,3 +679,23 @@ Bar was <= 11 s: **not met**. Wikipedia Alan_Turing `subframes (pre-load)` 2117 
 ran twice per phase on identical inputs). a11y node counts base vs new: max drift 0.04 % (comix.to, live page), 0 on the other 19;
 mutant (`finish_loading_inner` returns at once) drifts 1.4-78 % on 6 URLs -> node check RED. Remaining top URLs: puentedemando.com 3.78 s,
 ordertime.com 1.95 s (one 1.6 s script evaluation), Rust/Python/Turing Wikipedia 1.2-1.5 s each (script eval + one dirty restyle per phase).
+
+## PERF.1.3 results (chrome_ver=145.0.7632.116; manuk only, Chrome rows unchanged above)
+
+Paired interleaved (`perf1-profile.py --manuk BASE --manuk-b NEW`, 20 URLs x 3 runs, raw rows `docs/sprint/perf1-pf13/paired.jsonl`);
+BASE is HEAD df08661a built with the same command, NEW is HEAD + the font change below.
+
+- **Cause of the fixed first-layout cost:** `FontContext::intern` copied a font file whole (`to_vec`) and `fallback_faces()` interned
+  all nine fallback families the first time one character missed the primary face - colour emoji and a CJK collection are tens of MB
+  each (CJK three times, one family name per collection face). example.com spent ~45 of its 50 ms there (strace: 368 font opens).
+- **Fix:** fallbacks are looked up as ids and interned one at a time in list order (stop at the first face that covers); system
+  font bytes are memory-mapped instead of copied (`FaceBytes`).
+- **Result:** example.com layout median 50 -> 7 ms (bar <= 15 met; trace `layout` line, 3 runs). Every other URL within noise.
+  Σ layout 10.29 -> 10.70 s (bar <= 5 **not met**): comix.to alone is 5.5-5.8 s.
+- **Where the rest is (comix.to, `MANUK_LAYOUT_PROFILE=1`):** 6 cascade+layout passes of ~1.05 s each, 91% inside one taffy solve
+  (123k measure probes, 6.2k distinct (node, width) misses, ~520 top-level item measures per pass). The top-level misses are
+  dominated by `min_content_width` of three `<section>` items (layout of the whole subtree at width 1, 100-200 ms each, per pass).
+- **Next fixed cost:** first use of each distinct face costs 8-12 ms (fontdue parses every outline eagerly): quotes.toscrape.com/js first
+  layout 28 ms (Liberation Serif, Serif Bold, Sans Italic) before and after this change.
+- **Not comparable:** the pre-sprint `target/release/a11y-dump` that sat in the tree (Alan_Turing cascade 106 ms, wall 4.7 s) is ~2.4x
+  faster in cascade than a clean build of HEAD (250 ms, wall 7.8 s) - see PERF.1.3.c.

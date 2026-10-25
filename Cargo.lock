@@ -3551,6 +3551,7 @@ dependencies = [
  "fontdb",
  "fontdue",
  "lru",
+ "memmap2",
  "swash",
  "tracing",
  "unicode-bidi",
