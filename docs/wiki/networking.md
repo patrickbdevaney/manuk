@@ -2079,3 +2079,15 @@ worth more than this directory alone.
 
 This is t1179's *"an AREA is not a CAUSE"* recurring one level down: **a directory is not a cause
 either, and neither is a single failing-message shape.**
+
+## TLS chain completion via AIA (R0.1.a.a)
+
+Some servers send only their leaf certificate and omit the intermediate CA (found: `ebanking.bdm-sa.com`,
+leaf issued by Sectigo OV R36). Chrome follows the leaf's Authority Information Access `caIssuers` URL and
+downloads the missing intermediate; bare rustls/webpki does not, so fetches failed with
+`invalid peer certificate: UnknownIssuer`. `engine/net/src/aia.rs` wraps `WebPkiServerVerifier`: only on
+`UnknownIssuer` it fetches the intermediate over plain HTTP (cached per URL, ≤3 hops, ≤64 KiB, 5s timeouts)
+and re-verifies against the SAME webpki root store — so trust is never relaxed; an untrusted root or
+self-signed leaf still fails. Gates: `aia::tests` (hermetic openssl-minted chain; plain webpki is the
+red mutant). Note ebanking.bdm-sa.com itself intermittently drops the TLS handshake (EOF) even for
+`openssl s_client`, so a live "3/3" on that host is bounded by the server, not the client.

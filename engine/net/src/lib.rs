@@ -33,6 +33,7 @@ use tokio::io::AsyncReadExt;
 use tokio_util::io::StreamReader;
 use url::Url;
 
+pub mod aia;
 pub mod cookies;
 
 pub mod cors;
@@ -114,7 +115,7 @@ fn connector() -> HttpsConnector<HttpConnector> {
         // Install a rustls crypto provider once (idempotent).
         let _ = rustls::crypto::ring::default_provider().install_default();
         hyper_rustls::HttpsConnectorBuilder::new()
-            .with_webpki_roots()
+            .with_tls_config(aia::client_config())
             .https_or_http()
             .enable_http1()
             .enable_http2()

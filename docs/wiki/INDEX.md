@@ -2836,6 +2836,7 @@
   - L2028 · The old code estimated its own damage, and the estimate was wrong
   - L2049 · What the rewrite covers
   - L2061 · ⚠⚠⚠ One histogram bar, two mechanisms — the rank was right and the price was wrong
+  - L2083 · TLS chain completion via AIA (R0.1.a.a)
 
 ## Nineteen of five hundred and sixty-seven
 `docs/wiki/nineteen-of-five-hundred-and-sixty-seven.md`
@@ -3684,4 +3685,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3051 sections across 157 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3052 sections across 157 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
