@@ -1,0 +1,53 @@
+# manuk-net fetch_document of https://amazon.com/ (agent/examples/m1_net_probe.rs, release), 5 runs, chrome_ver=145.0.7632.116, captured 2026-10-25T10:05:52Z
+# navigation request as the engine makes it: manuk UA, redirects followed inside fetch_document
+## manuk-net, 5 runs
+== run 1 2026-10-25T10:05:22Z
+HTTP/2 202 (manuk-net fetch_document)
+request_url: https://amazon.com/
+final_url: https://www.amazon.com/
+body_bytes: 2007
+content_type: text/html; charset=UTF-8
+server: CloudFront
+user_agent: Mozilla/5.0 (X11; Linux; x86_64) Manuk/1.0.0 (+standards)
+== run 2 2026-10-25T10:05:22Z
+HTTP/2 202 (manuk-net fetch_document)
+request_url: https://amazon.com/
+final_url: https://www.amazon.com/
+body_bytes: 2007
+content_type: text/html; charset=UTF-8
+server: CloudFront
+user_agent: Mozilla/5.0 (X11; Linux; x86_64) Manuk/1.0.0 (+standards)
+== run 3 2026-10-25T10:05:23Z
+HTTP/2 202 (manuk-net fetch_document)
+request_url: https://amazon.com/
+final_url: https://www.amazon.com/
+body_bytes: 2007
+content_type: text/html; charset=UTF-8
+server: CloudFront
+user_agent: Mozilla/5.0 (X11; Linux; x86_64) Manuk/1.0.0 (+standards)
+== run 4 2026-10-25T10:05:24Z
+HTTP/2 202 (manuk-net fetch_document)
+request_url: https://amazon.com/
+final_url: https://www.amazon.com/
+body_bytes: 2007
+content_type: text/html; charset=UTF-8
+server: CloudFront
+user_agent: Mozilla/5.0 (X11; Linux; x86_64) Manuk/1.0.0 (+standards)
+== run 5 2026-10-25T10:05:25Z
+HTTP/2 202 (manuk-net fetch_document)
+request_url: https://amazon.com/
+final_url: https://www.amazon.com/
+body_bytes: 2007
+content_type: text/html; charset=UTF-8
+server: CloudFront
+user_agent: Mozilla/5.0 (X11; Linux; x86_64) Manuk/1.0.0 (+standards)
+
+## control A: curl, Manuk UA, no -L (raw status line + Location)
+HTTP/1.1 301 Moved Permanently
+Location: https://www.amazon.com/
+## control B: curl, Manuk UA, www, headers only
+HTTP/2 202 
+content-length: 0
+x-amzn-waf-action: challenge
+## control C: curl, DEFAULT UA, www, headers only (same network, same minute)
+HTTP/2 200 
