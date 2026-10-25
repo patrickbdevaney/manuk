@@ -4999,6 +4999,27 @@ impl Page {
                     let initiator = base.clone();
                     async move {
                         let is_get = method.eq_ignore_ascii_case("GET") || method.is_empty();
+                        // **CORS preflight (W3.10.a):** a non-simple cross-origin request is not even
+                        // sent unless the server's OPTIONS answer allows it — the same rule the GUI
+                        // pump enforces, so headless/MCP sessions are not the weaker door. The page
+                        // sees a network failure (status 0).
+                        if let (Some(po), Ok(ru)) = (
+                            url::Url::parse(&initiator)
+                                .ok()
+                                .and_then(|u| manuk_net::cors::origin_of(&u)),
+                            url::Url::parse(&url),
+                        ) {
+                            if manuk_net::cors::is_cross_origin(&po, &ru) {
+                                let allowed =
+                                    manuk_net::cors_preflight(&po, &url, &method, &headers)
+                                        .await
+                                        .unwrap_or(false);
+                                if !allowed {
+                                    tracing::info!(%url, "page fetch blocked: CORS preflight not allowed");
+                                    return (id, 0u16, String::new(), Vec::new());
+                                }
+                            }
+                        }
                         let out = if is_get && headers.is_empty() {
                             // A header-less GET goes through `fetch`, which carries the HTTP cache, the
                             // single-flight coalescer and the per-navigation negative cache. A POST must

@@ -180,3 +180,68 @@ fn cors_preflight_gates_non_simple_requests() {
         .block_on(manuk_net::cors_preflight(origin, &url, "PUT", &req))
         .unwrap());
 }
+
+// ── W3.10.a: the raw-socket dials (WebSocket, SOCKS target) ─────────────────────────────────
+
+#[test]
+fn public_page_cannot_open_a_websocket_to_loopback() {
+    let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let rt = manuk_net::runtime();
+    let (port, hits, _) = server("");
+    manuk_net::set_top_level_document("http://public.example/");
+    for target in [
+        format!("ws://127.0.0.1:{port}/"),
+        format!("ws://localhost:{port}/"), // a name that resolves to loopback
+        format!("ws://[::1]:{port}/"),
+    ] {
+        let r = rt.block_on(manuk_net::websocket::WebSocketConn::connect(&target, &[]));
+        assert!(r.is_err(), "{target} must be refused");
+    }
+    assert_eq!(
+        hits.load(Ordering::SeqCst),
+        0,
+        "the WS dial never reached the server"
+    );
+
+    // Control (the gate can go red): with the guard off the TCP connection is made — the
+    // handshake then fails (the fixture is not a WS server) but the server saw the dial.
+    manuk_net::egress::set_allow_private_network(true);
+    let _ = rt.block_on(manuk_net::websocket::WebSocketConn::connect(
+        &format!("ws://127.0.0.1:{port}/"),
+        &[],
+    ));
+    assert!(
+        hits.load(Ordering::SeqCst) >= 1,
+        "opt-out must let the dial land"
+    );
+    manuk_net::egress::set_allow_private_network(false);
+}
+
+#[test]
+fn public_page_cannot_target_loopback_through_a_socks_proxy() {
+    let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let rt = manuk_net::runtime();
+    let (proxy_port, proxy_hits, _) = server("");
+    let proxy = manuk_net::proxy::SocksProxy::new(format!("127.0.0.1:{proxy_port}"));
+    manuk_net::set_top_level_document("http://public.example/");
+    let r = rt.block_on(manuk_net::proxy::fetch_via_proxy(
+        &proxy,
+        "http://127.0.0.1:9/",
+    ));
+    assert!(r.is_err());
+    assert_eq!(
+        proxy_hits.load(Ordering::SeqCst),
+        0,
+        "a private literal target is refused before the proxy is even dialled"
+    );
+    manuk_net::egress::set_allow_private_network(true);
+    let _ = rt.block_on(manuk_net::proxy::fetch_via_proxy(
+        &proxy,
+        "http://127.0.0.1:9/",
+    ));
+    assert!(
+        proxy_hits.load(Ordering::SeqCst) >= 1,
+        "control: opt-out reaches the proxy"
+    );
+    manuk_net::egress::set_allow_private_network(false);
+}

@@ -242,7 +242,8 @@
 `docs/wiki/a-public-page-cannot-dial-the-lan.md`
 
   - L5 · Mechanism
-  - L19 · Not covered
+  - L19 · W3.10.a — raw sockets and the headless executor
+  - L31 · Not covered
 
 ## ARCHITECTURE — concurrency, process model, memory, and the REASONING
 `docs/wiki/architecture.md`
@@ -3691,4 +3692,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3054 sections across 158 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3055 sections across 158 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

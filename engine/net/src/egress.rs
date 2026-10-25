@@ -113,6 +113,34 @@ pub fn check_url_literal(url: &Url) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Resolve `host:port` for a raw socket dial (WebSocket, proxy target) with the same post-DNS rule
+/// as [`GuardResolver`]: while the guard is active, private addresses are dropped and an all-private
+/// answer fails. The caller dials the returned addresses, not the name, so a rebind cannot swap
+/// the answer between check and connect.
+pub async fn resolve_for_dial(host: &str, port: u16) -> std::io::Result<Vec<SocketAddr>> {
+    // IP literals (including bracketed v6) skip DNS but not the check.
+    let bare = host.trim_start_matches('[').trim_end_matches(']');
+    let addrs: Vec<SocketAddr> = match bare.parse::<IpAddr>() {
+        Ok(ip) => vec![SocketAddr::new(ip, port)],
+        Err(_) => tokio::net::lookup_host((host, port)).await?.collect(),
+    };
+    if !guard_active() {
+        return Ok(addrs);
+    }
+    let total = addrs.len();
+    let ok: Vec<SocketAddr> = addrs
+        .into_iter()
+        .filter(|a| !is_private_ip(a.ip()))
+        .collect();
+    if ok.is_empty() && total > 0 {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            format!("blocked: {host} is a private-network address and the page is public (--allow-private-network overrides)"),
+        ));
+    }
+    Ok(ok)
+}
+
 /// The connector's DNS resolver. `guarded == false` is the embedder's own client (LLM endpoint,
 /// MCP plumbing), which is allowed to reach loopback.
 #[derive(Clone, Copy)]

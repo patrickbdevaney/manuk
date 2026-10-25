@@ -16,7 +16,18 @@
 - CORS preflight: `cors::needs_preflight` / `preflight_response_allows`, driven by `manuk_net::cors_preflight`,
   called from the shell's `pump_fetches` before the real request is sent. Failure = network error (status 0).
 
+## W3.10.a — raw sockets and the headless executor
+
+- `egress::resolve_for_dial` resolves `host:port` under the same post-DNS rule; `WebSocketConn::connect` dials the
+  vetted addresses (never the name), so `ws://127.0.0.1`, `ws://localhost` and `ws://[::1]` from a public page fail.
+- `proxy::fetch_via_proxy` refuses a private *literal* target before dialling the SOCKS proxy. Names are resolved by
+  the proxy out of our sight: a documented gap.
+- `Page::pump_page_fetches` (what `manuk-mcp` and every headless consumer run via `finish_loading`) now calls
+  `cors_preflight` for cross-origin requests; `Page::load_async` alone does not pump fetches.
+- Gates: `public_page_cannot_open_a_websocket_to_loopback`, `public_page_cannot_target_loopback_through_a_socks_proxy`
+  (net) and `g_page_fetch_preflight` (page, needs `--features spidermonkey`). Red under removing the preflight call
+  or the guard in `resolve_for_dial`.
+
 ## Not covered
 
-WebSocket and proxy sockets dial directly and bypass this resolver; the page-crate's fetch executor
-(headless/MCP) does not yet call `cors_preflight`.
+Proxy-resolved hostnames; WebTransport/EventSource-specific dials (none exist as separate sockets today).

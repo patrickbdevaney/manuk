@@ -72,7 +72,12 @@ impl WebSocketConn {
             .to_string();
         let port = u.port().unwrap_or(if secure { 443 } else { 80 });
 
-        let tcp = TcpStream::connect((host.as_str(), port))
+        // W3.10.a: a public page's `new WebSocket('ws://127.0.0.1/…')` is the cross-site-WebSocket
+        // route to local services; resolve under the egress guard and dial the vetted addresses.
+        let addrs = crate::egress::resolve_for_dial(&host, port)
+            .await
+            .with_context(|| format!("WebSocket target refused: {host}:{port}"))?;
+        let tcp = TcpStream::connect(&addrs[..])
             .await
             .with_context(|| format!("WebSocket TCP connect failed: {host}:{port}"))?;
         // Interactive traffic: a chat keystroke must not wait on Nagle coalescing.
