@@ -1,0 +1,9 @@
+2026-10-25T06:06:54.839925Z  WARN manuk_js::dom_bindings: UNHANDLED PROMISE REJECTION — a page's async code threw and nothing was listening. Every modern framework renders inside an async function, so this is where their failures go to die. error=undefined
+2026-10-25T06:06:54.839961Z  WARN manuk_js::dom_bindings: UNHANDLED PROMISE REJECTION — a page's async code threw and nothing was listening. Every modern framework renders inside an async function, so this is where their failures go to die. error=undefined
+2026-10-25T06:07:49.985292Z  WARN manuk_js::event_loop: event loop hit its TIME budget — the page is not converging fast enough to be worth more of the user's clock. Painting what we have. count=7 elapsed_ms=12458 budget_ms=5000 reflow_n=3 reflow_ms=12439
+2026-10-25T06:08:00.737184Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://g1.nyt.com/fonts/css/web-fonts.css
+2026-10-25T06:08:02.051831Z  WARN manuk_page: load budget of 12.0s exhausted mid-phase — painting now. The document is what the user came for; the rest was an enhancement.
+  BOOT: 4 uncaught · FIRST [other:undefined] undefined (rejection) · classes: other:undefined×2 missing-member:addEventListener×1 other:no-exception-object×1
+  WEBFONTS: 57 of 58 @font-face families delivered a usable face — the rest SHADOW a local face of the same name, so their text is measured                          in a fallback
+  UNMEASURABLE [bot-wall-403]: the origin answered 403 and refused this client — a BOT WALL, not a rendering failure. Rendering work cannot move it; identity/fingerprint can
+  ⚠ nytimes.com UNMEASURABLE [bot-wall-403]: the origin answered 403 and refused this client — a BOT WALL, not a rendering failure. Rendering work cannot move it; identity/fingerprint can

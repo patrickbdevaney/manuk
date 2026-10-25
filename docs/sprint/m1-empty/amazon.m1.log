@@ -1,0 +1,4 @@
+fidelity: amazon.com
+  BOOT: clean
+  UNMEASURABLE [empty-202]: the origin answered 202 with a ZERO-BYTE body — there was no document to measure. This is the true cause behind the old 'Chrome rendered NO [id] elements' line, which blamed the corpus for the network's answer
+  ⚠ amazon.com UNMEASURABLE [empty-202]: the origin answered 202 with a ZERO-BYTE body — there was no document to measure. This is the true cause behind the old 'Chrome rendered NO [id] elements' line, which blamed the corpus for the network's answer
