@@ -51,3 +51,25 @@ other; why the origin or Chrome varies is not examined here.
 | `body:nth-of-type(1)/header:nth-of-type(1)/div:nth-of-type(2)/div:nth-of-type(2)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(1)/span:nth-of-type(1)` | 642 | 168 | 199 | 19 |
 | `body:nth-of-type(1)/header:nth-of-type(1)/div:nth-of-type(2)/div:nth-of-type(2)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(1)/span:nth-of-type(1)/a:nth-of-type(1)` | 642 | 153 | 199 | 44 |
 <!-- paths-diff:end -->
+
+## Raw HTML vs JavaScript: the 11 paths (node R0.4.a.b.a.a.a.a.a)
+
+chrome_ver=145.0.7632.116. Gate: `scripts/usagov-fetch-has-test.sh`. Stored engine-fetch HTML: `docs/bench/engine-fetch/www.usa.gov.engine-fetch.html`
+(sha256 34f9e0bd13c46c13ffa29001081090b570897d5bdf045bad9aebe3823d937ece, captured by `manuk-wpt fidelity` on 2026-10-25). `scripts/usagov-fetch-has.sh` parses it with Chrome's
+JavaScript blocked (a CSP meta, since `--disable-javascript` does not stop scripts here) and checks each key.
+
+<!-- raw-has:begin | class | key -->
+| path key | class |
+|---|---|
+| `body:nth-of-type(1)/footer:nth-of-type(1)/div:nth-of-type(2)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(1)` | RAW |
+| `body:nth-of-type(1)/footer:nth-of-type(1)/div:nth-of-type(2)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(1)` | RAW |
+| `body:nth-of-type(1)/footer:nth-of-type(1)/div:nth-of-type(2)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(1)` | RAW |
+| `body:nth-of-type(1)/footer:nth-of-type(1)/div:nth-of-type(2)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(1)/h4:nth-of-type(1)` | RAW |
+| `body:nth-of-type(1)/footer:nth-of-type(1)/div:nth-of-type(2)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(2)` | RAW |
+| `body:nth-of-type(1)/footer:nth-of-type(1)/div:nth-of-type(2)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(2)/address:nth-of-type(1)` | RAW |
+| `body:nth-of-type(1)/footer:nth-of-type(1)/div:nth-of-type(2)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(2)/address:nth-of-type(1)/div:nth-of-type(1)` | RAW |
+| `body:nth-of-type(1)/footer:nth-of-type(1)/div:nth-of-type(2)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(2)/address:nth-of-type(1)/div:nth-of-type(1)/a:nth-of-type(1)` | RAW |
+| `body:nth-of-type(1)/footer:nth-of-type(1)/div:nth-of-type(2)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(2)/p:nth-of-type(1)` | RAW |
+| `body:nth-of-type(1)/header:nth-of-type(1)/div:nth-of-type(2)/div:nth-of-type(2)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(1)/span:nth-of-type(1)` | RAW |
+| `body:nth-of-type(1)/header:nth-of-type(1)/div:nth-of-type(2)/div:nth-of-type(2)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(1)/span:nth-of-type(1)/a:nth-of-type(1)` | RAW |
+<!-- raw-has:end -->
