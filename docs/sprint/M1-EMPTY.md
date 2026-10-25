@@ -12,4 +12,4 @@ Check: `scripts/m1-empty-check.sh` (each cited line must appear verbatim in its 
 
 Neither site is a blank render (the page never reached the renderer) or an oracle-empty case (the oracle was not consulted, since fidelity stopped at the origin response).
 
-The EMPTY bucket is produced by `scripts/tri-classify.sh`'s catch-all, which does not read these `UNMEASURABLE [...]` labels. Follow-up R0.4.a.a.a.a tags them.
+The EMPTY bucket is produced by `scripts/tri-classify.sh`'s catch-all, which does not read these `UNMEASURABLE [...]` labels. R0.4.a.a.a.a now tags them BOTWALL (bot-wall-NNN) and BLANK (empty-NNN) in `scripts/tri-sweep.sh`.

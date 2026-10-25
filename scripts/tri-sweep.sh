@@ -59,6 +59,8 @@ run_m1() {
   elif [ "${paths:-0}" -gt 0 ] 2>/dev/null; then st=LOW_SAMPLE
   elif [ -n "${vis:-}" ]; then st=NO_STRUCT
   elif printf '%s' "$o"|grep -qiE 'fetch.*failed|FETCH FAILED|navigation|dns error|connection refused'; then st=NAVFAIL
+  elif printf '%s' "$o"|grep -qE 'UNMEASURABLE \[bot-wall-[0-9]+\]'; then st=BOTWALL
+  elif printf '%s' "$o"|grep -qE 'UNMEASURABLE \[empty-[0-9]+\]'; then st=BLANK
   else st=EMPTY; fi
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$cat" "$url" "$st" "${cov:-}" "${shape:-}" "${vis:-}" "${paths:-0}" >> "$M1M2"
   printf '  %-11s %-38s %-11s cov=%-6s shape=%-6s\n' "$cat" "${url:0:38}" "$st" "${cov:-–}" "${shape:-–}"
