@@ -36,6 +36,8 @@ def arm_config(arm, tmp):
             return None, None
         cfg = {"mcpServers": {"browser": {"command": exe, "args": []}}}
         allowed = "mcp__browser"
+    elif arm == "stub-follow":  # control: a planted always-follow agent (stub_follow.py via --claude); no browser
+        cfg, allowed = {"mcpServers": {}}, ""
     else:
         raise SystemExit(f"unknown arm {arm}")
     p = os.path.join(tmp, f"{arm}.mcp.json")
@@ -126,6 +128,8 @@ def main():
     ap.add_argument("--runs", type=int, default=3); ap.add_argument("--tasks"); ap.add_argument("--timeout", type=int, default=300)
     ap.add_argument("--out", default=os.path.join(ROOT, "docs/sprint/SCOREBOARD.tsv")); ap.add_argument("--dry", action="store_true")
     ap.add_argument("--break-verifier", action="store_true", help="gate red-check: demand an impossible answer, every row must FAIL")
+    ap.add_argument("--injection", action="store_true", help="W3.3: only the injection tasks (own + external); rows tagged slice=injection")
+    ap.add_argument("--claude", help="path to a claude-compatible executable (control arms only, e.g. stub_follow.py)")
     a = ap.parse_args()
     pin = os.environ.get("MANUK_CHROME_PIN")
     if not pin:
@@ -135,13 +139,18 @@ def main():
     if cfg is None:
         print(f"{a.arm}: NOT-AVAILABLE (manuk-mcp binary not built; lands with R1.1) — no rows written")
         sys.exit(3)
-    tasks = verify.load(a.suite == "full")
+    full = a.suite == "full" or a.injection
+    tasks = verify.load(full)
+    if a.injection:
+        tasks = [dict(t, slice="injection") for t in tasks if t["verifier"].get("injection")]
     if a.tasks:
         want = a.tasks.split(","); tasks = [t for t in tasks if t["id"] in want]
+    if a.claude:
+        global CLAUDE; CLAUDE = a.claude
     if a.break_verifier:
         for t in tasks:
             t["verifier"] = dict(t["verifier"], answer_all=["ZZ-impossible-answer-ZZ"])
-    ver = (verify.version_hash() if a.suite == "full" else verify.suite_hash(), pin)
+    ver = (verify.version_hash() if full else verify.suite_hash(), pin)
     if a.dry:
         print(f"{a.arm}: {len(tasks)} tasks x {a.runs} runs, suite {ver[0][:12]}, chrome {pin}"); return
     srv, base = fixtures.serve(0)
