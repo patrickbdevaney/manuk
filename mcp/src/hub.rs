@@ -32,7 +32,8 @@ pub struct Entry {
     pub args: Map<String, Value>,
     pub ok: bool,
     pub diff_hash: u64,
-    /// Network request ids issued by the call. Empty until the net layer exposes them (W3.5.a).
+    /// Wire request ids (`manuk_net::take_request_ids`) issued while the call ran; empty for a call
+    /// that touched no network.
     pub req: Vec<u64>,
     pub storage_hash: u64,
 }
@@ -178,7 +179,10 @@ impl<B: Backend> Hub<B> {
         let logged = !UNLOGGED.contains(&tool);
         let a = strip_page(args);
         let page = self.pages.get_mut(&id).unwrap();
+        // Take-since around the call: ids issued before it belong to someone else.
+        let _ = manuk_net::take_request_ids();
         let (r, h) = Self::run(&mut page.s, tool, &a).await;
+        let req = manuk_net::take_request_ids();
         let mut seq = page.log.len() as u64;
         if logged {
             seq += 1;
@@ -188,7 +192,7 @@ impl<B: Backend> Hub<B> {
                 args: a,
                 ok: r.is_ok(),
                 diff_hash: h,
-                req: Vec::new(),
+                req,
                 storage_hash: Self::storage_hash(&page.s),
             };
             if let Some(p) = self.path(&id) {

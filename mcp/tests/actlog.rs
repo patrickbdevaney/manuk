@@ -229,3 +229,53 @@ fn two_pages_in_one_server_do_not_cross_talk() {
     assert_eq!(log_a.lines().count(), 3, "{log_a}");
     assert!(!log_a.contains("result.html"));
 }
+
+/// A loopback server: `/` is a page with a stylesheet and a script (two subresources) and one
+/// button with no handler. Every connection is answered once and closed, so the HTTP cache (which
+/// is per-process) never serves the navigation from memory.
+fn serve_two_subresource_page() -> String {
+    use std::io::{Read, Write as _};
+    let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = l.local_addr().unwrap();
+    std::thread::spawn(move || {
+        for stream in l.incoming() {
+            let Ok(mut s) = stream else { continue };
+            std::thread::spawn(move || {
+                let mut buf = [0u8; 4096];
+                let n = s.read(&mut buf).unwrap_or(0);
+                let head = String::from_utf8_lossy(&buf[..n]).to_string();
+                let path = head.split_whitespace().nth(1).unwrap_or("/").to_string();
+                let (ct, body) = match path.as_str() {
+                    "/style.css" => ("text/css", "p { color: red }".to_string()),
+                    "/app.js" => ("text/javascript", "void 0".to_string()),
+                    _ => ("text/html", "<!doctype html><title>Sub</title><link rel=stylesheet href=\"/style.css\"><script src=\"/app.js\"></script><h1>Sub</h1><button>Go</button>".to_string()),
+                };
+                let resp = format!("HTTP/1.1 200 OK\r\nContent-Type: {ct}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
+                let _ = s.write_all(resp.as_bytes());
+            });
+        }
+    });
+    format!("http://{addr}/")
+}
+
+#[test]
+fn req_field_carries_the_wire_request_ids_of_each_call() {
+    let dir = tmp("req");
+    let url = serve_two_subresource_page();
+    let mut c = Client::start(&dir);
+    let (e, nav) = c.tool("navigate", json!({"url": url}));
+    assert!(!e, "{nav}");
+    // the document + stylesheet + script: three requests issued by one navigate
+    let go = handle_of(&nav, "button \"Go\"");
+    let (e, t) = c.tool("act", json!({"handle": go, "action": "click", "page": page_of(&nav)}));
+    assert!(!e, "{t}");
+    let log = log_lines(&dir);
+    assert_eq!(log.len(), 2, "{log:?}");
+    let nav_req = log[0]["req"].as_array().unwrap();
+    assert!(nav_req.len() >= 3, "navigate of a 2-subresource page must log its requests: {nav_req:?}");
+    // ids are unique and increasing within the navigate
+    let ids: Vec<u64> = nav_req.iter().map(|v| v.as_u64().unwrap()).collect();
+    assert!(ids.windows(2).all(|w| w[0] < w[1]), "{ids:?}");
+    // a click with no handler touches no network: nothing from the navigate leaks into it
+    assert_eq!(log[1]["req"], json!([]), "{:?}", log[1]);
+}

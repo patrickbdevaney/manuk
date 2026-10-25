@@ -874,6 +874,27 @@ pub static FETCH_DUPES: std::sync::atomic::AtomicUsize = std::sync::atomic::Atom
 pub static NET_REQUESTS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 /// The same URL put on the wire **twice** in one navigation. This is the one that must be zero.
 pub static NET_DUPES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+/// W3.5.a: a process-wide, monotonically increasing id for every request that reaches the wire, and
+/// the ids issued since the last [`take_request_ids`]. Ids are never reused and never reset, so a
+/// caller can attribute requests to the call that issued them by draining before and after it.
+static REQ_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static REQ_ISSUED: std::sync::Mutex<Vec<u64>> = std::sync::Mutex::new(Vec::new());
+/// A caller that never drains must not grow this without bound: past the cap the oldest half goes.
+const REQ_ISSUED_CAP: usize = 65_536;
+fn issue_request_id() {
+    let id = REQ_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+    let mut v = REQ_ISSUED.lock().unwrap();
+    if v.len() >= REQ_ISSUED_CAP {
+        v.drain(..REQ_ISSUED_CAP / 2);
+    }
+    v.push(id);
+}
+/// The wire request ids issued since the last call, oldest first. Draining is the take-since API:
+/// `take_request_ids()` before a call discards strangers, `take_request_ids()` after it is the call's
+/// own requests. Ids are process-global, so two calls running at once can see each other's requests.
+pub fn take_request_ids() -> Vec<u64> {
+    std::mem::take(&mut *REQ_ISSUED.lock().unwrap())
+}
 static NETWORKED: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> =
     std::sync::OnceLock::new();
 /// Per-URL locks, so two concurrent callers for one URL make ONE request. See `fetch`.
@@ -1432,6 +1453,7 @@ pub async fn fetch_document_or_download(url: &str, dir: &std::path::Path) -> Res
     // Wire accounting — identical to `fetch_inner`, so G_DEDUP and the request counters see this
     // navigation exactly as they did before the split.
     NET_REQUESTS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    issue_request_id();
     {
         let netted = NETWORKED.get_or_init(Default::default);
         let mut g = netted.lock().unwrap();
@@ -1698,6 +1720,7 @@ async fn fetch_inner(url: &str, initiator: Option<&Url>) -> Result<Response> {
     //
     // So the wire is counted here, past the cache, and G_DEDUP asserts on THIS.
     NET_REQUESTS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    issue_request_id();
     {
         let netted = NETWORKED.get_or_init(Default::default);
         let mut g = netted.lock().unwrap();
