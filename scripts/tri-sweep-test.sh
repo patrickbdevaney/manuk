@@ -25,6 +25,7 @@ case "$*" in
   *m1crash*) kill -SEGV $$;;
   *m1nav*) echo "fetch http://m1nav.test/ failed: dns error"; exit 0;;
   *m1bot*) echo "UNMEASURABLE [bot-wall-403]: the origin answered 403 and refused this client" >&2; exit 0;;
+  *m1waf*) printf 'HTTP/2 202\nx-amzn-waf-action: challenge\n' >&2; echo "UNMEASURABLE [empty-202]: the origin answered 202 with a ZERO-BYTE body" >&2; exit 0;;
   *m1blank*) echo "UNMEASURABLE [empty-202]: the origin answered 202 with a ZERO-BYTE body" >&2; exit 0;;
   *m1empty*) echo "nothing useful"; exit 0;;
 esac
@@ -32,10 +33,10 @@ echo "structural: 90.0% (oracle 50 paths) SHAPE: 80.0% within 4px MEAN VISUAL: 0
 F
 chmod +x "$T"/dp "$T"/ax "$T"/mw
 printf 'cat\thttp://ok.test/\ncat\thttp://navfail.test/\ncat\thttp://hang.test/\ncat\thttp://crash.test/\n' > "$T/corpus"
-printf 'cat\thttp://m1hang.test/\ncat\thttp://m1crash.test/\ncat\thttp://m1nav.test/\ncat\thttp://m1empty.test/\ncat\thttp://m1bot.test/\ncat\thttp://m1blank.test/\n' >> "$T/corpus"
+printf 'cat\thttp://m1hang.test/\ncat\thttp://m1crash.test/\ncat\thttp://m1nav.test/\ncat\thttp://m1empty.test/\ncat\thttp://m1bot.test/\ncat\thttp://m1blank.test/\ncat\thttp://m1waf.test/\n' >> "$T/corpus"
 MW="$T/mw" DP="$T/dp" AX="$T/ax" TRI_NO_CHROME_CHECK=1 PERSIST="$T/persist" MANUK_CHROME_PIN=testpin \
   "$R/scripts/tri-sweep.sh" --corpus "$T/corpus" --out "$T/out" --m1-timeout 2 --m2-timeout 2 --a11y-timeout 2 --jobs 2 >"$T/log" 2>&1
-F=$(ls "$T"/persist/tri-sweep-*.tsv 2>/dev/null | head -1); fail=0
+F=$(ls "$T"/persist/tri-sweep-*.tsv 2>/dev/null | grep -v attrib | head -1); fail=0
 chk() { if [ "$2" = "$3" ]; then echo "ok   $1"; else echo "FAIL $1: want '$3' got '$2'"; fail=1; fi; }
 [ -n "$F" ] || { echo "FAIL no persisted file"; cat "$T/log"; exit 1; }
 tag() { awk -F'\t' -v u="$1" '$2==u{print $8}' "$F"; }
@@ -52,7 +53,8 @@ chk m1_NAVFAIL "$(m1 http://m1nav.test/)" NAVFAIL
 chk m1_EMPTY   "$(m1 http://m1empty.test/)" EMPTY
 chk m1_BOTWALL "$(m1 http://m1bot.test/)" BOTWALL
 chk m1_BLANK   "$(m1 http://m1blank.test/)" BLANK
+chk m1_BOTWALL_waf "$(m1 http://m1waf.test/)" BOTWALL
 chk m1_none_unreachable "$(awk -F'\t' '$3=="UNREACHABLE"' "$F"|wc -l)" 0
-chk m1_stderr_kept "$(cat "$T"/out/err/*.m1.log|grep -c stderr-m1)" 10
+chk m1_stderr_kept "$(cat "$T"/out/err/*.m1.log|grep -c stderr-m1)" 11
 n=$(cat "$T"/out/err/*.m2.log 2>/dev/null | grep -c stderr-marker); chk stderr_captured "$n" 4
 exit $fail

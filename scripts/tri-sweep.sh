@@ -60,6 +60,8 @@ run_m1() {
   elif [ -n "${vis:-}" ]; then st=NO_STRUCT
   elif printf '%s' "$o"|grep -qiE 'fetch.*failed|FETCH FAILED|navigation|dns error|connection refused'; then st=NAVFAIL
   elif printf '%s' "$o"|grep -qE 'UNMEASURABLE \[bot-wall-[0-9]+\]'; then st=BOTWALL
+  # R0.4.a.a.a.b.a.b: a WAF challenge (x-amzn-waf-action: challenge) with an empty 202 is a bot wall, not a blank render
+  elif printf '%s' "$o"|grep -qiE 'x-amzn-waf-action: *challenge'; then st=BOTWALL
   elif printf '%s' "$o"|grep -qE 'UNMEASURABLE \[empty-[0-9]+\]'; then st=BLANK
   else st=EMPTY; fi
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$cat" "$url" "$st" "${cov:-}" "${shape:-}" "${vis:-}" "${paths:-0}" >> "$M1M2"
