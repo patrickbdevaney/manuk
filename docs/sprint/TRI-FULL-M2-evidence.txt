@@ -1,0 +1,24 @@
+# re-drive of the 17 non-OK M2 sites: target/release/drive-probe <url>, timeout 90, nice 15, 4 parallel, 2026-10-25, chrome_ver=145.0.7632.116
+# format: <url> <exit code> <wall seconds>   (exit 0 = row printed; 139 = SIGSEGV/abort)
+https://berkeley.edu/ 0 10
+https://pagerduty.com/ 0 14
+https://tailwindcss.com/ 0 15
+https://wikihow.com/ 0 15
+https://reactjs.org/ 0 18
+https://gizmodo.com/ 0 20
+https://time.com/ 0 20
+https://sentry.io/ 0 29
+https://wired.com/ 139 31
+https://nasa.gov/ 0 32
+https://bonappetit.com/ 0 37
+https://newyorker.com/ 0 37
+https://newrelic.com/ 0 50
+https://github.com/ 0 54
+https://wix.com/ 0 61
+https://salesforce.com/ 0 78
+https://rottentomatoes.com/ 0 85
+# wired.com stderr (verbatim):
+thread 'main' has overflowed its stack
+fatal runtime error: stack overflow, aborting
+Redirecting call to abort() to mozalloc_abort
+timeout: the monitored command dumped core
