@@ -115,3 +115,26 @@ For each run the 11 paths-diff keys were looked up in the post-JS DOM (`scripts/
 Result: absent: 0/220 key-slots over 20 runs. All 20 Chrome-received byte files equal the engine-fetch sha (34f9e0bd13c4), and all 20 post-JS DOMs hold 11/11 keys.
 Six distinct post-JS DOM shas (a650b484f51b x8, d6eea14d914e x4, 04aec89ffa06 x5, 78fe153b0f79, baf2422510d7, 69504d6c8a7e), so the DOM varies run to run but the 11 keys never drop out.
 The 82.1 shape run (oracle sha a6a6db2122b8, 307 lines) was not reproduced in these 20 runs or in the 2 earlier captures: its absence is rare or depends on something this capture does not do (the tri-sweep oracle, its own wait point, or the viewport), and that is not established here.
+
+## Small oracle DOM inside the tri-sweep oracle (R0.4.a.b.a.a.a.a.a.a.a.a)
+
+12 fresh `tri-sweep.sh` runs of usa.gov alone (`--no-a11y --no-m2`), chrome_ver=145.0.7632.116; sidecars and oracle path files in `docs/bench/oracle-freq/`. Gate: `scripts/usagov-oracle-freq-test.sh`.
+
+<!-- oracle-freq:begin | run | oracle sha (12) | keys present (of 11) -->
+| run | oracle sha (12) | keys present (of 11) |
+|---|---|---|
+| 20261025-071059 | 2286d97a1714 | 11 |
+| 20261025-071118 | 2286d97a1714 | 11 |
+| 20261025-071136 | 2286d97a1714 | 11 |
+| 20261025-071156 | 2286d97a1714 | 11 |
+| 20261025-071213 | 2286d97a1714 | 11 |
+| 20261025-071231 | 2286d97a1714 | 11 |
+| 20261025-071250 | 2286d97a1714 | 11 |
+| 20261025-071313 | 2286d97a1714 | 11 |
+| 20261025-071333 | 2286d97a1714 | 11 |
+| 20261025-071351 | a6a6db2122b8 | 0 |
+| 20261025-071411 | 2286d97a1714 | 11 |
+| 20261025-071430 | 2286d97a1714 | 11 |
+<!-- oracle-freq:end -->
+
+Result: small DOM (a6a6db2122b8) in 1/12 fresh tri-sweep runs (run 20261025-071351; 307 oracle lines, 0 of the 11 keys); the other 11 runs hit the larger DOM (2286d97a1714, 318 lines, 11/11 keys). Standalone Chrome captures (22) never lost the keys, so the drop is rare (~1 in 12) and arises in the tri-sweep oracle path, where the same run's engine fetch is byte-identical to the others; the specific cause (wait point, viewport, load order) is not yet established.
