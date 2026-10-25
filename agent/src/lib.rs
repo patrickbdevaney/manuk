@@ -633,6 +633,19 @@ impl AgentBrowser {
         // remains the surface for a caller that wants to disambiguate before acting. Refusing here
         // would turn every two-similar-buttons page into an error where the previous behaviour at
         // least picked one.
+        // An exact accessible-name match of the requested role outranks the fuzzy scorer. The
+        // scorer's keywords drop 1-char tokens, so `Radio A`/`Radio B`/`Radio C` tie on `radio`
+        // alone (t1402). Only taken when unambiguous; otherwise fall through.
+        {
+            let norm = |s: &str| s.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase();
+            let want = norm(name);
+            let mut hit = tree.iter().filter(|n| n.role.matches(role) && norm(&n.name) == want);
+            if let (Some(n), None) = (hit.next(), hit.next()) {
+                if !want.is_empty() {
+                    return Ok(n.node);
+                }
+            }
+        }
         let viewport = manuk_a11y::Rect {
             x: 0.0,
             y: self.scroll_y,

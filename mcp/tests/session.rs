@@ -106,11 +106,14 @@ fn scripted_session_navigates_clicks_and_reads_the_diff() {
     let (err, t) = c.tool("type", json!({"handle": q, "text": "7"}));
     assert!(!err, "{t}");
     assert!(t.contains("=2→7") || t.contains("=1→7"), "{t}");
+    // R1.2: the change is a `~` line carrying the SAME handle the agent typed into
+    assert!(t.lines().any(|l| l.starts_with(&format!("~[{q}]")) && l.contains('→')), "no ~[{q}] line:\n{t}");
 
     // checkbox toggles and is verified through state, idempotently
     let gift = handle_of(&full, "checkbox");
     let (_, on) = c.tool("act", json!({"handle": gift, "action": "check"}));
     assert!(on.contains("unchecked]→[checked") || on.contains("checked"), "{on}");
+    assert!(on.lines().any(|l| l.starts_with(&format!("~[{gift}]"))), "no ~[{gift}] line:\n{on}");
     let (_, again) = c.tool("act", json!({"handle": gift, "action": "check"}));
     assert!(again.contains("already checked"), "{again}");
 
