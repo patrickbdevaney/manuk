@@ -2876,6 +2876,7 @@
 
   - L5 · Mechanism (engine/net/src/lib.rs, engine/page/src/lib.rs)
   - L19 · Limits
+  - L24 · PERF.1.1.a — the early scan (fonts and images start at parse time)
 
 ## One flag in the oracle's command line — and two refusal cohorts stop existing
 `docs/wiki/one-flag-in-the-oracles-command-line.md`
@@ -3717,4 +3718,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3064 sections across 162 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3065 sections across 162 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

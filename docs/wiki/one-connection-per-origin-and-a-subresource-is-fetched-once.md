@@ -20,3 +20,15 @@
 
 An HTTP/1.1 origin is still six-wide, and fonts/images still start only after cascade/layout (a serial waterfall Chrome
 overlaps with its preload scanner) - that is the remaining subres_fetch gap.
+
+## PERF.1.1.a — the early scan (fonts and images start at parse time)
+
+`load_async` already warmed external CSS before the parse. It now also warms (a) every `<img>` URL
+(srcset/`<picture>` chosen by `select_image_url`, http(s) only, first 48 distinct) right after
+`manuk_html::parse`, and (b) each stylesheet's `@font-face` first `src` the moment the sheet text lands
+(`warm_font_faces`; skips `unicode-range` subsets and `.eot`). Both only call `manuk_net::fetch`, so the
+later `fetch_and_apply_*` passes get the bytes from the HTTP cache or park on the single-flight lock:
+nothing is requested twice and nothing is applied early. `MANUK_NO_EARLY_SCAN=1` turns it off (the gate's
+mutant arm). Measured paired (`scripts/perf1-ab.py`, interleaved per URL/run): Σ subres_fetch 19.90 vs
+23.09 s and 22.56 vs 26.55 s (ratio 0.862, 0.850; the node's 0.8x bar was NOT met).
+Gotcha: `resolve_url` percent-encodes the `?` of `x.eot?v=1` so an `ends_with(".eot")` test misses it.

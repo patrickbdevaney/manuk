@@ -1904,6 +1904,71 @@ fn selected_image_urls(
     }
 }
 
+/// PERF.1.1.a: the early scan is on unless `MANUK_NO_EARLY_SCAN` is set (the gate's mutant arm).
+fn early_scan_enabled() -> bool {
+    std::env::var_os("MANUK_NO_EARLY_SCAN").is_none()
+}
+
+/// **Start the images' fetches at parse time.** They used to begin only after `subframes
+/// (pre-load)` — after every cascade, layout and blocking script — a serial waterfall Chrome's
+/// preload scanner overlaps. This only WARMS: the later `fetch_and_apply_images` asks for the same
+/// URLs and takes the result from the HTTP cache, or waits on `manuk_net`'s single-flight lock if the
+/// warm request is still in the air, so nothing is requested twice and nothing is applied early.
+fn warm_images(dom: &Dom, base: &str) {
+    if !early_scan_enabled() {
+        return;
+    }
+    let Ok(handle) = tokio::runtime::Handle::try_current() else {
+        return;
+    };
+    let mut seen = std::collections::HashSet::new();
+    for sub in collect_subresources(dom, base)
+        .into_iter()
+        .filter(|s| s.kind == SubresourceKind::Image)
+        .filter(|s| s.url.starts_with("http://") || s.url.starts_with("https://"))
+        .filter(|s| seen.insert(s.url.clone()))
+        .take(48)
+    {
+        handle.spawn(async move {
+            let _ = manuk_net::fetch(&sub.url).await;
+        });
+    }
+}
+
+/// **Start a stylesheet's web fonts the moment the sheet lands**, not after the document has been
+/// parsed, scripted and laid out. Only each face's first `src` (what `fetch_and_apply_stylesheets`
+/// asks for first) and only faces without a `unicode-range` (a subset the page may not need must not
+/// be fetched speculatively). Same single-flight contract as [`warm_images`].
+fn warm_font_faces(css: &str, sheet_url: &str) {
+    if !early_scan_enabled() {
+        return;
+    }
+    let Ok(handle) = tokio::runtime::Handle::try_current() else {
+        return;
+    };
+    let mut seen = std::collections::HashSet::new();
+    for ff in Stylesheet::parse(css).font_faces() {
+        if ff.unicode_range.is_some() {
+            continue;
+        }
+        let Some(first) = ff.srcs.first() else {
+            continue;
+        };
+        let url = resolve_url(sheet_url, first);
+        // `contains`, not `ends_with`: resolution percent-encodes the `?v=` of `x.eot?v=3.2.1`, and
+        // an undecodable format is never worth a speculative round trip.
+        if url.to_ascii_lowercase().contains(".eot")
+            || !url.starts_with("http")
+            || !seen.insert(url.clone())
+        {
+            continue;
+        }
+        handle.spawn(async move {
+            let _ = manuk_net::fetch(&url).await;
+        });
+    }
+}
+
 fn collect_subresources(dom: &Dom, base: &str) -> Vec<Subresource> {
     let attr = |n: NodeId, name: &str| {
         dom.element(n)
@@ -4320,6 +4385,7 @@ impl Page {
         }
         #[allow(unused_mut)]
         let mut dom = manuk_html::parse(html);
+        warm_images(&dom, final_url);
         // Off the real tree rather than a regex over the bytes: `collect_style_sources` already knows
         // about `media`, shadow roots and inline `<style>`, and getting the URL list wrong here would
         // fetch the wrong thing early and still look like it worked. The head start is everything
@@ -4339,10 +4405,14 @@ impl Page {
                 css_inflight.push((
                     url,
                     handle.spawn(async move {
-                        manuk_net::fetch(&u)
+                        let css = manuk_net::fetch(&u)
                             .await
                             .ok()
-                            .and_then(|r| subresource_text(&r))
+                            .and_then(|r| subresource_text(&r));
+                        if let Some(css) = &css {
+                            warm_font_faces(css, &u);
+                        }
+                        css
                     }),
                 ));
             }
