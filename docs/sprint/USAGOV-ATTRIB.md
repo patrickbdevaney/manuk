@@ -73,3 +73,11 @@ JavaScript blocked (a CSP meta, since `--disable-javascript` does not stop scrip
 | `body:nth-of-type(1)/header:nth-of-type(1)/div:nth-of-type(2)/div:nth-of-type(2)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(1)/span:nth-of-type(1)` | RAW |
 | `body:nth-of-type(1)/header:nth-of-type(1)/div:nth-of-type(2)/div:nth-of-type(2)/div:nth-of-type(1)/div:nth-of-type(1)/div:nth-of-type(1)/span:nth-of-type(1)/a:nth-of-type(1)` | RAW |
 <!-- raw-has:end -->
+
+## Chrome-received bytes (node R0.4.a.b.a.a.a.a.a.a)
+
+chrome_ver=145.0.7632.116. `scripts/usagov-chrome-bytes.py` stores the main-document bytes Chrome itself receives (CDP `Network.getResponseBody`) and the post-JS DOM,
+in `docs/bench/chrome-bytes/`. Two live captures: both Chrome-received files are byte-identical to the engine-fetch HTML (sha256 34f9e0bd13c46c13...), and in both
+post-JS DOMs all 11 keys are present. So Chrome did not get different bytes, and page JS did not remove the nodes in these captures; the small oracle DOM (82.1) was
+not reproduced (2 captures, both full-size). The 11 missing nodes in that one run came from something other than bytes or JS-removal that we have not caught.
+Gate: `scripts/usagov-live-bytes-test.sh` (edited-bytes and removed-node mutants red).
