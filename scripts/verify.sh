@@ -94,16 +94,21 @@ BLD=$'\033[1m'; YEL=$'\033[33m'; OFF=$'\033[0m'
 # already-linked binary, so the runs genuinely parallelise and the build-race false-RED cannot occur. Warm
 # runs are a no-op. No gate semantics change — same binaries, same tests, built once instead of raced. A real
 # build failure is NOT masked: `|| true` only skips the warm-up; the gate (or the workspace build) still REDs.
-for _pw in \
-  "manuk-page --features stylo,spidermonkey" \
-  "manuk-shell" \
-  "manuk-dom"; do
+#
+# ── INFRA.DISK: build ONLY the manuk-page targets the wall runs. A bare `cargo test -p manuk-page` (and the
+# `js` launch below, which had no target filter) links EVERY engine/page/tests/*.rs — one ~150 MB debug
+# binary per gate, 584 of them (~95 GB) — to run ~20. The wall's own `--test X` launches are the source of
+# truth: the prewarm list is derived from them, so a gate added below is prewarmed with no second edit.
+_PW_PAGE_TESTS=$(grep -oP '^_launch \w+ cargo test -q -p manuk-page --features stylo,spidermonkey --test \K\w+' "$0" | sort -u | sed 's/^/--test /' | tr '\n' ' ')
+# shellcheck disable=SC2086
+cargo test --no-run -q -p manuk-page --features stylo,spidermonkey --lib $_PW_PAGE_TESTS >/dev/null 2>&1 || true
+for _pw in "manuk-shell" "manuk-dom"; do
   cargo test --no-run -q -p $_pw >/dev/null 2>&1 || true
-  _PREWARM_END=$SECONDS
 done
+_PREWARM_END=$SECONDS
 
 # Launch every independent gate NOW; each block below simply collects its result.
-_launch js cargo test -q -p manuk-page --features stylo,spidermonkey -- --ignored js_conformance
+_launch js cargo test -q -p manuk-page --features stylo,spidermonkey --lib -- --ignored js_conformance
 _launch ga cargo test -q -p manuk-page --features stylo,spidermonkey --test g_alloc -- --ignored
 # ── SHELL GATES AS ONE INVOCATION (observer, tick 118). The manuk-shell gates — affordance, teardown,
 # runtime-count, tab-interact — used to run as FOUR concurrent `cargo test -p manuk-shell` processes. Under
