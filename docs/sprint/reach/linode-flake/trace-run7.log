@@ -1,0 +1,170 @@
+0	epoch	1792962021651582
+160867	dns	linode.com	160846
+222449	connect	linode.com	222432
+313850	req	https://linode.com/	0	313847	301	HTTP/1.1	0
+315518	body	https://linode.com/	0
+376572	dns	www.linode.com	60994
+503982	connect	www.linode.com	188405
+821092	req	https://www.linode.com/	315568	505521	200	HTTP/1.1	25149
+860039	body	https://www.linode.com/	161803
+866314	phase	html parse	6186
+867593	dns	rum.hlx.page	961
+886071	dns	www.linode.com	25339
+886173	dns	www.linode.com	19446
+886236	dns	www.linode.com	25385
+886302	dns	www.linode.com	25615
+886403	dns	www.linode.com	19403
+905496	dns	content.linode.com	38582
+920198	req	https://www.linode.com/etc.clientlibs/akamai/clientlibs/clientlib-base.min.f72bda36b00909c4ae4c4f98814939eb.css	860623	59574	200	HTTP/1.1	7984
+920463	body	https://www.linode.com/etc.clientlibs/akamai/clientlibs/clientlib-base.min.f72bda36b00909c4ae4c4f98814939eb.css	109034
+956643	connect	rum.hlx.page	90013
+992553	req	https://www.linode.com/etc.clientlibs/linode/clientlibs/clientlib-site.min.7705343f556aabaf680564278d560e70.css	860682	131868	200	HTTP/1.1	36762
+1006626	body	https://www.linode.com/etc.clientlibs/linode/clientlibs/clientlib-site.min.7705343f556aabaf680564278d560e70.css	262979
+1066618	req	https://www.linode.com/content/dam/site/fonts/core-icons.css	860723	205891	200	HTTP/1.1	4206
+1066753	body	https://www.linode.com/content/dam/site/fonts/core-icons.css	22959
+1076738	dns	www.linode.com	156169
+1076855	dns	www.linode.com	70079
+1095443	dns	assets.linode.com	234834
+1095519	dns	assets.linode.com	234923
+1116344	dns	www.linode.com	49454
+1125373	connect	www.linode.com	264642
+1140457	connect	www.linode.com	273730
+1182056	connect	www.linode.com	321213
+1184968	req	https://www.linode.com/etc.clientlibs/akamai/clientlibs/clientlib-amp.min.1737f0950d05feaf123798ff5f5a91cc.css	860818	324149	200	HTTP/1.1	2444
+1185077	body	https://www.linode.com/etc.clientlibs/akamai/clientlibs/clientlib-amp.min.1737f0950d05feaf123798ff5f5a91cc.css	19068
+1217333	connect	www.linode.com	356646
+1263078	connect	www.linode.com	396077
+1298341	connect	content.linode.com	431428
+1301628	req	https://www.linode.com/etc.clientlibs/core/wcm/components/commons/datalayer/v1/clientlibs/core.wcm.components.commons.datalayer.v1.min.70264651675213ed7f7cc5a02a00f621.js	1006767	294860	200	HTTP/1.1	12134
+1301829	body	https://www.linode.com/etc.clientlibs/core/wcm/components/commons/datalayer/v1/clientlibs/core.wcm.components.commons.datalayer.v1.min.70264651675213ed7f7cc5a02a00f621.js	35490
+1318988	dns	assets.adobedtm.com	452167
+1348165	dns	www.linode.com	163033
+1393701	req	https://rum.hlx.page/.rum/@adobe/helix-rum-js@%5E2/dist/micro.js	866622	527077	200	HTTP/2.0	-
+1394085	body	https://rum.hlx.page/.rum/@adobe/helix-rum-js@%5E2/dist/micro.js	843
+1724651	connect	assets.linode.com	864048
+1739472	req	https://www.linode.com/ns/ot/202508.2.0/prod/scripttemplates/otSDKStub.js	866723	872746	200	HTTP/1.1	8676
+1739620	body	https://www.linode.com/ns/ot/202508.2.0/prod/scripttemplates/otSDKStub.js	26385
+1764958	connect	www.linode.com	844390
+1790061	connect	assets.linode.com	929472
+1831177	connect	www.linode.com	824402
+1875556	req	https://www.linode.com/etc.clientlibs/linode/clientlibs/clientlib-site.min.8fd76f33f13ea372081f15f3f6cb2537.js	866992	1008562	200	HTTP/1.1	373236
+1891802	req	https://www.linode.com/etc.clientlibs/akamai/clientlibs/clientlib-base.min.4344bd7bebda13f332631463901e2120.js	920563	971238	200	HTTP/1.1	11854
+1892001	body	https://www.linode.com/etc.clientlibs/akamai/clientlibs/clientlib-base.min.4344bd7bebda13f332631463901e2120.js	47882
+1897010	connect	www.linode.com	830121
+1922246	req	https://www.linode.com/etc.clientlibs/akamai/clientlibs/clientlib-cl-qualtrics.min.df81ff64bfb78afaa4bac05ac477b553.js	1066881	855364	200	HTTP/1.1	1774
+1922322	body	https://www.linode.com/etc.clientlibs/akamai/clientlibs/clientlib-cl-qualtrics.min.df81ff64bfb78afaa4bac05ac477b553.js	6954
+2034555	req	https://www.linode.com/Of0fBLPjA/QZb9F9osS/6Ed/m8LgHc/mOONw6bpQ14QLpEr/GQ41Sg5kMgI/LxVW/AnAOOWY	1185127	849424	200	HTTP/1.1	201249
+2079566	req	https://content.linode.com/js/forms2/js/forms2.min.js	866910	1212655	200	HTTP/1.1	68655
+2129876	connect	assets.adobedtm.com	1263055
+2174918	connect	www.linode.com	989787
+2263850	req	https://assets.linode.com/fonts/source-sans-pro-v14-latin-600.woff2	860569	1403279	200	HTTP/2.0	15948
+2264026	req	https://assets.linode.com/fonts/source-sans-pro-v14-latin-regular.woff2	860586	1403438	200	HTTP/2.0	16112
+2264035	body	https://assets.linode.com/fonts/source-sans-pro-v14-latin-600.woff2	15948
+2294679	body	https://content.linode.com/js/forms2/js/forms2.min.js	206614
+2334652	body	https://assets.linode.com/fonts/source-sans-pro-v14-latin-regular.woff2	16112
+2362086	body	https://www.linode.com/Of0fBLPjA/QZb9F9osS/6Ed/m8LgHc/mOONw6bpQ14QLpEr/GQ41Sg5kMgI/LxVW/AnAOOWY	625995
+2385519	req	https://assets.adobedtm.com/fcfd3580c848/f9e7661907ee/launch-2fb69de42220.min.js	866816	1518702	200	HTTP/2.0	89387
+2412590	body	https://www.linode.com/etc.clientlibs/linode/clientlibs/clientlib-site.min.8fd76f33f13ea372081f15f3f6cb2537.js	1318007
+2571225	body	https://assets.adobedtm.com/fcfd3580c848/f9e7661907ee/launch-2fb69de42220.min.js	352398
+2692997	phase	external scripts	1826672
+2693431	phase	module graph prefetch	418
+2693460	phase	blocking stylesheets	21
+3153966	cascade	66899
+3330072	layout	176079
+3412678	cascade	58849
+3588158	layout	175456
+3805862	cascade	8166
+4464261	layout	658372
+4472718	phase	cascade+layout+blocking scripts	1779249
+4866605	cascade	62292
+5043911	layout	177279
+5052733	phase	deferred scripts	579998
+5161369	cascade	62121
+5338143	layout	176749
+5355914	phase	DOMContentLoaded	303167
+5746494	req	https://assets.linode.com/fonts/oswald-v35-latin-300.woff2	5649234	97259	200	HTTP/2.0	16352
+5752923	body	https://assets.linode.com/fonts/oswald-v35-latin-300.woff2	16352
+5784977	req	https://assets.linode.com/fonts/oswald-v35-latin-regular.woff2	5753525	31451	200	HTTP/2.0	16016
+5787306	body	https://assets.linode.com/fonts/oswald-v35-latin-regular.woff2	16016
+5850939	req	https://www.linode.com/content/dam/site/fonts/icomoon.woff2	5793098	57839	200	HTTP/1.1	41992
+5853199	body	https://www.linode.com/content/dam/site/fonts/icomoon.woff2	41964
+6105795	cascade	62203
+6185386	layout	79564
+6195308	phase	subframes (pre-load)	839376
+6249784	req	https://www.linode.com/linode/en/images/logo/akamai-cloud-logo.svg	6195549	54234	200	HTTP/1.1	3417
+6249861	body	https://www.linode.com/linode/en/images/logo/akamai-cloud-logo.svg	7978
+6254037	req	https://www.linode.com/site/en/images/promo/2025/forrester-osnap-2025.jpg	6195583	58453	200	HTTP/1.1	108522
+6271081	req	https://www.linode.com/site/en/qa/fiji-card-image-4.png	6195602	75478	200	HTTP/1.1	80704
+6272093	body	https://www.linode.com/site/en/images/promo/2025/forrester-osnap-2025.jpg	108522
+6286033	req	https://www.linode.com/linode/en/images/thumbnail/2025/ai-foundry-report-thumbnail.png	6195620	90413	200	HTTP/1.1	70750
+6298289	req	https://www.linode.com/linode/en/images/promo/distributed-cloud-taking-ai-to-the-edge.png	6195640	102648	200	HTTP/1.1	25547
+6309811	req	https://www.linode.com/linode/en/images/promo/learn-how-we-cut-our-public-cloud-spend.png	6249895	59915	200	HTTP/1.1	23918
+6310340	body	https://www.linode.com/linode/en/images/promo/learn-how-we-cut-our-public-cloud-spend.png	23918
+6327671	req	https://www.linode.com/linode/en/images/thumbnail/1-lower-your-cloud-bill-center.png	6272130	55540	200	HTTP/1.1	16108
+6327958	body	https://www.linode.com/linode/en/images/thumbnail/1-lower-your-cloud-bill-center.png	16108
+6333267	req	https://www.linode.com/linode/en/images/promo/ai-inference-efficiency-588.png	6195661	137605	200	HTTP/1.1	37558
+6338566	body	https://www.linode.com/linode/en/images/promo/distributed-cloud-taking-ai-to-the-edge.png	25547
+6372572	req	https://www.linode.com/linode/en/images/thumbnail/2-deploy-low-latency-apps-center.png	6310372	62199	200	HTTP/1.1	25245
+6373178	body	https://www.linode.com/linode/en/images/thumbnail/2-deploy-low-latency-apps-center.png	25245
+6386508	req	https://www.linode.com/linode/en/images/thumbnail/3-scale-across-the-globe-center.png	6327987	58520	200	HTTP/1.1	29782
+6389410	body	https://www.linode.com/linode/en/images/thumbnail/3-scale-across-the-globe-center.png	29782
+6393035	body	https://www.linode.com/site/en/qa/fiji-card-image-4.png	80704
+6393678	body	https://www.linode.com/linode/en/images/promo/ai-inference-efficiency-588.png	37558
+6395007	body	https://www.linode.com/linode/en/images/thumbnail/2025/ai-foundry-report-thumbnail.png	70750
+6419556	req	https://www.linode.com/linode/en/images/thumbnail/4-real-cloud-portability-center.png	6338598	80957	200	HTTP/1.1	24072
+6428347	body	https://www.linode.com/linode/en/images/thumbnail/4-real-cloud-portability-center.png	24072
+6434201	req	https://www.linode.com/linode/en/images/promo/cloud-computing-foundations-certification.png	6373208	60992	200	HTTP/1.1	303301
+6448970	req	https://www.linode.com/linode/en/images/thumbnail/learn-more-pricing.png	6389448	59521	200	HTTP/1.1	10018
+6448992	body	https://www.linode.com/linode/en/images/thumbnail/learn-more-pricing.png	10018
+6454452	req	https://www.linode.com/linode/en/images/thumbnail/learn-more-support-experience.png	6393067	61384	200	HTTP/1.1	16208
+6454484	body	https://www.linode.com/linode/en/images/thumbnail/learn-more-support-experience.png	16208
+6455412	req	https://www.linode.com/linode/en/images/logo/akamai-logo.svg	6395036	60375	200	HTTP/1.1	1665
+6455455	body	https://www.linode.com/linode/en/images/logo/akamai-logo.svg	3747
+6459791	body	https://www.linode.com/linode/en/images/promo/cloud-computing-foundations-certification.png	303301
+6463583	req	https://www.linode.com/linode/en/images/thumbnail/learn-more-developer-portal.png	6393703	69880	200	HTTP/1.1	24021
+6471472	body	https://www.linode.com/linode/en/images/thumbnail/learn-more-developer-portal.png	24021
+6618075	phase	initial images+masks	422751
+6774694	cascade	72129
+6854670	layout	79945
+6948456	cascade	66141
+7026820	layout	78332
+7225386	phase	load event	607286
+7589052	phase	finish_loading: external CSS	363628
+7630451	req	https://assets.adobedtm.com/extensions/EP31dbb9c60e404ba1aa6e746d49be6f29/AppMeasurement.min.js	7589821	40629	200	HTTP/2.0	13011
+7635364	body	https://assets.adobedtm.com/extensions/EP31dbb9c60e404ba1aa6e746d49be6f29/AppMeasurement.min.js	36178
+7668956	req	https://www.linode.com/etc.clientlibs/akamai/clientlibs/clientlib-amp.v1.js	7589842	79113	200	HTTP/1.1	226075
+7766736	req	https://content.linode.com//index.php/form/getForm?munchkinId=642-skn-449&form=9725&url=https%3A%2F%2Fwww.linode.com%2F&callback=jQuery37105473634216943893_1792962024723&_=1792962024724	7589789	176946	200	HTTP/1.1	23707
+7773741	body	https://www.linode.com/etc.clientlibs/akamai/clientlibs/clientlib-amp.v1.js	815813
+7791700	body	https://content.linode.com//index.php/form/getForm?munchkinId=642-skn-449&form=9725&url=https%3A%2F%2Fwww.linode.com%2F&callback=jQuery37105473634216943893_1792962024723&_=1792962024724	23707
+8191832	phase	finish_loading: dynamic scripts	602753
+8193324	phase	finish_loading: subframes	1465
+8249041	req	https://www.linode.com/ns/features/prod/features.json	8193506	55534	200	HTTP/1.1	1369
+8250501	body	https://www.linode.com/ns/features/prod/features.json	5919
+8250824	req	https://www.linode.com/libs/granite/csrf/token.json	8193527	57297	200	HTTP/1.1	22
+8252051	body	https://www.linode.com/libs/granite/csrf/token.json	2
+8256170	req	https://www.linode.com/linode/en/videos.videos.json	8193547	62623	200	HTTP/1.1	1601
+8257453	body	https://www.linode.com/linode/en/videos.videos.json	13857
+8315930	req	https://www.linode.com/ns/ot/202508.2.0/prod/consent/01922358-0e47-73fa-9452-fa124177d6d6/01922358-0e47-73fa-9452-fa124177d6d6.json	8193468	122461	200	HTTP/1.1	2112
+8317223	body	https://www.linode.com/ns/ot/202508.2.0/prod/consent/01922358-0e47-73fa-9452-fa124177d6d6/01922358-0e47-73fa-9452-fa124177d6d6.json	6541
+8401410	cascade	60871
+8486726	layout	85288
+8696292	req	https://www.linode.com/Of0fBLPjA/QZb9F9osS/6Ed/m8LgHc/mOONw6bpQ14QLpEr/GQ41Sg5kMgI/LxVW/AnAOOWY	8498714	197577	201	HTTP/1.1	-
+8698038	body	https://www.linode.com/Of0fBLPjA/QZb9F9osS/6Ed/m8LgHc/mOONw6bpQ14QLpEr/GQ41Sg5kMgI/LxVW/AnAOOWY	18
+8773566	req	https://www.linode.com/Of0fBLPjA/QZb9F9osS/6Ed/m8LgHc/mOONw6bpQ14QLpEr/GQ41Sg5kMgI/LxVW/AnAOOWY	8498749	274809	201	HTTP/1.1	-
+8775896	body	https://www.linode.com/Of0fBLPjA/QZb9F9osS/6Ed/m8LgHc/mOONw6bpQ14QLpEr/GQ41Sg5kMgI/LxVW/AnAOOWY	18
+8778185	phase	finish_loading: page fetches	584849
+8833280	req	https://www.linode.com/ns/features/prod/images/gpu-438.png	8778581	54697	200	HTTP/1.1	26407
+8833605	body	https://www.linode.com/ns/features/prod/images/gpu-438.png	26407
+8837347	req	https://www.linode.com/ns/features/prod/images/MRK-4404-Portability-i632x217-px.jpg	8778606	58739	200	HTTP/1.1	18959
+8838054	body	https://www.linode.com/ns/features/prod/images/MRK-4404-Portability-i632x217-px.jpg	18959
+8842748	req	https://www.linode.com/ns/features/prod/images/Cloud_Pricing_MockUp2-416x376.png	8778626	64120	200	HTTP/1.1	125541
+8881198	req	https://www.linode.com/ns/features/prod/images/hero-forge-craft-of-code-632x279.jpg	8778550	102647	200	HTTP/1.1	19760
+8883515	body	https://www.linode.com/ns/features/prod/images/hero-forge-craft-of-code-632x279.jpg	19760
+8886949	req	https://www.linode.com/ns/features/prod/images/developerHub-submenu-sm.jpg	8778647	108300	200	HTTP/1.1	20768
+8919668	body	https://www.linode.com/ns/features/prod/images/Cloud_Pricing_MockUp2-416x376.png	125541
+8921986	body	https://www.linode.com/ns/features/prod/images/developerHub-submenu-sm.jpg	20768
+9013872	phase	finish_loading: images	235674
+9013935	phase	finish_loading: icon masks	45
+9014049	phase	finish_loading: background images	108
+9024226	mark	navigate_returned
+9027965	mark	a11y_built
