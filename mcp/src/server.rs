@@ -14,7 +14,8 @@ use rmcp::{ErrorData as McpError, RoleServer, ServerHandler, ServiceExt};
 use serde_json::{json, Map, Value};
 use tokio::sync::{mpsc, oneshot};
 
-use crate::session::{Output, Session};
+use crate::hub::Hub;
+use crate::session::Output;
 use crate::Backend;
 
 type Reply = Result<Output, String>;
@@ -26,7 +27,8 @@ struct Job {
 
 /// Spawn the session thread around any backend built *on that thread* (it need not be `Send`).
 pub fn spawn_session<B: Backend + 'static>(
-    make: impl FnOnce() -> B + Send + 'static,
+    make: impl Fn() -> B + Send + 'static,
+    log_dir: Option<std::path::PathBuf>,
 ) -> mpsc::UnboundedSender<Job> {
     let (tx, mut rx) = mpsc::unbounded_channel::<Job>();
     std::thread::Builder::new()
@@ -39,7 +41,7 @@ pub fn spawn_session<B: Backend + 'static>(
                 .build()
                 .expect("session runtime");
             rt.block_on(async move {
-                let mut s = Session::new(make());
+                let mut s = Hub::new(make, log_dir);
                 while let Some(job) = rx.recv().await {
                     let r = s
                         .call(&job.tool, &job.args)
@@ -68,7 +70,12 @@ fn schema(props: Value, required: &[&str]) -> Map<String, Value> {
 }
 
 fn tools() -> Vec<Tool> {
-    let t = |n: &'static str, d: &'static str, s| Tool::new(n, d, Arc::new(s));
+    let t = |n: &'static str, d: &'static str, mut s: Map<String, Value>| {
+        if let Some(Value::Object(p)) = s.get_mut("properties") {
+            p.insert("page".into(), json!({"type": "string", "description": "page handle `<id>:<seq>` returned by the previous call (a log position: pass it back to continue, even from a new client); omit for the default page, \"new\" for a fresh one"}));
+        }
+        Tool::new(n, d, Arc::new(s))
+    };
     vec![
         t("navigate", "Load a URL. Returns the page header and a compact observation: one line per node, `[hN] role \"name\" [state]`. Handles (hN) are stable until the next navigation.", schema(json!({"url": {"type": "string"}}), &["url"])),
         t("observe", "Read the page. mode=full (default), diff (only what changed since the last observation/action), or viewport (only what is on screen). Output is capped at budget_tokens (default 8000) with a summary of anything cut.", schema(json!({"mode": {"type": "string", "enum": ["full", "diff", "viewport"]}, "budget_tokens": {"type": "integer"}, "include_hidden": {"type": "boolean", "description": "opt out of the injection shield and also return text a human cannot see (opacity 0, offscreen, tiny, camouflaged); default false"}}), &[])),
@@ -145,7 +152,8 @@ impl ServerHandler for ManukMcp {
 }
 
 pub fn run_stdio(width: u32, height: u32) -> Result<()> {
-    let tx = spawn_session(move || AgentBrowser::new(width, height));
+    let log_dir = std::env::var_os("MANUK_ACTLOG_DIR").map(std::path::PathBuf::from);
+    let tx = spawn_session(move || AgentBrowser::new(width, height), log_dir);
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
         .enable_all()

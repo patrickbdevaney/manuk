@@ -1,0 +1,209 @@
+//! W3.5: the action log and stateless page handles. Every tool call is appended to a per-page log
+//! `(seq, handle, effect-diff hash, request ids, storage hash)`; a page handle `<id>:<seq>` *is* a
+//! log position. A client that dies loses nothing: any client holding the handle can resume,
+//! because the server rebuilds the page by replaying the persisted log (and refuses to continue if
+//! a replayed step's hash no longer matches what was recorded). No `Mcp-Session-Id` is involved.
+
+use std::collections::HashMap;
+use std::path::PathBuf;
+
+use serde_json::{json, Map, Value};
+
+use crate::session::{Output, Session};
+use crate::Backend;
+
+/// Calls that do not touch page state and are never logged.
+const UNLOGGED: &[&str] = &["screenshot", "storage_state"];
+
+/// FNV-1a 64: stable across builds and platforms (unlike `DefaultHasher`).
+pub fn fnv(bytes: &[u8]) -> u64 {
+    let mut h = 0xcbf29ce484222325u64;
+    for b in bytes {
+        h ^= u64::from(*b);
+        h = h.wrapping_mul(0x100000001b3);
+    }
+    h
+}
+
+#[derive(Clone, Debug)]
+pub struct Entry {
+    pub seq: u64,
+    pub tool: String,
+    pub args: Map<String, Value>,
+    pub ok: bool,
+    pub diff_hash: u64,
+    /// Network request ids issued by the call. Empty until the net layer exposes them (W3.5.a).
+    pub req: Vec<u64>,
+    pub storage_hash: u64,
+}
+
+impl Entry {
+    fn to_json(&self, page: &str) -> Value {
+        json!({"seq": self.seq, "handle": format!("{page}:{}", self.seq), "tool": self.tool,
+               "args": self.args, "ok": self.ok, "diff_hash": format!("{:016x}", self.diff_hash),
+               "req": self.req, "storage_hash": format!("{:016x}", self.storage_hash)})
+    }
+    fn from_json(v: &Value) -> Option<Entry> {
+        let hex = |k| u64::from_str_radix(v[k].as_str()?, 16).ok();
+        Some(Entry {
+            seq: v["seq"].as_u64()?,
+            tool: v["tool"].as_str()?.to_string(),
+            args: v["args"].as_object()?.clone(),
+            ok: v["ok"].as_bool()?,
+            diff_hash: hex("diff_hash")?,
+            req: v["req"].as_array()?.iter().filter_map(Value::as_u64).collect(),
+            storage_hash: hex("storage_hash")?,
+        })
+    }
+}
+
+struct Page<B: Backend> {
+    s: Session<B>,
+    log: Vec<Entry>,
+}
+
+pub struct Hub<B: Backend> {
+    make: Box<dyn Fn() -> B>,
+    dir: Option<PathBuf>,
+    pages: HashMap<String, Page<B>>,
+    default: Option<String>,
+    next: u64,
+    salt: u64,
+}
+
+fn strip_page(a: &Map<String, Value>) -> Map<String, Value> {
+    let mut a = a.clone();
+    a.remove("page");
+    a
+}
+
+impl<B: Backend> Hub<B> {
+    /// `dir`: where logs persist (`None` = in-memory only; nothing touches the disk).
+    pub fn new(make: impl Fn() -> B + 'static, dir: Option<PathBuf>) -> Self {
+        let salt = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos() as u64)
+            .unwrap_or(0)
+            ^ u64::from(std::process::id()) << 40;
+        if let Some(d) = &dir {
+            let _ = std::fs::create_dir_all(d);
+        }
+        Hub { make: Box::new(make), dir, pages: HashMap::new(), default: None, next: 0, salt }
+    }
+
+    fn fresh_id(&mut self) -> String {
+        self.next += 1;
+        format!("p{:06x}", fnv(format!("{}:{}", self.salt, self.next).as_bytes()) & 0xff_ffff)
+    }
+
+    fn path(&self, id: &str) -> Option<PathBuf> {
+        self.dir.as_ref().map(|d| d.join(format!("{id}.jsonl")))
+    }
+
+    fn storage_hash(s: &Session<B>) -> u64 {
+        s.backend()
+            .export_storage_state()
+            .ok()
+            .map(|v| fnv(v.to_string().as_bytes()))
+            .unwrap_or(0)
+    }
+
+    fn load(&self, id: &str) -> Result<Vec<Entry>, String> {
+        let p = self.path(id).ok_or_else(|| format!("unknown page {id:?} (no persisted log: set MANUK_ACTLOG_DIR)"))?;
+        let text = std::fs::read_to_string(&p).map_err(|_| format!("unknown page {id:?}: no log at {}", p.display()))?;
+        text.lines()
+            .map(|l| serde_json::from_str::<Value>(l).ok().and_then(|v| Entry::from_json(&v)).ok_or_else(|| format!("corrupt log line for {id}")))
+            .collect()
+    }
+
+    /// Run one entry's call and return `(ok, diff hash)`.
+    async fn run(s: &mut Session<B>, tool: &str, args: &Map<String, Value>) -> (Result<Output, String>, u64) {
+        let r = s.call(tool, args).await.map_err(|e| format!("{e:#}"));
+        let h = match &r {
+            Ok(Output::Text(t)) => fnv(t.as_bytes()),
+            Ok(Output::Image { png, .. }) => fnv(png),
+            Err(e) => fnv(e.as_bytes()),
+        };
+        (r, h)
+    }
+
+    /// Rebuild page `id` at position `seq` by replaying its persisted log, verifying every hash.
+    async fn resume(&mut self, id: &str, seq: u64) -> Result<(), String> {
+        let mut log = self.load(id)?;
+        if (log.len() as u64) < seq {
+            return Err(format!("page handle {id}:{seq} is ahead of its log (length {})", log.len()));
+        }
+        log.truncate(seq as usize);
+        let mut s = Session::new((self.make)());
+        for e in &log {
+            let (_, h) = Self::run(&mut s, &e.tool, &e.args).await;
+            if h != e.diff_hash || Self::storage_hash(&s) != e.storage_hash {
+                return Err(format!("REPLAY DIVERGED at {id}:{} ({}): the page no longer reproduces what was recorded; start a new page", e.seq, e.tool));
+            }
+        }
+        self.pages.insert(id.to_string(), Page { s, log });
+        Ok(())
+    }
+
+    /// `args.page`: absent = the default page; `"new"` = a fresh page; `"<id>:<seq>"` = resume/verify.
+    pub async fn call(&mut self, tool: &str, args: &Map<String, Value>) -> Result<Output, String> {
+        let want = args.get("page").and_then(Value::as_str).map(str::to_string);
+        let id = match want.as_deref() {
+            None => match &self.default {
+                Some(d) => d.clone(),
+                None => {
+                    let id = self.fresh_id();
+                    self.default = Some(id.clone());
+                    id
+                }
+            },
+            Some("new") => self.fresh_id(),
+            Some(h) => {
+                let (id, seq) = h
+                    .rsplit_once(':')
+                    .and_then(|(i, s)| Some((i, s.parse::<u64>().ok()?)))
+                    .ok_or_else(|| format!("bad page handle {h:?}: expected \"<id>:<seq>\" as returned by the last call"))?;
+                match self.pages.get(id).map(|p| p.log.len() as u64) {
+                    Some(n) if n == seq => {}
+                    Some(n) => return Err(format!("STALE page handle {h}: that page is at seq {n}; use {id}:{n}")),
+                    None => self.resume(id, seq).await?,
+                }
+                id.to_string()
+            }
+        };
+        if !self.pages.contains_key(&id) {
+            let s = Session::new((self.make)());
+            self.pages.insert(id.clone(), Page { s, log: Vec::new() });
+        }
+        let logged = !UNLOGGED.contains(&tool);
+        let a = strip_page(args);
+        let page = self.pages.get_mut(&id).unwrap();
+        let (r, h) = Self::run(&mut page.s, tool, &a).await;
+        let mut seq = page.log.len() as u64;
+        if logged {
+            seq += 1;
+            let e = Entry {
+                seq,
+                tool: tool.to_string(),
+                args: a,
+                ok: r.is_ok(),
+                diff_hash: h,
+                req: Vec::new(),
+                storage_hash: Self::storage_hash(&page.s),
+            };
+            if let Some(p) = self.path(&id) {
+                use std::io::Write;
+                if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(p) {
+                    let _ = writeln!(f, "{}", e.to_json(&id));
+                }
+            }
+            self.pages.get_mut(&id).unwrap().log.push(e);
+        }
+        let handle = format!("page: {id}:{seq}");
+        match r {
+            Ok(Output::Text(t)) => Ok(Output::Text(format!("{t}\n{handle}"))),
+            Ok(Output::Image { png, note }) => Ok(Output::Image { png, note: format!("{note}\n{handle}") }),
+            Err(e) => Err(format!("{e}\n{handle}")),
+        }
+    }
+}

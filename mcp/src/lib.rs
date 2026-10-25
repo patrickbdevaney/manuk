@@ -2,6 +2,7 @@
 //! [`backend::Backend`]; `server` is the thin rmcp stdio adapter.
 
 pub mod backend;
+pub mod hub;
 pub mod isolation;
 pub mod server;
 pub mod session;
