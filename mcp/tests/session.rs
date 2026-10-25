@@ -167,3 +167,25 @@ impl Client {
         (r["result"]["isError"].as_bool().unwrap_or(false), img)
     }
 }
+
+#[test]
+fn modal_over_a_button_is_occluded_until_dismissed() {
+    let mut c = Client::start();
+    let (_, nav) = c.tool("navigate", json!({"url": fixture("modal.html")}));
+    let buy = handle_of(&nav, "button \"Buy now\"");
+    let name = handle_of(&nav, "textbox");
+    let (err, msg) = c.tool("act", json!({"handle": buy}));
+    assert!(err && msg.contains("OCCLUDED") && msg.contains("covered by [h") && msg.contains("Sign up dialog"), "{msg}");
+    // typing into a covered field is refused too, and nothing was changed
+    let (err, msg) = c.tool("type", json!({"handle": name, "text": "x"}));
+    assert!(err && msg.contains("OCCLUDED") && msg.contains("nothing was typed"), "{msg}");
+    // dismiss the dialog, and the same handle now clicks
+    let close = handle_of(&nav, "Dismiss");
+    let (err, eff) = c.tool("act", json!({"handle": close}));
+    assert!(!err, "{eff}");
+    let (err, eff) = c.tool("act", json!({"handle": buy}));
+    assert!(!err && eff.contains("verified: target was topmost") && eff.contains("bought"), "{eff}");
+    // the dismissed dialog's own button is gone: stale, loudly
+    let (err, msg) = c.tool("act", json!({"handle": close}));
+    assert!(err && msg.contains("STALE"), "{msg}");
+}

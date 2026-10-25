@@ -112,7 +112,7 @@ impl<B: Backend> Session<B> {
     fn resolve<'t>(&self, tree: &'t A11yNode, hs: &str) -> Result<(u32, &'t A11yNode)> {
         let h = Self::parse_handle(hs)?;
         let id = self.rev.get(&h).ok_or_else(|| anyhow!("h{h} is unknown (handles are per-page; call observe to list them)"))?;
-        let n = tree.iter().find(|n| n.node == *id).ok_or_else(|| anyhow!("h{h} is stale: it is no longer on the page (call observe)"))?;
+        let n = tree.iter().find(|n| n.node == *id).ok_or_else(|| anyhow!("STALE: h{h} is no longer on the page (call observe)"))?;
         Ok((h, n))
     }
 
@@ -334,9 +334,9 @@ impl<B: Backend> Session<B> {
                     let who = tree.iter().find(|n| n.node == by).map(|n| (n.role.clone(), n.name.clone()));
                     let hb = self.handle(by);
                     let what = who.map(|(r, n)| format!("{} {:?}", role_str(&r), clip(&n))).unwrap_or_else(|| "another element".into());
-                    bail!("h{h} is covered by [h{hb}] {what}; deal with that first (nothing was clicked)");
+                    bail!("OCCLUDED: h{h} is covered by [h{hb}] {what}; deal with that first (nothing was clicked)");
                 }
-                Landing::Unreachable => bail!("h{h} has no clickable area (no box, or pointer-events:none); nothing was clicked"),
+                Landing::Unreachable => bail!("UNREACHABLE: h{h} has no clickable area (no box, or pointer-events:none); nothing was clicked"),
             }
         }
         bail!("h{h} is still off-screen after scrolling; nothing was clicked")
@@ -393,6 +393,7 @@ impl<B: Backend> Session<B> {
                     .find(|c| matches!(c.role, Role::Option) && c.name.eq_ignore_ascii_case(v))
                     .map(|c| c.node)
                     .ok_or_else(|| anyhow!("h{h} has no option named {v:?}"))?;
+                self.verify_landing(h, node)?;
                 self.b.click(opt).await?
             }
             "focus" | "hover" => bail!("action {action:?} is not supported by this backend (no focus/hover model); use click or type"),
@@ -408,6 +409,7 @@ impl<B: Backend> Session<B> {
         if n.state.disabled || n.state.readonly {
             bail!("h{h} is {}; nothing was typed", if n.state.disabled { "disabled" } else { "read-only" });
         }
+        self.verify_landing(h, node).map_err(|e| anyhow!("{}", e.to_string().replace("nothing was clicked", "nothing was typed")))?;
         let before = self.snapshot(&tree);
         let url_before = self.b.url();
         self.b.type_text(node, text)?;
