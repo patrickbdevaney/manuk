@@ -443,17 +443,49 @@ fn media_type_rejected(mime: &str) -> bool {
         .any(|c| t.contains(c))
 }
 
+/// May a document at `embedder` read the frame document at `framed` (HTML's "same origin" check for
+/// `contentDocument`)? Tuple origins must match; two local documents are one origin; a frame with no
+/// URL of its own (`about:blank`, `about:srcdoc`, empty) inherits the embedder's. `data:` is opaque
+/// and therefore cross-origin to everything, including another `data:` (W3.1).
+fn frame_same_origin(embedder: &str, framed: &str) -> bool {
+    let f = framed.trim();
+    if f.is_empty() || f.eq_ignore_ascii_case("about:blank") || f.eq_ignore_ascii_case("about:srcdoc") || f == embedder {
+        return true;
+    }
+    if manuk_net::is_local_url(embedder) && manuk_net::is_local_url(f) {
+        return true;
+    }
+    match (Url::parse(embedder), Url::parse(f)) {
+        (Ok(e), Ok(fr)) => {
+            let (eo, fo) = (e.origin(), fr.origin());
+            eo.is_tuple() && eo == fo
+        }
+        _ => false,
+    }
+}
+
 /// Resolve `href` against `base` to an absolute URL string (falling back to `href`).
 ///
 /// `pub` since t1487 so `manuk-wpt` resolves a `<meta refresh>` target with the SAME function the
 /// engine navigates by. A second URL joiner in the instrument is how the instrument and the engine
 /// come to disagree about what page they are looking at.
+///
+/// ⚠⚠⚠ **A web document never resolves into the local disk (W3.1, the same-origin floor).** A page at
+/// `https://…` that names `file:///home/u/.ssh/id_ed25519` — as a frame, a script, a stylesheet, an
+/// image, a link or a refresh target — gets `about:blank` instead, which every loader treats as
+/// nothing. Chrome refuses the same loads. A `file:` base still resolves `file:` URLs: a local page
+/// keeps its fixtures.
 pub fn resolve_url(base: &str, href: &str) -> String {
-    Url::parse(base)
-        .ok()
-        .and_then(|b| b.join(href).ok())
-        .map(|u| u.to_string())
-        .unwrap_or_else(|| href.to_string())
+    let base_url = Url::parse(base).ok();
+    let resolved = base_url.as_ref().and_then(|b| b.join(href).ok());
+    match (base_url, resolved) {
+        (Some(b), Some(u)) if b.scheme() != "file" && u.scheme() == "file" => {
+            tracing::warn!(base, href, "refused: a web document may not reference a local file (SOP floor)");
+            "about:blank".to_string()
+        }
+        (_, Some(u)) => u.to_string(),
+        _ => href.to_string(),
+    }
 }
 
 /// A URL without its `#fragment`. Two URLs that differ only here are the SAME DOCUMENT, which is
@@ -1114,6 +1146,11 @@ async fn fetch_image_bytes(url: &str) -> Option<Vec<u8>> {
     // identifies a part of the resource *after* it is retrieved (RFC 3986 §3.5) and is never sent
     // to the transport; `decode_svg` reads it back off the original URL, which is why it is stripped
     // here and not earlier.
+    // Only a LOCAL url reaches the disk, and only while a local document is being served (W3.1): an
+    // `about:`/`blob:` string used to fall through to here and be read as a relative filename.
+    if !manuk_net::is_local_url(url) || !manuk_net::local_reads_allowed() {
+        return None;
+    }
     let path = url.split('#').next().unwrap_or(url);
     let path = path.strip_prefix("file://").unwrap_or(path);
     std::fs::read(path).ok()
@@ -5477,6 +5514,18 @@ impl Page {
             })
             .collect();
         manuk_js::set_iframe_docs(m);
+        // **Which of those documents this one may not read (W3.1).** A frame from another origin is still
+        // a frame — it renders, and its `contentWindow` takes `postMessage` — but `contentDocument` is
+        // `null` and `contentWindow.document` throws, so a page cannot read a framed bank statement or
+        // a localhost admin panel. Two local documents count as one origin (the WPT suite reads its own
+        // frames from `file:` pages); `about:blank`/`srcdoc` frames inherit the embedder's origin.
+        let cross: std::collections::HashSet<usize> = self
+            .child_pages
+            .iter_mut()
+            .filter(|(_, c)| !frame_same_origin(&self.final_url, &c.final_url))
+            .map(|(_, c)| &mut *c.dom as *mut manuk_dom::Dom as usize)
+            .collect();
+        manuk_js::set_cross_origin_frames(cross);
 
         // **And each child's COMPUTED-STYLE map, keyed by its arena.** `getComputedStyle` had one
         // style map to read, so a frame element resolved against the PARENT's — the same
@@ -5713,6 +5762,19 @@ impl Page {
         }
         // One round of fetches, concurrently. A frame inside a frame is handled by the child's own
         // load — `MAX_IFRAME_DEPTH` is the fork-bomb guard.
+        // ⚠⚠⚠ **A web document may not frame the local disk (W3.1).** Checked against THIS document,
+        // not the process-wide navigation policy, because a GUI tab is not the last tab navigated.
+        let embedder_is_local = manuk_net::is_local_url(&self.final_url);
+        let pending: Vec<_> = pending
+            .into_iter()
+            .filter(|(_, url, _, _)| {
+                let ok = embedder_is_local || !manuk_net::is_local_url(url);
+                if !ok {
+                    tracing::warn!(%url, embedder = %self.final_url, "frame refused: a web document may not frame a local file (SOP floor)");
+                }
+                ok
+            })
+            .collect();
         let fetches = pending.into_iter().map(|(node, url, _w, _h)| async move {
             let (html, final_url, headers, charset) =
                 fetch_html_with_headers_named(&url).await.ok()?;
@@ -12243,6 +12305,8 @@ pub fn set_pending_identity(win_id: u64, opener_win: u64) {
 }
 
 pub async fn fetch_document(url: &str) -> Result<Loaded> {
+    // A top-level navigation decides whether this document may read the local disk (W3.1).
+    manuk_net::set_top_level_document(url);
     if url.starts_with("http://") || url.starts_with("https://") {
         // The document gets the long deadline; its subresources get the short one. A download,
         // however, is **streamed to disk** by the net layer — decision made from headers, before the
@@ -12282,6 +12346,9 @@ pub async fn fetch_document(url: &str) -> Result<Loaded> {
 }
 
 pub async fn fetch_html(url: &str) -> Result<(String, String)> {
+    // Every top-level loader that is not `fetch_document` (the agent, the CLIs, the WPT runner) comes
+    // through here; frames do not — they call `fetch_html_with_headers_named` directly (W3.1).
+    manuk_net::set_top_level_document(url);
     fetch_html_with_headers(url).await.map(|(t, u, _)| (t, u))
 }
 
@@ -12330,6 +12397,11 @@ pub async fn fetch_html_with_headers_named(
             "UTF-8".to_string(),
         ))
     } else {
+        // Only a local URL is a path, and only a local document may read one (W3.1). An `about:` or
+        // `blob:` string used to be read here as a relative FILENAME.
+        if !manuk_net::is_local_url(url) || !manuk_net::local_reads_allowed() {
+            anyhow::bail!("blocked: not a loadable document from this context: {url}");
+        }
         let path = url.strip_prefix("file://").unwrap_or(url);
         let html =
             std::fs::read_to_string(path).with_context(|| format!("reading local file {path}"))?;

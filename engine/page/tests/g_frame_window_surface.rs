@@ -48,8 +48,10 @@ use manuk_text::FontContext;
 /// The parent. The frame's content is rendered in by `render_iframe` below rather than fetched —
 /// `srcdoc` is not wired to this path, and a fixture whose frame never loads makes every claim here
 /// vacuously true, which is what `frameLoaded` guards against.
+// W3.1: this frame is SAME-ORIGIN on purpose. Since the same-origin floor a script cannot read or write a
+// cross-origin frame's document (that claim is G_SOP_FLOOR's); this gate tests frame MECHANICS, not origins.
 const PARENT: &str = r#"<!doctype html><html><body>
-  <iframe src="https://embed.test/c" id="f"></iframe>
+  <iframe src="https://parent.test/c" id="f"></iframe>
   <iframe srcdoc="<p>second</p>" id="g" name="two"></iframe>
   <div id="out">-</div>
   <script>window.__parentRan = 1;</script>
@@ -170,7 +172,7 @@ fn a_frames_window_carries_the_platform_and_still_hides_what_it_cannot_answer() 
     let mut page = manuk_page::Page::load(PARENT, "https://parent.test/", &fonts, 900.0);
     let root = page.dom().root();
     let fnode = manuk_css::query_selector_all(page.dom(), root, "#f")[0];
-    page.render_iframe(fnode, CHILD, "https://embed.test/c", &fonts, 0);
+    page.render_iframe(fnode, CHILD, "https://parent.test/c", &fonts, 0);
     page.eval_for_test(PROBE);
     let dom = page.dom();
     let out = manuk_css::query_selector_all(dom, dom.root(), "#__fws__");

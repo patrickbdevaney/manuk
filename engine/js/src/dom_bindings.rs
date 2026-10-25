@@ -1001,6 +1001,34 @@ pub fn set_iframe_docs(m: std::collections::HashMap<NodeId, (usize, NodeId)>) {
     IFRAME_DOCS.with(|c| *c.borrow_mut() = m);
 }
 
+thread_local! {
+    /// Child arenas (by address) that are a different origin from the document running script (W3.1).
+    static CROSS_ORIGIN_FRAMES: std::cell::RefCell<std::collections::HashSet<usize>> =
+        std::cell::RefCell::new(std::collections::HashSet::new());
+}
+
+/// See `manuk_js::set_cross_origin_frames`.
+pub fn set_cross_origin_frames(s: std::collections::HashSet<usize>) {
+    CROSS_ORIGIN_FRAMES.with(|c| *c.borrow_mut() = s);
+}
+
+fn frame_is_cross_origin(dom_addr: usize) -> bool {
+    CROSS_ORIGIN_FRAMES.with(|c| c.borrow().contains(&dom_addr))
+}
+
+/// `__iframeXO()` → `true` when this frame element holds a document of ANOTHER origin, so
+/// `iframe_js` can hand out a `contentWindow` that takes `postMessage` but refuses `document` (W3.1).
+unsafe fn el_frame_cross_origin(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    *vp = BooleanValue(false);
+    let Some((_, node)) = this_node(vp) else {
+        return true;
+    };
+    if let Some((dom_addr, _)) = IFRAME_DOCS.with(|c| c.borrow().get(&node).copied()) {
+        *vp = BooleanValue(frame_is_cross_origin(dom_addr));
+    }
+    true
+}
+
 /// Add ONE frame's arena without disturbing the others — the on-demand path (see
 /// [`ensure_frame_doc`]). `set_iframe_docs` replaces wholesale, which is right when the host
 /// republishes the whole child set and wrong when a single frame is being born mid-script.
@@ -5254,6 +5282,7 @@ unsafe fn define_members(
         // The nested browsing context. `null` on anything that is not a frame — see `iframe_js`, which
         // puts the `contentDocument`/`contentWindow` IDL surface on top of this one native.
         def_guarded!(def, c"__iframeDoc", el_content_document, 0);
+        def_guarded!(def, c"__iframeXO", el_frame_cross_origin, 0);
         // DOM tree mutation + cloning.
         def_guarded!(def, c"insertBefore", el_insert_before, 2);
         def_guarded!(def, c"moveBefore", el_move_before, 2);
@@ -7435,6 +7464,12 @@ unsafe fn el_content_document(cx: *mut RawJSContext, _argc: u32, vp: *mut Value)
     // The registry is the safety property, not the pointer: an arena whose `Page` has been dropped is not
     // a document, it is a use-after-free, and `is_alive()` cannot save you if you ask the wrong arena.
     if !dom_is_live(child) {
+        return true;
+    }
+    // ⚠⚠⚠ **Another origin's document is not this page's to read (W3.1).** Single-realm frames made
+    // `contentDocument` hand any page the full DOM of any frame — a localhost admin panel, a logged-in
+    // bank, a `file:` path. HTML says `null` for a cross-origin frame; so does this.
+    if frame_is_cross_origin(dom_addr) {
         return true;
     }
     // **ONE document object per frame — `f.contentDocument === f.contentDocument`.**

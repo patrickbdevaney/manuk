@@ -61,9 +61,11 @@ use manuk_text::FontContext;
 #[test]
 fn a_frames_window_and_document_have_stable_identity() {
     let fonts = FontContext::new();
+    // W3.1: this frame is SAME-ORIGIN on purpose. Since the same-origin floor a script cannot read or write a
+    // cross-origin frame's document (that claim is G_SOP_FLOOR's); this gate tests frame MECHANICS, not origins.
     let mut fr = manuk_page::Page::load(
         r#"<!doctype html><html><body>
-             <iframe src="https://embed.test/c" id="f"></iframe>
+             <iframe src="https://parent.test/c" id="f"></iframe>
              <script>window.__x = 1;</script>
            </body></html>"#,
         "https://parent.test/",
@@ -75,7 +77,7 @@ fn a_frames_window_and_document_have_stable_identity() {
     fr.render_iframe(
         fnode,
         r#"<!doctype html><html><body><div id="d">x</div></body></html>"#,
-        "https://embed.test/c",
+        "https://parent.test/c",
         &fonts,
         0,
     );

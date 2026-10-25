@@ -60,7 +60,9 @@ fn a_frames_pixels_follow_its_document() {
     let frame = manuk_css::query_selector_all(page.dom(), root, "#f")[0];
 
     // Load the frame's document the way the sync path does (no async runtime in a gate).
-    page.render_iframe(frame, FRAME_HTML, "https://bank.test/3ds", &fonts, 0);
+    // W3.1: this frame is SAME-ORIGIN on purpose. Since the same-origin floor a script cannot read or write a
+    // cross-origin frame's document (that claim is G_SOP_FLOOR's); this gate tests frame MECHANICS, not origins.
+    page.render_iframe(frame, FRAME_HTML, "https://shop.test/3ds", &fonts, 0);
 
     let before = frame_ink(&page, frame).expect(
         "the frame must paint at all — without a bitmap there is nothing on screen for the embed",

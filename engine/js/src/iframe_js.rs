@@ -109,6 +109,24 @@ pub const IFRAME_JS: &str = r#"
     get: function () {
       var d = frameDoc(this);
       if (d === undefined) return undefined;
+      // **A frame of ANOTHER origin still has a window (W3.1).** Embeds talk to their frames through
+      // `frame.contentWindow.postMessage(...)` — OAuth, payments, video players — so the window stays,
+      // but its document is not this page's to read: `document` throws `SecurityError`, as HTML says.
+      if (d === null && this.__iframeXO && this.__iframeXO()) {
+        if (this.__manukXOWin) { return this.__manukXOWin; }
+        var xo = {
+          get document() {
+            throw new DOMException("Blocked a frame from accessing a cross-origin frame.", "SecurityError");
+          },
+          postMessage: function () {},
+          addEventListener: function () {},
+          removeEventListener: function () {},
+          closed: false
+        };
+        xo.window = xo; xo.self = xo; xo.frames = xo;
+        Object.defineProperty(this, '__manukXOWin', { value: xo, configurable: true });
+        return xo;
+      }
       if (d === null) return null;
       var el = this;
       // **ONE window object per frame.** This built a fresh object literal on EVERY read, so

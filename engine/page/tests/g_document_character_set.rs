@@ -27,8 +27,10 @@
 
 use manuk_text::FontContext;
 
+// W3.1: this frame is SAME-ORIGIN on purpose. Since the same-origin floor a script cannot read or write a
+// cross-origin frame's document (that claim is G_SOP_FLOOR's); this gate tests frame MECHANICS, not origins.
 const PARENT: &str = r#"<!doctype html><html><body>
-  <iframe src="https://embed.test/a" id="f"></iframe>
+  <iframe src="https://parent.test/a" id="f"></iframe>
   <script>window.__ran = 1;</script>
 </body></html>"#;
 
@@ -38,7 +40,7 @@ fn charset_probe(cs: Option<&str>, fonts: &FontContext) -> String {
     let mut page = manuk_page::Page::load(PARENT, "https://parent.test/", fonts, 900.0);
     let root = page.dom().root();
     let fnode = manuk_css::query_selector_all(page.dom(), root, "#f")[0];
-    page.render_iframe_with_type(fnode, CHILD, "https://embed.test/a", fonts, 0, None, cs);
+    page.render_iframe_with_type(fnode, CHILD, "https://parent.test/a", fonts, 0, None, cs);
     page.eval_for_test(
         r#"var d = document.getElementById('f').contentDocument;
            var r = d ? (d.characterSet + '|' + d.charset + '|' + d.inputEncoding) : 'NODOC';

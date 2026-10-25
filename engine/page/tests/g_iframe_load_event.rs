@@ -175,7 +175,9 @@ fn an_iframe_fires_load_on_its_element() {
     //    fire `load` again. `render_iframe` is the ONE place a child document is installed — the
     //    fetched path, the network-free `srcdoc`/`about:blank` path and every direct caller all
     //    arrive there, which is why driving it here exercises the real wiring.
-    page.render_iframe(frame_a, CHILD, "https://embed.test/a", &fonts, 0);
+    // W3.1: this frame is SAME-ORIGIN on purpose. Since the same-origin floor a script cannot read or write a
+    // cross-origin frame's document (that claim is G_SOP_FLOOR's); this gate tests frame MECHANICS, not origins.
+    page.render_iframe(frame_a, CHILD, "https://frame.test/a", &fonts, 0);
     let stage2 = read(&page);
     println!("G_IFRAME_LOAD_EVENT STAGE2: {stage2}");
     assert!(
@@ -200,7 +202,7 @@ fn an_iframe_fires_load_on_its_element() {
 
     // ── STAGE 3 — the other delivery path, driven the same way. An inline attribute handler and a
     //    registered listener are separate wiring and either could work without the other.
-    page.render_iframe(frame_b, CHILD, "https://embed.test/b", &fonts, 0);
+    page.render_iframe(frame_b, CHILD, "https://frame.test/b", &fonts, 0);
     let stage3 = read(&page);
     println!("G_IFRAME_LOAD_EVENT STAGE3: {stage3}");
     assert!(

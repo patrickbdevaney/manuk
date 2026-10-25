@@ -1140,6 +1140,10 @@ pub async fn post_document(
                 .final_url
                 .join(loc)
                 .with_context(|| format!("bad redirect Location {loc:?} from POST {url}"))?;
+            // A network response never gets to redirect into the local disk (W3.1).
+            if next.scheme() == "file" {
+                bail!("blocked: redirect from {url} into a local file: {next}");
+            }
             return fetch_with_deadline(next.as_str(), deadline, None).await;
         }
     }
@@ -1335,6 +1339,39 @@ async fn stream_attachment_to_disk<R: tokio::io::AsyncRead + Unpin>(
     Ok((dest, filename, bytes))
 }
 
+/// Is the top-level document a **web** document (anything but a `file:` URL or a bare local path)?
+/// Set at every top-level navigation by [`set_top_level_document`]; read by every local-file loader.
+static WEB_DOCUMENT_ACTIVE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// `true` for a URL that names the local disk: `file:` or a bare path with no scheme at all.
+/// `data:`/`about:`/`blob:` are NOT local — they are opaque origins and get no disk access.
+pub fn is_local_url(url: &str) -> bool {
+    let u = url.trim_start();
+    if u.len() >= 5 && u[..5].eq_ignore_ascii_case("file:") {
+        return true;
+    }
+    // A scheme is `alpha *( alpha / digit / "+" / "-" / "." ) ":"`; a Windows drive letter is a path.
+    match u.find(':') {
+        Some(i) if i > 1 => !u[..i]
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.')),
+        _ => true,
+    }
+}
+
+/// **Record the document a top-level navigation is committing to.** A local document may read local
+/// files; a web document may not. One page per process (the agent, the MCP server, the CLIs) makes
+/// this exact; in the multi-tab GUI it names the most recent navigation, which is why the frame
+/// loader and `contentDocument` ALSO check the embedding document directly rather than trusting it.
+pub fn set_top_level_document(url: &str) {
+    WEB_DOCUMENT_ACTIVE.store(!is_local_url(url), std::sync::atomic::Ordering::SeqCst);
+}
+
+/// May a loader that carries no initiator read the local disk right now? See [`set_top_level_document`].
+pub fn local_reads_allowed() -> bool {
+    !WEB_DOCUMENT_ACTIVE.load(std::sync::atomic::Ordering::SeqCst)
+}
+
 /// **`file://` — reading a local file, which is a thing a browser does.**
 ///
 /// This scheme was rejected outright (`unsupported URL scheme: file`), and the consequence was much
@@ -1350,7 +1387,18 @@ async fn stream_attachment_to_disk<R: tokio::io::AsyncRead + Unpin>(
 ///
 /// No deadline is applied: a local read is not a network request, and a timeout on it would only ever
 /// fire spuriously.
-async fn fetch_file(url: &Url) -> Result<Response> {
+///
+/// ⚠⚠⚠ **A WEB PAGE MAY NOT READ THE DISK (W3.1, the same-origin floor).** This function used to serve
+/// `file:` to anyone who asked, so `<iframe src="file:///home/u/.ssh/id_ed25519">` on any website loaded
+/// the key into a document the page could read. A `file:` read is now refused when the request was made
+/// on behalf of a web document — named by `initiator`, or, for the loaders that carry none, by the
+/// top-level document [`set_top_level_document`] last committed. A local page still reads its own
+/// fixtures, which is the case the paragraphs above were written for.
+async fn fetch_file(url: &Url, initiator: Option<&Url>) -> Result<Response> {
+    if initiator.is_some_and(|i| i.scheme() != "file") || !local_reads_allowed() {
+        tracing::warn!(%url, "file: read refused — the requesting document is not a local file (SOP floor)");
+        bail!("blocked: a web document may not read local files: {url}");
+    }
     let path = url
         .to_file_path()
         .map_err(|_| anyhow::anyhow!("not a readable file path: {url}"))?;
@@ -1374,7 +1422,7 @@ async fn fetch_with_deadline(
 ) -> Result<Response> {
     if let Ok(u) = Url::parse(url) {
         if u.scheme() == "file" {
-            return fetch_file(&u).await;
+            return fetch_file(&u, initiator).await;
         }
     }
     match tokio::time::timeout(d, fetch_inner(url, initiator)).await {

@@ -35,8 +35,10 @@
 
 use manuk_text::FontContext;
 
+// W3.1: this frame is SAME-ORIGIN on purpose. Since the same-origin floor a script cannot read or write a
+// cross-origin frame's document (that claim is G_SOP_FLOOR's); this gate tests frame MECHANICS, not origins.
 const PARENT: &str = r#"<!doctype html><html><body>
-  <iframe src="https://embed.test/a" id="f"></iframe>
+  <iframe src="https://parent.test/a" id="f"></iframe>
   <script>window.__ran = 1;</script>
 </body></html>"#;
 
@@ -65,7 +67,7 @@ fn frame_probe(
     page.render_iframe_with_type(
         fnode,
         child,
-        "https://embed.test/a",
+        "https://parent.test/a",
         fonts,
         0,
         content_type,

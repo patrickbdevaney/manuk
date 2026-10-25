@@ -794,6 +794,16 @@ pub fn set_iframe_docs(
 ) {
 }
 
+/// **The child arenas whose documents the current page may NOT read** — cross-origin frames (W3.1).
+/// `contentDocument` answers `null` for them and `contentWindow.document` throws `SecurityError`.
+#[cfg(feature = "_sm")]
+pub fn set_cross_origin_frames(s: std::collections::HashSet<usize>) {
+    dom_bindings::set_cross_origin_frames(s);
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn set_cross_origin_frames(_s: std::collections::HashSet<usize>) {}
+
 /// **Each live child arena's computed-style map, keyed by the arena's address.**
 ///
 /// `getComputedStyle` had exactly one style map to read (`STYLES_PTR`), so a frame element's

@@ -164,9 +164,11 @@ fn iframes_have_a_box_show_their_document_and_do_not_block_paint() {
     //        The child document was always built and then thrown away; this pins that it survives, that
     //        a reflector resolves against ITS OWN arena (not the parent's — the bug that made this
     //        impossible), and that node identity across the document boundary holds.
+    // W3.1: this frame is SAME-ORIGIN on purpose. Since the same-origin floor a script cannot read or write a
+    // cross-origin frame's document (that claim is G_SOP_FLOOR's); this gate tests frame MECHANICS, not origins.
     let mut fr = manuk_page::Page::load(
         r#"<!doctype html><html><body>
-             <iframe src="https://embed.test/child" id="f"></iframe>
+             <iframe src="https://parent.test/child" id="f"></iframe>
              <span id="p">parent-span</span>
              <script>window.__x = 1;</script>
            </body></html>"#,
@@ -180,7 +182,7 @@ fn iframes_have_a_box_show_their_document_and_do_not_block_paint() {
         fnode,
         r#"<!doctype html><html><head><title>frame-title</title></head>
              <body><span data-cp="A7">child-a</span> <span data-cp="A8">child-b</span></body></html>"#,
-        "https://embed.test/child",
+        "https://parent.test/child",
         &fonts,
         0,
     );
