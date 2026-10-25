@@ -26,6 +26,10 @@ pub trait Backend {
     /// Submit the form owning `node`.
     async fn submit(&mut self, node: NodeId) -> Result<String>;
     fn page_text(&self) -> Result<String>;
+    /// The injection shield's verdict (R1.4); `None` for a backend that cannot compute paint truth.
+    fn shield(&self) -> Result<Option<manuk_agent::shield::Shield>> {
+        Ok(None)
+    }
     /// `(text, absolute href)` for every link on the page.
     fn links(&self) -> Result<Vec<(String, String)>>;
     fn screenshot_png(&self) -> Result<Vec<u8>>;
@@ -93,6 +97,9 @@ impl Backend for AgentBrowser {
     }
     fn page_text(&self) -> Result<String> {
         Ok(self.observe()?.text)
+    }
+    fn shield(&self) -> Result<Option<manuk_agent::shield::Shield>> {
+        Ok(Some(AgentBrowser::shield(self)?))
     }
     fn links(&self) -> Result<Vec<(String, String)>> {
         Ok(self

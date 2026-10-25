@@ -18,6 +18,7 @@ use anyhow::{anyhow, Context, Result};
 use manuk_page::{fetch_html, Link, Page};
 
 /// §4b — HTML form model (find form, read fields, build a GET submission URL).
+pub mod shield;
 pub mod forms;
 
 /// Scoring the a11y tree against Chrome's — the versioned instrument behind Track B's node-match
@@ -1117,6 +1118,13 @@ impl AgentBrowser {
         let page = self.page.as_ref().context("no page loaded")?;
         page.paint_scrolled(&self.fonts, self.width, self.height, self.scroll_y)
             .encode_png()
+    }
+
+    /// The injection shield's verdict on the current page: the text a human can see, and what was
+    /// withheld (see [`shield`]).
+    pub fn shield(&self) -> Result<shield::Shield> {
+        let page = self.page.as_ref().context("no page loaded")?;
+        Ok(shield::analyze(&page.root_box, self.width as f32))
     }
 
     /// The current observation.

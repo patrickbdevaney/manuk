@@ -276,3 +276,48 @@ fn modal_over_a_button_is_occluded_until_dismissed() {
     let (err, msg) = c.tool("act", json!({"handle": close}));
     assert!(err && msg.contains("STALE"), "{msg}");
 }
+
+/// R1.4 gate: text a human cannot see never reaches observe/extract by default.
+#[test]
+fn injection_shield_withholds_invisible_text() {
+    let mut c = Client::start();
+    c.tool("navigate", json!({"url": fixture("injection.html")}));
+    let hidden = [
+        "HIDDEN_OPACITY",
+        "HIDDEN_VISIBILITY",
+        "HIDDEN_OFFSCREEN",
+        "HIDDEN_TINY",
+        "HIDDEN_CONTRAST",
+        "HIDDEN_ZERO",
+        "HIDDEN_DARKCONTRAST",
+        "HIDDEN_DISPLAY",
+    ];
+    for (tool, args) in [
+        ("observe", json!({})),
+        ("extract", json!({})),
+        ("extract", json!({"format": "markdown"})),
+    ] {
+        let (err, text) = c.tool(tool, args.clone());
+        assert!(!err, "{text}");
+        for h in hidden {
+            assert!(!text.contains(h), "{tool} {args} leaked {h}:\n{text}");
+        }
+        assert!(
+            text.contains("Revenue grew 12 percent") || tool == "observe",
+            "{text}"
+        );
+        assert!(
+            text.contains("Margins improved") || tool == "observe",
+            "{text}"
+        );
+        assert!(text.contains("⚠hidden-text"), "{tool}: no marker:\n{text}");
+    }
+    let (_, obs) = c.tool("observe", json!({}));
+    assert!(obs.contains("Quarterly report") && obs.contains("Subscribe"), "{obs}");
+    // Opt-out returns everything except display:none (which has no box at all).
+    let (_, all) = c.tool("extract", json!({"include_hidden": true}));
+    for h in &hidden[..7] {
+        assert!(all.contains(h), "include_hidden lost {h}:\n{all}");
+    }
+    assert!(!all.contains("⚠hidden-text"), "{all}");
+}

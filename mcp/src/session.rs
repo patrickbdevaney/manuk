@@ -43,6 +43,8 @@ pub struct Session<B: Backend> {
     rev: HashMap<u32, NodeId>,
     next: u32,
     snap: Option<Snap>,
+    /// Per-call opt-out of the injection shield (`include_hidden=true`).
+    include_hidden: bool,
 }
 
 fn role_str(r: &Role) -> String {
@@ -77,6 +79,16 @@ fn entry(n: &A11yNode) -> Entry {
     }
 }
 
+/// `tree` minus every subtree rooted at a withheld element. `None` only if the root itself goes.
+fn prune(n: &A11yNode, hidden: &HashMap<NodeId, &'static str>) -> Option<A11yNode> {
+    if hidden.contains_key(&n.node) {
+        return None;
+    }
+    let mut c = n.clone();
+    c.children = n.children.iter().filter_map(|k| prune(k, hidden)).collect();
+    Some(c)
+}
+
 fn arg_str<'a>(a: &'a Map<String, Value>, k: &str) -> Option<&'a str> {
     a.get(k).and_then(Value::as_str)
 }
@@ -89,6 +101,30 @@ impl<B: Backend> Session<B> {
             rev: HashMap::new(),
             next: 1,
             snap: None,
+            include_hidden: false,
+        }
+    }
+
+    /// The a11y tree with everything a human cannot see pruned (R1.4), unless the call opted out.
+    fn tree(&self) -> Result<A11yNode> {
+        let tree = self.b.tree()?;
+        if self.include_hidden {
+            return Ok(tree);
+        }
+        Ok(match self.b.shield()? {
+            Some(sh) if !sh.nodes.is_empty() => prune(&tree, &sh.nodes).unwrap_or(tree),
+            _ => tree,
+        })
+    }
+
+    /// `\n⚠hidden-text: …` when the shield withheld something from this observation, else empty.
+    fn warn(&self) -> String {
+        if self.include_hidden {
+            return String::new();
+        }
+        match self.b.shield() {
+            Ok(Some(sh)) => sh.marker().map(|m| format!("\n{m}")).unwrap_or_default(),
+            _ => String::new(),
         }
     }
 
@@ -319,6 +355,10 @@ impl<B: Backend> Session<B> {
     }
 
     pub async fn call(&mut self, tool: &str, a: &Map<String, Value>) -> Result<Output> {
+        self.include_hidden = a
+            .get("include_hidden")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
         match tool {
             "storage_state" => self
                 .storage_state(arg_str(a, "action").unwrap_or("export"), arg_str(a, "path"))
@@ -375,18 +415,18 @@ impl<B: Backend> Session<B> {
     async fn navigate(&mut self, url: &str) -> Result<String> {
         self.b.navigate(url).await?;
         self.new_document();
-        let tree = self.b.tree()?;
+        let tree = self.tree()?;
         self.snap = Some(self.snapshot(&tree));
         let body = Self::fit(
             self.lines(&tree, false),
             DEFAULT_BUDGET_TOKENS,
             "use find(query) or observe(mode=viewport)",
         );
-        Ok(format!("{UNTRUSTED}\n{}\n{body}", self.header()))
+        Ok(format!("{UNTRUSTED}{}\n{}\n{body}", self.warn(), self.header()))
     }
 
     fn observe(&mut self, mode: &str, budget: Option<usize>) -> Result<String> {
-        let tree = self.b.tree()?;
+        let tree = self.tree()?;
         let budget = budget.unwrap_or(DEFAULT_BUDGET_TOKENS);
         let now = self.snapshot(&tree);
         let out = match mode {
@@ -398,7 +438,8 @@ impl<B: Backend> Session<B> {
                     "scroll, then observe again"
                 };
                 format!(
-                    "{UNTRUSTED}\n{}\n{}",
+                    "{UNTRUSTED}{}\n{}\n{}",
+                    self.warn(),
                     self.header(),
                     Self::fit(lines, budget, hint)
                 )
@@ -407,7 +448,8 @@ impl<B: Backend> Session<B> {
                 None => {
                     let lines = self.lines(&tree, false);
                     format!(
-                        "{UNTRUSTED}\n{}\n(no earlier observation: full)\n{}",
+                        "{UNTRUSTED}{}\n{}\n(no earlier observation: full)\n{}",
+                        self.warn(),
                         self.header(),
                         Self::fit(lines, budget, "use find(query)")
                     )
@@ -432,7 +474,7 @@ impl<B: Backend> Session<B> {
     /// off-screen. Err names what covers it, by handle.
     fn verify_landing(&mut self, h: u32, node: NodeId) -> Result<()> {
         for _ in 0..2 {
-            let tree = self.b.tree()?;
+            let tree = self.tree()?;
             let vp = self.b.viewport();
             match tree.landing(node, Some(vp)) {
                 Landing::Clear { .. } => return Ok(()),
@@ -456,7 +498,7 @@ impl<B: Backend> Session<B> {
         let url_now = self.b.url();
         if url_now != url_before {
             self.new_document();
-            let tree = self.b.tree()?;
+            let tree = self.tree()?;
             self.snap = Some(self.snapshot(&tree));
             let body = Self::fit(
                 self.lines(&tree, false),
@@ -468,7 +510,7 @@ impl<B: Backend> Session<B> {
                 self.header()
             ));
         }
-        let tree = self.b.tree()?;
+        let tree = self.tree()?;
         let after = self.snapshot(&tree);
         let d = self.diff_lines(&before, &after);
         self.snap = Some(after);
@@ -481,7 +523,7 @@ impl<B: Backend> Session<B> {
     }
 
     async fn act(&mut self, hs: &str, action: &str, value: Option<&str>) -> Result<String> {
-        let tree = self.b.tree()?;
+        let tree = self.tree()?;
         let (h, n) = self.resolve(&tree, hs)?;
         let (node, role, checked, disabled) =
             (n.node, n.role.clone(), n.state.checked, n.state.disabled);
@@ -528,7 +570,7 @@ impl<B: Backend> Session<B> {
     }
 
     async fn type_(&mut self, hs: &str, text: &str, submit: bool) -> Result<String> {
-        let tree = self.b.tree()?;
+        let tree = self.tree()?;
         let (h, n) = self.resolve(&tree, hs)?;
         let node = n.node;
         if n.state.disabled || n.state.readonly {
@@ -559,7 +601,7 @@ impl<B: Backend> Session<B> {
     }
 
     fn scroll(&mut self, to: Option<&str>, dy: Option<f64>) -> Result<String> {
-        let tree = self.b.tree()?;
+        let tree = self.tree()?;
         let vis_before: std::collections::HashSet<u64> = {
             let vp = self.b.viewport();
             tree.iter()
@@ -580,7 +622,7 @@ impl<B: Backend> Session<B> {
             (None, None) => bail!("scroll needs `to` (a handle) or `dy`"),
         };
         self.b.scroll_by(delta);
-        let tree = self.b.tree()?;
+        let tree = self.tree()?;
         let vp = self.b.viewport();
         let mut fresh = Vec::new();
         for n in tree
@@ -607,8 +649,33 @@ impl<B: Backend> Session<B> {
         ))
     }
 
+    /// Page text with withheld runs removed (unless the call opted out).
+    fn page_text(&self) -> Result<String> {
+        if !self.include_hidden {
+            if let Some(sh) = self.b.shield()? {
+                return Ok(sh.text);
+            }
+        }
+        self.b.page_text()
+    }
+
+    /// Page links minus those whose text is a withheld run.
+    fn links(&self) -> Result<Vec<(String, String)>> {
+        let links = self.b.links()?;
+        if self.include_hidden {
+            return Ok(links);
+        }
+        let Some(sh) = self.b.shield()? else {
+            return Ok(links);
+        };
+        Ok(links
+            .into_iter()
+            .filter(|(t, _)| !sh.withheld.iter().any(|(_, w)| w.trim() == t.trim()))
+            .collect())
+    }
+
     fn extract(&mut self, format: &str, scope: Option<&str>) -> Result<String> {
-        let tree = self.b.tree()?;
+        let tree = self.tree()?;
         let scoped: Option<&A11yNode> = match scope {
             Some(hs) => Some(self.resolve(&tree, hs)?.1),
             None => None,
@@ -616,7 +683,7 @@ impl<B: Backend> Session<B> {
         let root = scoped.unwrap_or(&tree);
         let out = match format {
             "text" => match scoped {
-                None => self.b.page_text()?,
+                None => self.page_text()?,
                 Some(s) => s
                     .iter()
                     .filter(|n| !n.name.is_empty())
@@ -640,8 +707,8 @@ impl<B: Backend> Session<B> {
                 }
                 match scoped {
                     None => {
-                        md.push_str(&self.b.page_text()?);
-                        let links = self.b.links()?;
+                        md.push_str(&self.page_text()?);
+                        let links = self.links()?;
                         if !links.is_empty() {
                             md.push_str("\n\nLinks:\n");
                             for (t, u) in links {
@@ -682,11 +749,11 @@ impl<B: Backend> Session<B> {
             }
             f => bail!("unknown extract format {f:?}: use markdown, text or table"),
         };
-        Ok(format!("{UNTRUSTED}\n{out}"))
+        Ok(format!("{UNTRUSTED}{}\n{out}", self.warn()))
     }
 
     fn find(&mut self, query: &str) -> Result<String> {
-        let tree = self.b.tree()?;
+        let tree = self.tree()?;
         let q = query.to_ascii_lowercase();
         let words: Vec<&str> = q.split_whitespace().collect();
         let vp = self.b.viewport();

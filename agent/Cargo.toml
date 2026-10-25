@@ -51,6 +51,8 @@ manuk-html.workspace = true
 manuk-paint.workspace = true
 manuk-net.workspace = true
 manuk-text.workspace = true
+manuk-layout.workspace = true
+manuk-css.workspace = true
 
 anyhow.workspace = true
 url.workspace = true
