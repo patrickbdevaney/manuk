@@ -1,0 +1,24 @@
+0	epoch	1792947169332222
+44252	dns	httpbin.org	44218
+134113	connect	httpbin.org	134085
+239203	req	https://httpbin.org/html	0	239200	200	HTTP/2.0	3741	GET
+239253	body	https://httpbin.org/html	3741
+239392	phase	html parse	92
+239423	phase	external scripts	19
+239439	phase	module graph prefetch	3
+239452	phase	blocking stylesheets	1
+266734	phase	cascade+layout+blocking scripts	27269
+266751	phase	deferred scripts	0
+266778	phase	DOMContentLoaded	17
+266797	phase	subframes (pre-load)	9
+266814	phase	initial images+masks	7
+266826	phase	load event	2
+268085	phase	finish_loading: external CSS	1248
+268100	phase	finish_loading: dynamic scripts	1
+268112	phase	finish_loading: subframes	3
+268122	phase	finish_loading: page fetches	0
+268135	phase	finish_loading: images	3
+268144	phase	finish_loading: icon masks	0
+268154	phase	finish_loading: background images	0
+268168	mark	navigate_returned
+268198	mark	a11y_built

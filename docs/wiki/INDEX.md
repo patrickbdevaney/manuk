@@ -2864,6 +2864,12 @@
   - L52 · After the repairs
   - L66 · The standing rule this leaves
 
+## One connection per origin, and a subresource is fetched once per navigation
+`docs/wiki/one-connection-per-origin-and-a-subresource-is-fetched-once.md`
+
+  - L5 · Mechanism (engine/net/src/lib.rs, engine/page/src/lib.rs)
+  - L19 · Limits
+
 ## One flag in the oracle's command line — and two refusal cohorts stop existing
 `docs/wiki/one-flag-in-the-oracles-command-line.md`
 
@@ -3704,4 +3710,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3059 sections across 160 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3061 sections across 161 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

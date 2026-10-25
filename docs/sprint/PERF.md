@@ -645,3 +645,21 @@ Phases owning >=10% of the positive gap: subres_fetch (45%), settle (29%), layou
 - manuk `settle` is the time inside `navigate()` after (and around) the engine's own `load event`: `finish_loading` phases, subframes, image/mask decode. Chrome's equivalent is ~0 because the CDP load event is the stop point; a Playwright `goto` also stops at the load event.
 - Reproduce: `cargo build --release -p manuk-agent --bin a11y-dump && python3 -I scripts/perf1-profile.py --runs 3 --out docs/sprint/perf1` (needs `MANUK_CHROME_PIN`), `--self-test` for the instrument's own gate.
 
+
+## PERF.1.1 results (chrome_ver=145.0.7632.116; manuk only, Chrome rows unchanged above)
+
+`scripts/perf1-gate.py <runs.jsonl> <traces>`: Σ over 20 URLs of the per-URL median of manuk `subres_fetch`, 3 runs each.
+
+| arm | Σ subres_fetch s | Σ doc_fetch s | GET URLs on the wire twice |
+|---|---|---|---|
+| baseline (perf1/runs.jsonl, 12-13 runs/URL pooled) | 40.22 | 4.37 | 49+ |
+| after, sweep 1 (earlier tree, before 404 reuse; raw rows not kept, number read from the console) | 21.94 | 3.92 | 24 (404s + POST beacons) |
+| after, sweep 2 (perf1-after, final tree) | 28.07 | 5.16 | 0 |
+| after, sweep 3 (perf1-after2, final tree) | 32.13 | 4.69 | 0 |
+| mutant `MANUK_MAX_CONNS_PER_HOST=1` (perf1-mutant) | 58.24 | 4.80 | - |
+
+The sweeps differ by 10 s with the same code: the four remote-origin pages (comix.to, mobile.bg, puentedemando.com,
+ebanking.bdm-sa.com) move 2x between sweeps, while the origins that are stable improved and stayed improved
+(Wikipedia x4 pages 1.0-2.3 s -> 0.64-0.79 s; books.toscrape.com 0.76 -> 0.55 s; 10 -> 3 connections on Wikipedia).
+The <=24 s bar was met by one sweep of three, so PERF.1.1 is recorded BLOCKED on that bar, not DONE. The remaining time is
+the serial waterfall (fonts, then images, start after cascade/layout; HTTP/1.1 ebanking is six-wide at 190 ms RTT).

@@ -10700,6 +10700,7 @@ impl Page {
         // distinct scalars rather than of characters — a page has hundreds of distinct codepoints,
         // not thousands.
         let mut doc_codepoints: Option<std::collections::HashSet<u32>> = None;
+        let mut font_jobs: Vec<(String, _, Vec<String>, String)> = Vec::new();
         for s in &sources {
             // ⚠ **A RELATIVE `src` RESOLVES AGAINST THE STYLESHEET, NOT THE DOCUMENT** (CSS Values
             // §4.2). This loop is iterating `sources` and holds the sheet's own URL, and it used to
@@ -10775,17 +10776,42 @@ impl Page {
                 if !fonts.claim_webfont_src(&ff.family, first) {
                     continue; // this block was already tried this load — arrived or 404'd
                 }
-                for url in &urls {
-                    if let Some(data) = fetch_font_bytes(url).await {
-                        fonts.register_named_font(&ff.family, data, ff.weight);
-                        // **A FONT THAT ARRIVES IS A REASON TO RE-LAY-OUT, and it was not one.**
-                        // Every text box was measured with the fallback face; the new face has
-                        // different advances, so every line box, wrap point and content height in
-                        // the document is now stale.
-                        registered_webfont = true;
-                        self.webfonts.1.insert(face_key.clone());
-                        break; // first usable source wins
+                font_jobs.push((ff.family.clone(), ff.weight, urls, face_key));
+            }
+        }
+        // **Every claimed face is fetched CONCURRENTLY; each face's own `src` ladder stays ordered.**
+        // This was a sequential loop over faces AND sources (`books.toscrape.com`: seven font files
+        // 45 ms apart, 1.4 s on one h2 connection). `FuturesOrdered` polls them all at once but yields
+        // in declaration order, so registration order — which `face_id` ties can depend on — is
+        // exactly what the sequential loop produced, and a cancellation by the load budget still
+        // banks every face ahead of the one it interrupted.
+        {
+            use futures_util::StreamExt;
+            let mut pending: futures_util::stream::FuturesOrdered<_> = font_jobs
+                .into_iter()
+                .map(|(family, weight, urls, face_key)| async move {
+                    for url in &urls {
+                        // `.eot` is a format we cannot decode; asking for it only costs a round trip.
+                        let path = url.split(['?', '#']).next().unwrap_or(url);
+                        if path.to_ascii_lowercase().ends_with(".eot") {
+                            continue;
+                        }
+                        if let Some(data) = fetch_font_bytes(url).await {
+                            return Some((family, weight, face_key, data));
+                        }
                     }
+                    None
+                })
+                .collect();
+            while let Some(done) = pending.next().await {
+                if let Some((family, weight, face_key, data)) = done {
+                    fonts.register_named_font(&family, data, weight);
+                    // **A FONT THAT ARRIVES IS A REASON TO RE-LAY-OUT, and it was not one.**
+                    // Every text box was measured with the fallback face; the new face has
+                    // different advances, so every line box, wrap point and content height in
+                    // the document is now stale.
+                    registered_webfont = true;
+                    self.webfonts.1.insert(face_key);
                 }
             }
         }

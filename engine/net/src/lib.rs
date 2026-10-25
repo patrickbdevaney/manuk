@@ -129,6 +129,17 @@ impl tower_service::Service<hyper::Uri> for TimedConnector {
         Box::pin(async move {
             let t = std::time::Instant::now();
             let r = fut.await;
+            mark_origin_known_key(&format!(
+                "{}://{}:{}",
+                uri.scheme_str().unwrap_or("https"),
+                uri.host().unwrap_or("").to_ascii_lowercase(),
+                uri.port_u16()
+                    .unwrap_or(if uri.scheme_str() == Some("http") {
+                        80
+                    } else {
+                        443
+                    })
+            ));
             if nettrace::enabled() {
                 nettrace::emit(
                     "connect",
@@ -935,13 +946,7 @@ fn host_permit_for(url: &str) -> Option<std::sync::Arc<tokio::sync::Semaphore>> 
     if n == 0 {
         return None;
     }
-    let u = Url::parse(url).ok()?;
-    let host = u.host_str()?.to_ascii_lowercase();
-    let key = format!(
-        "{}://{host}:{}",
-        u.scheme(),
-        u.port_or_known_default().unwrap_or(0)
-    );
+    let key = permit_origin_key(url)?;
     let map = HOST_PERMITS.get_or_init(Default::default);
     let mut g = map.lock().unwrap();
     Some(
@@ -949,6 +954,158 @@ fn host_permit_for(url: &str) -> Option<std::sync::Arc<tokio::sync::Semaphore>> 
             .or_insert_with(|| std::sync::Arc::new(tokio::sync::Semaphore::new(n)))
             .clone(),
     )
+}
+
+fn permit_origin_key(url: &str) -> Option<String> {
+    let u = Url::parse(url).ok()?;
+    let host = u.host_str()?.to_ascii_lowercase();
+    Some(format!(
+        "{}://{host}:{}",
+        u.scheme(),
+        u.port_or_known_default().unwrap_or(0)
+    ))
+}
+
+/// Longest a request waits for its origin's first request to answer before going out regardless.
+const PROBE_WAIT: std::time::Duration = std::time::Duration::from_millis(1500);
+
+/// Per origin: (has a connection been established or the first request answered, leader taken,
+/// waiters' wake-up).
+#[allow(clippy::type_complexity)]
+static ORIGIN_PROBES: std::sync::OnceLock<
+    std::sync::Mutex<
+        std::collections::HashMap<String, (bool, bool, std::sync::Arc<tokio::sync::Notify>)>,
+    >,
+> = std::sync::OnceLock::new();
+
+/// Returns once this request may go out: immediately for the origin's first request (the leader) or
+/// a known origin; otherwise when the leader's connection is up, capped at [`PROBE_WAIT`].
+async fn origin_probe(url: &str) {
+    if max_conns_per_host() == 0 {
+        return;
+    }
+    let Some(key) = permit_origin_key(url) else {
+        return;
+    };
+    let notify = {
+        let mut g = ORIGIN_PROBES.get_or_init(Default::default).lock().unwrap();
+        let e = g
+            .entry(key)
+            .or_insert_with(|| (false, false, Default::default()));
+        if e.0 {
+            return;
+        }
+        if !e.1 {
+            e.1 = true; // this request is the leader
+            return;
+        }
+        e.2.clone()
+    };
+    let waiting = notify.notified();
+    tokio::pin!(waiting);
+    // Enable before the re-check so a wake-up between the check and the await is not lost.
+    waiting.as_mut().enable();
+    let known = ORIGIN_PROBES
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap()
+        .get(&permit_origin_key(url).unwrap_or_default())
+        .map(|e| e.0)
+        .unwrap_or(true);
+    if !known {
+        let _ = tokio::time::timeout(PROBE_WAIT, waiting).await;
+    }
+}
+
+fn mark_origin_known_key(key: &str) {
+    if let Some(e) = ORIGIN_PROBES
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap()
+        .get_mut(key)
+    {
+        e.0 = true;
+        e.2.notify_waiters();
+    }
+}
+
+fn mark_origin_known(url: &str) {
+    if let Some(key) = permit_origin_key(url) {
+        mark_origin_known_key(&key);
+    }
+}
+
+/// Concurrent streams allowed on an origin once it has answered over HTTP/2.
+const H2_STREAMS_PER_HOST: usize = 64;
+
+/// **An origin that spoke HTTP/2 is not an HTTP/1.1 origin, and the 6-connection cap was written for
+/// the latter.** Six is Chromium's HTTP/1.1 socket limit; h2 multiplexes every request over one
+/// connection, so holding an h2 origin to six in-flight streams serialised a page's fonts and images
+/// into waves for no benefit. The first response that comes back `HTTP/2.0` widens that origin's
+/// semaphore (once) to [`H2_STREAMS_PER_HOST`]; an origin never seen to speak h2 keeps the cap.
+fn note_http_version(url: &str, v: HttpVersion) {
+    // An explicit cap below the default (`MANUK_MAX_CONNS_PER_HOST=1`, the serialising mutant the gate
+    // uses) is an instruction, not a default to widen.
+    if v != HttpVersion::Http2 || max_conns_per_host() < 6 {
+        return;
+    }
+    static WIDENED: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> =
+        std::sync::OnceLock::new();
+    let Some(key) = permit_origin_key(url) else {
+        return;
+    };
+    if !WIDENED
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap()
+        .insert(key)
+    {
+        return;
+    }
+    if let Some(sem) = host_permit_for(url) {
+        sem.add_permits(H2_STREAMS_PER_HOST.saturating_sub(max_conns_per_host()));
+    }
+}
+
+/// How long after a successful fetch a repeat request in the same navigation reuses it unconditionally.
+const NAV_REUSE_WINDOW: std::time::Duration = std::time::Duration::from_secs(10);
+
+type NavRecent =
+    std::sync::Mutex<std::collections::HashMap<String, (std::time::Instant, Response)>>;
+static NAV_RECENT: std::sync::OnceLock<NavRecent> = std::sync::OnceLock::new();
+
+/// Only document SUBRESOURCES are remembered — styles, scripts, fonts, images. A `fetch()` of a JSON
+/// or text endpoint is data the page may be polling, and must always reach the wire.
+fn nav_reusable(r: &Response) -> bool {
+    // A dead subresource answers 404 every time; asking again within the navigation only repeats it.
+    if r.status == 404 || r.status == 410 {
+        return true;
+    }
+    if r.status != 200 {
+        return false;
+    }
+    let ct = r.header("content-type").unwrap_or("").to_ascii_lowercase();
+    ct.contains("css")
+        || ct.contains("javascript")
+        || ct.contains("ecmascript")
+        || ct.starts_with("font/")
+        || ct.contains("font")
+        || ct.starts_with("image/")
+}
+
+fn nav_recent_put(url: &str, r: &Response) {
+    if nav_reusable(r) {
+        let m = NAV_RECENT.get_or_init(Default::default);
+        m.lock()
+            .unwrap()
+            .insert(url.to_string(), (std::time::Instant::now(), r.clone()));
+    }
+}
+
+fn nav_recent_get(url: &str) -> Option<Response> {
+    let m = NAV_RECENT.get_or_init(Default::default).lock().unwrap();
+    let (at, r) = m.get(url)?;
+    (at.elapsed() < NAV_REUSE_WINDOW).then(|| r.clone())
 }
 
 pub fn fetch_stats() -> (usize, usize) {
@@ -1015,6 +1172,9 @@ pub fn reset_fetch_stats() {
         m.lock().unwrap().clear();
     }
     if let Some(m) = SEEN.get() {
+        m.lock().unwrap().clear();
+    }
+    if let Some(m) = NAV_RECENT.get() {
         m.lock().unwrap().clear();
     }
     // The negative cache is per-NAVIGATION. Pressing reload must genuinely retry a dead subresource —
@@ -1091,6 +1251,17 @@ async fn fetch_scoped(url: &str, initiator: Option<&Url>) -> Result<Response> {
     if let Some(cached) = http_cache::get(url) {
         return Ok(cached);
     }
+    // **A resource this navigation has JUST fetched is not asked for again, fresh or not.** A
+    // stylesheet served `no-cache` + `ETag` is stale the instant it lands, so the preload pass and
+    // the loader 90 ms later each paid a conditional round trip (`books.toscrape.com`: the same two
+    // CSS files, twice, the second pair a `304`). Chromium's per-document memory cache serves the
+    // second user from the first fetch; this is that, bounded to a few seconds so a page polling
+    // an endpoint with `fetch()` still revalidates.
+    if repeat {
+        if let Some(recent) = nav_recent_get(url) {
+            return Ok(recent);
+        }
+    }
     if FAILED
         .get_or_init(Default::default)
         .lock()
@@ -1114,7 +1285,20 @@ async fn fetch_scoped(url: &str, initiator: Option<&Url>) -> Result<Response> {
         None => None,
     };
 
+    // **The first request to an origin goes alone, so the burst behind it rides its connection.**
+    // The pooled client opens one connection per request that arrives before any connection exists,
+    // and an h2 origin then has N connections where one would do (`en.wikipedia.org`: 10 opened,
+    // Chrome opens 2) — each costing a TCP+TLS handshake. Requests that arrive while the origin is
+    // still unknown wait for the first one's response head, for at most [`PROBE_WAIT`] (a dead host
+    // must not serialise the page behind its timeout), then go out in parallel as before.
+    origin_probe(url).await;
+
     let out = fetch_with_deadline(url, request_timeout(), initiator).await;
+    mark_origin_known(url);
+    if let Ok(r) = &out {
+        note_http_version(url, r.http_version);
+        nav_recent_put(url, r);
+    }
     if out.is_err() {
         FAILED
             .get_or_init(Default::default)
@@ -2138,7 +2322,7 @@ async fn send_raw(
         nettrace::emit(
             "req",
             &format!(
-                "{url}\t{t_start}\t{}\t{}\t{:?}\t{clen}",
+                "{url}\t{t_start}\t{}\t{}\t{:?}\t{clen}\t{method}",
                 nettrace::now_us() - t_start,
                 resp.status().as_u16(),
                 resp.version()
