@@ -294,6 +294,7 @@
   - L5 · Mechanism (engine/page/src/lib.rs)
   - L16 · What is NOT fixed (the remaining settle)
   - L22 · Gate hygiene
+  - L27 · PERF.1.2.a: a forced reflow's result is adopted, but only while mutation_seq still matches
 
 ## A rotated run's fields are a mixed frame
 `docs/wiki/a-rotated-runs-fields-are-a-mixed-frame.md`
@@ -3737,4 +3738,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3072 sections across 165 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3073 sections across 165 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

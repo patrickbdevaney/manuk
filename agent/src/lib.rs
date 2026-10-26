@@ -1163,7 +1163,12 @@ impl AgentBrowser {
                     || st.overflow_y != manuk_css::Overflow::Visible
             })
         };
-        Ok(shield::analyze(&page.root_box, self.width as f32, &inline_bg, &clips))
+        Ok(shield::analyze(
+            &page.root_box,
+            self.width as f32,
+            &inline_bg,
+            &clips,
+        ))
     }
 
     /// The current observation.
@@ -1992,7 +1997,10 @@ mod tests {
         .await;
         let sh = b.shield().unwrap();
         assert!(sh.text.contains("pillword"), "inline pill withheld: {sh:?}");
-        assert!(sh.text.contains("blockpill"), "inline-block pill withheld: {sh:?}");
+        assert!(
+            sh.text.contains("blockpill"),
+            "inline-block pill withheld: {sh:?}"
+        );
         assert!(!sh.text.contains("greyword"), "camouflage kept: {sh:?}");
     }
 

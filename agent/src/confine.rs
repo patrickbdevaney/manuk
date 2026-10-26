@@ -161,7 +161,10 @@ pub fn harden_process(args: &mut Vec<String>, extra: Grants) -> bool {
 /// `--confine-selftest <outside-file> <inside-dir> [--no-confine]`: confine, then report what the
 /// process can still do. The gate tests run this on every agent binary and read the lines.
 pub fn selftest(a: &[String]) -> anyhow::Result<()> {
-    anyhow::ensure!(a.len() >= 2, "--confine-selftest <outside-file> <inside-dir>");
+    anyhow::ensure!(
+        a.len() >= 2,
+        "--confine-selftest <outside-file> <inside-dir>"
+    );
     let (outside, inside) = (&a[0], &a[1]);
     if !a.iter().any(|x| x == "--no-confine") {
         let g = Grants {

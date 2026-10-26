@@ -2110,6 +2110,11 @@ struct ReflowCtx {
     /// bit-identical.
     reflow_us_used: u64,
     reflow_us_budget: u64,
+    /// The box tree of the LAST reflow, kept only when it is exactly what `Page` would have built
+    /// itself: nothing scrolled (committed or pending) and no sticky box, because those two passes
+    /// are applied to the reflow's tree in ways `Page` redoes. `None` otherwise. See
+    /// [`ReflowScope::into_fresh`] (PERF.1.2.a).
+    adoptable: Option<LayoutBox>,
 }
 
 /// **Every stylesheet the document has, inline and external, in cascade order.**
@@ -2279,6 +2284,7 @@ unsafe fn forced_reflow(ctx: *mut std::ffi::c_void, dom: *mut Dom) {
         let mut applied = std::collections::HashMap::new();
         apply_sticky(&mut root_box, &c.styles, live_y, vh, &mut applied);
     }
+    let adoptable = offsets.is_empty() && !has_sticky;
     let us_layout = t_layout.elapsed().as_micros() as u64;
 
     let t_rects = std::time::Instant::now();
@@ -2310,6 +2316,7 @@ unsafe fn forced_reflow(ctx: *mut std::ffi::c_void, dom: *mut Dom) {
 
     c.laid_out_at = dom.mutation_seq();
     c.scrolled_at = scroll_seq;
+    c.adoptable = if adoptable { Some(root_box) } else { None };
     // Charged AFTER the work, and only here, so the accounting is of reflows that actually ran.
     c.reflow_us_used = c
         .reflow_us_used
@@ -2386,6 +2393,7 @@ impl ReflowScope {
             final_url: final_url as *const String,
             external_css: external_css as *const HashMap<String, String>,
             reflow_us_used: 0,
+            adoptable: None,
             // The SAME number the event loop gives a whole drain (`max_drain_ms`), spent on ONE
             // thing. Deliberately not a smaller, invented constant: the drain's budget is the
             // engine's existing statement of *"how long this page is worth"*, and a forced reflow
@@ -2399,6 +2407,25 @@ impl ReflowScope {
             _ctx: ctx,
             prev_maps,
         }
+    }
+}
+
+impl ReflowScope {
+    /// **Adopt the layout the last forced reflow computed, if it is still the document's.**
+    ///
+    /// A script that reads geometry during DOMContentLoaded/load makes `forced_reflow` cascade and lay
+    /// out the whole tree, and the scope's end used to throw that away so the next phase did the same
+    /// work again (PERF.1.2.a). It is only valid while `Dom::mutation_seq` still equals the sequence the
+    /// reflow laid out at — any later mutation makes it stale, and adopting it would paint a tree the
+    /// DOM no longer matches. Consumes the scope: the view maps point into the buffers taken here, so
+    /// the `Drop` that restores them must run before anything reads them.
+    fn into_fresh(mut self, dom: &Dom) -> Option<(StyleMap, LayoutBox)> {
+        let c = &mut *self._ctx;
+        if c.laid_out_at != dom.mutation_seq() {
+            return None;
+        }
+        let root = c.adoptable.take()?;
+        Some((std::mem::take(&mut c.styles), root))
     }
 }
 
@@ -7827,6 +7854,25 @@ impl Page {
             self.has_sticky,
         );
         self.eval_for_test(src);
+        // The scripts' geometry reads may have left a fresh layout behind; adopt it rather than have
+        // the next phase redo the identical cascade+layout (PERF.1.2.a).
+        if self.zoom == 1.0 && std::env::var_os("MANUK_NO_ADOPT_REFLOW").is_none() {
+            if let Some((styles, root)) = _reflow.into_fresh(&self.dom) {
+                self.styles = styles;
+                self.set_root_box(root);
+                self.content_height = self.root_box.content_bottom();
+                self.has_sticky = false;
+                self.dom.clear_all_dirty();
+                let sources = self.cascade_sources(&self.external_css);
+                self.last_cascade = Some(cascade_fingerprint(
+                    &self.dom,
+                    &sources,
+                    &self.external_css,
+                    viewport_width,
+                    false,
+                ));
+            }
+        }
     }
 
     /// Without SpiderMonkey there is no JS to notify, so the lifecycle is a no-op — not a lie.
