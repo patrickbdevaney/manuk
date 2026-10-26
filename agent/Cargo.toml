@@ -45,7 +45,12 @@ path = "src/bin/drive-probe.rs"
 # with `MinimalCascade` and never executed a page script. Every `agent/tests/` fixture and both
 # corpus instruments (`a11y-score`, `drive-probe`) were measuring a static-HTML browser.
 manuk-js.workspace = true
-manuk-page = { workspace = true, features = ["spidermonkey"] }
+#
+# `stylo` (the cascade) is still refused — it hides a collapsed <select>'s options, which
+# g_ax_tree_excludes_display_none catches. `cssom` links Stylo's parser for `CSS.supports` and
+# `el.style` only: without it every `el.style.x = v` write was rejected as invalid (R2.1.2,
+# g_agent_cssom_style_write).
+manuk-page = { workspace = true, features = ["spidermonkey", "cssom"] }
 manuk-a11y.workspace = true
 manuk-dom.workspace = true
 manuk-html.workspace = true

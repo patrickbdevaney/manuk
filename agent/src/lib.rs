@@ -805,7 +805,9 @@ impl AgentBrowser {
                     // A file input makes this a multipart upload; the agent has no file bytes to
                     // send, and urlencoding it would silently drop them, so refuse loudly.
                     if !forms::file_inputs(page.dom(), form).is_empty() {
-                        return Err(anyhow!("form has a file input; file uploads are not supported"));
+                        return Err(anyhow!(
+                            "form has a file input; file uploads are not supported"
+                        ));
                     }
                     let p = forms::urlencoded_submission(page.dom(), form, &page.final_url)
                         .map_err(|e| anyhow!("{e}"))?;
@@ -833,7 +835,8 @@ impl AgentBrowser {
         let final_url = resp.final_url.to_string();
         let _settle = PrewarmSettle;
         manuk_page::prewarm_js();
-        self.build_loaded(resp.decoded_text(), final_url.clone()).await?;
+        self.build_loaded(resp.decoded_text(), final_url.clone())
+            .await?;
         let landed = self.page.as_ref().expect("just loaded").final_url.clone();
         self.history.push(landed);
         Ok(Activation::Submitted(final_url))

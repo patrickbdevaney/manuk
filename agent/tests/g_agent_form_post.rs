@@ -47,7 +47,11 @@ fn serve(log: Arc<Mutex<Vec<(String, String)>>>) -> String {
                 }
                 buf.extend_from_slice(&tmp[..n]);
             }
-            let line = String::from_utf8_lossy(&buf).lines().next().unwrap_or("").to_string();
+            let line = String::from_utf8_lossy(&buf)
+                .lines()
+                .next()
+                .unwrap_or("")
+                .to_string();
             let body = String::from_utf8_lossy(&buf[head_end..]).to_string();
             log.lock().unwrap().push((line.clone(), body.clone()));
             let resp = if line.starts_with("POST /login") {
@@ -80,12 +84,17 @@ fn the_agent_posts_a_login_form_and_follows_the_redirect() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async {
         let mut b = AgentBrowser::new(1024, 768);
-        b.navigate(&format!("{base}/login")).await.expect("navigate");
+        b.navigate(&format!("{base}/login"))
+            .await
+            .expect("navigate");
         b.type_into("User", "alice").unwrap();
         b.type_into("Pass", "wonderland").unwrap();
         b.submit(None).await.expect("POST submit");
         let url = b.current_url().unwrap().to_string();
-        assert!(url.ends_with("/home"), "did not land on /home after the 302: {url}");
+        assert!(
+            url.ends_with("/home"),
+            "did not land on /home after the 302: {url}"
+        );
         let tree = b.a11y_tree().unwrap();
         let (bag, _) = manuk_agent::a11y_score::manuk_bag(&tree);
         assert!(
@@ -94,10 +103,14 @@ fn the_agent_posts_a_login_form_and_follows_the_redirect() {
         );
     });
     let log = log.lock().unwrap();
-    let post = log.iter().find(|(l, _)| l.starts_with("POST")).expect("a POST was sent");
+    let post = log
+        .iter()
+        .find(|(l, _)| l.starts_with("POST"))
+        .expect("a POST was sent");
     assert_eq!(post.1, "user=alice&pass=wonderland", "body: {post:?}");
     assert!(
-        log.iter().all(|(l, _)| !l.contains("wonderland") && !l.contains("user=")),
+        log.iter()
+            .all(|(l, _)| !l.contains("wonderland") && !l.contains("user=")),
         "a field value leaked into a request URL: {log:?}"
     );
 }

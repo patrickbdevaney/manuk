@@ -1807,6 +1807,12 @@
   - L102 · The third inert guard in one arc
   - L111 · Not built yet
 
+## `el.style.x = v` needs a CSS parser, not the Stylo cascade
+`docs/wiki/el-style-writes-need-a-css-parser-not-the-stylo-cascade.md`
+
+  - L5 · Mechanism (engine/page/src/lib.rs install_supports_hook, engine/page/Cargo.toml cssom)
+  - L16 · Measured (chrome_ver=145.0.7632.116)
+
 ## "As necessary" is load-bearing — the scrollable region's extra padding attaches to the margin box
 `docs/wiki/end-padding-is-as-necessary.md`
 
@@ -3750,4 +3756,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3077 sections across 167 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3079 sections across 168 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

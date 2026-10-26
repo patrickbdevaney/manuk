@@ -42,6 +42,10 @@ resvg = "0.49"
 # Route the cascade through the real Stylo engine (full selectors/@media/var()) instead
 # of the from-scratch MinimalCascade. Heavy to build, so opt-in; forwarded to manuk-css.
 stylo = ["manuk-css/stylo"]
+# Stylo's PARSER for the CSSOM hooks only (`CSS.supports`, `el.style` validate/serialize/expand),
+# with the cascade left on MinimalCascade. The agent needs `el.style.display = 'block'` to work but
+# refused the Stylo cascade (it hides a collapsed <select>'s options; see agent/Cargo.toml).
+cssom = ["manuk-css/stylo"]
 # Execute page <script> via SpiderMonkey (forwarded to manuk-js). Off by default:
 # run_document_scripts is a no-op without it, so the parse/layout path is unchanged.
 spidermonkey = ["manuk-js/spidermonkey"]

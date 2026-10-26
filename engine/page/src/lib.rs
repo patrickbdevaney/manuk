@@ -3490,36 +3490,40 @@ fn snap_candidates_for(
 
 /// Point `CSS.supports()` at the real feature-query evaluator.
 ///
-/// Without the `stylo` feature there is no evaluator, and the answer is a flat `false`. That is the
+/// Without `stylo` or `cssom` there is no evaluator, and the answer is a flat `false`. That is the
 /// conservative direction on purpose: a build that cannot honour a property must not claim it, or
 /// every page throws away the fallback it already shipped in favour of a branch this configuration
 /// cannot render.
+///
+/// ⚠ That `false` also feeds `el.style`'s VALIDATING setter, so a build with neither feature drops
+/// every `el.style.x = v` write (R2.1.2: the agent's dialogs and tabs never opened). `cssom` links
+/// Stylo's parser for these hooks without switching the cascade.
 fn install_supports_hook() {
-    #[cfg(feature = "stylo")]
+    #[cfg(any(feature = "stylo", feature = "cssom"))]
     manuk_js::set_supports_hook(manuk_css::stylo_engine::supports_condition);
-    #[cfg(not(feature = "stylo"))]
+    #[cfg(not(any(feature = "stylo", feature = "cssom")))]
     manuk_js::set_supports_hook(|_| false);
     // The SERIALIZING half of the same seam (t1224): `el.style` must report CSSOM's normal form,
     // not the author's text. ⚠ Its no-engine answer is `None`, not a value — the opposite polarity
     // from `supports`, because echoing an un-normalised string costs conformance while inventing an
     // empty one would DELETE a declaration the page set.
-    #[cfg(feature = "stylo")]
+    #[cfg(any(feature = "stylo", feature = "cssom"))]
     manuk_js::set_serialize_decl_hook(manuk_css::stylo_engine::serialize_declaration);
-    #[cfg(not(feature = "stylo"))]
+    #[cfg(not(any(feature = "stylo", feature = "cssom")))]
     manuk_js::set_serialize_decl_hook(|_, _| None);
     // The EXPANDING half: a shorthand sets its longhands, and `el.style` had no way to say so. Same
     // polarity as the serializer — with no engine the answer is "nothing", which leaves a longhand
     // read exactly where it was rather than inventing values no parser produced.
-    #[cfg(feature = "stylo")]
+    #[cfg(any(feature = "stylo", feature = "cssom"))]
     manuk_js::set_expand_decl_hook(manuk_css::stylo_engine::expand_declaration);
-    #[cfg(not(feature = "stylo"))]
+    #[cfg(not(any(feature = "stylo", feature = "cssom")))]
     manuk_js::set_expand_decl_hook(|_, _| Vec::new());
     // The ENUMERABLE half of the same question, from the same oracle — see
     // `stylo_engine::supported_property_names`. Installed here rather than at three call sites for
     // the reason the comment above gives: three callers is what produced one.
-    #[cfg(feature = "stylo")]
+    #[cfg(any(feature = "stylo", feature = "cssom"))]
     manuk_js::set_supported_props_hook(manuk_css::stylo_engine::supported_property_names);
-    #[cfg(not(feature = "stylo"))]
+    #[cfg(not(any(feature = "stylo", feature = "cssom")))]
     manuk_js::set_supported_props_hook(|| &[]);
 }
 
