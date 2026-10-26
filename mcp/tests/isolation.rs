@@ -300,7 +300,7 @@ fn storage_state_round_trips_between_sessions() {
     let dir = tmp("state-json");
     let f = dir.join("state.json");
     let fs = f.to_str().unwrap();
-    let mut a = Client::start(&[]);
+    let mut a = Client::start(&["--allow-write", dir.to_str().unwrap()]);
     a.tool(
         "navigate",
         json!({"url": format!("http://127.0.0.1:{port}/login")}),

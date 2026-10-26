@@ -1967,6 +1967,9 @@ pub fn run_document_scripts(
 #[cfg(feature = "_sm")]
 pub mod determinism;
 
+#[cfg(feature = "_sm")]
+pub mod hardening;
+
 pub mod spidermonkey;
 
 /// D3 Step-0 prototype: an `Element.textContent`-style binding over the arena DOM.

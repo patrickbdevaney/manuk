@@ -3393,6 +3393,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "base64 0.22.1",
+ "libc",
  "manuk-a11y",
  "manuk-agent",
  "manuk-dom",

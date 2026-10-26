@@ -236,6 +236,11 @@ impl SpiderMonkeyRuntime {
         install_host_hooks(&mut runtime);
         Ok(SpiderMonkeyRuntime { runtime })
     }
+
+    /// The JIT tier switches as the engine sees them (1 = on). All zero in agent mode.
+    pub fn jit_tiers(&mut self) -> Vec<u32> {
+        crate::hardening::jit_tiers_on(self.runtime.cx())
+    }
 }
 
 /// The host hooks SpiderMonkey **requires an embedder to install**, and aborts the process without.
@@ -270,6 +275,7 @@ impl SpiderMonkeyRuntime {
 /// `doCleanup` through the real job queue after a GC is a named follow-on: an improvement on a legal
 /// baseline, not a fix for a lie.
 fn install_host_hooks(runtime: &mut Runtime) {
+    crate::hardening::apply(runtime.cx());
     unsafe extern "C" fn drop_cleanup_job(
         _do_cleanup: *mut mozjs::jsapi::JSFunction,
         _incumbent_global: *mut mozjs::jsapi::JSObject,
