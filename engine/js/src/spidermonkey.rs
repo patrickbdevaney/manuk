@@ -174,6 +174,19 @@ pub(crate) fn engine_available() -> bool {
     !SHUT_DOWN.load(Ordering::SeqCst)
 }
 
+/// True when another thread already owns the process's one JS engine (or it is shut down), so this
+/// thread must not speculatively build a runtime: a second live runtime segfaults (see [`SHUT_DOWN`]).
+pub(crate) fn engine_owned_elsewhere() -> bool {
+    if SHUT_DOWN.load(Ordering::SeqCst) {
+        return true;
+    }
+    let published = ENGINE_HANDLE
+        .get()
+        .and_then(|c| c.lock().ok().map(|s| s.is_some()))
+        .unwrap_or(false);
+    published && ENGINE.with(|c| c.borrow().is_none())
+}
+
 pub(crate) fn engine_handle() -> Result<JSEngineHandle, JsError> {
     if SHUT_DOWN.load(Ordering::SeqCst) {
         return Err(JsError {

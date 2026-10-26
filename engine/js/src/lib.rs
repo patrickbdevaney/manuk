@@ -331,6 +331,11 @@ pub fn prewarm() {
         if std::env::var_os("MANUK_NO_PREWARM").is_some() {
             return;
         }
+        // One JS thread per process: if another thread owns the engine, a speculative runtime here
+        // would be a second live one (SIGSEGV in a multi-threaded test harness).
+        if spidermonkey::engine_owned_elsewhere() {
+            return;
+        }
         // Evaluate a trivial script in a throwaway global, the way the first real page would, so
         // mozjs registers its own lazily-created thread-locals now.
         let _ = with_runtime_arming(false, |rt| {

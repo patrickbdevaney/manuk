@@ -17,3 +17,9 @@
 
 example.com script phase 51 -> 41.5 ms. The per-document global (`install` ~10 ms, event-loop preludes ~14 ms, 8 ms of it the 487 KB
 prelude parse) is still on the critical path.
+
+## One JS thread per process (PERF.1.4.c)
+
+`prewarm()` skips when another thread already owns the engine (`engine_owned_elsewhere`) or it is shut down. Without the guard,
+the multi-threaded `cargo test -p manuk-agent --lib` harness built a second live runtime on a second test thread: "outstanding
+JS engine handles" abort then SIGSEGV (128 tests, 3/3 runs red at 29de29c2, 3/3 green after).
