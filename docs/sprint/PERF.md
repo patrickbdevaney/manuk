@@ -699,3 +699,20 @@ BASE is HEAD df08661a built with the same command, NEW is HEAD + the font change
   layout 28 ms (Liberation Serif, Serif Bold, Sans Italic) before and after this change.
 - **Not comparable:** the pre-sprint `target/release/a11y-dump` that sat in the tree (Alan_Turing cascade 106 ms, wall 4.7 s) is ~2.4x
   faster in cascade than a clean build of HEAD (250 ms, wall 7.8 s) - see PERF.1.3.c.
+
+## PERF.1.4 results (script phase)
+
+chrome_ver=145.0.7632.116. Paired same-minute A/B on example.com, 7 runs, `scripts/perf1-profile.py --manuk-b` with arm B =
+`MANUK_NO_PREWARM=1` (same binary); rows in `docs/sprint/perf1-pf14/paired.jsonl`.
+
+- **Profile of the fixed cost** (example.com, `Instant` timers, release): `Runtime::new` 9.1 ms; `install` (native DOM/BOM bindings) 9.7 ms;
+  `event_loop::install` 14 ms of which the 487 KB `event_loop_prelude.js` alone is 8 ms of compile+run and the other 14 preludes 6 ms;
+  `JSEngine::init` + the helper-thread spawns are in the 9 ms. Total `load_document` 33 ms before this change.
+- **Fix:** `Agent::load_url` builds the thread's JS runtime (`manuk_js::prewarm`) *after* issuing the document request, so engine +
+  context creation overlaps DNS/TLS/transfer. The teardown guard is armed afterwards (`prewarm_settle`, on every exit path), because it
+  must register after the page's thread-locals (arming it inside prewarm segfaults at exit - measured). `g_prewarm_exit` covers script,
+  script-free and (mutant) unsettled children.
+- **Result:** example.com script phase median 51.1 -> 41.5 ms (7 paired runs, bands 50.7-53.7 vs 41.4-41.7). Bar <= 15 ms **not met**.
+- **Not measured:** Σ script over the 20 URLs (bar <= 5 s from 9.48): the change saves ~10 ms per page, so the long pages are untouched.
+- **Where the rest is:** ~26 ms is the per-document global (`install` 10 + event-loop preludes 14 + script) and ~15 ms of the 41 is the
+  initial cascade+layout inside `from_dom`, which the trace does not emit as `cascade`/`layout` lines and so lands in `script`.

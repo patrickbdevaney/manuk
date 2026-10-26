@@ -440,7 +440,23 @@ impl AgentBrowser {
 
     /// Fetch + lay out `url`, without touching the history stack.
     async fn load_url(&mut self, url: &str) -> Result<()> {
-        let (html, final_url) = fetch_html(url).await?;
+        // PERF.1.4: the fetch is polled first, so the request is out before the JS runtime is built;
+        // the ~18 ms of engine+context creation then overlaps DNS/TLS/transfer instead of
+        // following the parse.
+        // The guard arms the runtime's teardown on every exit path, after the page's own
+        // thread-locals exist.
+        struct Settle;
+        impl Drop for Settle {
+            fn drop(&mut self) {
+                manuk_page::prewarm_js_settle();
+            }
+        }
+        let _settle = Settle;
+        let (fetched, ()) = futures_util::future::join(fetch_html(url), async {
+            manuk_page::prewarm_js();
+        })
+        .await;
+        let (html, final_url) = fetched?;
         // ── ⚠⚠⚠ **`load`, NOT `load_async`, WAS A BROWSER THAT NEVER FINISHED LOADING.** The
         //    synchronous constructor parses and lays out and stops: no subresources, no lifecycle,
         //    no scripts. An agent driving the real web needs the page the user would see, and on a

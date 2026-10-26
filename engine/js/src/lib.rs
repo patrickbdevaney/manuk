@@ -153,6 +153,15 @@ pub mod bindings {
 fn with_runtime<R>(
     f: impl FnOnce(&mut mozjs::rust::Runtime) -> Result<R, JsError>,
 ) -> Result<R, JsError> {
+    with_runtime_arming(true, f)
+}
+
+/// [`with_runtime`], optionally leaving the teardown guard unarmed (see [`prewarm`]).
+#[cfg(feature = "_sm")]
+fn with_runtime_arming<R>(
+    arm: bool,
+    f: impl FnOnce(&mut mozjs::rust::Runtime) -> Result<R, JsError>,
+) -> Result<R, JsError> {
     use mozjs::rust::Runtime;
 
     // The runtime lives in the SAME thread-local as the engine (`spidermonkey::JS_THREAD`), and that
@@ -181,7 +190,9 @@ fn with_runtime<R>(
         // teardown dies reaching for a thread-local that is already gone.
         //
         // **To run first at teardown, register last.** So we register after the JS has run.
-        spidermonkey::arm_teardown();
+        if arm {
+            spidermonkey::arm_teardown();
+        }
         out
     })
 }
@@ -299,6 +310,58 @@ pub fn js_available() -> bool {
     #[cfg(not(feature = "_sm"))]
     {
         false
+    }
+}
+
+/// Build this thread's SpiderMonkey runtime now instead of on the first script (PERF.1.4).
+///
+/// `JSEngine::init` + `Runtime::new` cost ~18 ms of CPU on a page's critical path, and the caller
+/// that knows a navigation is about to start can pay it while the document request is in flight.
+/// Same thread-affinity rule as every other entry point: call it on the thread that will run the
+/// page's scripts (one JS thread per process). A build without a JS engine, or one whose engine is
+/// already shut down, does nothing.
+///
+/// ⚠ This does NOT arm the teardown guard: it must register after every thread-local the page's
+/// scripts create, or exit aborts. The caller MUST pair it with [`prewarm_settle`] once the load is
+/// over (on every path), or a page that never runs a script exits with a live context.
+pub fn prewarm() {
+    #[cfg(feature = "_sm")]
+    {
+        // The A/B arm for `scripts/perf1-profile.py --env-b`: same binary, no head start.
+        if std::env::var_os("MANUK_NO_PREWARM").is_some() {
+            return;
+        }
+        // Evaluate a trivial script in a throwaway global, the way the first real page would, so
+        // mozjs registers its own lazily-created thread-locals now.
+        let _ = with_runtime_arming(false, |rt| {
+            use mozjs::jsapi::OnNewGlobalHookOption;
+            use mozjs::rooted;
+            use mozjs::rust::wrappers2::JS_NewGlobalObject;
+            use mozjs::rust::{
+                evaluate_script, CompileOptionsWrapper, RealmOptions, SIMPLE_GLOBAL_CLASS,
+            };
+            let options = RealmOptions::default();
+            rooted!(&in(rt.cx()) let global = unsafe {
+                JS_NewGlobalObject(rt.cx(), &SIMPLE_GLOBAL_CLASS, std::ptr::null_mut(),
+                    OnNewGlobalHookOption::FireOnNewGlobalHook, &*options)
+            });
+            rooted!(&in(rt.cx()) let mut rval = mozjs::jsval::UndefinedValue());
+            let opts = CompileOptionsWrapper::new(rt.cx_no_gc(), c"prewarm.js".to_owned(), 1);
+            let _ = evaluate_script(rt.cx(), global.handle(), "0", rval.handle_mut(), opts);
+            Ok(())
+        });
+    }
+}
+
+/// Arm the teardown guard for a runtime [`prewarm`] built, now that the load that used it is over.
+/// Idempotent; a no-op when nothing was prewarmed.
+pub fn prewarm_settle() {
+    #[cfg(feature = "_sm")]
+    {
+        let built = spidermonkey::RUNTIME.with(|c| c.borrow().is_some());
+        if built {
+            spidermonkey::arm_teardown();
+        }
     }
 }
 

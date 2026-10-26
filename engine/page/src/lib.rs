@@ -16,6 +16,8 @@ pub use manuk_dom::history;
 /// can drive the streaming path without depending on `manuk-js` directly.
 pub use manuk_js::FetchStreamEvent;
 pub use manuk_js::KeyModifiers;
+/// Build the thread's JS runtime while a document request is in flight (PERF.1.4).
+pub use manuk_js::{prewarm as prewarm_js, prewarm_settle as prewarm_js_settle};
 /// What a page's WebSocket asked for, and what happened to it — see [`Page::take_ws_ops`] and
 /// [`Page::deliver_ws_event`]. Re-exported so the shell can drive sockets without depending on
 /// `manuk-js` directly.
