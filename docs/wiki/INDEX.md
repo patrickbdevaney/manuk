@@ -2940,6 +2940,10 @@
   - L36 · What the next phase costs
   - L52 · The shape worth keeping
 
+## A page's fetches and timers need a pump after load, not only during it
+`docs/wiki/page-async-work-needs-a-post-load-pump.md`
+
+
 ## PERFORMANCE — what is actually slow, and why
 `docs/wiki/performance.md`
 
@@ -3756,4 +3760,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3079 sections across 168 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3079 sections across 169 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

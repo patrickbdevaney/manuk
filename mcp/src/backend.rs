@@ -20,6 +20,8 @@ pub trait Backend {
     fn scroll_y(&self) -> f32;
     fn content_height(&self) -> f32;
     fn scroll_by(&mut self, dy: f32);
+    /// Let the page's queued fetches/timers run (after a scroll, or while idle).
+    async fn settle(&mut self) {}
     /// Activate `node`; returns a one-line description of what the engine reports happened.
     async fn click(&mut self, node: NodeId) -> Result<String>;
     fn type_text(&mut self, node: NodeId, text: &str) -> Result<()>;
@@ -85,6 +87,9 @@ impl Backend for AgentBrowser {
     }
     fn scroll_by(&mut self, dy: f32) {
         AgentBrowser::scroll_by(self, dy)
+    }
+    async fn settle(&mut self) {
+        AgentBrowser::settle(self).await
     }
     async fn click(&mut self, node: NodeId) -> Result<String> {
         Ok(describe(self.activate(node).await?))

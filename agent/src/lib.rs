@@ -385,6 +385,9 @@ impl Observation {
     }
 }
 
+/// How long one [`AgentBrowser::settle`] may spend on a page's follow-up requests.
+pub const SETTLE_BUDGET: std::time::Duration = std::time::Duration::from_secs(2);
+
 impl AgentBrowser {
     pub fn new(width: u32, height: u32) -> Self {
         AgentBrowser {
@@ -912,6 +915,9 @@ impl AgentBrowser {
             let page = self.page.as_mut().expect("checked above");
             page.dispatch_click(node, &self.fonts, self.width as f32)
         };
+        // The handler may have started a fetch (a cookie banner's POST): perform it before the
+        // outcome is read, or it sits in the queue forever.
+        self.settle().await;
 
         // A submission the engine's activation behaviour queued, as *requested* — the `submit`
         // handler has already had its chance to validate or cancel by the time it lands here.
@@ -1156,14 +1162,32 @@ impl AgentBrowser {
         self.scroll_y
     }
 
-    /// Scroll by `dy` px, clamped to the page.
+    /// Scroll by `dy` px, clamped to the page. A real move fires the page's `scroll` listeners and
+    /// observers (an infinite feed asks for its next page there); the fetch they queue is performed
+    /// by the next [`Self::settle`].
     pub fn scroll_by(&mut self, dy: f32) {
         let max = self
             .page
             .as_ref()
             .map(|p| (p.content_height - self.height as f32).max(0.0))
             .unwrap_or(0.0);
+        let before = self.scroll_y;
         self.scroll_y = (self.scroll_y + dy).clamp(0.0, max);
+        if self.scroll_y != before {
+            let (sy, w, h) = (self.scroll_y, self.width as f32, self.height as f32);
+            if let Some(p) = self.page.as_mut() {
+                p.view_changed(sy, w, h, true);
+            }
+        }
+    }
+
+    /// Let the page's async work run: perform the `fetch()`/XHR requests that handlers, scroll
+    /// listeners and timers have queued since the last call, bounded by [`SETTLE_BUDGET`].
+    pub async fn settle(&mut self) {
+        let (fonts, w) = (&self.fonts, self.width as f32);
+        if let Some(p) = self.page.as_mut() {
+            p.settle_async(fonts, w, SETTLE_BUDGET).await;
+        }
     }
 
     /// PNG screenshot of the current viewport.

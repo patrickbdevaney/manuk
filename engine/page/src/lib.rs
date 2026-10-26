@@ -5405,6 +5405,51 @@ impl Page {
         );
     }
 
+    /// **Keep the page's async work running after the load**: perform the `fetch()`/XHR requests an
+    /// input handler (a click, a scroll event) or a timer queued, settle them, and repeat, bounded by
+    /// `budget`. `finish_loading` is the only other caller of the pump, so without this every request
+    /// started after `load` sat in the queue forever (R2.1.3: a cookie banner's POST, an
+    /// infinite-scroll feed's next page).     #[cfg(feature = "spidermonkey")]
+    pub async fn settle_async(
+        &mut self,
+        fonts: &FontContext,
+        viewport_width: f32,
+        budget: std::time::Duration,
+    ) {
+        if self.js.is_none() {
+            return;
+        }
+        let started = std::time::Instant::now();
+        // The virtual clock stops at the load horizon, so an interval armed at load (an
+        // infinite-scroll feed's 500 ms poll) would never fire again. Each round opens the clock a
+        // further SLICE_MS, runs what became due, then performs the requests that produced.
+        // Virtual time, so nothing sleeps and `--deterministic` runs still replay.
+        const SLICE_MS: u32 = 600;
+        for _ in 0..3 {
+            self.eval_for_test(&format!(
+                "__timeBudget = Math.max(__timeBudget, __now) + {SLICE_MS};"
+            ));
+            self.pump_page_fetches(fonts, viewport_width, &started, budget)
+                .await;
+            if started.elapsed() >= budget {
+                break;
+            }
+        }
+        let root = self.dom.root();
+        if self.dom.is_dirty(root) || self.dom.has_dirty_descendants(root) {
+            self.relayout(fonts, viewport_width);
+        }
+    }
+
+    #[cfg(not(feature = "spidermonkey"))]
+    pub async fn settle_async(
+        &mut self,
+        _fonts: &FontContext,
+        _viewport_width: f32,
+        _budget: std::time::Duration,
+    ) {
+    }
+
     /// Without SpiderMonkey there are no dynamic scripts to run.
     #[cfg(not(feature = "spidermonkey"))]
     pub async fn finish_loading(&mut self, fonts: &FontContext, viewport_width: f32) {

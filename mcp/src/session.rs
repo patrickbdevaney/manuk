@@ -359,6 +359,11 @@ impl<B: Backend> Session<B> {
             .get("include_hidden")
             .and_then(Value::as_bool)
             .unwrap_or(false);
+        // Follow-up requests a handler, scroll listener or interval queued run before any read, so
+        // an idle wait (observe again) sees the page the user would.
+        if matches!(tool, "observe" | "extract" | "find" | "screenshot") {
+            self.b.settle().await;
+        }
         match tool {
             "storage_state" => self
                 .storage_state(arg_str(a, "action").unwrap_or("export"), arg_str(a, "path"))
@@ -393,6 +398,7 @@ impl<B: Backend> Session<B> {
                 .map(Output::Text),
             "scroll" => self
                 .scroll(arg_str(a, "to"), a.get("dy").and_then(Value::as_f64))
+                .await
                 .map(Output::Text),
             "extract" => self
                 .extract(arg_str(a, "format").unwrap_or("text"), arg_str(a, "scope"))
@@ -604,7 +610,7 @@ impl<B: Backend> Session<B> {
         self.effect(before, &url_before, &evidence)
     }
 
-    fn scroll(&mut self, to: Option<&str>, dy: Option<f64>) -> Result<String> {
+    async fn scroll(&mut self, to: Option<&str>, dy: Option<f64>) -> Result<String> {
         let tree = self.tree()?;
         let vis_before: std::collections::HashSet<u64> = {
             let vp = self.b.viewport();
@@ -626,6 +632,7 @@ impl<B: Backend> Session<B> {
             (None, None) => bail!("scroll needs `to` (a handle) or `dy`"),
         };
         self.b.scroll_by(delta);
+        self.b.settle().await;
         let tree = self.tree()?;
         let vp = self.b.viewport();
         let mut fresh = Vec::new();
