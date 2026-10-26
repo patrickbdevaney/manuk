@@ -96,15 +96,16 @@ fn classify(f: &TextFragment, ctx: Ctx, viewport_w: f32) -> Option<&'static str>
     None
 }
 
-struct Walk {
+struct Walk<'a> {
     viewport_w: f32,
+    inline_bg: &'a dyn Fn(NodeId) -> Option<Rgba>,
     seen: Vec<TextFragment>,
     out: Vec<(&'static str, TextFragment)>,
     hidden_nodes: HashMap<NodeId, &'static str>,
     seen_nodes: HashSet<NodeId>,
 }
 
-fn walk(b: &LayoutBox, mut ctx: Ctx, w: &mut Walk) {
+fn walk(b: &LayoutBox, mut ctx: Ctx, w: &mut Walk<'_>) {
     if ctx.box_reason.is_none() {
         if b.opacity <= 0.01 {
             ctx.box_reason = Some("opacity");
@@ -131,7 +132,13 @@ fn walk(b: &LayoutBox, mut ctx: Ctx, w: &mut Walk) {
                     }
                     continue;
                 }
-                match classify(f, ctx, w.viewport_w) {
+                // Inline elements make no LayoutBox, so a pill's own background reaches us only
+                // through the element the run came from.
+                let mut fctx = ctx;
+                if let Some(bg) = f.node.and_then(|n| (w.inline_bg)(n)) {
+                    fctx.bg = bg;
+                }
+                match classify(f, fctx, w.viewport_w) {
                     Some(r) => {
                         if let Some(n) = f.node.or(b.node) {
                             w.hidden_nodes.entry(n).or_insert(r);
@@ -156,10 +163,16 @@ fn walk(b: &LayoutBox, mut ctx: Ctx, w: &mut Walk) {
 }
 
 /// Sort every text run under `root` into seen/withheld. `viewport_w` is the layout width (text
-/// starting right of it is off-canvas); the canvas is taken as white.
-pub fn analyze(root: &LayoutBox, viewport_w: f32) -> Shield {
+/// starting right of it is off-canvas); the canvas is taken as white. `inline_bg` gives the
+/// background an inline element paints behind its own text, if any (see `Walk::inline_bg`).
+pub fn analyze(
+    root: &LayoutBox,
+    viewport_w: f32,
+    inline_bg: &dyn Fn(NodeId) -> Option<Rgba>,
+) -> Shield {
     let mut w = Walk {
         viewport_w,
+        inline_bg,
         seen: Vec::new(),
         out: Vec::new(),
         hidden_nodes: HashMap::new(),

@@ -1141,7 +1141,23 @@ impl AgentBrowser {
     /// withheld (see [`shield`]).
     pub fn shield(&self) -> Result<shield::Shield> {
         let page = self.page.as_ref().context("no page loaded")?;
-        Ok(shield::analyze(&page.root_box, self.width as f32))
+        let inline_bg = |n: manuk_dom::NodeId| {
+            // Nearest inline-level ancestor (self included) with an opaque-ish background; a
+            // block-level one is already in the layout tree.
+            let mut cur = Some(n);
+            while let Some(c) = cur {
+                let st = page.styles_of(c)?;
+                if !matches!(st.display, manuk_css::Display::Inline) {
+                    return None;
+                }
+                if let Some(bg) = st.background_color.filter(|b| b.a >= 200) {
+                    return Some(bg);
+                }
+                cur = page.dom().parent(c);
+            }
+            None
+        };
+        Ok(shield::analyze(&page.root_box, self.width as f32, &inline_bg))
     }
 
     /// The current observation.
@@ -1956,6 +1972,22 @@ mod tests {
         let mut b = AgentBrowser::new(800, 600);
         b.navigate(&data_url(html)).await.unwrap();
         b
+    }
+
+    /// R1.4.a.a: white text on an inline element's own background (a tag pill) is readable, so
+    /// the shield keeps it; grey on the page's white is still camouflage.
+    #[tokio::test]
+    async fn shield_uses_the_inline_elements_own_background() {
+        let b = browser_with(
+            "<body><p><a style=\"background:rgb(124,163,230);color:rgb(255,255,255)\">pillword</a> \
+             <a style=\"display:inline-block;background:rgb(124,163,230);color:rgb(255,255,255)\">blockpill</a> \
+             <span style=\"color:rgb(250,250,250)\">greyword</span></p></body>",
+        )
+        .await;
+        let sh = b.shield().unwrap();
+        assert!(sh.text.contains("pillword"), "inline pill withheld: {sh:?}");
+        assert!(sh.text.contains("blockpill"), "inline-block pill withheld: {sh:?}");
+        assert!(!sh.text.contains("greyword"), "camouflage kept: {sh:?}");
     }
 
     #[tokio::test]
