@@ -3519,6 +3519,18 @@ pub struct Stylesheet {
 }
 
 impl Stylesheet {
+    /// A hash of the CSS source this sheet was parsed from, or `None` for a programmatically-built
+    /// sheet (no source to vouch for its rules). Two sheets with the same hash cascade identically.
+    pub fn source_hash(&self) -> Option<u64> {
+        use std::hash::{Hash, Hasher};
+        if self.source.is_empty() {
+            return None;
+        }
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        self.source.hash(&mut h);
+        Some(h.finish())
+    }
+
     /// **Apply this sheet's `:has()` rules to `style` — the rules Stylo THREW AWAY.**
     ///
     /// Stylo's *servo* build hardcodes `parse_has() -> false`, so a selector containing `:has()` fails to

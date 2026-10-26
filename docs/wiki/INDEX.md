@@ -150,6 +150,12 @@
   - L69 · ⚠ Found by a vacuity arm, not by reading the tracker
   - L79 · The gates
 
+## A layout whose inputs equal the previous slow layout is that layout (restyle_and_layout memo)
+`docs/wiki/a-layout-whose-inputs-equal-the-last-one-is-that-layout.md`
+
+  - L5 · Mechanism (engine/page/src/lib.rs restyle_and_layout)
+  - L19 · Limits
+
 ## A linked sheet is in the CSSOM
 `docs/wiki/a-linked-sheet-is-in-the-cssom.md`
 
@@ -3738,4 +3744,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3073 sections across 165 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3075 sections across 166 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

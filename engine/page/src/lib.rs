@@ -286,6 +286,34 @@ fn restyle_and_layout(
     // image's intrinsic size is not in any stylesheet, so a cascade that rebuilds the style map
     // erases it, and the picture becomes a full-width strip of zero height.
     apply_natural_sizes(dom, &mut styles, images);
+
+    // **A layout whose inputs equal the previous slow layout's IS that layout.** comix.to ran ~13
+    // whole layouts of ~440 ms over one tree: a carousel script toggles `class` on its slides every
+    // round, so the DOM and the dirty bits move, but the computed styles (and everything else layout
+    // reads) come out equal. Layout reads no `class`/`style` attribute (those act through the
+    // cascade, whose output is compared whole below), so the key leaves them out.
+    let memo_key = if dom.len() >= PASS_MEMO_MIN_NODES {
+        layout_key(dom, sheets, fonts, viewport_width, images)
+    } else {
+        None
+    };
+    if let Some(k) = memo_key {
+        let hit = LAST_LAYOUT.with(|c| {
+            c.borrow().as_ref().and_then(|m| {
+                // `layouts_run` unchanged = no other layout ran since, so the thread-local side
+                // outputs of `layout_document` (grid tracks, relative offsets, ...) are still ours.
+                (m.key == k && m.epoch == manuk_layout::layouts_run() && m.styles_in == styles)
+                    .then(|| (m.styles_out.clone(), m.root_box.clone()))
+            })
+        });
+        if let Some(out) = hit {
+            if manuk_net::nettrace::enabled() {
+                manuk_net::nettrace::emit("layout", "0");
+            }
+            return out;
+        }
+    }
+    let styles_in = memo_key.map(|_| styles.clone());
     let t_layout = std::time::Instant::now();
     let mut root_box = layout_document(dom, &styles, fonts, viewport_width);
     let us_layout = t_layout.elapsed().as_micros() as u64;
@@ -299,6 +327,20 @@ fn restyle_and_layout(
     if manuk_net::nettrace::enabled() {
         manuk_net::nettrace::emit("layout", &format!("{}", us_layout + us_cq));
     }
+    if let (Some(k), Some(styles_in)) = (memo_key, styles_in) {
+        // Only a layout slow enough to be worth the clones is remembered.
+        if (us_layout + us_cq) / 1000 >= PASS_MEMO_MIN_MS {
+            LAST_LAYOUT.with(|c| {
+                *c.borrow_mut() = Some(LayoutMemo {
+                    key: k,
+                    epoch: manuk_layout::layouts_run(),
+                    styles_in,
+                    styles_out: styles.clone(),
+                    root_box: root_box.clone(),
+                })
+            });
+        }
+    }
     if (us_cascade + us_layout + us_cq) / 1000 >= 100 {
         tracing::info!(
             cascade_ms = us_cascade / 1000,
@@ -311,6 +353,99 @@ fn restyle_and_layout(
         );
     }
     (styles, root_box)
+}
+
+/// Smallest document the layout memo bothers with; below it a layout is too cheap to be worth proving.
+const PASS_MEMO_MIN_NODES: usize = 1000;
+/// Smallest layout (ms) that is stored. `MANUK_NO_PASS_MEMO=1` disables the memo (the gate's mutant).
+const PASS_MEMO_MIN_MS: u64 = 50;
+
+struct LayoutMemo {
+    key: u64,
+    epoch: usize,
+    /// The styles layout was handed (post-cascade, pre-`@container` re-pass).
+    styles_in: StyleMap,
+    /// The styles it returned (after the `@container` re-pass).
+    styles_out: StyleMap,
+    root_box: LayoutBox,
+}
+
+thread_local! {
+    static LAST_LAYOUT: std::cell::RefCell<Option<LayoutMemo>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Everything `layout_document` and the `@container` re-pass read besides the computed styles: the
+/// tree's shape, tags, namespaces, text and attributes (but not `class`/`style`, see the call site),
+/// shadow roots, the sheets' source, the viewport/ICB, the font set, the decoded images and
+/// the interaction state. `None` when the memo is disabled or a sheet has no source to vouch for.
+fn layout_key(
+    dom: &Dom,
+    sheets: &[Stylesheet],
+    fonts: &FontContext,
+    viewport_width: f32,
+    images: &std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>>,
+) -> Option<u64> {
+    use manuk_dom::NodeData;
+    use std::hash::{Hash, Hasher};
+    if std::env::var_os("MANUK_NO_PASS_MEMO").is_some() {
+        return None;
+    }
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    for s in sheets {
+        s.source_hash()?.hash(&mut h);
+    }
+    sheets.len().hash(&mut h);
+    viewport_width.to_bits().hash(&mut h);
+    let (vw, vh) = manuk_css::values::viewport_size();
+    (vw.to_bits(), vh.to_bits()).hash(&mut h);
+    let (iw, ih) = manuk_css::values::icb_size();
+    (iw.to_bits(), ih.to_bits()).hash(&mut h);
+    fonts.fingerprint().hash(&mut h);
+    let mut imgs: Vec<_> = images
+        .iter()
+        .map(|(n, i)| {
+            (
+                n.0,
+                i.width,
+                i.height,
+                i.rgba.len(),
+                std::rc::Rc::as_ptr(i) as usize,
+            )
+        })
+        .collect();
+    imgs.sort_unstable();
+    imgs.hash(&mut h);
+    (
+        dom.quirks(),
+        dom.hovered(),
+        dom.focused(),
+        dom.focused().map(|f| dom.is_focus_visible(f)),
+        dom.active(),
+    )
+        .hash(&mut h);
+    dom.len().hash(&mut h);
+    for n in dom.descendants(dom.root()) {
+        n.hash(&mut h);
+        dom.parent(n).hash(&mut h);
+        dom.shadow_root(n).hash(&mut h);
+        match dom.data(n) {
+            NodeData::Element(e) => {
+                e.name.hash(&mut h);
+                e.namespace.hash(&mut h);
+                for a in e
+                    .attrs
+                    .iter()
+                    .filter(|a| a.name != "class" && a.name != "style")
+                {
+                    a.name.hash(&mut h);
+                    a.value.hash(&mut h);
+                }
+            }
+            NodeData::Text(t) => t.hash(&mut h),
+            other => std::mem::discriminant(other).hash(&mut h),
+        }
+    }
+    Some(h.finish())
 }
 
 /// A hyperlink discovered in the page, with its href resolved to an absolute URL.

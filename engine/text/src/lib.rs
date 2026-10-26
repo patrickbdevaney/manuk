@@ -652,6 +652,14 @@ impl FontContext {
         loaded
     }
 
+    /// Changes whenever the set of fonts layout can resolve against changes (a web font was
+    /// registered or declared). Lazy interning of already-known fonts does not move it.
+    pub fn fingerprint(&self) -> u64 {
+        (self.db.borrow().len() as u64) << 32
+            | (self.webfonts.borrow().len() as u64) << 16
+            | self.declared_webfonts.borrow().len() as u64
+    }
+
     /// Register a downloaded font (no CSS family alias — matched by its internal name).
     pub fn register_font(&self, data: Vec<u8>) {
         self.db.borrow_mut().load_font_data(data);

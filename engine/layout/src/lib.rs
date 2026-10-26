@@ -2162,6 +2162,12 @@ pub fn generated_alt_text(
     out
 }
 
+/// How many `layout_document` calls have run in this process. A caller that remembers a layout
+/// can tell whether any other layout has run since (and so overwritten the thread-local side outputs).
+pub fn layouts_run() -> usize {
+    LAYOUTS.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 pub fn layout_document(
     dom: &Dom,
     styles: &StyleMap,

@@ -700,6 +700,14 @@ BASE is HEAD df08661a built with the same command, NEW is HEAD + the font change
 - **Not comparable:** the pre-sprint `target/release/a11y-dump` that sat in the tree (Alan_Turing cascade 106 ms, wall 4.7 s) is ~2.4x
   faster in cascade than a clean build of HEAD (250 ms, wall 7.8 s) - see PERF.1.3.c.
 
+## PERF.1.3.a results (chrome_ver=145.0.7632.116; manuk only)
+
+comix.to, `MANUK_NET_TRACE` layout lines summed, interleaved base/new/mutant (`MANUK_NO_PASS_MEMO=1`), 2 runs each (live page):
+BASE (binary built before the change) 5.41 / 5.57 s; NEW 1.91 / 2.02 s; MUTANT 5.69 / 4.86 s. Bars: NEW <= 2.5 s met, MUTANT > 4.5 s red as required.
+The passes are not identical DOMs (a carousel toggles `class` each round) but their computed styles and layout inputs are, see
+docs/wiki/a-layout-whose-inputs-equal-the-last-one-is-that-layout.md. a11y node drift BASE vs NEW,
+`scripts/perf1-nodes-gate.py`: 0.000% on all 20 reachable URLs (mkp.gem.gov.in, virtual.lapampa.edu.ar unreachable from the baseline too: skipped).
+
 ## PERF.1.4 results (script phase)
 
 chrome_ver=145.0.7632.116. Paired same-minute A/B on example.com, 7 runs, `scripts/perf1-profile.py --manuk-b` with arm B =
