@@ -15,8 +15,20 @@ fn arg<T: std::str::FromStr>(name: &str, default: T) -> T {
         .unwrap_or(default)
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
+    // Untrusted pages: jitless engine + landlock, applied before the runtime spawns any thread.
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) == Some("--confine-selftest") {
+        return manuk_agent::confine::selftest(&args[1..]);
+    }
+    manuk_agent::confine::harden_process(&mut args, Default::default());
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?
+        .block_on(run())
+}
+
+async fn run() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),

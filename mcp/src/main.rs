@@ -1,7 +1,7 @@
 fn main() -> anyhow::Result<()> {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
     if args.first().map(String::as_str) == Some("--confine-selftest") {
-        return selftest(&args[1..]);
+        return manuk_mcp::confine::selftest(&args[1..]);
     }
     let before = args.len();
     args.retain(|a| a != "--deterministic");
@@ -39,32 +39,4 @@ fn main() -> anyhow::Result<()> {
         }
     }
     manuk_mcp::server::run_stdio(1280, 800)
-}
-
-/// `--confine-selftest <outside-file> <inside-dir> [--no-confine]`: confine, then report what the
-/// process can still do. The gate test runs this and reads the lines.
-fn selftest(a: &[String]) -> anyhow::Result<()> {
-    let (outside, inside) = (&a[0], &a[1]);
-    if !a.iter().any(|x| x == "--no-confine") {
-        let g = manuk_mcp::confine::Grants {
-            read: vec![],
-            write: vec![inside.into()],
-        };
-        println!("confine={:?}", manuk_mcp::confine::confine(&g));
-    }
-    let w = |p: &str| std::fs::write(p, b"x").is_ok();
-    println!("write_outside={}", w(outside));
-    println!("write_inside={}", w(&format!("{inside}/ok")));
-    println!(
-        "exec={}",
-        std::process::Command::new("/bin/true").status().is_ok()
-    );
-    println!("read_usr={}", std::fs::read_dir("/usr").is_ok());
-    println!(
-        "read_home={}",
-        std::env::var("HOME")
-            .map(|h| std::fs::read_dir(h).is_ok())
-            .unwrap_or(false)
-    );
-    Ok(())
 }

@@ -17,6 +17,7 @@
 use anyhow::{anyhow, Context, Result};
 use manuk_page::{fetch_html, Link, Page};
 
+pub mod confine;
 pub mod forms;
 /// §4b — HTML form model (find form, read fields, build a GET submission URL).
 pub mod shield;

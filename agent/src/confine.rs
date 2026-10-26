@@ -138,3 +138,53 @@ pub fn confine(g: &Grants) -> Outcome {
     }
     Outcome::Enforced
 }
+
+/// Jitless engine + landlock for a headless agent binary (R1.6.a). Call first thing in a plain
+/// synchronous `main`, before any thread exists (so not under `#[tokio::main]`). `--no-confine` is
+/// stripped from `args` and turns the OS half off (the jitless half stays); returns whether confined.
+pub fn harden_process(args: &mut Vec<String>, extra: Grants) -> bool {
+    let before = args.len();
+    args.retain(|a| a != "--no-confine");
+    let confined = args.len() == before;
+    manuk_js::hardening::enable_jitless();
+    if confined {
+        let mut g = extra;
+        g.write.push(cache_dir());
+        g.read.extend(std::env::current_dir().ok());
+        if let Outcome::Unsupported(why) = confine(&g) {
+            eprintln!("WARNING: OS confinement unavailable ({why}); running unconfined");
+        }
+    }
+    confined
+}
+
+/// `--confine-selftest <outside-file> <inside-dir> [--no-confine]`: confine, then report what the
+/// process can still do. The gate tests run this on every agent binary and read the lines.
+pub fn selftest(a: &[String]) -> anyhow::Result<()> {
+    anyhow::ensure!(a.len() >= 2, "--confine-selftest <outside-file> <inside-dir>");
+    let (outside, inside) = (&a[0], &a[1]);
+    if !a.iter().any(|x| x == "--no-confine") {
+        let g = Grants {
+            read: vec![],
+            write: vec![inside.into()],
+        };
+        manuk_js::hardening::enable_jitless();
+        println!("confine={:?}", confine(&g));
+    }
+    let w = |p: &str| std::fs::write(p, b"x").is_ok();
+    println!("write_outside={}", w(outside));
+    println!("write_inside={}", w(&format!("{inside}/ok")));
+    println!(
+        "exec={}",
+        std::process::Command::new("/bin/true").status().is_ok()
+    );
+    println!("read_usr={}", std::fs::read_dir("/usr").is_ok());
+    println!(
+        "read_home={}",
+        std::env::var("HOME")
+            .map(|h| std::fs::read_dir(h).is_ok())
+            .unwrap_or(false)
+    );
+    println!("jitless={}", manuk_js::hardening::jitless());
+    Ok(())
+}

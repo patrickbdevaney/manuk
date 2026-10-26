@@ -3247,6 +3247,7 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "futures-util",
+ "libc",
  "manuk-a11y",
  "manuk-css",
  "manuk-dom",
