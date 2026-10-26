@@ -3556,6 +3556,7 @@ dependencies = [
  "memmap2",
  "swash",
  "tracing",
+ "ttf-parser 0.21.1",
  "unicode-bidi",
 ]
 

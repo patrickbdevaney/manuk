@@ -269,6 +269,55 @@ type RunKey = (FontKey, u32, bool, String);
 /// Key for the glyph raster cache: `(face, size bits, glyph id, subpixel bucket 0..4)`.
 type GlyphKey = (FaceId, u32, u16, u8);
 
+/// A face's horizontal line metrics, read straight from the `hhea` table.
+///
+/// This replaces `fontdue::Font`, whose `from_bytes` compiles every glyph outline up front (8-12 ms
+/// per face) although layout only ever asked it for these three numbers. The arithmetic is
+/// fontdue's own — same `ttf-parser`, same `i16 -> f32` widening, same `size / units_per_em` scale
+/// — so the values are bit-identical.
+pub struct FaceMetrics {
+    ascent: f32,
+    descent: f32,
+    line_gap: f32,
+    units_per_em: f32,
+}
+
+/// Scaled horizontal line metrics (`descent` is negative, below the baseline).
+pub struct ScaledLineMetrics {
+    pub ascent: f32,
+    pub descent: f32,
+    pub line_gap: f32,
+}
+
+impl FaceMetrics {
+    fn read(data: &[u8], index: u32) -> Option<Self> {
+        if std::env::var_os("MANUK_EAGER_FONT_PARSE").is_some() {
+            // Mutant for the PERF.1.3.b gate: pay the old eager outline parse.
+            let settings = fontdue::FontSettings {
+                collection_index: index,
+                ..fontdue::FontSettings::default()
+            };
+            let _ = fontdue::Font::from_bytes(data, settings).ok()?;
+        }
+        let face = ttf_parser::Face::parse(data, index).ok()?;
+        Some(Self {
+            ascent: face.ascender() as f32,
+            descent: face.descender() as f32,
+            line_gap: face.line_gap() as f32,
+            units_per_em: face.units_per_em() as f32,
+        })
+    }
+
+    pub fn horizontal_line_metrics(&self, px: f32) -> Option<ScaledLineMetrics> {
+        let scale = px / self.units_per_em;
+        Some(ScaledLineMetrics {
+            ascent: self.ascent * scale,
+            descent: self.descent * scale,
+            line_gap: self.line_gap * scale,
+        })
+    }
+}
+
 /// Owned font-file bytes + face index, so a swash `FontRef` (which borrows the data) can be
 /// built on demand for shaping/rasterization.
 struct FaceData {
@@ -315,7 +364,7 @@ const SUBPIXEL_BUCKETS: u8 = 4;
 
 pub struct FontContext {
     db: RefCell<fontdb::Database>,
-    cache: RefCell<HashMap<FontKey, Option<Rc<fontdue::Font>>>>,
+    cache: RefCell<HashMap<FontKey, Option<Rc<FaceMetrics>>>>,
     /// The face registry: interned faces indexed by [`FaceId`], deduped by fontdb id.
     faces: RefCell<Vec<Rc<FaceData>>>,
     face_by_dbid: RefCell<HashMap<fontdb::ID, FaceId>>,
@@ -324,7 +373,7 @@ pub struct FontContext {
     /// A fontdue face per interned [`FaceId`], so a FALLBACK face can be asked for its vertical
     /// metrics through the same reader the primary uses. Built lazily; a face that fails to parse
     /// memoises as `None` so it is not retried per line box.
-    face_fonts: RefCell<HashMap<FaceId, Option<Rc<fontdue::Font>>>>,
+    face_fonts: RefCell<HashMap<FaceId, Option<Rc<FaceMetrics>>>>,
     /// Discovered fallback faces (lazy); per-`(face, char)` coverage memo.
     fallbacks: RefCell<Option<Vec<fontdb::ID>>>,
     coverage: RefCell<HashMap<(FaceId, char), bool>>,
@@ -643,7 +692,7 @@ impl FontContext {
     }
 
     /// Resolve (and cache) a fontdue face for `key`, or `None` if unavailable.
-    pub fn font(&self, key: FontKey) -> Option<Rc<fontdue::Font>> {
+    pub fn font(&self, key: FontKey) -> Option<Rc<FaceMetrics>> {
         if let Some(hit) = self.cache.borrow().get(&key) {
             return hit.clone();
         }
@@ -1083,15 +1132,12 @@ impl FontContext {
             .or_else(|| self.db.borrow().faces().next().map(|f| f.id))
     }
 
-    fn load(&self, key: FontKey) -> Option<Rc<fontdue::Font>> {
+    fn load(&self, key: FontKey) -> Option<Rc<FaceMetrics>> {
         let id = self.face_id(key)?;
-        let font = self.db.borrow().with_face_data(id, |data, index| {
-            let settings = fontdue::FontSettings {
-                collection_index: index,
-                ..fontdue::FontSettings::default()
-            };
-            fontdue::Font::from_bytes(data, settings).ok()
-        })??;
+        let font = self
+            .db
+            .borrow()
+            .with_face_data(id, |data, index| FaceMetrics::read(data, index))??;
         Some(Rc::new(font))
     }
 
@@ -1316,19 +1362,13 @@ impl FontContext {
     /// metrics read out of it are the SAME numbers the primary path reads. Cached per face.
     ///
     /// [`load`]: FontContext::load
-    fn face_font(&self, fid: FaceId) -> Option<Rc<fontdue::Font>> {
+    fn face_font(&self, fid: FaceId) -> Option<Rc<FaceMetrics>> {
         if let Some(hit) = self.face_fonts.borrow().get(&fid) {
             return hit.clone();
         }
-        let built = self.face(fid).and_then(|fd| {
-            let settings = fontdue::FontSettings {
-                collection_index: fd.index,
-                ..fontdue::FontSettings::default()
-            };
-            fontdue::Font::from_bytes(&fd.data[..], settings)
-                .ok()
-                .map(Rc::new)
-        });
+        let built = self
+            .face(fid)
+            .and_then(|fd| FaceMetrics::read(&fd.data[..], fd.index).map(Rc::new));
         self.face_fonts.borrow_mut().insert(fid, built.clone());
         built
     }

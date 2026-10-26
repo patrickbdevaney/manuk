@@ -78,6 +78,12 @@
   - L81 · Where it is
   - L91 · Banked next, with the evidence already taken
 
+## A face's line metrics are three hhea numbers, not a glyph-outline parse
+`docs/wiki/a-face-s-line-metrics-are-three-hhea-numbers-not-a-glyph-parse.md`
+
+  - L5 · Mechanism (engine/text/src/lib.rs, FaceMetrics)
+  - L14 · Measured (5 runs, quotes.toscrape.com/js, trace)
+
 ## A `@font-face` declares its own weight
 `docs/wiki/a-font-face-declares-its-own-weight.md`
 
@@ -3744,4 +3750,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3075 sections across 166 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3077 sections across 167 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

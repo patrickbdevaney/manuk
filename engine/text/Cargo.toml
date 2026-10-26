@@ -16,6 +16,7 @@ fontdb.workspace = true
 # Already in the lockfile via fontdb's `memmap`; used here so a face's bytes are mapped, not copied.
 memmap2 = "0.9"
 fontdue.workspace = true
+ttf-parser = "=0.21.1"
 tracing.workspace = true
 # Bounded shaped-run/measure cache (A3). Pure-Rust, cross-platform.
 lru = "0.18"
