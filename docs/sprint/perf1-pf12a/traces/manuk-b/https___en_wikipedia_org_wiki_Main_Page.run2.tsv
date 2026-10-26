@@ -1,0 +1,172 @@
+0	epoch	1792975634130659
+10958	dns	en.wikipedia.org	10924
+121878	connect	en.wikipedia.org	121850
+258495	req	https://en.wikipedia.org/wiki/Main_Page	0	258492	200	HTTP/2.0	52236	GET
+335711	body	https://en.wikipedia.org/wiki/Main_Page	263149
+344258	phase	html parse	8267
+345097	dns	thumb.wikimedia.org	735
+369691	req	https://en.wikipedia.org/w/load.php?lang=en&amp;modules=ext.uls.interlanguage%7Cext.visualEditor.desktopArticleTarget.noscript%7Cext.wikimediamessages.styles%7Cmediawiki.skins.legacy%7Cskins.vector.icons%2Cstyles%7Cskins.vector.search.codex.styles%7Cwikibase.client.init&amp;only=styles&amp;skin=vector-2022	336582	33107	200	HTTP/2.0	196	GET
+369728	body	https://en.wikipedia.org/w/load.php?lang=en&amp;modules=ext.uls.interlanguage%7Cext.visualEditor.desktopArticleTarget.noscript%7Cext.wikimediamessages.styles%7Cmediawiki.skins.legacy%7Cskins.vector.icons%2Cstyles%7Cskins.vector.search.codex.styles%7Cwikibase.client.init&amp;only=styles&amp;skin=vector-2022	196
+402712	req	https://en.wikipedia.org/static/images/footer/wikimedia-button.svg	369811	32899	200	HTTP/2.0	1595	GET
+402794	body	https://en.wikipedia.org/static/images/footer/wikimedia-button.svg	3256
+403209	req	https://en.wikipedia.org/w/load.php?lang=en&amp;modules=site.styles&amp;only=styles&amp;skin=vector-2022	369825	33383	200	HTTP/2.0	196	GET
+403241	body	https://en.wikipedia.org/w/load.php?lang=en&amp;modules=site.styles&amp;only=styles&amp;skin=vector-2022	196
+408927	req	https://en.wikipedia.org/static/images/icons/enwiki-25.svg	369846	39080	200	HTTP/2.0	44092	GET
+419683	body	https://en.wikipedia.org/static/images/icons/enwiki-25.svg	115918
+421633	req	https://en.wikipedia.org/static/images/mobile/copyright/wikipedia-tagline-en-25.svg	369896	51735	200	HTTP/2.0	4788	GET
+421724	body	https://en.wikipedia.org/static/images/mobile/copyright/wikipedia-tagline-en-25.svg	15219
+432841	req	https://en.wikipedia.org/w/resources/assets/poweredby_mediawiki.svg	369873	62967	200	HTTP/2.0	4369	GET
+432946	body	https://en.wikipedia.org/w/resources/assets/poweredby_mediawiki.svg	14576
+434543	req	https://en.wikipedia.org/static/images/mobile/copyright/wikipedia-wordmark-en-25.svg	369861	64681	200	HTTP/2.0	4020	GET
+434619	body	https://en.wikipedia.org/static/images/mobile/copyright/wikipedia-wordmark-en-25.svg	9865
+435605	req	https://en.wikipedia.org/w/load.php?lang=en&modules=site.styles&only=styles&skin=vector-2022	369917	65687	200	HTTP/2.0	2305	GET
+435664	body	https://en.wikipedia.org/w/load.php?lang=en&modules=site.styles&only=styles&skin=vector-2022	6881
+440729	req	https://en.wikipedia.org/w/load.php?lang=en&modules=ext.uls.interlanguage%7Cext.visualEditor.desktopArticleTarget.noscript%7Cext.wikimediamessages.styles%7Cmediawiki.skins.legacy%7Cskins.vector.icons%2Cstyles%7Cskins.vector.search.codex.styles%7Cwikibase.client.init&only=styles&skin=vector-2022	369938	70789	200	HTTP/2.0	23324	GET
+444079	body	https://en.wikipedia.org/w/load.php?lang=en&modules=ext.uls.interlanguage%7Cext.visualEditor.desktopArticleTarget.noscript%7Cext.wikimediamessages.styles%7Cmediawiki.skins.legacy%7Cskins.vector.icons%2Cstyles%7Cskins.vector.search.codex.styles%7Cwikibase.client.init&only=styles&skin=vector-2022	196947
+452393	req	https://en.wikipedia.org/w/load.php?lang=en&modules=startup&only=scripts&raw=1&skin=vector-2022	369960	82431	200	HTTP/2.0	22165	GET
+453348	body	https://en.wikipedia.org/w/load.php?lang=en&modules=startup&only=scripts&raw=1&skin=vector-2022	70658
+453401	phase	external scripts	109129
+453810	phase	module graph prefetch	395
+453841	phase	blocking stylesheets	17
+455025	connect	thumb.wikimedia.org	110670
+545438	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/0/00/A_black_and_white_ball_of_fur_%2814409103416%29.jpg/500px-A_black_and_white_ball_of_fur_%2814409103416%29.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	344337	201098	200	HTTP/2.0	48326	GET
+616506	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/0/00/A_black_and_white_ball_of_fur_%2814409103416%29.jpg/500px-A_black_and_white_ball_of_fur_%2814409103416%29.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	48326
+631921	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/5/55/Hotel_de_ville_de_Limoges_18_octobre_2026_011_%28cropped%29.jpg/330px-Hotel_de_ville_de_Limoges_18_octobre_2026_011_%28cropped%29.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	455081	176839	200	HTTP/2.0	48931	GET
+647244	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8f/Tissot_The_Flight_of_the_Prisoners.jpg/1280px-Tissot_The_Flight_of_the_Prisoners.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	455093	192150	200	HTTP/2.0	340600	GET
+681696	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b8/Edward_James_Roye_c._1850.jpg/250px-Edward_James_Roye_c._1850.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	455121	226572	200	HTTP/2.0	17952	GET
+689900	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/5/55/Hotel_de_ville_de_Limoges_18_octobre_2026_011_%28cropped%29.jpg/330px-Hotel_de_ville_de_Limoges_18_octobre_2026_011_%28cropped%29.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	48931
+690860	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/2/2e/The_Women%27s_Royal_Air_Force_1914_-_1918_%28IWM_Q_72639%29.jpg/330px-The_Women%27s_Royal_Air_Force_1914_-_1918_%28IWM_Q_72639%29.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	455164	235694	200	HTTP/2.0	22583	GET
+690864	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/1/14/Meiyu_Issue_One.png/250px-Meiyu_Issue_One.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	455143	235720	200	HTTP/2.0	117859	GET
+699535	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b8/Edward_James_Roye_c._1850.jpg/250px-Edward_James_Roye_c._1850.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	17952
+715854	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/2/2e/The_Women%27s_Royal_Air_Force_1914_-_1918_%28IWM_Q_72639%29.jpg/330px-The_Women%27s_Royal_Air_Force_1914_-_1918_%28IWM_Q_72639%29.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	22583
+733374	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/1/14/Meiyu_Issue_One.png/250px-Meiyu_Issue_One.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	117859
+734334	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a6/MediaWiki-2020-icon.svg/120px-MediaWiki-2020-icon.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	616749	117582	200	HTTP/2.0	11137	GET
+734339	req	https://thumb.wikimedia.org/wikipedia/en/thumb/4/4a/Commons-logo.svg/120px-Commons-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	616722	117616	200	HTTP/2.0	6693	GET
+735797	body	https://thumb.wikimedia.org/wikipedia/en/thumb/4/4a/Commons-logo.svg/120px-Commons-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	6693
+736051	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/9/9e/Nat_Bailey_Stadium_%285564120036%29.jpg/330px-Nat_Bailey_Stadium_%285564120036%29.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	616632	119418	200	HTTP/2.0	20490	GET
+737213	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a6/MediaWiki-2020-icon.svg/120px-MediaWiki-2020-icon.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	11137
+737682	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4c/Wikisource-logo.svg/120px-Wikisource-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	616772	120910	200	HTTP/2.0	8164	GET
+739408	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0b/Wikiversity_logo_2017.svg/120px-Wikiversity_logo_2017.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	616804	122603	200	HTTP/2.0	2302	GET
+739436	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/d/df/Wikispecies-logo.svg/120px-Wikispecies-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	616786	122648	200	HTTP/2.0	12361	GET
+739461	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/9/99/Wiktionary-logo-en-v2.svg/120px-Wiktionary-logo-en-v2.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	616819	122639	200	HTTP/2.0	8672	GET
+739484	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fa/Wikiquote-logo.svg/120px-Wikiquote-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	616865	122618	200	HTTP/2.0	6832	GET
+739509	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/d/dd/Wikivoyage-Logo-v3-icon.svg/120px-Wikivoyage-Logo-v3-icon.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	616882	122625	200	HTTP/2.0	2423	GET
+739533	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0c/Wikifunctions-logo.svg/120px-Wikifunctions-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	616849	122683	200	HTTP/2.0	5970	GET
+739512	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/7/75/Wikimedia_Community_Logo.svg/120px-Wikimedia_Community_Logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	616827	122683	200	HTTP/2.0	9842	GET
+739538	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/ff/Wikidata-logo.svg/120px-Wikidata-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	616840	122697	200	HTTP/2.0	645	GET
+740334	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4c/Wikisource-logo.svg/120px-Wikisource-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	8164
+741336	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0b/Wikiversity_logo_2017.svg/120px-Wikiversity_logo_2017.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2302
+742096	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fa/Wikibooks-logo.svg/120px-Wikibooks-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	616897	125198	200	HTTP/2.0	7406	GET
+742970	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/9/99/Wiktionary-logo-en-v2.svg/120px-Wiktionary-logo-en-v2.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	8672
+744113	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/d/dd/Wikivoyage-Logo-v3-icon.svg/120px-Wikivoyage-Logo-v3-icon.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2423
+745742	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/7/75/Wikimedia_Community_Logo.svg/120px-Wikimedia_Community_Logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	9842
+746890	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/d/df/Wikispecies-logo.svg/120px-Wikispecies-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	12361
+748293	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fa/Wikibooks-logo.svg/120px-Wikibooks-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	7406
+749534	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/9/9e/Nat_Bailey_Stadium_%285564120036%29.jpg/330px-Nat_Bailey_Stadium_%285564120036%29.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	20490
+749806	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/ff/Wikidata-logo.svg/120px-Wikidata-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	645
+751262	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0c/Wikifunctions-logo.svg/120px-Wikifunctions-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	5970
+752670	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fa/Wikiquote-logo.svg/120px-Wikiquote-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	6832
+759429	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8f/Tissot_The_Flight_of_the_Prisoners.jpg/1280px-Tissot_The_Flight_of_the_Prisoners.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	340600
+839907	cascade	44003
+1567045	layout	727109
+1578210	phase	cascade+layout+blocking scripts	1124352
+2092450	cascade	207632
+2119909	layout	27426
+2133081	phase	deferred scripts	554845
+2138236	phase	DOMContentLoaded	5134
+2158133	phase	subframes (pre-load)	19875
+2189941	req	https://en.wikipedia.org/static/images/footer/wikimedia.svg	2158852	31085	200	HTTP/2.0	397	GET
+2190028	body	https://en.wikipedia.org/static/images/footer/wikimedia.svg	742
+2192186	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/1/14/Meiyu_Issue_One.png/120px-Meiyu_Issue_One.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2158461	33723	200	HTTP/2.0	33793	GET
+2193727	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/1/14/Meiyu_Issue_One.png/120px-Meiyu_Issue_One.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	33793
+2193789	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/0/00/A_black_and_white_ball_of_fur_%2814409103416%29.jpg/250px-A_black_and_white_ball_of_fur_%2814409103416%29.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2158499	35289	200	HTTP/2.0	15451	GET
+2194932	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/0/00/A_black_and_white_ball_of_fur_%2814409103416%29.jpg/250px-A_black_and_white_ball_of_fur_%2814409103416%29.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	15451
+2195003	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/2/2e/The_Women%27s_Royal_Air_Force_1914_-_1918_%28IWM_Q_72639%29.jpg/250px-The_Women%27s_Royal_Air_Force_1914_-_1918_%28IWM_Q_72639%29.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2158521	36481	200	HTTP/2.0	14208	GET
+2196129	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/5/55/Hotel_de_ville_de_Limoges_18_octobre_2026_011_%28cropped%29.jpg/250px-Hotel_de_ville_de_Limoges_18_octobre_2026_011_%28cropped%29.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2158541	37587	200	HTTP/2.0	29261	GET
+2197255	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/5/55/Hotel_de_ville_de_Limoges_18_octobre_2026_011_%28cropped%29.jpg/250px-Hotel_de_ville_de_Limoges_18_octobre_2026_011_%28cropped%29.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	29261
+2197312	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b8/Edward_James_Roye_c._1850.jpg/120px-Edward_James_Roye_c._1850.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2158562	38748	200	HTTP/2.0	5065	GET
+2198432	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b8/Edward_James_Roye_c._1850.jpg/120px-Edward_James_Roye_c._1850.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	5065
+2198485	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/9/9e/Nat_Bailey_Stadium_%285564120036%29.jpg/250px-Nat_Bailey_Stadium_%285564120036%29.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2158582	39902	200	HTTP/2.0	13582	GET
+2199605	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/9/9e/Nat_Bailey_Stadium_%285564120036%29.jpg/250px-Nat_Bailey_Stadium_%285564120036%29.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	13582
+2199666	req	https://thumb.wikimedia.org/wikipedia/en/thumb/4/4a/Commons-logo.svg/40px-Commons-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2158622	41043	200	HTTP/2.0	2189	GET
+2200777	body	https://thumb.wikimedia.org/wikipedia/en/thumb/4/4a/Commons-logo.svg/40px-Commons-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2189
+2200827	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a6/MediaWiki-2020-icon.svg/40px-MediaWiki-2020-icon.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2158643	42183	200	HTTP/2.0	2787	GET
+2201935	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a6/MediaWiki-2020-icon.svg/40px-MediaWiki-2020-icon.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2787
+2201988	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/ff/Wikidata-logo.svg/60px-Wikidata-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2158696	43290	200	HTTP/2.0	591	GET
+2203097	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/ff/Wikidata-logo.svg/60px-Wikidata-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	591
+2203147	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8f/Tissot_The_Flight_of_the_Prisoners.jpg/960px-Tissot_The_Flight_of_the_Prisoners.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2158601	44545	200	HTTP/2.0	192834	GET
+2204347	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8f/Tissot_The_Flight_of_the_Prisoners.jpg/960px-Tissot_The_Flight_of_the_Prisoners.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	192834
+2204414	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/2/2e/The_Women%27s_Royal_Air_Force_1914_-_1918_%28IWM_Q_72639%29.jpg/250px-The_Women%27s_Royal_Air_Force_1914_-_1918_%28IWM_Q_72639%29.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	14208
+2204464	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/7/75/Wikimedia_Community_Logo.svg/40px-Wikimedia_Community_Logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2158661	45802	200	HTTP/2.0	2672	GET
+2205575	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/7/75/Wikimedia_Community_Logo.svg/40px-Wikimedia_Community_Logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2672
+2205625	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fa/Wikiquote-logo.svg/40px-Wikiquote-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2158732	46892	200	HTTP/2.0	2375	GET
+2206729	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fa/Wikiquote-logo.svg/40px-Wikiquote-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2375
+2206778	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/d/df/Wikispecies-logo.svg/40px-Wikispecies-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2158774	48003	200	HTTP/2.0	3560	GET
+2207879	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/d/df/Wikispecies-logo.svg/40px-Wikispecies-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	3560
+2207931	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4c/Wikisource-logo.svg/40px-Wikisource-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2158753	49177	200	HTTP/2.0	2665	GET
+2209033	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4c/Wikisource-logo.svg/40px-Wikisource-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2665
+2209083	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0c/Wikifunctions-logo.svg/40px-Wikifunctions-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2158713	50369	200	HTTP/2.0	2015	GET
+2210208	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0c/Wikifunctions-logo.svg/40px-Wikifunctions-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2015
+2210267	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fa/Wikibooks-logo.svg/40px-Wikibooks-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2158679	51587	200	HTTP/2.0	2638	GET
+2211401	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fa/Wikibooks-logo.svg/40px-Wikibooks-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2638
+2211454	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0b/Wikiversity_logo_2017.svg/60px-Wikiversity_logo_2017.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2158793	52660	200	HTTP/2.0	1408	GET
+2212577	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0b/Wikiversity_logo_2017.svg/60px-Wikiversity_logo_2017.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	1408
+2212629	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/d/dd/Wikivoyage-Logo-v3-icon.svg/40px-Wikivoyage-Logo-v3-icon.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2158813	53815	200	HTTP/2.0	1111	GET
+2213732	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/d/dd/Wikivoyage-Logo-v3-icon.svg/40px-Wikivoyage-Logo-v3-icon.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	1111
+2222417	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/9/99/Wiktionary-logo-en-v2.svg/40px-Wiktionary-logo-en-v2.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2158834	63582	200	HTTP/2.0	1993	GET
+2223765	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/9/99/Wiktionary-logo-en-v2.svg/40px-Wiktionary-logo-en-v2.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	1993
+2223822	req	https://en.wikipedia.org/w/resources/assets/mediawiki_compact.svg	2158870	64948	200	HTTP/2.0	1320	GET
+2223879	body	https://en.wikipedia.org/w/resources/assets/mediawiki_compact.svg	3517
+2304007	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=heart&format=original&lang=en&skin=vector-2022&version=1w2mk	2270031	33973	200	HTTP/2.0	276	GET
+2304105	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=heart&format=original&lang=en&skin=vector-2022&version=1w2mk	358
+2304197	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=verticalEllipsis&format=original&lang=en&skin=vector-2022&version=1w2mk	2270069	34127	200	HTTP/2.0	203	GET
+2304261	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=verticalEllipsis&format=original&lang=en&skin=vector-2022&version=1w2mk	243
+2304309	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=search&format=original&lang=en&skin=vector-2022&version=1w2mk	2270090	34218	200	HTTP/2.0	232	GET
+2304352	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=search&format=original&lang=en&skin=vector-2022&version=1w2mk	296
+2304397	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=eye&format=original&lang=en&skin=vector-2022&version=1w2mk	2270108	34289	200	HTTP/2.0	284	GET
+2304433	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=eye&format=original&lang=en&skin=vector-2022&version=1w2mk	385
+2304714	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=language&format=original&lang=en&skin=vector-2022&version=1w2mk	2270125	34588	200	HTTP/2.0	447	GET
+2304768	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=language&format=original&lang=en&skin=vector-2022&version=1w2mk	641
+2304834	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=userAvatar&format=original&lang=en&skin=vector-2022&version=1w2mk	2270227	34606	200	HTTP/2.0	218	GET
+2304876	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=userAvatar&format=original&lang=en&skin=vector-2022&version=1w2mk	256
+2305086	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=star&format=original&lang=en&skin=vector-2022&version=1w2mk	2270248	34836	200	HTTP/2.0	290	GET
+2305131	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=star&format=original&lang=en&skin=vector-2022&version=1w2mk	371
+2305216	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=menu&format=original&lang=en&skin=vector-2022&version=1w2mk	2270144	35072	200	HTTP/2.0	187	GET
+2305257	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=menu&format=original&lang=en&skin=vector-2022&version=1w2mk	220
+2305480	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=logIn&format=original&lang=en&skin=vector-2022&version=1w2mk	2270199	35279	200	HTTP/2.0	240	GET
+2305523	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=logIn&format=original&lang=en&skin=vector-2022&version=1w2mk	292
+2333837	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=language&variant=progressive&format=original&lang=en&skin=vector-2022&version=1w2mk	2270267	63566	200	HTTP/2.0	448	GET
+2333919	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=language&variant=progressive&format=original&lang=en&skin=vector-2022&version=1w2mk	641
+2334820	phase	initial images+masks	176663
+2341716	phase	load event	6874
+2360212	phase	finish_loading: external CSS	18474
+2395289	req	https://en.wikipedia.org/w/load.php?lang=en&modules=jquery&skin=vector-2022&version=tkra7	2360408	34874	200	HTTP/2.0	39877	GET
+2399915	body	https://en.wikipedia.org/w/load.php?lang=en&modules=jquery&skin=vector-2022&version=tkra7	140703
+2854786	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=speechBubbles&format=original&lang=en&skin=vector-2022&version=1egas	2821138	33646	200	HTTP/2.0	278	GET
+2854863	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=speechBubbles&format=original&lang=en&skin=vector-2022&version=1egas	331
+2854939	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=article&format=original&lang=en&skin=vector-2022&version=1egas	2821108	33830	200	HTTP/2.0	222	GET
+2854988	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=article&format=original&lang=en&skin=vector-2022&version=1egas	292
+2855021	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=history&format=original&lang=en&skin=vector-2022&version=1egas	2821156	33864	200	HTTP/2.0	256	GET
+2855059	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=history&format=original&lang=en&skin=vector-2022&version=1egas	327
+2855126	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=editLock&format=original&lang=en&skin=vector-2022&version=1egas	2821173	33953	200	HTTP/2.0	292	GET
+2855169	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=editLock&format=original&lang=en&skin=vector-2022&version=1egas	387
+2886527	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=speechBubbleAdd&variant=progressive&format=original&lang=en&skin=vector-2022&version=1egas	2821191	65335	200	HTTP/2.0	256	GET
+2886567	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=speechBubbleAdd&variant=progressive&format=original&lang=en&skin=vector-2022&version=1egas	302
+2886644	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=edit&format=original&lang=en&skin=vector-2022&version=1egas	2821211	65432	200	HTTP/2.0	218	GET
+2886688	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=edit&format=original&lang=en&skin=vector-2022&version=1egas	264
+2886776	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=wikiText&format=original&lang=en&skin=vector-2022&version=1egas	2821233	65542	200	HTTP/2.0	219	GET
+2886821	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=wikiText&format=original&lang=en&skin=vector-2022&version=1egas	273
+2886938	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=appearance&format=original&lang=en&skin=vector-2022&version=1egas	2821253	65684	200	HTTP/2.0	273	GET
+2886979	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=appearance&format=original&lang=en&skin=vector-2022&version=1egas	416
+2887806	phase	finish_loading: dynamic scripts	527567
+2888519	phase	finish_loading: subframes	699
+2955426	req	https://en.wikipedia.org/ins-502b/v2/events?hasty=true	2888690	66733	202	HTTP/2.0	0	POST
+2955479	body	https://en.wikipedia.org/ins-502b/v2/events?hasty=true	0
+2956478	phase	finish_loading: page fetches	67947
+2957166	phase	finish_loading: images	672
+2957260	phase	finish_loading: icon masks	82
+2990269	req	https://en.wikipedia.org/w/skins/Vector/resources/skins.vector.styles/images/link-external-small-ltr-progressive.svg?fb64d	2957653	32613	200	HTTP/2.0	241	GET
+2990322	body	https://en.wikipedia.org/w/skins/Vector/resources/skins.vector.styles/images/link-external-small-ltr-progressive.svg?fb64d	298
+2990541	phase	finish_loading: background images	33270
+2994885	mark	navigate_returned
+2999055	mark	a11y_built

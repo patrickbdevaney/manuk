@@ -1,0 +1,114 @@
+0	epoch	1792975467368913
+53887	dns	app.ordertime.com	53860
+148894	connect	app.ordertime.com	148873
+246888	req	https://app.ordertime.com/	0	246885	200	HTTP/2.0	1626	GET
+247003	body	https://app.ordertime.com/	3946
+247407	phase	html parse	365
+247566	dns	fonts.googleapis.com	390
+266324	dns	www.google.com	18820
+283246	req	https://app.ordertime.com/Content/jquery-ui-1.13.3.min.css	247137	36107	200	HTTP/2.0	9877	GET
+283401	body	https://app.ordertime.com/Content/jquery-ui-1.13.3.min.css	32152
+332968	req	https://app.ordertime.com/Content/colors_order_time.css	283507	49452	200	HTTP/2.0	3221	GET
+333063	body	https://app.ordertime.com/Content/colors_order_time.css	14144
+334002	req	https://app.ordertime.com/Scripts/jquery-3.7.1.min.js	283491	50509	200	HTTP/2.0	42786	GET
+365880	req	https://app.ordertime.com/Content/jquery.loadmask.css	283571	82308	200	HTTP/2.0	538	GET
+365948	body	https://app.ordertime.com/Content/jquery.loadmask.css	846
+366049	req	https://app.ordertime.com/Content/selectize.default.css	283512	82536	200	HTTP/2.0	3407	GET
+366085	req	https://app.ordertime.com/Content/jquery-ui.theme-1.13.3.min.css	283627	82456	200	HTTP/2.0	2979	GET
+366110	req	https://app.ordertime.com/Content/webimages/help_icon_blue.png	283605	82503	200	HTTP/2.0	235	GET
+366138	req	https://app.ordertime.com/Content/jquery-ui.structure-1.13.3.min.css	283553	82583	200	HTTP/2.0	6274	GET
+366141	body	https://app.ordertime.com/Content/webimages/help_icon_blue.png	235
+366150	body	https://app.ordertime.com/Content/selectize.default.css	12273
+366155	req	https://app.ordertime.com/Content/webimages/order_time_logo_color.png	283593	82560	200	HTTP/2.0	1085	GET
+366173	body	https://app.ordertime.com/Content/jquery-ui.theme-1.13.3.min.css	13898
+366244	body	https://app.ordertime.com/Content/webimages/order_time_logo_color.png	1085
+366281	body	https://app.ordertime.com/Content/jquery-ui.structure-1.13.3.min.css	15565
+366500	body	https://app.ordertime.com/Scripts/jquery-3.7.1.min.js	105298
+366537	req	https://app.ordertime.com/Scripts/jquery.validate.unobtrusive.min.js	283662	82874	200	HTTP/2.0	2668	GET
+366603	body	https://app.ordertime.com/Scripts/jquery.validate.unobtrusive.min.js	5871
+376782	connect	fonts.googleapis.com	129613
+392221	connect	www.google.com	144720
+392317	req	https://app.ordertime.com/Scripts/jquery-ui-1.13.3.min.js	283534	108782	200	HTTP/2.0	-	GET
+392367	req	https://app.ordertime.com/Content/app.min.css	283466	108900	200	HTTP/2.0	-	GET
+425172	body	https://app.ordertime.com/Scripts/jquery-ui-1.13.3.min.js	254968
+425241	req	https://app.ordertime.com/Scripts/jquery.validate-1.19.5.min.js	283642	141598	200	HTTP/2.0	10002	GET
+425566	body	https://app.ordertime.com/Scripts/jquery.validate-1.19.5.min.js	24604
+425816	body	https://app.ordertime.com/Content/app.min.css	331829
+449111	dns	js.hs-scripts.com	201515
+504821	req	https://fonts.googleapis.com/css?family=Open+Sans:400,300,300italic,400italic,600,600italic,700,700italic,800,800italic	247149	257669	200	HTTP/2.0	-	GET
+515586	body	https://fonts.googleapis.com/css?family=Open+Sans:400,300,300italic,400italic,600,600italic,700,700italic,800,800italic	2475
+516214	dns	fonts.gstatic.com	401
+531795	req	https://www.google.com/recaptcha/api.js	247492	284302	200	HTTP/2.0	-	GET
+536871	body	https://www.google.com/recaptcha/api.js	976
+654904	connect	js.hs-scripts.com	407310
+720149	connect	fonts.gstatic.com	204344
+720614	dns	fonts.gstatic.com	408
+809818	req	https://fonts.gstatic.com/s/opensans/v44/memQYaGs126MiZpBA-UFUIcVXSCEkx2cmqvXlWq8tWZ0Pw86hd0Rk8ZkWVAexQ.ttf	515776	294039	200	HTTP/2.0	24205	GET
+845999	connect	fonts.gstatic.com	125794
+864685	req	https://js.hs-scripts.com/4462470.js	247589	617095	200	HTTP/2.0	655	GET
+864884	body	https://js.hs-scripts.com/4462470.js	1633
+873471	req	https://fonts.gstatic.com/s/opensans/v44/memQYaGs126MiZpBA-UFUIcVXSCEkx2cmqvXlWq8tWZ0Pw86hd0RkyFjWVAexQ.ttf	720216	153253	200	HTTP/2.0	23600	GET
+873646	body	https://fonts.gstatic.com/s/opensans/v44/memQYaGs126MiZpBA-UFUIcVXSCEkx2cmqvXlWq8tWZ0Pw86hd0Rk8ZkWVAexQ.ttf	36376
+893300	phase	external scripts	645878
+893333	phase	module graph prefetch	17
+893367	phase	blocking stylesheets	24
+908661	req	https://fonts.gstatic.com/s/opensans/v44/memQYaGs126MiZpBA-UFUIcVXSCEkx2cmqvXlWq8tWZ0Pw86hd0RkxhjWVAexQ.ttf	720198	188462	200	HTTP/2.0	24183	GET
+908773	body	https://fonts.gstatic.com/s/opensans/v44/memQYaGs126MiZpBA-UFUIcVXSCEkx2cmqvXlWq8tWZ0Pw86hd0RkyFjWVAexQ.ttf	36368
+939817	body	https://fonts.gstatic.com/s/opensans/v44/memQYaGs126MiZpBA-UFUIcVXSCEkx2cmqvXlWq8tWZ0Pw86hd0RkxhjWVAexQ.ttf	36496
+942193	req	https://fonts.gstatic.com/s/opensans/v44/memSYaGs126MiZpBA-UvWbX2vVnXBbObj2OVZyOOSr4dVJWUgshZ1x4gaVc.ttf	720225	221965	200	HTTP/2.0	23463	GET
+956348	body	https://fonts.gstatic.com/s/opensans/v44/memSYaGs126MiZpBA-UvWbX2vVnXBbObj2OVZyOOSr4dVJWUgshZ1x4gaVc.ttf	35540
+957416	req	https://fonts.gstatic.com/s/opensans/v44/memQYaGs126MiZpBA-UFUIcVXSCEkx2cmqvXlWq8tWZ0Pw86hd0Rk0ZjWVAexQ.ttf	720235	237180	200	HTTP/2.0	23877	GET
+968189	req	https://fonts.gstatic.com/s/opensans/v44/memQYaGs126MiZpBA-UFUIcVXSCEkx2cmqvXlWq8tWZ0Pw86hd0Rk5hkWVAexQ.ttf	720241	247943	200	HTTP/2.0	24307	GET
+968268	body	https://fonts.gstatic.com/s/opensans/v44/memQYaGs126MiZpBA-UFUIcVXSCEkx2cmqvXlWq8tWZ0Pw86hd0Rk0ZjWVAexQ.ttf	36652
+975659	req	https://fonts.gstatic.com/s/opensans/v44/memSYaGs126MiZpBA-UvWbX2vVnXBbObj2OVZyOOSr4dVJWUgsg-1x4gaVc.ttf	873723	101935	200	HTTP/2.0	22969	GET
+975745	body	https://fonts.gstatic.com/s/opensans/v44/memQYaGs126MiZpBA-UFUIcVXSCEkx2cmqvXlWq8tWZ0Pw86hd0Rk5hkWVAexQ.ttf	36556
+981707	req	https://fonts.gstatic.com/s/opensans/v44/memSYaGs126MiZpBA-UvWbX2vVnXBbObj2OVZyOOSr4dVJWUgsjZ0B4gaVc.ttf	873764	107942	200	HTTP/2.0	23582	GET
+981775	body	https://fonts.gstatic.com/s/opensans/v44/memSYaGs126MiZpBA-UvWbX2vVnXBbObj2OVZyOOSr4dVJWUgsg-1x4gaVc.ttf	35292
+986756	req	https://fonts.gstatic.com/s/opensans/v44/memSYaGs126MiZpBA-UvWbX2vVnXBbObj2OVZyOOSr4dVJWUgsgH1x4gaVc.ttf	873783	112972	200	HTTP/2.0	23489	GET
+986825	body	https://fonts.gstatic.com/s/opensans/v44/memSYaGs126MiZpBA-UvWbX2vVnXBbObj2OVZyOOSr4dVJWUgsjZ0B4gaVc.ttf	35316
+991825	req	https://fonts.gstatic.com/s/opensans/v44/memSYaGs126MiZpBA-UvWbX2vVnXBbObj2OVZyOOSr4dVJWUgsiH0B4gaVc.ttf	873800	118024	200	HTTP/2.0	23599	GET
+991911	body	https://fonts.gstatic.com/s/opensans/v44/memSYaGs126MiZpBA-UvWbX2vVnXBbObj2OVZyOOSr4dVJWUgsgH1x4gaVc.ttf	35296
+995162	body	https://fonts.gstatic.com/s/opensans/v44/memSYaGs126MiZpBA-UvWbX2vVnXBbObj2OVZyOOSr4dVJWUgsiH0B4gaVc.ttf	35348
+1018884	cascade	1437
+1043096	layout	24193
+1045461	phase	cascade+layout+blocking scripts	152070
+1126403	cascade	22635
+1127260	layout	830
+1129857	phase	deferred scripts	84383
+1133340	phase	DOMContentLoaded	3470
+1199525	cascade	23064
+1202361	layout	2810
+1204976	phase	subframes (pre-load)	71620
+1205257	phase	initial images+masks	269
+1205912	phase	load event	643
+1236277	phase	finish_loading: external CSS	30343
+1271237	dns	js.hubspot.com	34849
+1283927	dns	js.hs-analytics.net	47498
+1296850	dns	www.gstatic.com	60319
+1302793	dns	js.hs-banner.com	66434
+1368373	connect	js.hs-analytics.net	131945
+1398595	connect	www.gstatic.com	162067
+1512363	req	https://www.gstatic.com/recaptcha/releases/NhfdZHzre166o-vFZrWsq3yu/recaptcha__en.js	1236525	275834	200	HTTP/2.0	358593	GET
+1553173	req	https://js.hs-analytics.net/analytics/1792975200000/4462470.js	1236425	316746	200	HTTP/2.0	-	GET
+1564414	body	https://js.hs-analytics.net/analytics/1792975200000/4462470.js	110043
+1641527	body	https://www.gstatic.com/recaptcha/releases/NhfdZHzre166o-vFZrWsq3yu/recaptcha__en.js	858461
+2161281	connect	js.hs-banner.com	924920
+2259690	connect	js.hubspot.com	1023303
+2320405	req	https://js.hubspot.com/web-interactives-embed.js	1236384	1084018	200	HTTP/2.0	-	GET
+2342775	body	https://js.hubspot.com/web-interactives-embed.js	103679
+2401529	req	https://js.hs-banner.com/v2/4462470/banner.js	1236349	1165178	200	HTTP/2.0	-	GET
+2522612	body	https://js.hs-banner.com/v2/4462470/banner.js	77711
+4241820	phase	finish_loading: dynamic scripts	3005526
+4259059	phase	finish_loading: subframes	17208
+4293175	dns	cta-service-cms2.hubspot.com	33993
+4959866	connect	cta-service-cms2.hubspot.com	700687
+5248053	req	https://cta-service-cms2.hubspot.com/web-interactives/public/v1/embed/combinedConfigs?portalId=4462470&currentUrl=https%3A%2F%2Fapp.ordertime.com%2F&utk=842428a666d5d33a036a65d55642579e&__hstc=131259088.842428a666d5d33a036a65d55642579e.1792947094840.1792947094840.1792947094840.1	4259170	988880	200	HTTP/2.0	-	GET
+5248137	body	https://cta-service-cms2.hubspot.com/web-interactives/public/v1/embed/combinedConfigs?portalId=4462470&currentUrl=https%3A%2F%2Fapp.ordertime.com%2F&utk=842428a666d5d33a036a65d55642579e&__hstc=131259088.842428a666d5d33a036a65d55642579e.1792947094840.1792947094840.1792947094840.1	61
+5285797	cascade	23052
+5286129	layout	306
+5288162	phase	finish_loading: page fetches	1029082
+5288207	phase	finish_loading: images	33
+5288219	phase	finish_loading: icon masks	1
+5288233	phase	finish_loading: background images	4
+5288890	mark	navigate_returned
+5289071	mark	a11y_built

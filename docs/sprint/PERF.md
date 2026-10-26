@@ -716,3 +716,21 @@ chrome_ver=145.0.7632.116. Paired same-minute A/B on example.com, 7 runs, `scrip
 - **Not measured:** Σ script over the 20 URLs (bar <= 5 s from 9.48): the change saves ~10 ms per page, so the long pages are untouched.
 - **Where the rest is:** ~26 ms is the per-document global (`install` 10 + event-loop preludes 14 + script) and ~15 ms of the 41 is the
   initial cascade+layout inside `from_dom`, which the trace does not emit as `cascade`/`layout` lines and so lands in `script`.
+
+## PERF.1.2.a results (code on branch `sprint/perf-1-2-a`, not main: the wall is red at HEAD, PERF.1.4.c; adopt the forced reflow; chrome_ver=145.0.7632.116; manuk only)
+
+Paired interleaved, same binary, arm B = `MANUK_NO_ADOPT_REFLOW=1` (20 URLs x 3 runs, rows `docs/sprint/perf1-pf12a/paired.jsonl`).
+`ReflowScope::into_fresh` hands the last forced reflow's styles + box tree to the `Page` when `Dom::mutation_seq` still equals the
+sequence it laid out at (and nothing is scrolled, no sticky box); `fire_lifecycle` adopts it and records the clean cascade fingerprint.
+
+| arm | Σ settle s (sum of per-URL medians) |
+|---|---|
+| adopt (new) | 18.88 |
+| `MANUK_NO_ADOPT_REFLOW=1` (interleaved baseline) | 21.26 |
+
+Ratio 0.888. Bars (Σ <= 11 s AND <= 0.85x baseline) **not met**. Movers: comix.to 4.36 -> 2.88, puentedemando 3.82 -> 3.26, mobile.bg
+1.72 -> 1.49; the Wikipedia pages and ordertime are unchanged (their forced reflows are not in DOMContentLoaded/load, or are followed by
+mutations). a11y node counts adopt vs not: 0.00 % drift on all 20 URLs (comix.to returned 6 nodes in 2 of 7 runs on BOTH arms - live-page
+flake, 2248 otherwise). Mutant (`into_fresh` without the `mutation_seq` check): `g_reflow_stale_not_adopted` RED; with adoption disabled
+`g_reflow_adopted` RED. The machine was slower this sweep than the PERF.1.2 sweep (baseline 21.3 s vs 13.7 s), so do not diff absolute
+sums across the two.
