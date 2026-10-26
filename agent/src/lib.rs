@@ -446,18 +446,17 @@ impl AgentBrowser {
         // following the parse.
         // The guard arms the runtime's teardown on every exit path, after the page's own
         // thread-locals exist.
-        struct Settle;
-        impl Drop for Settle {
-            fn drop(&mut self) {
-                manuk_page::prewarm_js_settle();
-            }
-        }
-        let _settle = Settle;
+        let _settle = PrewarmSettle;
         let (fetched, ()) = futures_util::future::join(fetch_html(url), async {
             manuk_page::prewarm_js();
         })
         .await;
         let (html, final_url) = fetched?;
+        self.build_loaded(html, final_url).await
+    }
+
+    /// Build the page for an already-fetched document (a GET's body or a form POST's response).
+    async fn build_loaded(&mut self, html: String, final_url: String) -> Result<()> {
         // ── ⚠⚠⚠ **`load`, NOT `load_async`, WAS A BROWSER THAT NEVER FINISHED LOADING.** The
         //    synchronous constructor parses and lays out and stops: no subresources, no lifecycle,
         //    no scripts. An agent driving the real web needs the page the user would see, and on a
@@ -798,12 +797,46 @@ impl AgentBrowser {
     /// into a navigation, whether the caller asked for it ([`Self::submit`]) or the engine's own
     /// activation behaviour queued it (a click on a submit button).
     async fn submit_form(&mut self, form: manuk_dom::NodeId) -> Result<Activation> {
-        let url = {
+        let (get, post, initiator) = {
             let page = self.page.as_ref().context("no page loaded")?;
-            forms::submission_url(page.dom(), form, &page.final_url).map_err(|e| anyhow!("{e}"))?
+            match forms::submission_url(page.dom(), form, &page.final_url) {
+                Ok(url) => (Some(url), None, None),
+                Err(forms::SubmitError::PostUnsupported) => {
+                    // A file input makes this a multipart upload; the agent has no file bytes to
+                    // send, and urlencoding it would silently drop them, so refuse loudly.
+                    if !forms::file_inputs(page.dom(), form).is_empty() {
+                        return Err(anyhow!("form has a file input; file uploads are not supported"));
+                    }
+                    let p = forms::urlencoded_submission(page.dom(), form, &page.final_url)
+                        .map_err(|e| anyhow!("{e}"))?;
+                    (None, Some(p), Some(page.final_url.clone()))
+                }
+                Err(e) => return Err(anyhow!("{e}")),
+            }
         };
-        self.navigate(&url).await?;
-        Ok(Activation::Submitted(url))
+        if let Some(url) = get {
+            self.navigate(&url).await?;
+            return Ok(Activation::Submitted(url));
+        }
+        // POST: the body travels in the request, never in the URL. The submitting page is the
+        // SameSite initiator, so a cross-site POST withholds the target's session cookie.
+        let post = post.expect("post or get");
+        manuk_net::set_top_level_document(&post.url);
+        let resp = manuk_net::post_document(
+            &post.url,
+            &post.content_type,
+            post.body.into_bytes().into(),
+            initiator.as_deref(),
+        )
+        .await
+        .with_context(|| format!("POST {}", post.url))?;
+        let final_url = resp.final_url.to_string();
+        let _settle = PrewarmSettle;
+        manuk_page::prewarm_js();
+        self.build_loaded(resp.decoded_text(), final_url.clone()).await?;
+        let landed = self.page.as_ref().expect("just loaded").final_url.clone();
+        self.history.push(landed);
+        Ok(Activation::Submitted(final_url))
     }
 
     /// §4b — activate a DOM node the way a click would.
@@ -2908,5 +2941,13 @@ mod tests {
             .transcript
             .iter()
             .any(|l| l.contains("no tab context")));
+    }
+}
+
+/// Arms the JS runtime's teardown on every exit path of a page load.
+struct PrewarmSettle;
+impl Drop for PrewarmSettle {
+    fn drop(&mut self) {
+        manuk_page::prewarm_js_settle();
     }
 }
