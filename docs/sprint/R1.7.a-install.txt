@@ -1,0 +1,29 @@
+R1.7.a install transcript (chrome_ver=145.0.7632.116)
+host: linux, claude CLI 2.1.306, model for headless check: claude-haiku-5-5
+build: cargo build --release -p manuk-mcp -> Finished (incremental, binary target/release/manuk-mcp, 48.5 MB, not a clean-checkout build)
+PATH for the server: /tmp/r17a/bin/manuk-mcp -> target/release/manuk-mcp (symlink; no system install)
+
+$ claude mcp add manuk -- manuk-mcp
+Added stdio MCP server manuk with command: manuk-mcp  to local config
+
+$ claude mcp list            (PATH includes /tmp/r17a/bin)
+manuk: manuk-mcp  - ✔ Connected
+
+$ claude -p "List the exact names of every tool that comes from the manuk MCP server ..." --model claude-haiku-5-5 --allowedTools "mcp__manuk__*"  (fresh session)
+mcp__manuk__act
+mcp__manuk__extract
+mcp__manuk__find
+mcp__manuk__navigate
+mcp__manuk__observe
+mcp__manuk__screenshot
+mcp__manuk__scroll
+mcp__manuk__storage_state
+mcp__manuk__type
+
+RED CHECK: the same server registered with a missing path, and manuk-mcp absent from PATH
+$ claude mcp list
+manuk: manuk-mcp  - ✘ Failed to connect — ENOENT: Executable not found in $PATH: "manuk-mcp"
+manuk-red: /tmp/r17a/missing/manuk-mcp  - ✘ Failed to connect — ENOENT: no such file or directory
+$ claude -p "... mcp__manuk-red__ ..." -> NONE
+
+cleanup: the test registrations were removed with claude mcp remove (local scope in ~/.claude.json)
