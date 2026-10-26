@@ -14035,6 +14035,12 @@ unsafe fn doc_get_body(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> boo
 /// a page; a page correctly wiped to white is not.* This is a **named divergence from the spec**, not
 /// an oversight, and it is the direction that cannot silently destroy user-visible content. When the
 /// parser can be re-entered, the wipe path is where to start.
+thread_local! {
+    /// `(script, last node it wrote)` — where the next `document.write` from that script continues.
+    static WRITE_CURSOR: std::cell::Cell<(NodeId, Option<NodeId>)> =
+        const { std::cell::Cell::new((NodeId(u64::MAX), None)) };
+}
+
 unsafe fn doc_write(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     doc_write_impl(cx, argc, vp, false)
 }
@@ -14087,7 +14093,51 @@ unsafe fn doc_write_impl(cx: *mut RawJSContext, argc: u32, vp: *mut Value, newli
             .filter(|&n| (*dom).parent(n).is_some())
     };
     let parent = match anchor {
-        Some(script) => insert_adjacent(dom, script, "afterend", &kids),
+        Some(script) => {
+            // Successive writes from ONE script chain after the previous write's last node (the
+            // parser's insertion point advances); inserting `afterend` of the script each time
+            // would reverse them.
+            let (cur_script, cur_last) = WRITE_CURSOR.with(|c| c.get());
+            let after = match cur_last {
+                Some(last) if cur_script == script && (*dom).parent(last).is_some() => last,
+                _ => script,
+            };
+            let Some(mut parent) = (*dom).parent(after) else {
+                return true;
+            };
+            let mut before = (*dom).next_sibling(after);
+            // The parser would close `<head>` at the first body-level markup, so such writes
+            // belong at the start of `<body>`, not inside `<head>` where they never render.
+            let in_head = (*dom).tag_name(parent) == Some("head");
+            let body_level = kids.iter().any(|&k| match (*dom).tag_name(k) {
+                Some(t) => !matches!(
+                    t,
+                    "script"
+                        | "style"
+                        | "link"
+                        | "meta"
+                        | "title"
+                        | "base"
+                        | "noscript"
+                        | "template"
+                ),
+                None => !(*dom).text_content(k).trim().is_empty(),
+            });
+            if in_head && body_level {
+                if let Some(body) = (*dom).find_first_in(doc_root, "body") {
+                    parent = body;
+                    before = (*dom).children(body).next();
+                }
+            }
+            for &k in &kids {
+                match before {
+                    Some(b) => (*dom).insert_before(parent, k, b),
+                    None => (*dom).append_child(parent, k),
+                }
+            }
+            WRITE_CURSOR.with(|c| c.set((script, kids.last().copied())));
+            Some(parent)
+        }
         None => match (*dom).find_first_in(doc_root, "body") {
             Some(body) => insert_adjacent(dom, body, "beforeend", &kids),
             None => insert_adjacent(dom, doc_root, "beforeend", &kids),

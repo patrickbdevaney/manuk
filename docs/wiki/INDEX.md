@@ -1559,6 +1559,10 @@
   - L32 · Priced before building
   - L38 · The histogram it came out of, and why the rest of that histogram is not a worklist
 
+## document.write continues where the last write ended
+`docs/wiki/document-write-continues-where-the-last-write-ended.md`
+
+
 ## DOM SEMANTICS — spec behaviour, mutation, and tree edge cases
 `docs/wiki/dom-semantics.md`
 
@@ -3760,4 +3764,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3079 sections across 169 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3079 sections across 170 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
