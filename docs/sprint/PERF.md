@@ -697,8 +697,29 @@ BASE is HEAD df08661a built with the same command, NEW is HEAD + the font change
   dominated by `min_content_width` of three `<section>` items (layout of the whole subtree at width 1, 100-200 ms each, per pass).
 - **Next fixed cost:** first use of each distinct face costs 8-12 ms (fontdue parses every outline eagerly): quotes.toscrape.com/js first
   layout 28 ms (Liberation Serif, Serif Bold, Sans Italic) before and after this change.
-- **Not comparable:** the pre-sprint `target/release/a11y-dump` that sat in the tree (Alan_Turing cascade 106 ms, wall 4.7 s) is ~2.4x
-  faster in cascade than a clean build of HEAD (250 ms, wall 7.8 s) - see PERF.1.3.c.
+- **Not comparable (corrected by PERF.1.3.c):** the `target/release/a11y-dump` that sat in the tree (mtime 2026-10-26 00:16, built
+  between PERF.1.3.a and PERF.1.3.b, not pre-sprint) was recorded as ~2.4x faster in cascade than a clean build of HEAD (250 ms, wall
+  7.8 s). That gap does not reproduce: see the PERF.1.3.c results below. No culprit commit exists.
+
+## PERF.1.3.c results (chrome_ver=145.0.7632.116; manuk only)
+
+Alan_Turing, `MANUK_NET_TRACE` `cascade` lines (first = initial pass, second = restyle pass), same machine, same hour.
+`/tmp` copies of both binaries; HEAD = b7c11f35 built with `cargo build --release -p manuk-agent --bin a11y-dump`.
+
+| arm | run | cascade 1 (ms) | cascade 2 (ms) | wall (s) |
+|---|---|---|---|---|
+| old (00:16 tree binary) | quiet 1, 2 | 94.7, 97.4 | 215.2, 211.3 | 4.05, 3.98 |
+| HEAD b7c11f35 | quiet 1-3 | 89.8, 89.8, 91.0 | 206.9, 206.8, 207.5 | 3.86, 3.83, 3.85 |
+| old, interleaved with HEAD | 3 pairs | 94.9, 122.8, 156.1 | 213.1, 211.4, 404.4 | 3.99, 4.18, 5.30 |
+| HEAD, interleaved with old | 3 pairs | 95.5, 93.9, 93.2 | 211.8, 236.2, 239.3 | 3.97, 4.42, 4.63 |
+| old, 12 CPU spinners | 2 runs | 148.6, 147.9 | 362.1, 207.6 | 5.56, 5.13 |
+| HEAD, 12 CPU spinners | 2 runs | 142.6, 148.5 | 404.5, 208.5 | 5.54, 5.20 |
+
+Reading: quiet-period first cascade is 90-97 ms for both binaries and the second cascade 207-215 ms for both. The interleaved
+pairs match within noise, and under CPU contention both arms move together (first cascade 95 -> 145-155 ms). The 250 ms / 7.8 s
+figure is therefore not a property of HEAD's code. Its conditions (load, cache state) were not recorded. A cold clean build
+(fresh `CARGO_TARGET_DIR`, full LTO) was not run: it is hours of compile for an answer the A/B already gives.
+The bisect is unnecessary because there is no regression to locate.
 
 ## PERF.1.3.a results (chrome_ver=145.0.7632.116; manuk only)
 
