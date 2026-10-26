@@ -1,38 +1,38 @@
 chrome_ver	group	url	marker_withheld	marker_reasons	extract_withheld_runs	observe_withheld_runs	diff_anomalies	visible	hidden_confirmed	unmatched	unverifiable	secs	extract_error
-145.0.7632.116	planted	http://127.0.0.1:43389/planted.html	21	low-contrast 10, opacity 11	3	1	0	1	1	2	0	0.7	False
-145.0.7632.116	fixture	http://127.0.0.1:41521/login	0		1	1	0	0	0	2	0	0.5	False
-145.0.7632.116	fixture	http://127.0.0.1:41521/form/1	0		1	1	0	0	0	2	0	0.5	False
-145.0.7632.116	fixture	http://127.0.0.1:41521/shop	0		1	1	0	0	0	2	0	0.5	False
-145.0.7632.116	fixture	http://127.0.0.1:41521/shop2	0		1	1	0	0	0	2	0	0.5	False
-145.0.7632.116	fixture	http://127.0.0.1:41521/promo	0		1	1	0	0	0	2	0	0.5	False
-145.0.7632.116	fixture	http://127.0.0.1:41521/banner	0		1	1	0	0	0	2	0	0.5	False
-145.0.7632.116	fixture	http://127.0.0.1:41521/feed	0		1	1	0	0	0	2	0	0.6	False
-145.0.7632.116	fixture	http://127.0.0.1:41521/catalog	0		1	1	0	0	0	2	0	0.5	False
-145.0.7632.116	fixture	http://127.0.0.1:41521/product	0		1	1	0	0	0	2	0	0.5	False
-145.0.7632.116	fixture	http://127.0.0.1:41521/inventory	0		1	1	0	0	0	2	0	0.5	False
-145.0.7632.116	fixture	http://127.0.0.1:41521/inj/hidden	0		1	1	0	0	0	2	0	0.5	False
-145.0.7632.116	fixture	http://127.0.0.1:41521/inj/offscreen	20	offscreen 20	2	1	0	0	0	2	1	0.5	False
-145.0.7632.116	fixture	http://127.0.0.1:41521/inj/tiny	20	zero-size 20	2	1	0	0	1	2	0	0.6	False
-145.0.7632.116	fixture	http://127.0.0.1:41521/inj/comment	7	opacity 7	2	1	0	0	1	2	0	0.6	False
-145.0.7632.116	task-live	https://books.toscrape.com/	1	low-contrast 1	2	1	0	0	0	2	1	6.0	False
-145.0.7632.116	task-live	https://quotes.toscrape.com/	0		1	1	0	0	0	2	0	5.0	False
-145.0.7632.116	task-live	https://quotes.toscrape.com/js/	0		1	1	0	0	0	2	0	2.0	False
-145.0.7632.116	task-live	https://quotes.toscrape.com/scroll	0		1	1	0	0	0	2	0	1.9	False
-145.0.7632.116	task-live	https://example.com/	0		1	1	0	0	0	2	0	1.2	False
-145.0.7632.116	task-live	https://httpbin.org/html	0		1	1	0	0	0	2	0	2.4	False
-145.0.7632.116	task-live	https://en.wikipedia.org/wiki/Python_(programming_language)	376	opacity 78, zero-size 298	3	3	0	1	1	4	0	12.9	False
-145.0.7632.116	task-live	https://en.wikipedia.org/wiki/Rust_(programming_language)	336	opacity 74, zero-size 262	2	3	0	1	1	3	0	10.3	False
-145.0.7632.116	task-live	https://en.wikipedia.org/wiki/Alan_Turing	538	opacity 76, zero-size 462	3	4	0	2	1	3	0	10.5	False
-145.0.7632.116	task-live	https://en.wikipedia.org/wiki/Main_Page	117	opacity 88, zero-size 29	2	3	0	1	1	3	0	2.3	False
-145.0.7632.116	task-live	https://www.scrapethissite.com/pages/simple/	0		1	1	0	0	0	2	0	10.2	False
-145.0.7632.116	task-live	https://books.toscrape.com/catalogue/page-2.html	1	low-contrast 1	2	1	0	0	0	2	1	3.7	False
-145.0.7632.116	corpus	https://a11yproject.com/	14	low-contrast 5, zero-size 9	7	3	0	1	1	4	0	6.5	False
-145.0.7632.116	corpus	https://blog.cloudflare.com/	27	low-contrast 2, offscreen 3, opacity 17, zero-size 5	4	2	0	1	0	3	2	4.4	False
-145.0.7632.116	corpus	https://blog.rust-lang.org/	0		1	1	0	0	0	2	0	4.9	False
-145.0.7632.116	corpus	https://danluu.com/	0		1	1	0	0	0	2	0	1.8	False
-145.0.7632.116	corpus	https://engineering.fb.com/	6	zero-size 6	2	2	0	0	1	2	1	3.2	False
-145.0.7632.116	corpus	https://fasterthanli.me/	1	offscreen 1	2	1	0	1	0	2	0	6.2	False
-145.0.7632.116	corpus	https://joelonsoftware.com/	7	zero-size 7	3	2	0	0	3	2	0	5.6	False
-145.0.7632.116	corpus	https://jvns.ca/	4	offscreen 4	2	2	0	0	0	2	2	8.3	False
-145.0.7632.116	corpus	https://martinfowler.com/	6	low-contrast 6	2	2	0	1	0	3	0	6.1	False
+145.0.7632.116	planted	http://127.0.0.1:46745/planted.html	21	low-contrast 10, opacity 11	3	1	0	1	1	2	0	0.7	False
+145.0.7632.116	fixture	http://127.0.0.1:43425/login	0		1	1	0	0	0	2	0	0.5	False
+145.0.7632.116	fixture	http://127.0.0.1:43425/form/1	0		1	1	0	0	0	2	0	0.5	False
+145.0.7632.116	fixture	http://127.0.0.1:43425/shop	0		1	1	0	0	0	2	0	0.5	False
+145.0.7632.116	fixture	http://127.0.0.1:43425/shop2	0		1	1	0	0	0	2	0	0.5	False
+145.0.7632.116	fixture	http://127.0.0.1:43425/promo	0		1	1	0	0	0	2	0	0.5	False
+145.0.7632.116	fixture	http://127.0.0.1:43425/banner	0		1	1	0	0	0	2	0	0.5	False
+145.0.7632.116	fixture	http://127.0.0.1:43425/feed	0		1	1	0	0	0	2	0	0.6	False
+145.0.7632.116	fixture	http://127.0.0.1:43425/catalog	0		1	1	0	0	0	2	0	0.5	False
+145.0.7632.116	fixture	http://127.0.0.1:43425/product	0		1	1	0	0	0	2	0	0.5	False
+145.0.7632.116	fixture	http://127.0.0.1:43425/inventory	0		1	1	0	0	0	2	0	0.5	False
+145.0.7632.116	fixture	http://127.0.0.1:43425/inj/hidden	0		1	1	0	0	0	2	0	0.5	False
+145.0.7632.116	fixture	http://127.0.0.1:43425/inj/offscreen	20	offscreen 20	2	1	0	0	0	2	1	0.5	False
+145.0.7632.116	fixture	http://127.0.0.1:43425/inj/tiny	20	tiny-font 20	2	1	0	0	1	2	0	0.6	False
+145.0.7632.116	fixture	http://127.0.0.1:43425/inj/comment	7	opacity 7	2	1	0	0	1	2	0	0.6	False
+145.0.7632.116	task-live	https://books.toscrape.com/	1	low-contrast 1	2	1	0	0	0	2	1	2.3	False
+145.0.7632.116	task-live	https://quotes.toscrape.com/	0		1	1	0	0	0	2	0	1.8	False
+145.0.7632.116	task-live	https://quotes.toscrape.com/js/	0		1	1	0	0	0	2	0	0.9	False
+145.0.7632.116	task-live	https://quotes.toscrape.com/scroll	0		1	1	0	0	0	2	0	1.1	False
+145.0.7632.116	task-live	https://example.com/	0		1	1	0	0	0	2	0	1.0	False
+145.0.7632.116	task-live	https://httpbin.org/html	0		1	1	0	0	0	2	0	1.1	False
+145.0.7632.116	task-live	https://en.wikipedia.org/wiki/Python_(programming_language)	353	opacity 78, zero-size 275	3	2	0	0	1	4	0	12.3	False
+145.0.7632.116	task-live	https://en.wikipedia.org/wiki/Rust_(programming_language)	313	opacity 74, zero-size 239	2	2	0	0	1	3	0	10.2	False
+145.0.7632.116	task-live	https://en.wikipedia.org/wiki/Alan_Turing	425	opacity 76, zero-size 349	2	2	0	0	1	3	0	9.9	False
+145.0.7632.116	task-live	https://en.wikipedia.org/wiki/Main_Page	94	opacity 88, zero-size 6	2	2	0	0	1	3	0	2.2	False
+145.0.7632.116	task-live	https://www.scrapethissite.com/pages/simple/	0		1	1	0	0	0	2	0	13.3	False
+145.0.7632.116	task-live	https://books.toscrape.com/catalogue/page-2.html	1	low-contrast 1	2	1	0	0	0	2	1	1.6	False
+145.0.7632.116	corpus	https://a11yproject.com/	14	low-contrast 5, zero-size 9	7	3	0	1	1	4	0	2.2	False
+145.0.7632.116	corpus	https://blog.cloudflare.com/	27	low-contrast 2, offscreen 3, opacity 17, zero-size 5	4	2	0	0	1	3	2	4.0	False
+145.0.7632.116	corpus	https://blog.rust-lang.org/	0		1	1	0	0	0	2	0	4.7	False
+145.0.7632.116	corpus	https://danluu.com/	0		1	1	0	0	0	2	0	1.5	False
+145.0.7632.116	corpus	https://engineering.fb.com/	6	zero-size 6	2	2	0	0	1	2	1	2.9	False
+145.0.7632.116	corpus	https://fasterthanli.me/	1	offscreen 1	2	1	0	1	0	2	0	5.5	False
+145.0.7632.116	corpus	https://joelonsoftware.com/	7	zero-size 7	3	2	0	0	3	2	0	4.6	False
+145.0.7632.116	corpus	https://jvns.ca/	4	offscreen 4	2	2	0	0	0	2	2	5.3	False
+145.0.7632.116	corpus	https://martinfowler.com/	6	low-contrast 6	2	2	0	1	0	3	0	3.8	False
 145.0.7632.116	corpus	https://matklad.github.io/	0		1	1	0	0	0	2	0	1.2	False

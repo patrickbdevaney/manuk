@@ -311,6 +311,11 @@ fn injection_shield_withholds_invisible_text() {
             "{text}"
         );
         assert!(text.contains("⚠hidden-text"), "{tool}: no marker:\n{text}");
+        // R1.4.a.b: a zero-size wrapper with overflow:visible still paints its text.
+        assert!(
+            text.contains("VISIBLE_OVERFLOW") || tool == "observe",
+            "{tool} withheld painted text:\n{text}"
+        );
     }
     let (_, obs) = c.tool("observe", json!({}));
     assert!(

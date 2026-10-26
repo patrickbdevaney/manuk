@@ -80,3 +80,10 @@ false positives. Those become follow-up rows R1.4.a.a and R1.4.a.b, not a reason
 - The observe diff repeats text already in the extract diff, so the observe VISIBLE rows double-count.
 - `marker_withheld` counts text fragments (a word or span each), not runs. Planted: 21 fragments, 2 runs.
 - Single run per page at a 1280x800 viewport; no scrolling beyond the element's own scrollIntoView.
+
+## R1.4.a.b (chrome_ver=145.0.7632.116)
+
+The Alan Turing quotation was withheld as `zero-size`: the layout box carrying it is a 0-wide, 1651px-tall
+wrapper at (76, 3214) with `overflow: visible`, so its text still paints outside it. The shield now treats
+a collapsed box as hiding text only when its element clips (`overflow` other than `visible`). Rerun: the
+paragraph is no longer in the withheld set; suite pages report 0 visible-but-withheld runs.

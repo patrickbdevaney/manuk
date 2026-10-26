@@ -1157,7 +1157,13 @@ impl AgentBrowser {
             }
             None
         };
-        Ok(shield::analyze(&page.root_box, self.width as f32, &inline_bg))
+        let clips = |n: manuk_dom::NodeId| {
+            page.styles_of(n).is_some_and(|st| {
+                st.overflow_x != manuk_css::Overflow::Visible
+                    || st.overflow_y != manuk_css::Overflow::Visible
+            })
+        };
+        Ok(shield::analyze(&page.root_box, self.width as f32, &inline_bg, &clips))
     }
 
     /// The current observation.

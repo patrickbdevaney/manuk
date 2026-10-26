@@ -99,6 +99,7 @@ fn classify(f: &TextFragment, ctx: Ctx, viewport_w: f32) -> Option<&'static str>
 struct Walk<'a> {
     viewport_w: f32,
     inline_bg: &'a dyn Fn(NodeId) -> Option<Rgba>,
+    clips: &'a dyn Fn(NodeId) -> bool,
     seen: Vec<TextFragment>,
     out: Vec<(&'static str, TextFragment)>,
     hidden_nodes: HashMap<NodeId, &'static str>,
@@ -112,6 +113,9 @@ fn walk(b: &LayoutBox, mut ctx: Ctx, w: &mut Walk<'_>) {
         } else if b.hidden {
             ctx.box_reason = Some("visibility");
         } else if (b.rect.width <= 1.0 || b.rect.height <= 1.0)
+            // A collapsed box hides its text only if it clips: with `overflow: visible` the text
+            // still paints outside the 0-wide wrapper (Wikipedia's Turing quotation).
+            && b.node.is_some_and(|n| (w.clips)(n))
             && !matches!(&b.content, BoxContent::Inline(f) if f.is_empty())
         {
             ctx.box_reason = Some("zero-size");
@@ -165,14 +169,17 @@ fn walk(b: &LayoutBox, mut ctx: Ctx, w: &mut Walk<'_>) {
 /// Sort every text run under `root` into seen/withheld. `viewport_w` is the layout width (text
 /// starting right of it is off-canvas); the canvas is taken as white. `inline_bg` gives the
 /// background an inline element paints behind its own text, if any (see `Walk::inline_bg`).
+/// `clips` says whether an element clips its overflow (`overflow` other than `visible`).
 pub fn analyze(
     root: &LayoutBox,
     viewport_w: f32,
     inline_bg: &dyn Fn(NodeId) -> Option<Rgba>,
+    clips: &dyn Fn(NodeId) -> bool,
 ) -> Shield {
     let mut w = Walk {
         viewport_w,
         inline_bg,
+        clips,
         seen: Vec::new(),
         out: Vec::new(),
         hidden_nodes: HashMap::new(),
