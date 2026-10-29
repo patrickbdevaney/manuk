@@ -1,0 +1,11 @@
+task	manuk_tokens_mean	playwright_tokens_mean	delta	delta_incl_cache_read	manuk_tokens1_rerun_mean	dominant_bucket	chrome_ver
+L19	58944	6541	+52403	+273435	33521	Read (71% of result bytes, 2 calls)	145.0.7632.116
+L18	47108	9208	+37900	+141191	44302	Read (76% of result bytes, 12 calls)	145.0.7632.116
+L21	27420	8934	+18485	+136909	25433	Read (50% of result bytes, 3 calls)	145.0.7632.116
+L16	22016	5166	+16850	-9895	19879	navigate (93% of result bytes, 3 calls)	145.0.7632.116
+L17	24157	7718	+16439	+78029	21064	extract (47% of result bytes, 4 calls)	145.0.7632.116
+L24	21120	5311	+15809	-4755	18531	extract (72% of result bytes, 3 calls)	145.0.7632.116
+L22	20410	5624	+14786	-15662	18339	extract (72% of result bytes, 4 calls)	145.0.7632.116
+L20	23371	8832	+14539	+19229	21407	Read (80% of result bytes, 3 calls)	145.0.7632.116
+F08	14093	5721	+8372	+388057	5748	extract (72% of result bytes, 7 calls)	145.0.7632.116
+L12	12982	5202	+7780	+259755	9973	extract (72% of result bytes, 13 calls)	145.0.7632.116
