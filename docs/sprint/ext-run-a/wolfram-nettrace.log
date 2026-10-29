@@ -1,0 +1,152 @@
+0	epoch	1793285107238312
+10466	dns	www.wolframalpha.com	10436
+195054	connect	www.wolframalpha.com	195031
+424495	req	https://www.wolframalpha.com/input?i=integral+of+3e%5E%282x%29+from+x%3D0+to+x%3D5	0	424491	200	HTTP/2.0	-	GET
+514353	body	https://www.wolframalpha.com/input?i=integral+of+3e%5E%282x%29+from+x%3D0+to+x%3D5	50716
+515634	phase	html parse	1211
+603489	req	https://www.wolframalpha.com/_next/static/chunks/8798.8516463f613dfb50.js	515757	87729	200	HTTP/2.0	-	GET
+603666	body	https://www.wolframalpha.com/_next/static/chunks/8798.8516463f613dfb50.js	15413
+692720	req	https://www.wolframalpha.com/_next/static/0UCK0owvo_JFdCpXGjpx9/_ssgManifest.js	603895	88821	200	HTTP/2.0	77	GET
+692790	body	https://www.wolframalpha.com/_next/static/0UCK0owvo_JFdCpXGjpx9/_ssgManifest.js	77
+693042	req	https://www.wolframalpha.com/_next/static/chunks/webpack-64a309e0b5acbd36.js	603747	89293	200	HTTP/2.0	-	GET
+693177	body	https://www.wolframalpha.com/_next/static/chunks/webpack-64a309e0b5acbd36.js	6592
+693215	req	https://www.wolframalpha.com/_next/static/chunks/5098-73e1850a35a83983.js	603839	89375	200	HTTP/2.0	-	GET
+693239	req	https://www.wolframalpha.com/_next/static/0UCK0owvo_JFdCpXGjpx9/_buildManifest.js	603880	89358	200	HTTP/2.0	-	GET
+693425	req	https://www.wolframalpha.com/_next/static/css/3e5e2c10614026a5.css	603930	89494	200	HTTP/2.0	-	GET
+693548	req	https://www.wolframalpha.com/_next/static/chunks/9afd5809-2c36b1433501745d.js	603783	89764	200	HTTP/2.0	-	GET
+693692	body	https://www.wolframalpha.com/_next/static/chunks/5098-73e1850a35a83983.js	8638
+693752	body	https://www.wolframalpha.com/_next/static/0UCK0owvo_JFdCpXGjpx9/_buildManifest.js	13828
+693872	body	https://www.wolframalpha.com/_next/static/css/3e5e2c10614026a5.css	5777
+694320	req	https://www.wolframalpha.com/_next/static/css/b86fd688f650caa5.css	603915	90404	200	HTTP/2.0	-	GET
+694363	req	https://www.wolframalpha.com/_next/static/chunks/pages/_app-8a4e9f7f0b56116d.js	603772	90590	200	HTTP/2.0	-	GET
+694386	req	https://www.wolframalpha.com/_next/static/chunks/5044-834d458d64d56cd6.js	603802	90583	200	HTTP/2.0	-	GET
+694439	req	https://www.wolframalpha.com/_next/static/chunks/3713-3a6f535b24e17647.js	603812	90626	200	HTTP/2.0	-	GET
+778176	body	https://www.wolframalpha.com/_next/static/css/b86fd688f650caa5.css	15346
+779736	req	https://www.wolframalpha.com/_next/static/chunks/pages/input-926fdb57cc358799.js	603864	175870	200	HTTP/2.0	-	GET
+779897	req	https://www.wolframalpha.com/_next/static/chunks/5158.69b7d07dd0f6e12f.js	603731	176165	200	HTTP/2.0	-	GET
+780228	req	https://www.wolframalpha.com/_next/static/chunks/4705-1f37cf179cd9bab9.js	603793	176434	200	HTTP/2.0	-	GET
+780360	body	https://www.wolframalpha.com/_next/static/chunks/5044-834d458d64d56cd6.js	25004
+780445	body	https://www.wolframalpha.com/_next/static/chunks/pages/input-926fdb57cc358799.js	13715
+782951	req	https://www.wolframalpha.com/_next/static/chunks/6169-cf6f5c9b589c1675.js	603821	179129	200	HTTP/2.0	-	GET
+783171	body	https://www.wolframalpha.com/_next/static/chunks/5158.69b7d07dd0f6e12f.js	10694
+863262	body	https://www.wolframalpha.com/_next/static/chunks/4705-1f37cf179cd9bab9.js	28904
+865667	req	https://www.wolframalpha.com/_next/static/chunks/framework-7e404342b933869f.js	603757	261899	200	HTTP/2.0	-	GET
+866010	req	https://www.wolframalpha.com/_next/static/chunks/main-9c7afc91105fe70f.js	603765	262244	200	HTTP/2.0	-	GET
+866614	req	https://www.wolframalpha.com/_next/static/chunks/275-3a7f02e3fc53a481.js	603830	262783	200	HTTP/2.0	-	GET
+866644	req	https://www.wolframalpha.com/_next/static/chunks/9764-e9b362aec0531daf.js	603848	262795	200	HTTP/2.0	-	GET
+871079	body	https://www.wolframalpha.com/_next/static/chunks/main-9c7afc91105fe70f.js	127891
+958553	body	https://www.wolframalpha.com/_next/static/chunks/6169-cf6f5c9b589c1675.js	92192
+959819	body	https://www.wolframalpha.com/_next/static/chunks/framework-7e404342b933869f.js	189782
+960485	body	https://www.wolframalpha.com/_next/static/chunks/275-3a7f02e3fc53a481.js	108699
+1039950	body	https://www.wolframalpha.com/_next/static/chunks/3713-3a6f535b24e17647.js	498800
+1047892	body	https://www.wolframalpha.com/_next/static/chunks/9afd5809-2c36b1433501745d.js	416799
+1048375	req	https://www.wolframalpha.com/_next/static/media/SourceCodePro-Regular.e750ea53.ttf	779649	268725	200	HTTP/2.0	-	GET
+1048704	req	https://www.wolframalpha.com/_next/static/media/SourceCodePro-Bold.e8ae9ddc.ttf	779662	269040	200	HTTP/2.0	-	GET
+1048798	req	https://www.wolframalpha.com/_next/static/media/SourceCodePro-Light.a246e4cf.ttf	779604	269193	200	HTTP/2.0	-	GET
+1051619	body	https://www.wolframalpha.com/_next/static/chunks/pages/_app-8a4e9f7f0b56116d.js	668806
+1052849	body	https://www.wolframalpha.com/_next/static/media/SourceCodePro-Regular.e750ea53.ttf	192740
+1053867	body	https://www.wolframalpha.com/_next/static/media/SourceCodePro-Bold.e8ae9ddc.ttf	191568
+1126748	body	https://www.wolframalpha.com/_next/static/media/SourceCodePro-Light.a246e4cf.ttf	193160
+1126921	body	https://www.wolframalpha.com/_next/static/chunks/9764-e9b362aec0531daf.js	358055
+1128506	phase	external scripts	612852
+1128543	phase	module graph prefetch	21
+1128568	phase	blocking stylesheets	15
+1174164	cascade	937
+1189359	layout	15170
+1189808	phase	cascade+layout+blocking scripts	61228
+1513964	cascade	1436
+1526261	layout	12269
+1529474	cascade	1105
+1541362	layout	11869
+1545529	cascade	996
+1557408	layout	11860
+1559815	cascade	826
+1571745	layout	11915
+1659395	cascade	1255
+1673516	layout	14085
+1677854	cascade	1174
+1691940	layout	14063
+1695028	cascade	1211
+1709074	layout	14030
+1712017	cascade	1154
+1726073	layout	14041
+1728982	cascade	1134
+1743135	layout	14138
+1746387	cascade	1152
+1760445	layout	14039
+1764575	cascade	1198
+1778682	layout	14089
+1781609	cascade	1181
+1795743	layout	14120
+1798700	cascade	1167
+1812838	layout	14123
+1815708	cascade	1155
+1829774	layout	14051
+1832720	cascade	1165
+1846799	layout	14064
+1850770	cascade	1383
+1864877	layout	14088
+1865429	phase	deferred scripts	675606
+1866477	phase	DOMContentLoaded	1037
+1986973	req	https://www.wolframalpha.com/_next/static/media/source-sans-pro-v9-latin-600.96f36c1a.woff2	1899321	87647	200	HTTP/2.0	13992	GET
+1987037	body	https://www.wolframalpha.com/_next/static/media/source-sans-pro-v9-latin-600.96f36c1a.woff2	13992
+1988950	req	https://www.wolframalpha.com/_next/static/media/roboto-cyrillic-italic-400.80247d43.woff2	1899410	89539	200	HTTP/2.0	7432	GET
+1988992	body	https://www.wolframalpha.com/_next/static/media/roboto-cyrillic-italic-400.80247d43.woff2	7432
+1989332	req	https://www.wolframalpha.com/_next/static/media/roboto-latin-400.7e0ffa28.woff2	1899364	89968	200	HTTP/2.0	10292	GET
+1989365	body	https://www.wolframalpha.com/_next/static/media/roboto-latin-400.7e0ffa28.woff2	10292
+1989746	req	https://www.wolframalpha.com/_next/static/media/roboto-cyrillic-ext-400.a9c276a8.woff2	1899330	90415	200	HTTP/2.0	10800	GET
+1989767	body	https://www.wolframalpha.com/_next/static/media/roboto-cyrillic-ext-400.a9c276a8.woff2	10800
+1990134	req	https://www.wolframalpha.com/_next/static/media/roboto-cyrillic-italic-700.541dca72.woff2	1899440	90693	200	HTTP/2.0	7684	GET
+1990151	body	https://www.wolframalpha.com/_next/static/media/roboto-cyrillic-italic-700.541dca72.woff2	7684
+1990404	req	https://www.wolframalpha.com/_next/static/media/roboto-cyrillic-400.999d4a21.woff2	1899338	91065	200	HTTP/2.0	6840	GET
+1990420	body	https://www.wolframalpha.com/_next/static/media/roboto-cyrillic-400.999d4a21.woff2	6840
+1990669	req	https://www.wolframalpha.com/_next/static/media/roboto-cyrillic-700.2cbb12b8.woff2	1899380	91288	200	HTTP/2.0	7044	GET
+1990687	body	https://www.wolframalpha.com/_next/static/media/roboto-cyrillic-700.2cbb12b8.woff2	7044
+1990958	req	https://www.wolframalpha.com/_next/static/media/roboto-greek-italic-400.6a043fc4.woff2	1899417	91541	200	HTTP/2.0	5588	GET
+1990980	body	https://www.wolframalpha.com/_next/static/media/roboto-greek-italic-400.6a043fc4.woff2	5588
+1991185	req	https://www.wolframalpha.com/_next/static/media/roboto-greek-400.8e247d8e.woff2	1899346	91838	200	HTTP/2.0	5084	GET
+1991201	body	https://www.wolframalpha.com/_next/static/media/roboto-greek-400.8e247d8e.woff2	5084
+1991376	req	https://www.wolframalpha.com/_next/static/media/Lexia/%20Bold.6f0e4713.woff	1899487	91888	404	HTTP/2.0	-	GET
+1991396	body	https://www.wolframalpha.com/_next/static/media/Lexia/%20Bold.6f0e4713.woff	9
+1991431	req	https://www.wolframalpha.com/_next/static/media/roboto-latin-italic-400.fac7cf37.woff2	1899425	92005	200	HTTP/2.0	11500	GET
+1991448	body	https://www.wolframalpha.com/_next/static/media/roboto-latin-italic-400.fac7cf37.woff2	11500
+1991815	req	https://www.wolframalpha.com/_next/static/media/source-sans-pro-v9-latin-regular.090a5408.woff2	1899311	92503	200	HTTP/2.0	14308	GET
+1991833	body	https://www.wolframalpha.com/_next/static/media/source-sans-pro-v9-latin-regular.090a5408.woff2	14308
+1992276	req	https://www.wolframalpha.com/_next/static/media/roboto-latin-italic-700.96a5e91b.woff2	1899465	92810	200	HTTP/2.0	11492	GET
+1992294	body	https://www.wolframalpha.com/_next/static/media/roboto-latin-italic-700.96a5e91b.woff2	11492
+1992658	req	https://www.wolframalpha.com/_next/static/media/source-sans-pro-v9-latin-300.3952852a.woff2	1899289	93368	200	HTTP/2.0	14308	GET
+1992676	body	https://www.wolframalpha.com/_next/static/media/source-sans-pro-v9-latin-300.3952852a.woff2	14308
+1993220	req	https://www.wolframalpha.com/_next/static/media/roboto-cyrillic-ext-italic-400.ddb4e8d5.woff2	1899402	93818	200	HTTP/2.0	12120	GET
+1993238	body	https://www.wolframalpha.com/_next/static/media/roboto-cyrillic-ext-italic-400.ddb4e8d5.woff2	12120
+1993624	req	https://www.wolframalpha.com/_next/static/media/roboto-cyrillic-ext-italic-700.260a6160.woff2	1899433	94191	200	HTTP/2.0	11952	GET
+1993643	body	https://www.wolframalpha.com/_next/static/media/roboto-cyrillic-ext-italic-700.260a6160.woff2	11952
+1994018	req	https://www.wolframalpha.com/_next/static/media/Lexia_W_LtIt.763dc789.woff	1899495	94523	200	HTTP/2.0	32140	GET
+1994145	body	https://www.wolframalpha.com/_next/static/media/Lexia_W_LtIt.763dc789.woff	32140
+1994578	req	https://www.wolframalpha.com/_next/static/media/roboto-latin-700.b860b962.woff2	1899395	95183	200	HTTP/2.0	10276	GET
+1994597	body	https://www.wolframalpha.com/_next/static/media/roboto-latin-700.b860b962.woff2	10276
+1994948	req	https://www.wolframalpha.com/_next/static/media/roboto-greek-700.adb14528.woff2	1899387	95560	200	HTTP/2.0	5020	GET
+2075193	body	https://www.wolframalpha.com/_next/static/media/roboto-greek-700.adb14528.woff2	5020
+2075571	req	https://www.wolframalpha.com/_next/static/media/Lexia_W_Lt.19c4cb27.woff	1899479	176090	200	HTTP/2.0	32084	GET
+2075645	body	https://www.wolframalpha.com/_next/static/media/Lexia_W_Lt.19c4cb27.woff	32084
+2082640	req	https://www.wolframalpha.com/_next/static/media/Lexia/%20Bold.fb3ec0a0.woff2	1991421	91217	404	HTTP/2.0	-	GET
+2082694	body	https://www.wolframalpha.com/_next/static/media/Lexia/%20Bold.fb3ec0a0.woff2	9
+2281681	req	https://www.wolframalpha.com/_next/static/media/roboto-cyrillic-ext-700.bf7040c3.woff2	1899372	382306	200	HTTP/2.0	10712	GET
+2281740	body	https://www.wolframalpha.com/_next/static/media/roboto-cyrillic-ext-700.bf7040c3.woff2	10712
+2296243	req	https://www.wolframalpha.com/_next/static/media/roboto-greek-italic-700.500b4484.woff2	1899448	396792	200	HTTP/2.0	5456	GET
+2296304	body	https://www.wolframalpha.com/_next/static/media/roboto-greek-italic-700.500b4484.woff2	5456
+2300497	cascade	1696
+2308969	layout	8456
+2309400	phase	subframes (pre-load)	442908
+2317890	phase	initial images+masks	8478
+2425054	phase	load event	107147
+2474843	phase	finish_loading: external CSS	49752
+2564275	req	https://www.wolframalpha.com/_next/static/chunks/polyfills-42372ed130431b0a.js	2474917	89354	200	HTTP/2.0	-	GET
+2565655	body	https://www.wolframalpha.com/_next/static/chunks/polyfills-42372ed130431b0a.js	112594
+2639780	phase	finish_loading: dynamic scripts	164904
+2639899	phase	finish_loading: subframes	88
+2726943	req	https://www.wolframalpha.com/n/v1/api/randomizer	2640097	86842	200	HTTP/2.0	307	GET
+2726993	body	https://www.wolframalpha.com/n/v1/api/randomizer	307
+2728322	phase	finish_loading: page fetches	88412
+2749531	phase	finish_loading: images	21187
+2749557	phase	finish_loading: icon masks	4
+2749585	phase	finish_loading: background images	9
