@@ -102,6 +102,11 @@ while :; do
 
   next=$(python3 scripts/sprint-next.py)
   if [ "$next" = NONE ]; then say "graph has no ready node — idle (add nodes or unblock one)"; sleep 900; continue; fi
+  case "$next" in
+    BADGRAPH*) say "⚠ GRAPH.tsv is malformed (${next#BADGRAPH }) — paused until fixed"; sleep 600; continue ;;
+    *$'\t'*) ;;
+    *) say "⚠ sprint-next.py gave no node (${next:-empty output}) — paused"; sleep 600; continue ;;
+  esac
   node=${next%%$'\t'*}; floor=${next##*$'\t'}
   attempts=$(grep -c "■ node $node exited" "$LOG" 2>/dev/null || true); attempts=${attempts:-0}
   ft=$(tier_of "$floor"); t=$(( ft + attempts )); [ "$t" -gt 2 ] && t=2

@@ -32,8 +32,21 @@ def depth(node_id: str) -> int:
     return n
 
 
+def malformed(rows: list[dict]) -> list[str]:
+    """Rows a hand edit broke: a stray column, a missing one, or a non-integer ring/pri."""
+    bad = []
+    for n, r in enumerate(rows, start=2):
+        if None in r or None in r.values() or not r["ring"].isdigit() or not r["pri"].isdigit():
+            bad.append(f"row {n}: {r.get('id')!r}")
+    return bad
+
+
 def main() -> int:
     rows = list(csv.DictReader(GRAPH.open(), delimiter="\t"))
+    bad = malformed(rows)
+    if bad:
+        print("BADGRAPH " + "; ".join(bad))
+        return 0
     status = {r["id"]: r["status"] for r in rows}
     for r in rows:
         if r["status"] == "IN_PROGRESS":
