@@ -787,7 +787,17 @@ impl CdpBackend {
     pub fn launch(width: u32, height: u32) -> Result<Self> {
         let dir = std::env::temp_dir().join(format!("manuk-cdp-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_nanos()));
         std::fs::create_dir_all(&dir)?;
-        let child = Command::new(chrome_exe())
+        let mut cmd = Command::new(chrome_exe());
+        // If this server is killed (the harness ends a session by SIGKILL), Chrome must not outlive it.
+        #[cfg(target_os = "linux")]
+        unsafe {
+            use std::os::unix::process::CommandExt;
+            cmd.pre_exec(|| {
+                libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL);
+                Ok(())
+            });
+        }
+        let child = cmd
             .args(["--headless=new", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage", "--no-first-run", "--no-default-browser-check", "--mute-audio", "--disable-background-networking", "--remote-debugging-port=0"])
             .arg(format!("--user-data-dir={}", dir.display()))
             .arg(format!("--window-size={width},{height}"))
