@@ -553,8 +553,7 @@ pub fn capture_boxes_all_ids(url: &str, vw: u32, vh: u32) -> Result<HashMap<Stri
 fn fetch_document_following_redirects(
     url: &str,
 ) -> std::result::Result<(String, String), Unmeasurable> {
-    let mut at = url.to_string();
-    let mut html = fetch_document(&at)?;
+    let (mut at, mut html) = fetch_document_at(url)?;
     for _ in 0..3 {
         let next = if let Some((secs, next)) = meta_refresh_target(&html, &at) {
             if secs >= 1.0 || next == at {
@@ -573,8 +572,7 @@ fn fetch_document_following_redirects(
         } else {
             break;
         };
-        at = next;
-        html = fetch_document(&at)?;
+        (at, html) = fetch_document_at(&next)?;
     }
     Ok((at, html))
 }
@@ -1072,6 +1070,14 @@ fn ureq_get(url: &str) -> Result<String> {
 /// **why** — the reason was destroyed here, before any layer that reports existed. Classification
 /// itself lives in [`crate::fidelity::classify_fetch`] so it is exercisable without a network.
 pub fn fetch_document(url: &str) -> std::result::Result<String, Unmeasurable> {
+    fetch_document_at(url).map(|(_, body)| body)
+}
+
+/// [`fetch_document`] plus the URL the bytes came from AFTER HTTP redirects (TAIL.1.b). The oracle's `<base href>` must
+/// be this URL: a page that 302s to a login host carries relative stylesheets that a browser resolves against the login
+/// host, and pinning `<base>` to the requested URL made Chrome fetch them from the original host, which 302s them to
+/// login again, so the reference rendered an unstyled page while ours (which follows the redirect) rendered it styled.
+pub fn fetch_document_at(url: &str) -> std::result::Result<(String, String), Unmeasurable> {
     let body_path = std::env::temp_dir().join(format!("manuk-fetch-{}.body", stable_tag(url)));
     let out = Command::new("curl")
         .args([
@@ -1083,7 +1089,7 @@ pub fn fetch_document(url: &str) -> std::result::Result<String, Unmeasurable> {
             "-o",
             &body_path.to_string_lossy(),
             "-w",
-            "%{http_code}",
+            "%{http_code} %{url_effective}",
             url,
         ])
         .output()
@@ -1094,10 +1100,14 @@ pub fn fetch_document(url: &str) -> std::result::Result<String, Unmeasurable> {
         let _ = std::fs::remove_file(&body_path);
         return Err(Unmeasurable::Unreachable);
     }
-    let status: u32 = String::from_utf8_lossy(&out.stdout)
-        .trim()
-        .parse()
-        .unwrap_or(0);
+    let w = String::from_utf8_lossy(&out.stdout).into_owned();
+    let (code, eff) = w.trim().split_once(' ').unwrap_or((w.trim(), ""));
+    let status: u32 = code.parse().unwrap_or(0);
+    let eff = if eff.starts_with("http") {
+        eff.to_string()
+    } else {
+        url.to_string()
+    };
     let body = std::fs::read(&body_path)
         .map(|b| String::from_utf8_lossy(&b).into_owned())
         .unwrap_or_default();
@@ -1117,12 +1127,12 @@ pub fn fetch_document(url: &str) -> std::result::Result<String, Unmeasurable> {
         return if body.trim().is_empty() {
             Err(Unmeasurable::Unreachable)
         } else {
-            Ok(body)
+            Ok((eff, body))
         };
     }
     match crate::fidelity::classify_fetch(status, &body) {
         Some(reason) => Err(reason),
-        None => Ok(body),
+        None => Ok((eff, body)),
     }
 }
 
@@ -1492,6 +1502,8 @@ pub fn match_reference_scrollbar_policy() {
 }
 
 /// The flags every headless invocation shares.
+const ORACLE_USER_AGENT: &str = "--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36";
+
 fn base_flags(vw: u32, vh: u32) -> Vec<String> {
     // See `viewport_chrome_offset`: the requested LAYOUT viewport, expressed as the WINDOW size
     // that produces it.
@@ -1506,6 +1518,10 @@ fn base_flags(vw: u32, vh: u32) -> Vec<String> {
         "--disable-lcd-text".into(),
         POINTING_DEVICE.into(),
         format!("--window-size={vw},{vh}"),
+        // TAIL.1.b: headless Chrome announces `HeadlessChrome/…`, which bot walls (www.cbse.gov.in: 403 on the
+        // stylesheet for that UA, 200 for the same request as `Chrome/…`) refuse subresources to, so the reference
+        // rendered an unstyled page. A headed Chrome of the same version sends this string.
+        ORACLE_USER_AGENT.into(),
         "--virtual-time-budget=2000".into(),
         // ── ⚠⚠⚠ **WITHOUT THIS THE REFERENCE LAYS OUT EVERY SELF-HOSTED WEBFONT SITE IN A FALLBACK
         //    FACE, AND HAS DONE SINCE THE ORACLE WAS WRITTEN.**
@@ -1645,7 +1661,8 @@ pub fn capture_url_screenshot(
     // fundraising banner on the real origin and not on a `file://` page, so the screenshot had a
     // banner the box probe never saw — and the visual score and the structural score were measuring
     // two different documents. One page, two probes.
-    let html = fetch_document(url)?;
+    let (url, html) = fetch_document_at(url)?;
+    let url = url.as_str();
     let base = format!("<base href=\"{url}\">");
     let doc = splice_head(&html, &base);
     let tmp = std::env::temp_dir().join(format!("manuk-shot-{}.html", stable_tag(&doc)));
