@@ -1,4 +1,4 @@
-# Agent mode runs SpiderMonkey jitless and the process landlocked
+# Agent mode runs SpiderMonkey (baseline JIT only; --jitless = none) and the process landlocked
 
 > Landed R1.6.
 
@@ -18,3 +18,9 @@
 
 `engine/js/tests/hardening.rs` (child process per mode; `MANUK_TEST_BREAK=1` skips the switch and it goes red) and
 `mcp/tests/confine.rs` (control run with `--no-confine` can write outside, exec and read `$HOME`).
+
+## Update (JIT.BASE, 2026-10-29): baseline tiers are the agent default
+`hardening` now has a `JitMode` (Full/Baseline/None). Agent binaries call `confine::set_jit_mode`, which selects Baseline (Baseline
+interpreter + Baseline compiler on; Ion, native regexp, both wasm JIT tiers off) unless `--jitless` is passed (None). The selftest prints
+`jit=baseline|none|full`. Measured on a 10M-iteration loop: full 30 ms, baseline 394 ms, jitless 3620 ms. Residual risk: the baseline
+compiler still emits machine code; landlock bounds the blast radius.

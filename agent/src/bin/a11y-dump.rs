@@ -35,6 +35,14 @@ async fn main() -> Result<()> {
         .init();
 
     let mut args: Vec<String> = std::env::args().skip(1).collect();
+    // Measurement hook (JIT.BASE): time a page under the agent-mode tier sets without landlock.
+    if let Some(i) = args.iter().position(|a| a.starts_with("--jit-mode=")) {
+        match args.remove(i).as_str() {
+            "--jit-mode=baseline" => manuk_js::hardening::enable_baseline_only(),
+            "--jit-mode=none" => manuk_js::hardening::enable_jitless(),
+            m => anyhow::bail!("{m}: want --jit-mode=baseline|none"),
+        }
+    }
     if let Some(i) = args.iter().position(|a| a == "--deterministic") {
         args.remove(i);
         manuk_js::determinism::enable();

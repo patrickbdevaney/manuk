@@ -19,8 +19,8 @@ fn main() -> anyhow::Result<()> {
         allow_write.push(std::path::PathBuf::from(args.remove(i + 1)));
         args.remove(i);
     }
-    // Agent mode runs untrusted pages: no JIT (all 12 recent SpiderMonkey CVEs were JIT/wasm).
-    manuk_js::hardening::enable_jitless();
+    // Agent mode runs untrusted pages: baseline JIT tiers only, Ion/wasm-JIT off; `--jitless` = none.
+    manuk_mcp::confine::set_jit_mode(&mut args);
     let opts = manuk_mcp::isolation::Options::parse(args)?;
     let _held = manuk_mcp::isolation::apply(&opts)?;
     if confine {

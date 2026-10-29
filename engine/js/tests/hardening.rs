@@ -1,6 +1,7 @@
-//! R1.6 gate: agent mode runs SpiderMonkey with no JIT tier. Each mode runs in a child process
-//! (the switch is process-wide). Gate can go red: `MANUK_TEST_BREAK=1` makes the "jitless" child skip
-//! `enable_jitless`, and the assertions below then fail.
+//! R1.6 / JIT.BASE gate: agent mode runs SpiderMonkey with the baseline tiers only (Ion, native regexp,
+//! wasm JIT off); `--jitless` has none. Each mode runs in a child process (the switch is
+//! process-wide). Gate can go red: `MANUK_TEST_BREAK=1` makes the "baseline" and "jitless" children
+//! skip their switch (Ion comes back on), and the assertions below then fail.
 
 #![cfg(feature = "spidermonkey")]
 
@@ -15,8 +16,12 @@ fn child() {
     let Ok(mode) = std::env::var("MANUK_TEST_MODE") else {
         return;
     };
-    if mode == "jitless" && std::env::var("MANUK_TEST_BREAK").is_err() {
-        manuk_js::hardening::enable_jitless();
+    if std::env::var("MANUK_TEST_BREAK").is_err() {
+        match mode.as_str() {
+            "jitless" => manuk_js::hardening::enable_jitless(),
+            "baseline" => manuk_js::hardening::enable_baseline_only(),
+            _ => {}
+        }
     }
     let mut rt = SpiderMonkeyRuntime::new().unwrap();
     let tiers = rt.jit_tiers();
@@ -57,20 +62,26 @@ fn run(mode: &str) -> (Vec<u32>, u128) {
 }
 
 #[test]
-fn agent_mode_has_no_jit_and_a_jit_only_bench_is_slower() {
-    let (jit_tiers, jit_ms) = run("jit");
+fn baseline_is_on_ion_is_off_and_jitless_is_slow() {
+    let (full_tiers, full_ms) = run("jit");
+    let (base_tiers, base_ms) = run("baseline");
     let (off_tiers, off_ms) = run("jitless");
-    eprintln!("jit: tiers={jit_tiers:?} {jit_ms} ms | jitless: tiers={off_tiers:?} {off_ms} ms");
-    assert!(
-        jit_tiers.iter().any(|&t| t == 1),
-        "default mode should have a JIT tier on: {jit_tiers:?}"
+    eprintln!(
+        "full: {full_tiers:?} {full_ms} ms | baseline: {base_tiers:?} {base_ms} ms | jitless: {off_tiers:?} {off_ms} ms"
+    );
+    assert!(full_tiers.iter().any(|&t| t == 1), "{full_tiers:?}");
+    // TIERS order: ion, baseline, baseline-interp, native regexp, wasm baseline, wasm optimizing.
+    assert_eq!(
+        base_tiers,
+        vec![0, 1, 1, 0, 0, 0],
+        "agent mode must be baseline-only (Ion off)"
     );
     assert!(
         off_tiers.iter().all(|&t| t == 0),
-        "agent mode left a JIT tier on: {off_tiers:?}"
+        "--jitless left a JIT tier on: {off_tiers:?}"
     );
     assert!(
-        off_ms > jit_ms * 3,
-        "jitless bench ({off_ms} ms) not clearly slower than JIT ({jit_ms} ms)"
+        off_ms >= base_ms * 5,
+        "baseline ({base_ms} ms) not >=5x faster than jitless ({off_ms} ms)"
     );
 }

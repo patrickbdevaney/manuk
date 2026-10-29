@@ -6,7 +6,7 @@ no gate of its own). `scripts/sec-did-check.py` enforces: every gate file exists
 layers, or any UNPINNED layer, names a SEC.DID.* node that exists in GRAPH.tsv. "Mutation-checked" is only
 claimed where the gate file's own header records it (marked `mut`); otherwise `SEC.DID.1` does the runs.
 
-Scope note: "agent" = manuk-mcp / manuk-agent / manuk-bidi (jitless + landlock + ephemeral jar). "shell" = the GUI
+Scope note: "agent" = manuk-mcp / manuk-agent / manuk-bidi (optimizing JIT off + landlock + ephemeral jar). "shell" = the GUI
 browser, which has none of those three.
 
 | id | path (untrusted source -> sink) | layers | node |
@@ -22,7 +22,7 @@ browser, which has none of those three.
 | P7 | web page -> process exec | no Command::new in shipped shell/engine/mcp/agent/bidi code paths (test and dev-tool uses only)@UNPINNED; landlock execve denied (agent only)@mcp/tests/confine.rs | SEC.DID.7 |
 | P8 | cross-origin frame -> embedder DOM / embedder -> frame | contentDocument/contentWindow.document SecurityError@engine/page/tests/g_sop_floor.rs (mut); X-Frame-Options/frame-ancestors refusal@engine/page/tests/g_framing.rs | - |
 | P9 | other tab / window.opener / named window access | not probed: shell tabs are separate Pages sharing the cookie jar and storage, no test of cross-tab reach | SEC.DID.8 |
-| P10 | page script -> engine memory corruption (SpiderMonkey/JIT, wasm) | jitless@engine/js/tests/hardening.rs (mut, MANUK_TEST_BREAK); landlock@mcp/tests/confine.rs (agent only). Shell: neither. SpiderMonkey pin is past EOL (SYNTHESIS) | SEC.DID.9 |
+| P10 | page script -> engine memory corruption (SpiderMonkey/JIT, wasm) | optimizing JIT off (baseline tiers on; `--jitless` = none)@engine/js/tests/hardening.rs (mut, MANUK_TEST_BREAK); landlock@mcp/tests/confine.rs (agent only). Shell: neither. SpiderMonkey pin is past EOL (SYNTHESIS) | SEC.DID.9 |
 | P11 | page content -> agent tool calls (prompt injection) | hidden-text shield@mcp/tests/session.rs. Visible injected text: no layer. navigate/act/type have no origin allowlist, so an injected `navigate` to an attacker URL carrying data in its query is unblocked | SEC.DID.10 |
 | P12 | agent `storage_state` path arg -> disk write/read | landlock write set@mcp/tests/confine.rs | SEC.DID.11 |
 | P13 | page script injection (XSS-style) via CSP | script-src enforcement@engine/page/tests/g_csp.rs (other CSP directives unimplemented per csp.rs header) | SEC.DID.12 |
@@ -30,3 +30,11 @@ browser, which has none of those three.
 ## Not yet probed (no claim made)
 mixed content / https downgrade, `javascript:` and `data:` top-level navigation, `window.open` features, WebRTC,
 service-worker scope, extension/IPC surfaces of the shell. SEC.DID.12 covers the probe.
+
+## JIT layer (JIT.BASE, owner decision 2026-10-29)
+
+Agent mode runs SpiderMonkey with the Baseline interpreter and Baseline compiler ON; Ion/Warp, native regexp
+and both wasm JIT tiers OFF. `--jitless` turns every tier off. Residual risk: the baseline compiler still emits
+machine code, so a baseline-tier bug is reachable; the optimizing tier, where the recent SpiderMonkey JIT CVEs
+sit, is not. Landlock (no exec, read-only fs) bounds what a compromise could do. Measured on a hot numeric loop:
+full 30 ms, baseline 394 ms, jitless 3620 ms (9.2x), chrome_ver=145.0.7632.116.

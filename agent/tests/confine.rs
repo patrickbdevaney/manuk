@@ -39,7 +39,7 @@ fn confined_process_is_read_only_outside_cache_and_cannot_exec() {
     assert!(c.contains("exec=false"), "{c}");
     assert!(c.contains("read_usr=true"), "{c}");
     assert!(c.contains("read_home=false"), "{c}");
-    assert!(c.contains("jitless=true"), "{c}");
+    assert!(c.contains("jit=baseline"), "{c}");
 }
 
 #[test]
@@ -48,5 +48,11 @@ fn control_without_confinement_can_do_all_of_it() {
     assert!(c.contains("write_outside=true"), "{c}");
     assert!(c.contains("exec=true"), "{c}");
     assert!(c.contains("read_home=true"), "{c}");
-    assert!(c.contains("jitless=false"), "{c}");
+    assert!(c.contains("jit=full"), "{c}");
+}
+
+#[test]
+fn jitless_flag_selects_no_jit() {
+    let c = run(&["--jitless"]);
+    assert!(c.contains("jit=none"), "{c}");
 }

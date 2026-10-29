@@ -124,11 +124,12 @@
   - L67 · The gate
   - L88 · The new public surface, and why
 
-## Agent mode runs SpiderMonkey jitless and the process landlocked
+## Agent mode runs SpiderMonkey (baseline JIT only; --jitless = none) and the process landlocked
 `docs/wiki/agent-mode-runs-jitless-and-landlocked.md`
 
   - L5 · Mechanism
   - L17 · Gates
+  - L22 · Update (JIT.BASE, 2026-10-29): baseline tiers are the agent default
 
 ## The agent picked the first substring match — and the scorer built to do better had no caller
 `docs/wiki/agent-target-selection.md`
@@ -3764,4 +3765,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3079 sections across 170 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3080 sections across 170 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

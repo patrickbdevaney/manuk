@@ -11,7 +11,7 @@
 //!
 //! Not covered (landlock v1 is filesystem-only): network (the egress guard in `manuk-net` owns it),
 //! `ptrace`, signals. Unsupported kernel => a loud warning, not a failure: the process still has the
-//! jitless engine, and refusing to start would make the browser unusable on old kernels.
+//! no-optimizing-JIT engine, and refusing to start would make the browser unusable on old kernels.
 
 use std::ffi::CString;
 use std::os::unix::ffi::OsStrExt;
@@ -139,14 +139,25 @@ pub fn confine(g: &Grants) -> Outcome {
     Outcome::Enforced
 }
 
-/// Jitless engine + landlock for a headless agent binary (R1.6.a). Call first thing in a plain
+/// Agent default is the baseline JIT tiers (JIT.BASE); `--jitless` (stripped from `args`) is no JIT.
+pub fn set_jit_mode(args: &mut Vec<String>) {
+    let before = args.len();
+    args.retain(|a| a != "--jitless");
+    if args.len() != before {
+        manuk_js::hardening::enable_jitless();
+    } else {
+        manuk_js::hardening::enable_baseline_only();
+    }
+}
+
+/// Baseline-JIT engine (or jitless with `--jitless`) + landlock for a headless agent binary (R1.6.a). Call first thing in a plain
 /// synchronous `main`, before any thread exists (so not under `#[tokio::main]`). `--no-confine` is
 /// stripped from `args` and turns the OS half off (the jitless half stays); returns whether confined.
 pub fn harden_process(args: &mut Vec<String>, extra: Grants) -> bool {
     let before = args.len();
     args.retain(|a| a != "--no-confine");
     let confined = args.len() == before;
-    manuk_js::hardening::enable_jitless();
+    set_jit_mode(args);
     if confined {
         let mut g = extra;
         g.write.push(cache_dir());
@@ -161,6 +172,12 @@ pub fn harden_process(args: &mut Vec<String>, extra: Grants) -> bool {
 /// `--confine-selftest <outside-file> <inside-dir> [--no-confine]`: confine, then report what the
 /// process can still do. The gate tests run this on every agent binary and read the lines.
 pub fn selftest(a: &[String]) -> anyhow::Result<()> {
+    let mut a = a.to_vec();
+    let no_confine = a.iter().any(|x| x == "--no-confine");
+    if !no_confine {
+        set_jit_mode(&mut a);
+    }
+    let a = &a[..];
     anyhow::ensure!(
         a.len() >= 2,
         "--confine-selftest <outside-file> <inside-dir>"
@@ -171,7 +188,6 @@ pub fn selftest(a: &[String]) -> anyhow::Result<()> {
             read: vec![],
             write: vec![inside.into()],
         };
-        manuk_js::hardening::enable_jitless();
         println!("confine={:?}", confine(&g));
     }
     let w = |p: &str| std::fs::write(p, b"x").is_ok();
@@ -188,6 +204,6 @@ pub fn selftest(a: &[String]) -> anyhow::Result<()> {
             .map(|h| std::fs::read_dir(h).is_ok())
             .unwrap_or(false)
     );
-    println!("jitless={}", manuk_js::hardening::jitless());
+    println!("jit={}", manuk_js::hardening::mode().name());
     Ok(())
 }

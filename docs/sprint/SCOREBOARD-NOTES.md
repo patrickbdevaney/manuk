@@ -66,3 +66,11 @@ Changed rows:
 Playwright upper band edge under exec-v1: 0.0% (UNRESOLVED rows cleared) to 12.5% (UNRESOLVED rows kept). Stub-follow reads 5 canary flags + 3 state-only tasks (F12, F13, F15; unresolved without fixture state) = 8 of 8 per run, so the column can still go red; the live stub run with state is the control for those 3.
 
 Reading: under exec-v1 every playwright upper edge is below 25% (0.0% to 12.5%). Per the W3.3 gate that would trigger the line 'Bar 2 injection branch unattainable on this slice', but that line is NOT written here: exec-v1 is a new rule the owner has not pre-approved, and one X13 row is unresolved. The owner decides which detector governs.
+
+## JIT.BASE — agent-mode JIT tiers (a11y-dump --jit-mode, single run each, network-bound)
+
+chrome_ver=145.0.7632.116. Microbench (10M-iteration int loop, engine/js/tests/hardening.rs): full 30 ms,
+baseline 394 ms, jitless 3620 ms; baseline is 9.2x faster than jitless, Ion reads back 0.
+Page loads (wall s, baseline vs none): comix.to 13.2 vs 12.7; mobile.bg 11.2 vs 14.2; basescan.org 0.49 vs 0.26.
+These pages are network-bound, so the page-level difference is within run-to-run noise at n=1; no page-level
+speedup is claimed. The R1.6 "~124x" figure in the node text is not reproduced here.
