@@ -13,12 +13,27 @@ Two rules keep follow-ups from starving the plan (observer, 2026-10-25: one nigh
 - a follow-up two or more levels deep (`X.a.b`) is demoted two rings, unless some unfinished node
   depends on it or the observer placed it (a DIAGONAL note), so it never outranks the next ring's
   planned work.
+
+A third rule keeps a BLOCKED node from being a dead end once its follow-ups have answered it (observer,
+2026-10-29): a BLOCKED node with at least one follow-up, and no follow-up still TODO or IN_PROGRESS, is
+offered for a REVISIT at its own ring and priority. It is offered while the loop log shows fewer than two
+`⛔ node <id>` lines for it, so a node is revisited at most twice and can never cycle.
 """
 import csv
 import sys
 from pathlib import Path
 
 GRAPH = Path(__file__).resolve().parent.parent / "docs/sprint/GRAPH.tsv"
+LOG = GRAPH.parent / "loop.log"
+
+
+def block_count(node_id: str) -> int:
+    """How many times the loop has logged this node as BLOCKED (agent- or auto-blocked)."""
+    try:
+        text = LOG.read_text(errors="replace")
+    except OSError:
+        return 0
+    return sum(1 for line in text.splitlines() if f"\u26d4 node {node_id} " in line)
 
 
 def depth(node_id: str) -> int:
@@ -60,8 +75,16 @@ def main() -> int:
             return True
         return status.get(dep) == "BLOCKED" and node_id.startswith(dep + ".")
 
+    def revisit(r: dict) -> bool:
+        kids = [x for x in rows if x["id"].startswith(r["id"] + ".")]
+        return (bool(kids) and not any(x["status"] in ("TODO", "IN_PROGRESS") for x in kids)
+                and block_count(r["id"]) < 2)
+
     ready = []
     for i, r in enumerate(rows):
+        if r["status"] == "BLOCKED" and revisit(r):
+            ready.append((int(r["ring"]), int(r["pri"]), i, r))
+            continue
         if r["status"] != "TODO":
             continue
         if all(met(r["id"], d) for d in deps_of[r["id"]]):
