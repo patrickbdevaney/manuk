@@ -8396,6 +8396,7 @@ impl Page {
         // `from_prefetched_inner`), which is why the call belongs here and not in three callers —
         // three callers is what produced one.
         install_supports_hook();
+        manuk_layout::set_scripting_enabled(manuk_js::js_available());
         // **The child-document reflow, installed for the same reason and in the same place.** It
         // carries no borrowed state (the host's registry is keyed by arena address), so unlike
         // `ReflowScope` it is installed once and never torn down — and it belongs on the one

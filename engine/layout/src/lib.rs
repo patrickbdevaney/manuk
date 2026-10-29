@@ -2652,9 +2652,26 @@ fn is_rendered(dom: &Dom, styles: &StyleMap, node: NodeId) -> bool {
             Some(s) => s.display != Display::None,
             None => false,
         },
-        NodeData::Text(_) => styles.contains_key(&node),
+        // With scripting enabled a `<noscript>`'s content is RAW TEXT the parent never renders
+        // (HTML "scripting flag"); only when scripting is off does it stand for its fallback.
+        NodeData::Text(_) => {
+            styles.contains_key(&node)
+                && !(SCRIPTING_ENABLED.load(std::sync::atomic::Ordering::Relaxed)
+                    && dom
+                        .parent(node)
+                        .is_some_and(|p| dom.tag_name(p) == Some("noscript")))
+        }
         _ => false,
     }
+}
+
+/// Whether the document being laid out has scripting enabled (set by the page loader from
+/// `manuk_js::js_available()`); decides if `<noscript>` text renders. Default off.
+static SCRIPTING_ENABLED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Declare whether scripting is enabled for subsequent layouts (see [`SCRIPTING_ENABLED`]).
+pub fn set_scripting_enabled(on: bool) {
+    SCRIPTING_ENABLED.store(on, std::sync::atomic::Ordering::Relaxed);
 }
 
 /// Apply `text-transform` to a text run for RENDERING only (the DOM text is untouched, so JS still
@@ -14266,6 +14283,7 @@ impl Ctx<'_> {
         pch: Option<f32>,
     ) {
         match self.dom.data(node) {
+            NodeData::Text(_) if !is_rendered(self.dom, self.styles, node) => {}
             NodeData::Text(raw) => {
                 let cs = self.style_of(node);
                 let style = text_style(cs, self.fonts);
