@@ -170,6 +170,20 @@ pub struct AgentBrowser {
     /// page exactly as before.
     heading: Option<String>,
     nth: Option<usize>,
+    /// Open page WebSockets: the queue the page's `send()`s are put on, per socket id. Dropping a
+    /// sender closes that socket (see [`Self::service_websockets`]).
+    ws_send: std::collections::HashMap<
+        u32,
+        tokio::sync::mpsc::UnboundedSender<manuk_net::websocket::WsMessage>,
+    >,
+    /// Transport events (open/message/close) on their way back into the page, tagged with the
+    /// socket id and the navigation generation that opened it.
+    ws_events: (
+        tokio::sync::mpsc::UnboundedSender<(u64, u32, manuk_page::WsEvent)>,
+        tokio::sync::mpsc::UnboundedReceiver<(u64, u32, manuk_page::WsEvent)>,
+    ),
+    /// Bumped per loaded page so a late event from the previous page's socket is dropped.
+    ws_gen: u64,
 }
 
 /// A synchronous readiness snapshot (see [`AgentBrowser::readiness`]).
@@ -401,6 +415,9 @@ impl AgentBrowser {
             landmark: None,
             heading: None,
             nth: None,
+            ws_send: std::collections::HashMap::new(),
+            ws_events: tokio::sync::mpsc::unbounded_channel(),
+            ws_gen: 0,
         }
     }
 
@@ -485,8 +502,178 @@ impl AgentBrowser {
         //    rendered page, completed module loaders, and 488 more laid-out list items.
         page.finish_loading(&self.fonts, self.width as f32).await;
         self.scroll_y = 0.0;
+        // The previous page's sockets die with it: dropping the senders closes them.
+        self.ws_send.clear();
+        self.ws_gen += 1;
         self.page = Some(page);
+        self.service_websockets(SETTLE_BUDGET).await;
         Ok(())
+    }
+
+    /// Run the page's WebSockets, the agent-side twin of the GUI shell's `pump_websockets`:
+    /// connect what the page asked for, put its `send()`s on the wire, and feed the server's frames
+    /// back into `onmessage` until the sockets go quiet or `budget` runs out. Without this a page
+    /// that fetches its results over a socket (Wolfram|Alpha) never gets them.
+    async fn service_websockets(&mut self, budget: std::time::Duration) {
+        // After the last event, wait this long for another before calling the sockets quiet.
+        const QUIET: std::time::Duration = std::time::Duration::from_millis(400);
+        let started = std::time::Instant::now();
+        let mut last_activity = std::time::Instant::now();
+        loop {
+            let ops = match self.page.as_ref() {
+                Some(p) => p.take_ws_ops(),
+                None => return,
+            };
+            if !ops.is_empty() {
+                last_activity = std::time::Instant::now();
+            }
+            let base = self
+                .page
+                .as_ref()
+                .map(|p| p.final_url.clone())
+                .unwrap_or_default();
+            for (id, op) in ops {
+                match op {
+                    manuk_page::WsOp::Connect { url, protocols } => {
+                        let abs = url::Url::parse(&base)
+                            .ok()
+                            .and_then(|b| b.join(&url).ok())
+                            .map(|u| match u.scheme() {
+                                "http" | "https" => u.as_str().replacen("http", "ws", 1),
+                                _ => u.to_string(),
+                            })
+                            .unwrap_or(url);
+                        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+                        self.ws_send.insert(id, tx);
+                        let (gen, ev) = (self.ws_gen, self.ws_events.0.clone());
+                        tokio::spawn(async move {
+                            let send = |event| {
+                                let _ = ev.send((gen, id, event));
+                            };
+                            let mut conn = match manuk_net::websocket::WebSocketConn::connect(
+                                &abs, &protocols,
+                            )
+                            .await
+                            {
+                                Ok(c) => c,
+                                Err(e) => {
+                                    send(manuk_page::WsEvent::Error {
+                                        message: e.to_string(),
+                                    });
+                                    send(manuk_page::WsEvent::Close {
+                                        code: 1006,
+                                        reason: String::new(),
+                                        clean: false,
+                                    });
+                                    return;
+                                }
+                            };
+                            send(manuk_page::WsEvent::Open {
+                                protocol: conn.protocol().to_string(),
+                                extensions: String::new(),
+                            });
+                            loop {
+                                tokio::select! {
+                                    outgoing = rx.recv() => match outgoing {
+                                        Some(msg) => {
+                                            let n = match &msg {
+                                                manuk_net::websocket::WsMessage::Text(t) => t.len(),
+                                                manuk_net::websocket::WsMessage::Binary(b) => b.len(),
+                                            };
+                                            if let Err(e) = conn.send(msg).await {
+                                                send(manuk_page::WsEvent::Error { message: e.to_string() });
+                                                break;
+                                            }
+                                            send(manuk_page::WsEvent::Sent { bytes: n });
+                                        }
+                                        None => {
+                                            let _ = conn.close().await;
+                                            send(manuk_page::WsEvent::Close {
+                                                code: 1000,
+                                                reason: String::new(),
+                                                clean: true,
+                                            });
+                                            break;
+                                        }
+                                    },
+                                    incoming = conn.recv() => match incoming {
+                                        Ok(Some(manuk_net::websocket::WsMessage::Text(t))) => {
+                                            send(manuk_page::WsEvent::Message {
+                                                data: t.into_bytes(),
+                                                binary: false,
+                                            });
+                                        }
+                                        Ok(Some(manuk_net::websocket::WsMessage::Binary(b))) => {
+                                            send(manuk_page::WsEvent::Message { data: b, binary: true });
+                                        }
+                                        Ok(None) => {
+                                            send(manuk_page::WsEvent::Close {
+                                                code: 1000,
+                                                reason: String::new(),
+                                                clean: true,
+                                            });
+                                            break;
+                                        }
+                                        Err(e) => {
+                                            send(manuk_page::WsEvent::Error { message: e.to_string() });
+                                            send(manuk_page::WsEvent::Close {
+                                                code: 1006,
+                                                reason: String::new(),
+                                                clean: false,
+                                            });
+                                            break;
+                                        }
+                                    },
+                                }
+                            }
+                        });
+                    }
+                    manuk_page::WsOp::Send { data, binary } => {
+                        if let Some(tx) = self.ws_send.get(&id) {
+                            let msg = if binary {
+                                manuk_net::websocket::WsMessage::Binary(data)
+                            } else {
+                                manuk_net::websocket::WsMessage::Text(
+                                    String::from_utf8_lossy(&data).into_owned(),
+                                )
+                            };
+                            let _ = tx.send(msg);
+                        }
+                    }
+                    manuk_page::WsOp::Close { .. } => {
+                        self.ws_send.remove(&id);
+                    }
+                }
+            }
+            if self.ws_send.is_empty() || started.elapsed() >= budget {
+                break;
+            }
+            if last_activity.elapsed() >= QUIET && self.ws_send.is_empty() {
+                break;
+            }
+            let wait = QUIET
+                .saturating_sub(last_activity.elapsed())
+                .min(budget.saturating_sub(started.elapsed()));
+            if wait.is_zero() {
+                break;
+            }
+            match tokio::time::timeout(wait, self.ws_events.1.recv()).await {
+                Ok(Some((gen, id, event))) => {
+                    last_activity = std::time::Instant::now();
+                    if gen != self.ws_gen {
+                        continue;
+                    }
+                    if matches!(event, manuk_page::WsEvent::Close { .. }) {
+                        self.ws_send.remove(&id);
+                    }
+                    let (fonts, w) = (&self.fonts, self.width as f32);
+                    if let Some(p) = self.page.as_mut() {
+                        p.deliver_ws_event(id, &event, fonts, w);
+                    }
+                }
+                _ => break,
+            }
+        }
     }
 
     /// Load `url` (http(s)/data/file/path), lay it out, and push it onto the history
@@ -1188,6 +1375,7 @@ impl AgentBrowser {
         if let Some(p) = self.page.as_mut() {
             p.settle_async(fonts, w, SETTLE_BUDGET).await;
         }
+        self.service_websockets(SETTLE_BUDGET).await;
     }
 
     /// PNG screenshot of the current viewport.
