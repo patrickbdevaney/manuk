@@ -88,6 +88,7 @@ fn tools() -> Vec<Tool> {
         t("checkpoint", "Remember this page's position (its action log) and return a checkpoint id. v1 is replay-based: exact, but restore/fork cost one page load, not a memory snapshot.", schema(json!({}), &[])),
         t("restore", "Rewind to a checkpoint: replay its log into a fresh page (every step hash-verified) and make that the default page. Cookies are not cleared; web storage is. Returns the new page handle.", schema(json!({"checkpoint": {"type": "string"}}), &["checkpoint"])),
         t("fork", "Like restore, but leaves the current default page alone: a new independent page at the checkpoint.", schema(json!({"checkpoint": {"type": "string"}}), &["checkpoint"])),
+        t("commit", "Lift this forked branch's write-fence and send the non-safe requests (POST/PUT/DELETE...) it held, once each. Until then a fork sends none: acts report held=[...].", schema(json!({}), &[])),
         t("screenshot", "PNG of the current viewport (opt-in; the expensive channel).", schema(json!({"handle": {"type": "string"}}), &[])),
     ]
 }

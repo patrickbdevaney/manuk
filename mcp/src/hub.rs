@@ -68,11 +68,38 @@ impl Entry {
 struct Ckpt {
     log: Vec<Entry>,
     url: String,
+    /// The client side of the world at checkpoint time (cookies, web storage, CacheStorage).
+    snap: Value,
+    /// `CLIENT`: no non-safe request had left this process, so rewinding the client rewinds
+    /// everything the page could have changed. `WORLD`: the server had already been written to.
+    tag: &'static str,
+    /// Position in this process's non-safe request ledger, and the process it is valid in.
+    pos: usize,
+    pid: u32,
 }
 
 struct Page<B: Backend> {
     s: Session<B>,
     log: Vec<Entry>,
+    /// A forked branch: non-safe sends are held, not sent, until `commit`.
+    fenced: bool,
+    held: Vec<manuk_net::ledger::Held>,
+}
+
+impl<B: Backend> Page<B> {
+    fn new(s: Session<B>, log: Vec<Entry>) -> Self {
+        Page {
+            s,
+            log,
+            fenced: false,
+            held: Vec::new(),
+        }
+    }
+}
+
+fn held_line(held: &[manuk_net::ledger::Held]) -> String {
+    let v: Vec<String> = held.iter().map(|h| h.what.short()).collect();
+    format!("held=[{}]", v.join(", "))
 }
 
 pub struct Hub<B: Backend> {
@@ -181,7 +208,7 @@ impl<B: Backend> Hub<B> {
                 return Err(format!("REPLAY DIVERGED at {id}:{} ({}): the page no longer reproduces what was recorded; start a new page", e.seq, e.tool));
             }
         }
-        self.pages.insert(id.to_string(), Page { s, log });
+        self.pages.insert(id.to_string(), Page::new(s, log));
         Ok(())
     }
 
@@ -193,13 +220,15 @@ impl<B: Backend> Hub<B> {
         if let Some(c) = self.ckpts.get(id) {
             return Ok(c.clone());
         }
-        let p = self
-            .ckpt_path(id)
-            .ok_or_else(|| format!("unknown checkpoint {id:?} (no persisted store: set MANUK_ACTLOG_DIR)"))?;
+        let p = self.ckpt_path(id).ok_or_else(|| {
+            format!("unknown checkpoint {id:?} (no persisted store: set MANUK_ACTLOG_DIR)")
+        })?;
         let text = std::fs::read_to_string(&p)
             .map_err(|_| format!("unknown checkpoint {id:?}: no file at {}", p.display()))?;
         let mut lines = text.lines();
-        let url = lines.next().unwrap_or("").to_string();
+        let head: Value = serde_json::from_str(lines.next().unwrap_or(""))
+            .map_err(|_| format!("corrupt checkpoint {id}"))?;
+        let url = head["url"].as_str().unwrap_or("").to_string();
         let log = lines
             .map(|l| {
                 serde_json::from_str::<Value>(l)
@@ -208,7 +237,18 @@ impl<B: Backend> Hub<B> {
                     .ok_or_else(|| format!("corrupt checkpoint {id}"))
             })
             .collect::<Result<Vec<_>, _>>()?;
-        let c = Ckpt { log, url };
+        let c = Ckpt {
+            log,
+            url,
+            snap: head["snap"].clone(),
+            tag: if head["tag"] == "WORLD" {
+                "WORLD"
+            } else {
+                "CLIENT"
+            },
+            pos: head["pos"].as_u64().unwrap_or(0) as usize,
+            pid: head["pid"].as_u64().unwrap_or(0) as u32,
+        };
         self.ckpts.insert(id.to_string(), c.clone());
         Ok(c)
     }
@@ -216,9 +256,14 @@ impl<B: Backend> Hub<B> {
     /// `checkpoint`: remember the current position of page `id`.
     fn checkpoint(&mut self, id: &str) -> String {
         let page = &self.pages[id];
+        let pos = manuk_net::ledger::position();
         let c = Ckpt {
             log: page.log.clone(),
             url: page.s.backend().url(),
+            snap: manuk_net::partition::snapshot().unwrap_or(Value::Null),
+            tag: if pos == 0 { "CLIENT" } else { "WORLD" },
+            pos,
+            pid: std::process::id(),
         };
         let cid = format!(
             "c{:06x}",
@@ -226,7 +271,9 @@ impl<B: Backend> Hub<B> {
         );
         self.next += 1;
         if let Some(p) = self.ckpt_path(&cid) {
-            let mut out = format!("{}\n", c.url);
+            let head =
+                json!({"url": c.url, "tag": c.tag, "pos": c.pos, "pid": c.pid, "snap": c.snap});
+            let mut out = format!("{head}\n");
             for e in &c.log {
                 out.push_str(&format!("{}\n", e.to_json(id)));
             }
@@ -234,14 +281,60 @@ impl<B: Backend> Hub<B> {
         }
         let n = c.log.len();
         let url = c.url.clone();
+        let tag = c.tag;
+        let note = if tag == "CLIENT" {
+            "CLIENT: nothing has been sent to a server yet, so restore is a full rollback."
+        } else {
+            "WORLD: non-safe requests had already reached a server before this point; restore rewinds the client only."
+        };
         self.ckpts.insert(cid.clone(), c);
-        format!("checkpoint {cid} at {id}:{n} ({url}); restore/fork replays the log into a fresh page, so it costs one page load\npage: {id}:{n}")
+        format!("checkpoint {cid} [{tag}] at {id}:{n} ({url}); restore/fork replays the log into a fresh page, so it costs one page load. {note}\npage: {id}:{n}")
+    }
+
+    /// `commit`: lift the branch's write-fence and send what it held, once each.
+    async fn commit(&mut self, id: &str) -> String {
+        let page = self.pages.get_mut(id).unwrap();
+        let held = std::mem::take(&mut page.held);
+        page.fenced = false;
+        let (mut sent, mut dropped) = (Vec::new(), Vec::new());
+        for h in held {
+            if !h.replayable {
+                dropped.push(h.what.short());
+                continue;
+            }
+            let hs: Vec<(&str, &str)> = h
+                .headers
+                .iter()
+                .map(|(k, v)| (k.as_str(), v.as_str()))
+                .collect();
+            let url = h.what.url.clone();
+            match manuk_net::request_from(&h.what.method, &url, &hs, h.body.clone(), Some(&url))
+                .await
+            {
+                Ok(_) => sent.push(h.what.short()),
+                Err(e) => dropped.push(format!("{} ({e})", h.what.short())),
+            }
+        }
+        let n = page.log.len();
+        format!(
+            "committed: sent {} [{}]; could not send {} [{}]\npage: {id}:{n}",
+            sent.len(),
+            sent.join(", "),
+            dropped.len(),
+            dropped.join(", ")
+        )
     }
 
     /// `restore` / `fork`: replay checkpoint `cid` into a brand-new page (verifying every hash) and
     /// return its handle. `restore` also makes that page the default one.
     async fn from_ckpt(&mut self, cid: &str, make_default: bool) -> Result<Output, String> {
         let c = self.ckpt_get(cid)?;
+        // What the server has seen since the checkpoint, computed before the replay adds its own.
+        let diverged = if c.pid == std::process::id() {
+            Some(manuk_net::ledger::sent_since(c.pos))
+        } else {
+            None
+        };
         let id = self.fresh_id();
         let mut s = Session::new((self.make)());
         s.backend_mut().reset_storage();
@@ -259,14 +352,34 @@ impl<B: Backend> Hub<B> {
                 .collect();
             let _ = std::fs::write(p, text);
         }
+        // The replay rebuilt the page; the snapshot is the authority for the rest of the partition.
+        manuk_net::partition::restore(&c.snap)
+            .map_err(|e| format!("partition restore failed: {e}"))?;
         let n = c.log.len();
-        self.pages.insert(id.clone(), Page { s, log: c.log });
+        let mut page = Page::new(s, c.log);
+        page.fenced = !make_default;
+        self.pages.insert(id.clone(), page);
         if make_default {
             self.default = Some(id.clone());
         }
+        let world = match diverged {
+            Some(d) if d.is_empty() => "server: not diverged (no non-safe request since the checkpoint)".to_string(),
+            Some(d) => format!(
+                "SERVER-DIVERGED: {} non-safe request(s) since the checkpoint reached the server and were NOT undone: [{}]",
+                d.len(),
+                d.iter().map(|x| x.short()).collect::<Vec<_>>().join(", ")
+            ),
+            None => "server: divergence unknown (the checkpoint was taken by another process)".to_string(),
+        };
+        let fence = if make_default {
+            ""
+        } else {
+            "\nbranch write-fence ON: non-GET/HEAD/OPTIONS sends are held until `commit`"
+        };
         Ok(Output::Text(format!(
-            "{} {cid} into a new page ({})\npage: {id}:{n}",
+            "{} {cid} [{}] into a new page ({})\n{world}{fence}\npage: {id}:{n}",
             if make_default { "restored" } else { "forked" },
+            c.tag,
             c.url
         )))
     }
@@ -277,7 +390,9 @@ impl<B: Backend> Hub<B> {
             let cid = args
                 .get("checkpoint")
                 .and_then(Value::as_str)
-                .ok_or_else(|| format!("{tool} needs `checkpoint` (an id returned by `checkpoint`)"))?
+                .ok_or_else(|| {
+                    format!("{tool} needs `checkpoint` (an id returned by `checkpoint`)")
+                })?
                 .to_string();
             return self.from_ckpt(&cid, tool == "restore").await;
         }
@@ -311,17 +426,28 @@ impl<B: Backend> Hub<B> {
         };
         if !self.pages.contains_key(&id) {
             let s = Session::new((self.make)());
-            self.pages.insert(id.clone(), Page { s, log: Vec::new() });
+            self.pages.insert(id.clone(), Page::new(s, Vec::new()));
         }
         if tool == "checkpoint" {
             return Ok(Output::Text(self.checkpoint(&id)));
+        }
+        if tool == "commit" {
+            return Ok(Output::Text(self.commit(&id).await));
         }
         let logged = !UNLOGGED.contains(&tool);
         let a = strip_page(args);
         let page = self.pages.get_mut(&id).unwrap();
         // Take-since around the call: ids issued before it belong to someone else.
         let _ = manuk_net::take_request_ids();
+        manuk_net::ledger::set_fence(page.fenced);
         let (r, h) = Self::run(&mut page.s, tool, &a).await;
+        manuk_net::ledger::set_fence(false);
+        page.held.extend(manuk_net::ledger::take_held());
+        let held = if page.held.is_empty() {
+            None
+        } else {
+            Some(held_line(&page.held))
+        };
         let req = manuk_net::take_request_ids();
         let mut seq = page.log.len() as u64;
         if logged {
@@ -348,6 +474,10 @@ impl<B: Backend> Hub<B> {
             self.pages.get_mut(&id).unwrap().log.push(e);
         }
         let handle = format!("page: {id}:{seq}");
+        let handle = match held {
+            Some(h) => format!("{h}\n{handle}"),
+            None => handle,
+        };
         match r {
             Ok(Output::Text(t)) => Ok(Output::Text(format!("{t}\n{handle}"))),
             Ok(Output::Image { png, note }) => Ok(Output::Image {

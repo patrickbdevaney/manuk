@@ -254,6 +254,25 @@ pub fn same_url(a: &str, b: &str, ignore_search: bool) -> bool {
     strip(a) == strip(b)
 }
 
+/// Every cache of every origin as JSON (a partition snapshot, W3.13).
+pub fn dump() -> serde_json::Value {
+    let Ok(mut s) = state().lock() else {
+        return serde_json::Value::Null;
+    };
+    ensure_loaded(&mut s);
+    serde_json::to_value(&s.origins).unwrap_or(serde_json::Value::Null)
+}
+
+/// Replace every cache with a [`dump`] (a partition restore, W3.13).
+pub fn load_dump(v: &serde_json::Value) {
+    let Ok(mut s) = state().lock() else {
+        return;
+    };
+    ensure_loaded(&mut s);
+    s.origins = serde_json::from_value(v.clone()).unwrap_or_default();
+    s.dirty = true;
+}
+
 /// Flush to disk. Called on transaction-shaped boundaries by the shim and once at shutdown, never
 /// per entry — a `save()` per `put` re-serialises the whole envelope and turns an `addAll()` of an
 /// app shell into a quadratic write.

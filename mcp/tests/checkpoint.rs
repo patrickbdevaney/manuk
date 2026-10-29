@@ -143,18 +143,27 @@ fn checkpoint_before_add_to_cart_act_restore_gives_empty_cart_and_equal_digest()
     assert!(!e, "{ck}");
     let cid = ckpt_of(&ck);
     let (_, pre) = c.tool("observe", json!({"mode": "full", "page": page_of(&ck)}));
-    let (e, eff) = c.tool("act", json!({"handle": add, "action": "click", "page": page_of(&pre)}));
+    let (e, eff) = c.tool(
+        "act",
+        json!({"handle": add, "action": "click", "page": page_of(&pre)}),
+    );
     assert!(!e && eff.contains("Cart (1 item)"), "{eff}");
     let (e, r) = c.tool("restore", json!({"checkpoint": cid}));
     assert!(!e && r.contains("restored"), "{r}");
     let (e, post) = c.tool("observe", json!({"mode": "full", "page": page_of(&r)}));
     assert!(!e, "{post}");
-    assert!(!post.contains("Cart (1 item)"), "cart not empty after restore:\n{post}");
+    assert!(
+        !post.contains("Cart (1 item)"),
+        "cart not empty after restore:\n{post}"
+    );
     assert_eq!(body(&pre), body(&post), "a11y digest differs after restore");
 
     // fork leaves the default page alone; a brand-new client restores from the persisted file
     let (e, f) = c.tool("fork", json!({"checkpoint": cid}));
-    assert!(!e && f.contains("forked") && page_of(&f) != page_of(&r), "{f}");
+    assert!(
+        !e && f.contains("forked") && page_of(&f) != page_of(&r),
+        "{f}"
+    );
     let mut c2 = Client::start(&dir);
     let (e, r2) = c2.tool("restore", json!({"checkpoint": cid}));
     assert!(!e, "{r2}");

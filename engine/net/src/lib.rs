@@ -48,6 +48,8 @@ pub mod idb;
 
 /// The Cache API — `caches`, the request/response store the offline web is built on.
 pub mod cachestorage;
+pub mod ledger;
+pub mod partition;
 
 pub mod downloads;
 
@@ -2304,6 +2306,9 @@ async fn send_raw(
     let trusted = TRUSTED.try_with(|_| ()).is_ok();
     if !trusted {
         egress::check_url_literal(url)?;
+        // W3.13: the one place every page-initiated HTTP request passes; non-safe ones are
+        // recorded, or held while a branch write-fence is up.
+        ledger::gate(method, url.as_str(), headers, &body, true)?;
     }
 
     let mut builder = Request::builder()
