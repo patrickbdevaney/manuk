@@ -20,6 +20,9 @@ RULES = [  # (cause, class, symptom regex over reasons+answer)
     ("cssom-style-write-dead", "script", r"(dialog never opened|subscribe dialog|tab did not switch|clicking the shipping tab|did not switch the panel|stayed on the description|panel)"),
     ("document-write-head", "script", r"(second batch never loaded|Steve Martin|only the first 10)"),
     ("model-miscount", "target", r"fourth in the listing|counted from the top"),
+    # R2.1.6: F08 answers "Item 45 is amber" (correct value) but the verifier wants the literal "Item 45: amber";
+    # a verifier string-format mismatch, not an engine fault. Suite NOT changed (SUCCESS.md); see V1.4.md.
+    ("verifier-literal-mismatch", "judge-error", r"missing 'Item 45: amber'"),
 ]
 def classify(r, rules):
     t = r["reasons"] + " " + r["answer"]

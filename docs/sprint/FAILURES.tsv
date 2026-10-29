@@ -32,3 +32,5 @@ F06	3	script	cssom-style-write-dead	(dialog never opened|subscribe dialog|tab di
 F07	3	script	async-never-pumped	(never saw it load more|only ever shows items|did not dismiss|Reject all.{0,80}no change|banner is still)	8	state[cookie_choice]=None want 'reject'
 F08	3	script	async-never-pumped	(never saw it load more|only ever shows items|did not dismiss|Reject all.{0,80}no change|banner is still)	22	answer missing 'Item 45: amber'
 F10	3	script	cssom-style-write-dead	(dialog never opened|subscribe dialog|tab did not switch|clicking the shipping tab|did not switch the panel|stayed on the description|panel)	14	answer missing '3-5 business days'
+F08	1	judge-error	verifier-literal-mismatch	missing 'Item 45: amber'	8	answer missing 'Item 45: amber'
+F08	2	judge-error	verifier-literal-mismatch	missing 'Item 45: amber'	7	answer missing 'Item 45: amber'
