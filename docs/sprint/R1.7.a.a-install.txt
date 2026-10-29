@@ -1,0 +1,52 @@
+R1.7.a.a clean-checkout install proof (chrome_ver=145.0.7632.116)
+host: linux, claude CLI (~/.local/bin/claude), model for headless check: claude-haiku-5-5
+clone: git clone git@github.com:patrickbdevaney/manuk.git /tmp/r17a2/manuk  -> HEAD 5171123e (matches origin/main)
+     (a fresh clone, own target dir; no file from the working tree of /home/patrickd/manuk was used)
+
+STEP 1 -- bare release build, no prefetch (rc was non-zero)
+$ cargo build --release -p manuk-mcp
+error: failed to run custom build command for `mozjs_sys v140.17.0-0-lts`
+  Trying to download prebuilt mozjs static library from Github Releases
+  thread 'main' panicked at mozjs_sys-140.17.0-0-lts/build.rs:88:66: called `Result::unwrap()` on an `Err` value: Os { code: 2, kind: NotFound }
+=> a bare clone cannot build manuk-mcp without the documented prefetch step (README: ./scripts/mozjs-fetch.sh)
+
+STEP 2 -- documented prefetch, then the release build
+$ ./scripts/mozjs-fetch.sh
+warning: gh is not authenticated; attestation NOT checked for libmozjs-x86_64-unknown-linux-gnu.tar.gz, sha256 pin only
+target/mozjs-verified/libmozjs-x86_64-unknown-linux-gnu.tar.gz        rc=0
+$ CARGO_BUILD_JOBS=16 cargo build --release -p manuk-mcp
+    Finished `release` profile [optimized] target(s) in 2m 52s         rc=0
+binary: target/release/manuk-mcp (50.8 MB)  -- symlinked as /tmp/r17a2/bin/manuk-mcp (not a system install)
+
+STEP 3 -- one-line install, from the clone's directory
+$ claude mcp add manuk -- manuk-mcp
+Added stdio MCP server manuk with command: manuk-mcp  to local config
+$ claude mcp list   (PATH includes /tmp/r17a2/bin)
+manuk: manuk-mcp  - ✔ Connected
+
+STEP 4 -- fresh headless session lists the tools
+$ claude -p "List the exact names of every tool that comes from the manuk MCP server ..." --model claude-haiku-5-5 --allowedTools "mcp__manuk__*"
+mcp__manuk__act
+mcp__manuk__checkpoint
+mcp__manuk__commit
+mcp__manuk__extract
+mcp__manuk__find
+mcp__manuk__fork
+mcp__manuk__navigate
+mcp__manuk__observe
+mcp__manuk__restore
+mcp__manuk__screenshot
+mcp__manuk__scroll
+mcp__manuk__storage_state
+mcp__manuk__type
+(13 tools)
+Note: the 9 tools in docs/sprint/R1.7.a-install.txt (act, extract, find, navigate, observe, screenshot, scroll,
+storage_state, type) are all present. The 4 extra tools (checkpoint, commit, fork, restore) were added by
+commits 95046fa8 (R3.2) and 97b875c1 (W3.13) after the 2026-10-25 transcript, so HEAD exposes more tools.
+
+RED CHECK: manuk-mcp removed from PATH (PATH=$HOME/.local/bin:/usr/bin:/bin; manuk-mcp is not installed system-wide)
+$ claude mcp list
+manuk: manuk-mcp  - ✘ Failed to connect — ENOENT: Executable not found in $PATH: "manuk-mcp"
+$ claude -p "... mcp__manuk__* ..."  -> NONE (zero manuk tools)
+
+cleanup: claude mcp remove manuk (local scope of /tmp/r17a2/manuk); claude mcp list shows no manuk entry afterwards.
