@@ -1,0 +1,5 @@
+ToolSearch {"query": "select:mcp__browser__navigate,mcp__browser__find,mcp__browser__act,mcp__browser__extract,mcp__browser__observe,mcp__browser__type
+navigate {"url": "https://en.wikipedia.org/wiki/Main_Page"}
+find {"query": "search input"}
+type {"handle": "h7", "text": "Alan Turing", "submit": true, "page": "p6cf768:2"}
+find {"query": "Born 23 June 1912 Maida Vale lead paragraph date of birth", "page": "p6cf768:3"}
