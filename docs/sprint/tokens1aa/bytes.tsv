@@ -1,0 +1,11 @@
+tool	manuk_calls_per_run	cdp_calls_per_run	manuk_result_bytes_per_run	cdp_result_bytes_per_run	delta_bytes_per_run	chrome_ver
+Read	0.06	0.11	1960	145	+1815	145.0.7632.116
+extract	1.12	0.23	1985	859	+1126	145.0.7632.116
+Bash	0.07	0.01	83	8	+75	145.0.7632.116
+find	0.31	0.24	167	135	+32	145.0.7632.116
+ToolSearch	1.02	1.05	223	239	-16	145.0.7632.116
+type	0.34	0.35	517	533	-17	145.0.7632.116
+scroll	0.20	0.06	32	86	-55	145.0.7632.116
+act	0.83	0.79	806	973	-167	145.0.7632.116
+observe	0.17	0.08	67	260	-193	145.0.7632.116
+navigate	1.12	1.07	7944	10217	-2273	145.0.7632.116
