@@ -31,6 +31,12 @@ ROLLBACK_HINT = ("You also have checkpoint, restore and fork tools for the page.
                  "want to undo. If an action leads to a dead end, call restore with that checkpoint id to rewind the page "
                  "to that state, or fork to open an independent page at it. restore reports any server-side requests "
                  "sent since the checkpoint that cannot be undone.")
+# ROLLBACK.RUN.a: v1 never loaded the deferred tools (0 restore calls in 162 runs), so v2 names the load step too.
+ROLLBACK_LOAD = "mcp__browser__checkpoint,mcp__browser__restore,mcp__browser__fork"
+ROLLBACK_HINT_V2 = ("Your checkpoint, restore and fork tools are deferred: they are not in your tool list until you load them. "
+                    f"Before your first browser action, call ToolSearch with query \"select:{ROLLBACK_LOAD}\". "
+                    + ROLLBACK_HINT.replace("You also have checkpoint, restore and fork tools for the page. ", "", 1))
+HINTS = {"manuk+rollback": ROLLBACK_HINT, "manuk+rollback.v2": ROLLBACK_HINT_V2}
 
 
 def arm_config(arm, tmp):
@@ -39,7 +45,7 @@ def arm_config(arm, tmp):
         cfg = {"mcpServers": {"browser": {"command": "npx", "args": [
             "-y", "@playwright/mcp@0.0.83", "--headless", "--isolated", "--no-sandbox", "--executable-path", chrome]}}}
         allowed = "mcp__browser"
-    elif arm in ("manuk", "manuk+rollback"):
+    elif arm in ("manuk", "manuk+rollback", "manuk+rollback.v2"):
         exe = shutil.which("manuk-mcp") or os.path.join(ROOT, "target/release/manuk-mcp")
         if not os.path.exists(exe):
             return None, None
@@ -122,7 +128,7 @@ def one(task, arm, run, base, cfg, allowed, ver, timeout, tdir=None):
     if task["kind"] == "fixture":
         verify.reset(base)
     url = task["start_url"].replace("{BASE}", base)
-    hint = ROLLBACK_HINT if arm == "manuk+rollback" else None
+    hint = HINTS.get(arm)
     out, err, secs, peak = run_claude(PROMPT.format(url=url, goal=task["goal"]), cfg, allowed, timeout, stream=bool(tdir), sys_hint=hint)
     if tdir:
         open(os.path.join(tdir, f"{arm}_{task['id']}_r{run}.jsonl"), "w").write(out)
