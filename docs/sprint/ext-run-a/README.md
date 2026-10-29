@@ -22,3 +22,10 @@ Target: X07 query URL (`/input?i=integral+of+3e^(2x)+from+x=0+to+x=5`), release 
 Engine cause named: agent backend (mcp/src/backend.rs path) lacks the WebSocket pump the GUI has. Gate "pods in 3/3"
 is NOT met by this node (diagnosis only); it moves to EXT.RUN.a.a (pump) and EXT.RUN.a.b (noscript leak).
 Not measured: that the pump alone yields pods (WA may also need cookies/captcha); that is EXT.RUN.a.a's gate.
+
+## EXT.RUN.a.a.a: why pod bodies were absent (chrome_ver=145.0.7632.116)
+WS frame dump on the X07 URL: the page sends init, newQuery and a user info; the server answers `ready` and
+`noAuth` (harmless, anonymous) and then ~1.4 s later `pods` frames (Definite integral, ..., `queryComplete timing 1.41`).
+The pump called the socket quiet after 400 ms of silence and stopped, so the pods frames were never delivered.
+The pod bodies are `<img alt="integral_0^5 3 e^(2 x) dx = 3/2 (e^10 - 1)≈33038.">` and extract already exposes alt text.
+Fix: while the page has sent more frames than the server has answered, keep servicing until WS_REPLY_BUDGET (8 s).

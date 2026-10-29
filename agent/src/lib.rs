@@ -399,6 +399,8 @@ impl Observation {
     }
 }
 
+/// How long the agent keeps servicing a page's sockets while one still owes it a reply.
+pub const WS_REPLY_BUDGET: std::time::Duration = std::time::Duration::from_secs(8);
 /// How long one [`AgentBrowser::settle`] may spend on a page's follow-up requests.
 pub const SETTLE_BUDGET: std::time::Duration = std::time::Duration::from_secs(2);
 
@@ -519,6 +521,11 @@ impl AgentBrowser {
         const QUIET: std::time::Duration = std::time::Duration::from_millis(400);
         let started = std::time::Instant::now();
         let mut last_activity = std::time::Instant::now();
+        // Frames the page has sent minus frames the server has answered with. While positive the page
+        // is waiting on a reply (Wolfram|Alpha computes for seconds after `newQuery`), so a quiet
+        // socket is not a finished one and we keep waiting until `budget`.
+        let mut awaiting: i64 = 0;
+        let budget = budget.max(WS_REPLY_BUDGET);
         loop {
             let ops = match self.page.as_ref() {
                 Some(p) => p.take_ws_ops(),
@@ -648,12 +655,12 @@ impl AgentBrowser {
             if self.ws_send.is_empty() || started.elapsed() >= budget {
                 break;
             }
-            if last_activity.elapsed() >= QUIET && self.ws_send.is_empty() {
-                break;
-            }
-            let wait = QUIET
-                .saturating_sub(last_activity.elapsed())
-                .min(budget.saturating_sub(started.elapsed()));
+            let left = budget.saturating_sub(started.elapsed());
+            let wait = if awaiting > 0 {
+                QUIET.min(left)
+            } else {
+                QUIET.saturating_sub(last_activity.elapsed()).min(left)
+            };
             if wait.is_zero() {
                 break;
             }
@@ -663,6 +670,11 @@ impl AgentBrowser {
                     if gen != self.ws_gen {
                         continue;
                     }
+                    match event {
+                        manuk_page::WsEvent::Sent { .. } => awaiting += 1,
+                        manuk_page::WsEvent::Message { .. } => awaiting -= 1,
+                        _ => {}
+                    }
                     if matches!(event, manuk_page::WsEvent::Close { .. }) {
                         self.ws_send.remove(&id);
                     }
@@ -671,6 +683,7 @@ impl AgentBrowser {
                         p.deliver_ws_event(id, &event, fonts, w);
                     }
                 }
+                Err(_) if awaiting > 0 && started.elapsed() < budget => {}
                 _ => break,
             }
         }
