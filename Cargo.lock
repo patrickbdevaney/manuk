@@ -3397,12 +3397,14 @@ dependencies = [
  "libc",
  "manuk-a11y",
  "manuk-agent",
+ "manuk-css",
  "manuk-dom",
  "manuk-js",
  "manuk-net",
  "rmcp",
  "serde_json",
  "tokio",
+ "tungstenite",
  "url",
 ]
 

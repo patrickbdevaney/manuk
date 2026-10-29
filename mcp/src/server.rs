@@ -158,6 +158,20 @@ impl ServerHandler for ManukMcp {
 pub fn run_stdio(width: u32, height: u32) -> Result<()> {
     let log_dir = std::env::var_os("MANUK_ACTLOG_DIR").map(std::path::PathBuf::from);
     let tx = spawn_session(move || AgentBrowser::new(width, height), log_dir);
+    serve(tx)
+}
+
+/// R4.1: the same tool surface over Chrome (CDP) instead of the in-process engine.
+pub fn run_stdio_chrome(width: u32, height: u32) -> Result<()> {
+    let log_dir = std::env::var_os("MANUK_ACTLOG_DIR").map(std::path::PathBuf::from);
+    let tx = spawn_session(
+        move || crate::cdp::CdpBackend::launch(width, height).expect("launch Chrome (set MANUK_CHROME)"),
+        log_dir,
+    );
+    serve(tx)
+}
+
+fn serve(tx: mpsc::UnboundedSender<Job>) -> Result<()> {
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
         .enable_all()

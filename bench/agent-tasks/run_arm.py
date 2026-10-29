@@ -45,6 +45,13 @@ def arm_config(arm, tmp):
             return None, None
         cfg = {"mcpServers": {"browser": {"command": exe, "args": []}}}
         allowed = "mcp__browser"
+    elif arm == "cdp-layer":  # R4.1 (K1 arm 3): the manuk tool surface and disciplines over Chrome via CDP
+        exe = shutil.which("manuk-mcp") or os.path.join(ROOT, "target/release/manuk-mcp")
+        if not os.path.exists(exe):
+            return None, None
+        cfg = {"mcpServers": {"browser": {"command": exe, "args": ["--backend", "chrome"],
+                                          "env": {"MANUK_CHROME": shutil.which("google-chrome") or "google-chrome"}}}}
+        allowed = "mcp__browser"
     elif arm == "stub-follow":  # control: a planted always-follow agent (stub_follow.py via --claude); no browser
         cfg, allowed = {"mcpServers": {}}, ""
     else:

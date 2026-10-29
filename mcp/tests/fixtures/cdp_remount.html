@@ -1,0 +1,11 @@
+<!doctype html><html><head><title>Remount</title></head><body>
+<h1>Remount page</h1>
+<button id="save">Save</button>
+<h2 id="out">idle</h2>
+<script>
+setTimeout(function(){
+  var o=document.getElementById('save'),n=o.cloneNode(true);
+  n.addEventListener('click',function(){document.getElementById('out').textContent='saved-new';});
+  o.replaceWith(n);
+},1800);
+</script></body></html>

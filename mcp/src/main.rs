@@ -3,6 +3,10 @@ fn main() -> anyhow::Result<()> {
     if args.first().map(String::as_str) == Some("--confine-selftest") {
         return manuk_mcp::confine::selftest(&args[1..]);
     }
+    if let Some(i) = args.iter().position(|a| a == "--backend") {
+        anyhow::ensure!(args.get(i + 1).map(String::as_str) == Some("chrome"), "--backend takes `chrome`");
+        return manuk_mcp::server::run_stdio_chrome(1280, 800);
+    }
     let before = args.len();
     args.retain(|a| a != "--deterministic");
     if args.len() != before {
