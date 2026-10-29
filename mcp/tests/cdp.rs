@@ -18,14 +18,22 @@ struct Client {
 impl Client {
     fn start(mutate: Option<&str>) -> Client {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_manuk-mcp"));
-        cmd.args(["--backend", "chrome"]).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
+        cmd.args(["--backend", "chrome"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null());
         if let Some(m) = mutate {
             cmd.env("MANUK_CDP_MUTATE", m);
         }
         let mut child = cmd.spawn().expect("spawn manuk-mcp --backend chrome");
         let tx = child.stdin.take().unwrap();
         let rx = BufReader::new(child.stdout.take().unwrap());
-        let mut c = Client { child, tx, rx, id: 0 };
+        let mut c = Client {
+            child,
+            tx,
+            rx,
+            id: 0,
+        };
         c.rpc("initialize", json!({"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}));
         c.send(json!({"jsonrpc": "2.0", "method": "notifications/initialized"}));
         c
@@ -40,7 +48,10 @@ impl Client {
         self.send(json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}));
         loop {
             let mut line = String::new();
-            assert!(self.rx.read_line(&mut line).unwrap() > 0, "server closed stdout");
+            assert!(
+                self.rx.read_line(&mut line).unwrap() > 0,
+                "server closed stdout"
+            );
             let v: Value = serde_json::from_str(&line).unwrap();
             if v["id"] == json!(id) {
                 return v;
@@ -50,7 +61,15 @@ impl Client {
     fn tool(&mut self, name: &str, args: Value) -> (bool, String) {
         let r = self.rpc("tools/call", json!({"name": name, "arguments": args}));
         let res = &r["result"];
-        let text = res["content"].as_array().map(|c| c.iter().filter_map(|b| b["text"].as_str()).collect::<Vec<_>>().join("\n")).unwrap_or_default();
+        let text = res["content"]
+            .as_array()
+            .map(|c| {
+                c.iter()
+                    .filter_map(|b| b["text"].as_str())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            })
+            .unwrap_or_default();
         (res["isError"].as_bool().unwrap_or(false), text)
     }
 }
@@ -61,11 +80,17 @@ impl Drop for Client {
 }
 
 fn fixture(name: &str) -> String {
-    format!("file://{}/tests/fixtures/{name}", env!("CARGO_MANIFEST_DIR"))
+    format!(
+        "file://{}/tests/fixtures/{name}",
+        env!("CARGO_MANIFEST_DIR")
+    )
 }
 
 fn handle_of(text: &str, needle: &str) -> String {
-    let line = text.lines().find(|l| l.contains(needle)).unwrap_or_else(|| panic!("no line with {needle:?} in:\n{text}"));
+    let line = text
+        .lines()
+        .find(|l| l.contains(needle))
+        .unwrap_or_else(|| panic!("no line with {needle:?} in:\n{text}"));
     let start = line.find("[h").unwrap();
     let end = line[start..].find(']').unwrap() + start;
     line[start + 1..end].to_string()
@@ -86,11 +111,30 @@ fn taint_withholds_what_a_human_cannot_see() {
     }
     let (nav, ex) = taint(None);
     assert!(nav.contains("⚠hidden-text"), "no warning marker:\n{nav}");
-    for visible in ["Revenue grew 12 percent", "Margins improved", "VISIBLE_OVERFLOW"] {
-        assert!(ex.contains(visible), "visible text {visible:?} was withheld:\n{ex}");
+    for visible in [
+        "Revenue grew 12 percent",
+        "Margins improved",
+        "VISIBLE_OVERFLOW",
+    ] {
+        assert!(
+            ex.contains(visible),
+            "visible text {visible:?} was withheld:\n{ex}"
+        );
     }
-    for hidden in ["HIDDEN_OPACITY", "HIDDEN_VISIBILITY", "HIDDEN_OFFSCREEN", "HIDDEN_TINY", "HIDDEN_CONTRAST", "HIDDEN_ZERO", "HIDDEN_DARKCONTRAST", "HIDDEN_DISPLAY"] {
-        assert!(!ex.contains(hidden) && !nav.contains(hidden), "{hidden} leaked:\n{ex}\n{nav}");
+    for hidden in [
+        "HIDDEN_OPACITY",
+        "HIDDEN_VISIBILITY",
+        "HIDDEN_OFFSCREEN",
+        "HIDDEN_TINY",
+        "HIDDEN_CONTRAST",
+        "HIDDEN_ZERO",
+        "HIDDEN_DARKCONTRAST",
+        "HIDDEN_DISPLAY",
+    ] {
+        assert!(
+            !ex.contains(hidden) && !nav.contains(hidden),
+            "{hidden} leaked:\n{ex}\n{nav}"
+        );
     }
 }
 
@@ -98,7 +142,10 @@ fn taint_withholds_what_a_human_cannot_see() {
 #[test]
 fn taint_mutant_leaks_hidden_text() {
     let (nav, ex) = taint(Some("no-taint"));
-    assert!(ex.contains("HIDDEN_OPACITY") || nav.contains("HIDDEN_OPACITY"), "mutant did not leak:\n{ex}");
+    assert!(
+        ex.contains("HIDDEN_OPACITY") || nav.contains("HIDDEN_OPACITY"),
+        "mutant did not leak:\n{ex}"
+    );
 }
 
 fn late(mutate: Option<&str>) -> (bool, String, bool, String) {
@@ -119,13 +166,19 @@ fn dispatch_revalidation_refuses_a_click_under_a_late_overlay() {
         return;
     }
     let (pay_err, pay_txt, _, _) = late(None);
-    assert!(pay_err && pay_txt.contains("OCCLUDED at dispatch"), "expected a dispatch-time refusal, got err={pay_err}: {pay_txt}");
+    assert!(
+        pay_err && pay_txt.contains("OCCLUDED at dispatch"),
+        "expected a dispatch-time refusal, got err={pay_err}: {pay_txt}"
+    );
 }
 
 #[test]
 fn revalidation_mutant_dispatches_into_the_overlay() {
     let (pay_err, pay_txt, _, _) = late(Some("no-revalidate"));
-    assert!(!pay_err, "mutant should have clicked blindly, got: {pay_txt}");
+    assert!(
+        !pay_err,
+        "mutant should have clicked blindly, got: {pay_txt}"
+    );
 }
 
 /// Remount: the overlay also covers Save, so this test uses a page where only the re-render happens.
@@ -145,12 +198,18 @@ fn a_handle_survives_the_page_replacing_its_element() {
     }
     let (err, txt) = remount(None);
     assert!(!err, "{txt}");
-    assert!(txt.contains("saved-new"), "the NEW button was not clicked: {txt}");
+    assert!(
+        txt.contains("saved-new"),
+        "the NEW button was not clicked: {txt}"
+    );
     assert!(txt.contains("re-mounted"), "no re-mount evidence: {txt}");
 }
 
 #[test]
 fn remount_mutant_goes_stale() {
     let (err, txt) = remount(Some("no-remount"));
-    assert!(err && txt.contains("STALE"), "mutant should report a stale handle, got err={err}: {txt}");
+    assert!(
+        err && txt.contains("STALE"),
+        "mutant should report a stale handle, got err={err}: {txt}"
+    );
 }

@@ -2559,6 +2559,7 @@
   - L5 · Mechanism
   - L16 · Limits
   - L21 · One JS thread per process (PERF.1.4.c)
+  - L27 · Prelude stencils (PERF.1.4.a)
 
 ## The landmark map, swept — and the one row that was wrong
 `docs/wiki/landmark-roles.md`
@@ -3771,4 +3772,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3082 sections across 171 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3083 sections across 171 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -23,3 +23,15 @@ prelude parse) is still on the critical path.
 `prewarm()` skips when another thread already owns the engine (`engine_owned_elsewhere`) or it is shut down. Without the guard,
 the multi-threaded `cargo test -p manuk-agent --lib` harness built a second live runtime on a second test thread: "outstanding
 JS engine handles" abort then SIGSEGV (128 tests, 3/3 runs red at 29de29c2, 3/3 green after).
+
+## Prelude stencils (PERF.1.4.a)
+
+`prewarm()` also calls `event_loop::precompile`, which compiles the 14 static preludes (`event_loop_prelude.js` 487 KB first) to
+SpiderMonkey stencils on the JS thread while the request is in flight. `event_loop::eval` instantiates + runs a cached stencil
+(`eval_cached`, keyed by file name AND source pointer-equal text) instead of parsing; dynamic strings (`reflect_table.js`,
+`determinism.js`, `wire_inline.js`) still go the plain route. `MANUK_NO_STENCIL=1` is the A/B arm.
+
+- The stencils are released FIRST in `spidermonkey::teardown` (`release_stencils`). Left to the TLS destructor, exit segfaulted
+  (rc -11, 7/7 runs) - `g_prewarm_exit` goes red on that.
+- Measured (example.com, 7 paired runs, same binary, chrome_ver=145.0.7632.116): script phase 44.3 ms (`MANUK_NO_STENCIL=1`) -> 29.7 ms.
+  Bar <= 25 NOT met. Remaining: native `install` ~10 ms, prelude *execution* 3.7 ms, reflect.js 2.1 ms, the rest of the 14 evals ~2 ms.

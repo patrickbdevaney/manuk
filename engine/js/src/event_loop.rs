@@ -9022,6 +9022,113 @@ fn js_string_literal(s: &str) -> String {
     out
 }
 
+thread_local! {
+    /// Compiled stencils of the document-independent preludes (PERF.1.4.a). A stencil is not tied
+    /// to a realm, so [`precompile`] builds them while the document request is in flight and every
+    /// per-document global only instantiates + runs them. Keyed by file name; the source is kept
+    /// and compared so a changed string can never run a stale stencil.
+    static STENCILS: std::cell::RefCell<Vec<(String, &'static str, mozjs::rust::Stencil)>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+fn compile_stencil(
+    rt: &mut Runtime,
+    src: &'static str,
+    file: &str,
+) -> Option<mozjs::rust::Stencil> {
+    use mozjs::rust::{transform_str_to_source_text, wrappers2, CompileOptionsWrapper};
+    let fname = std::ffi::CString::new(file).ok()?;
+    let opts = CompileOptionsWrapper::new(rt.cx_no_gc(), fname, 1);
+    let mut text = transform_str_to_source_text(src);
+    let st = unsafe { wrappers2::CompileGlobalScriptToStencil(rt.cx(), opts.ptr, &mut text) };
+    let st: mozjs::rust::Stencil = unsafe { std::mem::transmute(st) };
+    if st.is_null() {
+        // A syntax error leaves an exception pending; drop it so the plain `eval` path reports it.
+        unsafe { mozjs::jsapi::JS_ClearPendingException(rt.cx().raw_cx()) };
+        return None;
+    }
+    Some(st)
+}
+
+/// Compile every static prelude to a stencil on this thread (called from `prewarm`, with the
+/// document request already out). Skipped under `MANUK_NO_STENCIL=1` (the A/B arm).
+pub fn precompile(rt: &mut Runtime) {
+    if std::env::var_os("MANUK_NO_STENCIL").is_some() {
+        return;
+    }
+    let list: [(&'static str, &str); 14] = [
+        (DOC_PROTO_JS, "doc_proto.js"),
+        (PRELUDE, "event_loop_prelude.js"),
+        (crate::range_js::RANGE_JS, "range.js"),
+        (crate::traversal_js::TRAVERSAL_JS, "traversal.js"),
+        (crate::collections_js::COLLECTIONS_JS, "collections.js"),
+        (crate::attrs_js::ATTRS_JS, "attrs.js"),
+        (crate::reflect_js::REFLECT_JS, "reflect.js"),
+        (crate::animatable_js::ANIMATABLE_JS, "animatable.js"),
+        (crate::mutation_js::MUTATION_JS, "mutation.js"),
+        (crate::iframe_js::IFRAME_JS, "iframe.js"),
+        (crate::document_url_js::DOCUMENT_URL_JS, "document_url.js"),
+        (crate::mse_js::MSE_JS, "mse.js"),
+        (crate::xpath_js::XPATH_JS, "xpath.js"),
+        (
+            crate::inline_handlers_js::INLINE_HANDLERS_JS,
+            "inline_handlers.js",
+        ),
+    ];
+    for (src, file) in list {
+        if let Some(st) = compile_stencil(rt, src, file) {
+            STENCILS.with(|c| c.borrow_mut().push((file.to_string(), src, st)));
+        }
+    }
+}
+
+/// Drop the cached stencils. Called first in the engine teardown, while the engine is still alive.
+pub(crate) fn release_stencils() {
+    let _ = STENCILS.try_with(|c| c.borrow_mut().clear());
+}
+
+/// Run a cached stencil in `global`, if one exists for exactly this `src`.
+fn eval_cached(
+    rt: &mut Runtime,
+    global: mozjs::rust::HandleObject,
+    src: &str,
+    file: &str,
+) -> Option<Result<mozjs::jsapi::Value, String>> {
+    use mozjs::jsapi::{DelazificationOption, InstantiateOptions};
+    use mozjs::jsval::UndefinedValue;
+    use mozjs::realm::AutoRealm;
+    use mozjs::rooted;
+    use mozjs::rust::wrappers2;
+    let st = STENCILS.with(|c| {
+        c.borrow()
+            .iter()
+            .find(|(f, s, _)| f == file && *s == src)
+            .map(|(_, _, st)| **st)
+    })?;
+    let mut realm = AutoRealm::new_from_handle(rt.cx(), global);
+    let opts = InstantiateOptions {
+        skipFilenameValidation: false,
+        hideScriptFromDebugger: false,
+        deferDebugMetadata: false,
+        eagerDelazificationStrategy_: DelazificationOption::OnDemandOnly,
+    };
+    let script = unsafe {
+        wrappers2::InstantiateGlobalStencil(&realm, &opts, st as *mut _, std::ptr::null_mut())
+    };
+    if script.is_null() {
+        unsafe { mozjs::jsapi::JS_ClearPendingException(realm.raw_cx()) };
+        return None;
+    }
+    rooted!(&in(realm) let script = script);
+    rooted!(&in(realm) let mut rval = UndefinedValue());
+    let ok = unsafe { wrappers2::JS_ExecuteScript(&mut realm, script.handle(), rval.handle_mut()) };
+    Some(if ok {
+        Ok(rval.get())
+    } else {
+        Err(format!("event-loop eval failed: {file}"))
+    })
+}
+
 /// Evaluate `src` and return its (unrooted, immediately-consumed) value. Kept local
 /// so callers never touch rooting.
 fn eval(
@@ -9033,6 +9140,9 @@ fn eval(
     use mozjs::jsval::UndefinedValue;
     use mozjs::rooted;
     use mozjs::rust::{evaluate_script, CompileOptionsWrapper};
+    if let Some(r) = eval_cached(rt, global, src, file) {
+        return r;
+    }
     rooted!(&in(rt.cx()) let mut rval = UndefinedValue());
     let fname = std::ffi::CString::new(file).unwrap_or_default();
     let opts = CompileOptionsWrapper::new(rt.cx_no_gc(), fname, 1);

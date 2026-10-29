@@ -53,12 +53,18 @@ impl Cdp {
 
     /// One message, or `None` on timeout.
     fn read(&mut self, wait: Duration) -> Result<Option<Value>> {
-        self.ws.get_ref().set_read_timeout(Some(wait.max(Duration::from_millis(1))))?;
+        self.ws
+            .get_ref()
+            .set_read_timeout(Some(wait.max(Duration::from_millis(1))))?;
         match self.ws.read() {
             Ok(Message::Text(t)) => Ok(Some(serde_json::from_str(t.as_str())?)),
             Ok(Message::Close(_)) => bail!("Chrome closed the DevTools socket"),
             Ok(_) => Ok(None),
-            Err(tungstenite::Error::Io(e)) if matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => Ok(None),
+            Err(tungstenite::Error::Io(e))
+                if matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) =>
+            {
+                Ok(None)
+            }
             Err(e) => Err(e.into()),
         }
     }
@@ -78,7 +84,9 @@ impl Cdp {
             if left.is_zero() {
                 bail!("CDP {method} timed out");
             }
-            let Some(m) = self.read(left.min(Duration::from_secs(1)))? else { continue };
+            let Some(m) = self.read(left.min(Duration::from_secs(1)))? else {
+                continue;
+            };
             if m["id"].as_u64() == Some(id) {
                 if let Some(e) = m.get("error") {
                     bail!("CDP {method}: {}", e["message"].as_str().unwrap_or("error"));
@@ -99,7 +107,9 @@ impl Cdp {
             return Ok(true);
         }
         while t0.elapsed() < dur {
-            let Some(m) = self.read((dur - t0.elapsed()).min(Duration::from_millis(250)))? else { continue };
+            let Some(m) = self.read((dur - t0.elapsed()).min(Duration::from_millis(250)))? else {
+                continue;
+            };
             if m.get("method").is_some() {
                 self.auto_dialog(&m);
                 let hit = stop(&m);
@@ -124,12 +134,25 @@ struct Color {
 }
 
 fn parse_color(s: &str) -> Option<Color> {
-    let inner = s.split('(').nth(1).and_then(|x| x.split(')').next()).unwrap_or("");
-    let v: Vec<f32> = inner.split([',', ' ', '/']).filter(|x| !x.is_empty()).filter_map(|x| x.trim_end_matches('%').parse().ok()).collect();
+    let inner = s
+        .split('(')
+        .nth(1)
+        .and_then(|x| x.split(')').next())
+        .unwrap_or("");
+    let v: Vec<f32> = inner
+        .split([',', ' ', '/'])
+        .filter(|x| !x.is_empty())
+        .filter_map(|x| x.trim_end_matches('%').parse().ok())
+        .collect();
     if v.len() < 3 {
         return None;
     }
-    Some(Color { r: v[0] as u8, g: v[1] as u8, b: v[2] as u8, a: v.get(3).copied().unwrap_or(1.0) })
+    Some(Color {
+        r: v[0] as u8,
+        g: v[1] as u8,
+        b: v[2] as u8,
+        a: v.get(3).copied().unwrap_or(1.0),
+    })
 }
 
 fn rgba(c: Color) -> manuk_css::Rgba {
@@ -137,7 +160,16 @@ fn rgba(c: Color) -> manuk_css::Rgba {
 }
 
 const STYLES: [&str; 10] = [
-    "display", "visibility", "opacity", "pointer-events", "font-size", "color", "background-color", "overflow-x", "position", "overflow-y",
+    "display",
+    "visibility",
+    "opacity",
+    "pointer-events",
+    "font-size",
+    "color",
+    "background-color",
+    "overflow-x",
+    "position",
+    "overflow-y",
 ];
 
 #[derive(Default, Clone)]
@@ -168,22 +200,45 @@ struct Raw {
 }
 
 fn parse_snapshot(snap: &Value) -> Result<(Raw, f32, f32)> {
-    let strings: Vec<String> = snap["strings"].as_array().ok_or_else(|| anyhow!("no strings"))?.iter().map(|s| s.as_str().unwrap_or("").to_string()).collect();
-    let s = |i: &Value| -> String { i.as_i64().filter(|&i| i >= 0).and_then(|i| strings.get(i as usize)).cloned().unwrap_or_default() };
+    let strings: Vec<String> = snap["strings"]
+        .as_array()
+        .ok_or_else(|| anyhow!("no strings"))?
+        .iter()
+        .map(|s| s.as_str().unwrap_or("").to_string())
+        .collect();
+    let s = |i: &Value| -> String {
+        i.as_i64()
+            .filter(|&i| i >= 0)
+            .and_then(|i| strings.get(i as usize))
+            .cloned()
+            .unwrap_or_default()
+    };
     let d = &snap["documents"][0];
     let nd = &d["nodes"];
     let arr = |v: &Value| -> Vec<Value> { v.as_array().cloned().unwrap_or_default() };
-    let parent: Vec<i64> = arr(&nd["parentIndex"]).iter().map(|v| v.as_i64().unwrap_or(-1)).collect();
+    let parent: Vec<i64> = arr(&nd["parentIndex"])
+        .iter()
+        .map(|v| v.as_i64().unwrap_or(-1))
+        .collect();
     let n = parent.len();
-    let kind: Vec<i64> = arr(&nd["nodeType"]).iter().map(|v| v.as_i64().unwrap_or(0)).collect();
+    let kind: Vec<i64> = arr(&nd["nodeType"])
+        .iter()
+        .map(|v| v.as_i64().unwrap_or(0))
+        .collect();
     let name: Vec<String> = arr(&nd["nodeName"]).iter().map(&s).collect();
     let value: Vec<String> = arr(&nd["nodeValue"]).iter().map(&s).collect();
-    let backend: Vec<u64> = arr(&nd["backendNodeId"]).iter().map(|v| v.as_u64().unwrap_or(0)).collect();
+    let backend: Vec<u64> = arr(&nd["backendNodeId"])
+        .iter()
+        .map(|v| v.as_u64().unwrap_or(0))
+        .collect();
     let attrs: Vec<HashMap<String, String>> = arr(&nd["attributes"])
         .iter()
         .map(|a| {
             let a = arr(a);
-            a.chunks(2).filter(|c| c.len() == 2).map(|c| (s(&c[0]), s(&c[1]))).collect()
+            a.chunks(2)
+                .filter(|c| c.len() == 2)
+                .map(|c| (s(&c[0]), s(&c[1])))
+                .collect()
         })
         .collect();
     let mut kids = vec![vec![]; n];
@@ -192,35 +247,62 @@ fn parse_snapshot(snap: &Value) -> Result<(Raw, f32, f32)> {
             kids[p as usize].push(i);
         }
     }
-    let idx_set = |v: &Value| -> HashSet<usize> { arr(&v["index"]).iter().filter_map(|x| x.as_u64().map(|x| x as usize)).collect() };
+    let idx_set = |v: &Value| -> HashSet<usize> {
+        arr(&v["index"])
+            .iter()
+            .filter_map(|x| x.as_u64().map(|x| x as usize))
+            .collect()
+    };
     let mut input_value = HashMap::new();
-    let (iv, vv) = (arr(&nd["inputValue"]["index"]), arr(&nd["inputValue"]["value"]));
+    let (iv, vv) = (
+        arr(&nd["inputValue"]["index"]),
+        arr(&nd["inputValue"]["value"]),
+    );
     for (a, b) in iv.iter().zip(vv.iter()) {
         if let Some(i) = a.as_u64() {
             input_value.insert(i as usize, s(b));
         }
     }
     let lay = &d["layout"];
-    let (ni, bounds, styles, po) = (arr(&lay["nodeIndex"]), arr(&lay["bounds"]), arr(&lay["styles"]), arr(&lay["paintOrders"]));
+    let (ni, bounds, styles, po) = (
+        arr(&lay["nodeIndex"]),
+        arr(&lay["bounds"]),
+        arr(&lay["styles"]),
+        arr(&lay["paintOrders"]),
+    );
     let mut layout = HashMap::new();
     for (k, i) in ni.iter().enumerate() {
-        let Some(i) = i.as_u64().map(|i| i as usize) else { continue };
+        let Some(i) = i.as_u64().map(|i| i as usize) else {
+            continue;
+        };
         let b = arr(&bounds[k]);
         let b = [0, 1, 2, 3].map(|j| b.get(j).and_then(Value::as_f64).unwrap_or(0.0) as f32);
         let sv: Vec<String> = arr(&styles[k]).iter().map(&s).collect();
-        let g = |name: &str| STYLES.iter().position(|x| *x == name).and_then(|p| sv.get(p)).cloned().unwrap_or_default();
+        let g = |name: &str| {
+            STYLES
+                .iter()
+                .position(|x| *x == name)
+                .and_then(|p| sv.get(p))
+                .cloned()
+                .unwrap_or_default()
+        };
         let ox = g("overflow-x");
         let oy = g("overflow-y");
         let st = Style {
             visibility_hidden: matches!(g("visibility").as_str(), "hidden" | "collapse"),
             opacity: g("opacity").parse().unwrap_or(1.0),
             pointer_none: g("pointer-events") == "none",
-            font_size: g("font-size").trim_end_matches("px").parse().unwrap_or(16.0),
+            font_size: g("font-size")
+                .trim_end_matches("px")
+                .parse()
+                .unwrap_or(16.0),
             color: parse_color(&g("color")),
             bg: parse_color(&g("background-color")),
             clips: (!ox.is_empty() && ox != "visible") || (!oy.is_empty() && oy != "visible"),
         };
-        layout.entry(i).or_insert((b, po.get(k).and_then(Value::as_i64).unwrap_or(0), st));
+        layout
+            .entry(i)
+            .or_insert((b, po.get(k).and_then(Value::as_i64).unwrap_or(0), st));
     }
     let raw = Raw {
         parent,
@@ -236,11 +318,27 @@ fn parse_snapshot(snap: &Value) -> Result<(Raw, f32, f32)> {
         clickable: idx_set(&nd["isClickable"]),
         layout,
     };
-    Ok((raw, d["scrollOffsetX"].as_f64().unwrap_or(0.0) as f32, d["scrollOffsetY"].as_f64().unwrap_or(0.0) as f32))
+    Ok((
+        raw,
+        d["scrollOffsetX"].as_f64().unwrap_or(0.0) as f32,
+        d["scrollOffsetY"].as_f64().unwrap_or(0.0) as f32,
+    ))
 }
 
 fn is_skipped_tag(t: &str) -> bool {
-    matches!(t, "head" | "script" | "style" | "noscript" | "template" | "title" | "meta" | "link" | "base" | "#comment")
+    matches!(
+        t,
+        "head"
+            | "script"
+            | "style"
+            | "noscript"
+            | "template"
+            | "title"
+            | "meta"
+            | "link"
+            | "base"
+            | "#comment"
+    )
 }
 
 fn norm(s: &str) -> String {
@@ -276,7 +374,14 @@ impl Raw {
         norm(&v.join(" "))
     }
     fn direct_text(&self, i: usize) -> String {
-        norm(&self.kids[i].iter().filter(|&&c| self.kind[c] == 3 && self.rendered(c)).map(|&c| self.value[c].as_str()).collect::<Vec<_>>().join(" "))
+        norm(
+            &self.kids[i]
+                .iter()
+                .filter(|&&c| self.kind[c] == 3 && self.rendered(c))
+                .map(|&c| self.value[c].as_str())
+                .collect::<Vec<_>>()
+                .join(" "),
+        )
     }
     fn by_id(&self, id: &str) -> Option<usize> {
         (0..self.kind.len()).find(|&i| self.kind[i] == 1 && self.attr(i, "id") == Some(id))
@@ -312,7 +417,12 @@ fn role_of(r: &Raw, i: usize, body_child: bool) -> Role {
             "main" => Some(Role::Main),
             "banner" => Some(Role::Banner),
             "search" => Some(Role::Search),
-            "heading" => Some(Role::Heading { level: r.attr(i, "aria-level").and_then(|l| l.parse().ok()).unwrap_or(2) }),
+            "heading" => Some(Role::Heading {
+                level: r
+                    .attr(i, "aria-level")
+                    .and_then(|l| l.parse().ok())
+                    .unwrap_or(2),
+            }),
             "img" => Some(Role::Image),
             "list" => Some(Role::List),
             "listitem" => Some(Role::ListItem),
@@ -361,12 +471,30 @@ fn role_of(r: &Raw, i: usize, body_child: bool) -> Role {
         "table" => Role::Table,
         "tr" => Role::Row,
         "td" => Role::Cell,
-        "th" => if r.attr(i, "scope") == Some("row") { Role::RowHeader } else { Role::ColumnHeader },
+        "th" => {
+            if r.attr(i, "scope") == Some("row") {
+                Role::RowHeader
+            } else {
+                Role::ColumnHeader
+            }
+        }
         "nav" => Role::Navigation,
         "main" => Role::Main,
         "aside" => Role::Complementary,
-        "header" => if body_child { Role::Banner } else { Role::SectionHeader },
-        "footer" => if body_child { Role::ContentInfo } else { Role::SectionFooter },
+        "header" => {
+            if body_child {
+                Role::Banner
+            } else {
+                Role::SectionHeader
+            }
+        }
+        "footer" => {
+            if body_child {
+                Role::ContentInfo
+            } else {
+                Role::SectionFooter
+            }
+        }
         "article" => Role::Article,
         "form" => Role::Form,
         "dialog" => Role::Dialog,
@@ -386,7 +514,11 @@ fn name_of(r: &Raw, i: usize, role: &Role) -> String {
         return norm(l);
     }
     if let Some(ids) = r.attr(i, "aria-labelledby") {
-        let t: Vec<String> = ids.split_whitespace().filter_map(|id| r.by_id(id)).map(|j| r.text_of(j)).collect();
+        let t: Vec<String> = ids
+            .split_whitespace()
+            .filter_map(|id| r.by_id(id))
+            .map(|j| r.text_of(j))
+            .collect();
         if !t.join("").is_empty() {
             return norm(&t.join(" "));
         }
@@ -395,11 +527,20 @@ fn name_of(r: &Raw, i: usize, role: &Role) -> String {
         "img" => return norm(r.attr(i, "alt").or(r.attr(i, "title")).unwrap_or("")),
         "input" | "textarea" | "select" => {
             if matches!(r.input_type(i).as_str(), "button" | "submit" | "reset") && tag == "input" {
-                return norm(r.attr(i, "value").unwrap_or(match r.input_type(i).as_str() { "submit" => "Submit", "reset" => "Reset", _ => "" }));
+                return norm(
+                    r.attr(i, "value")
+                        .unwrap_or(match r.input_type(i).as_str() {
+                            "submit" => "Submit",
+                            "reset" => "Reset",
+                            _ => "",
+                        }),
+                );
             }
             // <label for=id> or a wrapping <label>
             if let Some(id) = r.attr(i, "id") {
-                if let Some(l) = (0..r.kind.len()).find(|&j| r.kind[j] == 1 && r.tag(j) == "label" && r.attr(j, "for") == Some(id)) {
+                if let Some(l) = (0..r.kind.len()).find(|&j| {
+                    r.kind[j] == 1 && r.tag(j) == "label" && r.attr(j, "for") == Some(id)
+                }) {
                     let t = r.text_of(l);
                     if !t.is_empty() {
                         return t;
@@ -416,12 +557,34 @@ fn name_of(r: &Raw, i: usize, role: &Role) -> String {
                 }
                 p = r.parent[p as usize];
             }
-            return norm(r.attr(i, "placeholder").or(r.attr(i, "title")).or(r.attr(i, "name")).unwrap_or(""));
+            return norm(
+                r.attr(i, "placeholder")
+                    .or(r.attr(i, "title"))
+                    .or(r.attr(i, "name"))
+                    .unwrap_or(""),
+            );
         }
         _ => {}
     }
     match role {
-        Role::Link | Role::Button | Role::Heading { .. } | Role::Option | Role::Tab | Role::MenuItem | Role::Paragraph | Role::ListItem | Role::Cell | Role::ColumnHeader | Role::RowHeader | Role::CheckBox | Role::Radio | Role::Switch | Role::Code | Role::Strong | Role::Emphasis | Role::Blockquote => {
+        Role::Link
+        | Role::Button
+        | Role::Heading { .. }
+        | Role::Option
+        | Role::Tab
+        | Role::MenuItem
+        | Role::Paragraph
+        | Role::ListItem
+        | Role::Cell
+        | Role::ColumnHeader
+        | Role::RowHeader
+        | Role::CheckBox
+        | Role::Radio
+        | Role::Switch
+        | Role::Code
+        | Role::Strong
+        | Role::Emphasis
+        | Role::Blockquote => {
             let t = r.text_of(i);
             if t.is_empty() {
                 norm(r.attr(i, "title").unwrap_or(""))
@@ -430,7 +593,9 @@ fn name_of(r: &Raw, i: usize, role: &Role) -> String {
             }
         }
         Role::Generic => r.direct_text(i),
-        Role::Dialog | Role::Region | Role::Form | Role::Navigation => norm(r.attr(i, "title").unwrap_or("")),
+        Role::Dialog | Role::Region | Role::Form | Role::Navigation => {
+            norm(r.attr(i, "title").unwrap_or(""))
+        }
         _ => String::new(),
     }
 }
@@ -453,7 +618,11 @@ fn state_of(r: &Raw, i: usize, role: &Role) -> A11yState {
     let mut st = A11yState::default();
     st.checked = tri(r.attr(i, "aria-checked"));
     if tag == "input" && matches!(r.input_type(i).as_str(), "checkbox" | "radio") {
-        st.checked = Some(if r.checked.contains(&i) { Checked::True } else { Checked::False });
+        st.checked = Some(if r.checked.contains(&i) {
+            Checked::True
+        } else {
+            Checked::False
+        });
     }
     st.expanded = r.attr(i, "aria-expanded").map(|v| v == "true");
     if tag == "details" {
@@ -469,12 +638,25 @@ fn state_of(r: &Raw, i: usize, role: &Role) -> A11yState {
     st.pressed = tri(r.attr(i, "aria-pressed"));
     st.invalid = truthy(r, i, "aria-invalid");
     st.value = match tag.as_str() {
-        "input" if !matches!(r.input_type(i).as_str(), "checkbox" | "radio" | "button" | "submit" | "reset") => r.input_value.get(&i).cloned().or_else(|| r.attr(i, "value").map(String::from)),
+        "input"
+            if !matches!(
+                r.input_type(i).as_str(),
+                "checkbox" | "radio" | "button" | "submit" | "reset"
+            ) =>
+        {
+            r.input_value
+                .get(&i)
+                .cloned()
+                .or_else(|| r.attr(i, "value").map(String::from))
+        }
         "textarea" => r.input_value.get(&i).cloned(),
         "select" => {
             let mut opts = vec![];
             collect_options(r, i, &mut opts);
-            opts.iter().find(|&&o| r.opt_selected.contains(&o)).or(opts.first()).map(|&o| norm(&r.text_of_any(o)))
+            opts.iter()
+                .find(|&&o| r.opt_selected.contains(&o))
+                .or(opts.first())
+                .map(|&o| norm(&r.text_of_any(o)))
         }
         _ => r.attr(i, "aria-valuenow").map(String::from),
     };
@@ -485,7 +667,14 @@ fn state_of(r: &Raw, i: usize, role: &Role) -> A11yState {
 impl Raw {
     /// Text of a node that may not have a layout box (an `<option>`).
     fn text_of_any(&self, i: usize) -> String {
-        norm(&self.kids[i].iter().filter(|&&c| self.kind[c] == 3).map(|&c| self.value[c].as_str()).collect::<Vec<_>>().join(" "))
+        norm(
+            &self.kids[i]
+                .iter()
+                .filter(|&&c| self.kind[c] == 3)
+                .map(|&c| self.value[c].as_str())
+                .collect::<Vec<_>>()
+                .join(" "),
+        )
     }
 }
 
@@ -536,19 +725,34 @@ impl Builder<'_> {
         let be = self.r.backend[i];
         let id = if let Some(&s) = self.alias.get(&be) {
             s
-        } else if let Some(s) = self.orphans.get_mut(key).filter(|_| !mutated("no-remount")).and_then(|q| q.pop_front()) {
+        } else if let Some(s) = self
+            .orphans
+            .get_mut(key)
+            .filter(|_| !mutated("no-remount"))
+            .and_then(|q| q.pop_front())
+        {
             self.alias.insert(be, s);
             s
         } else {
             be
         };
         // A stable id is issued once per tree.
-        let id = if self.claimed.insert(id) { id } else { be + (1 << 40) };
+        let id = if self.claimed.insert(id) {
+            id
+        } else {
+            be + (1 << 40)
+        };
         self.claimed.insert(id);
         id
     }
 
-    fn node(&mut self, i: usize, body_child: bool, parent_id: Option<u64>, depth: usize) -> Option<A11yNode> {
+    fn node(
+        &mut self,
+        i: usize,
+        body_child: bool,
+        parent_id: Option<u64>,
+        depth: usize,
+    ) -> Option<A11yNode> {
         let r = self.r;
         let tag = r.tag(i);
         if depth > 400 || is_skipped_tag(&tag) || (tag == "input" && r.input_type(i) == "hidden") {
@@ -581,7 +785,13 @@ impl Builder<'_> {
         }
         let (bbox, z, hittable) = match r.layout.get(&i) {
             Some((b, po, st)) => (
-                Some(Rect { x: b[0], y: b[1], width: b[2], height: b[3] }).filter(|b| b.width > 0.0 && b.height > 0.0),
+                Some(Rect {
+                    x: b[0],
+                    y: b[1],
+                    width: b[2],
+                    height: b[3],
+                })
+                .filter(|b| b.width > 0.0 && b.height > 0.0),
                 (*po).max(1) as i32,
                 !st.pointer_none && !st.visibility_hidden,
             ),
@@ -603,7 +813,16 @@ impl Builder<'_> {
                 self.idents.index.insert(oid, o);
                 self.idents.key.insert(oid, k);
                 self.idents.parent.insert(oid, id);
-                children.push(A11yNode { node: NodeId(oid), role: Role::Option, name: oname, bbox: None, z: 0, hittable: true, state: state_of(r, o, &Role::Option), children: vec![] });
+                children.push(A11yNode {
+                    node: NodeId(oid),
+                    role: Role::Option,
+                    name: oname,
+                    bbox: None,
+                    z: 0,
+                    hittable: true,
+                    state: state_of(r, o, &Role::Option),
+                    children: vec![],
+                });
             }
         } else {
             let bc = tag == "body";
@@ -615,7 +834,16 @@ impl Builder<'_> {
                 }
             }
         }
-        Some(A11yNode { node: NodeId(id), role, name, bbox, z, hittable, state, children })
+        Some(A11yNode {
+            node: NodeId(id),
+            role,
+            name,
+            bbox,
+            z,
+            hittable,
+            state,
+            children,
+        })
     }
 }
 
@@ -629,7 +857,9 @@ fn shield_of(r: &Raw, ids: &Idents, viewport_w: f32) -> Shield {
         if r.kind[i] != 3 || r.value[i].trim().is_empty() {
             continue;
         }
-        let Some((b, _, st)) = r.layout.get(&i) else { continue };
+        let Some((b, _, st)) = r.layout.get(&i) else {
+            continue;
+        };
         // Walk ancestors for the box-wide reasons and the nearest opaque background.
         let mut reason: Option<&'static str> = None;
         let mut bg = manuk_css::Rgba::WHITE;
@@ -660,7 +890,12 @@ fn shield_of(r: &Raw, ids: &Idents, viewport_w: f32) -> Shield {
             }
             p = r.parent[pu];
         }
-        let color = st.color.unwrap_or(Color { r: 0, g: 0, b: 0, a: 1.0 });
+        let color = st.color.unwrap_or(Color {
+            r: 0,
+            g: 0,
+            b: 0,
+            a: 1.0,
+        });
         let reason = reason.or_else(|| {
             if st.font_size <= MIN_FONT_PX {
                 Some("tiny-font")
@@ -713,30 +948,63 @@ fn shield_of(r: &Raw, ids: &Idents, viewport_w: f32) -> Shield {
     }
     let by_index: HashMap<usize, u64> = ids.index.iter().map(|(&id, &i)| (i, id)).collect();
     for (&i, &id) in &by_index {
-        let own_hidden = r.layout.get(&i).is_some_and(|(_, _, st)| st.opacity <= 0.01 || st.visibility_hidden);
+        let own_hidden = r
+            .layout
+            .get(&i)
+            .is_some_and(|(_, _, st)| st.opacity <= 0.01 || st.visibility_hidden);
         if own_hidden {
-            let why = if r.layout[&i].2.visibility_hidden { "visibility" } else { "opacity" };
+            let why = if r.layout[&i].2.visibility_hidden {
+                "visibility"
+            } else {
+                "opacity"
+            };
             sh.nodes.insert(NodeId(id), why);
         } else if hidden_below[i] > 0 && seen_below[i] == 0 {
-            let why = r.kids[i].iter().find_map(|&c| text_state.get(&c).filter(|&&w| w).map(|_| "hidden")).unwrap_or("hidden");
+            let why = r.kids[i]
+                .iter()
+                .find_map(|&c| text_state.get(&c).filter(|&&w| w).map(|_| "hidden"))
+                .unwrap_or("hidden");
             sh.nodes.insert(NodeId(id), why);
         }
     }
     sh
 }
 
-fn build(snap: &Value, alias: &mut HashMap<u64, u64>, prev: &Idents, viewport_w: f32) -> Result<(Built, f32, f32)> {
+fn build(
+    snap: &Value,
+    alias: &mut HashMap<u64, u64>,
+    prev: &Idents,
+    viewport_w: f32,
+) -> Result<(Built, f32, f32)> {
     let (raw, sx, sy) = parse_snapshot(snap)?;
     let live: HashSet<u64> = raw.backend.iter().copied().collect();
     let mut orphans: HashMap<String, VecDeque<u64>> = HashMap::new();
-    let mut stale: Vec<(&u64, &u64)> = prev.backend.iter().filter(|(_, be)| !live.contains(be)).collect();
+    let mut stale: Vec<(&u64, &u64)> = prev
+        .backend
+        .iter()
+        .filter(|(_, be)| !live.contains(be))
+        .collect();
     stale.sort();
     for (sid, _) in stale {
-        orphans.entry(prev.key[sid].clone()).or_default().push_back(*sid);
+        orphans
+            .entry(prev.key[sid].clone())
+            .or_default()
+            .push_back(*sid);
     }
-    let html = (0..raw.kind.len()).find(|&i| raw.kind[i] == 1 && raw.tag(i) == "html").ok_or_else(|| anyhow!("snapshot has no <html>"))?;
-    let mut b = Builder { r: &raw, alias, orphans, ord: HashMap::new(), idents: Idents::default(), claimed: HashSet::new() };
-    let mut root = b.node(html, false, None, 0).ok_or_else(|| anyhow!("page has no rendered root"))?;
+    let html = (0..raw.kind.len())
+        .find(|&i| raw.kind[i] == 1 && raw.tag(i) == "html")
+        .ok_or_else(|| anyhow!("snapshot has no <html>"))?;
+    let mut b = Builder {
+        r: &raw,
+        alias,
+        orphans,
+        ord: HashMap::new(),
+        idents: Idents::default(),
+        claimed: HashSet::new(),
+    };
+    let mut root = b
+        .node(html, false, None, 0)
+        .ok_or_else(|| anyhow!("page has no rendered root"))?;
     root.role = Role::Document;
     let idents = b.idents;
     let shield = shield_of(&raw, &idents, viewport_w);
@@ -751,7 +1019,16 @@ fn build(snap: &Value, alias: &mut HashMap<u64, u64>, prev: &Idents, viewport_w:
     }
     links.sort();
     let links = links.into_iter().map(|(_, t, h)| (t, h)).collect();
-    Ok((Built { tree: root, shield, idents, links }, sx, sy))
+    Ok((
+        Built {
+            tree: root,
+            shield,
+            idents,
+            links,
+        },
+        sx,
+        sy,
+    ))
 }
 
 // ───────────────────────────── the backend ─────────────────────────────
@@ -780,12 +1057,21 @@ fn mutated(what: &str) -> bool {
 }
 
 fn chrome_exe() -> String {
-    std::env::var("MANUK_CHROME").ok().or_else(|| std::env::var("CHROME").ok()).unwrap_or_else(|| "google-chrome".into())
+    std::env::var("MANUK_CHROME")
+        .ok()
+        .or_else(|| std::env::var("CHROME").ok())
+        .unwrap_or_else(|| "google-chrome".into())
 }
 
 impl CdpBackend {
     pub fn launch(width: u32, height: u32) -> Result<Self> {
-        let dir = std::env::temp_dir().join(format!("manuk-cdp-{}-{}", std::process::id(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_nanos()));
+        let dir = std::env::temp_dir().join(format!(
+            "manuk-cdp-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)?
+                .as_nanos()
+        ));
         std::fs::create_dir_all(&dir)?;
         let mut cmd = Command::new(chrome_exe());
         // If this server is killed (the harness ends a session by SIGKILL), Chrome must not outlive it.
@@ -798,7 +1084,17 @@ impl CdpBackend {
             });
         }
         let child = cmd
-            .args(["--headless=new", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage", "--no-first-run", "--no-default-browser-check", "--mute-audio", "--disable-background-networking", "--remote-debugging-port=0"])
+            .args([
+                "--headless=new",
+                "--no-sandbox",
+                "--disable-gpu",
+                "--disable-dev-shm-usage",
+                "--no-first-run",
+                "--no-default-browser-check",
+                "--mute-audio",
+                "--disable-background-networking",
+                "--remote-debugging-port=0",
+            ])
             .arg(format!("--user-data-dir={}", dir.display()))
             .arg(format!("--window-size={width},{height}"))
             .arg("about:blank")
@@ -821,8 +1117,14 @@ impl CdpBackend {
             std::thread::sleep(Duration::from_millis(50));
         };
         let stream = TcpStream::connect(("127.0.0.1", port))?;
-        let (ws, _) = tungstenite::client(format!("ws://127.0.0.1:{port}{path}"), stream).map_err(|e| anyhow!("DevTools handshake: {e}"))?;
-        let mut cdp = Cdp { ws, next: 0, session: None, events: VecDeque::new() };
+        let (ws, _) = tungstenite::client(format!("ws://127.0.0.1:{port}{path}"), stream)
+            .map_err(|e| anyhow!("DevTools handshake: {e}"))?;
+        let mut cdp = Cdp {
+            ws,
+            next: 0,
+            session: None,
+            events: VecDeque::new(),
+        };
         let targets = cdp.call("Target.getTargets", json!({}))?;
         let tid = targets["targetInfos"]
             .as_array()
@@ -830,20 +1132,51 @@ impl CdpBackend {
             .and_then(|t| t["targetId"].as_str())
             .ok_or_else(|| anyhow!("no page target"))?
             .to_string();
-        let att = cdp.call("Target.attachToTarget", json!({"targetId": tid, "flatten": true}))?;
-        cdp.session = Some(att["sessionId"].as_str().ok_or_else(|| anyhow!("no sessionId"))?.to_string());
+        let att = cdp.call(
+            "Target.attachToTarget",
+            json!({"targetId": tid, "flatten": true}),
+        )?;
+        cdp.session = Some(
+            att["sessionId"]
+                .as_str()
+                .ok_or_else(|| anyhow!("no sessionId"))?
+                .to_string(),
+        );
         for m in ["Page.enable", "DOM.enable", "Runtime.enable"] {
             cdp.call(m, json!({}))?;
         }
         cdp.call("Page.setLifecycleEventsEnabled", json!({"enabled": true}))?;
-        cdp.call("Emulation.setDeviceMetricsOverride", json!({"width": width, "height": height, "deviceScaleFactor": 1, "mobile": false}))?;
-        Ok(CdpBackend { cdp, child, dir, width: width as f32, height: height as f32, alias: HashMap::new(), built: None, url: "about:blank".into(), title: String::new(), scroll: (0.0, 0.0), content_h: 0.0, text: String::new(), remounted: 0 })
+        cdp.call(
+            "Emulation.setDeviceMetricsOverride",
+            json!({"width": width, "height": height, "deviceScaleFactor": 1, "mobile": false}),
+        )?;
+        Ok(CdpBackend {
+            cdp,
+            child,
+            dir,
+            width: width as f32,
+            height: height as f32,
+            alias: HashMap::new(),
+            built: None,
+            url: "about:blank".into(),
+            title: String::new(),
+            scroll: (0.0, 0.0),
+            content_h: 0.0,
+            text: String::new(),
+            remounted: 0,
+        })
     }
 
     fn eval(&mut self, expr: &str) -> Result<Value> {
-        let r = self.cdp.call("Runtime.evaluate", json!({"expression": expr, "returnByValue": true, "awaitPromise": false}))?;
+        let r = self.cdp.call(
+            "Runtime.evaluate",
+            json!({"expression": expr, "returnByValue": true, "awaitPromise": false}),
+        )?;
         if let Some(e) = r.get("exceptionDetails") {
-            bail!("page script error: {}", e["text"].as_str().unwrap_or("exception"));
+            bail!(
+                "page script error: {}",
+                e["text"].as_str().unwrap_or("exception")
+            );
         }
         Ok(r["result"]["value"].clone())
     }
@@ -854,13 +1187,23 @@ impl CdpBackend {
         let info: Value = serde_json::from_str(info.as_str().unwrap_or("{}"))?;
         self.url = info["u"].as_str().unwrap_or("").to_string();
         self.title = info["t"].as_str().unwrap_or("").to_string();
-        self.scroll = (info["x"].as_f64().unwrap_or(0.0) as f32, info["y"].as_f64().unwrap_or(0.0) as f32);
+        self.scroll = (
+            info["x"].as_f64().unwrap_or(0.0) as f32,
+            info["y"].as_f64().unwrap_or(0.0) as f32,
+        );
         self.width = info["w"].as_f64().unwrap_or(self.width as f64) as f32;
         self.height = info["h"].as_f64().unwrap_or(self.height as f64) as f32;
         self.content_h = info["ch"].as_f64().unwrap_or(0.0) as f32;
         self.text = info["tx"].as_str().unwrap_or("").to_string();
-        let snap = self.cdp.call("DOMSnapshot.captureSnapshot", json!({"computedStyles": STYLES, "includePaintOrder": true, "includeDOMRects": true}))?;
-        let prev = self.built.as_ref().map(|b| b.idents.clone()).unwrap_or_default();
+        let snap = self.cdp.call(
+            "DOMSnapshot.captureSnapshot",
+            json!({"computedStyles": STYLES, "includePaintOrder": true, "includeDOMRects": true}),
+        )?;
+        let prev = self
+            .built
+            .as_ref()
+            .map(|b| b.idents.clone())
+            .unwrap_or_default();
         let before = self.alias.len();
         let (built, _, _) = build(&snap, &mut self.alias, &prev, self.width)?;
         self.remounted = (self.alias.len() - before.min(self.alias.len())) as u32;
@@ -869,17 +1212,34 @@ impl CdpBackend {
     }
 
     fn built(&self) -> Result<&Built> {
-        self.built.as_ref().ok_or_else(|| anyhow!("no page loaded yet: navigate first"))
+        self.built
+            .as_ref()
+            .ok_or_else(|| anyhow!("no page loaded yet: navigate first"))
     }
 
     /// After something that may have started a navigation: wait for it to finish, then re-read.
     fn after_action(&mut self) -> Result<()> {
-        let nav = |m: &Value| matches!(m["method"].as_str(), Some("Page.frameStartedNavigating" | "Page.frameStartedLoading" | "Page.frameNavigated" | "Page.navigatedWithinDocument"));
+        let nav = |m: &Value| {
+            matches!(
+                m["method"].as_str(),
+                Some(
+                    "Page.frameStartedNavigating"
+                        | "Page.frameStartedLoading"
+                        | "Page.frameNavigated"
+                        | "Page.navigatedWithinDocument"
+                )
+            )
+        };
         self.cdp.pump_until(Duration::from_millis(450), nav)?;
         let navigated = self.cdp.events.iter().any(nav);
         if navigated {
-            self.cdp.pump_until(Duration::from_secs(20), |m| m["method"] == "Page.loadEventFired" || m["method"] == "Page.navigatedWithinDocument")?;
-            self.cdp.pump_until(Duration::from_secs(3), |m| m["method"] == "Page.lifecycleEvent" && m["params"]["name"] == "networkIdle")?;
+            self.cdp.pump_until(Duration::from_secs(20), |m| {
+                m["method"] == "Page.loadEventFired"
+                    || m["method"] == "Page.navigatedWithinDocument"
+            })?;
+            self.cdp.pump_until(Duration::from_secs(3), |m| {
+                m["method"] == "Page.lifecycleEvent" && m["params"]["name"] == "networkIdle"
+            })?;
         }
         self.cdp.events.clear();
         self.refresh()
@@ -890,14 +1250,22 @@ impl CdpBackend {
     }
 
     fn object_for(&mut self, be: u64) -> Result<String> {
-        let r = self.cdp.call("DOM.resolveNode", json!({"backendNodeId": be}))?;
-        r["object"]["objectId"].as_str().map(String::from).ok_or_else(|| anyhow!("element has no JS object"))
+        let r = self
+            .cdp
+            .call("DOM.resolveNode", json!({"backendNodeId": be}))?;
+        r["object"]["objectId"]
+            .as_str()
+            .map(String::from)
+            .ok_or_else(|| anyhow!("element has no JS object"))
     }
 
     fn call_on(&mut self, obj: &str, f: &str, args: Value) -> Result<Value> {
         let r = self.cdp.call("Runtime.callFunctionOn", json!({"objectId": obj, "functionDeclaration": f, "arguments": args, "returnByValue": true}))?;
         if let Some(e) = r.get("exceptionDetails") {
-            bail!("page script error: {}", e["text"].as_str().unwrap_or("exception"));
+            bail!(
+                "page script error: {}",
+                e["text"].as_str().unwrap_or("exception")
+            );
         }
         Ok(r["result"]["value"].clone())
     }
@@ -905,10 +1273,21 @@ impl CdpBackend {
     /// Is `hit` the target or inside it?
     fn within(&self, hit: u64, target_be: u64) -> bool {
         let Ok(b) = self.built() else { return false };
-        let Some(&hid) = b.idents.backend.iter().find(|(_, &be)| be == hit).map(|(id, _)| id) else {
+        let Some(&hid) = b
+            .idents
+            .backend
+            .iter()
+            .find(|(_, &be)| be == hit)
+            .map(|(id, _)| id)
+        else {
             return false;
         };
-        let tid = b.idents.backend.iter().find(|(_, &be)| be == target_be).map(|(id, _)| *id);
+        let tid = b
+            .idents
+            .backend
+            .iter()
+            .find(|(_, &be)| be == target_be)
+            .map(|(id, _)| *id);
         let mut cur = Some(hid);
         while let Some(c) = cur {
             if Some(c) == tid {
@@ -924,10 +1303,20 @@ impl CdpBackend {
     fn aim(&mut self, node: NodeId) -> Result<(f32, f32, u64)> {
         let be = self.backend_of(node)?;
         let b = self.built()?;
-        let n = find(&b.tree, node).ok_or_else(|| anyhow!("STALE: element no longer in the tree"))?;
-        let bbox = n.bbox.ok_or_else(|| anyhow!("UNREACHABLE: element has no box at dispatch"))?;
-        let vp = Rect { x: self.scroll.0, y: self.scroll.1, width: self.width, height: self.height };
-        let aim = bbox.intersection(&vp).ok_or_else(|| anyhow!("OFFSCREEN at dispatch: element is outside the viewport"))?;
+        let n =
+            find(&b.tree, node).ok_or_else(|| anyhow!("STALE: element no longer in the tree"))?;
+        let bbox = n
+            .bbox
+            .ok_or_else(|| anyhow!("UNREACHABLE: element has no box at dispatch"))?;
+        let vp = Rect {
+            x: self.scroll.0,
+            y: self.scroll.1,
+            width: self.width,
+            height: self.height,
+        };
+        let aim = bbox
+            .intersection(&vp)
+            .ok_or_else(|| anyhow!("OFFSCREEN at dispatch: element is outside the viewport"))?;
         let pts = [
             aim.center(),
             (aim.x + aim.width * 0.25, aim.y + aim.height * 0.25),
@@ -946,8 +1335,19 @@ impl CdpBackend {
             cover.get_or_insert(hit);
         }
         let by = cover
-            .and_then(|h| self.built().ok().and_then(|b| b.idents.backend.iter().find(|(_, &x)| x == h).map(|(id, _)| *id)))
-            .and_then(|id| find(&self.built().ok()?.tree, NodeId(id)).map(|n| format!("{:?} {:?}", n.role, n.name)))
+            .and_then(|h| {
+                self.built().ok().and_then(|b| {
+                    b.idents
+                        .backend
+                        .iter()
+                        .find(|(_, &x)| x == h)
+                        .map(|(id, _)| *id)
+                })
+            })
+            .and_then(|id| {
+                find(&self.built().ok()?.tree, NodeId(id))
+                    .map(|n| format!("{:?} {:?}", n.role, n.name))
+            })
             .unwrap_or_else(|| "another element".into());
         bail!("OCCLUDED at dispatch: {by} covers the target; nothing was clicked")
     }
@@ -976,8 +1376,12 @@ impl Backend for CdpBackend {
         if let Some(e) = r["errorText"].as_str() {
             bail!("navigation failed: {e}");
         }
-        self.cdp.pump_until(Duration::from_secs(25), |m| m["method"] == "Page.loadEventFired")?;
-        self.cdp.pump_until(Duration::from_secs(3), |m| m["method"] == "Page.lifecycleEvent" && m["params"]["name"] == "networkIdle")?;
+        self.cdp.pump_until(Duration::from_secs(25), |m| {
+            m["method"] == "Page.loadEventFired"
+        })?;
+        self.cdp.pump_until(Duration::from_secs(3), |m| {
+            m["method"] == "Page.lifecycleEvent" && m["params"]["name"] == "networkIdle"
+        })?;
         self.cdp.events.clear();
         self.refresh()
     }
@@ -991,7 +1395,12 @@ impl Backend for CdpBackend {
         self.title.clone()
     }
     fn viewport(&self) -> Rect {
-        Rect { x: self.scroll.0, y: self.scroll.1, width: self.width, height: self.height }
+        Rect {
+            x: self.scroll.0,
+            y: self.scroll.1,
+            width: self.width,
+            height: self.height,
+        }
     }
     fn scroll_y(&self) -> f32 {
         self.scroll.1
@@ -1031,7 +1440,14 @@ impl Backend for CdpBackend {
             self.cdp.call("Input.dispatchMouseEvent", json!({"type": t, "x": x, "y": y, "button": "left", "buttons": if t == "mousePressed" { 1 } else { 0 }, "clickCount": cc}))?;
         }
         self.after_action()?;
-        Ok(format!("dispatched click at ({x:.0},{y:.0}); hit-test re-validated at dispatch{}", if remounted > 0 { format!("; {remounted} element(s) re-mounted by identity") } else { String::new() }))
+        Ok(format!(
+            "dispatched click at ({x:.0},{y:.0}); hit-test re-validated at dispatch{}",
+            if remounted > 0 {
+                format!("; {remounted} element(s) re-mounted by identity")
+            } else {
+                String::new()
+            }
+        ))
     }
     fn type_text(&mut self, node: NodeId, text: &str) -> Result<()> {
         let be = self.backend_of(node)?;
@@ -1050,7 +1466,11 @@ impl Backend for CdpBackend {
         let obj = self.object_for(be)?;
         self.call_on(&obj, "function(){this.focus();}", json!([]))?;
         self.cdp.events.clear();
-        for (t, extra) in [("rawKeyDown", json!({})), ("char", json!({"text": "\r"})), ("keyUp", json!({}))] {
+        for (t, extra) in [
+            ("rawKeyDown", json!({})),
+            ("char", json!({"text": "\r"})),
+            ("keyUp", json!({})),
+        ] {
             let mut p = json!({"type": t, "key": "Enter", "code": "Enter", "windowsVirtualKeyCode": 13, "nativeVirtualKeyCode": 13});
             if let (Some(o), Some(e)) = (p.as_object_mut(), extra.as_object()) {
                 o.extend(e.clone());

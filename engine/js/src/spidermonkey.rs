@@ -96,6 +96,9 @@ impl Drop for TeardownGuard {
 /// The one true teardown, in the one correct order. Idempotent: calling it twice is a no-op, so an
 /// explicit [`shutdown_engine`] and the automatic guard cannot fight each other.
 fn teardown() {
+    // 0. The cached prelude stencils: refcounted engine objects, released while the engine is alive.
+    crate::event_loop::release_stencils();
+
     // 1. The context. A rooted JS object outliving its runtime is the *other* way to crash here, so
     //    nothing may touch JS after this point.
     RUNTIME.with(|cell| {

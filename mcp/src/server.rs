@@ -165,7 +165,9 @@ pub fn run_stdio(width: u32, height: u32) -> Result<()> {
 pub fn run_stdio_chrome(width: u32, height: u32) -> Result<()> {
     let log_dir = std::env::var_os("MANUK_ACTLOG_DIR").map(std::path::PathBuf::from);
     let tx = spawn_session(
-        move || crate::cdp::CdpBackend::launch(width, height).expect("launch Chrome (set MANUK_CHROME)"),
+        move || {
+            crate::cdp::CdpBackend::launch(width, height).expect("launch Chrome (set MANUK_CHROME)")
+        },
         log_dir,
     );
     serve(tx)

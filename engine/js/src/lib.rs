@@ -353,6 +353,8 @@ pub fn prewarm() {
             rooted!(&in(rt.cx()) let mut rval = mozjs::jsval::UndefinedValue());
             let opts = CompileOptionsWrapper::new(rt.cx_no_gc(), c"prewarm.js".to_owned(), 1);
             let _ = evaluate_script(rt.cx(), global.handle(), "0", rval.handle_mut(), opts);
+            // PERF.1.4.a: compile the document-independent preludes now, off the critical path.
+            event_loop::precompile(rt);
             Ok(())
         });
     }
