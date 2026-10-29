@@ -9,7 +9,7 @@ reproduced by the command shown. suite hashes: own-only v1 `69903c7d…`, full o
 
 | Item | Result | Numbers (3-run band) | Source |
 |---|---|---|---|
-| Bar 1.1 one-line install | NOT MEASURED on a clean checkout | 9 tools listed in a fresh session after `claude mcp add manuk -- manuk-mcp`; the release build was incremental, clean-checkout proof is open (R1.7.a.a TODO) | docs/sprint/R1.7.a-install.txt, JOURNAL R1.7.a |
+| Bar 1.1 one-line install | MET, with one stated condition: the clean-clone release build needs the documented `./scripts/mozjs-fetch.sh` first (a bare `cargo build --release -p manuk-mcp` panics in mozjs_sys, rc≠0). After the prefetch: clone of 5171123e builds rc=0 in 2m52s; `claude mcp add manuk -- manuk-mcp` → ✔ Connected; fresh headless session lists 13 `mcp__manuk__` tools. Red: manuk-mcp off PATH → ✘ Failed to connect, zero tools | docs/sprint/R1.7.a.a-install.txt, JOURNAL R1.7.a.a; README.md:109 (prefetch step); chrome_ver=145.0.7632.116 |
 | Bar 1.2 ≥25/40 tasks | MET | manuk own slice 39/40 tasks pass ≥2 of 3 runs; per-run 39, 39, 40 | `arm3_report.py`, arm=manuk suite 061ee22b |
 | Bar 1.3 external slice published | MET | external 7/10 tasks pass ≥2/3; per-run 7, 5, 7 (band 5–7); losses listed in FAILURES-EXTERNAL.tsv | `arm3_report.py`; EXT.RUN.b |
 | Bar 1.4 public demo | per graph DEMO.1 DONE; not re-read here | — | GRAPH.tsv DEMO.1 |
@@ -24,7 +24,7 @@ reproduced by the command shown. suite hashes: own-only v1 `69903c7d…`, full o
 Bar 2 condition 1 holds. Bar 2 condition 2 (a decisive win that arm 3 does not match) holds on **no** branch: hidden-instruction is 0 vs 0,
 tokens go the wrong way, rollback was never exercised to a flip. Bar 2 is therefore **NOT MET**.
 
-Bar 1 holds on items 2 and 3, item 4 is DONE in the graph, and item 1 lacks the clean-checkout proof, so Bar 1 is MET provisionally pending R1.7.a.a.
+Bar 1 holds on items 1, 2 and 3; item 4 is DONE in the graph (DEMO.1). Item 1 is MET on a clean clone (R1.7.a.a), with the reading stated in the table: SUCCESS.md says the install works "on a clean checkout's release build", and the clone's release build needs the documented mozjs prefetch before it links. If the owner reads "clean checkout" as "bare `cargo build`, no prefetch", item 1 is NOT MET and the verdict row is unchanged, since the Bar 2 result does not depend on it. So Bar 1 is MET.
 
 Applicable SUCCESS.md row: **Bar 1 only** — "A useful agent tool, but the engine is not the reason."
 Then: ship the MCP layer with a Chrome backend (`manuk-mcp --backend chrome`, R4.1); manuk becomes the deterministic/forkable research backend.
