@@ -85,6 +85,9 @@ fn tools() -> Vec<Tool> {
         t("extract", "Page content. format=text (default), markdown (headings + text + links) or table (rows of a table in scope). Optional scope handle.", schema(json!({"format": {"type": "string", "enum": ["markdown", "text", "table"]}, "scope": {"type": "string"}, "include_hidden": {"type": "boolean"}}), &[])),
         t("find", "Rank nodes by role/name/text match for a query (no model call). Returns up to 8 handles.", schema(json!({"query": {"type": "string"}}), &["query"])),
         t("storage_state", "Export (default) or import this session's cookies + localStorage as Playwright storage-state JSON, to/from `path` (export without a path returns the JSON).", schema(json!({"action": {"type": "string", "enum": ["export", "import"]}, "path": {"type": "string"}}), &[])),
+        t("checkpoint", "Remember this page's position (its action log) and return a checkpoint id. v1 is replay-based: exact, but restore/fork cost one page load, not a memory snapshot.", schema(json!({}), &[])),
+        t("restore", "Rewind to a checkpoint: replay its log into a fresh page (every step hash-verified) and make that the default page. Cookies are not cleared; web storage is. Returns the new page handle.", schema(json!({"checkpoint": {"type": "string"}}), &["checkpoint"])),
+        t("fork", "Like restore, but leaves the current default page alone: a new independent page at the checkpoint.", schema(json!({"checkpoint": {"type": "string"}}), &["checkpoint"])),
         t("screenshot", "PNG of the current viewport (opt-in; the expensive channel).", schema(json!({"handle": {"type": "string"}}), &[])),
     ]
 }

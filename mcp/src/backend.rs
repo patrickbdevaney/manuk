@@ -42,6 +42,9 @@ pub trait Backend {
     fn import_storage_state(&mut self, _state: &serde_json::Value) -> Result<(usize, usize)> {
         anyhow::bail!("this backend has no storage state")
     }
+    /// Drop the web storage a previous page left behind, so a replay starts from the empty state a
+    /// fresh process has (R3.2 restore). Cookies are not cleared.
+    fn reset_storage(&mut self) {}
 }
 
 fn describe(a: Activation) -> String {
@@ -122,5 +125,13 @@ impl Backend for AgentBrowser {
     }
     fn import_storage_state(&mut self, state: &serde_json::Value) -> Result<(usize, usize)> {
         manuk_net::storage_state::import(state)
+    }
+    fn reset_storage(&mut self) {
+        use manuk_net::webstorage::{clear, origins, Area};
+        for area in [Area::Local, Area::Session] {
+            for o in origins(area) {
+                clear(area, &o);
+            }
+        }
     }
 }

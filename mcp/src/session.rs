@@ -132,6 +132,10 @@ impl<B: Backend> Session<B> {
         &self.b
     }
 
+    pub fn backend_mut(&mut self) -> &mut B {
+        &mut self.b
+    }
+
     fn handle(&mut self, id: NodeId) -> u32 {
         if let Some(h) = self.ids.get(&id.0) {
             return *h;

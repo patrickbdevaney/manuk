@@ -62,6 +62,14 @@ impl Entry {
     }
 }
 
+/// R3.2: a checkpoint is a log position of one page (v1, replay-based). Restoring replays that log
+/// prefix into a fresh page, so it is exact but costs one page load; it is not a memory snapshot.
+#[derive(Clone)]
+struct Ckpt {
+    log: Vec<Entry>,
+    url: String,
+}
+
 struct Page<B: Backend> {
     s: Session<B>,
     log: Vec<Entry>,
@@ -71,6 +79,7 @@ pub struct Hub<B: Backend> {
     make: Box<dyn Fn() -> B>,
     dir: Option<PathBuf>,
     pages: HashMap<String, Page<B>>,
+    ckpts: HashMap<String, Ckpt>,
     default: Option<String>,
     next: u64,
     salt: u64,
@@ -97,6 +106,7 @@ impl<B: Backend> Hub<B> {
             make: Box::new(make),
             dir,
             pages: HashMap::new(),
+            ckpts: HashMap::new(),
             default: None,
             next: 0,
             salt,
@@ -175,8 +185,102 @@ impl<B: Backend> Hub<B> {
         Ok(())
     }
 
+    fn ckpt_path(&self, id: &str) -> Option<PathBuf> {
+        self.dir.as_ref().map(|d| d.join(format!("{id}.ckpt")))
+    }
+
+    fn ckpt_get(&mut self, id: &str) -> Result<Ckpt, String> {
+        if let Some(c) = self.ckpts.get(id) {
+            return Ok(c.clone());
+        }
+        let p = self
+            .ckpt_path(id)
+            .ok_or_else(|| format!("unknown checkpoint {id:?} (no persisted store: set MANUK_ACTLOG_DIR)"))?;
+        let text = std::fs::read_to_string(&p)
+            .map_err(|_| format!("unknown checkpoint {id:?}: no file at {}", p.display()))?;
+        let mut lines = text.lines();
+        let url = lines.next().unwrap_or("").to_string();
+        let log = lines
+            .map(|l| {
+                serde_json::from_str::<Value>(l)
+                    .ok()
+                    .and_then(|v| Entry::from_json(&v))
+                    .ok_or_else(|| format!("corrupt checkpoint {id}"))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let c = Ckpt { log, url };
+        self.ckpts.insert(id.to_string(), c.clone());
+        Ok(c)
+    }
+
+    /// `checkpoint`: remember the current position of page `id`.
+    fn checkpoint(&mut self, id: &str) -> String {
+        let page = &self.pages[id];
+        let c = Ckpt {
+            log: page.log.clone(),
+            url: page.s.backend().url(),
+        };
+        let cid = format!(
+            "c{:06x}",
+            fnv(format!("{}:{}:{}", self.salt, self.next, self.ckpts.len()).as_bytes()) & 0xff_ffff
+        );
+        self.next += 1;
+        if let Some(p) = self.ckpt_path(&cid) {
+            let mut out = format!("{}\n", c.url);
+            for e in &c.log {
+                out.push_str(&format!("{}\n", e.to_json(id)));
+            }
+            let _ = std::fs::write(p, out);
+        }
+        let n = c.log.len();
+        let url = c.url.clone();
+        self.ckpts.insert(cid.clone(), c);
+        format!("checkpoint {cid} at {id}:{n} ({url}); restore/fork replays the log into a fresh page, so it costs one page load\npage: {id}:{n}")
+    }
+
+    /// `restore` / `fork`: replay checkpoint `cid` into a brand-new page (verifying every hash) and
+    /// return its handle. `restore` also makes that page the default one.
+    async fn from_ckpt(&mut self, cid: &str, make_default: bool) -> Result<Output, String> {
+        let c = self.ckpt_get(cid)?;
+        let id = self.fresh_id();
+        let mut s = Session::new((self.make)());
+        s.backend_mut().reset_storage();
+        for e in &c.log {
+            let (_, h) = Self::run(&mut s, &e.tool, &e.args).await;
+            if h != e.diff_hash || Self::storage_hash(&s) != e.storage_hash {
+                return Err(format!("REPLAY DIVERGED restoring {cid} at step {} ({}): the page no longer reproduces what was recorded", e.seq, e.tool));
+            }
+        }
+        if let Some(p) = self.path(&id) {
+            let text: String = c
+                .log
+                .iter()
+                .map(|e| format!("{}\n", e.to_json(&id)))
+                .collect();
+            let _ = std::fs::write(p, text);
+        }
+        let n = c.log.len();
+        self.pages.insert(id.clone(), Page { s, log: c.log });
+        if make_default {
+            self.default = Some(id.clone());
+        }
+        Ok(Output::Text(format!(
+            "{} {cid} into a new page ({})\npage: {id}:{n}",
+            if make_default { "restored" } else { "forked" },
+            c.url
+        )))
+    }
+
     /// `args.page`: absent = the default page; `"new"` = a fresh page; `"<id>:<seq>"` = resume/verify.
     pub async fn call(&mut self, tool: &str, args: &Map<String, Value>) -> Result<Output, String> {
+        if matches!(tool, "restore" | "fork") {
+            let cid = args
+                .get("checkpoint")
+                .and_then(Value::as_str)
+                .ok_or_else(|| format!("{tool} needs `checkpoint` (an id returned by `checkpoint`)"))?
+                .to_string();
+            return self.from_ckpt(&cid, tool == "restore").await;
+        }
         let want = args.get("page").and_then(Value::as_str).map(str::to_string);
         let id = match want.as_deref() {
             None => match &self.default {
@@ -208,6 +312,9 @@ impl<B: Backend> Hub<B> {
         if !self.pages.contains_key(&id) {
             let s = Session::new((self.make)());
             self.pages.insert(id.clone(), Page { s, log: Vec::new() });
+        }
+        if tool == "checkpoint" {
+            return Ok(Output::Text(self.checkpoint(&id)));
         }
         let logged = !UNLOGGED.contains(&tool);
         let a = strip_page(args);
