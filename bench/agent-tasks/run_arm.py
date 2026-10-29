@@ -2,6 +2,8 @@
 """R0.3 harness: drive each frozen task through `claude -p --model haiku` with one browser arm, verify, record.
 
   run_arm.py --arm playwright|manuk [--suite own|full] [--runs 3] [--tasks L01,F04] [--out FILE] [--dry]
+             [--transcripts DIR]   (R2.1.5: stream-json per run into DIR/<arm>_<task>_r<run>.jsonl; the result
+                                    event is parsed from it, so the row is built from the same run it records)
 
 Arms: playwright = @playwright/mcp driving the pinned Chrome; manuk = `manuk-mcp` (NOT-AVAILABLE until R1.1 lands:
 exits 3 and writes no rows). One row per task x run is appended to docs/sprint/SCOREBOARD.tsv with the suite hash and
@@ -63,8 +65,9 @@ def tree_rss_mb(pid):
     return tot / 1048576
 
 
-def run_claude(prompt, cfg, allowed, timeout, claude=None, cwd=None):
-    cmd = [claude or CLAUDE, "-p", "--model", "haiku", "--output-format", "json", "--mcp-config", cfg,
+def run_claude(prompt, cfg, allowed, timeout, claude=None, cwd=None, stream=False):
+    fmt = ["--output-format", "stream-json", "--verbose"] if stream else ["--output-format", "json"]
+    cmd = [claude or CLAUDE, "-p", "--model", "haiku", *fmt, "--mcp-config", cfg,
            "--strict-mcp-config", "--allowedTools", allowed, "--permission-mode", "dontAsk",
            "--no-session-persistence", "--max-budget-usd", "1.00", prompt]
     t0 = time.time()
@@ -88,7 +91,10 @@ def run_claude(prompt, cfg, allowed, timeout, claude=None, cwd=None):
     return out, err, time.time() - t0, peak[0]
 
 
-def parse(out):
+def parse(out, stream=False):
+    if stream:  # stream-json: one event per line; the final {"type":"result"} carries usage, cost, turns
+        ev = [json.loads(l) for l in out.splitlines() if l.startswith("{")]
+        return next((e for e in reversed(ev) if e.get("type") == "result"), None)
     try:
         j = json.loads(out)
     except Exception:
@@ -96,13 +102,15 @@ def parse(out):
     return j[-1] if isinstance(j, list) and j else j
 
 
-def one(task, arm, run, base, cfg, allowed, ver, timeout):
+def one(task, arm, run, base, cfg, allowed, ver, timeout, tdir=None):
     t0 = time.time()
     if task["kind"] == "fixture":
         verify.reset(base)
     url = task["start_url"].replace("{BASE}", base)
-    out, err, secs, peak = run_claude(PROMPT.format(url=url, goal=task["goal"]), cfg, allowed, timeout)
-    j = parse(out)
+    out, err, secs, peak = run_claude(PROMPT.format(url=url, goal=task["goal"]), cfg, allowed, timeout, stream=bool(tdir))
+    if tdir:
+        open(os.path.join(tdir, f"{arm}_{task['id']}_r{run}.jsonl"), "w").write(out)
+    j = parse(out, stream=bool(tdir))
     row = {"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "arm": arm, "suite_hash": ver[0], "chrome_ver": ver[1],
            "task": task["id"], "slice": task["slice"], "kind": task["kind"], "run": run, "model": "haiku",
            "seconds": f"{secs:.1f}", "peak_rss_mb": f"{peak:.0f}"}
@@ -134,6 +142,7 @@ def main():
     ap.add_argument("--break-verifier", action="store_true", help="gate red-check: demand an impossible answer, every row must FAIL")
     ap.add_argument("--injection", action="store_true", help="W3.3: only the injection tasks (own + external); rows tagged slice=injection")
     ap.add_argument("--visible", action="store_true", help="W3.14: the 20 visible-text injection tasks; rows tagged slice=injection-visible")
+    ap.add_argument("--transcripts", help="R2.1.5: directory for per-run stream-json transcripts (one .jsonl per task x run)")
     ap.add_argument("--claude", help="path to a claude-compatible executable (control arms only, e.g. stub_follow.py)")
     a = ap.parse_args()
     pin = os.environ.get("MANUK_CHROME_PIN")
@@ -160,6 +169,8 @@ def main():
     ver = (verify.version_hash() if full else verify.suite_hash(), pin)
     if a.dry:
         print(f"{a.arm}: {len(tasks)} tasks x {a.runs} runs, suite {ver[0][:12]}, chrome {pin}"); return
+    if a.transcripts:
+        os.makedirs(a.transcripts, exist_ok=True)
     srv, base = fixtures.serve(0)
     new = not os.path.exists(a.out)
     try:
@@ -168,7 +179,7 @@ def main():
                 f.write("\t".join(COLS) + "\n")
             for run in range(1, a.runs + 1):
                 for t in tasks:
-                    row = one(t, a.arm, run, base, cfg, allowed, ver, a.timeout)
+                    row = one(t, a.arm, run, base, cfg, allowed, ver, a.timeout, a.transcripts)
                     f.write("\t".join(str(row.get(c, "")) for c in COLS) + "\n"); f.flush()
                     print(f"{a.arm} {t['id']} run{run}: {'PASS' if row['pass'] else 'FAIL'} {row.get('reasons','')[:80]}", flush=True)
                     os.utime(os.path.join(ROOT, ".git/sprint-working"), None)
