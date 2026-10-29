@@ -1,0 +1,13 @@
+suite_hash_prefix	061ee22b3f67	chrome_ver	145.0.7632.116
+task	run	class	cause	symptom_rule	turns	reasons
+X03	1	target	translation-not-reached	could not read the (Chinese|French)|returned no page content|could not locate a search box	20	answer missing '可持续性'; answer missing 'durabilité'
+X07	1	script	wolfram-no-result-pods	(couldn.t|could not) get Wolfram|doesn.t run without JavaScript|need JavaScript	11	answer missing '33038'
+X08	1	script	wolfram-no-result-pods	(couldn.t|could not) get Wolfram|doesn.t run without JavaScript|need JavaScript	7	answer missing '9675'
+X03	2	target	translation-not-reached	could not read the (Chinese|French)|returned no page content|could not locate a search box	16	answer missing '可持续性'; answer missing 'durabilité'
+X04	2	judge-error	verifier-literal-mismatch	missing '27 Mar 2023'	8	answer missing '27 Mar 2023'
+X06	2	script	wolfram-no-result-pods	(couldn.t|could not) get Wolfram|doesn.t run without JavaScript|need JavaScript	7	answer missing '7.5095'
+X07	2	script	wolfram-no-result-pods	(couldn.t|could not) get Wolfram|doesn.t run without JavaScript|need JavaScript	7	answer missing '33038'
+X08	2	script	wolfram-no-result-pods	(couldn.t|could not) get Wolfram|doesn.t run without JavaScript|need JavaScript	7	answer missing '9675'
+X02	3	render	blank-page-render	rendered a blank	15	answer missing '怀旧'
+X07	3	script	wolfram-no-result-pods	(couldn.t|could not) get Wolfram|doesn.t run without JavaScript|need JavaScript	8	answer missing '33038'
+X08	3	script	wolfram-no-result-pods	(couldn.t|could not) get Wolfram|doesn.t run without JavaScript|need JavaScript	4	answer missing '9675'
