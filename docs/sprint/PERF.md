@@ -763,3 +763,18 @@ mutations). a11y node counts adopt vs not: 0.00 % drift on all 20 URLs (comix.to
 flake, 2248 otherwise). Mutant (`into_fresh` without the `mutation_seq` check): `g_reflow_stale_not_adopted` RED; with adoption disabled
 `g_reflow_adopted` RED. The machine was slower this sweep than the PERF.1.2 sweep (baseline 21.3 s vs 13.7 s), so do not diff absolute
 sums across the two.
+
+## PERF.1.4.b results (initial-pass attribution; chrome_ver=145.0.7632.116; manuk only)
+
+Paired same-minute A/B on example.com, 7 runs, `scripts/perf1-profile.py --manuk <pre-change a11y-dump> --manuk-b <new a11y-dump>`;
+rows and traces in `docs/sprint/perf1-pf14b/`.
+
+- **Fix:** `Page::from_dom`'s initial cascade and layout (before the inline scripts run) now time themselves and emit the same
+  `cascade` / `layout` nettrace lines `restyle_and_layout` already emits, so perf1-profile no longer folds them into `script`.
+- **Measured split (medians, ms):** layout 10.31 -> 11.7 (the 10 ms is the post-script restyle, unchanged); the initial pass alone is
+  **1.3-1.7 ms** of layout and 0.12 ms of cascade in each run (trace lines `layout 1463` / `cascade 115` in run 1, old binary had no such line);
+  script 28.49 -> 26.96 median. Per-run paired: layout +0.9 to +1.7 ms, script -0.1 to -2.9 ms, script+layout net -0.7 ms median.
+- **Correction:** the node note and PERF.1.4's "~15 ms of the 41 is the initial cascade+layout" were wrong. On example.com the
+  initial pass is ~1.5 ms; the earlier PERF.md layout/script figures for other URLs are not re-measured here (follow-up PERF.1.4.b.a).
+- **Gate:** `perf1-profile.py --self-test` OK. The mutant (emit removed) is the pre-change binary: its layout median stays 10.3 ms with no
+  initial-pass line, which is the old split; the emit is the only behavioural difference between the two binaries.

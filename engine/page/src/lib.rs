@@ -8446,27 +8446,42 @@ impl Page {
             );
             s
         };
+        // Timed and traced like `restyle_and_layout` does, so the initial pass is attributed to
+        // cascade/layout in perf1-profile instead of falling into the `script` phase it runs inside.
+        let t_cascade = std::time::Instant::now();
         let mut styles = cascade_styles(&dom, &sheets, viewport_width);
+        let us_cascade = t_cascade.elapsed().as_micros() as u64;
+        if manuk_net::nettrace::enabled() {
+            manuk_net::nettrace::emit("cascade", &format!("{us_cascade}"));
+        }
         // **Inline images are sized BEFORE the first layout.** A `data:` image carries its own bytes,
         // so there is nothing to wait for — decoding it here means it has its natural size in the
         // very first box tree, instead of laying out `0x0` and never being corrected on any path that
         // does not run the async subresource pass.
         let mut inline_images = decode_inline_images(&dom, &mut styles);
+        let t_layout = std::time::Instant::now();
         let mut root_box = layout_document(&dom, &styles, fonts, viewport_width);
+        let us_layout = t_layout.elapsed().as_micros() as u64;
         // The `@container` re-pass, BEFORE `rects`/JS see any styles: the probe scripts below run
         // against the map handed to `load_document`, so a re-pass after them would leave
         // `getComputedStyle` answering from the unsized pass. The re-cascade replaces the style
         // map wholesale, so the inline-image natural sizes annotated above are re-applied.
-        if container_query_recascade(
+        let t_cq = std::time::Instant::now();
+        let cq_relaid = container_query_recascade(
             &dom,
             &sheets,
             viewport_width,
             &mut styles,
             &root_box,
             &inline_images,
-        ) {
+        );
+        if cq_relaid {
             let _ = decode_inline_images(&dom, &mut styles);
             root_box = layout_document(&dom, &styles, fonts, viewport_width);
+        }
+        let us_cq = t_cq.elapsed().as_micros() as u64;
+        if manuk_net::nettrace::enabled() {
+            manuk_net::nettrace::emit("layout", &format!("{}", us_layout + us_cq));
         }
 
         let rects: std::collections::HashMap<manuk_dom::NodeId, [f32; 4]> = root_box
