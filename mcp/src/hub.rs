@@ -241,10 +241,10 @@ impl<B: Backend> Hub<B> {
             log,
             url,
             snap: head["snap"].clone(),
-            tag: if head["tag"] == "WORLD" {
-                "WORLD"
-            } else {
-                "CLIENT"
+            tag: match head["tag"].as_str() {
+                Some("WORLD") => "WORLD",
+                Some("UNKNOWN") => "UNKNOWN",
+                _ => "CLIENT",
             },
             pos: head["pos"].as_u64().unwrap_or(0) as usize,
             pid: head["pid"].as_u64().unwrap_or(0) as u32,
@@ -261,7 +261,13 @@ impl<B: Backend> Hub<B> {
             log: page.log.clone(),
             url: page.s.backend().url(),
             snap: manuk_net::partition::snapshot().unwrap_or(Value::Null),
-            tag: if pos == 0 { "CLIENT" } else { "WORLD" },
+            tag: if !page.s.backend().sees_network() {
+                "UNKNOWN"
+            } else if pos == 0 {
+                "CLIENT"
+            } else {
+                "WORLD"
+            },
             pos,
             pid: std::process::id(),
         };
@@ -282,7 +288,9 @@ impl<B: Backend> Hub<B> {
         let n = c.log.len();
         let url = c.url.clone();
         let tag = c.tag;
-        let note = if tag == "CLIENT" {
+        let note = if tag == "UNKNOWN" {
+            "UNKNOWN: this backend's network traffic is not tracked, so whether the server was written to is not known; restore rewinds the client only."
+        } else if tag == "CLIENT" {
             "CLIENT: nothing has been sent to a server yet, so restore is a full rollback."
         } else {
             "WORLD: non-safe requests had already reached a server before this point; restore rewinds the client only."
@@ -330,7 +338,7 @@ impl<B: Backend> Hub<B> {
     async fn from_ckpt(&mut self, cid: &str, make_default: bool) -> Result<Output, String> {
         let c = self.ckpt_get(cid)?;
         // What the server has seen since the checkpoint, computed before the replay adds its own.
-        let diverged = if c.pid == std::process::id() {
+        let diverged = if c.tag != "UNKNOWN" && c.pid == std::process::id() {
             Some(manuk_net::ledger::sent_since(c.pos))
         } else {
             None
@@ -369,6 +377,7 @@ impl<B: Backend> Hub<B> {
                 d.len(),
                 d.iter().map(|x| x.short()).collect::<Vec<_>>().join(", ")
             ),
+            None if c.tag == "UNKNOWN" => "server: divergence unknown (this backend does not track network requests)".to_string(),
             None => "server: divergence unknown (the checkpoint was taken by another process)".to_string(),
         };
         let fence = if make_default {

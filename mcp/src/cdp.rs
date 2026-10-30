@@ -1371,6 +1371,10 @@ impl Drop for CdpBackend {
 
 #[async_trait(?Send)]
 impl Backend for CdpBackend {
+    /// Chrome's requests never touch manuk's ledger. `claim-client` (test-only) restores the lie.
+    fn sees_network(&self) -> bool {
+        mutated("claim-client")
+    }
     async fn navigate(&mut self, url: &str) -> Result<()> {
         self.cdp.events.clear();
         let r = self.cdp.call("Page.navigate", json!({"url": url}))?;

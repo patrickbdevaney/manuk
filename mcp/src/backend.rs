@@ -45,6 +45,11 @@ pub trait Backend {
     /// Drop the web storage a previous page left behind, so a replay starts from the empty state a
     /// fresh process has (R3.2 restore). Cookies are not cleared.
     fn reset_storage(&mut self) {}
+    /// Whether this process's request ledger sees the backend's network traffic. A backend whose
+    /// requests bypass it (Chrome over CDP) cannot tell CLIENT from WORLD, so checkpoints say UNKNOWN.
+    fn sees_network(&self) -> bool {
+        true
+    }
 }
 
 fn describe(a: Activation) -> String {

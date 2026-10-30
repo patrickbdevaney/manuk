@@ -3,7 +3,8 @@
 //! `MANUK_CDP_MUTATE=<no-taint|no-revalidate|no-remount>` switches one discipline off; each test has
 //! a twin that must go red under its mutation (run by `scripts`-free `cargo test` env, see bottom).
 
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::TcpListener;
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
 use serde_json::{json, Value};
@@ -211,5 +212,62 @@ fn remount_mutant_goes_stale() {
     assert!(
         err && txt.contains("STALE"),
         "mutant should report a stale handle, got err={err}: {txt}"
+    );
+}
+
+const POSTER: &str = r#"<!doctype html><html><body><button onclick="fetch('/add',{method:'POST',body:'x'}).then(()=>{document.getElementById('o').textContent='posted'})">Add</button><p id="o">idle</p></body></html>"#;
+
+/// A loopback server: any request gets the poster page (a POST gets the same, which is enough).
+fn poster() -> String {
+    let l = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = l.local_addr().unwrap();
+    std::thread::spawn(move || {
+        for s in l.incoming().flatten() {
+            std::thread::spawn(move || {
+                let mut s = s;
+                let mut buf = [0u8; 4096];
+                let _ = s.read(&mut buf);
+                let b = POSTER.as_bytes();
+                let _ = write!(s, "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", b.len());
+                let _ = s.write_all(b);
+            });
+        }
+    });
+    format!("http://{addr}/")
+}
+
+/// Navigate to a page, POST from it, checkpoint, restore: returns (checkpoint text, restore text).
+fn ckpt_after_post(mutate: Option<&str>) -> (String, String) {
+    let mut c = Client::start(mutate);
+    let (e, txt) = c.tool("navigate", json!({"url": poster()}));
+    assert!(!e, "{txt}");
+    let h = handle_of(&txt, "Add");
+    let (e, txt) = c.tool("act", json!({"handle": h, "action": "click"}));
+    assert!(!e, "{txt}");
+    let (e, cp) = c.tool("checkpoint", json!({}));
+    assert!(!e, "{cp}");
+    let id = cp.split_whitespace().nth(1).unwrap().to_string();
+    let (e, rs) = c.tool("restore", json!({"checkpoint": id}));
+    assert!(!e, "{rs}");
+    (cp, rs)
+}
+
+#[test]
+fn chrome_checkpoint_after_a_post_does_not_claim_client() {
+    if std::env::var("MANUK_CDP_MUTATE").is_ok() {
+        return;
+    }
+    let (cp, rs) = ckpt_after_post(None);
+    assert!(!cp.contains("[CLIENT]") && cp.contains("[UNKNOWN]"), "{cp}");
+    assert!(!rs.contains("[CLIENT]") && rs.contains("[UNKNOWN]"), "{rs}");
+    assert!(rs.contains("divergence unknown"), "{rs}");
+}
+
+#[test]
+fn claim_client_mutant_is_red() {
+    let (cp, _) = ckpt_after_post(Some("claim-client"));
+    assert!(
+        cp.contains("[CLIENT]"),
+        "mutant should reproduce the CLIENT lie: {cp}"
     );
 }
