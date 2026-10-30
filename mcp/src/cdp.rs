@@ -1485,6 +1485,22 @@ impl Backend for CdpBackend {
         self.after_action()?;
         Ok("pressed Enter in the field".into())
     }
+    fn node_facts(&mut self, node: NodeId) -> Option<manuk_agent::NodeFacts> {
+        let be = self.backend_of(node).ok()?;
+        let obj = self.object_for(be).ok()?;
+        let v = self.call_on(&obj, "function(){const l=s=>s?s.toLowerCase():null;const a=this.closest&&this.closest('a[href]');const f=this.form||(this.closest&&this.closest('form'));return {tag:this.tagName.toLowerCase(),type:this.getAttribute('type'),ac:this.getAttribute('autocomplete'),name:this.getAttribute('name'),dl:!!(a&&a.hasAttribute('download')),href:a?a.href:null,fm:f?(f.getAttribute('method')||'get').toLowerCase():null,fa:f?f.action:null};}", json!([])).ok()?;
+        let s = |k: &str| v[k].as_str().map(String::from);
+        Some(manuk_agent::NodeFacts {
+            tag: s("tag")?,
+            input_type: s("type").map(|t| t.to_ascii_lowercase()),
+            autocomplete: s("ac").map(|t| t.to_ascii_lowercase()),
+            name: s("name"),
+            href: s("href"),
+            form_method: s("fm"),
+            form_action: s("fa"),
+            download: v["dl"].as_bool().unwrap_or(false),
+        })
+    }
     fn page_text(&self) -> Result<String> {
         Ok(self.text.clone())
     }

@@ -110,6 +110,7 @@ pub struct Hub<B: Backend> {
     default: Option<String>,
     next: u64,
     salt: u64,
+    grants: crate::policy::Grants,
 }
 
 fn strip_page(a: &Map<String, Value>) -> Map<String, Value> {
@@ -137,7 +138,20 @@ impl<B: Backend> Hub<B> {
             default: None,
             next: 0,
             salt,
+            grants: Default::default(),
         }
+    }
+
+    /// W3.9: origin sets and confirm kinds applied to every page this hub makes.
+    pub fn with_grants(mut self, g: crate::policy::Grants) -> Self {
+        self.grants = g;
+        self
+    }
+
+    fn new_session(&self) -> Session<B> {
+        let mut s = Session::new((self.make)());
+        s.set_grants(self.grants.clone());
+        s
     }
 
     fn fresh_id(&mut self) -> String {
@@ -201,7 +215,7 @@ impl<B: Backend> Hub<B> {
             ));
         }
         log.truncate(seq as usize);
-        let mut s = Session::new((self.make)());
+        let mut s = self.new_session();
         for e in &log {
             let (_, h) = Self::run(&mut s, &e.tool, &e.args).await;
             if h != e.diff_hash || Self::storage_hash(&mut s) != e.storage_hash {
@@ -344,7 +358,7 @@ impl<B: Backend> Hub<B> {
             None
         };
         let id = self.fresh_id();
-        let mut s = Session::new((self.make)());
+        let mut s = self.new_session();
         s.backend_mut().reset_storage();
         for e in &c.log {
             let (_, h) = Self::run(&mut s, &e.tool, &e.args).await;
@@ -434,7 +448,7 @@ impl<B: Backend> Hub<B> {
             }
         };
         if !self.pages.contains_key(&id) {
-            let s = Session::new((self.make)());
+            let s = self.new_session();
             self.pages.insert(id.clone(), Page::new(s, Vec::new()));
         }
         if tool == "checkpoint" {

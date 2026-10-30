@@ -6,6 +6,7 @@ pub mod cdp;
 pub use manuk_agent::confine;
 pub mod hub;
 pub mod isolation;
+pub mod policy;
 pub mod server;
 pub mod session;
 

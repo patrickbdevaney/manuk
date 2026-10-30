@@ -710,6 +710,42 @@ impl AgentBrowser {
         &self.history
     }
 
+    /// W3.9: the attributes a grant policy needs about one element, read from the live DOM.
+    pub fn node_facts(&self, node: manuk_dom::NodeId) -> Option<NodeFacts> {
+        let page = self.page.as_ref()?;
+        let dom = page.dom();
+        let base = url::Url::parse(&page.final_url).ok();
+        let abs = |h: &str| match &base {
+            Some(b) => b.join(h).map(|u| u.to_string()).unwrap_or_else(|_| h.to_string()),
+            None => h.to_string(),
+        };
+        let e = dom.element(node)?;
+        let mut f = NodeFacts {
+            tag: dom.tag_name(node).unwrap_or("").to_ascii_lowercase(),
+            input_type: e.attr("type").map(|t| t.to_ascii_lowercase()),
+            autocomplete: e.attr("autocomplete").map(str::to_ascii_lowercase),
+            name: e.attr("name").map(str::to_string),
+            download: e.attr("download").is_some(),
+            ..NodeFacts::default()
+        };
+        let mut cur = Some(node);
+        while let Some(n) = cur {
+            if let Some(el) = dom.element(n) {
+                let tag = dom.tag_name(n).unwrap_or("").to_ascii_lowercase();
+                if tag == "a" && f.href.is_none() {
+                    f.href = el.attr("href").map(abs);
+                }
+                if tag == "form" {
+                    f.form_method = Some(el.attr("method").unwrap_or("get").to_ascii_lowercase());
+                    f.form_action = Some(abs(el.attr("action").unwrap_or("")));
+                    break;
+                }
+            }
+            cur = dom.parent(n);
+        }
+        Some(f)
+    }
+
     /// The currently loaded URL, or `None` before the first navigation.
     pub fn current_url(&self) -> Option<&str> {
         self.page.as_ref().map(|p| p.final_url.as_str())
@@ -1619,6 +1655,23 @@ impl ActionRisk {
     pub fn is_sensitive(&self) -> bool {
         matches!(self, ActionRisk::Sensitive(_))
     }
+}
+
+/// W3.9: what a grant policy needs to know about one element, backend-neutral. Token attributes are
+/// lowercased; `href` / `form_action` are absolute.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct NodeFacts {
+    pub tag: String,
+    pub input_type: Option<String>,
+    pub autocomplete: Option<String>,
+    pub name: Option<String>,
+    /// Nearest `<a href>` ancestor-or-self.
+    pub href: Option<String>,
+    /// Owning `<form>`: lowercase method (default `get`) and absolute action.
+    pub form_method: Option<String>,
+    pub form_action: Option<String>,
+    /// A link carrying the `download` attribute.
+    pub download: bool,
 }
 
 /// Classify a proposed [`Action`]'s risk (E6, layer 3). The agent's actions are

@@ -3,12 +3,19 @@ fn main() -> anyhow::Result<()> {
     if args.first().map(String::as_str) == Some("--confine-selftest") {
         return manuk_mcp::confine::selftest(&args[1..]);
     }
+    let grants = match manuk_mcp::policy::parse_grants(&mut args) {
+        Ok(g) => g,
+        Err(e) => {
+            eprintln!("manuk-mcp: {e}");
+            std::process::exit(2);
+        }
+    };
     if let Some(i) = args.iter().position(|a| a == "--backend") {
         anyhow::ensure!(
             args.get(i + 1).map(String::as_str) == Some("chrome"),
             "--backend takes `chrome`"
         );
-        return manuk_mcp::server::run_stdio_chrome(1280, 800);
+        return manuk_mcp::server::run_stdio_chrome(1280, 800, grants);
     }
     let before = args.len();
     args.retain(|a| a != "--deterministic");
@@ -45,5 +52,5 @@ fn main() -> anyhow::Result<()> {
             eprintln!("manuk-mcp: WARNING: OS confinement unavailable ({why}); running unconfined");
         }
     }
-    manuk_mcp::server::run_stdio(1280, 800)
+    manuk_mcp::server::run_stdio(1280, 800, grants)
 }

@@ -29,6 +29,7 @@ struct Job {
 pub fn spawn_session<B: Backend + 'static>(
     make: impl Fn() -> B + Send + 'static,
     log_dir: Option<std::path::PathBuf>,
+    grants: crate::policy::Grants,
 ) -> mpsc::UnboundedSender<Job> {
     let (tx, mut rx) = mpsc::unbounded_channel::<Job>();
     std::thread::Builder::new()
@@ -41,7 +42,7 @@ pub fn spawn_session<B: Backend + 'static>(
                 .build()
                 .expect("session runtime");
             rt.block_on(async move {
-                let mut s = Hub::new(make, log_dir);
+                let mut s = Hub::new(make, log_dir).with_grants(grants);
                 while let Some(job) = rx.recv().await {
                     let r = s
                         .call(&job.tool, &job.args)
@@ -72,9 +73,16 @@ fn schema(props: Value, required: &[&str]) -> Map<String, Value> {
 fn tools() -> Vec<Tool> {
     let t = |n: &'static str, d: &'static str, mut s: Map<String, Value>| {
         if let Some(Value::Object(p)) = s.get_mut("properties") {
+            if matches!(n, "navigate" | "act" | "type") {
+                p.insert("confirm".into(), json!({"type": "boolean", "description": "set true only when the user approved an action the server answered with CONFIRM REQUIRED"}));
+            }
             p.insert("page".into(), json!({"type": "string", "description": "page handle `<id>:<seq>` returned by the previous call (a log position: pass it back to continue, even from a new client); omit for the default page, \"new\" for a fresh one"}));
         }
-        Tool::new(n, d, Arc::new(s))
+        let (ro, destructive) = crate::policy::annotations(n);
+        let mut ann = rmcp::model::ToolAnnotations::new().read_only(ro);
+        ann.destructive_hint = Some(destructive);
+        ann.open_world_hint = Some(matches!(n, "navigate" | "act" | "type" | "commit"));
+        Tool::new(n, d, Arc::new(s)).annotate(ann)
     };
     vec![
         t("navigate", "Load a URL. Returns the page header and a compact observation: one line per node, `[hN] role \"name\" [state]`. Handles (hN) are stable until the next navigation.", schema(json!({"url": {"type": "string"}}), &["url"])),
@@ -155,20 +163,21 @@ impl ServerHandler for ManukMcp {
     }
 }
 
-pub fn run_stdio(width: u32, height: u32) -> Result<()> {
+pub fn run_stdio(width: u32, height: u32, grants: crate::policy::Grants) -> Result<()> {
     let log_dir = std::env::var_os("MANUK_ACTLOG_DIR").map(std::path::PathBuf::from);
-    let tx = spawn_session(move || AgentBrowser::new(width, height), log_dir);
+    let tx = spawn_session(move || AgentBrowser::new(width, height), log_dir, grants);
     serve(tx)
 }
 
 /// R4.1: the same tool surface over Chrome (CDP) instead of the in-process engine.
-pub fn run_stdio_chrome(width: u32, height: u32) -> Result<()> {
+pub fn run_stdio_chrome(width: u32, height: u32, grants: crate::policy::Grants) -> Result<()> {
     let log_dir = std::env::var_os("MANUK_ACTLOG_DIR").map(std::path::PathBuf::from);
     let tx = spawn_session(
         move || {
             crate::cdp::CdpBackend::launch(width, height).expect("launch Chrome (set MANUK_CHROME)")
         },
         log_dir,
+        grants,
     );
     serve(tx)
 }

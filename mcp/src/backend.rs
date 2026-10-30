@@ -4,7 +4,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use manuk_a11y::{A11yNode, Rect};
-use manuk_agent::{Activation, AgentBrowser};
+use manuk_agent::{Activation, AgentBrowser, NodeFacts};
 use manuk_dom::NodeId;
 
 /// Not `Send`: the engine's page state is single-threaded, so the server pins a backend to one
@@ -45,6 +45,11 @@ pub trait Backend {
     /// Drop the web storage a previous page left behind, so a replay starts from the empty state a
     /// fresh process has (R3.2 restore). Cookies are not cleared.
     fn reset_storage(&mut self) {}
+    /// W3.9: input type / autocomplete / owning form / link target of `node`, for the grant policy.
+    /// `None` = this backend cannot say (the policy then treats the element as unknown).
+    fn node_facts(&mut self, _node: NodeId) -> Option<NodeFacts> {
+        None
+    }
     /// Whether this process's request ledger sees the backend's network traffic. A backend whose
     /// requests bypass it (Chrome over CDP) cannot tell CLIENT from WORLD, so checkpoints say UNKNOWN.
     fn sees_network(&self) -> bool {
@@ -130,6 +135,9 @@ impl Backend for AgentBrowser {
     }
     fn import_storage_state(&mut self, state: &serde_json::Value) -> Result<(usize, usize)> {
         manuk_net::storage_state::import(state)
+    }
+    fn node_facts(&mut self, node: NodeId) -> Option<NodeFacts> {
+        AgentBrowser::node_facts(self, node)
     }
     fn reset_storage(&mut self) {
         use manuk_net::webstorage::{clear, origins, Area};

@@ -45,6 +45,10 @@ pub struct Session<B: Backend> {
     snap: Option<Snap>,
     /// Per-call opt-out of the injection shield (`include_hidden=true`).
     include_hidden: bool,
+    /// W3.9: origin sets and confirm kinds; open by default.
+    grants: crate::policy::Grants,
+    /// This call carried `confirm=true`.
+    confirmed: bool,
 }
 
 fn role_str(r: &Role) -> String {
@@ -102,7 +106,33 @@ impl<B: Backend> Session<B> {
             next: 1,
             snap: None,
             include_hidden: false,
+            grants: Default::default(),
+            confirmed: false,
         }
+    }
+
+    pub fn set_grants(&mut self, g: crate::policy::Grants) {
+        self.grants = g;
+    }
+
+    /// W3.9: judge a call against the grants BEFORE it reaches the backend; a refusal sends nothing.
+    fn gate(&mut self, op: crate::policy::Op, node: Option<NodeId>, name: &str) -> Result<()> {
+        use crate::policy::Verdict;
+        if self.grants.is_open() || std::env::var_os("MANUK_POLICY_MUTATE").is_some() {
+            return Ok(());
+        }
+        let facts = node.and_then(|n| self.b.node_facts(n));
+        let page = self.b.url();
+        let v = self.grants.assess(op, facts.as_ref(), name, &page);
+        let why = match &v {
+            Verdict::Allow => return Ok(()),
+            Verdict::Confirm(_) if self.confirmed => return Ok(()),
+            Verdict::Confirm(k) => format!("CONFIRM REQUIRED ({k}): repeat the call with confirm=true if the user wants this"),
+            Verdict::Handoff(r) => format!("HANDOFF: {r}; ask the human to do this step"),
+            Verdict::Deny(r) => format!("REFUSED: {r}"),
+        };
+        eprintln!("manuk-mcp: policy {}: {why} (at {page})", v.tag());
+        bail!("{why}; nothing was sent")
     }
 
     /// The a11y tree with everything a human cannot see pruned (R1.4), unless the call opted out.
@@ -363,6 +393,7 @@ impl<B: Backend> Session<B> {
             .get("include_hidden")
             .and_then(Value::as_bool)
             .unwrap_or(false);
+        self.confirmed = a.get("confirm").and_then(Value::as_bool).unwrap_or(false);
         // Follow-up requests a handler, scroll listener or interval queued run before any read, so
         // an idle wait (observe again) sees the page the user would.
         if matches!(tool, "observe" | "extract" | "find" | "screenshot") {
@@ -423,6 +454,7 @@ impl<B: Backend> Session<B> {
     }
 
     async fn navigate(&mut self, url: &str) -> Result<String> {
+        self.gate(crate::policy::Op::Navigate(url), None, "")?;
         self.b.navigate(url).await?;
         self.new_document();
         let tree = self.tree()?;
@@ -544,6 +576,10 @@ impl<B: Backend> Session<B> {
         if disabled {
             bail!("h{h} is disabled; nothing was clicked");
         }
+        if matches!(action, "click" | "check" | "select") {
+            let name = n.name.clone();
+            self.gate(crate::policy::Op::Click, Some(node), &name)?;
+        }
         let before = self.snapshot(&tree);
         let url_before = self.b.url();
         let outcome = match action {
@@ -604,6 +640,7 @@ impl<B: Backend> Session<B> {
                     .replace("nothing was clicked", "nothing was typed")
             )
         })?;
+        self.gate(crate::policy::Op::Type { submit }, Some(node), "")?;
         let before = self.snapshot(&tree);
         let url_before = self.b.url();
         self.b.type_text(node, text)?;
