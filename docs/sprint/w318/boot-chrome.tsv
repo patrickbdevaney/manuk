@@ -1,0 +1,12 @@
+site	backend	chrome_ver	obs_len	verdict	reason
+dashdish	chrome	145.0.7632.116	8990	BOOT	
+fly-unified	chrome	145.0.7632.116	2814	BOOT	
+gocalendar	chrome	145.0.7632.116	7488	BOOT	
+gomail	chrome	145.0.7632.116	8001	BOOT	
+networkin	chrome	145.0.7632.116	7379	BOOT	
+omnizon	chrome	145.0.7632.116	362	FAIL	DMCA takedown
+opendining	chrome	145.0.7632.116	11010	BOOT	
+staynb	chrome	145.0.7632.116	8935	BOOT	
+topwork	chrome	145.0.7632.116	6202	BOOT	
+udriver	chrome	145.0.7632.116	1477	BOOT	
+zilloft	chrome	145.0.7632.116	5715	BOOT	

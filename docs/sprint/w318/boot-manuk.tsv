@@ -1,0 +1,12 @@
+site	backend	chrome_ver	obs_len	verdict	reason
+dashdish	manuk	145.0.7632.116	7406	BOOT	
+fly-unified	manuk	145.0.7632.116	130	FAIL	short observation
+gocalendar	manuk	145.0.7632.116	131	FAIL	short observation
+gomail	manuk	145.0.7632.116	25204	BOOT	
+networkin	manuk	145.0.7632.116	119	FAIL	short observation
+omnizon	manuk	145.0.7632.116	197	FAIL	DMCA takedown
+opendining	manuk	145.0.7632.116	236	FAIL	Application error
+staynb	manuk	145.0.7632.116	232	FAIL	Application error
+topwork	manuk	145.0.7632.116	215	FAIL	Application error
+udriver	manuk	145.0.7632.116	1109	BOOT	
+zilloft	manuk	145.0.7632.116	2511	BOOT	

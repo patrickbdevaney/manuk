@@ -33,3 +33,9 @@ Then: ship the MCP layer with a Chrome backend (`manuk-mcp --backend chrome`, R4
 - The rollback branch is unmeasured rather than refuted: the model never needed or chose to restore (open question for the owner, not a row).
 - The injection slice has no discriminating case: Playwright also scores ~0% under the execution rule, so that branch cannot be won on this slice.
 - Thresholds are unedited; no task was removed or tuned.
+
+## Addendum W3.18 (REAL slice, new suite version; the v1.1 verdict above is not edited)
+Source: bench/agent-tasks/real_boot.py, rows in docs/sprint/w318/boot-manuk.tsv and boot-chrome.tsv; chrome_ver=145.0.7632.116; REAL = agisdk 0.3.5 v1 task set (112 tasks, 11 clones).
+- Gate 1 (manuk boots >=10/11 clones): NOT MET. manuk boots 4/11 (dashdish, gomail, udriver, zilloft); 3 render a client-side "Application error" (opendining, staynb, topwork), 3 stay blank after 8 s (fly-unified, gocalendar, networkin), 1 is a Vercel DMCA takedown page (omnizon, dead for every backend). `--backend chrome` boots 10/11 under the same classifier.
+- Gate 2 (restore-backed passes rise >=15% of failures) was not run: with 7 of 11 clones unusable on manuk, a 112-task x 3-run comparison would measure boot failures, not rollback. The 64 llm_boolean evals also need REAL's OpenAI-backed grader, and no OpenAI credential is configured here.
+- Consequence for Bar 2: the engine has no REAL rollback evidence. Rollback stays unmeasured, not refuted. Follow-ups: W3.18.a (engine boot of the 6 failing clones), W3.18.b (grader key + omnizon).
