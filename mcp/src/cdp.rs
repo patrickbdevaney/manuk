@@ -23,6 +23,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
+use base64::Engine;
 use manuk_a11y::{A11yNode, A11yState, Checked, Rect, Role};
 use manuk_agent::shield::{contrast, Shield, MIN_CONTRAST, MIN_FONT_PX};
 use manuk_dom::NodeId;
@@ -1492,8 +1493,95 @@ impl Backend for CdpBackend {
     fn links(&self) -> Result<Vec<(String, String)>> {
         Ok(self.built()?.links.clone())
     }
-    fn screenshot_png(&self) -> Result<Vec<u8>> {
-        // `&self` cannot drive the socket; a screenshot is rare enough to open a one-shot path.
-        bail!("screenshot is not implemented on the CDP arm (the study's tasks are text-only)")
+    fn screenshot_png(&mut self) -> Result<Vec<u8>> {
+        if mutated("no-screenshot") {
+            bail!("screenshot is not implemented on the CDP arm");
+        }
+        let r = self.cdp.call("Page.captureScreenshot", json!({"format": "png"}))?;
+        let b64 = r["data"]
+            .as_str()
+            .ok_or_else(|| anyhow!("Page.captureScreenshot returned no data"))?;
+        base64::engine::general_purpose::STANDARD
+            .decode(b64)
+            .map_err(|e| anyhow!("screenshot payload is not base64: {e}"))
+    }
+    fn export_storage_state(&mut self) -> Result<Value> {
+        let cs = self.cdp.call("Network.getAllCookies", json!({}))?;
+        let cookies: Vec<Value> = cs["cookies"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .map(|c| {
+                        let ss = match c["sameSite"].as_str() {
+                            Some("Strict") => "Strict",
+                            Some("Lax") => "Lax",
+                            _ => "None",
+                        };
+                        let exp = if c["session"].as_bool().unwrap_or(false) {
+                            -1.0
+                        } else {
+                            c["expires"].as_f64().unwrap_or(-1.0)
+                        };
+                        json!({"name": c["name"], "value": c["value"], "domain": c["domain"],
+                               "path": c["path"], "expires": exp, "httpOnly": c["httpOnly"],
+                               "secure": c["secure"], "sameSite": ss})
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        // Chrome exposes localStorage only for the page's own origin; other origins are not reachable.
+        let ls = self.eval("JSON.stringify({o:location.origin,l:Object.keys(localStorage).map(k=>({name:k,value:localStorage.getItem(k)}))})");
+        let mut origins = Vec::new();
+        if let Ok(v) = ls {
+            let v: Value = serde_json::from_str(v.as_str().unwrap_or("{}")).unwrap_or_default();
+            if let (Some(o), Some(l)) = (v["o"].as_str(), v["l"].as_array()) {
+                if o != "null" && !l.is_empty() {
+                    origins.push(json!({"origin": o, "localStorage": l}));
+                }
+            }
+        }
+        Ok(json!({"cookies": cookies, "origins": origins}))
+    }
+    fn import_storage_state(&mut self, state: &Value) -> Result<(usize, usize)> {
+        let mut nc = 0;
+        if let Some(cs) = state["cookies"].as_array() {
+            for c in cs {
+                let mut p = json!({"name": c["name"], "value": c["value"], "domain": c["domain"],
+                                   "path": c["path"], "httpOnly": c["httpOnly"],
+                                   "secure": c["secure"], "sameSite": c["sameSite"]});
+                if c["expires"].as_f64().is_some_and(|e| e > 0.0) {
+                    p["expires"] = c["expires"].clone();
+                }
+                let r = self.cdp.call("Network.setCookie", p)?;
+                if r["success"].as_bool().unwrap_or(true) {
+                    nc += 1;
+                }
+            }
+        }
+        // Only the current page's origin can be written (Chrome has no cross-origin storage API here).
+        let here = self
+            .eval("location.origin")
+            .ok()
+            .and_then(|v| v.as_str().map(String::from))
+            .unwrap_or_default();
+        let mut nl = 0;
+        for o in state["origins"].as_array().into_iter().flatten() {
+            if o["origin"].as_str() != Some(here.as_str()) {
+                continue;
+            }
+            for kv in o["localStorage"].as_array().into_iter().flatten() {
+                let (k, v) = (kv["name"].as_str().unwrap_or(""), kv["value"].as_str().unwrap_or(""));
+                self.eval(&format!(
+                    "localStorage.setItem({},{});0",
+                    serde_json::to_string(k)?,
+                    serde_json::to_string(v)?
+                ))?;
+                nl += 1;
+            }
+        }
+        Ok((nc, nl))
+    }
+    fn reset_storage(&mut self) {
+        let _ = self.eval("localStorage.clear();sessionStorage.clear();0");
     }
 }

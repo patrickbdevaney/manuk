@@ -34,9 +34,9 @@ pub trait Backend {
     }
     /// `(text, absolute href)` for every link on the page.
     fn links(&self) -> Result<Vec<(String, String)>>;
-    fn screenshot_png(&self) -> Result<Vec<u8>>;
+    fn screenshot_png(&mut self) -> Result<Vec<u8>>;
     /// Cookies + localStorage as Playwright storage-state JSON.
-    fn export_storage_state(&self) -> Result<serde_json::Value> {
+    fn export_storage_state(&mut self) -> Result<serde_json::Value> {
         anyhow::bail!("this backend has no storage state")
     }
     fn import_storage_state(&mut self, _state: &serde_json::Value) -> Result<(usize, usize)> {
@@ -117,10 +117,10 @@ impl Backend for AgentBrowser {
             .map(|l| (l.text, l.href))
             .collect())
     }
-    fn screenshot_png(&self) -> Result<Vec<u8>> {
+    fn screenshot_png(&mut self) -> Result<Vec<u8>> {
         AgentBrowser::screenshot_png(self)
     }
-    fn export_storage_state(&self) -> Result<serde_json::Value> {
+    fn export_storage_state(&mut self) -> Result<serde_json::Value> {
         manuk_net::storage_state::export()
     }
     fn import_storage_state(&mut self, state: &serde_json::Value) -> Result<(usize, usize)> {

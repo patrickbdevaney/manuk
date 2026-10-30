@@ -152,8 +152,8 @@ impl<B: Backend> Hub<B> {
         self.dir.as_ref().map(|d| d.join(format!("{id}.jsonl")))
     }
 
-    fn storage_hash(s: &Session<B>) -> u64 {
-        s.backend()
+    fn storage_hash(s: &mut Session<B>) -> u64 {
+        s.backend_mut()
             .export_storage_state()
             .ok()
             .map(|v| fnv(v.to_string().as_bytes()))
@@ -204,7 +204,7 @@ impl<B: Backend> Hub<B> {
         let mut s = Session::new((self.make)());
         for e in &log {
             let (_, h) = Self::run(&mut s, &e.tool, &e.args).await;
-            if h != e.diff_hash || Self::storage_hash(&s) != e.storage_hash {
+            if h != e.diff_hash || Self::storage_hash(&mut s) != e.storage_hash {
                 return Err(format!("REPLAY DIVERGED at {id}:{} ({}): the page no longer reproduces what was recorded; start a new page", e.seq, e.tool));
             }
         }
@@ -340,7 +340,7 @@ impl<B: Backend> Hub<B> {
         s.backend_mut().reset_storage();
         for e in &c.log {
             let (_, h) = Self::run(&mut s, &e.tool, &e.args).await;
-            if h != e.diff_hash || Self::storage_hash(&s) != e.storage_hash {
+            if h != e.diff_hash || Self::storage_hash(&mut s) != e.storage_hash {
                 return Err(format!("REPLAY DIVERGED restoring {cid} at step {} ({}): the page no longer reproduces what was recorded", e.seq, e.tool));
             }
         }
@@ -459,7 +459,7 @@ impl<B: Backend> Hub<B> {
                 ok: r.is_ok(),
                 diff_hash: h,
                 req,
-                storage_hash: Self::storage_hash(&page.s),
+                storage_hash: Self::storage_hash(&mut page.s),
             };
             if let Some(p) = self.path(&id) {
                 use std::io::Write;
