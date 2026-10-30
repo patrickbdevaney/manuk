@@ -10272,8 +10272,16 @@ impl Page {
         // guarantee. This is the correctness half: if the tree has grown since the cascade, cascade
         // it. The check is a node count, which is O(n) and trivially cheap next to a layout — and it
         // is only ever *true* when something really did change, so the common path pays nothing.
+        //
+        // Membership, not a count: a timer that sets `textContent` removes one text node and adds
+        // another, so the count is unchanged while the new node has no style — it laid out as nothing
+        // and the text vanished from every observation.
         let nodes = self.dom.descendants(self.dom.root()).count();
-        if nodes > self.styles.len() {
+        if self
+            .dom
+            .descendants(self.dom.root())
+            .any(|n| !self.styles.contains_key(&n))
+        {
             tracing::debug!(
                 nodes,
                 styled = self.styles.len(),
