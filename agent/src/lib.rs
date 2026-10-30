@@ -1003,6 +1003,30 @@ impl AgentBrowser {
         Ok(())
     }
 
+    /// CB.1.a — move keyboard focus to `node` (`el.focus()`): `:focus`, `:focus-within` and the page's
+    /// focus handlers see it. `Ok(false)` when the engine refuses (inert or disabled control).
+    pub fn focus_handle(&mut self, node: manuk_dom::NodeId) -> Result<bool> {
+        let page = self.page.as_mut().context("no page loaded")?;
+        Ok(page.set_focus(Some(node), false, &self.fonts, self.width as f32))
+    }
+
+    /// CB.1.a — move the pointer over the centre of `node`'s box: the hit-test decides the target, and
+    /// `mouseover`/`mouseenter` plus `:hover` follow the way they do for a real pointer.
+    pub fn hover_handle(&mut self, node: manuk_dom::NodeId) -> Result<()> {
+        let tree = self.a11y_tree()?;
+        let b = tree
+            .iter()
+            .find(|n| n.node == node)
+            .and_then(|n| n.bbox)
+            .ok_or_else(|| anyhow!("node {} has no box to hover", node.0))?;
+        let page = self.page.as_mut().context("no page loaded")?;
+        let w = self.width as f32;
+        page.dispatch_hover_at(b.x + b.width / 2.0, b.y + b.height / 2.0, &self.fonts, w);
+        // The handlers may have changed the page; lay it out so the next read sees their result.
+        page.relayout(&self.fonts, w);
+        Ok(())
+    }
+
     /// §4b — submit the form containing the control named `near` (or the document's
     /// first form when `near` is `None`).
     pub async fn submit(&mut self, near: Option<(&manuk_a11y::Role, &str)>) -> Result<Activation> {

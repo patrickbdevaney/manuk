@@ -609,8 +609,18 @@ impl<B: Backend> Session<B> {
                 self.verify_landing(h, node)?;
                 self.b.click(opt).await?
             }
-            "focus" | "hover" => bail!("action {action:?} is not supported by this backend (no focus/hover model); use click or type"),
-            a => bail!("unknown action {a:?}: use click, check, select"),
+            "focus" => {
+                if !self.b.focus(node).await? {
+                    bail!("h{h} refused focus (inert or disabled); nothing was focused");
+                }
+                format!("focused h{h}")
+            }
+            "hover" => {
+                self.verify_landing(h, node)?;
+                self.b.hover(node).await?;
+                format!("pointer over h{h}")
+            }
+            a => bail!("unknown action {a:?}: use click, check, select, focus, hover"),
         };
         self.effect(
             before,

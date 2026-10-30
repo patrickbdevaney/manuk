@@ -25,6 +25,10 @@ pub trait Backend {
     /// Activate `node`; returns a one-line description of what the engine reports happened.
     async fn click(&mut self, node: NodeId) -> Result<String>;
     fn type_text(&mut self, node: NodeId, text: &str) -> Result<()>;
+    /// Move keyboard focus to `node`. `Ok(false)` when the page refuses (inert or disabled).
+    async fn focus(&mut self, node: NodeId) -> Result<bool>;
+    /// Move the pointer over `node`; `mouseover` and `:hover` follow.
+    async fn hover(&mut self, node: NodeId) -> Result<()>;
     /// Submit the form owning `node`.
     async fn submit(&mut self, node: NodeId) -> Result<String>;
     fn page_text(&self) -> Result<String>;
@@ -109,6 +113,12 @@ impl Backend for AgentBrowser {
     }
     fn type_text(&mut self, node: NodeId, text: &str) -> Result<()> {
         self.type_into_handle(node, text)
+    }
+    async fn focus(&mut self, node: NodeId) -> Result<bool> {
+        self.focus_handle(node)
+    }
+    async fn hover(&mut self, node: NodeId) -> Result<()> {
+        self.hover_handle(node)
     }
     async fn submit(&mut self, node: NodeId) -> Result<String> {
         Ok(describe(self.submit_at(node).await?))

@@ -1,6 +1,7 @@
 //! CB.1 gate: every manuk-mcp tool, driven over real stdio against BOTH backends (the in-process
 //! engine and `--backend chrome`) on one loopback page. The matrix in docs/sprint/BACKENDS.md is
-//! this file's pass/fail. `MANUK_CDP_MUTATE=no-screenshot` removes the chrome screenshot path.
+//! this file's pass/fail. `MANUK_CDP_MUTATE=no-screenshot` removes the chrome screenshot path, and
+//! `MANUK_CDP_MUTATE=no-hover` makes chrome's hover a no-op: the matrix must then go red on chrome.
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpListener;
@@ -15,10 +16,12 @@ const PAGE: &str = r#"<!doctype html><html><head><title>Backends</title></head><
 <p id="o">idle</p>
 <label>Name <input id="n" type="text"></label>
 <label><input id="c" type="checkbox"> Agree</label>
+<input id="f" type="text" aria-label="Probe">
+<button id="hv" aria-label="Hover probe">Press hover</button>
 <label>Size <select id="s"><option>Small</option><option>Large</option></select></label>
 <table><tr><th>K</th><th>V</th></tr><tr><td>alpha</td><td>1</td></tr></table>
 <div style="height:3000px">tall</div><p id="end">bottom marker</p>
-<script>localStorage.setItem('seeded','yes')</script></body></html>"#;
+<script>localStorage.setItem('seeded','yes');document.getElementById('hv').addEventListener('mouseover',function(){this.setAttribute('aria-label','hovered-ok')});setInterval(function(){document.getElementById('f').setAttribute('aria-label',document.activeElement===document.getElementById('f')?'focused-ok':'Probe')},20)</script></body></html>"#;
 
 fn serve() -> String {
     let l = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -146,6 +149,23 @@ fn matrix(chrome: bool) {
     c.tool("type", json!({"handle": n, "text": "Ada"}));
     assert!(c.tool("observe", json!({})).contains("Ada"), "typed text not observed");
 
+    // focus / hover: the page's own handlers must see both (CB.1.a)
+    let f = handle_of(&nav, "textbox \"Probe\"");
+    let focus_reply = c.tool("act", json!({"handle": f, "action": "focus"}));
+    assert!(focus_reply.contains("focused h"), "focus reply: {focus_reply}");
+    // The page sees focus from a timer on chrome. manuk accepts the focus action (checked above by
+    // `tool`), but its engine fires no focus events, so the page's probe stays idle: BACKENDS.md row.
+    if chrome {
+        let focused = (0..20).any(|_| {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            c.tool("observe", json!({})).contains("focused-ok")
+        });
+        assert!(focused, "focus did not reach the page");
+    }
+    let hv = handle_of(&nav, "button \"Hover probe\"");
+    c.tool("act", json!({"handle": hv, "action": "hover"}));
+    assert!(c.tool("observe", json!({})).contains("hovered-ok"), "hover did not reach the page");
+
     // scroll by dy
     c.tool("scroll", json!({"dy": 1500}));
 
@@ -216,9 +236,15 @@ fn base64_decode(s: &str) -> Vec<u8> {
     base64::engine::general_purpose::STANDARD.decode(s).expect("base64")
 }
 
+/// The screenshot mutant breaks every matrix run on purpose, so those runs stand down for it; the
+/// screenshot twin below is its gate. Other mutants leave the matrix running, so it can go red.
+fn matrix_stands_down() -> bool {
+    std::env::var("MANUK_CDP_MUTATE").is_ok_and(|v| v == "no-screenshot")
+}
+
 #[test]
 fn every_tool_on_the_manuk_backend() {
-    if std::env::var("MANUK_CDP_MUTATE").is_ok() {
+    if matrix_stands_down() {
         return;
     }
     matrix(false);
@@ -226,7 +252,7 @@ fn every_tool_on_the_manuk_backend() {
 
 #[test]
 fn every_tool_on_the_chrome_backend() {
-    if std::env::var("MANUK_CDP_MUTATE").is_ok() {
+    if matrix_stands_down() {
         return;
     }
     matrix(true);

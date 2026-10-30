@@ -1510,6 +1510,25 @@ impl Backend for CdpBackend {
             }
         ))
     }
+    async fn focus(&mut self, node: NodeId) -> Result<bool> {
+        self.refresh()?;
+        let be = self.backend_of(node)?;
+        let obj = self.object_for(be)?;
+        // `focus()` is a no-op on an element that cannot take focus; report that instead of guessing.
+        let r = self.call_on(&obj, "function(){if(this.disabled){return false;}this.focus();return document.activeElement===this;}", json!([]))?;
+        self.after_action()?;
+        Ok(r.as_bool().unwrap_or(false))
+    }
+    async fn hover(&mut self, node: NodeId) -> Result<()> {
+        // Same dispatch discipline as click: fresh snapshot, then a hit-test aimed at the node's box.
+        self.refresh()?;
+        let (x, y, _be) = self.aim(node)?;
+        self.cdp.events.clear();
+        if !mutated("no-hover") {
+            self.cdp.call("Input.dispatchMouseEvent", json!({"type": "mouseMoved", "x": x, "y": y, "button": "none", "buttons": 0}))?;
+        }
+        self.after_action()
+    }
     fn type_text(&mut self, node: NodeId, text: &str) -> Result<()> {
         let be = self.backend_of(node)?;
         let obj = self.object_for(be)?;
