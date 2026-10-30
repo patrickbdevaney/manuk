@@ -285,7 +285,10 @@ fn status_field(pid: &str, key: &str) -> String {
     std::fs::read_to_string(format!("/proc/{pid}/status"))
         .unwrap_or_default()
         .lines()
-        .find_map(|l| l.strip_prefix(key).map(|v| v.trim_start_matches(':').trim().to_string()))
+        .find_map(|l| {
+            l.strip_prefix(key)
+                .map(|v| v.trim_start_matches(':').trim().to_string())
+        })
         .unwrap_or_default()
 }
 
@@ -301,7 +304,9 @@ fn probe(mutate: Option<&str>) -> Probe {
         if !pid.chars().all(|c| c.is_ascii_digit()) {
             continue;
         }
-        let Ok(raw) = std::fs::read(format!("/proc/{pid}/cmdline")) else { continue };
+        let Ok(raw) = std::fs::read(format!("/proc/{pid}/cmdline")) else {
+            continue;
+        };
         let cmd = String::from_utf8_lossy(&raw).replace('\0', " ");
         if !cmd.contains(&marker) {
             continue;
@@ -310,7 +315,14 @@ fn probe(mutate: Option<&str>) -> Probe {
             sec.push(status_field(&pid, "Seccomp"));
             nnp.push(status_field(&pid, "NoNewPrivs"));
         } else if !cmd.contains("--type=") {
-            port_dir = cmd.split("--user-data-dir=").nth(1).unwrap().split(' ').next().unwrap().to_string();
+            port_dir = cmd
+                .split("--user-data-dir=")
+                .nth(1)
+                .unwrap()
+                .split(' ')
+                .next()
+                .unwrap()
+                .to_string();
             browser = cmd;
         }
     }
@@ -346,20 +358,31 @@ fn chrome_backend_is_sandboxed_and_pinned() {
         return;
     }
     let p = probe(None);
-    assert!(!p.browser_cmdline.contains("--no-sandbox"), "{}", p.browser_cmdline);
+    assert!(
+        !p.browser_cmdline.contains("--no-sandbox"),
+        "{}",
+        p.browser_cmdline
+    );
     assert!(!p.renderer_seccomp.is_empty(), "no renderer process found");
     for (s, n) in p.renderer_seccomp.iter().zip(&p.renderer_nnp) {
         assert_eq!(s, "2", "renderer has no seccomp filter (unsandboxed)");
         assert_eq!(n, "1", "renderer lacks NoNewPrivs (unsandboxed)");
     }
     let pin = include_str!("../../docs/sprint/CHROME_PIN").trim();
-    assert!(p.version.ends_with(pin), "ran {} not pinned {pin}", p.version);
+    assert!(
+        p.version.ends_with(pin),
+        "ran {} not pinned {pin}",
+        p.version
+    );
 }
 
 #[test]
 fn no_sandbox_mutant_is_red() {
     let p = probe(Some("sandbox"));
-    assert!(p.browser_cmdline.contains("--no-sandbox"), "mutant did not re-add the flag");
+    assert!(
+        p.browser_cmdline.contains("--no-sandbox"),
+        "mutant did not re-add the flag"
+    );
     assert!(
         p.renderer_seccomp.iter().any(|s| s != "2"),
         "the unsandboxed renderer should show no seccomp filter: {:?}",

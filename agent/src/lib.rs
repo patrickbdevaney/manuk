@@ -716,7 +716,10 @@ impl AgentBrowser {
         let dom = page.dom();
         let base = url::Url::parse(&page.final_url).ok();
         let abs = |h: &str| match &base {
-            Some(b) => b.join(h).map(|u| u.to_string()).unwrap_or_else(|_| h.to_string()),
+            Some(b) => b
+                .join(h)
+                .map(|u| u.to_string())
+                .unwrap_or_else(|_| h.to_string()),
             None => h.to_string(),
         };
         let e = dom.element(node)?;

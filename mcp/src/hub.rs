@@ -144,6 +144,8 @@ impl<B: Backend> Hub<B> {
 
     /// W3.9: origin sets and confirm kinds applied to every page this hub makes.
     pub fn with_grants(mut self, g: crate::policy::Grants) -> Self {
+        // Before any backend is made: Chrome decides at launch whether to intercept requests.
+        manuk_net::scope::set(&g.read, &g.write);
         self.grants = g;
         self
     }

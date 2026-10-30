@@ -112,6 +112,8 @@ impl<B: Backend> Session<B> {
     }
 
     pub fn set_grants(&mut self, g: crate::policy::Grants) {
+        // W3.9.a: the same sets bound what the page itself loads (manuk_net, and the Chrome interceptor).
+        manuk_net::scope::set(&g.read, &g.write);
         self.grants = g;
     }
 
@@ -127,7 +129,9 @@ impl<B: Backend> Session<B> {
         let why = match &v {
             Verdict::Allow => return Ok(()),
             Verdict::Confirm(_) if self.confirmed => return Ok(()),
-            Verdict::Confirm(k) => format!("CONFIRM REQUIRED ({k}): repeat the call with confirm=true if the user wants this"),
+            Verdict::Confirm(k) => format!(
+                "CONFIRM REQUIRED ({k}): repeat the call with confirm=true if the user wants this"
+            ),
             Verdict::Handoff(r) => format!("HANDOFF: {r}; ask the human to do this step"),
             Verdict::Deny(r) => format!("REFUSED: {r}"),
         };

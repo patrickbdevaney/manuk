@@ -58,7 +58,14 @@ impl Cdp {
             .get_ref()
             .set_read_timeout(Some(wait.max(Duration::from_millis(1))))?;
         match self.ws.read() {
-            Ok(Message::Text(t)) => Ok(Some(serde_json::from_str(t.as_str())?)),
+            Ok(Message::Text(t)) => {
+                let m: Value = serde_json::from_str(t.as_str())?;
+                if m["method"] == "Fetch.requestPaused" {
+                    self.judge_request(&m);
+                    return Ok(None);
+                }
+                Ok(Some(m))
+            }
             Ok(Message::Close(_)) => bail!("Chrome closed the DevTools socket"),
             Ok(_) => Ok(None),
             Err(tungstenite::Error::Io(e))
@@ -68,6 +75,26 @@ impl Cdp {
             }
             Err(e) => Err(e.into()),
         }
+    }
+
+    /// W3.9.a: every request Chrome is about to make (subresource, redirect hop, fetch, form POST,
+    /// frame) is held here and failed unless its origin is in the grant's read/write set.
+    fn judge_request(&mut self, m: &Value) {
+        let p = &m["params"];
+        let (Some(rid), url) = (
+            p["requestId"].as_str(),
+            p["request"]["url"].as_str().unwrap_or(""),
+        ) else {
+            return;
+        };
+        let method = p["request"]["method"].as_str().unwrap_or("GET");
+        let _ = match manuk_net::scope::check(method, url) {
+            Ok(()) => self.send("Fetch.continueRequest", json!({"requestId": rid})),
+            Err(_) => self.send(
+                "Fetch.failRequest",
+                json!({"requestId": rid, "errorReason": "BlockedByClient"}),
+            ),
+        };
     }
 
     /// A page dialog blocks every other command until answered, so it is answered the moment it is seen.
@@ -1068,8 +1095,7 @@ pub fn allow_unsafe_no_sandbox() {
 }
 
 fn chrome_pin() -> String {
-    std::env::var("MANUK_CHROME_PIN")
-        .unwrap_or_else(|_| CHROME_PIN.trim().to_string())
+    std::env::var("MANUK_CHROME_PIN").unwrap_or_else(|_| CHROME_PIN.trim().to_string())
 }
 
 /// `MANUK_CHROME`/`CHROME` if set, else the pinned CfT build under `~/.local/chrome-cft/<pin>/`.
@@ -1125,8 +1151,8 @@ impl CdpBackend {
         ));
         std::fs::create_dir_all(&dir)?;
         let exe = chrome_exe()?;
-        let no_sandbox = UNSAFE_NO_SANDBOX.load(std::sync::atomic::Ordering::SeqCst)
-            || mutated("sandbox");
+        let no_sandbox =
+            UNSAFE_NO_SANDBOX.load(std::sync::atomic::Ordering::SeqCst) || mutated("sandbox");
         if no_sandbox {
             eprintln!("manuk-mcp: WARNING: Chrome is running WITHOUT its sandbox (--unsafe-no-sandbox). A renderer bug is full code execution as this user. Do not load untrusted pages.");
         }
@@ -1203,6 +1229,11 @@ impl CdpBackend {
             cdp.call(m, json!({}))?;
         }
         cdp.call("Page.setLifecycleEventsEnabled", json!({"enabled": true}))?;
+        // W3.9.a: sets are installed by the session before the first navigation; hold every request
+        // so the judge sees it. Cheap when the sets are empty (continue immediately).
+        if manuk_net::scope::active() {
+            cdp.call("Fetch.enable", json!({"patterns": [{"urlPattern": "*"}]}))?;
+        }
         cdp.call(
             "Emulation.setDeviceMetricsOverride",
             json!({"width": width, "height": height, "deviceScaleFactor": 1, "mobile": false}),
@@ -1525,7 +1556,10 @@ impl Backend for CdpBackend {
         let (x, y, _be) = self.aim(node)?;
         self.cdp.events.clear();
         if !mutated("no-hover") {
-            self.cdp.call("Input.dispatchMouseEvent", json!({"type": "mouseMoved", "x": x, "y": y, "button": "none", "buttons": 0}))?;
+            self.cdp.call(
+                "Input.dispatchMouseEvent",
+                json!({"type": "mouseMoved", "x": x, "y": y, "button": "none", "buttons": 0}),
+            )?;
         }
         self.after_action()
     }
@@ -1592,7 +1626,9 @@ impl Backend for CdpBackend {
         if mutated("no-screenshot") {
             bail!("screenshot is not implemented on the CDP arm");
         }
-        let r = self.cdp.call("Page.captureScreenshot", json!({"format": "png"}))?;
+        let r = self
+            .cdp
+            .call("Page.captureScreenshot", json!({"format": "png"}))?;
         let b64 = r["data"]
             .as_str()
             .ok_or_else(|| anyhow!("Page.captureScreenshot returned no data"))?;
@@ -1665,7 +1701,10 @@ impl Backend for CdpBackend {
                 continue;
             }
             for kv in o["localStorage"].as_array().into_iter().flatten() {
-                let (k, v) = (kv["name"].as_str().unwrap_or(""), kv["value"].as_str().unwrap_or(""));
+                let (k, v) = (
+                    kv["name"].as_str().unwrap_or(""),
+                    kv["value"].as_str().unwrap_or(""),
+                );
                 self.eval(&format!(
                     "localStorage.setItem({},{});0",
                     serde_json::to_string(k)?,

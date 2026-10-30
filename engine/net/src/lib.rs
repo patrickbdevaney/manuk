@@ -39,6 +39,7 @@ pub mod cookies;
 pub mod cors;
 pub mod egress;
 pub mod nettrace;
+pub mod scope;
 pub mod storage_state;
 /// E7 storage layer — RFC 6265 cookie jar.
 pub mod webstorage;
@@ -2303,6 +2304,7 @@ async fn send_raw(
         "http" | "https" => {}
         other => bail!("unsupported URL scheme: {other}"),
     }
+    scope::check(method, url.as_str()).map_err(|e| anyhow::anyhow!(e))?;
     let trusted = TRUSTED.try_with(|_| ()).is_ok();
     if !trusted {
         egress::check_url_literal(url)?;

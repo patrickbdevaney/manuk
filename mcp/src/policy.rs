@@ -47,7 +47,9 @@ pub enum Op<'a> {
     Navigate(&'a str),
     /// click / check / select on an element.
     Click,
-    Type { submit: bool },
+    Type {
+        submit: bool,
+    },
 }
 
 pub fn origin(url: &str) -> Option<String> {
@@ -60,12 +62,22 @@ pub fn origin(url: &str) -> Option<String> {
 }
 
 fn in_set(set: &[String], url: &str) -> bool {
-    set.is_empty() || origin(url).is_some_and(|o| set.iter().any(|s| origin(s).as_deref() == Some(&o)))
+    set.is_empty()
+        || origin(url).is_some_and(|o| set.iter().any(|s| origin(s).as_deref() == Some(&o)))
 }
 
 const RISKY_NAMES: &[&str] = &[
-    "delete", "remove", "pay", "purchase", "buy now", "place order", "transfer", "send money",
-    "confirm order", "unsubscribe", "close account",
+    "delete",
+    "remove",
+    "pay",
+    "purchase",
+    "buy now",
+    "place order",
+    "transfer",
+    "send money",
+    "confirm order",
+    "unsubscribe",
+    "close account",
 ];
 
 impl Grants {
@@ -93,7 +105,13 @@ impl Grants {
         }
     }
 
-    fn judge(&self, op: Op, f: Option<&NodeFacts>, name: &str, page_url: &str) -> Result<Verdict, Verdict> {
+    fn judge(
+        &self,
+        op: Op,
+        f: Option<&NodeFacts>,
+        name: &str,
+        page_url: &str,
+    ) -> Result<Verdict, Verdict> {
         // A blank page has no origin to leave, so the first load is never a "new origin".
         let same = |u: &str| origin(page_url).is_none() || origin(u) == origin(page_url);
         if let Op::Navigate(url) = op {
@@ -190,7 +208,10 @@ pub fn parse_grants(args: &mut Vec<String>) -> Result<Grants, String> {
             Some((k, v)) => (k.to_string(), Some(v.to_string())),
             None => (a.clone(), None),
         };
-        if !matches!(key.as_str(), "--read-origins" | "--write-origins" | "--confirm") {
+        if !matches!(
+            key.as_str(),
+            "--read-origins" | "--write-origins" | "--confirm"
+        ) {
             i += 1;
             continue;
         }
@@ -200,14 +221,20 @@ pub fn parse_grants(args: &mut Vec<String>) -> Result<Grants, String> {
             None if i < args.len() => args.remove(i),
             None => return Err(format!("{key} needs a value")),
         };
-        let items = v.split(',').map(str::trim).filter(|x| !x.is_empty()).map(String::from);
+        let items = v
+            .split(',')
+            .map(str::trim)
+            .filter(|x| !x.is_empty())
+            .map(String::from);
         match key.as_str() {
             "--read-origins" => g.read.extend(items),
             "--write-origins" => g.write.extend(items),
             _ => {
                 for k in items {
                     if !matches!(k.as_str(), "submit" | "download" | "navigate-new-origin") {
-                        return Err(format!("--confirm: unknown kind {k:?} (submit, download, navigate-new-origin)"));
+                        return Err(format!(
+                            "--confirm: unknown kind {k:?} (submit, download, navigate-new-origin)"
+                        ));
                     }
                     g.confirm.insert(k);
                 }
@@ -255,7 +282,9 @@ mod tests {
     #[test]
     fn vendor_category_table() {
         let g = Grants {
-            confirm: ["submit", "download", "navigate-new-origin"].map(String::from).into(),
+            confirm: ["submit", "download", "navigate-new-origin"]
+                .map(String::from)
+                .into(),
             ..Grants::default()
         };
         let mut link = f("a", None, None);
@@ -266,34 +295,161 @@ mod tests {
         dl.href = Some("https://shop.test/x.pdf".into());
         dl.download = true;
         let rows: Vec<(&str, Op, Option<NodeFacts>, &str, &str)> = vec![
-            ("type password", Op::Type { submit: false }, Some(f("input", Some("password"), None)), "", "handoff"),
-            ("type cc-number", Op::Type { submit: false }, Some(f("input", Some("text"), Some("cc-number"))), "", "handoff"),
-            ("type otp", Op::Type { submit: false }, Some(f("input", Some("text"), Some("one-time-code"))), "", "handoff"),
-            ("type search q", Op::Type { submit: false }, Some(f("input", Some("search"), None)), "", "allow"),
-            ("type username", Op::Type { submit: false }, Some(f("input", Some("email"), Some("username"))), "", "allow"),
-            ("plain search button", Op::Click, Some(form(f("button", None, None), "get", "https://shop.test/search")), "Search", "allow"),
-            ("post submit same origin", Op::Click, Some(form(f("button", None, None), "post", "https://shop.test/order")), "Continue", "confirm"),
-            ("post submit cross origin", Op::Click, Some(form(f("button", Some("submit"), None), "post", "https://evil.test/c")), "Continue", "deny"),
-            ("same-origin link", Op::Click, Some(link), "Product", "allow"),
-            ("new-origin link", Op::Click, Some(ext), "Partner", "confirm"),
+            (
+                "type password",
+                Op::Type { submit: false },
+                Some(f("input", Some("password"), None)),
+                "",
+                "handoff",
+            ),
+            (
+                "type cc-number",
+                Op::Type { submit: false },
+                Some(f("input", Some("text"), Some("cc-number"))),
+                "",
+                "handoff",
+            ),
+            (
+                "type otp",
+                Op::Type { submit: false },
+                Some(f("input", Some("text"), Some("one-time-code"))),
+                "",
+                "handoff",
+            ),
+            (
+                "type search q",
+                Op::Type { submit: false },
+                Some(f("input", Some("search"), None)),
+                "",
+                "allow",
+            ),
+            (
+                "type username",
+                Op::Type { submit: false },
+                Some(f("input", Some("email"), Some("username"))),
+                "",
+                "allow",
+            ),
+            (
+                "plain search button",
+                Op::Click,
+                Some(form(
+                    f("button", None, None),
+                    "get",
+                    "https://shop.test/search",
+                )),
+                "Search",
+                "allow",
+            ),
+            (
+                "post submit same origin",
+                Op::Click,
+                Some(form(
+                    f("button", None, None),
+                    "post",
+                    "https://shop.test/order",
+                )),
+                "Continue",
+                "confirm",
+            ),
+            (
+                "post submit cross origin",
+                Op::Click,
+                Some(form(
+                    f("button", Some("submit"), None),
+                    "post",
+                    "https://evil.test/c",
+                )),
+                "Continue",
+                "deny",
+            ),
+            (
+                "same-origin link",
+                Op::Click,
+                Some(link),
+                "Product",
+                "allow",
+            ),
+            (
+                "new-origin link",
+                Op::Click,
+                Some(ext),
+                "Partner",
+                "confirm",
+            ),
             ("download link", Op::Click, Some(dl), "Get PDF", "confirm"),
-            ("plain button named Menu", Op::Click, Some(f("button", Some("button"), None)), "Menu", "allow"),
-            ("button named Delete account", Op::Click, Some(f("button", Some("button"), None)), "Delete account", "confirm"),
+            (
+                "plain button named Menu",
+                Op::Click,
+                Some(f("button", Some("button"), None)),
+                "Menu",
+                "allow",
+            ),
+            (
+                "button named Delete account",
+                Op::Click,
+                Some(f("button", Some("button"), None)),
+                "Delete account",
+                "confirm",
+            ),
         ];
         for (label, op, facts, name, want) in rows {
-            assert_eq!(g.assess(op, facts.as_ref(), name, PAGE).tag(), want, "{label}");
+            assert_eq!(
+                g.assess(op, facts.as_ref(), name, PAGE).tag(),
+                want,
+                "{label}"
+            );
         }
     }
 
     #[test]
     fn origin_sets() {
-        let g = Grants { read: vec!["https://a.test".into()], write: vec!["https://a.test".into()], ..Grants::default() };
-        assert_eq!(g.assess(Op::Navigate("https://a.test/x"), None, "", "https://a.test/").tag(), "allow");
-        assert_eq!(g.assess(Op::Navigate("https://evil.test/?c=1"), None, "", "https://a.test/").tag(), "deny");
+        let g = Grants {
+            read: vec!["https://a.test".into()],
+            write: vec!["https://a.test".into()],
+            ..Grants::default()
+        };
+        assert_eq!(
+            g.assess(
+                Op::Navigate("https://a.test/x"),
+                None,
+                "",
+                "https://a.test/"
+            )
+            .tag(),
+            "allow"
+        );
+        assert_eq!(
+            g.assess(
+                Op::Navigate("https://evil.test/?c=1"),
+                None,
+                "",
+                "https://a.test/"
+            )
+            .tag(),
+            "deny"
+        );
         let t = f("input", Some("text"), None);
-        assert_eq!(g.assess(Op::Type { submit: false }, Some(&t), "", "https://attacker.test/").tag(), "deny");
-        assert_eq!(g.assess(Op::Type { submit: false }, Some(&t), "", "https://a.test/").tag(), "allow");
+        assert_eq!(
+            g.assess(
+                Op::Type { submit: false },
+                Some(&t),
+                "",
+                "https://attacker.test/"
+            )
+            .tag(),
+            "deny"
+        );
+        assert_eq!(
+            g.assess(Op::Type { submit: false }, Some(&t), "", "https://a.test/")
+                .tag(),
+            "allow"
+        );
         let leak = form(f("button", None, None), "get", "https://evil.test/?c=1");
-        assert_eq!(g.assess(Op::Click, Some(&leak), "Go", "https://a.test/").tag(), "deny");
+        assert_eq!(
+            g.assess(Op::Click, Some(&leak), "Go", "https://a.test/")
+                .tag(),
+            "deny"
+        );
     }
 }

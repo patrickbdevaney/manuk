@@ -58,7 +58,10 @@ impl Client {
         if chrome {
             cmd.args(["--backend", "chrome"]);
         }
-        cmd.env("MANUK_ACTLOG_DIR", std::env::temp_dir().join(format!("cb1-log-{}-{chrome}", std::process::id())));
+        cmd.env(
+            "MANUK_ACTLOG_DIR",
+            std::env::temp_dir().join(format!("cb1-log-{}-{chrome}", std::process::id())),
+        );
         cmd.arg("--allow-write").arg(std::env::temp_dir());
         let mut child = cmd
             .stdin(Stdio::piped())
@@ -68,7 +71,12 @@ impl Client {
             .expect("spawn manuk-mcp");
         let tx = child.stdin.take().unwrap();
         let rx = BufReader::new(child.stdout.take().unwrap());
-        let mut c = Client { child, tx, rx, id: 0 };
+        let mut c = Client {
+            child,
+            tx,
+            rx,
+            id: 0,
+        };
         c.rpc("initialize", json!({"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}));
         c.send(json!({"jsonrpc": "2.0", "method": "notifications/initialized"}));
         c
@@ -83,7 +91,10 @@ impl Client {
         self.send(json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}));
         loop {
             let mut line = String::new();
-            assert!(self.rx.read_line(&mut line).unwrap() > 0, "server closed stdout");
+            assert!(
+                self.rx.read_line(&mut line).unwrap() > 0,
+                "server closed stdout"
+            );
             let v: Value = serde_json::from_str(&line).unwrap();
             if v["id"] == json!(id) {
                 return v;
@@ -95,8 +106,15 @@ impl Client {
         let r = self.rpc("tools/call", json!({"name": name, "arguments": args}));
         let res = &r["result"];
         let blocks = res["content"].as_array().cloned().unwrap_or_default();
-        let text = blocks.iter().filter_map(|b| b["text"].as_str()).collect::<Vec<_>>().join("\n");
-        let img = blocks.iter().find(|b| b["type"] == "image").and_then(|b| b["data"].as_str().map(String::from));
+        let text = blocks
+            .iter()
+            .filter_map(|b| b["text"].as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+        let img = blocks
+            .iter()
+            .find(|b| b["type"] == "image")
+            .and_then(|b| b["data"].as_str().map(String::from));
         (res["isError"].as_bool().unwrap_or(false), text, img)
     }
     fn tool(&mut self, name: &str, args: Value) -> String {
@@ -112,7 +130,10 @@ impl Drop for Client {
 }
 
 fn handle_of(text: &str, needle: &str) -> String {
-    let line = text.lines().find(|l| l.contains(needle)).unwrap_or_else(|| panic!("no {needle:?} in:\n{text}"));
+    let line = text
+        .lines()
+        .find(|l| l.contains(needle))
+        .unwrap_or_else(|| panic!("no {needle:?} in:\n{text}"));
     let s = line.find("[h").unwrap();
     let e = line[s..].find(']').unwrap() + s;
     line[s + 1..e].to_string()
@@ -126,33 +147,53 @@ fn matrix(chrome: bool) {
 
     // observe (full / viewport / diff)
     assert!(c.tool("observe", json!({"mode": "full"})).contains("Agree"));
-    assert!(c.tool("observe", json!({"mode": "viewport"})).contains("Press me"));
+    assert!(c
+        .tool("observe", json!({"mode": "viewport"}))
+        .contains("Press me"));
     c.tool("observe", json!({"mode": "diff"}));
 
     // extract text / markdown / table, find
     assert!(c.tool("extract", json!({})).contains("Backend parity"));
-    assert!(c.tool("extract", json!({"format": "markdown"})).contains("Other page"));
-    assert!(c.tool("extract", json!({"format": "table"})).contains("alpha"));
-    assert!(c.tool("find", json!({"query": "press"})).contains("Press me"));
+    assert!(c
+        .tool("extract", json!({"format": "markdown"}))
+        .contains("Other page"));
+    assert!(c
+        .tool("extract", json!({"format": "table"}))
+        .contains("alpha"));
+    assert!(c
+        .tool("find", json!({"query": "press"}))
+        .contains("Press me"));
 
     // act: click / check / select
     let b = handle_of(&nav, "button \"Press me\"");
     c.tool("act", json!({"handle": b, "action": "click"}));
-    assert!(c.tool("extract", json!({})).contains("clicked-ok"), "click had no effect");
+    assert!(
+        c.tool("extract", json!({})).contains("clicked-ok"),
+        "click had no effect"
+    );
     let ck = handle_of(&nav, "checkbox \"Agree\"");
     c.tool("act", json!({"handle": ck, "action": "check"}));
     let sel = handle_of(&nav, "combobox \"Size\"");
-    c.tool("act", json!({"handle": sel, "action": "select", "value": "Large"}));
+    c.tool(
+        "act",
+        json!({"handle": sel, "action": "select", "value": "Large"}),
+    );
 
     // type
     let n = handle_of(&nav, "textbox \"Name\"");
     c.tool("type", json!({"handle": n, "text": "Ada"}));
-    assert!(c.tool("observe", json!({})).contains("Ada"), "typed text not observed");
+    assert!(
+        c.tool("observe", json!({})).contains("Ada"),
+        "typed text not observed"
+    );
 
     // focus / hover: the page's own handlers must see both (CB.1.a)
     let f = handle_of(&nav, "textbox \"Probe\"");
     let focus_reply = c.tool("act", json!({"handle": f, "action": "focus"}));
-    assert!(focus_reply.contains("focused h"), "focus reply: {focus_reply}");
+    assert!(
+        focus_reply.contains("focused h"),
+        "focus reply: {focus_reply}"
+    );
     // The page sees focus from a timer on chrome. manuk accepts the focus action (checked above by
     // `tool`), but its engine fires no focus events, so the page's probe stays idle: BACKENDS.md row.
     if chrome {
@@ -164,7 +205,10 @@ fn matrix(chrome: bool) {
     }
     let hv = handle_of(&nav, "button \"Hover probe\"");
     c.tool("act", json!({"handle": hv, "action": "hover"}));
-    assert!(c.tool("observe", json!({})).contains("hovered-ok"), "hover did not reach the page");
+    assert!(
+        c.tool("observe", json!({})).contains("hovered-ok"),
+        "hover did not reach the page"
+    );
 
     // scroll by dy
     c.tool("scroll", json!({"dy": 1500}));
@@ -177,18 +221,34 @@ fn matrix(chrome: bool) {
     assert!(raw.len() > 500, "suspiciously small PNG: {}", raw.len());
 
     // storage_state: export has the page's localStorage, import round-trips a cookie
-    let ex: Value = serde_json::from_str(json_part(&c.tool("storage_state", json!({"action": "export"})))).expect("export is JSON");
+    let ex: Value = serde_json::from_str(json_part(
+        &c.tool("storage_state", json!({"action": "export"})),
+    ))
+    .expect("export is JSON");
     let has_seed = ex["origins"].as_array().unwrap().iter().any(|o| {
-        o["localStorage"].as_array().unwrap().iter().any(|kv| kv["name"] == "seeded" && kv["value"] == "yes")
+        o["localStorage"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|kv| kv["name"] == "seeded" && kv["value"] == "yes")
     });
-    assert!(has_seed, "localStorage seeded=yes missing from export: {ex}");
+    assert!(
+        has_seed,
+        "localStorage seeded=yes missing from export: {ex}"
+    );
     let path = std::env::temp_dir().join(format!("cb1-state-{}-{chrome}.json", std::process::id()));
     let state = json!({"cookies": [{"name": "cb1", "value": "v", "domain": "example.com", "path": "/", "expires": -1, "httpOnly": false, "secure": false, "sameSite": "Lax"}], "origins": []});
     std::fs::write(&path, state.to_string()).unwrap();
-    let imp = c.tool("storage_state", json!({"action": "import", "path": path.to_str().unwrap()}));
+    let imp = c.tool(
+        "storage_state",
+        json!({"action": "import", "path": path.to_str().unwrap()}),
+    );
     assert!(imp.contains("imported 1 cookie"), "{imp}");
     let ex2 = c.tool("storage_state", json!({"action": "export"}));
-    assert!(ex2.contains("\"cb1\""), "imported cookie not exported back: {ex2}");
+    assert!(
+        ex2.contains("\"cb1\""),
+        "imported cookie not exported back: {ex2}"
+    );
     let _ = std::fs::remove_file(&path);
 }
 
@@ -202,15 +262,35 @@ fn rollback(chrome: bool) {
     let url = serve();
     let mut c = Client::start(chrome);
     let nav = c.tool("navigate", json!({"url": url}));
-    let page = |t: &str| t.lines().rev().find_map(|l| l.strip_prefix("page: ")).unwrap().trim().to_string();
+    let page = |t: &str| {
+        t.lines()
+            .rev()
+            .find_map(|l| l.strip_prefix("page: "))
+            .unwrap()
+            .trim()
+            .to_string()
+    };
     let cp = c.tool("checkpoint", json!({"page": page(&nav)}));
-    let id = cp.split_whitespace().skip_while(|w| *w != "checkpoint").nth(1).unwrap().to_string();
+    let id = cp
+        .split_whitespace()
+        .skip_while(|w| *w != "checkpoint")
+        .nth(1)
+        .unwrap()
+        .to_string();
     let b = handle_of(&nav, "button \"Press me\"");
-    let eff = c.tool("act", json!({"handle": b, "action": "click", "page": page(&cp)}));
-    assert!(c.tool("extract", json!({"page": page(&eff)})).contains("clicked-ok"));
+    let eff = c.tool(
+        "act",
+        json!({"handle": b, "action": "click", "page": page(&cp)}),
+    );
+    assert!(c
+        .tool("extract", json!({"page": page(&eff)}))
+        .contains("clicked-ok"));
     let r = c.tool("restore", json!({"checkpoint": id}));
     let after = c.tool("extract", json!({"page": page(&r)}));
-    assert!(after.contains("idle") && !after.contains("clicked-ok"), "restore did not rewind:\n{after}");
+    assert!(
+        after.contains("idle") && !after.contains("clicked-ok"),
+        "restore did not rewind:\n{after}"
+    );
     let f = c.tool("fork", json!({"checkpoint": id}));
     c.tool("commit", json!({"page": page(&f)}));
 }
@@ -233,7 +313,9 @@ fn rollback_on_the_chrome_backend() {
 
 fn base64_decode(s: &str) -> Vec<u8> {
     use base64::Engine;
-    base64::engine::general_purpose::STANDARD.decode(s).expect("base64")
+    base64::engine::general_purpose::STANDARD
+        .decode(s)
+        .expect("base64")
 }
 
 /// The screenshot mutant breaks every matrix run on purpose, so those runs stand down for it; the
@@ -263,11 +345,22 @@ fn every_tool_on_the_chrome_backend() {
 fn chrome_screenshot_mutant_fails() {
     let url = serve();
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_manuk-mcp"));
-    cmd.args(["--backend", "chrome"]).env("MANUK_CDP_MUTATE", "no-screenshot");
-    let mut child = cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().unwrap();
+    cmd.args(["--backend", "chrome"])
+        .env("MANUK_CDP_MUTATE", "no-screenshot");
+    let mut child = cmd
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
     let tx = child.stdin.take().unwrap();
     let rx = BufReader::new(child.stdout.take().unwrap());
-    let mut c = Client { child, tx, rx, id: 0 };
+    let mut c = Client {
+        child,
+        tx,
+        rx,
+        id: 0,
+    };
     c.rpc("initialize", json!({"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}));
     c.send(json!({"jsonrpc": "2.0", "method": "notifications/initialized"}));
     c.tool("navigate", json!({"url": url}));
