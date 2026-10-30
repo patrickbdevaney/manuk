@@ -7692,6 +7692,125 @@ impl Page {
         self.relayout(fonts, viewport_width);
     }
 
+    /// Fire a single bare event (`beforeinput`, `change`, …) at `node`; `true` iff no handler
+    /// cancelled it. No JS context → `true`.
+    fn fire_plain_event(
+        &mut self,
+        node: manuk_dom::NodeId,
+        ty: &str,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) -> bool {
+        #[cfg(feature = "spidermonkey")]
+        {
+            let Some(ctx) = &self.js else {
+                return true;
+            };
+            let rects: HashMap<manuk_dom::NodeId, [f32; 4]> = self
+                .root_box
+                .node_rects(&self.dom)
+                .into_iter()
+                .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
+                .collect();
+            let _reflow = ReflowScope::install(
+                &self.dom,
+                fonts,
+                viewport_width,
+                &self.images,
+                &self.final_url,
+                &self.external_css,
+                &self.scroll_offsets,
+                self.sticky_scroll_y,
+                self.has_sticky,
+            );
+            match manuk_js::dispatch_event(ctx, &mut self.dom, node, ty, &rects, &self.styles) {
+                Ok(p) => p,
+                Err(e) => {
+                    tracing::warn!("{ty} dispatch: {e}");
+                    true
+                }
+            }
+        }
+        #[cfg(not(feature = "spidermonkey"))]
+        {
+            let _ = (node, ty, fonts, viewport_width);
+            true
+        }
+    }
+
+    /// **Type `text` into a text control the way a user does**: focus it, then for each character
+    /// `keydown` → `beforeinput` → (value grows by that character) `input` → `keyup`, and finally
+    /// `change` on commit. A handler that cancels `keydown` or `beforeinput` vetoes that character.
+    /// Replaces the field's current contents (an `input` event announces the clear when it was
+    /// non-empty, so a controlled component's state follows). Returns `false` when the engine
+    /// refuses focus (inert or disabled control) and nothing was typed.
+    ///
+    /// This replaces setting the `value` attribute silently: a React/Vue/Svelte controlled field
+    /// keeps its own state, updated only from `input` events, and re-renders that state back into the
+    /// field — so a silent write was reverted and the typed text vanished. `scroll_y` is the host's
+    /// current scroll offset, republished with the new `activeElement`.
+    pub fn type_text(
+        &mut self,
+        node: manuk_dom::NodeId,
+        text: &str,
+        scroll_y: f32,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) -> bool {
+        // `set_focus` reports whether focus MOVED, so a field that already has it is not a refusal.
+        if self.dom.focused() != Some(node)
+            && !self.set_focus(Some(node), false, fonts, viewport_width)
+        {
+            return false;
+        }
+        // `document.activeElement` reads the published view state, which only the shell refreshed.
+        self.publish_view_state(0.0, scroll_y, Some(node));
+        let before = self
+            .dom
+            .element(node)
+            .and_then(|e| e.attr("value"))
+            .unwrap_or("")
+            .to_string();
+        let mut value = String::new();
+        if !before.is_empty() {
+            self.dispatch_input(node, "", fonts, viewport_width);
+        }
+        for ch in text.chars() {
+            let key = ch.to_string();
+            let go = self.dispatch_key(node, "keydown", &key, fonts, viewport_width);
+            if go && self.fire_plain_event(node, "beforeinput", fonts, viewport_width) {
+                // A controlled component may have rewritten the value in its own `input`
+                // handler; continue from what the field holds now, not from our local copy.
+                let now = self
+                    .dom
+                    .element(node)
+                    .and_then(|e| e.attr("value"))
+                    .unwrap_or("")
+                    .to_string();
+                value = if now.chars().count() >= value.chars().count() {
+                    now
+                } else {
+                    value
+                };
+                value.push(ch);
+                self.dispatch_input(node, &value, fonts, viewport_width);
+            }
+            self.dispatch_key(node, "keyup", &key, fonts, viewport_width);
+        }
+        if self
+            .dom
+            .element(node)
+            .and_then(|e| e.attr("value"))
+            .unwrap_or("")
+            .to_string()
+            != before
+        {
+            self.fire_plain_event(node, "change", fonts, viewport_width);
+        }
+        self.relayout(fonts, viewport_width);
+        true
+    }
+
     /// Dispatch a `keydown`/`keyup` keyboard event carrying `key` (the `KeyboardEvent.key` value)
     /// to `node`, and return `true` iff the browser should perform its **default** action for that
     /// key (i.e. no handler called `preventDefault`). This is how a page intercepts a key — a chat

@@ -1075,8 +1075,12 @@ impl AgentBrowser {
         {
             return Err(anyhow!("node {} is not a text field", node.0));
         }
-        page.dom_mut().set_attr(node, "value", text);
-        page.relayout(&self.fonts, self.width as f32);
+        if !page.type_text(node, text, self.scroll_y, &self.fonts, self.width as f32) {
+            return Err(anyhow!(
+                "node {} cannot take focus (inert or disabled)",
+                node.0
+            ));
+        }
         Ok(())
     }
 
