@@ -9784,6 +9784,26 @@ impl Page {
         }
     }
 
+    /// W3.12: close the virtual clock to `ms` past now, so a handler that arms a long timer does not have
+    /// it fired inside the same dispatch. The load horizon (60 s) is for load; after it, an action only
+    /// owes the reader what lands within `ms`, and anything later is reported pending, as a real
+    /// browser's 1x clock would have it.
+    pub fn hold_clock(&mut self, ms: u32) {
+        #[cfg(feature = "spidermonkey")]
+        self.eval_for_test(&format!("__timeBudget = (__now || 0) + {ms};"));
+        #[cfg(not(feature = "spidermonkey"))]
+        let _ = ms;
+    }
+
+    /// W3.12: the page's own queues, read in-process: `(timer delays in virtual ms ascending, urls of
+    /// fetches still owed a reply)`. Empty without a JS context.
+    pub fn pending_work(&self) -> (Vec<u32>, Vec<String>) {
+        match &self.js {
+            Some(ctx) => manuk_js::pending_work(ctx),
+            None => (Vec::new(), Vec::new()),
+        }
+    }
+
     /// Forms a script asked to submit: `(direct, requested)`. See `manuk_js::take_form_submits`.
     ///
     /// A form submitted by **clicking its submit button** joins the `requested` list, not `direct`:

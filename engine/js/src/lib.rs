@@ -1187,6 +1187,28 @@ pub fn take_script_navigation(_ctx: &PageContext) -> Option<String> {
     None
 }
 
+/// W3.12: what `ctx`'s page still has queued, as `(timer delays in virtual ms ascending, fetch urls)`.
+#[cfg(feature = "_sm")]
+pub fn pending_work(ctx: &PageContext) -> (Vec<u32>, Vec<String>) {
+    let raw = with_runtime(|rt| Ok::<_, JsError>(ctx.pending_work(rt)))
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+    let (t, f) = raw.split_once('|').unwrap_or(("", ""));
+    (
+        t.split(',').filter_map(|x| x.parse().ok()).collect(),
+        f.split('\u{1}')
+            .filter(|x| !x.is_empty())
+            .map(str::to_string)
+            .collect(),
+    )
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn pending_work(_ctx: &PageContext) -> (Vec<u32>, Vec<String>) {
+    (Vec::new(), Vec::new())
+}
+
 /// Node ids of forms a script asked to submit. `direct` = `form.submit()` (no event, the script has
 /// decided); `requested` = `form.requestSubmit()` (fire `submit` first, the page may cancel).
 #[cfg(feature = "_sm")]

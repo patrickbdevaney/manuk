@@ -15763,6 +15763,32 @@ impl PageContext {
         }
     }
 
+    /// W3.12: the page's own pending work, read from its queues: `"<timer delays ms, comma>|<fetch urls, \x01>"`.
+    /// Timer delays are relative to the virtual clock; fetches are the callbacks still owed a reply
+    /// (queued ones carry their URL). Same string-eval idiom as [`Self::take_pending_nav`].
+    pub fn pending_work(&self, runtime: &mut Runtime) -> Option<String> {
+        let raw_cx = unsafe { runtime.cx().raw_cx() };
+        rooted!(&in(runtime.cx()) let global = self.global.get());
+        let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
+        let js = "(function(){var g=globalThis;var now=g.__now||0;var ts=[];\
+                  (g.__tasks||[]).forEach(function(t){ts.push(Math.max(0,Math.round(t.w-now)));});\
+                  ts.sort(function(a,b){return a-b;});\
+                  var urls=[];(g.__pendingFetches||[]).forEach(function(q){var p=String(q).split('\\u0001');urls.push(p[3]||'?');});\
+                  var owed=Object.keys(g.__fetchCb||{}).length;\
+                  while(urls.length<owed){urls.push('?');}\
+                  return ts.join(',')+'|'+urls.join('\\u0001');})()";
+        let v = (unsafe { eval_in_current_global(raw_cx, js) })?;
+        if !v.is_string() {
+            return None;
+        }
+        let mut c = unsafe { wrap_cx(raw_cx) };
+        rooted!(&in(runtime.cx()) let val = v);
+        match unsafe { String::safe_from_jsval(&mut c, val.handle(), ()) } {
+            Ok(ConversionResult::Success(s)) => Some(s),
+            _ => None,
+        }
+    }
+
     /// Drain this document's queued `history` ops as `(kind, state_json, url)` (see
     /// [`take_pending_history`]). Host-side thread-local, so no realm entry is needed.
     pub fn take_history_ops(&self) -> Vec<(u8, String, String)> {

@@ -195,6 +195,62 @@ pub struct Readiness {
     pub title: Option<String>,
     /// Count of actionable affordances (links, buttons, text fields, checkboxes, …).
     pub interactive: usize,
+    /// Pending work read from the page's own queues (W3.12).
+    pub pending: Pending,
+}
+
+/// A timer due within this many virtual ms counts as work the page still owes the reader.
+pub const SOON_MS: u32 = 2000;
+
+/// What the page still has queued: fetches owed a reply and timers, from the engine's own queues.
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct Pending {
+    /// URLs of fetch/XHR requests not yet answered.
+    pub fetches: Vec<String>,
+    /// Pending timer delays (virtual ms from now), ascending.
+    pub timers: Vec<u32>,
+}
+
+impl Pending {
+    pub fn timers_soon(&self) -> usize {
+        self.timers.iter().filter(|&&t| t <= SOON_MS).count()
+    }
+    /// True when a fetch is owed or a timer is due within [`SOON_MS`].
+    pub fn is_pending(&self) -> bool {
+        !self.fetches.is_empty() || self.timers_soon() > 0
+    }
+    /// The one-line settle oracle: `settled: 0 fetch, 0 timers<=2s, layout clean` or
+    /// `pending: 2 fetch (/api/cart), 1 timers<=2s`. Timers beyond the horizon are named, not waited on.
+    pub fn line(&self) -> String {
+        let later = self.timers.len() - self.timers_soon();
+        let tail = match self.timers.iter().find(|&&t| t > SOON_MS) {
+            Some(next) if later > 0 => {
+                format!("; pending later: {later} timer(s), next in {next}ms")
+            }
+            _ => String::new(),
+        };
+        if self.is_pending() {
+            let names: Vec<String> = self.fetches.iter().take(3).map(|u| path_of(u)).collect();
+            let names = if names.is_empty() {
+                String::new()
+            } else {
+                format!(" ({})", names.join(", "))
+            };
+            format!(
+                "pending: {} fetch{names}, {} timers<=2s{tail}",
+                self.fetches.len(),
+                self.timers_soon()
+            )
+        } else {
+            format!("settled: 0 fetch, 0 timers<=2s, layout clean{tail}")
+        }
+    }
+}
+
+fn path_of(u: &str) -> String {
+    url::Url::parse(u)
+        .map(|x| x.path().to_string())
+        .unwrap_or_else(|_| u.to_string())
 }
 
 impl Readiness {
@@ -438,7 +494,25 @@ impl AgentBrowser {
             loaded: self.page.is_some(),
             title: self.current_title().map(str::to_string),
             interactive,
+            pending: self.pending(),
         }
+    }
+
+    /// W3.12: call before dispatching an action; timers armed by it beyond [`SOON_MS`] stay pending.
+    pub fn begin_act(&mut self) {
+        if let Some(p) = self.page.as_mut() {
+            p.hold_clock(SOON_MS);
+        }
+    }
+
+    /// W3.12: the page's pending fetches and timers, read from the engine's own queues.
+    pub fn pending(&self) -> Pending {
+        let (timers, fetches) = self
+            .page
+            .as_ref()
+            .map(|p| p.pending_work())
+            .unwrap_or_default();
+        Pending { fetches, timers }
     }
 
     /// E-moat — compute the current accessibility tree, diff it against the previous

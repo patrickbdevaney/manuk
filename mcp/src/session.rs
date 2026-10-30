@@ -457,9 +457,18 @@ impl<B: Backend> Session<B> {
         }
     }
 
+    /// The settle line (W3.12). `MANUK_SETTLE_MUTATE=no-settle` skips the wait, for the gate's mutant.
+    async fn settled(&mut self) -> String {
+        if std::env::var("MANUK_SETTLE_MUTATE").is_ok_and(|v| v == "no-settle") {
+            return "settled: (mutant)".into();
+        }
+        self.b.settle_line().await
+    }
+
     async fn navigate(&mut self, url: &str) -> Result<String> {
         self.gate(crate::policy::Op::Navigate(url), None, "")?;
         self.b.navigate(url).await?;
+        let settle = self.settled().await;
         self.new_document();
         let tree = self.tree()?;
         self.snap = Some(self.snapshot(&tree));
@@ -469,7 +478,7 @@ impl<B: Backend> Session<B> {
             "use find(query) or observe(mode=viewport)",
         );
         Ok(format!(
-            "{UNTRUSTED}{}\n{}\n{body}",
+            "{UNTRUSTED}{}\n{}\n{settle}\n{body}",
             self.warn(),
             self.header()
         ))
@@ -586,6 +595,7 @@ impl<B: Backend> Session<B> {
         }
         let before = self.snapshot(&tree);
         let url_before = self.b.url();
+        self.b.begin_act();
         let outcome = match action {
             "click" => {
                 self.verify_landing(h, node)?;
@@ -626,11 +636,14 @@ impl<B: Backend> Session<B> {
             }
             a => bail!("unknown action {a:?}: use click, check, select, focus, hover"),
         };
-        self.effect(
+        // The result waits for the act's own consequences, then says what is still pending.
+        let settle = self.settled().await;
+        let r = self.effect(
             before,
             &url_before,
             &format!("verified: target was topmost at dispatch; {outcome}"),
-        )
+        )?;
+        Ok(format!("{r}\n{settle}"))
     }
 
     async fn type_(&mut self, hs: &str, text: &str, submit: bool) -> Result<String> {
@@ -657,12 +670,15 @@ impl<B: Backend> Session<B> {
         self.gate(crate::policy::Op::Type { submit }, Some(node), "")?;
         let before = self.snapshot(&tree);
         let url_before = self.b.url();
+        self.b.begin_act();
         self.b.type_text(node, text)?;
         let mut evidence = format!("typed {} chars", text.chars().count());
         if submit {
             evidence = format!("{evidence}; {}", self.b.submit(node).await?);
         }
-        self.effect(before, &url_before, &evidence)
+        let settle = self.settled().await;
+        let r = self.effect(before, &url_before, &evidence)?;
+        Ok(format!("{r}\n{settle}"))
     }
 
     async fn scroll(&mut self, to: Option<&str>, dy: Option<f64>) -> Result<String> {

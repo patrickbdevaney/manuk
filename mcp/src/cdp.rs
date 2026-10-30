@@ -151,6 +151,17 @@ impl Cdp {
     }
 }
 
+/// Installed on every new document: counts fetch/XHR in flight and setTimeout timers pending.
+const SETTLE_PROBE: &str = r#"(function(){if(window.__mk)return;var S=window.__mk={u:{},t:{},n:0};
+var of=window.fetch;if(of){window.fetch=function(a){var k=++S.n;S.u[k]=String((a&&a.url)||a);var d=function(){delete S.u[k];};var p=of.apply(this,arguments);p.then(d,d);return p;};}
+var xs=XMLHttpRequest.prototype.send,xo=XMLHttpRequest.prototype.open;
+XMLHttpRequest.prototype.open=function(m,u){this.__mku=String(u);return xo.apply(this,arguments);};
+XMLHttpRequest.prototype.send=function(){var k=++S.n;S.u[k]=this.__mku||'?';this.addEventListener('loadend',function(){delete S.u[k];});return xs.apply(this,arguments);};
+var st=window.setTimeout,ct=window.clearTimeout;
+window.setTimeout=function(cb,ms){var a=[].slice.call(arguments),id;if(typeof cb==='function'){a[0]=function(){delete S.t[id];return cb.apply(this,arguments);};}
+id=st.apply(window,a);S.t[id]=performance.now()+(+ms||0);return id;};
+window.clearTimeout=function(id){delete S.t[id];return ct.call(window,id);};})();"#;
+
 // ───────────────────────────── snapshot → tree ─────────────────────────────
 
 #[derive(Clone, Copy, Debug)]
@@ -1229,6 +1240,11 @@ impl CdpBackend {
             cdp.call(m, json!({}))?;
         }
         cdp.call("Page.setLifecycleEventsEnabled", json!({"enabled": true}))?;
+        // W3.12: count the page's own pending fetches and timers so a settle line can be read from it.
+        cdp.call(
+            "Page.addScriptToEvaluateOnNewDocument",
+            json!({"source": SETTLE_PROBE}),
+        )?;
         // W3.9.a: sets are installed by the session before the first navigation; hold every request
         // so the judge sees it. Cheap when the sets are empty (continue immediately).
         if manuk_net::scope::active() {
@@ -1253,6 +1269,37 @@ impl CdpBackend {
             text: String::new(),
             remounted: 0,
         })
+    }
+
+    /// The page-side probe's view of pending work (empty when the probe is not installed).
+    fn probe(&mut self) -> manuk_agent::Pending {
+        let v = self
+            .eval(
+                "(function(){var S=window.__mk;if(!S)return null;var n=performance.now();\
+                 return {f:Object.values(S.u),t:Object.values(S.t).map(function(d){return Math.max(0,Math.round(d-n));})};})()",
+            )
+            .unwrap_or(Value::Null);
+        let mut timers: Vec<u32> = v["t"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|x| x.as_u64())
+                    .map(|x| x as u32)
+                    .collect()
+            })
+            .unwrap_or_default();
+        timers.sort_unstable();
+        manuk_agent::Pending {
+            fetches: v["f"]
+                .as_array()
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|x| x.as_str().map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default(),
+            timers,
+        }
     }
 
     fn eval(&mut self, expr: &str) -> Result<Value> {
@@ -1509,6 +1556,34 @@ impl Backend for CdpBackend {
         let _ = self.cdp.pump_until(Duration::from_millis(150), |_| false);
         self.cdp.events.clear();
         let _ = self.refresh();
+    }
+    async fn settle_line(&mut self) -> String {
+        // Wait for the action's own consequences: fetches up to 5 s, timers due within 2 s, then
+        // 300 ms quiet (W3.12). Read from the page-side probe; real wall time, unlike the engine.
+        let t0 = Instant::now();
+        let mut p = self.probe();
+        loop {
+            let soon = p.timers_soon() > 0 && t0.elapsed() < Duration::from_millis(2300);
+            let owed = !p.fetches.is_empty() && t0.elapsed() < Duration::from_secs(5);
+            if !(soon || owed) {
+                break;
+            }
+            let _ = self.cdp.pump_until(Duration::from_millis(100), |_| false);
+            p = self.probe();
+        }
+        let _ = self.cdp.pump_until(Duration::from_millis(300), |_| false);
+        self.cdp.events.clear();
+        let _ = self.refresh();
+        let p = self.probe();
+        let mut line = p.line();
+        if self
+            .eval("document.fonts&&document.fonts.status")
+            .map(|v| v == "loading")
+            .unwrap_or(false)
+        {
+            line.push_str("; fonts loading");
+        }
+        line
     }
     async fn click(&mut self, node: NodeId) -> Result<String> {
         // Dispatch-time re-validation: fresh snapshot, re-mount, then a real hit-test.
