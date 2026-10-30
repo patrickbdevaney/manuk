@@ -16093,13 +16093,20 @@ pub fn clear_module_node_bases() {
     MODULE_NODE_BASES.with(|m| m.borrow_mut().clear());
 }
 
-pub fn set_module_graph_sources(sources: std::collections::HashMap<String, String>) {
+pub fn set_module_graph_sources(mut sources: std::collections::HashMap<String, String>) {
+    ON_DEMAND_SOURCES.with(|o| {
+        for (k, v) in o.borrow().iter() {
+            sources.entry(k.clone()).or_insert_with(|| v.clone());
+        }
+    });
     MODULE_GRAPH_SOURCES.with(|m| *m.borrow_mut() = sources);
 }
 
 /// Drop the pre-fetched module-graph sources. Pairs with [`esm_registry_clear`] on page teardown /
 /// navigation so one document's graph can never feed the next's `import`s.
 pub fn clear_module_graph_sources() {
+    ON_DEMAND_MODULES.with(|c| c.set(0));
+    ON_DEMAND_SOURCES.with(|m| m.borrow_mut().clear());
     MODULE_GRAPH_SOURCES.with(|m| m.borrow_mut().clear());
 }
 
@@ -17040,6 +17047,94 @@ unsafe extern "C" fn module_metadata_hook(
 ///    returns the SAME `*mut JSObject` for a url every time it is asked, which is precisely what makes
 ///    a cycle (`a.js`↔`b.js`) re-enter the existing module record instead of looping — the registry is
 ///    the memoization SpiderMonkey's graph walk needs.
+thread_local! {
+    /// Modules fetched on demand by [`fetch_module_graph_on_demand`] for this page.
+    static ON_DEMAND_MODULES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// The sources those fetches returned. [`set_module_graph_sources`] replaces the whole pre-fetched map
+    /// each time the page re-seeds it, so without this copy the next re-seed would drop them and the
+    /// next `import()` would fetch the same bytes again.
+    static ON_DEMAND_SOURCES: std::cell::RefCell<std::collections::HashMap<String, String>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+/// A page that `import()`s more than this many modules it did not name up front is not converging.
+const MAX_ON_DEMAND_MODULES: usize = 256;
+
+/// **Fetch an `import()` target the document pre-fetch did not carry, plus its static import closure.**
+///
+/// `FinishDynamicModuleImport` is called synchronously by [`module_dynamic_import_hook`], and the JS
+/// thread has no async network, so the fetch blocks the thread, like a synchronous XHR, but only for a
+/// module the page really asked for and only up to [`MAX_ON_DEMAND_MODULES`]. Each fetch runs on a
+/// scoped helper thread with its own runtime: blocking on a runtime from the JS thread would panic if
+/// that thread is inside one. Failures are skipped (the hook then rejects as it always did).
+fn fetch_module_graph_on_demand(root: &str) {
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut level = vec![root.to_string()];
+    while !level.is_empty() {
+        level.retain(|u| {
+            seen.insert(u.clone())
+                && !MODULE_GRAPH_SOURCES.with(|m| m.borrow().contains_key(u))
+                && esm_registry_get(u).is_null()
+        });
+        let room = MAX_ON_DEMAND_MODULES.saturating_sub(ON_DEMAND_MODULES.with(|c| c.get()));
+        if level.len() > room {
+            tracing::warn!("on-demand module fetch hit its cap of {MAX_ON_DEMAND_MODULES}");
+            level.truncate(room);
+        }
+        if level.is_empty() {
+            return;
+        }
+        ON_DEMAND_MODULES.with(|c| c.set(c.get() + level.len()));
+        let urls = level.clone();
+        let fetched: Vec<(String, Option<String>)> = std::thread::scope(|scope| {
+            scope
+                .spawn(|| {
+                    let Ok(rt) = tokio::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()
+                    else {
+                        return Vec::new();
+                    };
+                    rt.block_on(async {
+                        let mut set = tokio::task::JoinSet::new();
+                        for u in urls {
+                            set.spawn(async move {
+                                let text = match manuk_net::fetch(&u).await {
+                                    Ok(r) if (200..300).contains(&r.status) => {
+                                        Some(r.decoded_text())
+                                    }
+                                    _ => None,
+                                };
+                                (u, text)
+                            });
+                        }
+                        let mut out = Vec::new();
+                        while let Some(Ok(done)) = set.join_next().await {
+                            out.push(done);
+                        }
+                        out
+                    })
+                })
+                .join()
+                .unwrap_or_default()
+        });
+        level = Vec::new();
+        for (url, text) in fetched {
+            let Some(text) = text else {
+                tracing::info!(url = %url, "on-demand module fetch miss");
+                continue;
+            };
+            for spec in crate::import_scan::scan_static_import_specifiers(&text) {
+                if let Some(dep) = resolve_module_specifier(&url, &spec) {
+                    level.push(dep);
+                }
+            }
+            ON_DEMAND_SOURCES.with(|m| m.borrow_mut().insert(url.clone(), text.clone()));
+            MODULE_GRAPH_SOURCES.with(|m| m.borrow_mut().insert(url, text));
+        }
+    }
+}
+
 /// **`import()` — the HostImportModuleDynamically hook.** Without it SpiderMonkey throws
 /// *"Dynamic module import is disabled or not supported in this context"* at every `import()`
 /// expression — which surface audit #34 caught the map claiming `works` for.
@@ -17095,6 +17190,16 @@ unsafe extern "C" fn module_dynamic_import_hook(
         resolve_module_specifier(&base, &specifier)
     })();
 
+    if let Some(url) = &resolved {
+        // The document's pre-fetch cannot know which `import()` a page will actually take (a Vike app
+        // names ~3,400 lazy chunks and takes a handful), so a miss is fetched NOW, with its static
+        // closure, rather than rejecting with `undefined`.
+        if esm_registry_get(url).is_null()
+            && !MODULE_GRAPH_SOURCES.with(|m| m.borrow().contains_key(url))
+        {
+            fetch_module_graph_on_demand(url);
+        }
+    }
     if let Some(url) = resolved {
         rooted!(in(cx) let mut module = esm_registry_get(&url));
         if module.get().is_null() {

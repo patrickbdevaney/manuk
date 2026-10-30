@@ -12158,3 +12158,5 @@ children, 10 containing-block heights); it was 11 of 16 before t1511. `serennu.c
 **78.7** shape across the two ticks. Gated by `g_an_inline_of_only_breaks` under seven mutations. ⚠
 The break keeps its own box (t380) — that is the half this must not break, and the `<br>` rows are in
 the fixture.
+
+- **Vite/Vike code-split apps (lazy `import()` chunks): supported when the chunk is reachable.** TAIL.1.c: the module scanner no longer loses every specifier after a nested template literal or a regex containing `//`, and an `import()` target the document pre-fetch did not carry is fetched on demand with its static closure (cap 256 per page). `booking.directferries.com` went from 2 to 21 painted paths (oracle 20). Gated by `a_nested_template_does_not_hide_a_later_dynamic_import`. Not covered: the on-demand fetch blocks the JS thread (like a synchronous XHR) and needs a multi-thread runtime.

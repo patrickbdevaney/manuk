@@ -1966,6 +1966,8 @@ pub fn run_document_scripts(
     Ok(0)
 }
 
+pub mod import_scan;
+
 #[cfg(feature = "_sm")]
 pub mod determinism;
 

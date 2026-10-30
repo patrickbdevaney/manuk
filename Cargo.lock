@@ -3368,6 +3368,7 @@ dependencies = [
  "sha1",
  "sha2",
  "tiny-skia 0.12.0",
+ "tokio",
  "tracing",
  "url",
 ]

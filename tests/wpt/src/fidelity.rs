@@ -4943,6 +4943,44 @@ pub fn falsify_certificate() -> Vec<Falsification> {
     out
 }
 
+/// **Did OUR fetch get a bot challenge where the oracle's fetch got the page? (TAIL.1.c)**
+///
+/// `classify_fetch` judges the curl fetch the oracle's `<base>` document comes from. Our own engine
+/// fetches separately, and an origin may challenge one client and not the other: `www.jazzguitar.be`
+/// answered our engine a Cloudflare "Just a moment..." page (403) while Chrome rendered the real
+/// 485-path site, and the row was booked `render-failed`, "our own bug", for a page we never
+/// received. The body is all `fetch_html` returns, so this tests the infrastructure markers only
+/// (the same rule as the 2xx arm of `classify_fetch`): prose such as "Just a moment" can appear on a
+/// real page, and excusing a genuine render failure is the more expensive error.
+pub fn our_fetch_is_bot_wall(body: &str) -> Option<Unmeasurable> {
+    match classify_fetch(200, body) {
+        w @ Some(Unmeasurable::BotWall(_)) => w,
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod our_fetch_wall_tests {
+    use super::*;
+
+    /// RED if `our_fetch_is_bot_wall` returns `None` for the challenge, or `Some` for a page that
+    /// merely says "Just a moment" (the vacuity arm).
+    #[test]
+    fn a_challenge_we_were_served_is_a_bot_wall_and_prose_is_not() {
+        let challenge = r#"<html><head><title>Just a moment...</title><meta http-equiv="content-security-policy" content="script-src https://challenges.cloudflare.com"></head></html>"#;
+        assert_eq!(
+            our_fetch_is_bot_wall(challenge),
+            Some(Unmeasurable::BotWall(200))
+        );
+        assert_eq!(
+            our_fetch_is_bot_wall(
+                "<html><body><p>Just a moment, I will explain.</p></body></html>"
+            ),
+            None
+        );
+    }
+}
+
 #[cfg(test)]
 mod bot_challenge_tests {
     use super::*;

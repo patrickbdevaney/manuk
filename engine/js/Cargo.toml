@@ -53,6 +53,7 @@ manuk-css.workspace = true
 # pure function of (DOM, computed styles) that lives here. See `host_ax_role_name`.
 manuk-layout.workspace = true
 manuk-net.workspace = true
+tokio = { workspace = true, features = ["rt", "macros"] }
 serde_json.workspace = true
 manuk-html.workspace = true
 # N1/N2: the one SessionHistory model the History API binds to.

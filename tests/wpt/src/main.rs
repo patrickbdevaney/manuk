@@ -1086,6 +1086,13 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
             out.join(format!("{name}.engine-fetch.html")),
             html.as_bytes(),
         );
+        // TAIL.1.c: a challenge page served to OUR fetch is the origin refusing us as a client, not a page we
+        // failed to paint. Decided before the load so the row says why.
+        if let Some(reason) = manuk_wpt::fidelity::our_fetch_is_bot_wall(&html) {
+            eprintln!("  UNMEASURABLE [{}]: {}", reason.tag(), reason.explain());
+            rows.push(manuk_wpt::fidelity::Fidelity::unmeasured(&name, reason));
+            continue;
+        }
         let page = rt.block_on(async {
             let mut p = Page::load_async(&html, &final_url, fonts, vw as f32).await;
             p.finish_loading(fonts, vw as f32).await;

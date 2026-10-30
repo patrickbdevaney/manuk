@@ -31,6 +31,8 @@ pub struct ScrollAnchor {
     pub offset_from_top: f32,
 }
 
+#[allow(unused_imports)]
+use manuk_js::import_scan::scan_static_import_specifiers;
 use std::collections::HashMap;
 
 use anyhow::{Context, Result};
@@ -12156,116 +12158,6 @@ async fn fetch_external_scripts(
     (authorized, origins)
 }
 
-/// **Scan JS source for the specifiers of its STATIC `import` / `export … from` statements (B3b).**
-///
-/// The page-path module-graph pre-fetch needs to know *what a module imports* before any JS runs, so it
-/// can fetch the whole transitive graph up front (there is no synchronous network on the JS thread — the
-/// authoritative walk in `esm_load_graph` reads a *pre-fetched* map). SpiderMonkey gives the exact
-/// specifiers only *after* a module is compiled, and compiling needs the JS engine on the UI thread —
-/// so this is a lightweight textual pre-scan whose only job is to seed the fetch. It is deliberately a
-/// SUPERSET-or-miss heuristic, not a parser: an over-match fetches a URL nothing imports (harmless), and
-/// a miss means that dependency is absent from the map and its importer fails loud-but-safe at
-/// `ModuleLink` — the same failure policy `esm_load_graph` already documents. `esm_load_graph` remains
-/// the source of truth for which modules are actually linked; this only decides what gets fetched.
-///
-/// Matches the specifier string of `import x from 'm'`, `import {a} from 'm'`, `import * as n from 'm'`,
-/// `import 'm'` (side-effect), and `export … from 'm'` / `export * from 'm'`. Skips comments and string
-/// bodies so a `from`/`import` inside them is not mistaken for a keyword, and skips `import(` (a dynamic
-/// import — resolved lazily at runtime, not part of the static graph) and `import.meta`.
-fn scan_static_import_specifiers(src: &str) -> Vec<String> {
-    let b = src.as_bytes();
-    let n = b.len();
-    let mut i = 0usize;
-    let mut out = Vec::new();
-    // The last significant token in code context: an identifier word, or a single punctuation byte. A
-    // specifier is captured when this is exactly `from` (any import/export … from) or `import` (a bare
-    // side-effect import). Tracking it — rather than the string alone — is what keeps `{`, `}`, `,`, `*`
-    // between `import` and `from` from masquerading as the keyword, and what makes `import(` and
-    // `import.meta` not fire the bare-import rule (the `(` / `.` becomes the previous token instead).
-    let mut prev = String::new();
-    while i < n {
-        let c = b[i];
-        if c.is_ascii_whitespace() {
-            i += 1;
-            continue;
-        }
-        // Comments — skipped so a `//`/`/* */` `from` is never read as a keyword.
-        if c == b'/' && i + 1 < n && b[i + 1] == b'/' {
-            i += 2;
-            while i < n && b[i] != b'\n' {
-                i += 1;
-            }
-            continue;
-        }
-        if c == b'/' && i + 1 < n && b[i + 1] == b'*' {
-            i += 2;
-            while i + 1 < n && !(b[i] == b'*' && b[i + 1] == b'/') {
-                i += 1;
-            }
-            i = (i + 2).min(n);
-            continue;
-        }
-        // String literal — capture its body; a `'`/`"` body that directly follows `from` or `import`
-        // is a specifier. Backtick strings are consumed but never captured (a static specifier is a
-        // plain string literal, never a template).
-        if c == b'\'' || c == b'"' || c == b'`' {
-            let quote = c;
-            i += 1;
-            let mut content: Vec<u8> = Vec::new();
-            while i < n {
-                let d = b[i];
-                if d == b'\\' && i + 1 < n {
-                    content.push(b[i + 1]);
-                    i += 2;
-                    continue;
-                }
-                if d == quote {
-                    i += 1;
-                    break;
-                }
-                content.push(d);
-                i += 1;
-            }
-            if (quote == b'\'' || quote == b'"')
-                && (prev == "from" || prev == "import" || prev == "import(")
-            {
-                let s = String::from_utf8_lossy(&content).trim().to_string();
-                if !s.is_empty() {
-                    out.push(s);
-                }
-            }
-            prev.clear();
-            continue;
-        }
-        // Identifier / keyword.
-        if c == b'_' || c == b'$' || c.is_ascii_alphabetic() {
-            let s = i;
-            i += 1;
-            while i < n && (b[i] == b'_' || b[i] == b'$' || b[i].is_ascii_alphanumeric()) {
-                i += 1;
-            }
-            prev = String::from_utf8_lossy(&b[s..i]).to_string();
-            continue;
-        }
-        // Punctuation. `import(` is a dynamic import — clear so the bare-import rule cannot fire on the
-        // string inside. Any other single byte becomes the previous token.
-        if c == b'(' && prev == "import" {
-            // **A LITERAL `import("m")` specifier IS collected (t624).** The dynamic-import host hook
-            // resolves from this same pre-fetched map, so a specifier missing from it is one
-            // `import()` cannot satisfy. `import(` becomes its own marker so the string branch can
-            // tell it from a bare side-effect `import 'm'`. A COMPUTED specifier still cannot be seen
-            // by a textual scan and rejects at runtime — over-collecting is the safe direction, since
-            // a fetched module nothing imports costs one request and a missing one costs the feature.
-            prev.clear();
-            prev.push_str("import(");
-        } else {
-            prev = (c as char).to_string();
-        }
-        i += 1;
-    }
-    out
-}
-
 /// **Parse the document's import map from its `<script type=importmap>` (tick 520).** Returns the flat
 /// `imports` object (bare specifier → raw target) — the standard form CDN-pinned no-bundler apps use
 /// (`{"imports":{"react":"https://esm.sh/react"}}`). Per spec the FIRST import map wins and must precede
@@ -14597,6 +14489,23 @@ mod tests {
                  renders a broken-image placeholder rather than a wrong-sized one."
             );
         }
+    }
+
+    /// **A nested template literal must not flip the scanner's quote parity (TAIL.1.c).** Vike's entry
+    /// builds a debug string as `${a} > ${E?`\`x\``:`y`}`; ending the outer template at the second
+    /// backtick left every later quote inverted, so the `import("./pages.js")` that loads the whole
+    /// app went uncollected, was never pre-fetched, and the dynamic-import hook rejected with
+    /// `undefined` (booking.directferries.com rendered an empty shell where Chrome built the page).
+    /// RED if `scan_static_import_specifiers` ends a template at the next backtick again.
+    #[test]
+    fn a_nested_template_does_not_hide_a_later_dynamic_import() {
+        let src = "const m=`${d} > ${E?`\\`a ${f}\\``:`b`}`;const x=()=>import(\"./pages.js\").then(e=>e.eS);";
+        assert_eq!(
+            scan_static_import_specifiers(src),
+            vec!["./pages.js".to_string()]
+        );
+        // The vacuity arm: a flat template with a quote inside is not a specifier.
+        assert!(scan_static_import_specifiers("const m=`import \"./nope.js\"`;").is_empty());
     }
 
     #[test]
