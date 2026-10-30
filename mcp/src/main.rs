@@ -10,6 +10,10 @@ fn main() -> anyhow::Result<()> {
             std::process::exit(2);
         }
     };
+    if let Some(i) = args.iter().position(|a| a == "--unsafe-no-sandbox") {
+        args.remove(i);
+        manuk_mcp::cdp::allow_unsafe_no_sandbox();
+    }
     if let Some(i) = args.iter().position(|a| a == "--backend") {
         anyhow::ensure!(
             args.get(i + 1).map(String::as_str) == Some("chrome"),

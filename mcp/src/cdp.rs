@@ -1057,11 +1057,61 @@ fn mutated(what: &str) -> bool {
     std::env::var("MANUK_CDP_MUTATE").is_ok_and(|v| v == what)
 }
 
-fn chrome_exe() -> String {
-    std::env::var("MANUK_CHROME")
+/// The Chrome-for-Testing build the whole sprint measures against (docs/sprint/CHROME_PIN).
+const CHROME_PIN: &str = include_str!("../../docs/sprint/CHROME_PIN");
+
+static UNSAFE_NO_SANDBOX: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Operator opt-out (`--unsafe-no-sandbox`): run Chrome without its sandbox. Loud, never the default.
+pub fn allow_unsafe_no_sandbox() {
+    UNSAFE_NO_SANDBOX.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
+fn chrome_pin() -> String {
+    std::env::var("MANUK_CHROME_PIN")
+        .unwrap_or_else(|_| CHROME_PIN.trim().to_string())
+}
+
+/// `MANUK_CHROME`/`CHROME` if set, else the pinned CfT build under `~/.local/chrome-cft/<pin>/`.
+/// There is deliberately no fallback to whatever `google-chrome` is on PATH: that is an unpinned build.
+fn chrome_exe() -> Result<String> {
+    if let Some(e) = std::env::var("MANUK_CHROME")
         .ok()
         .or_else(|| std::env::var("CHROME").ok())
-        .unwrap_or_else(|| "google-chrome".into())
+    {
+        return Ok(e);
+    }
+    let home = std::env::var("HOME").unwrap_or_default();
+    let p = PathBuf::from(home)
+        .join(".local/chrome-cft")
+        .join(chrome_pin())
+        .join("chrome-linux64/chrome");
+    if p.exists() {
+        return Ok(p.display().to_string());
+    }
+    bail!(
+        "pinned Chrome {} not found at {} (set MANUK_CHROME to override)",
+        chrome_pin(),
+        p.display()
+    )
+}
+
+/// Chrome's command line. `--no-sandbox` appears only under the explicit unsafe flag (or the test mutant).
+fn chrome_args(unsafe_no_sandbox: bool) -> Vec<&'static str> {
+    let mut a = vec!["--headless=new"];
+    if unsafe_no_sandbox {
+        a.push("--no-sandbox");
+    }
+    a.extend([
+        "--disable-gpu",
+        "--disable-dev-shm-usage",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--mute-audio",
+        "--disable-background-networking",
+        "--remote-debugging-port=0",
+    ]);
+    a
 }
 
 impl CdpBackend {
@@ -1074,7 +1124,13 @@ impl CdpBackend {
                 .as_nanos()
         ));
         std::fs::create_dir_all(&dir)?;
-        let mut cmd = Command::new(chrome_exe());
+        let exe = chrome_exe()?;
+        let no_sandbox = UNSAFE_NO_SANDBOX.load(std::sync::atomic::Ordering::SeqCst)
+            || mutated("sandbox");
+        if no_sandbox {
+            eprintln!("manuk-mcp: WARNING: Chrome is running WITHOUT its sandbox (--unsafe-no-sandbox). A renderer bug is full code execution as this user. Do not load untrusted pages.");
+        }
+        let mut cmd = Command::new(&exe);
         // If this server is killed (the harness ends a session by SIGKILL), Chrome must not outlive it.
         #[cfg(target_os = "linux")]
         unsafe {
@@ -1085,24 +1141,14 @@ impl CdpBackend {
             });
         }
         let child = cmd
-            .args([
-                "--headless=new",
-                "--no-sandbox",
-                "--disable-gpu",
-                "--disable-dev-shm-usage",
-                "--no-first-run",
-                "--no-default-browser-check",
-                "--mute-audio",
-                "--disable-background-networking",
-                "--remote-debugging-port=0",
-            ])
+            .args(chrome_args(no_sandbox))
             .arg(format!("--user-data-dir={}", dir.display()))
             .arg(format!("--window-size={width},{height}"))
             .arg("about:blank")
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
-            .with_context(|| format!("launching {}", chrome_exe()))?;
+            .with_context(|| format!("launching {exe}"))?;
         let port_file = dir.join("DevToolsActivePort");
         let t0 = Instant::now();
         let (port, path) = loop {
@@ -1126,6 +1172,16 @@ impl CdpBackend {
             session: None,
             events: VecDeque::new(),
         };
+        let ver = cdp.call("Browser.getVersion", json!({}))?;
+        let product = ver["product"].as_str().unwrap_or("?").to_string();
+        let pin = chrome_pin();
+        eprintln!(
+            "manuk-mcp: chrome backend: {product} (pin {pin}) sandbox={}",
+            if no_sandbox { "OFF" } else { "on" }
+        );
+        if !product.ends_with(&pin) {
+            eprintln!("manuk-mcp: WARNING: running {product}, NOT the pinned {pin}; measurements taken now are not comparable");
+        }
         let targets = cdp.call("Target.getTargets", json!({}))?;
         let tid = targets["targetInfos"]
             .as_array()

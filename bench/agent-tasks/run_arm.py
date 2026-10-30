@@ -39,11 +39,23 @@ ROLLBACK_HINT_V2 = ("Your checkpoint, restore and fork tools are deferred: they 
 HINTS = {"manuk+rollback": ROLLBACK_HINT, "manuk+rollback.v2": ROLLBACK_HINT_V2}
 
 
+def pinned_chrome():
+    """CB.SANDBOX: the pinned CfT binary, never whatever `google-chrome` PATH happens to give (a bare box had 156)."""
+    pin = os.environ.get("MANUK_CHROME_PIN") or sys.exit("refusing: MANUK_CHROME_PIN unset")
+    exe = os.path.expanduser(f"~/.local/chrome-cft/{pin}/chrome-linux64/chrome")
+    if not os.path.exists(exe):
+        sys.exit(f"refusing: pinned Chrome {pin} not at {exe}")
+    got = subprocess.run([exe, "--version"], capture_output=True, text=True).stdout.strip()
+    if not got.endswith(pin):
+        sys.exit(f"refusing: {exe} reports {got!r}, not the pin {pin}")
+    return exe
+
+
 def arm_config(arm, tmp):
     if arm == "playwright":
-        chrome = shutil.which("google-chrome") or "google-chrome"
+        chrome = pinned_chrome()
         cfg = {"mcpServers": {"browser": {"command": "npx", "args": [
-            "-y", "@playwright/mcp@0.0.83", "--headless", "--isolated", "--no-sandbox", "--executable-path", chrome]}}}
+            "-y", "@playwright/mcp@0.0.83", "--headless", "--isolated", "--executable-path", chrome]}}}
         allowed = "mcp__browser"
     elif arm in ("manuk", "manuk+rollback", "manuk+rollback.v2"):
         exe = shutil.which("manuk-mcp") or os.path.join(ROOT, "target/release/manuk-mcp")
@@ -56,7 +68,7 @@ def arm_config(arm, tmp):
         if not os.path.exists(exe):
             return None, None
         cfg = {"mcpServers": {"browser": {"command": exe, "args": ["--backend", "chrome"],
-                                          "env": {"MANUK_CHROME": shutil.which("google-chrome") or "google-chrome"}}}}
+                                          "env": {"MANUK_CHROME": pinned_chrome()}}}}
         allowed = "mcp__browser"
     elif arm == "stub-follow":  # control: a planted always-follow agent (stub_follow.py via --claude); no browser
         cfg, allowed = {"mcpServers": {}}, ""
