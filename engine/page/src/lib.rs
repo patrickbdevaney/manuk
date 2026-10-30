@@ -5260,6 +5260,12 @@ impl Page {
                 );
                 return;
             }
+            // **Scripts the page injected AFTER the dynamic-script phase still have to run.** A Next.js
+            // app's `router.push` fetches the route's flight payload, renders, and webpack then appends
+            // the route's chunk `<script>`s — in the DOM, never executed, so the page sat on its
+            // loading shell (topwork/networkin, W3.18.a). A no-op when nothing new was appended.
+            self.fetch_and_run_dynamic_scripts(fonts, viewport_width, 4)
+                .await;
             let mut reqs = self.take_fetches();
             if reqs.is_empty() {
                 return;

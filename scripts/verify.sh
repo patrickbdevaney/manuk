@@ -140,6 +140,7 @@ _launch gs cargo test -q -p manuk-page --features stylo,spidermonkey --test g_si
 _launch gd cargo test -q -p manuk-page --features stylo,spidermonkey --test g_dedup
 _launch gra cargo test -q -p manuk-page --features stylo,spidermonkey --test g_runaway
 _launch gc cargo test -q -p manuk-page --features stylo,spidermonkey --test g_contain
+_launch grn cargo test -q -p manuk-page --features stylo,spidermonkey --test g_get_root_node_is_the_topmost_node
 # (G_RUNTIME_COUNT + G_INTERACT are part of the single `_launch shell` above — observer tick 118)
 
 

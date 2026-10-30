@@ -11666,8 +11666,14 @@ unsafe fn el_get_root_node(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) ->
                 None => break,
             }
         }
+        // DOM §4.4 getRootNode: the topmost node of the chain — a document is its own root and a
+        // detached subtree's root is its own top, not `window.document`. React 19 reads
+        // `container.getRootNode()` to find the hoistable root; `null` there is its error #446
+        // ("resourceRoot was expected to exist"), which blanked six Next.js apps.
+        let refl = new_reflector(cx, dom, cur);
+        *vp = ObjectValue(refl);
+        return true;
     }
-    // Not in a shadow tree → the document, read from the rooted global (never a cached raw pointer).
     el_get_owner_document(cx, 0, vp)
 }
 

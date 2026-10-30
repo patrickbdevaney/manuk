@@ -377,7 +377,12 @@ mod tests {
     /// the select, and a boxless option with NO select is still ungrounded.
     #[test]
     fn a_boxless_option_is_grounded_by_its_select() {
-        let r = |x, y, w, h| Rect { x, y, width: w, height: h };
+        let r = |x, y, w, h| Rect {
+            x,
+            y,
+            width: w,
+            height: h,
+        };
         let select = n(
             2,
             Role::ComboBox,
@@ -389,7 +394,13 @@ mod tests {
             ],
         );
         let orphan = n(5, Role::Option, "Orphan", None, vec![]);
-        let root = n(1, Role::Main, "", Some(r(0.0, 0.0, 800.0, 600.0)), vec![select, orphan]);
+        let root = n(
+            1,
+            Role::Main,
+            "",
+            Some(r(0.0, 0.0, 800.0, 600.0)),
+            vec![select, orphan],
+        );
         let t = tally(&root);
         assert_eq!((t.total, t.drivable, t.ungrounded), (4, 3, 1), "{t:?}");
     }
