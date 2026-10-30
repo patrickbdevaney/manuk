@@ -14,7 +14,7 @@
 //! whether our own tree is actionable by our own agent.
 
 use anyhow::{bail, Result};
-use manuk_agent::drivability::{self, classify, targets, Verdict};
+use manuk_agent::drivability::{self, targets, Verdict};
 use manuk_agent::AgentBrowser;
 
 #[tokio::main]
@@ -79,6 +79,7 @@ async fn main() -> Result<()> {
 
         if list {
             let ts = targets(&tree);
+            let hosts = drivability::option_hosts(&tree);
             let mut counts = std::collections::HashMap::<(String, String), usize>::new();
             for x in &ts {
                 *counts
@@ -87,7 +88,7 @@ async fn main() -> Result<()> {
             }
             for x in &ts {
                 let d = counts[&(x.role.as_str().to_string(), x.name.trim().to_string())];
-                let v = classify(&tree, x, d);
+                let v = drivability::classify_hosted(&tree, x, d, &hosts);
                 if v != Verdict::Drivable {
                     println!(
                         "    {:<11} {:<10} {:?}",

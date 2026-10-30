@@ -180,6 +180,50 @@ pub fn classify(root: &A11yNode, target: &A11yNode, duplicates: usize) -> Verdic
     }
 }
 
+/// The `<select>` (combobox or listbox) enclosing each `<option>`, keyed by the option's node.
+///
+/// ⭐ **A COLLAPSED `<select>`'S OPTIONS HAVE NO BOX, AND THAT IS NOT A DEFECT.** Chrome gives them
+/// none either: the popup is not part of the page's layout. On chat.google.com 83 of 91 targets
+/// and on a Little Caesars locator 18 of 29 were `Ungrounded` for exactly this reason. An agent
+/// does not click an option's coordinates; it aims at the select and chooses one, so the option is
+/// grounded by its host.
+pub fn option_hosts(root: &A11yNode) -> std::collections::HashMap<manuk_dom::NodeId, &A11yNode> {
+    fn go<'a>(
+        n: &'a A11yNode,
+        host: Option<&'a A11yNode>,
+        m: &mut std::collections::HashMap<manuk_dom::NodeId, &'a A11yNode>,
+    ) {
+        let host = if matches!(n.role, Role::ComboBox | Role::ListBox) {
+            Some(n)
+        } else {
+            host
+        };
+        if let (Role::Option, Some(h)) = (&n.role, host) {
+            m.insert(n.node, h);
+        }
+        for c in &n.children {
+            go(c, host, m);
+        }
+    }
+    let mut m = std::collections::HashMap::new();
+    go(root, None, &mut m);
+    m
+}
+
+/// [`classify`], except an option with no box of its own is judged through its host select.
+pub fn classify_hosted(
+    root: &A11yNode,
+    target: &A11yNode,
+    duplicates: usize,
+    hosts: &std::collections::HashMap<manuk_dom::NodeId, &A11yNode>,
+) -> Verdict {
+    let own_box = target.bbox.is_some_and(|b| b.width > 0.0 && b.height > 0.0);
+    match (own_box, hosts.get(&target.node)) {
+        (false, Some(host)) => classify(root, host, duplicates),
+        _ => classify(root, target, duplicates),
+    }
+}
+
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct Tally {
     pub total: usize,
@@ -238,6 +282,7 @@ impl Tally {
 /// Classify every actionable target in a tree.
 pub fn tally(root: &A11yNode) -> Tally {
     let ts = targets(root);
+    let hosts = option_hosts(root);
     let mut counts = std::collections::HashMap::<(String, String), usize>::new();
     for t in &ts {
         *counts
@@ -250,7 +295,7 @@ pub fn tally(root: &A11yNode) -> Tally {
     };
     for t in &ts {
         let d = counts[&(t.role.as_str().to_string(), t.name.trim().to_string())];
-        match classify(root, t, d) {
+        match classify_hosted(root, t, d, &hosts) {
             Verdict::Drivable => out.drivable += 1,
             Verdict::Ungrounded => out.ungrounded += 1,
             Verdict::Ambiguous => out.ambiguous += 1,
@@ -268,7 +313,7 @@ pub fn tally(root: &A11yNode) -> Tally {
     }
     for (t, s) in &scoped {
         let d = scounts[&(*s, t.role.as_str().to_string(), t.name.trim().to_string())];
-        if classify(root, t, d) == Verdict::Drivable {
+        if classify_hosted(root, t, d, &hosts) == Verdict::Drivable {
             out.drivable_scoped += 1;
         }
     }
@@ -293,7 +338,7 @@ pub fn tally(root: &A11yNode) -> Tally {
             t.role.as_str().to_string(),
             t.name.trim().to_string(),
         )];
-        if classify(root, t, d) == Verdict::Drivable {
+        if classify_hosted(root, t, d, &hosts) == Verdict::Drivable {
             out.drivable_sectioned += 1;
         }
     }
@@ -302,9 +347,50 @@ pub fn tally(root: &A11yNode) -> Tally {
     // MisHit can still fail. The distance between this and `sectioned` is inherent ambiguity that no
     // further NAMING term can remove.
     for t in &ts {
-        if classify(root, t, 1) == Verdict::Drivable {
+        if classify_hosted(root, t, 1, &hosts) == Verdict::Drivable {
             out.drivable_ordinal += 1;
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use manuk_a11y::Rect;
+    use manuk_dom::NodeId;
+
+    fn n(id: u64, role: Role, name: &str, bbox: Option<Rect>, children: Vec<A11yNode>) -> A11yNode {
+        A11yNode {
+            node: NodeId(id as u64),
+            role,
+            name: name.to_string(),
+            bbox,
+            z: 0,
+            hittable: true,
+            state: Default::default(),
+            children,
+        }
+    }
+
+    /// A collapsed `<select>` has a box; its options have none. The options are drivable through
+    /// the select, and a boxless option with NO select is still ungrounded.
+    #[test]
+    fn a_boxless_option_is_grounded_by_its_select() {
+        let r = |x, y, w, h| Rect { x, y, width: w, height: h };
+        let select = n(
+            2,
+            Role::ComboBox,
+            "Language",
+            Some(r(10.0, 10.0, 100.0, 20.0)),
+            vec![
+                n(3, Role::Option, "Deutsch", None, vec![]),
+                n(4, Role::Option, "English", None, vec![]),
+            ],
+        );
+        let orphan = n(5, Role::Option, "Orphan", None, vec![]);
+        let root = n(1, Role::Main, "", Some(r(0.0, 0.0, 800.0, 600.0)), vec![select, orphan]);
+        let t = tally(&root);
+        assert_eq!((t.total, t.drivable, t.ungrounded), (4, 3, 1), "{t:?}");
+    }
 }
