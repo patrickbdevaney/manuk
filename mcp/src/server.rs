@@ -70,7 +70,7 @@ fn schema(props: Value, required: &[&str]) -> Map<String, Value> {
     m
 }
 
-fn tools() -> Vec<Tool> {
+pub fn tools() -> Vec<Tool> {
     let t = |n: &'static str, d: &'static str, mut s: Map<String, Value>| {
         if let Some(Value::Object(p)) = s.get_mut("properties") {
             if matches!(n, "navigate" | "act" | "type" | "fill_form") {

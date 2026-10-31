@@ -3,6 +3,14 @@ fn main() -> anyhow::Result<()> {
     if args.first().map(String::as_str) == Some("--confine-selftest") {
         return manuk_mcp::confine::selftest(&args[1..]);
     }
+    // W4.E4: `--zygote <socket>` serves a warmed pre-forked process pool; each connection becomes
+    // one ordinary stdio session (the socket is its stdin/stdout) in a fresh forked child.
+    if let Some(i) = args.iter().position(|a| a == "--zygote") {
+        anyhow::ensure!(i + 1 < args.len(), "--zygote needs a socket path");
+        let sock = std::path::PathBuf::from(args.remove(i + 1));
+        args.remove(i);
+        manuk_mcp::zygote::serve(&sock)?;
+    }
     let grants = match manuk_mcp::policy::parse_grants(&mut args) {
         Ok(g) => g,
         Err(e) => {
