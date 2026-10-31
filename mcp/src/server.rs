@@ -82,7 +82,14 @@ fn tools() -> Vec<Tool> {
         let mut ann = rmcp::model::ToolAnnotations::new().read_only(ro);
         ann.destructive_hint = Some(destructive);
         ann.open_world_hint = Some(matches!(n, "navigate" | "act" | "type" | "commit" | "fill_form"));
-        Tool::new(n, d, Arc::new(s)).annotate(ann)
+        let tool = Tool::new(n, d, Arc::new(s)).annotate(ann);
+        // R-B1: the core tools load upfront (Claude Code otherwise defers every MCP tool behind a ToolSearch turn).
+        if matches!(n, "navigate" | "act" | "type" | "extract") {
+            let Value::Object(m) = json!({"anthropic/alwaysLoad": true}) else { unreachable!() };
+            tool.with_meta(rmcp::model::MetaObject(m))
+        } else {
+            tool
+        }
     };
     vec![
         t("navigate", "Load a URL. Returns the page header and a compact observation: one line per node, `[hN] role \"name\" [state]`. Handles (hN) are stable until the next navigation.", schema(json!({"url": {"type": "string"}}), &["url"])),
@@ -201,4 +208,19 @@ fn serve(tx: mpsc::UnboundedSender<Job>) -> Result<()> {
         svc.waiting().await?;
         Ok(())
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::tools;
+
+    /// R-B1 gate: the four core tools carry `_meta["anthropic/alwaysLoad"]`, nothing else does.
+    #[test]
+    fn core_tools_are_always_loaded() {
+        for t in tools() {
+            let always = t.meta.as_ref().and_then(|m| m.0.get("anthropic/alwaysLoad")).and_then(|v| v.as_bool());
+            let core = matches!(t.name.as_ref(), "navigate" | "act" | "type" | "extract");
+            assert_eq!(always == Some(true), core, "tool {} alwaysLoad mismatch", t.name);
+        }
+    }
 }
