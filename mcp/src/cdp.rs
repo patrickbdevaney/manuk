@@ -1625,6 +1625,14 @@ impl CdpBackend {
         false
     }
 
+    /// Backend id of the element the page itself reports under viewport point `(x, y)`.
+    fn page_hit(&mut self, x: f32, y: f32) -> Result<u64> {
+        let r = self.cdp.call("Runtime.evaluate", json!({"expression": format!("document.elementFromPoint({x},{y})")}))?;
+        let obj = r["result"]["objectId"].as_str().ok_or_else(|| anyhow!("no element at point"))?;
+        let d = self.cdp.call("DOM.describeNode", json!({"objectId": obj}))?;
+        d["node"]["backendNodeId"].as_u64().ok_or_else(|| anyhow!("no backend id"))
+    }
+
     /// Dispatch-time re-validation: pick a point of the (freshly re-found) element's box that
     /// `DOM.getNodeForLocation` says belongs to the element, else report what covers it.
     fn aim(&mut self, node: NodeId) -> Result<(f32, f32, u64)> {
@@ -1635,12 +1643,28 @@ impl CdpBackend {
         let bbox = n
             .bbox
             .ok_or_else(|| anyhow!("UNREACHABLE: element has no box at dispatch"))?;
+        // The snapshot's scroll offset and box go stale once the page has scrolled or shifted
+        // since (smooth scroll, a layout change); aim from the element's live box and scroll.
+        let mut bbox = bbox;
+        if !mutated("cached-scroll") {
+            let live = self.object_for(be).and_then(|o| {
+                self.call_on(&o, "function(){const r=this.getBoundingClientRect();return JSON.stringify([r.x+scrollX,r.y+scrollY,r.width,r.height,scrollX,scrollY])}", json!([]))
+            });
+            if let Some(Ok(v)) = live.ok().map(|v| serde_json::from_str::<[f64; 6]>(v.as_str().unwrap_or(""))) {
+                bbox = Rect { x: v[0] as f32, y: v[1] as f32, width: v[2] as f32, height: v[3] as f32 };
+                self.scroll = (v[4] as f32, v[5] as f32);
+            }
+        }
         let vp = Rect {
             x: self.scroll.0,
             y: self.scroll.1,
             width: self.width,
             height: self.height,
         };
+        // Hit-testing reads the compositor's committed scroll: let the page present a frame first.
+        if !mutated("cached-scroll") {
+            let _ = self.cdp.call("Runtime.evaluate", json!({"expression": "new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(()=>r(0))))", "awaitPromise": true}));
+        }
         let aim = bbox
             .intersection(&vp)
             .ok_or_else(|| anyhow!("OFFSCREEN at dispatch: element is outside the viewport"))?;
@@ -1654,8 +1678,14 @@ impl CdpBackend {
         let mut cover = None;
         for (px, py) in pts {
             let (cx, cy) = (px - self.scroll.0, py - self.scroll.1);
-            let r = self.cdp.call("DOM.getNodeForLocation", json!({"x": cx.floor() as i64, "y": cy.floor() as i64, "includeUserAgentShadowDOM": false}))?;
-            let hit = r["backendNodeId"].as_u64().unwrap_or(0);
+            let r = self.cdp.call("DOM.getNodeForLocation", json!({"x": cx.floor() as i64, "y": cy.floor() as i64, "includeUserAgentShadowDOM": false}));
+            let hit = match r {
+                Ok(r) => r["backendNodeId"].as_u64().unwrap_or(0),
+                // After a scroll the browser process can briefly have no committed frame to
+                // hit-test; the page's own layout-based hit test is always current.
+                Err(_) if !mutated("cached-scroll") => self.page_hit(cx, cy).unwrap_or(0),
+                Err(e) => return Err(e),
+            };
             if hit == be || self.within(hit, be) || mutated("no-revalidate") {
                 return Ok((cx, cy, be));
             }

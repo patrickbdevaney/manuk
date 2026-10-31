@@ -18,6 +18,7 @@ const PAGE: &str = r#"<!doctype html><html><head><title>Shop</title></head><body
 <p>PRICE-MARKER Teal Kettle costs 19.99</p>
 <div id="gift" onclick="document.title='gift'">Gift wrap</div>
 <div id="promo">Promo banner</div>
+<div style="height:900px">spacer</div>
 <div id="dd" role="combobox" aria-label="City" aria-haspopup="listbox" aria-expanded="false" tabindex="0">Choose city</div>
 <div id="pop" role="listbox" style="display:none"><div role="option">Paris</div><div role="option">Rome</div></div>
 <h2 id="o">cart:</h2>
