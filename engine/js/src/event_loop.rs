@@ -8209,6 +8209,40 @@ const PRELUDE: &str = r#"
         }
       } catch (e) {}
 
+      // ── **GLOBAL EVENT HANDLER IDL ATTRIBUTES EXIST, `null` UNTIL ASSIGNED.** ───────────────
+      // React decides at module load whether the browser has a native `input` event:
+      // `'oninput' in document`, else `typeof div.oninput === 'function'` after `setAttribute`. Here
+      // both answered no — the `on*` properties were only ever expandos created by assignment — so
+      // React fell back to its IE9 polyfill (focusin/propertychange/selectionchange) and `onChange`
+      // NEVER fired for any text input: a controlled field kept the typed text in the DOM, then
+      // re-rendered back to its old state value (opendining's phone "Enter a valid phone number").
+      // Chrome has every one of these as `null` on the element / document / window prototype.
+      (function () {
+        var names = ['abort', 'blur', 'cancel', 'canplay', 'canplaythrough', 'change', 'click', 'close',
+          'contextmenu', 'cuechange', 'dblclick', 'drag', 'dragend', 'dragenter', 'dragleave', 'dragover',
+          'dragstart', 'drop', 'durationchange', 'emptied', 'ended', 'error', 'focus', 'formdata', 'input',
+          'invalid', 'keydown', 'keypress', 'keyup', 'load', 'loadeddata', 'loadedmetadata', 'loadstart',
+          'mousedown', 'mouseenter', 'mouseleave', 'mousemove', 'mouseout', 'mouseover', 'mouseup', 'pause',
+          'play', 'playing', 'progress', 'ratechange', 'reset', 'resize', 'scroll', 'seeked', 'seeking',
+          'select', 'slotchange', 'stalled', 'submit', 'suspend', 'timeupdate', 'toggle', 'volumechange',
+          'waiting', 'wheel', 'beforeinput', 'copy', 'cut', 'paste', 'pointerdown', 'pointerup',
+          'pointermove', 'pointerenter', 'pointerleave', 'pointerover', 'pointerout', 'pointercancel',
+          'gotpointercapture', 'lostpointercapture', 'touchstart', 'touchend', 'touchmove', 'touchcancel',
+          'animationstart', 'animationend', 'animationiteration', 'transitionend', 'auxclick',
+          'selectstart', 'beforetoggle', 'securitypolicyviolation'];
+        var targets = [globalThis.__protoHTMLElement];
+        try { var dp = Object.getPrototypeOf(document); if (dp && targets.indexOf(dp) < 0) { targets.push(dp); } } catch (e) {}
+        targets.forEach(function (t) {
+          if (!t) { return; }
+          names.forEach(function (n) {
+            var k = 'on' + n;
+            if (!(k in t)) {
+              try { Object.defineProperty(t, k, { value: null, writable: true, configurable: true, enumerable: true }); } catch (e) {}
+            }
+          });
+        });
+      })();
+
       // ── **THE INERT INTERFACE SURFACE, INSTALLED LAST.** ────────────────────────────────────
       // Everything real has had its chance to define itself by now. Whatever is still `undefined`
       // gets a named, inert constructor so that referencing it is not a ReferenceError.
