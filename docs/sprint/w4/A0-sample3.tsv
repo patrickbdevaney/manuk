@@ -1,0 +1,11 @@
+arm	task	run	hand_label	basis	chrome_ver
+manuk+rollback.v2	fly-unified-6	3	dialog_modal	empty overlay covers Previous Month; year select ignored	145.0.7632.116
+manuk	dashdish-2	2	act_before_reacted	tile click returns no change, page never reacts (closest category)	145.0.7632.116
+manuk	networkin-1	3	wrong_answer	post published, run ended with answer, no layer defect narrated	145.0.7632.116
+manuk+rollback.v2	zilloft-3	1	act_before_reacted	clicks registered, URL/page never changed (closest category)	145.0.7632.116
+manuk+rollback.v2	gocalendar-4	1	act_before_reacted	every event click returns no change (closest category)	145.0.7632.116
+manuk	fly-unified-6	3	dialog_modal	overlay blocks month arrow; year control ignored input	145.0.7632.116
+cdp-layer	fly-unified-5	3	wrong_answer	wrong origin city typed, date 2024 unreachable; finished with answer	145.0.7632.116
+manuk	networkin-9	1	wrong_answer	completed connect+message, ended with answer	145.0.7632.116
+cdp-layer	udriver-9	1	wrong_answer	booked ride with wrong direction/date; ended with answer	145.0.7632.116
+cdp-layer	staynb-2	3	wrong_answer	booked after Enter workaround; ended with answer	145.0.7632.116
