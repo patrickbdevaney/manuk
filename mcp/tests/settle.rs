@@ -26,7 +26,9 @@ fn serve() -> String {
                 let n = s.read(&mut buf).unwrap_or(0);
                 let req = String::from_utf8_lossy(&buf[..n]).to_string();
                 let body = if req.starts_with("GET /api/data") {
-                    std::thread::sleep(std::time::Duration::from_millis(400));
+                    // W3.12.a: MANUK_SETTLE_FETCH_MS=0 serves the fetch instantly (the --deterministic wall).
+                    let ms = std::env::var("MANUK_SETTLE_FETCH_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(400);
+                    std::thread::sleep(std::time::Duration::from_millis(ms));
                     "ORDER-42"
                 } else {
                     PAGE
@@ -59,6 +61,8 @@ impl Client {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_manuk-mcp"));
         if chrome {
             cmd.args(["--backend", "chrome"]);
+        } else if std::env::var("MANUK_SETTLE_DETERMINISTIC").is_ok() {
+            cmd.arg("--deterministic");
         }
         cmd.env(
             "MANUK_ACTLOG_DIR",

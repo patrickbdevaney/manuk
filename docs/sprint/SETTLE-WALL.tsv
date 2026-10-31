@@ -1,0 +1,13 @@
+chrome_ver	backend	mode	fetch_ms	run	act_wall_ms	late_result_first_obs
+145.0.7632.116	manuk	default	400	1	405.479	yes
+145.0.7632.116	manuk	default	400	2	405.464	yes
+145.0.7632.116	manuk	default	400	3	405.282	yes
+145.0.7632.116	chrome	default	400	1	2300.687	yes
+145.0.7632.116	chrome	default	400	2	2308.020	yes
+145.0.7632.116	chrome	default	400	3	2303.512	yes
+145.0.7632.116	manuk	deterministic	0	1	5.394	yes
+145.0.7632.116	manuk	deterministic	0	2	4.605	yes
+145.0.7632.116	manuk	deterministic	0	3	4.792	yes
+145.0.7632.116	chrome	default	0	1	1887.190	yes
+145.0.7632.116	chrome	default	0	2	1890.353	yes
+145.0.7632.116	chrome	default	0	3	1887.044	yes
