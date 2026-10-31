@@ -184,6 +184,8 @@ pub struct AgentBrowser {
     ),
     /// Bumped per loaded page so a late event from the previous page's socket is dropped.
     ws_gen: u64,
+    /// W4.A4: where the page's own `pushState` put the URL; cleared by every load.
+    routed_url: Option<String>,
 }
 
 /// A synchronous readiness snapshot (see [`AgentBrowser::readiness`]).
@@ -476,6 +478,7 @@ impl AgentBrowser {
             ws_send: std::collections::HashMap::new(),
             ws_events: tokio::sync::mpsc::unbounded_channel(),
             ws_gen: 0,
+            routed_url: None,
         }
     }
 
@@ -496,6 +499,35 @@ impl AgentBrowser {
             interactive,
             pending: self.pending(),
         }
+    }
+
+    /// W4.A4: which document is loaded. Bumped by every load, never by `pushState`/`replaceState`, so a
+    /// caller can tell an SPA route change (same document, handles still good) from a real navigation.
+    pub fn doc_gen(&self) -> u64 {
+        self.ws_gen
+    }
+
+    /// W4.A4: elements that are clickable without a semantic role: an inline `onclick`, a
+    /// `tabindex`, or `role=button|link`, on anything the a11y tree has not already made operable.
+    /// Listeners attached from script are not visible here (they live in the JS world).
+    pub fn clickable_nodes(&self) -> Vec<(manuk_dom::NodeId, String)> {
+        let (Some(page), Ok(tree)) = (self.page.as_ref(), self.a11y_tree()) else {
+            return Vec::new();
+        };
+        let dom = page.dom();
+        tree.iter()
+            .filter(|n| !n.role.is_interactive())
+            .filter(|n| {
+                dom.element(n.node).is_some_and(|e| {
+                    e.attr("onclick").is_some()
+                        || e.attr("tabindex").is_some_and(|t| t.trim() != "-1")
+                })
+            })
+            .map(|n| {
+                let t = dom.text_content(n.node);
+                (n.node, t.split_whitespace().collect::<Vec<_>>().join(" "))
+            })
+            .collect()
     }
 
     /// W3.12: call before dispatching an action; timers armed by it beyond [`SOON_MS`] stay pending.
@@ -581,6 +613,7 @@ impl AgentBrowser {
         // The previous page's sockets die with it: dropping the senders closes them.
         self.ws_send.clear();
         self.ws_gen += 1;
+        self.routed_url = None;
         self.page = Some(page);
         self.service_websockets(SETTLE_BUDGET).await;
         Ok(())
@@ -825,7 +858,9 @@ impl AgentBrowser {
 
     /// The currently loaded URL, or `None` before the first navigation.
     pub fn current_url(&self) -> Option<&str> {
-        self.page.as_ref().map(|p| p.final_url.as_str())
+        self.page
+            .as_ref()
+            .map(|p| self.routed_url.as_deref().unwrap_or(p.final_url.as_str()))
     }
 
     /// The current page's title, or `None` before the first navigation.
@@ -1574,6 +1609,22 @@ impl AgentBrowser {
             p.settle_async(fonts, w, SETTLE_BUDGET).await;
         }
         self.service_websockets(SETTLE_BUDGET).await;
+        self.follow_history_ops();
+    }
+
+    /// W4.A4: a `pushState`/`replaceState` the page ran moves the URL without a load (the shell reflects
+    /// it in the omnibox the same way). Back/forward/go are the shell's to drive, not drained here.
+    fn follow_history_ops(&mut self) {
+        let Some(p) = self.page.as_ref() else { return };
+        for (kind, _state, url) in p.take_history_ops() {
+            if matches!(kind, 0 | 1) && !url.is_empty() {
+                let abs = url::Url::parse(&p.final_url)
+                    .and_then(|b| b.join(&url))
+                    .map(|u| u.to_string())
+                    .unwrap_or(url);
+                self.routed_url = Some(abs);
+            }
+        }
     }
 
     /// PNG screenshot of the current viewport.

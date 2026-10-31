@@ -811,6 +811,8 @@ struct Idents {
     key: HashMap<u64, String>,
     /// stable NodeId → parent stable NodeId
     parent: HashMap<u64, u64>,
+    /// W4.A4: stable ids Chrome reports as clickable (a click listener or `cursor:pointer`)
+    click: HashMap<u64, String>,
 }
 
 struct Built {
@@ -876,7 +878,8 @@ impl Builder<'_> {
         let role = role_of(r, i, body_child);
         let mut name = name_of(r, i, &role);
         let mut role = role;
-        if matches!(role, Role::Generic) && r.clickable.contains(&i) && !name.is_empty() {
+        let was_generic_click = matches!(role, Role::Generic) && r.clickable.contains(&i);
+        if was_generic_click && !name.is_empty() {
             role = Role::Button;
         }
         if matches!(role, Role::Generic) && name.is_empty() {
@@ -890,6 +893,9 @@ impl Builder<'_> {
         self.idents.backend.insert(id, r.backend[i]);
         self.idents.index.insert(id, i);
         self.idents.key.insert(id, full_key);
+        if was_generic_click {
+            self.idents.click.insert(id, r.text_of(i));
+        }
         if let Some(p) = parent_id {
             self.idents.parent.insert(id, p);
         }
@@ -1150,6 +1156,8 @@ pub struct CdpBackend {
     width: f32,
     height: f32,
     alias: HashMap<u64, u64>,
+    /// W4.A4: `performance.timeOrigin` of the current document (bits): new per load, not per `pushState`.
+    doc: u64,
     built: Option<Built>,
     url: String,
     title: String,
@@ -1360,6 +1368,7 @@ impl CdpBackend {
             width: width as f32,
             height: height as f32,
             alias: HashMap::new(),
+            doc: 0,
             built: None,
             url: "about:blank".into(),
             title: String::new(),
@@ -1420,9 +1429,10 @@ impl CdpBackend {
 
     /// Re-snapshot the page and rebuild the tree, shield and identity tables.
     fn refresh(&mut self) -> Result<()> {
-        let info = self.eval("JSON.stringify({u:location.href,t:document.title,x:scrollX,y:scrollY,w:innerWidth,h:innerHeight,ch:Math.max(document.documentElement.scrollHeight,document.body?document.body.scrollHeight:0),tx:document.body?document.body.innerText:''})")?;
+        let info = self.eval("JSON.stringify({o:performance.timeOrigin,u:location.href,t:document.title,x:scrollX,y:scrollY,w:innerWidth,h:innerHeight,ch:Math.max(document.documentElement.scrollHeight,document.body?document.body.scrollHeight:0),tx:document.body?document.body.innerText:''})")?;
         let info: Value = serde_json::from_str(info.as_str().unwrap_or("{}"))?;
         self.url = info["u"].as_str().unwrap_or("").to_string();
+        self.doc = info["o"].as_f64().unwrap_or(0.0).to_bits();
         self.title = info["t"].as_str().unwrap_or("").to_string();
         self.scroll = (
             info["x"].as_f64().unwrap_or(0.0) as f32,
@@ -1753,6 +1763,20 @@ impl Backend for CdpBackend {
     fn tree(&self) -> Result<A11yNode> {
         Ok(self.built()?.tree.clone())
     }
+    fn document_id(&self) -> u64 {
+        self.doc
+    }
+    fn clickables(&self) -> HashMap<NodeId, String> {
+        self.built()
+            .map(|b| {
+                b.idents
+                    .click
+                    .iter()
+                    .map(|(&i, t)| (NodeId(i), t.clone()))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
     fn url(&self) -> String {
         self.url.clone()
     }
@@ -1818,10 +1842,13 @@ impl Backend for CdpBackend {
         let be = self.backend_of(node)?;
         let n = find(&self.built()?.tree, node).ok_or_else(|| anyhow!("STALE: element gone"))?;
         if matches!(n.role, Role::Option) {
+            // A native <option> is chosen through its <select>; an ARIA `role=option` div is clicked.
             let obj = self.object_for(be)?;
-            self.call_on(&obj, "function(){this.selected=true;const s=this.closest('select');if(s){s.dispatchEvent(new Event('input',{bubbles:true}));s.dispatchEvent(new Event('change',{bubbles:true}));}}", json!([]))?;
-            self.after_action()?;
-            return Ok("selected option".into());
+            let done = self.call_on(&obj, "function(){if(this.tagName!=='OPTION')return false;this.selected=true;const s=this.closest('select');if(s){s.dispatchEvent(new Event('input',{bubbles:true}));s.dispatchEvent(new Event('change',{bubbles:true}));}return true}", json!([]))?;
+            if done.as_bool() == Some(true) {
+                self.after_action()?;
+                return Ok("selected option".into());
+            }
         }
         let (x, y, be) = self.aim(node)?;
         // A new-tab link would leave this page; keep the agent in the one tab it observes.

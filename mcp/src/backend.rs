@@ -93,6 +93,16 @@ pub trait Backend {
     fn node_facts(&mut self, _node: NodeId) -> Option<NodeFacts> {
         None
     }
+    /// W4.A4: an id that changes when a NEW document loads and not on same-document (`pushState`)
+    /// route changes; handles stay valid while it holds.
+    fn document_id(&self) -> u64 {
+        0
+    }
+    /// W4.A4: elements an agent can click that carry no semantic role (listeners, `onclick`,
+    /// `cursor:pointer`) with their text, so the observation can mark and name them.
+    fn clickables(&self) -> std::collections::HashMap<NodeId, String> {
+        Default::default()
+    }
     /// Whether this process's request ledger sees the backend's network traffic. A backend whose
     /// requests bypass it (Chrome over CDP) cannot tell CLIENT from WORLD, so checkpoints say UNKNOWN.
     fn sees_network(&self) -> bool {
@@ -225,6 +235,12 @@ impl Backend for AgentBrowser {
     }
     fn node_facts(&mut self, node: NodeId) -> Option<NodeFacts> {
         AgentBrowser::node_facts(self, node)
+    }
+    fn document_id(&self) -> u64 {
+        self.doc_gen()
+    }
+    fn clickables(&self) -> std::collections::HashMap<NodeId, String> {
+        self.clickable_nodes().into_iter().collect()
     }
     fn reset_storage(&mut self) {
         use manuk_net::webstorage::{clear, origins, Area};

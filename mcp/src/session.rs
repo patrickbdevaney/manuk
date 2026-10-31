@@ -1,7 +1,8 @@
 //! The tool logic: short stable handles, the compact line format, diffs, verified actions.
 //! Everything here is backend-agnostic and synchronous-looking; `server` adapts it to MCP.
 
-use std::collections::HashMap;
+use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Write as _;
 
 use anyhow::{anyhow, bail, Result};
@@ -23,12 +24,35 @@ pub enum Output {
     Image { png: Vec<u8>, note: String },
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 struct Entry {
     role: String,
     name: String,
     state: String,
     value: Option<String>,
+    /// W4.A4: a non-semantic element the page treats as clickable (listener, `onclick`, `cursor:pointer`).
+    click: bool,
+    /// W4.A4: ` in listitem "Teal Kettle" in list "Products"`: the nearest named containers. Not part of
+    /// identity: a re-render that moves a card does not make its button "changed".
+    ctx: String,
+}
+
+impl PartialEq for Entry {
+    fn eq(&self, o: &Entry) -> bool {
+        self.role == o.role
+            && self.name == o.name
+            && self.state == o.state
+            && self.value == o.value
+            && self.click == o.click
+    }
+}
+
+/// What the tree walk knows about a node beyond the node itself.
+#[derive(Clone, Default)]
+struct Where {
+    ctx: String,
+    /// Inside banner/navigation/contentinfo/complementary: page chrome, not the content.
+    chrome: bool,
 }
 
 #[derive(Default)]
@@ -49,6 +73,15 @@ pub struct Session<B: Backend> {
     grants: crate::policy::Grants,
     /// This call carried `confirm=true`.
     confirmed: bool,
+    /// W4.A4: filled by every `tree()`: clickable non-semantic nodes, and each node's container context.
+    click: RefCell<HashSet<NodeId>>,
+    wh: RefCell<HashMap<NodeId, Where>>,
+    /// W4.A4: handle → `role|name|context` it was issued for, to re-find it after a re-mount.
+    keys: HashMap<u32, String>,
+    /// W4.A4: handles re-bound since the last action result, to be reported by it.
+    rebound: Vec<String>,
+    /// W4.A4: `Backend::document_id` at the last observation (0 = unknown).
+    doc: u64,
 }
 
 fn role_str(r: &Role) -> String {
@@ -80,6 +113,99 @@ fn entry(n: &A11yNode) -> Entry {
         name: clip(&n.name),
         state: st.render().trim().to_string(),
         value,
+        click: false,
+        ctx: String::new(),
+    }
+}
+
+fn is_container(r: &Role) -> bool {
+    matches!(
+        r,
+        Role::ListItem
+            | Role::Row
+            | Role::Article
+            | Role::Dialog
+            | Role::AlertDialog
+            | Role::Form
+            | Role::Region
+            | Role::List
+            | Role::Table
+    )
+}
+
+fn is_chrome(r: &Role) -> bool {
+    matches!(
+        r,
+        Role::Banner | Role::Navigation | Role::ContentInfo | Role::Complementary
+    )
+}
+
+/// What to call a container: its own name, else its heading, else the first words of its text.
+fn label_of(n: &A11yNode) -> String {
+    let kids = || n.iter().skip(1);
+    // A heading names a card better than its text content does ("Teal Kettle", not "Teal Kettle Add to cart").
+    // (A list or form is named by its own label; only item-like containers lean on their heading.)
+    let own = Some(n).filter(|n| !n.name.is_empty());
+    let named_first = matches!(n.role, Role::List | Role::Table | Role::Form | Role::Region | Role::Dialog | Role::AlertDialog);
+    own.filter(|_| named_first)
+        .or_else(|| kids().find(|k| matches!(k.role, Role::Heading { .. }) && !k.name.is_empty()))
+        .or(own)
+        .or_else(|| kids().find(|k| !k.role.is_interactive() && !k.name.is_empty()))
+        .or_else(|| kids().find(|k| !k.name.is_empty()))
+        .map(|k| clip40(&k.name))
+        .unwrap_or_default()
+}
+
+fn clip40(s: &str) -> String {
+    let s = clip(s);
+    if s.chars().count() > 40 {
+        format!("{}…", s.chars().take(40).collect::<String>())
+    } else {
+        s
+    }
+}
+
+/// All the text under `n`, for naming a clickable `div` that has no name of its own.
+fn text_under(n: &A11yNode) -> String {
+    let mut parts: Vec<&str> = Vec::new();
+    for k in n.iter() {
+        if !k.name.is_empty() && !parts.iter().any(|p| p.contains(k.name.as_str())) {
+            parts.push(&k.name);
+        }
+    }
+    clip(&parts.join(" "))
+}
+
+/// The tree walk behind every handle line: each node's nearest two named containers, and whether it
+/// sits in page chrome. `MANUK_TREE_MUTATE=flat` drops the context (the gate's mutant).
+fn walk_where(n: &A11yNode, stack: &mut Vec<String>, chrome: bool, out: &mut HashMap<NodeId, Where>) {
+    let flat = std::env::var("MANUK_TREE_MUTATE").is_ok_and(|v| v == "flat");
+    let ctx = if flat {
+        String::new()
+    } else {
+        stack
+            .iter()
+            .rev()
+            .take(2)
+            .map(|c| format!(" in {c}"))
+            .collect()
+    };
+    out.insert(n.node, Where { ctx, chrome });
+    let pushed = is_container(&n.role) && {
+        let l = label_of(n);
+        if l.is_empty() {
+            false
+        } else {
+            stack.push(format!("{} {:?}", role_str(&n.role), l));
+            true
+        }
+    };
+    let chrome = chrome || is_chrome(&n.role);
+    for k in &n.children {
+        walk_where(k, stack, chrome, out);
+    }
+    if pushed {
+        stack.pop();
     }
 }
 
@@ -108,6 +234,11 @@ impl<B: Backend> Session<B> {
             include_hidden: false,
             grants: Default::default(),
             confirmed: false,
+            click: Default::default(),
+            wh: Default::default(),
+            keys: HashMap::new(),
+            rebound: Vec::new(),
+            doc: 0,
         }
     }
 
@@ -141,14 +272,54 @@ impl<B: Backend> Session<B> {
 
     /// The a11y tree with everything a human cannot see pruned (R1.4), unless the call opted out.
     fn tree(&self) -> Result<A11yNode> {
-        let tree = self.b.tree()?;
-        if self.include_hidden {
-            return Ok(tree);
+        let mut tree = self.b.tree()?;
+        if !self.include_hidden {
+            if let Some(sh) = self.b.shield()?.filter(|sh| !sh.nodes.is_empty()) {
+                tree = prune(&tree, &sh.nodes).unwrap_or(tree);
+            }
         }
-        Ok(match self.b.shield()? {
-            Some(sh) if !sh.nodes.is_empty() => prune(&tree, &sh.nodes).unwrap_or(tree),
-            _ => tree,
-        })
+        // A `div` with a click listener is a button to the page: say so, and name it from its text.
+        let hints = self.b.clickables();
+        // A container that holds operable controls is delegating to them (one listener on the list):
+        // marking it would only hide the real buttons behind a giant one.
+        fn promote(n: &mut A11yNode, hints: &HashMap<NodeId, String>, done: &mut HashSet<NodeId>) {
+            if let Some(text) = hints.get(&n.node) {
+                if !n.iter().skip(1).any(|k| k.role.is_interactive()) {
+                    n.role = Role::Button;
+                    if n.name.is_empty() {
+                        n.name = clip(&format!("{} {}", text_under(n), text).trim().to_string());
+                        if text_under(n).is_empty() {
+                            n.name = clip(text);
+                        }
+                    }
+                    done.insert(n.node);
+                }
+            }
+            for k in &mut n.children {
+                promote(k, hints, done);
+            }
+        }
+        let mut clicks = HashSet::new();
+        promote(&mut tree, &hints, &mut clicks);
+        *self.click.borrow_mut() = clicks;
+        let mut wh = HashMap::new();
+        walk_where(&tree, &mut Vec::new(), false, &mut wh);
+        *self.wh.borrow_mut() = wh;
+        Ok(tree)
+    }
+
+    /// The line entry for `n`, with the context the last `tree()` recorded.
+    fn ent(&self, n: &A11yNode) -> Entry {
+        let mut e = entry(n);
+        e.click = self.click.borrow().contains(&n.node);
+        if let Some(w) = self.wh.borrow().get(&n.node) {
+            e.ctx = w.ctx.clone();
+        }
+        e
+    }
+
+    fn chrome(&self, n: &A11yNode) -> bool {
+        self.wh.borrow().get(&n.node).is_some_and(|w| w.chrome)
     }
 
     /// `\n⚠hidden-text: …` when the shield withheld something from this observation, else empty.
@@ -181,10 +352,20 @@ impl<B: Backend> Session<B> {
         h
     }
 
+    /// The handle for `n`, remembering what it names so a re-mount can be followed.
+    fn bind(&mut self, id: NodeId, e: &Entry) -> u32 {
+        let h = self.handle(id);
+        self.keys
+            .insert(h, format!("{}|{}|{}", e.role, e.name, e.ctx));
+        h
+    }
+
     /// A new document invalidates every handle: arena ids are not meaningful across pages.
     fn new_document(&mut self) {
         self.ids.clear();
         self.rev.clear();
+        self.keys.clear();
+        self.doc = self.b.document_id();
         // `next` is NOT reset: a stale `h2` from the old page must be "unknown", never silently
         // re-bound to a different element on the new one.
         self.snap = None;
@@ -199,23 +380,51 @@ impl<B: Backend> Session<B> {
             .map_err(|_| anyhow!("bad handle {s:?}: expected like \"h12\""))
     }
 
-    fn resolve<'t>(&self, tree: &'t A11yNode, hs: &str) -> Result<(u32, &'t A11yNode)> {
+    fn resolve<'t>(&mut self, tree: &'t A11yNode, hs: &str) -> Result<(u32, &'t A11yNode)> {
         let h = Self::parse_handle(hs)?;
-        let id = self.rev.get(&h).ok_or_else(|| {
+        let id = *self.rev.get(&h).ok_or_else(|| {
             anyhow!("h{h} is unknown (handles are per-page; call observe to list them)")
         })?;
-        let n = tree
-            .iter()
-            .find(|n| n.node == *id)
-            .ok_or_else(|| anyhow!("STALE: h{h} is no longer on the page (call observe)"))?;
-        Ok((h, n))
+        if let Some(n) = tree.iter().find(|n| n.node == id) {
+            return Ok((h, n));
+        }
+        // The page re-rendered and the element came back as a new node (a React key change, an SPA
+        // route): follow the handle to the one node with the same role, name and container.
+        let key = self.keys.get(&h).cloned();
+        let hits: Vec<&A11yNode> = match &key {
+            Some(k) if std::env::var_os("MANUK_REMOUNT_MUTATE").is_none() => tree
+                .iter()
+                .filter(|n| worth(n))
+                .filter(|n| {
+                    let e = self.ent(n);
+                    format!("{}|{}|{}", e.role, e.name, e.ctx) == *k
+                })
+                .collect(),
+            _ => Vec::new(),
+        };
+        match hits.as_slice() {
+            [n] => {
+                self.rev.insert(h, n.node);
+                self.ids.entry(n.node.0).or_insert(h);
+                self.rebound.push(format!(
+                    "rebound h{h} to the re-rendered {}",
+                    key.unwrap_or_default().replace('|', " ")
+                ));
+                Ok((h, n))
+            }
+            [] => Err(anyhow!("STALE: h{h} is no longer on the page (call observe)")),
+            many => Err(anyhow!(
+                "STALE: h{h} is gone and {} elements now match what it was (call observe)",
+                many.len()
+            )),
+        }
     }
 
     fn snapshot(&self, tree: &A11yNode) -> Snap {
         let mut s = Snap::default();
         for n in tree.iter().filter(|n| worth(n)) {
             s.order.push(n.node.0);
-            s.by_id.insert(n.node.0, entry(n));
+            s.by_id.insert(n.node.0, self.ent(n));
         }
         s
     }
@@ -231,6 +440,10 @@ impl<B: Backend> Session<B> {
         if !e.state.is_empty() {
             let _ = write!(l, " {}", e.state);
         }
+        if e.click {
+            l.push_str(" [clickable]");
+        }
+        l.push_str(&e.ctx);
         l.push_str(off);
         l
     }
@@ -244,7 +457,7 @@ impl<B: Backend> Session<B> {
         }
     }
 
-    fn lines(&mut self, tree: &A11yNode, viewport_only: bool) -> Vec<(bool, String)> {
+    fn lines(&mut self, tree: &A11yNode, viewport_only: bool) -> Vec<(u8, String)> {
         let vp = self.b.viewport();
         let mut out = Vec::new();
         for n in tree.iter().filter(|n| worth(n)) {
@@ -255,13 +468,21 @@ impl<B: Backend> Session<B> {
             if !viewport_only && n.bbox.is_none() && !n.role.is_interactive() {
                 continue;
             }
-            let h = self.handle(n.node);
-            let keep = n.role.is_interactive()
+            let e = self.ent(n);
+            let h = self.bind(n.node, &e);
+            // Budget tier: 0 = operable or structural (always kept), 1 = content text, 2 = chrome text.
+            let tier = if n.role.is_interactive()
                 || matches!(
                     n.role,
                     Role::Heading { .. } | Role::Dialog | Role::AlertDialog
-                );
-            out.push((keep, Self::fmt_entry(h, &entry(n), off)));
+                ) {
+                0
+            } else if self.chrome(n) {
+                2
+            } else {
+                1
+            };
+            out.push((tier, Self::fmt_entry(h, &e, off)));
         }
         out
     }
@@ -270,8 +491,9 @@ impl<B: Backend> Session<B> {
         format!("{} — {:?}", self.b.url(), clip(&self.b.title()))
     }
 
-    /// Render within a budget: when over, keep the operable lines and say exactly what was cut.
-    fn fit(lines: Vec<(bool, String)>, budget_tokens: usize, hint: &str) -> String {
+    /// Render within a budget: when over, keep the operable lines, then content text (prices, bodies)
+    /// while it fits, never chrome text first; and say exactly what was cut.
+    fn fit(lines: Vec<(u8, String)>, budget_tokens: usize, hint: &str) -> String {
         let budget = budget_tokens.saturating_mul(CHARS_PER_TOKEN);
         let total: usize = lines.iter().map(|(_, l)| l.len() + 1).sum();
         let mut out = String::new();
@@ -283,14 +505,29 @@ impl<B: Backend> Session<B> {
             return out;
         }
         let reserve = 240;
+        let mut kept = vec![false; lines.len()];
+        let mut used = 0;
+        // Tiers in priority order; `MANUK_FIT_MUTATE=chrome-first` inverts 1 and 2 for the gate's mutant.
+        let order: [u8; 3] = if std::env::var("MANUK_FIT_MUTATE").is_ok_and(|v| v == "chrome-first") {
+            [0, 2, 1]
+        } else {
+            [0, 1, 2]
+        };
+        for tier in order {
+            if tier == 2 && order[1] == 1 {
+                break; // chrome text is only ever cut
+            }
+            for (i, (t, l)) in lines.iter().enumerate() {
+                if *t == tier && used + l.len() + 1 + reserve <= budget {
+                    used += l.len() + 1;
+                    kept[i] = true;
+                }
+            }
+        }
         let mut cut: HashMap<String, usize> = HashMap::new();
         let mut cut_n = 0;
-        let mut used = 0;
-        // Pass 1 keeps only operable/structural lines, in page order; pass-2 filler is not needed
-        // because anything dropped is summarised by role so the agent knows what to `find`.
-        for (keep, l) in &lines {
-            if *keep && used + l.len() + 1 + reserve <= budget {
-                used += l.len() + 1;
+        for (i, (_, l)) in lines.iter().enumerate() {
+            if kept[i] {
                 out.push_str(l);
                 out.push('\n');
             } else {
@@ -321,15 +558,16 @@ impl<B: Backend> Session<B> {
             let e = &after.by_id[id];
             match before.by_id.get(id) {
                 None => {
-                    let h = self.handle(NodeId(*id));
+                    let h = self.bind(NodeId(*id), e);
                     out.push(format!("+{}", Self::fmt_entry(h, e, "")));
                 }
                 Some(p) if p != e => {
-                    let h = self.handle(NodeId(*id));
+                    let h = self.bind(NodeId(*id), e);
                     let mut l = format!("~[h{h}] {}", e.role);
                     if !e.name.is_empty() {
                         let _ = write!(l, " {:?}", e.name);
                     }
+                    l.push_str(&e.ctx);
                     if p.name != e.name {
                         let _ = write!(l, " name {:?}→{:?}", p.name, e.name);
                     }
@@ -610,6 +848,10 @@ impl<B: Backend> Session<B> {
     /// finished: W3.8).
     fn effect(&mut self, before: Snap, url_before: &str, evidence: &str) -> Result<String> {
         let mut r = self.effect_core(before, url_before, evidence)?;
+        for n in std::mem::take(&mut self.rebound) {
+            r.push('\n');
+            r.push_str(&n);
+        }
         for n in self.b.take_notes() {
             r.push('\n');
             r.push_str(&n);
@@ -619,6 +861,26 @@ impl<B: Backend> Session<B> {
 
     fn effect_core(&mut self, before: Snap, url_before: &str, evidence: &str) -> Result<String> {
         let url_now = self.b.url();
+        // An SPA route change (`pushState`) keeps the document: its handles stay good and the result
+        // is an ordinary diff, headed by where we went.
+        let same_doc = {
+            let d = self.b.document_id();
+            d != 0 && d == self.doc
+        };
+        if url_now != url_before && same_doc {
+            let tree = self.tree()?;
+            let after = self.snapshot(&tree);
+            let d = self.diff_lines(&before, &after);
+            self.snap = Some(after);
+            let body = if d.is_empty() {
+                "no change".to_string()
+            } else {
+                d.join("\n")
+            };
+            return Ok(format!(
+                "{UNTRUSTED}\nrouted (same document, handles still valid): {url_before} → {url_now}\n{body}   {evidence}"
+            ));
+        }
         if url_now != url_before {
             self.new_document();
             let tree = self.tree()?;
@@ -679,13 +941,20 @@ impl<B: Backend> Session<B> {
             }
             "select" => {
                 let v = value.ok_or_else(|| anyhow!("select needs `value` (the option's name)"))?;
-                let opt = n
+                let native = n
                     .iter()
                     .find(|c| matches!(c.role, Role::Option) && c.name.eq_ignore_ascii_case(v))
-                    .map(|c| c.node)
-                    .ok_or_else(|| anyhow!("h{h} has no option named {v:?}"))?;
-                self.verify_landing(h, node)?;
-                self.b.click(opt).await?
+                    .map(|c| c.node);
+                match native {
+                    Some(opt) => {
+                        self.verify_landing(h, node)?;
+                        self.b.click(opt).await?
+                    }
+                    None if n.iter().any(|c| matches!(c.role, Role::Option)) => {
+                        bail!("h{h} has no option named {v:?}")
+                    }
+                    None => self.aria_select(h, node, v).await?,
+                }
             }
             "focus" => {
                 if !self.b.focus(node).await? {
@@ -708,6 +977,60 @@ impl<B: Backend> Session<B> {
             &format!("verified: target was topmost at dispatch; {outcome}"),
         )?;
         Ok(format!("{r}\n{settle}"))
+    }
+
+    /// An ARIA combobox / listbox button / react-select: open it, find the option wherever the page put
+    /// it (a portal included), click it, and say whether the control now shows the choice.
+    async fn aria_select(&mut self, h: u32, node: NodeId, v: &str) -> Result<String> {
+        self.verify_landing(h, node)?;
+        self.b.click(node).await?;
+        self.b.settle().await;
+        let want = v.to_ascii_lowercase();
+        let tree = self.tree()?;
+        let opt = tree
+            .iter()
+            .filter(|c| matches!(c.role, Role::Option | Role::MenuItem | Role::TreeItem))
+            .filter(|c| c.bbox.is_some())
+            .find(|c| c.name.to_ascii_lowercase() == want)
+            .or_else(|| {
+                tree.iter()
+                    .filter(|c| matches!(c.role, Role::Option | Role::MenuItem | Role::TreeItem))
+                    .filter(|c| c.bbox.is_some())
+                    .find(|c| c.name.to_ascii_lowercase().contains(&want))
+            })
+            .map(|c| c.node)
+            .ok_or_else(|| {
+                anyhow!("h{h} opened but no option named {v:?} appeared (call observe to see what did)")
+            })?;
+        let oh = {
+            let e = tree.iter().find(|c| c.node == opt).map(|c| self.ent(c)).unwrap_or_else(|| entry(&tree));
+            self.bind(opt, &e)
+        };
+        self.verify_landing(oh, opt)?;
+        let how = self.b.click(opt).await?;
+        self.b.settle().await;
+        let tree = self.tree()?;
+        let shown = tree
+            .iter()
+            .find(|c| c.node == node)
+            .map(|c| format!("{} {}", c.name, c.state.value.clone().unwrap_or_default()))
+            .unwrap_or_default();
+        let still_open = tree.iter().any(|c| c.node == opt && c.bbox.is_some());
+        let ok = shown.to_ascii_lowercase().contains(&want)
+            || (!still_open
+                && self
+                    .page_text()
+                    .unwrap_or_default()
+                    .to_ascii_lowercase()
+                    .contains(&want));
+        Ok(format!(
+            "opened h{h} and chose option {v:?} ({how}); {}",
+            if ok {
+                format!("the control now shows {v:?}")
+            } else {
+                format!("NOT CONFIRMED: the control reads {:?}; observe to check", shown.trim())
+            }
+        ))
     }
 
     /// W3.8: press a key on the focused element (or on `handle`, focused first).
@@ -876,9 +1199,10 @@ impl<B: Backend> Session<B> {
         {
             if !vis_before.contains(&n.node.0) {
                 let h = self.handle(n.node);
+                let tier = if n.role.is_interactive() { 0 } else { 1 };
                 fresh.push((
-                    n.role.is_interactive(),
-                    format!("+{}", Self::fmt_entry(h, &entry(n), "")),
+                    tier,
+                    format!("+{}", Self::fmt_entry(h, &self.ent(n), "")),
                 ));
             }
         }
@@ -1039,7 +1363,7 @@ impl<B: Backend> Session<B> {
             let _ = write!(
                 out,
                 "\n{}",
-                Self::fmt_entry(h, &entry(n), Self::offscreen(n, &vp))
+                Self::fmt_entry(h, &self.ent(n), Self::offscreen(n, &vp))
             );
         }
         Ok(out)
