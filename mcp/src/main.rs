@@ -10,6 +10,12 @@ fn main() -> anyhow::Result<()> {
             std::process::exit(2);
         }
     };
+    // W3.8: the Download capability. Without it a download writes nothing anywhere.
+    if let Some(i) = args.iter().position(|a| a == "--download-dir") {
+        anyhow::ensure!(i + 1 < args.len(), "--download-dir needs a directory");
+        manuk_mcp::downloads::grant(std::path::PathBuf::from(args.remove(i + 1)))?;
+        args.remove(i);
+    }
     if let Some(i) = args.iter().position(|a| a == "--unsafe-no-sandbox") {
         args.remove(i);
         manuk_mcp::cdp::allow_unsafe_no_sandbox();

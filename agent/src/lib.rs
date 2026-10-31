@@ -1091,6 +1091,50 @@ impl AgentBrowser {
         Ok(page.set_focus(Some(node), false, &self.fonts, self.width as f32))
     }
 
+    /// W3.8 — press `key` (a `KeyboardEvent.key` value such as `Enter`, `Escape`, `ArrowDown`) on the
+    /// focused element, else on `<body>`: `keydown` then `keyup`. `Ok(false)` when a handler called
+    /// `preventDefault()` on the keydown.
+    pub fn press_key(&mut self, key: &str) -> Result<bool> {
+        let page = self.page.as_mut().context("no page loaded")?;
+        let target = page.dom().focused().or_else(|| {
+            let d = page.dom();
+            d.descendants(d.root())
+                .find(|&n| d.tag_name(n) == Some("body"))
+        });
+        let target = target.context("page has no element to receive the key")?;
+        let w = self.width as f32;
+        let go = page.dispatch_key(target, "keydown", key, &self.fonts, w);
+        page.dispatch_key(target, "keyup", key, &self.fonts, w);
+        page.relayout(&self.fonts, w);
+        Ok(go)
+    }
+
+    /// W3.8 — choose `files` `(name, mime, text contents)` in a file input (fires `input`, `change`).
+    pub fn upload_handle(
+        &mut self,
+        node: manuk_dom::NodeId,
+        files: &[(String, String, String)],
+    ) -> Result<()> {
+        let page = self.page.as_mut().context("no page loaded")?;
+        let w = self.width as f32;
+        if !page.set_input_files(node, files, &self.fonts, w) {
+            return Err(anyhow!("node {} is not a file input", node.0));
+        }
+        Ok(())
+    }
+
+    /// W3.8 — drag `source` onto `target` (dragstart/dragenter/dragover/drop/dragend). `Ok(false)` when
+    /// the page cancelled it.
+    pub fn drag_handles(
+        &mut self,
+        source: manuk_dom::NodeId,
+        target: manuk_dom::NodeId,
+    ) -> Result<bool> {
+        let page = self.page.as_mut().context("no page loaded")?;
+        let w = self.width as f32;
+        Ok(page.dispatch_drag(source, target, &self.fonts, w))
+    }
+
     /// CB.1.a — move the pointer over the centre of `node`'s box: the hit-test decides the target, and
     /// `mouseover`/`mouseenter` plus `:hover` follow the way they do for a real pointer.
     pub fn hover_handle(&mut self, node: manuk_dom::NodeId) -> Result<()> {

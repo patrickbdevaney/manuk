@@ -40,6 +40,37 @@ pub trait Backend {
     /// Submit the form owning `node`.
     async fn submit(&mut self, node: NodeId) -> Result<String>;
     fn page_text(&self) -> Result<String>;
+    /// W3.8: press `key` (`Enter`, `Escape`, `ArrowDown`, `Control+a`, a single character) on the focused
+    /// element, else the page.
+    async fn press_key(&mut self, _key: &str) -> Result<String> {
+        anyhow::bail!("this backend cannot press keys")
+    }
+    /// W3.8: choose the files at `paths` in the file input `node`.
+    async fn upload(&mut self, _node: NodeId, _paths: &[std::path::PathBuf]) -> Result<String> {
+        anyhow::bail!("this backend cannot upload files")
+    }
+    /// W3.8: drag `from` onto `to`.
+    async fn drag(&mut self, _from: NodeId, _to: NodeId) -> Result<String> {
+        anyhow::bail!("this backend cannot drag")
+    }
+    /// W3.8: answer the NEXT JS dialog (alert/confirm/prompt) this way. Unarmed, confirm and prompt are
+    /// dismissed.
+    fn arm_dialog(&mut self, _accept: bool, _text: Option<String>) -> Result<()> {
+        anyhow::bail!("this backend has no JS dialogs to answer (the engine implements none)")
+    }
+    /// W3.8: `list` | `switch` | `close` the browser's tabs (`index` is 1-based). A popup the page opens
+    /// is surfaced by the next action's result.
+    async fn tabs(&mut self, _action: &str, _index: Option<usize>) -> Result<String> {
+        anyhow::bail!("this backend has a single page and no tabs")
+    }
+    /// W3.8: things that happened on their own since the last call: dialogs answered, downloads finished.
+    fn take_notes(&mut self) -> Vec<String> {
+        Vec::new()
+    }
+    /// W3.8: wait up to `secs` for a download to finish; its result lines.
+    async fn wait_download(&mut self, _secs: u64) -> Vec<String> {
+        Vec::new()
+    }
     /// The injection shield's verdict (R1.4); `None` for a backend that cannot compute paint truth.
     fn shield(&self) -> Result<Option<manuk_agent::shield::Shield>> {
         Ok(None)
@@ -140,6 +171,37 @@ impl Backend for AgentBrowser {
     }
     fn page_text(&self) -> Result<String> {
         Ok(self.observe()?.text)
+    }
+    async fn press_key(&mut self, key: &str) -> Result<String> {
+        let go = AgentBrowser::press_key(self, key)?;
+        Ok(format!(
+            "pressed {key}{}",
+            if go { "" } else { " (the page cancelled it)" }
+        ))
+    }
+    async fn upload(&mut self, node: NodeId, paths: &[std::path::PathBuf]) -> Result<String> {
+        let mut files = Vec::new();
+        for p in paths {
+            let name = p
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            let text = String::from_utf8_lossy(&std::fs::read(p)?).into_owned();
+            files.push((name, "application/octet-stream".to_string(), text));
+        }
+        self.upload_handle(node, &files)?;
+        Ok(format!("chose {} file(s)", files.len()))
+    }
+    async fn drag(&mut self, from: NodeId, to: NodeId) -> Result<String> {
+        let go = self.drag_handles(from, to)?;
+        Ok(format!(
+            "dragged and dropped{}",
+            if go {
+                ""
+            } else {
+                " (the page cancelled the drop)"
+            }
+        ))
     }
     fn shield(&self) -> Result<Option<manuk_agent::shield::Shield>> {
         Ok(Some(AgentBrowser::shield(self)?))

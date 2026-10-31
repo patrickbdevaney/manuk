@@ -3,6 +3,7 @@
 
 pub mod backend;
 pub mod cdp;
+pub mod downloads;
 pub use manuk_agent::confine;
 pub mod hub;
 pub mod isolation;

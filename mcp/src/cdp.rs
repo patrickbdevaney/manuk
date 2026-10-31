@@ -39,6 +39,14 @@ struct Cdp {
     next: u64,
     session: Option<String>,
     events: VecDeque<Value>,
+    /// W3.8: the answer the agent armed for the next JS dialog (`dialog` tool), and what dialogs did.
+    dialog_arm: Option<(bool, Option<String>)>,
+    dialog_log: Vec<String>,
+    /// W3.8: downloads Chrome finished since the last `take_downloads` (name, bytes on disk).
+    downloads: Vec<std::result::Result<String, String>>,
+    dl_names: HashMap<String, String>,
+    dl_over: Vec<String>,
+    dl_tmp: PathBuf,
 }
 
 impl Cdp {
@@ -50,6 +58,14 @@ impl Cdp {
         }
         self.ws.send(Message::text(m.to_string()))?;
         Ok(self.next)
+    }
+
+    /// A browser-level command (no page session), e.g. `Target.*`.
+    fn call_browser(&mut self, method: &str, params: Value) -> Result<Value> {
+        let keep = self.session.take();
+        let r = self.call(method, params);
+        self.session = keep;
+        r
     }
 
     /// One message, or `None` on timeout.
@@ -100,7 +116,62 @@ impl Cdp {
     /// A page dialog blocks every other command until answered, so it is answered the moment it is seen.
     fn auto_dialog(&mut self, m: &Value) {
         if m["method"] == "Page.javascriptDialogOpening" {
-            let _ = self.send("Page.handleJavaScriptDialog", json!({"accept": true}));
+            let ty = m["params"]["type"].as_str().unwrap_or("alert").to_string();
+            let msg = m["params"]["message"].as_str().unwrap_or("").to_string();
+            // Unarmed: alerts and unload prompts are acknowledged; confirm/prompt are DISMISSED, because
+            // accepting one is a decision (delete? buy?) the agent has not made.
+            let (accept, text) = match self.dialog_arm.take() {
+                Some(a) => a,
+                None => (matches!(ty.as_str(), "alert" | "beforeunload"), None),
+            };
+            let mut p = json!({"accept": accept});
+            if let Some(t) = &text {
+                p["promptText"] = json!(t);
+            }
+            let _ = self.send("Page.handleJavaScriptDialog", p);
+            let shown: String = msg.chars().take(120).collect();
+            self.dialog_log.push(format!(
+                "{ty} {shown:?} -> {}",
+                if accept { "accepted" } else { "dismissed" }
+            ));
+        }
+        match m["method"].as_str() {
+            Some("Browser.downloadWillBegin") => {
+                if let Some(g) = m["params"]["guid"].as_str() {
+                    let n = m["params"]["suggestedFilename"]
+                        .as_str()
+                        .unwrap_or("download");
+                    self.dl_names.insert(g.to_string(), n.to_string());
+                }
+            }
+            Some("Browser.downloadProgress") => {
+                let g = m["params"]["guid"].as_str().unwrap_or("").to_string();
+                let got = m["params"]["receivedBytes"].as_u64().unwrap_or(0);
+                let name = self.dl_names.get(&g).cloned().unwrap_or_default();
+                let state = m["params"]["state"].as_str().unwrap_or("");
+                if got > crate::downloads::CAP_BYTES && !self.dl_over.contains(&g) {
+                    self.dl_over.push(g.clone());
+                    let _ = self.send("Browser.cancelDownload", json!({"guid": g}));
+                    self.downloads.push(Err(format!(
+                        "download of {name:?} aborted at the {}-byte cap ({got} bytes received); nothing was kept",
+                        crate::downloads::CAP_BYTES
+                    )));
+                }
+                if state == "completed" && self.dl_over.contains(&g) {
+                    let _ = std::fs::remove_file(self.dl_tmp.join(&g));
+                } else if state == "completed" {
+                    let tmp = self.dl_tmp.join(&g);
+                    self.downloads
+                        .push(crate::downloads::finalize(&tmp, &name).map_err(|e| e.to_string()));
+                } else if state == "canceled" {
+                    let _ = std::fs::remove_file(self.dl_tmp.join(&g));
+                    if !self.dl_over.contains(&g) {
+                        self.downloads
+                            .push(Err(format!("download of {name:?} was canceled")));
+                    }
+                }
+            }
+            _ => {}
         }
     }
 
@@ -1087,6 +1158,11 @@ pub struct CdpBackend {
     text: String,
     /// Dispatch-time facts for the last click, for the tool result.
     pub remounted: u32,
+    /// W3.8: page targets in the order the agent met them, and the one it is attached to.
+    tabs: Vec<String>,
+    cur: String,
+    /// What changed about the tab set during the last action (popup surfaced, tab closed).
+    tab_notes: Vec<String>,
 }
 
 /// Test-only: `MANUK_CDP_MUTATE=no-taint|no-revalidate|no-remount` switches one discipline off, so the
@@ -1151,6 +1227,30 @@ fn chrome_args(unsafe_no_sandbox: bool) -> Vec<&'static str> {
     a
 }
 
+/// Enable the domains and per-page hooks on the session `cdp` is attached to (the first tab, and every
+/// tab the agent is moved to).
+fn init_page_session(cdp: &mut Cdp, width: u32, height: u32) -> Result<()> {
+    for m in ["Page.enable", "DOM.enable", "Runtime.enable"] {
+        cdp.call(m, json!({}))?;
+    }
+    cdp.call("Page.setLifecycleEventsEnabled", json!({"enabled": true}))?;
+    // W3.12: count the page's own pending fetches and timers so a settle line can be read from it.
+    cdp.call(
+        "Page.addScriptToEvaluateOnNewDocument",
+        json!({"source": SETTLE_PROBE}),
+    )?;
+    // W3.9.a: sets are installed by the session before the first navigation; hold every request
+    // so the judge sees it. Cheap when the sets are empty (continue immediately).
+    if manuk_net::scope::active() {
+        cdp.call("Fetch.enable", json!({"patterns": [{"urlPattern": "*"}]}))?;
+    }
+    cdp.call(
+        "Emulation.setDeviceMetricsOverride",
+        json!({"width": width, "height": height, "deviceScaleFactor": 1, "mobile": false}),
+    )?;
+    Ok(())
+}
+
 impl CdpBackend {
     pub fn launch(width: u32, height: u32) -> Result<Self> {
         let dir = std::env::temp_dir().join(format!(
@@ -1208,6 +1308,12 @@ impl CdpBackend {
             next: 0,
             session: None,
             events: VecDeque::new(),
+            dialog_arm: None,
+            dialog_log: Vec::new(),
+            downloads: Vec::new(),
+            dl_names: HashMap::new(),
+            dl_over: Vec::new(),
+            dl_tmp: dir.join("dl"),
         };
         let ver = cdp.call("Browser.getVersion", json!({}))?;
         let product = ver["product"].as_str().unwrap_or("?").to_string();
@@ -1236,24 +1342,17 @@ impl CdpBackend {
                 .ok_or_else(|| anyhow!("no sessionId"))?
                 .to_string(),
         );
-        for m in ["Page.enable", "DOM.enable", "Runtime.enable"] {
-            cdp.call(m, json!({}))?;
-        }
-        cdp.call("Page.setLifecycleEventsEnabled", json!({"enabled": true}))?;
-        // W3.12: count the page's own pending fetches and timers so a settle line can be read from it.
-        cdp.call(
-            "Page.addScriptToEvaluateOnNewDocument",
-            json!({"source": SETTLE_PROBE}),
-        )?;
-        // W3.9.a: sets are installed by the session before the first navigation; hold every request
-        // so the judge sees it. Cheap when the sets are empty (continue immediately).
-        if manuk_net::scope::active() {
-            cdp.call("Fetch.enable", json!({"patterns": [{"urlPattern": "*"}]}))?;
-        }
-        cdp.call(
-            "Emulation.setDeviceMetricsOverride",
-            json!({"width": width, "height": height, "deviceScaleFactor": 1, "mobile": false}),
-        )?;
+        // W3.8: no Download capability = Chrome saves nothing. With it, bytes go to a scratch dir inside
+        // the profile and only `downloads::finalize` (name, mode, cap) moves them to the granted dir.
+        let dl = if crate::downloads::granted().is_some() {
+            std::fs::create_dir_all(&cdp.dl_tmp)?;
+            json!({"behavior": "allowAndName", "downloadPath": cdp.dl_tmp.display().to_string(), "eventsEnabled": true})
+        } else {
+            json!({"behavior": "deny", "eventsEnabled": true})
+        };
+        cdp.call("Browser.setDownloadBehavior", dl)?;
+        init_page_session(&mut cdp, width, height)?;
+        cdp.call("Target.getTargets", json!({}))?;
         Ok(CdpBackend {
             cdp,
             child,
@@ -1268,6 +1367,9 @@ impl CdpBackend {
             content_h: 0.0,
             text: String::new(),
             remounted: 0,
+            tabs: vec![tid.clone()],
+            cur: tid,
+            tab_notes: Vec::new(),
         })
     }
 
@@ -1352,8 +1454,88 @@ impl CdpBackend {
             .ok_or_else(|| anyhow!("no page loaded yet: navigate first"))
     }
 
+    fn page_targets(&mut self) -> Result<Vec<(String, String, String)>> {
+        let t = self.cdp.call_browser("Target.getTargets", json!({}))?;
+        Ok(t["targetInfos"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter(|t| t["type"] == "page")
+                    .map(|t| {
+                        (
+                            t["targetId"].as_str().unwrap_or("").to_string(),
+                            t["url"].as_str().unwrap_or("").to_string(),
+                            t["openerId"].as_str().unwrap_or("").to_string(),
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_default())
+    }
+
+    /// Attach to `tid` and make it the page the tools see.
+    fn attach(&mut self, tid: &str) -> Result<()> {
+        let att = self.cdp.call_browser(
+            "Target.attachToTarget",
+            json!({"targetId": tid, "flatten": true}),
+        )?;
+        self.cdp.session = Some(
+            att["sessionId"]
+                .as_str()
+                .ok_or_else(|| anyhow!("no sessionId"))?
+                .to_string(),
+        );
+        self.cdp
+            .call_browser("Target.activateTarget", json!({"targetId": tid}))
+            .ok();
+        init_page_session(&mut self.cdp, self.width as u32, self.height as u32)?;
+        self.cur = tid.to_string();
+        self.built = None;
+        self.alias.clear();
+        self.refresh()
+    }
+
+    /// W3.8: a popup the page opened is surfaced (the agent is moved onto it and told); a tab that closed
+    /// itself (an OAuth popup after approval) hands the agent back to the tab that opened it.
+    fn reconcile_tabs(&mut self) -> Result<()> {
+        // Give a window.open()/window.close() issued by the action a moment to materialise.
+        self.cdp.pump_until(Duration::from_millis(80), |_| false)?;
+        let now = self.page_targets()?;
+        let mut opened = None;
+        for (id, url, opener) in &now {
+            if !self.tabs.contains(id) {
+                self.tabs.push(id.clone());
+                opened = Some((id.clone(), url.clone(), opener.clone()));
+            }
+        }
+        let alive: Vec<&String> = now.iter().map(|t| &t.0).collect();
+        let closed_cur = !alive.contains(&&self.cur);
+        self.tabs.retain(|t| alive.contains(&t));
+        if let Some((id, url, _)) = opened {
+            let n = self
+                .tabs
+                .iter()
+                .position(|t| *t == id)
+                .map(|i| i + 1)
+                .unwrap_or(0);
+            self.tab_notes.push(format!("popup opened: tab {n} {url:?}; you are now on it (tabs(action=switch, index=1) goes back)"));
+            self.attach(&id)?;
+        } else if closed_cur {
+            let back = self
+                .tabs
+                .first()
+                .cloned()
+                .ok_or_else(|| anyhow!("every tab is closed"))?;
+            self.tab_notes
+                .push("the tab you were on closed; you are back on tab 1".into());
+            self.attach(&back)?;
+        }
+        Ok(())
+    }
+
     /// After something that may have started a navigation: wait for it to finish, then re-read.
     fn after_action(&mut self) -> Result<()> {
+        self.reconcile_tabs()?;
         let nav = |m: &Value| {
             matches!(
                 m["method"].as_str(),
@@ -1486,6 +1668,50 @@ impl CdpBackend {
             .unwrap_or_else(|| "another element".into());
         bail!("OCCLUDED at dispatch: {by} covers the target; nothing was clicked")
     }
+}
+
+/// `(key, code, windowsVirtualKeyCode)` for a key name or one character.
+fn key_info(k: &str) -> Option<(String, String, u32)> {
+    let named = |key: &str, code: &str, vk: u32| Some((key.to_string(), code.to_string(), vk));
+    match k.to_ascii_lowercase().as_str() {
+        "enter" | "return" => return named("Enter", "Enter", 13),
+        "escape" | "esc" => return named("Escape", "Escape", 27),
+        "tab" => return named("Tab", "Tab", 9),
+        "backspace" => return named("Backspace", "Backspace", 8),
+        "delete" => return named("Delete", "Delete", 46),
+        "arrowdown" | "down" => return named("ArrowDown", "ArrowDown", 40),
+        "arrowup" | "up" => return named("ArrowUp", "ArrowUp", 38),
+        "arrowleft" | "left" => return named("ArrowLeft", "ArrowLeft", 37),
+        "arrowright" | "right" => return named("ArrowRight", "ArrowRight", 39),
+        "home" => return named("Home", "Home", 36),
+        "end" => return named("End", "End", 35),
+        "pageup" => return named("PageUp", "PageUp", 33),
+        "pagedown" => return named("PageDown", "PageDown", 34),
+        "space" => return named(" ", "Space", 32),
+        _ => {}
+    }
+    if let Some(n) = k
+        .strip_prefix(['F', 'f'])
+        .and_then(|n| n.parse::<u32>().ok())
+    {
+        if (1..=12).contains(&n) {
+            return Some((format!("F{n}"), format!("F{n}"), 111 + n));
+        }
+    }
+    let mut cs = k.chars();
+    let c = cs.next()?;
+    if cs.next().is_some() {
+        return None;
+    }
+    let up = c.to_ascii_uppercase();
+    let (code, vk) = if c.is_ascii_alphabetic() {
+        (format!("Key{up}"), up as u32)
+    } else if c.is_ascii_digit() {
+        (format!("Digit{c}"), c as u32)
+    } else {
+        (String::new(), c as u32)
+    };
+    Some((c.to_string(), code, vk))
 }
 
 fn find(n: &A11yNode, id: NodeId) -> Option<&A11yNode> {
@@ -1649,6 +1875,185 @@ impl Backend for CdpBackend {
             self.cdp.call("Input.insertText", json!({"text": text}))?;
         }
         self.refresh()
+    }
+    async fn press_key(&mut self, key: &str) -> Result<String> {
+        self.cdp.events.clear();
+        let mut parts: Vec<&str> = key.split('+').collect();
+        let main = parts.pop().filter(|k| !k.is_empty()).unwrap_or("+");
+        let mut mods = 0;
+        for m in &parts {
+            mods |= match m.to_ascii_lowercase().as_str() {
+                "alt" => 1,
+                "control" | "ctrl" => 2,
+                "meta" | "cmd" => 4,
+                "shift" => 8,
+                other => bail!("unknown modifier {other:?} in key {key:?}"),
+            };
+        }
+        let (k, code, vk) = key_info(main).ok_or_else(|| anyhow!("unknown key {main:?}: use Enter, Escape, Tab, Arrow*, Backspace, Delete, Home, End, PageUp, PageDown, Space, F1-F12 or one character"))?;
+        let text = (mods & 6 == 0 && k.chars().count() == 1).then(|| k.clone());
+        let enter = k == "Enter";
+        for (t, text) in [
+            ("rawKeyDown", None),
+            ("char", text.as_deref().or(enter.then_some("\r"))),
+            ("keyUp", None),
+        ] {
+            if t == "char" && text.is_none() {
+                continue;
+            }
+            let mut p = json!({"type": t, "key": k, "code": code, "windowsVirtualKeyCode": vk, "nativeVirtualKeyCode": vk, "modifiers": mods});
+            if let Some(x) = text {
+                p["text"] = json!(x);
+            }
+            self.cdp.call("Input.dispatchKeyEvent", p)?;
+        }
+        self.after_action()?;
+        Ok(format!("pressed {key}"))
+    }
+    async fn upload(&mut self, node: NodeId, paths: &[PathBuf]) -> Result<String> {
+        self.refresh()?;
+        let be = self.backend_of(node)?;
+        let files: Vec<String> = paths.iter().map(|p| p.display().to_string()).collect();
+        self.cdp.events.clear();
+        // The handle may be the <label>/wrapper the a11y tree names; find the file input it stands for.
+        let obj = self.object_for(be)?;
+        let r = self.cdp.call("Runtime.callFunctionOn", json!({"objectId": obj, "functionDeclaration": "function(){if(this.tagName==='INPUT'&&this.type==='file')return this;if(this.control&&this.control.type==='file')return this.control;return this.querySelector('input[type=file]');}", "returnByValue": false}))?;
+        let input = r["result"]["objectId"]
+            .as_str()
+            .ok_or_else(|| anyhow!("that element is not a file input and holds none"))?
+            .to_string();
+        self.cdp.call(
+            "DOM.setFileInputFiles",
+            json!({"files": files, "objectId": input}),
+        )?;
+        // `setFileInputFiles` fires input/change on a real <input type=file>; on anything else it errors.
+        self.after_action()?;
+        Ok(format!("chose {} file(s)", paths.len()))
+    }
+    async fn drag(&mut self, from: NodeId, to: NodeId) -> Result<String> {
+        self.refresh()?;
+        let (x0, y0, _) = self.aim(from)?;
+        let (x1, y1, _) = self.aim(to)?;
+        self.cdp.events.clear();
+        self.cdp
+            .call("Input.setInterceptDrags", json!({"enabled": true}))?;
+        let mv = |t: &str, x: f32, y: f32, b: u32| json!({"type": t, "x": x, "y": y, "button": if b == 0 { "none" } else { "left" }, "buttons": b, "clickCount": if t == "mouseMoved" { 0 } else { 1 }});
+        self.cdp
+            .call("Input.dispatchMouseEvent", mv("mouseMoved", x0, y0, 0))?;
+        self.cdp
+            .call("Input.dispatchMouseEvent", mv("mousePressed", x0, y0, 1))?;
+        for i in 1..=4 {
+            let f = i as f32 / 4.0;
+            self.cdp.call(
+                "Input.dispatchMouseEvent",
+                mv("mouseMoved", x0 + (x1 - x0) * f, y0 + (y1 - y0) * f, 1),
+            )?;
+        }
+        // An HTML5 drag source hands Chrome its payload as `Input.dragIntercepted`; replay it as drag events.
+        self.cdp.pump_until(Duration::from_millis(150), |m| {
+            m["method"] == "Input.dragIntercepted"
+        })?;
+        let data = self
+            .cdp
+            .events
+            .iter()
+            .find(|m| m["method"] == "Input.dragIntercepted")
+            .map(|m| m["params"]["data"].clone());
+        let html5 = data.is_some();
+        if let Some(d) = data {
+            for t in ["dragEnter", "dragOver", "drop"] {
+                self.cdp.call(
+                    "Input.dispatchDragEvent",
+                    json!({"type": t, "x": x1, "y": y1, "data": d}),
+                )?;
+            }
+        }
+        self.cdp
+            .call("Input.dispatchMouseEvent", mv("mouseReleased", x1, y1, 0))?;
+        self.cdp
+            .call("Input.setInterceptDrags", json!({"enabled": false}))?;
+        self.after_action()?;
+        Ok(format!(
+            "dragged ({x0:.0},{y0:.0}) -> ({x1:.0},{y1:.0}) as {}",
+            if html5 {
+                "an HTML5 drag-and-drop"
+            } else {
+                "a pointer drag (no dragstart)"
+            }
+        ))
+    }
+    fn arm_dialog(&mut self, accept: bool, text: Option<String>) -> Result<()> {
+        self.cdp.dialog_arm = Some((accept, text));
+        Ok(())
+    }
+    async fn tabs(&mut self, action: &str, index: Option<usize>) -> Result<String> {
+        self.reconcile_tabs()?;
+        let now = self.page_targets()?;
+        let line = |me: &CdpBackend| -> String {
+            me.tabs
+                .iter()
+                .enumerate()
+                .map(|(i, t)| {
+                    let url = now
+                        .iter()
+                        .find(|n| &n.0 == t)
+                        .map(|n| n.1.as_str())
+                        .unwrap_or("?");
+                    format!("{}{} {url}", if *t == me.cur { "* " } else { "  " }, i + 1)
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+        let pick = |me: &CdpBackend| -> Result<String> {
+            let i = index.ok_or_else(|| anyhow!("tabs {action} needs `index` (1-based)"))?;
+            me.tabs
+                .get(i.wrapping_sub(1))
+                .cloned()
+                .ok_or_else(|| anyhow!("no tab {i}; there are {}", me.tabs.len()))
+        };
+        match action {
+            "list" => {}
+            "switch" => {
+                let t = pick(self)?;
+                self.attach(&t)?;
+            }
+            "close" => {
+                let t = pick(self)?;
+                if self.tabs.len() == 1 {
+                    bail!("refusing to close the only tab");
+                }
+                self.cdp
+                    .call_browser("Target.closeTarget", json!({"targetId": t}))?;
+                self.tabs.retain(|x| *x != t);
+                if t == self.cur {
+                    let back = self.tabs[0].clone();
+                    self.attach(&back)?;
+                }
+            }
+            a => bail!("unknown tabs action {a:?}: list, switch, close"),
+        }
+        Ok(format!("tabs:\n{}", line(self)))
+    }
+    fn take_notes(&mut self) -> Vec<String> {
+        let mut out: Vec<String> = std::mem::take(&mut self.tab_notes);
+        out.extend(
+            self.cdp
+                .dialog_log
+                .drain(..)
+                .map(|d| format!("dialog: {d}")),
+        );
+        out.extend(self.cdp.downloads.drain(..).map(|d| match d {
+            Ok(l) => l,
+            Err(e) => format!("download failed: {e}"),
+        }));
+        out
+    }
+    async fn wait_download(&mut self, secs: u64) -> Vec<String> {
+        let t0 = Instant::now();
+        while self.cdp.downloads.is_empty() && t0.elapsed() < Duration::from_secs(secs) {
+            let _ = self.cdp.pump_until(Duration::from_millis(250), |_| false);
+        }
+        self.take_notes()
     }
     async fn submit(&mut self, node: NodeId) -> Result<String> {
         let be = self.backend_of(node)?;

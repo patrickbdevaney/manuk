@@ -435,6 +435,59 @@ impl<B: Backend> Session<B> {
                 )
                 .await
                 .map(Output::Text),
+            "key" => self
+                .key(
+                    arg_str(a, "key").ok_or_else(|| anyhow!("key needs `key`"))?,
+                    arg_str(a, "handle"),
+                )
+                .await
+                .map(Output::Text),
+            "upload" => self
+                .upload(
+                    arg_str(a, "handle").ok_or_else(|| anyhow!("upload needs `handle`"))?,
+                    a.get("paths")
+                        .and_then(Value::as_array)
+                        .map(|v| v.iter().filter_map(Value::as_str).collect::<Vec<_>>())
+                        .or_else(|| arg_str(a, "path").map(|p| vec![p]))
+                        .ok_or_else(|| anyhow!("upload needs `path` or `paths`"))?,
+                )
+                .await
+                .map(Output::Text),
+            "drag" => self
+                .drag(
+                    arg_str(a, "from").ok_or_else(|| anyhow!("drag needs `from`"))?,
+                    arg_str(a, "to").ok_or_else(|| anyhow!("drag needs `to`"))?,
+                )
+                .await
+                .map(Output::Text),
+            "dialog" => {
+                let accept = match arg_str(a, "action") {
+                    Some("accept") => true,
+                    Some("dismiss") => false,
+                    _ => bail!("dialog needs action=accept|dismiss"),
+                };
+                self.b
+                    .arm_dialog(accept, arg_str(a, "text").map(String::from))?;
+                Ok(Output::Text(format!(
+                    "armed: the next alert/confirm/prompt will be {}{}. Now do the action that opens it; its result reports the dialog.",
+                    if accept { "accepted" } else { "dismissed" },
+                    arg_str(a, "text").map(|t| format!(" with text {t:?}")).unwrap_or_default()
+                )))
+            }
+            "tabs" => self
+                .b
+                .tabs(
+                    arg_str(a, "action").unwrap_or("list"),
+                    a.get("index").and_then(Value::as_u64).map(|n| n as usize),
+                )
+                .await
+                .map(|t| {
+                    if matches!(arg_str(a, "action"), Some("switch" | "close")) {
+                        self.new_document();
+                    }
+                    Output::Text(t)
+                }),
+            "download" => self.download(arg_str(a, "handle")).await.map(Output::Text),
             "scroll" => self
                 .scroll(arg_str(a, "to"), a.get("dy").and_then(Value::as_f64))
                 .await
@@ -553,7 +606,18 @@ impl<B: Backend> Session<B> {
     }
 
     /// Everything an action returns: what changed, where we are, and the verification evidence.
+    /// The effect diff, plus whatever the page did on its own meanwhile (a dialog answered, a download
+    /// finished: W3.8).
     fn effect(&mut self, before: Snap, url_before: &str, evidence: &str) -> Result<String> {
+        let mut r = self.effect_core(before, url_before, evidence)?;
+        for n in self.b.take_notes() {
+            r.push('\n');
+            r.push_str(&n);
+        }
+        Ok(r)
+    }
+
+    fn effect_core(&mut self, before: Snap, url_before: &str, evidence: &str) -> Result<String> {
         let url_now = self.b.url();
         if url_now != url_before {
             self.new_document();
@@ -644,6 +708,105 @@ impl<B: Backend> Session<B> {
             &format!("verified: target was topmost at dispatch; {outcome}"),
         )?;
         Ok(format!("{r}\n{settle}"))
+    }
+
+    /// W3.8: press a key on the focused element (or on `handle`, focused first).
+    async fn key(&mut self, key: &str, hs: Option<&str>) -> Result<String> {
+        let tree = self.tree()?;
+        if let Some(hs) = hs {
+            let (h, n) = self.resolve(&tree, hs)?;
+            let node = n.node;
+            if !self.b.focus(node).await? {
+                bail!("h{h} refused focus (inert or disabled); no key was sent");
+            }
+        }
+        // Enter/Space on a control activates it, so a key press is judged like a click.
+        if matches!(key, "Enter" | "Space" | " ") {
+            self.gate(crate::policy::Op::Type { submit: true }, None, "")?;
+        }
+        let before = self.snapshot(&tree);
+        let url_before = self.b.url();
+        self.b.begin_act();
+        let evidence = self.b.press_key(key).await?;
+        let settle = self.settled().await;
+        let r = self.effect(before, &url_before, &evidence)?;
+        Ok(format!("{r}\n{settle}"))
+    }
+
+    /// W3.8: choose files in a file input. Only files under the temp dir, the working dir or the
+    /// download dir can be sent to a page: an agent steered by a page must not be able to attach `~/.ssh`.
+    async fn upload(&mut self, hs: &str, paths: Vec<&str>) -> Result<String> {
+        let tree = self.tree()?;
+        let (h, n) = self.resolve(&tree, hs)?;
+        let node = n.node;
+        let mut roots = vec![std::env::temp_dir()];
+        roots.extend(std::env::current_dir().ok());
+        roots.extend(crate::downloads::granted().map(|p| p.to_path_buf()));
+        let mut real = Vec::new();
+        for p in &paths {
+            let c = std::fs::canonicalize(p).map_err(|e| anyhow!("cannot read {p:?}: {e}"))?;
+            if !c.is_file() {
+                bail!("{p:?} is not a regular file");
+            }
+            if !roots
+                .iter()
+                .filter_map(|r| std::fs::canonicalize(r).ok())
+                .any(|r| c.starts_with(r))
+            {
+                bail!("REFUSED: {p:?} is outside the directories an upload may read (temp dir, working dir, download dir); nothing was attached");
+            }
+            real.push(c);
+        }
+        self.gate(crate::policy::Op::Type { submit: false }, Some(node), "")?;
+        let before = self.snapshot(&tree);
+        let url_before = self.b.url();
+        self.b.begin_act();
+        let evidence = self
+            .b
+            .upload(node, &real)
+            .await
+            .map_err(|e| anyhow!("h{h}: {e}"))?;
+        let settle = self.settled().await;
+        let r = self.effect(before, &url_before, &evidence)?;
+        Ok(format!("{r}\n{settle}"))
+    }
+
+    async fn drag(&mut self, from: &str, to: &str) -> Result<String> {
+        let tree = self.tree()?;
+        let (_, f) = self.resolve(&tree, from)?;
+        let (_, t) = self.resolve(&tree, to)?;
+        let (f, t) = (f.node, t.node);
+        self.gate(crate::policy::Op::Click, Some(f), "")?;
+        let before = self.snapshot(&tree);
+        let url_before = self.b.url();
+        self.b.begin_act();
+        let evidence = self.b.drag(f, t).await?;
+        let settle = self.settled().await;
+        let r = self.effect(before, &url_before, &evidence)?;
+        Ok(format!("{r}\n{settle}"))
+    }
+
+    /// W3.8: click `handle` (if given) and wait for the download it starts to finish.
+    async fn download(&mut self, hs: Option<&str>) -> Result<String> {
+        if crate::downloads::granted().is_none() {
+            bail!("download refused: no Download capability (start the server with --download-dir <dir>)");
+        }
+        if let Some(hs) = hs {
+            let tree = self.tree()?;
+            let (_, n) = self.resolve(&tree, hs)?;
+            let (node, name) = (n.node, n.name.clone());
+            self.gate(crate::policy::Op::Click, Some(node), &name)?;
+            self.b.begin_act();
+            self.b.click(node).await?;
+        }
+        let lines = self.b.wait_download(15).await;
+        if lines.is_empty() {
+            bail!("no download finished within 15 s");
+        }
+        if lines.iter().all(|l| l.starts_with("download failed")) {
+            bail!("{}", lines.join("\n"));
+        }
+        Ok(lines.join("\n"))
     }
 
     async fn type_(&mut self, hs: &str, text: &str, submit: bool) -> Result<String> {

@@ -254,7 +254,7 @@ pub fn parse_grants(args: &mut Vec<String>) -> Result<Grants, String> {
 pub fn annotations(tool: &str) -> (bool, bool) {
     match tool {
         "observe" | "extract" | "find" | "screenshot" | "checkpoint" | "scroll" => (true, false),
-        "act" | "type" | "commit" => (false, true),
+        "act" | "type" | "commit" | "key" | "upload" | "drag" | "download" => (false, true),
         _ => (false, false),
     }
 }

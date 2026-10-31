@@ -3404,6 +3404,7 @@ dependencies = [
  "manuk-net",
  "rmcp",
  "serde_json",
+ "sha2",
  "tokio",
  "tungstenite",
  "url",

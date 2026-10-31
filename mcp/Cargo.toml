@@ -28,4 +28,5 @@ libc = "0.2"
 serde_json.workspace = true
 tokio.workspace = true
 url.workspace = true
+sha2 = "0.10"
 tungstenite = { version = "0.24", default-features = false, features = ["handshake"] }
