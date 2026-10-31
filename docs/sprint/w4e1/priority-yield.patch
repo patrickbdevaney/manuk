@@ -1,0 +1,215 @@
+diff --git a/engine/page/src/lib.rs b/engine/page/src/lib.rs
+index e68fe774..b22409be 100644
+--- a/engine/page/src/lib.rs
++++ b/engine/page/src/lib.rs
+@@ -520,6 +520,21 @@ fn scan_preloads(html: &str, base: &str) -> Vec<String> {
+     let lower = html.to_ascii_lowercase();
+     let mut out = Vec::new();
+     let mut seen = std::collections::HashSet::new();
++    // `<script src>`: render-blocking (or about to run), so High priority like a sheet. The parsed
++    // tree fetches them again later; that is a cache/single-flight hit, not a second request.
++    let mut j = 0;
++    while let Some(p) = lower[j..].find("<script") {
++        let start = j + p;
++        let end = lower[start..].find('>').map(|e| start + e + 1).unwrap_or(lower.len());
++        j = end;
++        let tag = &html[start..end];
++        if let Some(src) = extract_tag_attr(tag, "src") {
++            let abs = resolve_url(base, &src);
++            if abs.starts_with("http") && seen.insert(abs.clone()) {
++                out.push(abs);
++            }
++        }
++    }
+     let mut i = 0;
+     while let Some(p) = lower[i..].find("<link") {
+         let start = i + p;
+@@ -2044,6 +2059,58 @@ fn selected_image_urls(
+ }
+ 
+ /// PERF.1.1.a: the early scan is on unless `MANUK_NO_EARLY_SCAN` is set (the gate's mutant arm).
++/// W4.E1: the fetch-priority switch. On by default; `MANUK_NO_FETCH_PRIORITY=1` restores the flat
++/// "everything at parse time at once" behaviour (the A/B baseline arm and the gate's mutant).
++fn fetch_priority_enabled() -> bool {
++    std::env::var_os("MANUK_NO_FETCH_PRIORITY").is_none()
++}
++
++/// How long Low-priority (image) warm fetches yield to the render-blocking set at most.
++const LOW_YIELD_MAX: std::time::Duration = std::time::Duration::from_millis(1500);
++
++/// **Priority classes for the speculative fetches of one load.** High = render-blocking CSS, scripts
++/// and the fonts those sheets name; Low = images. A Low fetch waits (bounded by [`LOW_YIELD_MAX`], so
++/// nothing starves) until no High fetch is in flight, so the blocking set gets the connections first.
++#[derive(Default)]
++struct PrioGate {
++    high: std::sync::atomic::AtomicUsize,
++    changed: tokio::sync::Notify,
++}
++
++struct HighGuard(std::sync::Arc<PrioGate>);
++
++impl Drop for HighGuard {
++    fn drop(&mut self) {
++        self.0.high.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
++        self.0.changed.notify_waiters();
++    }
++}
++
++impl PrioGate {
++    /// Register one High fetch; call synchronously where it is spawned so a Low spawned afterwards sees it.
++    fn enter_high(self: &std::sync::Arc<Self>) -> HighGuard {
++        self.high.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
++        HighGuard(self.clone())
++    }
++    async fn low_wait(&self) {
++        if !fetch_priority_enabled() {
++            return;
++        }
++        let deadline = tokio::time::Instant::now() + LOW_YIELD_MAX;
++        loop {
++            let n = self.changed.notified();
++            tokio::pin!(n);
++            n.as_mut().enable();
++            if self.high.load(std::sync::atomic::Ordering::SeqCst) == 0 {
++                return;
++            }
++            if tokio::time::timeout_at(deadline, n).await.is_err() {
++                return;
++            }
++        }
++    }
++}
++
+ fn early_scan_enabled() -> bool {
+     std::env::var_os("MANUK_NO_EARLY_SCAN").is_none()
+ }
+@@ -2053,7 +2120,7 @@ fn early_scan_enabled() -> bool {
+ /// preload scanner overlaps. This only WARMS: the later `fetch_and_apply_images` asks for the same
+ /// URLs and takes the result from the HTTP cache, or waits on `manuk_net`'s single-flight lock if the
+ /// warm request is still in the air, so nothing is requested twice and nothing is applied early.
+-fn warm_images(dom: &Dom, base: &str) {
++fn warm_images(dom: &Dom, base: &str, gate: &std::sync::Arc<PrioGate>) {
+     if !early_scan_enabled() {
+         return;
+     }
+@@ -2068,7 +2135,9 @@ fn warm_images(dom: &Dom, base: &str) {
+         .filter(|s| seen.insert(s.url.clone()))
+         .take(48)
+     {
++        let gate = gate.clone();
+         handle.spawn(async move {
++            gate.low_wait().await;
+             let _ = manuk_net::fetch(&sub.url).await;
+         });
+     }
+@@ -2078,7 +2147,7 @@ fn warm_images(dom: &Dom, base: &str) {
+ /// parsed, scripted and laid out. Only each face's first `src` (what `fetch_and_apply_stylesheets`
+ /// asks for first) and only faces without a `unicode-range` (a subset the page may not need must not
+ /// be fetched speculatively). Same single-flight contract as [`warm_images`].
+-fn warm_font_faces(css: &str, sheet_url: &str) {
++fn warm_font_faces(css: &str, sheet_url: &str, gate: &std::sync::Arc<PrioGate>) {
+     if !early_scan_enabled() {
+         return;
+     }
+@@ -2102,7 +2171,9 @@ fn warm_font_faces(css: &str, sheet_url: &str) {
+         {
+             continue;
+         }
++        let guard = gate.enter_high();
+         handle.spawn(async move {
++            let _guard = guard;
+             let _ = manuk_net::fetch(&url).await;
+         });
+     }
+@@ -4549,17 +4620,19 @@ impl Page {
+         // start — seconds, on a real site — and a sheet that has not arrived by then simply falls
+         // through to `finish_loading` exactly as it does today. Strictly more capability, zero added
+         // latency, and nothing to starve.
++        let prio = std::sync::Arc::new(PrioGate::default());
+         let mut css_inflight: Vec<(String, tokio::task::JoinHandle<Option<String>>)> = Vec::new();
+         if let Ok(handle) = tokio::runtime::Handle::try_current() {
+             for url in scan_preloads(html, final_url) {
++                let guard = prio.enter_high();
+                 handle.spawn(async move {
++                    let _guard = guard;
+                     let _ = manuk_net::fetch(&url).await;
+                 });
+             }
+         }
+         #[allow(unused_mut)]
+         let mut dom = manuk_html::parse(html);
+-        warm_images(&dom, final_url);
+         // Off the real tree rather than a regex over the bytes: `collect_style_sources` already knows
+         // about `media`, shadow roots and inline `<style>`, and getting the URL list wrong here would
+         // fetch the wrong thing early and still look like it worked. The head start is everything
+@@ -4576,21 +4649,25 @@ impl Page {
+                 .filter(|u| seen.insert(u.clone()))
+             {
+                 let u = url.clone();
++                let guard = prio.enter_high();
++                let prio2 = prio.clone();
+                 css_inflight.push((
+                     url,
+                     handle.spawn(async move {
++                        let _guard = guard;
+                         let css = manuk_net::fetch(&u)
+                             .await
+                             .ok()
+                             .and_then(|r| subresource_text(&r));
+                         if let Some(css) = &css {
+-                            warm_font_faces(css, &u);
++                            warm_font_faces(css, &u, &prio2);
+                         }
+                         css
+                     }),
+                 ));
+             }
+         }
++        warm_images(&dom, final_url, &prio);
+         nav_phase(
+             "html parse",
+             &mut nav_at,
+@@ -14931,6 +15008,43 @@ mod tests {
+         );
+     }
+ 
++    #[test]
++    fn preload_scanner_finds_scripts() {
++        let urls = scan_preloads(
++            r#"<script src="/a.js"></script><script>1</script><script async src='https://cdn.test/b.js'></script>"#,
++            "https://e.test/p",
++        );
++        assert!(urls.contains(&"https://e.test/a.js".to_string()), "{urls:?}");
++        assert!(urls.contains(&"https://cdn.test/b.js".to_string()), "{urls:?}");
++        assert_eq!(urls.len(), 2, "{urls:?}");
++    }
++
++    /// W4.E1: a Low fetch yields while a High one is in flight, goes the moment it drains, and with
++    /// the switch off does not wait at all (the mutant).
++    #[tokio::test]
++    async fn prio_gate_low_waits_for_high() {
++        let gate = std::sync::Arc::new(PrioGate::default());
++        let g = gate.enter_high();
++        let t0 = std::time::Instant::now();
++        let g2 = gate.clone();
++        let low = tokio::spawn(async move {
++            g2.low_wait().await;
++            t0.elapsed()
++        });
++        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
++        drop(g);
++        let waited = low.await.unwrap();
++        assert!(waited >= std::time::Duration::from_millis(140), "Low went early: {waited:?}");
++        assert!(waited < std::time::Duration::from_millis(1000), "Low did not wake: {waited:?}");
++        let held = gate.enter_high();
++        std::env::set_var("MANUK_NO_FETCH_PRIORITY", "1");
++        let t1 = std::time::Instant::now();
++        gate.low_wait().await;
++        std::env::remove_var("MANUK_NO_FETCH_PRIORITY");
++        drop(held);
++        assert!(t1.elapsed() < std::time::Duration::from_millis(50), "switch off must not wait");
++    }
++
+     /// §4a — element geometry must come from the **real** layout pipeline, not a
+     /// synthetic map: the a11y tree's bboxes have to agree with the fragment tree,
+     /// and hit-testing a button's own center must return that button.

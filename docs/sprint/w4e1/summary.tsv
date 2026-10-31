@@ -1,0 +1,3 @@
+arm	desc	sum_median_s	sum_min_s	sum_max_s	chrome_ver
+manuk	flat (MANUK_NO_FETCH_PRIORITY=1; script scan on)	19.08	17.13	32.47	145.0.7632.116
+manuk-b	images yield to CSS/script/font set	20.22	18.79	23.96	145.0.7632.116
