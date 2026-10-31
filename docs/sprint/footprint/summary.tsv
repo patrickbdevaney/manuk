@@ -1,0 +1,21 @@
+axis	arm	n	value	per_page	per_GB	runs	chrome_ver
+pages	manuk-proc	1	31-31MB total	30.7-30.8MB/page	33.2-33.3 pages/GB (derived)	runs=3	145.0.7632.116
+pages	manuk-fork	1	31-31MB total	30.8-31.2MB/page	32.9-33.2 pages/GB (derived)	runs=3	145.0.7632.116
+pages	chrome-tabs	1	399-407MB total	398.6-406.9MB/page	2.5-2.6 pages/GB (derived)	runs=3	145.0.7632.116
+pages	chrome-procs	1	398-404MB total	398.4-403.7MB/page	2.5-2.6 pages/GB (derived)	runs=3	145.0.7632.116
+pages	manuk-proc	10	142-142MB total	14.2-14.2MB/page	72.0-72.1 pages/GB (derived)	runs=3	145.0.7632.116
+pages	manuk-fork	10	70-70MB total	7.0-7.0MB/page	145.4-146.0 pages/GB (derived)	runs=3	145.0.7632.116
+pages	chrome-tabs	10	517-520MB total	51.7-52.0MB/page	19.7-19.8 pages/GB (derived)	runs=3	145.0.7632.116
+pages	chrome-procs	10	2042-2070MB total	204.2-207.0MB/page	4.9-5.0 pages/GB (derived)	runs=3	145.0.7632.116
+pages	manuk-proc	50	619-620MB total	12.4-12.4MB/page	82.6-82.7 pages/GB (derived)	runs=3	145.0.7632.116
+pages	manuk-fork	50	245-245MB total	4.9-4.9MB/page	208.8-209.0 pages/GB (derived)	runs=3	145.0.7632.116
+pages	chrome-tabs	50	1004-1006MB total	20.1-20.1MB/page	50.9-51.0 pages/GB (derived)	runs=3	145.0.7632.116
+pages	chrome-procs	50	9509-9530MB total	190.2-190.6MB/page	5.4-5.4 pages/GB (derived)	runs=3	145.0.7632.116
+fork	manuk-fork	10	36-40 ms	-	-	forks=27	145.0.7632.116
+fork	manuk-fork	50	36-43 ms	-	-	forks=147	145.0.7632.116
+fork	chrome-context	1	65-70 ms	-	-	runs=3	145.0.7632.116
+cold	manuk-proc	1	55-57 ms	-	-	runs=3	145.0.7632.116
+cold	chrome-proc	1	305-314 ms	-	-	runs=3	145.0.7632.116
+urls	manuk-proc / chrome-proc	5 paired URLs	manuk:{'OK': 17, 'CHALLENGE': 6, 'FAIL': 7, 'TIMEOUT': 0} chrome:{'OK': 24, 'CHALLENGE': 0, 'FAIL': 3, 'TIMEOUT': 3}	-	-	OK-in-all-runs	145.0.7632.116
+urls	manuk/chrome wall ratio	5 URLs	1.66-1.96x (median of per-URL ratios, per run)	-	-	runs=3	145.0.7632.116
+urls	manuk/chrome pss ratio	5 URLs	0.30-0.31x (median of per-URL ratios, per run)	-	-	runs=3	145.0.7632.116
