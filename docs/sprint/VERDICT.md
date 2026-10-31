@@ -48,3 +48,20 @@ Source: bench/agent-tasks/real_run.py (one shim for every arm: REAL's /config + 
 - **What blocks the engine here is acting, not undoing.** manuk passes only gomail tasks. On opendining, Playwright passes 5/5 and manuk passes 0/5: agents report "the form rejects every phone number" and an unusable guest picker on staynb. The clone boots (state is read on 141/141 manuk runs), so this is a working shell, not a half-booted one, and its forms fail under manuk. Rollback cannot recover from a page that will not accept input.
 - **Consequence for Bar 2:** REAL gives the engine no decisive rollback win. On this subset manuk is 21 tasks behind Playwright+Chrome (Bar 2.1 not met here), and cdp-layer, the manuk tool surface over Chrome, also trails Playwright (10 vs 24). The owner's post-verdict direction (the Chrome backend is the product) stands, and this is the last-shot result it asked for.
 - **Harness notes, applied to every arm alike:** (1) opendining/staynb nest config.task_id one level down. The first 6 manuk r1 cells were rejected as invalid state before the shim learned this and were re-run; the report reads the latest row per cell. (2) Playwright staynb-9 r3 hit the 420 s timeout and counts as a fail. (3) The final Playwright cell overlapped the first re-run cell by about 1 min, so two browsers ran at once briefly.
+
+## Addendum W4.A6 (re-bench after the layer fixes W4.A1/A4/A5; the verdict and addenda above are not edited)
+Source: REAL det subset rows in docs/sprint/w4/A6-real.tsv (141 new rows, chrome_ver=145.0.7632.116, Haiku); own-suite rows appended to docs/sprint/SCOREBOARD.tsv (suite 69903c, 2026-10-31). Baseline = `real_report.py` on docs/sprint/w318/real-runs.tsv (run from the report, not from earlier prose).
+- **Baseline correction:** the W3.18.a.a addendum above says manuk 3/47 (per-run 3,3,3). `real_report.py` on the same TSV gives manuk 6/47 (per-run 6,5,7, band 5-7). The report is the source; the old prose is not edited.
+- **REAL, deterministic subset (47 tasks, pass = ≥2 of 3 runs):**
+
+| Arm | Runs | Per-run | pass ≥2/3 | Band | Mean in+out tokens/task | Mean turns/task |
+|---|---|---|---|---|---|---|
+| manuk (engine) | 3 | 11, 11, 10 | 11/47 | 10-11 | ~6.2k | ~32 |
+| cdp-layer | 3 | 15, 18, 16 | 15/47 | 15-18 | ~8.0k | ~43 |
+| playwright | 1 (run 1 in band, no repeats) | 25 | n/a (single run) | 23-25 | ~5.1k | ~36 |
+
+- **cdp-layer gate (≥4 tasks outside the band over the baseline):** MET. 15/47 against a baseline of 10/47 is +5, and all three runs (15-18) lie above the baseline's per-run max of 10. The +4 rule holds on the run-1 figure too (15 vs 5).
+- **Own-suite gate (manuk within 39-40):** NOT MET. manuk own suite ×3 = 38, 39, 38 (prior 2026-10-29 run was 118/120 total). Task fails this run: F08 fails in all 3 runs ("answer missing 'Item 45: amber'"), L12 in 2 of 3 ("answer missing 'Marilyn Monroe'"). cdp-layer own suite = 40, 40, 40.
+- **Engine vs layer:** manuk (10-11) stays behind cdp-layer (15-18) outside both bands on REAL. Any gain attributed to W4.A1/A4/A5 is a LAYER gain that cdp-layer also has; no engine win is claimed. Playwright (23-25) is still ahead of both.
+- **Node status:** BLOCKED on the own-suite clause (manuk 38/39/38). The cdp-layer clause was met. Follow-up W4.A6.a investigates F08 and L12 on the manuk backend.
+- **Harness notes:** playwright ran once only (its run 1 was inside its band, so the node's "3 if it moved" did not apply). Runs 2-3 for manuk and cdp-layer were run serially after run 1, interleaved per run. All rows: chrome_ver=145.0.7632.116.
