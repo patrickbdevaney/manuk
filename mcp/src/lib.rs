@@ -10,6 +10,7 @@ pub mod isolation;
 pub mod policy;
 pub mod server;
 pub mod session;
+pub mod taint;
 
 pub use backend::Backend;
 pub use session::{Output, Session};

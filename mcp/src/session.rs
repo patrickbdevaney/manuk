@@ -67,6 +67,8 @@ pub struct Session<B: Backend> {
     rev: HashMap<u32, NodeId>,
     next: u32,
     snap: Option<Snap>,
+    /// W4.D2: values read per origin; a payload carrying one toward another origin is refused.
+    taint: crate::taint::Taint,
     /// Per-call opt-out of the injection shield (`include_hidden=true`).
     include_hidden: bool,
     /// W3.9: origin sets and confirm kinds; open by default.
@@ -347,6 +349,7 @@ impl<B: Backend> Session<B> {
             next: 1,
             snap: None,
             include_hidden: false,
+            taint: Default::default(),
             grants: Default::default(),
             confirmed: false,
             click: Default::default(),
@@ -383,6 +386,24 @@ impl<B: Backend> Session<B> {
         };
         eprintln!("manuk-mcp: policy {}: {why} (at {page})", v.tag());
         bail!("{why}; nothing was sent")
+    }
+
+    /// W4.D2: refuse a payload carrying a value read on another origin, unless the destination is
+    /// explicitly granted for writes.
+    fn taint_check(&self, payload: &str, dest: &str, what: &str) -> Result<()> {
+        if !self.grants.write.is_empty() && crate::policy::origin(dest).is_some_and(|o| {
+            self.grants
+                .write
+                .iter()
+                .any(|w| crate::policy::origin(w).as_deref() == Some(&o))
+        }) {
+            return Ok(());
+        }
+        if let Err(e) = self.taint.check(payload, dest, what) {
+            eprintln!("manuk-mcp: {e}");
+            bail!("{e}");
+        }
+        Ok(())
     }
 
     /// The a11y tree with everything a human cannot see pruned (R1.4), unless the call opted out.
@@ -759,6 +780,17 @@ impl<B: Backend> Session<B> {
         if matches!(tool, "observe" | "extract" | "find" | "screenshot") {
             self.b.settle().await;
         }
+        let r = self.call_inner(tool, a).await;
+        if matches!(tool, "navigate" | "observe" | "extract" | "find") {
+            if let Ok(Output::Text(t)) = &r {
+                let url = self.b.url();
+                self.taint.record(&url, t);
+            }
+        }
+        r
+    }
+
+    async fn call_inner(&mut self, tool: &str, a: &Map<String, Value>) -> Result<Output> {
         match tool {
             "storage_state" => self
                 .storage_state(arg_str(a, "action").unwrap_or("export"), arg_str(a, "path"))
@@ -1120,6 +1152,7 @@ impl<B: Backend> Session<B> {
 
     async fn navigate(&mut self, url: &str, query: Option<&str>) -> Result<String> {
         self.gate(crate::policy::Op::Navigate(url), None, "")?;
+        self.taint_check(url, url, "navigation URL")?;
         self.b.navigate(url).await?;
         let settle = self.settled().await;
         self.new_document();
@@ -1671,6 +1704,12 @@ impl<B: Backend> Session<B> {
             )
         })?;
         self.gate(crate::policy::Op::Type { submit }, Some(node), "")?;
+        let dest = self
+            .b
+            .node_facts(node)
+            .and_then(|f| f.form_action)
+            .unwrap_or_else(|| self.b.url());
+        self.taint_check(text, &dest, "typed text")?;
         let before = self.snapshot(&tree);
         let url_before = self.b.url();
         self.b.begin_act();
