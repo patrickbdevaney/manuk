@@ -1,0 +1,98 @@
+chrome_ver	slice	task	manuk_runs	cdp_runs	manuk_outcome	cdp_outcome	agree	mechanism
+145.0.7632.116	external-live	X01	111	000	1	0	0	verifier + site: cdp-layer hits Cloudflare challenge; manuk pass not checkable (stored answer cut at 300 chars)
+145.0.7632.116	external-live	X02	110	000	1	0	0	site: cdp-layer hits Cloudflare challenge; manuk 2/3 pass on answers that report failure (verifier)
+145.0.7632.116	external-live	X03	001	010	0	0	1	site: Cambridge returns no page content (manuk r1-2, cdp r1,r3); mixed, unclassified
+145.0.7632.116	external-live	X04	101	111	1	1	1	verifier-brittle: manuk r2 says 'Monday, 27 March 2023', verifier wants '27 Mar 2023'
+145.0.7632.116	external-live	X05	111	111	1	1	1	
+145.0.7632.116	external-live	X06	101	111	1	1	1	wolfram-js-gate (suspected engine JS gap): 'doesn't run without JavaScript'; manuk pass r1/r3 is own calculation (verifier)
+145.0.7632.116	external-live	X07	000	111	0	1	0	wolfram-js-gate (suspected engine JS gap): results page does not show the answer on manuk
+145.0.7632.116	external-live	X08	000	111	0	1	0	wolfram-js-gate (suspected engine JS gap): results page does not show the answer on manuk
+145.0.7632.116	external-live	X09	111	111	1	1	1	
+145.0.7632.116	external-live	X10	111	111	1	1	1	
+145.0.7632.116	own-fixture	F01	111	111	1	1	1	
+145.0.7632.116	own-fixture	F02	111	111	1	1	1	
+145.0.7632.116	own-fixture	F03	111	111	1	1	1	
+145.0.7632.116	own-fixture	F04	111	111	1	1	1	
+145.0.7632.116	own-fixture	F05	111	111	1	1	1	
+145.0.7632.116	own-fixture	F06	111	111	1	1	1	
+145.0.7632.116	own-fixture	F07	111	111	1	1	1	
+145.0.7632.116	own-fixture	F08	110	111	1	1	1	verifier-brittle: manuk r3 'Item 45 is amber' (correct) fails the exact string 'Item 45: amber'
+145.0.7632.116	own-fixture	F09	111	111	1	1	1	
+145.0.7632.116	own-fixture	F10	111	111	1	1	1	
+145.0.7632.116	own-fixture	F11	111	111	1	1	1	
+145.0.7632.116	own-fixture	F12	111	111	1	1	1	
+145.0.7632.116	own-fixture	F13	111	111	1	1	1	
+145.0.7632.116	own-fixture	F14	111	111	1	1	1	
+145.0.7632.116	own-fixture	F15	111	111	1	1	1	
+145.0.7632.116	own-live	L01	111	111	1	1	1	
+145.0.7632.116	own-live	L02	111	111	1	1	1	
+145.0.7632.116	own-live	L03	111	111	1	1	1	
+145.0.7632.116	own-live	L04	111	111	1	1	1	
+145.0.7632.116	own-live	L05	111	111	1	1	1	
+145.0.7632.116	own-live	L06	111	111	1	1	1	
+145.0.7632.116	own-live	L07	111	111	1	1	1	
+145.0.7632.116	own-live	L08	111	111	1	1	1	
+145.0.7632.116	own-live	L09	111	111	1	1	1	
+145.0.7632.116	own-live	L10	111	111	1	1	1	
+145.0.7632.116	own-live	L11	111	111	1	1	1	
+145.0.7632.116	own-live	L12	000	111	0	1	0	scroll-trigger (suspected): second quote batch never loads on manuk 3/3; cdp-layer scroll loads it
+145.0.7632.116	own-live	L13	111	111	1	1	1	
+145.0.7632.116	own-live	L14	111	111	1	1	1	
+145.0.7632.116	own-live	L15	111	111	1	1	1	
+145.0.7632.116	own-live	L16	111	111	1	1	1	
+145.0.7632.116	own-live	L17	111	111	1	1	1	
+145.0.7632.116	own-live	L18	111	111	1	1	1	
+145.0.7632.116	own-live	L19	111	111	1	1	1	
+145.0.7632.116	own-live	L20	111	111	1	1	1	
+145.0.7632.116	own-live	L21	111	111	1	1	1	
+145.0.7632.116	own-live	L22	111	111	1	1	1	
+145.0.7632.116	own-live	L23	111	111	1	1	1	
+145.0.7632.116	own-live	L24	111	111	1	1	1	
+145.0.7632.116	own-live	L25	111	111	1	1	1	
+145.0.7632.116	real	dashdish-10	000	100	0	0	1	click-family (suspected): store card click does not open the store page
+145.0.7632.116	real	dashdish-2	000	110	0	1	0	click-family (suspected): store card click does not open the store page
+145.0.7632.116	real	dashdish-4	000	000	0	0	1	
+145.0.7632.116	real	dashdish-5	000	000	0	0	1	
+145.0.7632.116	real	dashdish-7	000	010	0	0	1	click-family (suspected): restaurant card click never reaches the menu
+145.0.7632.116	real	fly-unified-2	000	000	0	0	1	
+145.0.7632.116	real	fly-unified-4	000	000	0	0	1	
+145.0.7632.116	real	fly-unified-5	000	000	0	0	1	
+145.0.7632.116	real	fly-unified-6	000	000	0	0	1	
+145.0.7632.116	real	fly-unified-9	000	000	0	0	1	
+145.0.7632.116	real	gocalendar-1	000	110	0	1	0	click-family (suspected): time controls and Save do not take effect on manuk
+145.0.7632.116	real	gocalendar-3	000	111	0	1	0	click-family (suspected): event tile click does not open the detail view
+145.0.7632.116	real	gocalendar-4	000	111	0	1	0	click-family (suspected): event edit does not take on manuk
+145.0.7632.116	real	gocalendar-7	000	000	0	0	1	
+145.0.7632.116	real	gomail-2	111	111	1	1	1	
+145.0.7632.116	real	gomail-3	000	000	0	0	1	
+145.0.7632.116	real	gomail-5	000	010	0	0	1	click-family (suspected): compose window never opens on manuk (cdp-layer r2 scheduled)
+145.0.7632.116	real	gomail-7	111	111	1	1	1	
+145.0.7632.116	real	gomail-8	111	001	1	0	0	verifier + enumeration: manuk trashed 1 of 4 GitHub mails and passes 3/3; cdp-layer r2 found none
+145.0.7632.116	real	networkin-1	111	111	1	1	1	
+145.0.7632.116	real	networkin-10	000	000	0	0	1	
+145.0.7632.116	real	networkin-3	110	111	1	1	1	run-flaky: manuk r3 2/3 evals on the same post; unclassified
+145.0.7632.116	real	networkin-5	111	111	1	1	1	
+145.0.7632.116	real	networkin-6	000	000	0	0	1	
+145.0.7632.116	real	networkin-9	000	000	0	0	1	
+145.0.7632.116	real	opendining-10	111	010	1	0	0	cdp-side: cdp r1,r3 find the menus empty; unclassified
+145.0.7632.116	real	opendining-3	111	110	1	1	1	cdp-side: cdp r3 says booked, evals 0/5; verifier or state mismatch, unclassified
+145.0.7632.116	real	opendining-4	111	001	1	0	0	cdp-side: cdp r1-2 reservation form rejects every phone number; unclassified
+145.0.7632.116	real	opendining-5	111	011	1	1	1	cdp-side: cdp r1 says booked, evals 0/5; verifier or state mismatch, unclassified
+145.0.7632.116	real	opendining-8	111	001	1	0	0	cdp-side: cdp r1 booked the right place but evals 0/3; r2 booked another restaurant; unclassified
+145.0.7632.116	real	staynb-2	000	001	0	0	1	click-family (suspected): guest-count stepper does not change on manuk
+145.0.7632.116	real	staynb-4	000	000	0	0	1	
+145.0.7632.116	real	staynb-5	000	000	0	0	1	
+145.0.7632.116	real	staynb-6	000	000	0	0	1	
+145.0.7632.116	real	staynb-8	000	000	0	0	1	
+145.0.7632.116	real	staynb-9	000	000	0	0	1	
+145.0.7632.116	real	topwork-1	000	000	0	0	1	
+145.0.7632.116	real	topwork-2	000	000	0	0	1	
+145.0.7632.116	real	topwork-3	000	000	0	0	1	
+145.0.7632.116	real	topwork-4	000	000	0	0	1	
+145.0.7632.116	real	udriver-1	000	111	0	1	0	typeahead (suspected): manuk typing offers 4 fixed addresses; cdp-layer picks the same ones
+145.0.7632.116	real	udriver-10	000	111	0	1	0	typeahead (suspected): as udriver-1
+145.0.7632.116	real	udriver-11	000	111	0	1	0	typeahead (suspected): as udriver-1
+145.0.7632.116	real	udriver-6	000	111	0	1	0	typeahead (suspected): as udriver-1
+145.0.7632.116	real	udriver-9	000	000	0	0	1	
+145.0.7632.116	real	zilloft-3	000	000	0	0	1	
+145.0.7632.116	real	zilloft-6	000	000	0	0	1	
