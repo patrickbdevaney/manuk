@@ -461,6 +461,14 @@ mod http_cache {
         last_modified: Option<String>,
     }
 
+    /// The cache is **partitioned by top-level site** (W4.E3): the key is `(partition, url)`, so a
+    /// resource one site fetched is invisible to another site asking for the same URL (a cross-site
+    /// timing/history probe stays a miss). `partition` is `storage::site_of` of the initiating
+    /// top-level page, or of the URL itself for a top-level navigation.
+    fn key(part: &str, url: &str) -> String {
+        format!("{part}\u{0}{url}")
+    }
+
     fn store() -> &'static Mutex<HashMap<String, Entry>> {
         static S: OnceLock<Mutex<HashMap<String, Entry>>> = OnceLock::new();
         S.get_or_init(|| Mutex::new(HashMap::new()))
@@ -469,9 +477,10 @@ mod http_cache {
     /// A still-fresh cached response for `url`, if any. Freshness only — a stale-but-revalidatable
     /// entry is deliberately declined here so the caller goes to the wire; [`revalidation_headers`]
     /// is what turns that trip into a conditional request.
-    pub fn get(url: &str) -> Option<Response> {
+    pub fn get(part: &str, url: &str) -> Option<Response> {
+        ensure_loaded(part, url);
         let map = store().lock().ok()?;
-        let e = map.get(url)?;
+        let e = map.get(&key(part, url))?;
         (e.stored.elapsed() < e.fresh_for).then(|| e.response.clone())
     }
 
@@ -493,7 +502,7 @@ mod http_cache {
     /// a validator** — kept not to serve blind, but so the next request can ask "still current?" with
     /// an `If-None-Match`/`If-Modified-Since` and take a `304` instead of re-downloading the body.
     /// A response with neither a lifetime nor a validator is still dropped, exactly as before.
-    pub fn put(url: &str, response: &Response) {
+    pub fn put(part: &str, url: &str, response: &Response) {
         if response.status != 200 {
             return;
         }
@@ -528,17 +537,18 @@ mod http_cache {
         if fresh_secs == 0 && etag.is_none() && last_modified.is_none() {
             return;
         }
+        let entry = Entry {
+            response: response.clone(),
+            stored: Instant::now(),
+            fresh_for: Duration::from_secs(fresh_secs),
+            etag,
+            last_modified,
+        };
+        if let Some(dir) = disk_dir() {
+            disk_write(&dir, part, url, &entry);
+        }
         if let Ok(mut map) = store().lock() {
-            map.insert(
-                url.to_string(),
-                Entry {
-                    response: response.clone(),
-                    stored: Instant::now(),
-                    fresh_for: Duration::from_secs(fresh_secs),
-                    etag,
-                    last_modified,
-                },
-            );
+            map.insert(key(part, url), entry);
         }
     }
 
@@ -547,11 +557,12 @@ mod http_cache {
     /// (the caller already short-circuited through [`get`], so revalidating would be wasted), or the
     /// entry carries no validator. `ETag` wins over `Last-Modified` when both are present, but both
     /// are sent — a server keyed on either can then answer `304`.
-    pub fn revalidation_headers(url: &str) -> Vec<(String, String)> {
+    pub fn revalidation_headers(part: &str, url: &str) -> Vec<(String, String)> {
+        ensure_loaded(part, url);
         let Ok(map) = store().lock() else {
             return Vec::new();
         };
-        let Some(e) = map.get(url) else {
+        let Some(e) = map.get(&key(part, url)) else {
             return Vec::new();
         };
         if e.stored.elapsed() < e.fresh_for {
@@ -572,9 +583,10 @@ mod http_cache {
     /// any validator the `304` restated, and hand back the **stored** body as a normal response — the
     /// whole point being that no body crossed the wire. `None` when there is nothing stored to
     /// revalidate against (a `304` we cannot honour, which should not happen but must not panic).
-    pub fn note_revalidated(url: &str, not_modified: &Response) -> Option<Response> {
+    pub fn note_revalidated(part: &str, url: &str, not_modified: &Response) -> Option<Response> {
+        ensure_loaded(part, url);
         let mut map = store().lock().ok()?;
-        let e = map.get_mut(url)?;
+        let e = map.get_mut(&key(part, url))?;
         e.stored = Instant::now();
         let cc = not_modified
             .header("cache-control")
@@ -589,6 +601,9 @@ mod http_cache {
         }
         if last_modified.is_some() {
             e.last_modified = last_modified;
+        }
+        if let Some(dir) = disk_dir() {
+            disk_write(&dir, part, url, e);
         }
         Some(e.response.clone())
     }
@@ -633,9 +648,159 @@ mod http_cache {
         None
     }
 
+    // ---- on-disk store (W4.E3) -------------------------------------------------------------
+    // Opt-in: `$MANUK_HTTP_CACHE_DIR`. One file per (partition, url): a 4-byte big-endian header
+    // length, a JSON header, then the body. The header repeats the partition and URL and a load
+    // verifies both, so a filename-hash collision (or a file moved between partitions) is a miss,
+    // never a cross-site hit. Freshness is stored as wall-clock seconds since the epoch because an
+    // `Instant` does not survive the process.
+
+    pub fn disk_dir() -> Option<std::path::PathBuf> {
+        std::env::var_os("MANUK_HTTP_CACHE_DIR")
+            .filter(|d| !d.is_empty())
+            .map(std::path::PathBuf::from)
+    }
+
+    fn unix_now() -> u64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0)
+    }
+
+    fn fnv64(seed: u64, bytes: &[u8]) -> u64 {
+        bytes
+            .iter()
+            .fold(seed, |h, b| (h ^ *b as u64).wrapping_mul(0x100000001b3))
+    }
+
+    fn disk_path(dir: &std::path::Path, part: &str, url: &str) -> std::path::PathBuf {
+        let k = key(part, url);
+        let h1 = fnv64(0xcbf29ce484222325, k.as_bytes());
+        let h2 = fnv64(0x9e3779b97f4a7c15, k.as_bytes());
+        dir.join(format!("{h1:016x}{h2:016x}"))
+    }
+
+    fn version_name(v: crate::HttpVersion) -> &'static str {
+        use crate::HttpVersion::*;
+        match v {
+            Http09 => "0.9",
+            Http10 => "1.0",
+            Http11 => "1.1",
+            Http2 => "2",
+            Http3 => "3",
+            Other => "other",
+        }
+    }
+
+    fn version_of(s: &str) -> crate::HttpVersion {
+        use crate::HttpVersion::*;
+        match s {
+            "0.9" => Http09,
+            "1.0" => Http10,
+            "1.1" => Http11,
+            "2" => Http2,
+            "3" => Http3,
+            _ => Other,
+        }
+    }
+
+    fn disk_write(dir: &std::path::Path, part: &str, url: &str, e: &Entry) {
+        let elapsed = e.stored.elapsed().as_secs();
+        let head = serde_json::json!({
+            "part": part,
+            "url": url,
+            "status": e.response.status,
+            "headers": e.response.headers,
+            "final_url": e.response.final_url.as_str(),
+            "version": version_name(e.response.http_version),
+            "stored_unix": unix_now().saturating_sub(elapsed),
+            "fresh_secs": e.fresh_for.as_secs(),
+            "etag": e.etag,
+            "last_modified": e.last_modified,
+        })
+        .to_string();
+        let mut buf = Vec::with_capacity(4 + head.len() + e.response.body.len());
+        buf.extend_from_slice(&(head.len() as u32).to_be_bytes());
+        buf.extend_from_slice(head.as_bytes());
+        buf.extend_from_slice(&e.response.body);
+        let path = disk_path(dir, part, url);
+        if std::fs::create_dir_all(dir).is_err() {
+            return;
+        }
+        // Write-then-rename so a concurrent reader never sees a torn file.
+        let tmp = path.with_extension(format!("tmp{}", std::process::id()));
+        if std::fs::write(&tmp, &buf).is_ok() && std::fs::rename(&tmp, &path).is_err() {
+            let _ = std::fs::remove_file(&tmp);
+        }
+    }
+
+    fn disk_read(dir: &std::path::Path, part: &str, url: &str) -> Option<Entry> {
+        let buf = std::fs::read(disk_path(dir, part, url)).ok()?;
+        let n = u32::from_be_bytes(buf.get(..4)?.try_into().ok()?) as usize;
+        let head: serde_json::Value = serde_json::from_slice(buf.get(4..4 + n)?).ok()?;
+        if head["part"].as_str()? != part || head["url"].as_str()? != url {
+            return None;
+        }
+        let headers: Vec<(String, String)> =
+            serde_json::from_value(head["headers"].clone()).ok()?;
+        let age = unix_now().saturating_sub(head["stored_unix"].as_u64()?);
+        let stored = Instant::now()
+            .checked_sub(Duration::from_secs(age))
+            .unwrap_or_else(Instant::now);
+        Some(Entry {
+            response: Response {
+                status: head["status"].as_u64()? as u16,
+                headers,
+                body: bytes::Bytes::copy_from_slice(buf.get(4 + n..)?),
+                final_url: url::Url::parse(head["final_url"].as_str()?).ok()?,
+                http_version: version_of(head["version"].as_str()?),
+            },
+            stored,
+            fresh_for: Duration::from_secs(head["fresh_secs"].as_u64()?),
+            etag: head["etag"].as_str().map(str::to_string),
+            last_modified: head["last_modified"].as_str().map(str::to_string),
+        })
+    }
+
+    /// Pull a disk entry into memory when memory has none (a previous process wrote it).
+    fn ensure_loaded(part: &str, url: &str) {
+        let Some(dir) = disk_dir() else { return };
+        let k = key(part, url);
+        if store().lock().map(|m| m.contains_key(&k)).unwrap_or(true) {
+            return;
+        }
+        if let Some(e) = disk_read(&dir, part, url) {
+            if let Ok(mut m) = store().lock() {
+                m.entry(k).or_insert(e);
+            }
+        }
+    }
+
+    /// Test/probe seam: the disk read with an explicit directory and no memory layer.
+    #[cfg(test)]
+    pub fn disk_get(dir: &std::path::Path, part: &str, url: &str) -> Option<Response> {
+        disk_read(dir, part, url)
+            .filter(|e| e.stored.elapsed() < e.fresh_for)
+            .map(|e| e.response)
+    }
+
+    #[cfg(test)]
+    pub fn disk_put(dir: &std::path::Path, part: &str, url: &str, r: &Response) {
+        let e = Entry {
+            response: r.clone(),
+            stored: Instant::now(),
+            fresh_for: Duration::from_secs(300),
+            etag: None,
+            last_modified: None,
+        };
+        disk_write(dir, part, url, &e);
+    }
+
     #[cfg(test)]
     mod tests {
         use super::*;
+        const P: &str = "e.test";
         use crate::HttpVersion;
         use bytes::Bytes;
         use url::Url;
@@ -651,23 +816,64 @@ mod http_cache {
         }
 
         #[test]
+        fn a_cross_site_probe_is_a_miss_in_memory_and_on_disk() {
+            let u = "https://cdn.test/lib.js";
+            put("a.test", u, &resp("max-age=300"));
+            assert!(get("a.test", u).is_some(), "same partition hits");
+            assert!(
+                get("b.test", u).is_none(),
+                "another top-level site must miss"
+            );
+            let dir = std::env::temp_dir().join(format!("manuk-hc-{}", std::process::id()));
+            disk_put(&dir, "a.test", u, &resp("max-age=300"));
+            assert!(
+                disk_get(&dir, "a.test", u).is_some(),
+                "disk: same partition hits"
+            );
+            assert!(
+                disk_get(&dir, "b.test", u).is_none(),
+                "disk: cross-site probe misses"
+            );
+            // A file copied into another partition's slot is rejected by the identity check.
+            std::fs::copy(disk_path(&dir, "a.test", u), disk_path(&dir, "b.test", u)).unwrap();
+            assert!(
+                disk_get(&dir, "b.test", u).is_none(),
+                "disk: a moved file is not trusted"
+            );
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+
+        #[test]
+        fn disk_entry_round_trips_and_expires() {
+            let dir = std::env::temp_dir().join(format!("manuk-hc2-{}", std::process::id()));
+            let u = "https://e.test/rt.css";
+            let mut r = resp("max-age=300");
+            r.body = Bytes::from_static(b"BODY\x00\xff");
+            disk_put(&dir, "e.test", u, &r);
+            let got = disk_get(&dir, "e.test", u).unwrap();
+            assert_eq!(got.body.as_ref(), b"BODY\x00\xff");
+            assert_eq!(got.header("cache-control"), Some("max-age=300"));
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+
+        #[test]
         fn caches_fresh_and_skips_uncacheable() {
             let u = "https://e.test/max-age";
-            put(u, &resp("max-age=300"));
+            put(P, u, &resp("max-age=300"));
             assert!(
-                get(u).is_some(),
+                get(P, u).is_some(),
                 "fresh max-age response is served from cache"
             );
 
-            put("https://e.test/nostore", &resp("no-store, max-age=300"));
+            put(P, "https://e.test/nostore", &resp("no-store, max-age=300"));
             assert!(
-                get("https://e.test/nostore").is_none(),
+                get(P, "https://e.test/nostore").is_none(),
                 "no-store is not cached"
             );
 
-            put("https://e.test/zero", &resp("max-age=0"));
+            put(P, "https://e.test/zero", &resp("max-age=0"));
             assert!(
-                get("https://e.test/zero").is_none(),
+                get(P, "https://e.test/zero").is_none(),
                 "max-age=0 is not cached"
             );
         }
@@ -680,12 +886,15 @@ mod http_cache {
             let mut r = resp("max-age=0");
             r.headers.push(("etag".into(), "\"v1\"".into()));
             r.body = Bytes::from_static(b"ORIGINAL");
-            put(u, &r);
+            put(P, u, &r);
 
-            assert!(get(u).is_none(), "a max-age=0 entry is never served fresh");
+            assert!(
+                get(P, u).is_none(),
+                "a max-age=0 entry is never served fresh"
+            );
 
             // ...but it is revalidatable: the next request must carry the stored ETag.
-            let cond = revalidation_headers(u);
+            let cond = revalidation_headers(P, u);
             assert!(
                 cond.iter()
                     .any(|(k, v)| k == "if-none-match" && v == "\"v1\""),
@@ -701,14 +910,14 @@ mod http_cache {
                 final_url: Url::parse(u).unwrap(),
                 http_version: HttpVersion::Http11,
             };
-            let served = note_revalidated(u, &not_modified).expect("304 reuses the stored body");
+            let served = note_revalidated(P, u, &not_modified).expect("304 reuses the stored body");
             assert_eq!(
                 served.body.as_ref(),
                 b"ORIGINAL",
                 "the cached body is served, not re-downloaded"
             );
             assert!(
-                get(u).is_some(),
+                get(P, u).is_some(),
                 "the 304's max-age refreshed the entry to fresh"
             );
         }
@@ -723,12 +932,12 @@ mod http_cache {
                 "last-modified".into(),
                 "Wed, 21 Oct 2099 07:28:00 GMT".into(),
             ));
-            put(u, &r);
+            put(P, u, &r);
             assert!(
-                get(u).is_none(),
+                get(P, u).is_none(),
                 "no-cache is never served without revalidating"
             );
-            let cond = revalidation_headers(u);
+            let cond = revalidation_headers(P, u);
             assert!(
                 cond.iter().any(|(k, v)| k == "if-modified-since"
                     && v == "Wed, 21 Oct 2099 07:28:00 GMT"),
@@ -743,8 +952,11 @@ mod http_cache {
             let u = "https://e.test/expires-future";
             let mut r = resp("");
             r.headers = vec![("expires".into(), "Sun, 06 Nov 2099 08:49:37 GMT".into())];
-            put(u, &r);
-            assert!(get(u).is_some(), "a future Expires makes the entry fresh");
+            put(P, u, &r);
+            assert!(
+                get(P, u).is_some(),
+                "a future Expires makes the entry fresh"
+            );
 
             // `Cache-Control: max-age` OUTRANKS `Expires` (RFC 7234 §5.3): a past Expires next to a
             // positive max-age is still fresh.
@@ -752,8 +964,8 @@ mod http_cache {
             let mut r2 = resp("max-age=300");
             r2.headers
                 .push(("expires".into(), "Sun, 06 Nov 1994 08:49:37 GMT".into()));
-            put(u2, &r2);
-            assert!(get(u2).is_some(), "max-age wins over a past Expires");
+            put(P, u2, &r2);
+            assert!(get(P, u2).is_some(), "max-age wins over a past Expires");
         }
 
         #[test]
@@ -766,10 +978,10 @@ mod http_cache {
                 ("expires".into(), "Sun, 06 Nov 1994 08:49:37 GMT".into()),
                 ("etag".into(), "\"e9\"".into()),
             ];
-            put(u, &r);
-            assert!(get(u).is_none(), "a past Expires is not fresh");
+            put(P, u, &r);
+            assert!(get(P, u).is_none(), "a past Expires is not fresh");
             assert!(
-                revalidation_headers(u)
+                revalidation_headers(P, u)
                     .iter()
                     .any(|(k, v)| k == "if-none-match" && v == "\"e9\""),
                 "a stale-by-Expires entry with an ETag is still revalidatable"
@@ -780,9 +992,9 @@ mod http_cache {
             let u2 = "https://e.test/expires-past-novalidator";
             let mut r2 = resp("");
             r2.headers = vec![("expires".into(), "Sun, 06 Nov 1994 08:49:37 GMT".into())];
-            put(u2, &r2);
-            assert!(get(u2).is_none());
-            assert!(revalidation_headers(u2).is_empty());
+            put(P, u2, &r2);
+            assert!(get(P, u2).is_none());
+            assert!(revalidation_headers(P, u2).is_empty());
         }
 
         #[test]
@@ -792,9 +1004,9 @@ mod http_cache {
             let u = "https://e.test/age-partial";
             let mut r = resp("max-age=100");
             r.headers.push(("age".into(), "90".into()));
-            put(u, &r);
+            put(P, u, &r);
             assert!(
-                get(u).is_some(),
+                get(P, u).is_some(),
                 "max-age=100 with Age=90 is still fresh (~10s left)"
             );
 
@@ -803,9 +1015,9 @@ mod http_cache {
             let u2 = "https://e.test/age-expired";
             let mut r2 = resp("max-age=100");
             r2.headers.push(("age".into(), "200".into()));
-            put(u2, &r2);
+            put(P, u2, &r2);
             assert!(
-                get(u2).is_none(),
+                get(P, u2).is_none(),
                 "an Age past the max-age lifetime is stale on arrival, not served fresh"
             );
 
@@ -815,10 +1027,10 @@ mod http_cache {
             let mut r3 = resp("max-age=100");
             r3.headers.push(("age".into(), "200".into()));
             r3.headers.push(("etag".into(), "\"a1\"".into()));
-            put(u3, &r3);
-            assert!(get(u3).is_none(), "over-aged is not fresh");
+            put(P, u3, &r3);
+            assert!(get(P, u3).is_none(), "over-aged is not fresh");
             assert!(
-                revalidation_headers(u3)
+                revalidation_headers(P, u3)
                     .iter()
                     .any(|(k, v)| k == "if-none-match" && v == "\"a1\""),
                 "an over-aged entry with an ETag is still revalidatable"
@@ -830,10 +1042,10 @@ mod http_cache {
             // The original guarantee holds: an uncacheable response with no validator is neither
             // served fresh nor revalidatable — there is nothing to condition a request on.
             let u = "https://e.test/novalidator";
-            put(u, &resp("max-age=0"));
-            assert!(get(u).is_none());
+            put(P, u, &resp("max-age=0"));
+            assert!(get(P, u).is_none());
             assert!(
-                revalidation_headers(u).is_empty(),
+                revalidation_headers(P, u).is_empty(),
                 "nothing to revalidate without a validator"
             );
         }
@@ -1226,6 +1438,17 @@ pub async fn fetch_from(url: &str, initiator: Option<&str>) -> Result<Response> 
     fetch_scoped(url, init.as_ref()).await
 }
 
+/// The HTTP-cache partition for a request: the registrable site of the initiating top-level page,
+/// or of the URL itself for a top-level navigation (no initiator).
+fn partition_of(url: &str, initiator: Option<&Url>) -> String {
+    match initiator {
+        Some(i) => storage::site_of(i),
+        None => Url::parse(url)
+            .map(|u| storage::site_of(&u))
+            .unwrap_or_default(),
+    }
+}
+
 async fn fetch_scoped(url: &str, initiator: Option<&Url>) -> Result<Response> {
     if lean::is_tracker(url) {
         lean::BLOCKED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -1280,7 +1503,7 @@ async fn fetch_scoped(url: &str, initiator: Option<&Url>) -> Result<Response> {
     let _held = gate.lock().await;
 
     // Re-check now that any in-flight request for this URL has completed.
-    if let Some(cached) = http_cache::get(url) {
+    if let Some(cached) = http_cache::get(&partition_of(url, initiator), url) {
         return Ok(cached);
     }
     // **A resource this navigation has JUST fetched is not asked for again, fresh or not.** A
@@ -1458,7 +1681,7 @@ pub enum DocOrDownload {
 pub async fn fetch_document_or_download(url: &str, dir: &std::path::Path) -> Result<DocOrDownload> {
     // A cached response is, by construction, a document: downloads are never put in the HTTP cache
     // (they go to disk, below). So a cache hit skips the wire exactly as the document path did.
-    if let Some(cached) = http_cache::get(url) {
+    if let Some(cached) = http_cache::get(&partition_of(url, None), url) {
         tracing::debug!(%url, "served from HTTP cache");
         return Ok(DocOrDownload::Document(cached));
     }
@@ -1571,7 +1794,7 @@ pub async fn fetch_document_or_download(url: &str, dir: &std::path::Path) -> Res
         final_url,
         http_version,
     };
-    http_cache::put(url, &resp);
+    http_cache::put(&partition_of(url, None), url, &resp);
     Ok(DocOrDownload::Document(resp))
 }
 
@@ -1719,7 +1942,7 @@ async fn fetch_with_deadline(
 }
 
 async fn fetch_inner(url: &str, initiator: Option<&Url>) -> Result<Response> {
-    if let Some(cached) = http_cache::get(url) {
+    if let Some(cached) = http_cache::get(&partition_of(url, initiator), url) {
         tracing::debug!(%url, "served from HTTP cache");
         return Ok(cached);
     }
@@ -1745,7 +1968,7 @@ async fn fetch_inner(url: &str, initiator: Option<&Url>) -> Result<Response> {
     // A stale cache entry with a validator turns this GET into a *conditional* one: we ask the
     // server "still `<etag>`?" and it can answer `304` with no body. The headers ride only the FIRST
     // hop (the origin URL); a redirect target is a different resource and revalidates on its own.
-    let conditional = http_cache::revalidation_headers(url);
+    let conditional = http_cache::revalidation_headers(&partition_of(url, initiator), url);
     let mut first_hop = true;
     for _ in 0..=MAX_REDIRECTS {
         let cond_headers: Vec<(&str, &str)> = if first_hop {
@@ -1760,7 +1983,9 @@ async fn fetch_inner(url: &str, initiator: Option<&Url>) -> Result<Response> {
         first_hop = false;
         // `304 Not Modified` confirms our stored copy — serve it, no re-download.
         if resp.status == 304 {
-            if let Some(revalidated) = http_cache::note_revalidated(url, &resp) {
+            if let Some(revalidated) =
+                http_cache::note_revalidated(&partition_of(url, initiator), url, &resp)
+            {
                 tracing::debug!(%url, "304 Not Modified — served revalidated cache");
                 return Ok(revalidated);
             }
@@ -1777,7 +2002,7 @@ async fn fetch_inner(url: &str, initiator: Option<&Url>) -> Result<Response> {
                 continue;
             }
         }
-        http_cache::put(url, &resp);
+        http_cache::put(&partition_of(url, initiator), url, &resp);
         return Ok(resp);
     }
     bail!("too many redirects (>{MAX_REDIRECTS}) starting at {url}")
