@@ -253,8 +253,8 @@ pub fn parse_grants(args: &mut Vec<String>) -> Result<Grants, String> {
 /// vocabulary: what a client may auto-approve versus what can leave the machine.
 pub fn annotations(tool: &str) -> (bool, bool) {
     match tool {
-        "observe" | "extract" | "find" | "screenshot" | "checkpoint" | "scroll" => (true, false),
-        "act" | "type" | "commit" | "key" | "upload" | "drag" | "download" => (false, true),
+        "observe" | "extract" | "find" | "screenshot" | "checkpoint" | "scroll" | "wait_for" => (true, false),
+        "act" | "fill_form" | "type" | "commit" | "key" | "upload" | "drag" | "download" => (false, true),
         _ => (false, false),
     }
 }

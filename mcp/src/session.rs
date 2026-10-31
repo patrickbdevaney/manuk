@@ -8,7 +8,7 @@ use std::fmt::Write as _;
 use anyhow::{anyhow, bail, Result};
 use manuk_a11y::{A11yNode, Checked, Landing, Rect, Role};
 use manuk_dom::NodeId;
-use serde_json::{Map, Value};
+use serde_json::{json, Map, Value};
 
 use crate::backend::Backend;
 
@@ -657,6 +657,10 @@ impl<B: Backend> Session<B> {
                         .map(|n| n as usize),
                 )
                 .map(Output::Text),
+            "act" if a.get("steps").is_some() => self.batch(a).await.map(Output::Text),
+            "fill_form" => self.fill_form(a).await.map(Output::Text),
+            "back" => self.back().await.map(Output::Text),
+            "wait_for" => self.wait_for(a).await.map(Output::Text),
             "act" => self
                 .act(
                     arg_str(a, "handle").ok_or_else(|| anyhow!("act needs `handle`"))?,
@@ -746,6 +750,209 @@ impl<B: Backend> Session<B> {
             }
             other => bail!("unknown tool {other:?}"),
         }
+    }
+
+    /// W4.A5: go back one history entry; the result is the usual effect (`navigated:` with the page).
+    async fn back(&mut self) -> Result<String> {
+        let tree = self.tree()?;
+        let before = self.snapshot(&tree);
+        let url_before = self.b.url();
+        self.b.begin_act();
+        self.b.back().await?;
+        let settle = self.settled().await;
+        let r = self.effect(before, &url_before, "went back one entry")?;
+        Ok(format!("{r}\n{settle}"))
+    }
+
+    /// W4.A5: wait until `text` is on the page or `handle` is on it, polling the page's own queues;
+    /// `timeout` seconds (default 10, at most 60). A timeout is a result, not an error.
+    async fn wait_for(&mut self, a: &Map<String, Value>) -> Result<String> {
+        let text = arg_str(a, "text");
+        let handle = arg_str(a, "handle");
+        if text.is_none() == handle.is_none() {
+            bail!("wait_for needs exactly one of `text` or `handle`");
+        }
+        let secs = a.get("timeout").and_then(Value::as_f64).unwrap_or(10.0).clamp(0.0, 60.0);
+        let want = text.map(str::to_lowercase);
+        let t0 = std::time::Instant::now();
+        loop {
+            self.b.settle().await;
+            let found = match (&want, handle) {
+                (Some(w), _) => self.b.page_text()?.to_lowercase().contains(w.as_str()),
+                (_, Some(hs)) => {
+                    let tree = self.tree()?;
+                    self.resolve(&tree, hs).is_ok()
+                }
+                _ => unreachable!(),
+            };
+            let ms = t0.elapsed().as_millis();
+            if found {
+                let settle = self.settled().await;
+                let what = text.map(|t| format!("text {t:?}")).unwrap_or_else(|| format!("{}", handle.unwrap_or("")));
+                return Ok(format!("found {what} after {ms} ms\n{settle}"));
+            }
+            if t0.elapsed().as_secs_f64() >= secs {
+                let what = text.map(|t| format!("text {t:?}")).unwrap_or_else(|| format!("{}", handle.unwrap_or("")));
+                return Ok(format!("TIMED OUT after {ms} ms: {what} did not appear (observe to see the page as it is)"));
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+    }
+
+    /// W4.A5: `fill_form(fields[], submit?)`: each field `{handle, value, action?}` becomes a type /
+    /// check / select step by the control's role, run as one batch; `submit` is a handle clicked last.
+    async fn fill_form(&mut self, a: &Map<String, Value>) -> Result<String> {
+        let fields = a
+            .get("fields")
+            .and_then(Value::as_array)
+            .ok_or_else(|| anyhow!("fill_form needs `fields`: [{{handle, value}}, ...]"))?;
+        let mut steps = Vec::new();
+        for f in fields {
+            let mut m = f.as_object().cloned().ok_or_else(|| anyhow!("each field must be an object {{handle, value}}"))?;
+            m.insert("tool".into(), json!("fill"));
+            steps.push(Value::Object(m));
+        }
+        if let Some(h) = arg_str(a, "submit") {
+            steps.push(json!({"tool": "act", "handle": h, "action": "click"}));
+        }
+        let mut m = Map::new();
+        m.insert("steps".into(), Value::Array(steps));
+        if let Some(c) = a.get("confirm") {
+            m.insert("confirm".into(), c.clone());
+        }
+        self.batch(&m).await
+    }
+
+    /// The tool and arguments a batch step stands for; `fill` picks type / check / select from the
+    /// control's role.
+    fn step_call(&mut self, step: &Map<String, Value>) -> Result<(String, Map<String, Value>)> {
+        let tool = arg_str(step, "tool").unwrap_or("act").to_string();
+        let mut args = step.clone();
+        args.remove("tool");
+        if tool != "fill" {
+            if !matches!(tool.as_str(), "act" | "type" | "key" | "upload" | "drag" | "scroll" | "wait_for" | "navigate" | "back" | "dialog") {
+                bail!("a step cannot be {tool:?}: use act, type, key, upload, drag, scroll, wait_for, navigate, back or dialog");
+            }
+            if tool == "act" && args.contains_key("steps") {
+                bail!("steps do not nest");
+            }
+            return Ok((tool, args));
+        }
+        let hs = arg_str(step, "handle").ok_or_else(|| anyhow!("a field needs `handle`"))?;
+        let value = match step.get("value") {
+            Some(Value::String(v)) => v.clone(),
+            Some(Value::Bool(b)) => b.to_string(),
+            Some(Value::Number(n)) => n.to_string(),
+            _ => bail!("field {hs} needs `value`"),
+        };
+        let tree = self.tree()?;
+        let (_, n) = self.resolve(&tree, hs)?;
+        let has_options = n.iter().any(|c| matches!(c.role, Role::Option));
+        let kind = match (arg_str(step, "action"), &n.role) {
+            (Some(a), _) => a.to_string(),
+            (None, Role::CheckBox | Role::Radio | Role::Switch) => "check".into(),
+            (None, Role::ComboBox) if has_options => "select".into(),
+            _ => "type".into(),
+        };
+        let mut out = Map::new();
+        out.insert("handle".into(), json!(hs));
+        if kind == "type" {
+            out.insert("text".into(), json!(value));
+            Ok(("type".into(), out))
+        } else {
+            out.insert("action".into(), json!(kind));
+            out.insert("value".into(), json!(value));
+            Ok(("act".into(), out))
+        }
+    }
+
+    /// W4.A5: run `steps` in order in one call. It stops after the first step that fails, opens a
+    /// dialog or popup, or navigates, and says which step it stopped at; the last step's own result is
+    /// shown in full, earlier steps in one line each.
+    async fn batch(&mut self, a: &Map<String, Value>) -> Result<String> {
+        let steps = a
+            .get("steps")
+            .and_then(Value::as_array)
+            .ok_or_else(|| anyhow!("`steps` must be an array of {{tool, ...args}}"))?;
+        if steps.is_empty() || steps.len() > 40 {
+            bail!("steps must hold 1 to 40 entries");
+        }
+        let confirm = a.get("confirm").cloned();
+        let mut log = Vec::new();
+        let total = steps.len();
+        for (i, st) in steps.iter().enumerate() {
+            let n = i + 1;
+            let Some(sm) = st.as_object() else {
+                bail!("step {n} is not an object");
+            };
+            let label = |tool: &str, args: &Map<String, Value>| {
+                let tgt = ["handle", "from", "url", "key", "text"]
+                    .iter()
+                    .find_map(|k| arg_str(args, k))
+                    .unwrap_or("");
+                format!("{tool} {tgt}").trim().to_string()
+            };
+            let mut res = self.step_call(sm);
+            let mut name = arg_str(sm, "tool").unwrap_or("act").to_string();
+            if let Ok((tool, args)) = res.as_mut() {
+                name = label(tool, args);
+                if let Some(c) = &confirm {
+                    args.entry("confirm").or_insert(c.clone());
+                }
+            }
+            let out = match res {
+                Ok((tool, args)) => Box::pin(self.call(&tool, &args)).await,
+                Err(e) => Err(e),
+            };
+            let text = match out {
+                Ok(Output::Text(t)) => t,
+                Ok(Output::Image { note, .. }) => note,
+                Err(e) => {
+                    log.push(format!("step {n}/{total} ({name}) FAILED: {e}"));
+                    return Ok(format!(
+                        "STOPPED at step {n} of {total}: it failed, so steps {}..{total} did not run.\n{}",
+                        n + 1,
+                        log.join("\n")
+                    ));
+                }
+            };
+            let stop = if text.contains("\nnavigated: ") {
+                Some("it navigated")
+            } else if text.contains("\nrouted (same document") || text.starts_with("routed (same document") {
+                Some("it routed to a new URL")
+            } else if text.lines().any(|l| l.starts_with("dialog:")) {
+                Some("it opened a dialog")
+            } else if text.lines().any(|l| l.starts_with("popup opened:")) {
+                Some("it opened a popup")
+            } else {
+                None
+            };
+            if let Some(why) = stop.filter(|_| n < total) {
+                log.push(format!("step {n}/{total} ({name}) done"));
+                return Ok(format!(
+                    "STOPPED after step {n} of {total}: {why}, so steps {}..{total} did not run.\n{}\n--- result of step {n} ---\n{text}",
+                    n + 1,
+                    log.join("\n")
+                ));
+            }
+            if n == total {
+                log.push(format!("step {n}/{total} ({name}) done"));
+                return Ok(format!(
+                    "ran {total} of {total} steps{}.\n{}\n--- result of step {n} ---\n{text}",
+                    stop.map(|w| format!(" ({w})")).unwrap_or_default(),
+                    log.join("\n")
+                ));
+            }
+            let notes: Vec<&str> = text
+                .lines()
+                .filter(|l| l.starts_with("rebound ") || l.starts_with("NOT CONFIRMED"))
+                .collect();
+            log.push(format!(
+                "step {n}/{total} ({name}) done{}",
+                if notes.is_empty() { String::new() } else { format!("; {}", notes.join("; ")) }
+            ));
+        }
+        unreachable!()
     }
 
     /// The settle line (W3.12). `MANUK_SETTLE_MUTATE=no-settle` skips the wait, for the gate's mutant.

@@ -1760,6 +1760,27 @@ impl Backend for CdpBackend {
         self.cdp.events.clear();
         self.refresh()
     }
+    async fn back(&mut self) -> Result<()> {
+        let h = self.cdp.call("Page.getNavigationHistory", json!({}))?;
+        let i = h["currentIndex"].as_i64().unwrap_or(0);
+        if i <= 0 {
+            bail!("no earlier page in history");
+        }
+        let prev = &h["entries"][(i - 1) as usize];
+        if prev["url"].as_str().is_none_or(|u| u == "about:blank") {
+            bail!("no earlier page in history");
+        }
+        let id = prev["id"].as_i64().unwrap_or(0);
+        self.cdp.events.clear();
+        self.cdp
+            .call("Page.navigateToHistoryEntry", json!({"entryId": id}))?;
+        self.cdp.pump_until(Duration::from_secs(10), |m| {
+            m["method"] == "Page.loadEventFired" || m["method"] == "Page.navigatedWithinDocument"
+        })?;
+        self.cdp.pump_until(Duration::from_millis(500), |_| false)?;
+        self.cdp.events.clear();
+        self.refresh()
+    }
     fn tree(&self) -> Result<A11yNode> {
         Ok(self.built()?.tree.clone())
     }

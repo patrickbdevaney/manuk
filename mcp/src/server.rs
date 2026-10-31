@@ -73,7 +73,7 @@ fn schema(props: Value, required: &[&str]) -> Map<String, Value> {
 fn tools() -> Vec<Tool> {
     let t = |n: &'static str, d: &'static str, mut s: Map<String, Value>| {
         if let Some(Value::Object(p)) = s.get_mut("properties") {
-            if matches!(n, "navigate" | "act" | "type") {
+            if matches!(n, "navigate" | "act" | "type" | "fill_form") {
                 p.insert("confirm".into(), json!({"type": "boolean", "description": "set true only when the user approved an action the server answered with CONFIRM REQUIRED"}));
             }
             p.insert("page".into(), json!({"type": "string", "description": "page handle `<id>:<seq>` returned by the previous call (a log position: pass it back to continue, even from a new client); omit for the default page, \"new\" for a fresh one"}));
@@ -81,13 +81,16 @@ fn tools() -> Vec<Tool> {
         let (ro, destructive) = crate::policy::annotations(n);
         let mut ann = rmcp::model::ToolAnnotations::new().read_only(ro);
         ann.destructive_hint = Some(destructive);
-        ann.open_world_hint = Some(matches!(n, "navigate" | "act" | "type" | "commit"));
+        ann.open_world_hint = Some(matches!(n, "navigate" | "act" | "type" | "commit" | "fill_form"));
         Tool::new(n, d, Arc::new(s)).annotate(ann)
     };
     vec![
         t("navigate", "Load a URL. Returns the page header and a compact observation: one line per node, `[hN] role \"name\" [state]`. Handles (hN) are stable until the next navigation.", schema(json!({"url": {"type": "string"}}), &["url"])),
         t("observe", "Read the page. mode=full (default), diff (only what changed since the last observation/action), or viewport (only what is on screen). Output is capped at budget_tokens (default 8000) with a summary of anything cut.", schema(json!({"mode": {"type": "string", "enum": ["full", "diff", "viewport"]}, "budget_tokens": {"type": "integer"}, "include_hidden": {"type": "boolean", "description": "opt out of the injection shield and also return text a human cannot see (opacity 0, offscreen, tiny, camouflaged); default false"}}), &[])),
-        t("act", "Act on a handle: click, check (value=false to uncheck), select (value=option name). Fails loudly, with the reason, if the target is covered, disabled, stale or unreachable. Returns the effect as a diff (+added ~changed -removed) plus verification.", schema(json!({"handle": {"type": "string"}, "action": {"type": "string", "enum": ["click", "check", "select", "focus", "hover"]}, "value": {"type": "string"}}), &["handle"])),
+        t("act", "Act on a handle: click, check (value=false to uncheck), select (value=option name). Fails loudly, with the reason, if the target is covered, disabled, stale or unreachable. Returns the effect as a diff (+added ~changed -removed) plus verification.", schema(json!({"handle": {"type": "string"}, "action": {"type": "string", "enum": ["click", "check", "select", "focus", "hover"]}, "value": {"type": "string"}, "steps": {"type": "array", "description": "INSTEAD of handle: run these in order in ONE call, e.g. [{\"tool\":\"type\",\"handle\":\"h3\",\"text\":\"x\"},{\"tool\":\"act\",\"handle\":\"h9\",\"action\":\"click\"}]. Tools: act, type, key, upload, drag, scroll, wait_for, navigate, back, dialog. Stops after the first step that fails, opens a dialog/popup, or navigates, and reports where.", "items": {"type": "object"}}}), &[])),
+        t("fill_form", "Fill several fields and optionally submit in ONE call: fields=[{handle, value}] (text -> typed, checkbox/radio -> checked (value false unchecks), select/combobox -> option chosen; `action` overrides), `submit`=handle to click last. Stops at the first failed step, dialog, popup or navigation and says which step it stopped at.", schema(json!({"fields": {"type": "array", "items": {"type": "object", "properties": {"handle": {"type": "string"}, "value": {}, "action": {"type": "string", "enum": ["type", "check", "select"]}}, "required": ["handle", "value"]}}, "submit": {"type": "string"}}), &["fields"])),
+        t("back", "Go back one history entry. Returns the page you land on like a navigation.", schema(json!({}), &[])),
+        t("wait_for", "Wait until `text` appears on the page or `handle` is present, up to `timeout` seconds (default 10, max 60). Returns when found, or says TIMED OUT (not an error).", schema(json!({"text": {"type": "string"}, "handle": {"type": "string"}, "timeout": {"type": "number"}}), &[])),
         t("type", "Type text into a text field handle (replaces its value); submit=true then submits its form. Returns the effect diff.", schema(json!({"handle": {"type": "string"}, "text": {"type": "string"}, "submit": {"type": "boolean"}}), &["handle", "text"])),
         t("key", "Press a key on the focused element (or on `handle`, focused first): Enter, Escape, Tab, ArrowDown/Up/Left/Right, Backspace, Delete, Home, End, PageUp/PageDown, Space, F1-F12, one character, or a chord like Control+a. Returns the effect diff.", schema(json!({"key": {"type": "string"}, "handle": {"type": "string"}}), &["key"])),
         t("upload", "Attach local file(s) to a file-input handle (`path`, or `paths`). Only files under the temp dir, the working dir or the download dir can be attached. Returns the effect diff.", schema(json!({"handle": {"type": "string"}, "path": {"type": "string"}, "paths": {"type": "array", "items": {"type": "string"}}}), &["handle"])),

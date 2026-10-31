@@ -45,6 +45,10 @@ pub trait Backend {
     async fn press_key(&mut self, _key: &str) -> Result<String> {
         anyhow::bail!("this backend cannot press keys")
     }
+    /// W4.A5: traverse one entry back in the session history; errors when there is none.
+    async fn back(&mut self) -> Result<()> {
+        anyhow::bail!("this backend cannot go back")
+    }
     /// W3.8: choose the files at `paths` in the file input `node`.
     async fn upload(&mut self, _node: NodeId, _paths: &[std::path::PathBuf]) -> Result<String> {
         anyhow::bail!("this backend cannot upload files")
@@ -181,6 +185,9 @@ impl Backend for AgentBrowser {
     }
     fn page_text(&self) -> Result<String> {
         Ok(self.observe()?.text)
+    }
+    async fn back(&mut self) -> Result<()> {
+        AgentBrowser::back(self).await
     }
     async fn press_key(&mut self, key: &str) -> Result<String> {
         let go = AgentBrowser::press_key(self, key)?;
