@@ -1279,6 +1279,40 @@ fn decode_inline_images(
     out
 }
 
+/// W4.E2: an image's intrinsic size from the first 16 KB of its body; a whole fetch + decode when the
+/// header will not say (SVG, or a size field past the prefix). `None` if the image cannot be had.
+async fn lean_image_dims(url: &str) -> Option<(u32, u32)> {
+    let cell = manuk_net::lean::dims_cell(url);
+    *cell.get_or_init(|| lean_image_dims_uncached(url)).await
+}
+
+async fn lean_image_dims_uncached(url: &str) -> Option<(u32, u32)> {
+    if url.starts_with("http://") || url.starts_with("https://") {
+        // Most headers name the size in the first 2 KB; a JPEG with a large EXIF/ICC block needs more.
+        for prefix in [2 * 1024, 16 * 1024] {
+            let Ok((status, head)) = manuk_net::fetch_prefix(url, prefix).await else {
+                break;
+            };
+            if status >= 400 {
+                return None;
+            }
+            if let Some(d) = image::ImageReader::new(std::io::Cursor::new(&head))
+                .with_guessed_format()
+                .ok()
+                .and_then(|r| r.into_dimensions().ok())
+            {
+                return Some(d);
+            }
+            if head.len() < prefix {
+                break; // the whole body is in hand and it has no readable size: SVG or odd format
+            }
+        }
+    }
+    let bytes = fetch_image_bytes(url).await?;
+    let img = decode_bitmap(&bytes, url)?;
+    Some((img.width, img.height))
+}
+
 /// Fetch the raw bytes of an image URL: `data:` (base64 or literal), `http(s)://`, or a
 /// local `file://`/path (for the render CLI on local pages).
 async fn fetch_image_bytes(url: &str) -> Option<Vec<u8>> {
@@ -2060,6 +2094,22 @@ fn warm_images(dom: &Dom, base: &str) {
     let Ok(handle) = tokio::runtime::Handle::try_current() else {
         return;
     };
+    if manuk_net::lean::images_deferred() {
+        // Lean profile: warm the image SIZES (a ranged header read), not the bodies.
+        let mut seen = std::collections::HashSet::new();
+        for sub in collect_subresources(dom, base)
+            .into_iter()
+            .filter(|s| s.kind == SubresourceKind::Image)
+            .filter(|s| s.url.starts_with("http://") || s.url.starts_with("https://"))
+            .filter(|s| seen.insert(s.url.clone()))
+            .take(48)
+        {
+            handle.spawn(async move {
+                let _ = lean_image_dims(&sub.url).await;
+            });
+        }
+        return;
+    }
     let mut seen = std::collections::HashSet::new();
     for sub in collect_subresources(dom, base)
         .into_iter()
@@ -2746,6 +2796,9 @@ pub struct Page {
     /// A failure that is not remembered is a fetch that repeats on every round; see
     /// `fetch_images_owned`.
     image_attempts: std::collections::HashSet<(manuk_dom::NodeId, String)>,
+    /// W4.E2 (lean profile): intrinsic size of each image URL read from its header, `None` if it
+    /// could not be read. Keyed by URL so each is asked for once per navigation.
+    lean_dims: std::collections::HashMap<String, Option<(u32, u32)>>,
     /// `<iframe>`s already rendered, by node → the URL they show. Prevents re-fetching an embed on
     /// every round, which is the same storm `image_by_url` exists to stop.
     iframes: std::collections::HashMap<manuk_dom::NodeId, String>,
@@ -5496,6 +5549,24 @@ impl Page {
         fonts: &FontContext,
         viewport_width: f32,
     ) -> usize {
+        // W4.E2: lean agent profile — no image bodies until a screenshot asks. Nothing is recorded as
+        // attempted, so the screenshot's later call fetches them.
+        if manuk_net::lean::images_deferred() {
+            return self.apply_lean_image_dims(fonts, viewport_width).await;
+        }
+        // A screenshot is being prepared: placeholders from the lean pass give way to real pixels.
+        // What else `images` holds (masks, backgrounds, inline data: images) is carried through
+        // `apply_images`, which would otherwise replace the whole map.
+        let kept: std::collections::HashMap<_, _> = if manuk_net::lean::enabled() {
+            self.images
+                .iter()
+                .filter(|(_, img)| !img.rgba.is_empty())
+                .map(|(n, i)| (*n, i.clone()))
+                .collect()
+        } else {
+            Default::default()
+        };
+        self.images.retain(|_, img| !img.rgba.is_empty());
         // Same discipline for images: `finish_loading` and every script round both call this, and
         // re-fetching an image we have already decoded is pure waste — and, for a `<img>` whose src
         // a script has not touched, it is waste on every single round.
@@ -5508,7 +5579,78 @@ impl Page {
         )
         .await;
         self.image_attempts.extend(tried);
+        let mut images = images;
+        for (n, i) in kept {
+            images.entry(n).or_insert(i);
+        }
         self.apply_images(images, fonts, viewport_width)
+    }
+
+    /// W4.E2 lean profile: give each `<img>` its intrinsic size WITHOUT fetching its pixels. Reads the
+    /// first 2 KB (then 16 KB) of each distinct URL, takes the dimensions from the header, and lays the page out
+    /// with a pixel-less placeholder so every box lands where the full profile puts it (an image of
+    /// unknown size is a 0x0 box, which moves everything below it and so every click point). A URL
+    /// whose header will not yield a size (SVG, a header past 16 KB) is fetched whole and decoded,
+    /// because a wrong layout costs the agent more than the bytes do. Placeholders are dropped, and
+    /// the real images fetched, when a screenshot is requested.
+    async fn apply_lean_image_dims(&mut self, fonts: &FontContext, viewport_width: f32) -> usize {
+        let mut targets: Vec<(manuk_dom::NodeId, String)> = Vec::new();
+        for n in self.dom.flat_descendants(self.dom.root()) {
+            let Some(el) = self.dom.element(n) else {
+                continue;
+            };
+            let src = match self.dom.tag_name(n) {
+                Some("img") => el.attr("src"),
+                Some("video") => el.attr("poster"),
+                _ => None,
+            };
+            let Some(src) = src.map(str::trim).filter(|s| !s.is_empty()) else {
+                continue;
+            };
+            if self.images.contains_key(&n) {
+                continue;
+            }
+            targets.push((n, resolve_url(&self.final_url, src)));
+        }
+        let mut wanted: Vec<String> = Vec::new();
+        for (_, u) in &targets {
+            if !self.lean_dims.contains_key(u) && !wanted.contains(u) {
+                wanted.push(u.clone());
+            }
+        }
+        let fetched = collect_before_deadline(
+            wanted.into_iter().map(|u| async move {
+                let dims = lean_image_dims(&u).await;
+                (dims, u)
+            }),
+            self.load_deadline,
+        )
+        .await;
+        for (dims, u) in fetched {
+            self.lean_dims.insert(u, dims);
+        }
+        let mut add: std::collections::HashMap<
+            manuk_dom::NodeId,
+            std::rc::Rc<manuk_paint::DecodedImage>,
+        > = std::collections::HashMap::new();
+        for (n, u) in targets {
+            if let Some(Some((w, h))) = self.lean_dims.get(&u) {
+                add.insert(
+                    n,
+                    std::rc::Rc::new(manuk_paint::DecodedImage {
+                        width: *w,
+                        height: *h,
+                        rgba: Vec::new(),
+                    }),
+                );
+            }
+        }
+        if add.is_empty() {
+            return 0;
+        }
+        let mut all = self.images.clone();
+        all.extend(add);
+        self.apply_images(all, fonts, viewport_width)
     }
 
     /// **Every stylesheet that styles this document** — inline `<style>` blocks *and* the
@@ -8282,6 +8424,8 @@ impl Page {
     /// Fetch this page's mask images from the cascade (the paths that *have* styles: `load_async`,
     /// the shell's first paint, the render/fidelity harness) and bind them.
     pub async fn fetch_and_apply_masks(&mut self) -> usize {
+        // NOT deferred under the lean profile: a masked node held in `images` is laid out as a
+        // replaced box, so skipping the (small) icon masks moved content (Wikipedia: +5 px).
         let mut seen = std::collections::HashSet::new();
         let targets: Vec<(String, String)> = self
             .styles
@@ -8320,6 +8464,9 @@ impl Page {
     /// `url()` background is never also a replaced image, so they cannot collide. Gradients need no
     /// fetch at all; they are painted from the computed value directly.
     pub async fn fetch_and_apply_background_images(&mut self) -> usize {
+        if manuk_net::lean::images_deferred() {
+            return 0;
+        }
         let have: std::collections::HashSet<manuk_dom::NodeId> =
             self.images.keys().copied().collect();
         let targets: Vec<(manuk_dom::NodeId, String)> = self
@@ -8883,6 +9030,7 @@ impl Page {
             absent_css: std::collections::HashSet::new(),
             fetched_urls: std::collections::HashSet::new(),
             image_attempts: std::collections::HashSet::new(),
+            lean_dims: std::collections::HashMap::new(),
             image_by_url: std::collections::HashMap::new(),
             iframes: frame_urls,
             child_pages: frame_pages,

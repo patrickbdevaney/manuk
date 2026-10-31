@@ -70,6 +70,9 @@ pub mod websocket;
 /// security argument. See [`csp::Csp`].
 pub mod csp;
 
+/// W4.E2 lean agent profile: defer image bodies, refuse tracker hosts.
+pub mod lean;
+
 /// E5 native content-blocking (feature `adblock`).
 #[cfg(feature = "adblock")]
 pub mod blocker;
@@ -1189,6 +1192,7 @@ pub fn reset_fetch_stats() {
     FETCH_DUPES.store(0, std::sync::atomic::Ordering::Relaxed);
     NET_REQUESTS.store(0, std::sync::atomic::Ordering::Relaxed);
     NET_DUPES.store(0, std::sync::atomic::Ordering::Relaxed);
+    lean::reset_stats();
     if let Some(m) = NETWORKED.get() {
         m.lock().unwrap().clear();
     }
@@ -1223,6 +1227,10 @@ pub async fn fetch_from(url: &str, initiator: Option<&str>) -> Result<Response> 
 }
 
 async fn fetch_scoped(url: &str, initiator: Option<&Url>) -> Result<Response> {
+    if lean::is_tracker(url) {
+        lean::BLOCKED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        bail!("lean profile: tracker host not fetched: {url}");
+    }
     FETCHES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let repeat = {
         let seen = SEEN.get_or_init(Default::default);
@@ -1320,6 +1328,7 @@ async fn fetch_scoped(url: &str, initiator: Option<&Url>) -> Result<Response> {
     let out = fetch_with_deadline(url, request_timeout(), initiator).await;
     mark_origin_known(url);
     if let Ok(r) = &out {
+        lean::WIRE_BYTES.fetch_add(r.body.len() as u64, std::sync::atomic::Ordering::Relaxed);
         note_http_version(url, r.http_version);
         nav_recent_put(url, r);
     }
@@ -1837,6 +1846,55 @@ pub async fn fetch_streaming<F: FnMut(&[u8])>(url: &str, mut on_chunk: F) -> Res
             final_url: current,
             http_version,
         });
+    }
+    bail!("too many redirects (>{MAX_REDIRECTS}) starting at {url}")
+}
+
+/// **Fetch only the first `max` bytes of `url`'s (decoded) body** — a `Range: bytes=0-(max-1)` request
+/// that also stops reading at `max` if the server ignores the range and answers `200` in full, then
+/// drops the body (RST_STREAM on h2, close on h1). For reading an image's dimensions from its header
+/// without paying for the pixels (W4.E2). Returns `(status, prefix)`; redirects are followed. Carries
+/// the cookie jar's `Cookie` header but does not store `Set-Cookie`.
+pub async fn fetch_prefix(url: &str, max: usize) -> Result<(u16, Vec<u8>)> {
+    if lean::is_tracker(url) {
+        lean::BLOCKED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        bail!("lean profile: tracker host not fetched: {url}");
+    }
+    let mut current = Url::parse(url).with_context(|| format!("invalid URL: {url}"))?;
+    let range = format!("bytes=0-{}", max.saturating_sub(1));
+    for _ in 0..=MAX_REDIRECTS {
+        let cookie = cookie_jar()
+            .lock()
+            .ok()
+            .and_then(|j| j.cookie_header(&current));
+        let mut hdrs: Vec<(&str, &str)> = vec![("range", range.as_str())];
+        if let Some(c) = &cookie {
+            hdrs.push(("cookie", c.as_str()));
+        }
+        let resp = send_raw("GET", &current, &hdrs, Bytes::new()).await?;
+        let status = resp.status().as_u16();
+        if (300..400).contains(&status) {
+            if let Some(loc) = resp.headers().get(LOCATION).and_then(|v| v.to_str().ok()) {
+                current = current
+                    .join(loc)
+                    .with_context(|| format!("bad redirect target: {loc}"))?;
+                continue;
+            }
+        }
+        let encoding = content_encoding(&resp);
+        let mut decoded = wrap_decoder(body_reader(resp.into_body()), encoding.as_deref());
+        let mut out = Vec::with_capacity(max);
+        let mut buf = vec![0u8; 4096];
+        while out.len() < max {
+            let n = decoded.read(&mut buf).await?;
+            if n == 0 {
+                break;
+            }
+            out.extend_from_slice(&buf[..n]);
+        }
+        out.truncate(max);
+        lean::WIRE_BYTES.fetch_add(out.len() as u64, std::sync::atomic::Ordering::Relaxed);
+        return Ok((status, out));
     }
     bail!("too many redirects (>{MAX_REDIRECTS}) starting at {url}")
 }

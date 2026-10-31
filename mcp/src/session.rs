@@ -901,6 +901,7 @@ impl<B: Backend> Session<B> {
                 .find(arg_str(a, "query").ok_or_else(|| anyhow!("find needs `query`"))?)
                 .map(Output::Text),
             "screenshot" => {
+                self.b.load_visuals().await;
                 let png = self.b.screenshot_png()?;
                 let note = match arg_str(a, "handle") {
                     Some(_) => "viewport screenshot (per-handle cropping is not implemented; handle ignored)".to_string(),

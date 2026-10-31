@@ -82,6 +82,8 @@ pub trait Backend {
     /// `(text, absolute href)` for every link on the page.
     fn links(&self) -> Result<Vec<(String, String)>>;
     fn screenshot_png(&mut self) -> Result<Vec<u8>>;
+    /// W4.E2: fetch whatever a lean profile deferred (image pixels) before a screenshot. Default no-op.
+    async fn load_visuals(&mut self) {}
     /// Cookies + localStorage as Playwright storage-state JSON.
     fn export_storage_state(&mut self) -> Result<serde_json::Value> {
         anyhow::bail!("this backend has no storage state")
@@ -271,6 +273,9 @@ impl Backend for AgentBrowser {
     }
     fn screenshot_png(&mut self) -> Result<Vec<u8>> {
         AgentBrowser::screenshot_png(self)
+    }
+    async fn load_visuals(&mut self) {
+        AgentBrowser::load_visuals(self).await
     }
     fn export_storage_state(&mut self) -> Result<serde_json::Value> {
         manuk_net::storage_state::export()

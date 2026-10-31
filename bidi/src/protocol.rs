@@ -433,6 +433,7 @@ impl Session {
             }
             "browsingContext.captureScreenshot" => {
                 let ctx = str_param(p, "context")?;
+                self.browser_mut(&ctx)?.load_visuals().await;
                 let png = self
                     .browser(&ctx)?
                     .screenshot_png()

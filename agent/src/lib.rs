@@ -1631,6 +1631,22 @@ impl AgentBrowser {
         }
     }
 
+    /// W4.E2: under the lean profile image bodies were deferred (only their sizes are known), so a
+    /// caller that wants pixels awaits this first; the screenshot is then the one the full profile
+    /// would have produced. A no-op outside the lean profile.
+    pub async fn load_visuals(&mut self) {
+        if !manuk_net::lean::enabled() {
+            return;
+        }
+        let (fonts, w) = (&self.fonts, self.width as f32);
+        if let Some(p) = self.page.as_mut() {
+            let _visual = manuk_net::lean::VisualGuard::new();
+            p.fetch_and_apply_images(fonts, w).await;
+            p.fetch_and_apply_masks().await;
+            p.fetch_and_apply_background_images().await;
+        }
+    }
+
     /// PNG screenshot of the current viewport.
     pub fn screenshot_png(&self) -> Result<Vec<u8>> {
         let page = self.page.as_ref().context("no page loaded")?;
@@ -2200,6 +2216,7 @@ async fn run_loop(
         let obs_text = obs.to_prompt_with(&policy);
         // G-d: record what the agent perceived, before it decides anything.
         let shot = if policy.include_screenshot && backend.supports_images() {
+            browser.load_visuals().await;
             browser.screenshot_png().ok()
         } else {
             None

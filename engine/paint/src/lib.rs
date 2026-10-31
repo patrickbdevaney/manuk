@@ -1808,6 +1808,10 @@ fn blit_image(
     if rect.width <= 0.0 || rect.height <= 0.0 || image.width == 0 || image.height == 0 {
         return;
     }
+    // A lean-profile placeholder (size known, pixels deliberately not fetched) paints nothing.
+    if image.rgba.len() < image.width as usize * image.height as usize * 4 {
+        return;
+    }
     // Build a rectangular clip mask when the image is inside an overflow-clipping box.
     let mask = clip.and_then(|cl| rect_mask(pixmap.width(), pixmap.height(), cl));
     // Build a source pixmap, premultiplying each pixel (tiny-skia stores premultiplied).
