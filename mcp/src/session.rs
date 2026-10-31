@@ -1306,7 +1306,83 @@ impl<B: Backend> Session<B> {
             &url_before,
             &format!("verified: target was topmost at dispatch; {outcome}"),
         )?;
+        if action == "click" && Self::retry_on() && Self::is_noop(&r) {
+            if let Some(done) = self.retry_noop(h, node, &url_before).await? {
+                return Ok(done);
+            }
+        }
         Ok(format!("{r}\n{settle}"))
+    }
+
+    /// W4.C2: the layer retries a click that verifiably did nothing. `MANUK_NO_RETRY=1` turns it off (the
+    /// baseline arm of the measurement).
+    fn retry_on() -> bool {
+        std::env::var_os("MANUK_NO_RETRY").is_none()
+    }
+
+    fn is_noop(r: &str) -> bool {
+        r.contains("\nno change\nurl: unchanged")
+    }
+
+    /// An error page the act landed on (a 4xx/5xx or "error" heading) is as good as no effect.
+    fn looks_like_error(&self) -> bool {
+        let t = self.b.page_text().unwrap_or_default();
+        let head: String = t.trim_start().chars().take(80).collect::<String>().to_ascii_lowercase();
+        ["404", "403", "500", "502", "503", "not found", "error"].iter().any(|k| head.contains(k))
+    }
+
+    /// The click changed nothing. Try, in order: the keyboard (Enter, then Space) on the focused target,
+    /// then the target's own interactive descendant. Each attempt is judged by the same effect diff; an
+    /// attempt that lands on an error page is undone with `back` before the next. `None` = nothing worked.
+    async fn retry_noop(&mut self, h: u32, node: NodeId, url_before: &str) -> Result<Option<String>> {
+        let mut tried: Vec<&str> = Vec::new();
+        for method in ["Enter", "Space", "descendant"] {
+            let tree = self.tree()?;
+            let before = self.snapshot(&tree);
+            let target = if method == "descendant" {
+                let Some(inner) = tree
+                    .iter()
+                    .find(|n| n.node == node)
+                    .and_then(|n| n.iter().find(|c| c.node != node && matches!(c.role, Role::Link | Role::Button) && c.bbox.is_some()))
+                    .map(|c| c.node)
+                else {
+                    continue;
+                };
+                inner
+            } else {
+                node
+            };
+            tried.push(method);
+            self.b.begin_act();
+            let evidence = if method == "descendant" {
+                if self.verify_landing(h, target).is_err() {
+                    continue;
+                }
+                self.b.click(target).await?
+            } else {
+                if !self.b.focus(target).await.unwrap_or(false) {
+                    continue;
+                }
+                match self.b.press_key(method).await {
+                    Ok(e) => e,
+                    Err(_) => continue,
+                }
+            };
+            let settle = self.settled().await;
+            let r = self.effect(before, url_before, &format!("retried by the layer: first click had no effect; {method} ({evidence})"))?;
+            let navigated = !r.contains("url: unchanged");
+            if navigated && self.looks_like_error() {
+                let _ = self.b.back().await;
+                self.new_document();
+                let t = self.tree()?;
+                self.snap = Some(self.snapshot(&t));
+                continue;
+            }
+            if !Self::is_noop(&r) {
+                return Ok(Some(format!("{r}\n{settle}\nlayer retry: click had no effect, recovered by {method} (tried: {})", tried.join(", "))));
+            }
+        }
+        Ok(None)
     }
 
     /// An ARIA combobox / listbox button / react-select: open it, find the option wherever the page put
