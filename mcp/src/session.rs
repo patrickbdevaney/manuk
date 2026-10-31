@@ -1237,7 +1237,40 @@ impl<B: Backend> Session<B> {
         Ok(format!("{UNTRUSTED}\n{body}\nurl: unchanged   {evidence}"))
     }
 
+    /// W4.C4: every act result ends with a receipt of what the act WROTE: storage keys (local/session
+    /// storage, cookies) that appeared, changed or vanished, and non-safe requests the page sent. This
+    /// is the state change a task grader checks, so the agent need not re-read the page to learn that a
+    /// click really added to the cart. `MANUK_NO_RECEIPTS=1` turns it off (the baseline arm).
     async fn act(&mut self, hs: &str, action: &str, value: Option<&str>) -> Result<String> {
+        if std::env::var_os("MANUK_NO_RECEIPTS").is_some() {
+            return self.act_inner(hs, action, value).await;
+        }
+        let store_before = self.b.storage_map();
+        let net_before = self.b.writes_mark();
+        let r = self.act_inner(hs, action, value).await?;
+        let store_after = self.b.storage_map();
+        let mut lines: Vec<String> = Vec::new();
+        for (k, v) in &store_after {
+            match store_before.get(k) {
+                None => lines.push(format!("+ {k} = {}", preview(k, v))),
+                Some(o) if o != v => lines.push(format!("~ {k}: {} -> {}", preview(k, o), preview(k, v))),
+                _ => {}
+            }
+        }
+        for k in store_before.keys().filter(|k| !store_after.contains_key(*k)) {
+            lines.push(format!("- {k} (removed)"));
+        }
+        for w in self.b.writes_since(net_before) {
+            lines.push(format!("sent {w}"));
+        }
+        if lines.is_empty() {
+            Ok(format!("{r}\nwrites: none (no storage key changed, no non-safe request sent)"))
+        } else {
+            Ok(format!("{r}\nwrites:\n  {}", lines.join("\n  ")))
+        }
+    }
+
+    async fn act_inner(&mut self, hs: &str, action: &str, value: Option<&str>) -> Result<String> {
         let tree = self.tree()?;
         let (h, n) = self.resolve(&tree, hs)?;
         let (node, role, checked, disabled) =
@@ -1808,5 +1841,18 @@ impl<B: Backend> Session<B> {
             );
         }
         Ok(out)
+    }
+}
+
+/// A storage value as a receipt shows it: cookies are credentials, so only their size; the rest is cut short.
+fn preview(key: &str, v: &str) -> String {
+    if key.starts_with("cookie ") {
+        return format!("<{} bytes>", v.len());
+    }
+    let t: String = v.chars().take(60).collect();
+    if v.chars().count() > 60 {
+        format!("{t:?}... ({} bytes)", v.len())
+    } else {
+        format!("{t:?}")
     }
 }

@@ -107,6 +107,34 @@ pub trait Backend {
     fn clickables(&self) -> std::collections::HashMap<NodeId, String> {
         Default::default()
     }
+    /// W4.C4: every storage key now set, keyed `local <origin> <key>` / `session ...` / `cookie <name>@<domain>`.
+    fn storage_map(&mut self) -> std::collections::BTreeMap<String, String> {
+        let mut m = std::collections::BTreeMap::new();
+        let Ok(st) = self.export_storage_state() else { return m };
+        for c in st["cookies"].as_array().into_iter().flatten() {
+            m.insert(
+                format!("cookie {}@{}", c["name"].as_str().unwrap_or(""), c["domain"].as_str().unwrap_or("")),
+                c["value"].as_str().unwrap_or("").to_string(),
+            );
+        }
+        for o in st["origins"].as_array().into_iter().flatten() {
+            for e in o["localStorage"].as_array().into_iter().flatten() {
+                m.insert(
+                    format!("local {} {}", o["origin"].as_str().unwrap_or(""), e["name"].as_str().unwrap_or("")),
+                    e["value"].as_str().unwrap_or("").to_string(),
+                );
+            }
+        }
+        m
+    }
+    /// W4.C4: position in the backend's non-safe request record (0 for a backend that has none).
+    fn writes_mark(&self) -> usize {
+        0
+    }
+    /// W4.C4: `POST /api/cart` for every non-safe request sent since `mark`.
+    fn writes_since(&self, _mark: usize) -> Vec<String> {
+        Vec::new()
+    }
     /// Whether this process's request ledger sees the backend's network traffic. A backend whose
     /// requests bypass it (Chrome over CDP) cannot tell CLIENT from WORLD, so checkpoints say UNKNOWN.
     fn sees_network(&self) -> bool {
@@ -248,6 +276,34 @@ impl Backend for AgentBrowser {
     }
     fn clickables(&self) -> std::collections::HashMap<NodeId, String> {
         self.clickable_nodes().into_iter().collect()
+    }
+    fn writes_mark(&self) -> usize {
+        manuk_net::ledger::position()
+    }
+    fn writes_since(&self, mark: usize) -> Vec<String> {
+        manuk_net::ledger::sent_since(mark).iter().map(|s| s.short()).collect()
+    }
+    fn storage_map(&mut self) -> std::collections::BTreeMap<String, String> {
+        use manuk_net::webstorage::{get, keys, origins, Area};
+        let mut m = std::collections::BTreeMap::new();
+        if let Ok(st) = manuk_net::storage_state::export() {
+            for c in st["cookies"].as_array().into_iter().flatten() {
+                m.insert(
+                    format!("cookie {}@{}", c["name"].as_str().unwrap_or(""), c["domain"].as_str().unwrap_or("")),
+                    c["value"].as_str().unwrap_or("").to_string(),
+                );
+            }
+        }
+        for (area, name) in [(Area::Local, "local"), (Area::Session, "session")] {
+            for o in origins(area) {
+                for k in keys(area, &o) {
+                    if let Some(v) = get(area, &o, &k) {
+                        m.insert(format!("{name} {o} {k}"), v);
+                    }
+                }
+            }
+        }
+        m
     }
     fn reset_storage(&mut self) {
         use manuk_net::webstorage::{clear, origins, Area};
