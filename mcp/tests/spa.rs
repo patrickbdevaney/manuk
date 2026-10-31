@@ -186,37 +186,66 @@ fn run(chrome: bool) {
     let mut c = Client::start(chrome);
     let nav = c.tool("navigate", json!({"url": url}));
     // Three identical buttons, told apart by the card they sit in.
-    let adds: Vec<&str> = nav.lines().filter(|l| l.contains("\"Add to cart\"")).collect();
-    assert_eq!(adds.len(), 3, "three Add to cart lines (chrome={chrome}):\n{nav}");
+    let adds: Vec<&str> = nav
+        .lines()
+        .filter(|l| l.contains("\"Add to cart\""))
+        .collect();
+    assert_eq!(
+        adds.len(),
+        3,
+        "three Add to cart lines (chrome={chrome}):\n{nav}"
+    );
     for card in ["Teal Kettle", "Red Mug", "Blue Lamp"] {
         assert!(
-            adds.iter().any(|l| l.contains(&format!("in listitem \"{card}\""))),
+            adds.iter()
+                .any(|l| l.contains(&format!("in listitem \"{card}\""))),
             "no Add to cart line names card {card:?} (chrome={chrome}):\n{nav}"
         );
     }
     // A div with a click handler is marked.
-    assert!(line_of(&nav, "Gift wrap").contains("[clickable]"), "onclick div unmarked (chrome={chrome}):\n{nav}");
+    assert!(
+        line_of(&nav, "Gift wrap").contains("[clickable]"),
+        "onclick div unmarked (chrome={chrome}):\n{nav}"
+    );
     if chrome {
-        assert!(line_of(&nav, "Promo banner").contains("[clickable]"), "listener div unmarked:\n{nav}");
+        assert!(
+            line_of(&nav, "Promo banner").contains("[clickable]"),
+            "listener div unmarked:\n{nav}"
+        );
     }
     // Act on the second card only.
     let mug = handle_of(&nav, "button \"Add to cart\" in listitem \"Red Mug\"");
     let teal = handle_of(&nav, "button \"Add to cart\" in listitem \"Teal Kettle\"");
     let r = c.tool("act", json!({"handle": mug, "action": "click"}));
-    assert!(r.contains("cart:Red Mug"), "wrong card added (chrome={chrome}):\n{r}");
+    assert!(
+        r.contains("cart:Red Mug"),
+        "wrong card added (chrome={chrome}):\n{r}"
+    );
     // A route change keeps the document and the handles that did not re-render.
     let route = handle_of(&nav, "button \"Go to cart\"");
     let r = c.tool("act", json!({"handle": route, "action": "click"}));
-    assert!(r.contains("routed (same document"), "pushState treated as a new page (chrome={chrome}):\n{r}");
+    assert!(
+        r.contains("routed (same document"),
+        "pushState treated as a new page (chrome={chrome}):\n{r}"
+    );
     assert!(!r.contains("navigated:"), "{r}");
     // The list was re-rendered into new nodes; the old handle still acts, on the same card.
     let r = c.tool("act", json!({"handle": teal, "action": "click"}));
-    assert!(r.contains("cart:Red Mug,Teal Kettle"), "re-mounted handle lost (chrome={chrome}):\n{r}");
+    assert!(
+        r.contains("cart:Red Mug,Teal Kettle"),
+        "re-mounted handle lost (chrome={chrome}):\n{r}"
+    );
     // ARIA combobox: open, pick, verify.
     let obs = c.tool("observe", json!({}));
     let dd = handle_of(&obs, "combobox \"City\"");
-    let r = c.tool("act", json!({"handle": dd, "action": "select", "value": "Paris"}));
-    assert!(r.contains("now shows \"Paris\""), "combobox select not confirmed (chrome={chrome}):\n{r}");
+    let r = c.tool(
+        "act",
+        json!({"handle": dd, "action": "select", "value": "Paris"}),
+    );
+    assert!(
+        r.contains("now shows \"Paris\""),
+        "combobox select not confirmed (chrome={chrome}):\n{r}"
+    );
 }
 
 /// Over budget, the content text survives and chrome text is what is cut. Chrome only: the engine's
@@ -227,8 +256,14 @@ fn budget() {
     c.tool("navigate", json!({"url": format!("{url}budget")}));
     let o = c.tool("observe", json!({"budget_tokens": 150}));
     assert!(o.contains("cut "), "budget did not bite:\n{o}");
-    assert!(o.contains("PRICE-MARKER"), "content text was cut before chrome:\n{o}");
-    assert!(!o.contains("Chrome-Twelve"), "chrome text survived the cut:\n{o}");
+    assert!(
+        o.contains("PRICE-MARKER"),
+        "content text was cut before chrome:\n{o}"
+    );
+    assert!(
+        !o.contains("Chrome-Twelve"),
+        "chrome text survived the cut:\n{o}"
+    );
 }
 
 #[test]

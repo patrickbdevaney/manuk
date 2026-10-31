@@ -43,7 +43,10 @@ fn serve() -> String {
                 if let Some(b) = page(&path) {
                     let _ = write!(s, "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{b}", b.len());
                 } else {
-                    let _ = write!(s, "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                    let _ = write!(
+                        s,
+                        "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                    );
                 }
             });
         }
@@ -146,7 +149,6 @@ fn handle_of(text: &str, needle: &str) -> String {
     line[s + 1..e].to_string()
 }
 
-
 fn form_in_one_call(chrome: bool) {
     let base = serve();
     let mut c = Client::start(chrome, &[]);
@@ -165,7 +167,12 @@ fn form_in_one_call(chrome: bool) {
     // The engine's <option> click does not change a <select> yet (follow-up W4.A5.a), so `plan` is only
     // asserted on Chrome.
     assert!(
-        r.contains("/done?") && r.contains("name=Ada+Lovelace") && (!chrome || r.contains("plan=Pro") || r.contains("plan=pro")) && r.contains("news=yes") && r.contains("bill=y") && r.contains("email=ada%40example.org"),
+        r.contains("/done?")
+            && r.contains("name=Ada+Lovelace")
+            && (!chrome || r.contains("plan=Pro") || r.contains("plan=pro"))
+            && r.contains("news=yes")
+            && r.contains("bill=y")
+            && r.contains("email=ada%40example.org"),
         "form was not submitted whole (chrome={chrome}):\n{r}"
     );
 }
@@ -182,11 +189,17 @@ fn failed_step_stops(chrome: bool) {
             {"tool": "type", "handle": handle_of(&nav, "textbox \"Email\""), "text": "never"},
         ]}),
     );
-    assert!(r.contains("STOPPED at step 2 of 3") && r.contains("FAILED"), "(chrome={chrome}) {r}");
+    assert!(
+        r.contains("STOPPED at step 2 of 3") && r.contains("FAILED"),
+        "(chrome={chrome}) {r}"
+    );
     let page = c.tool("extract", json!({}));
     let _ = page;
     let obs = c.tool("observe", json!({}));
-    assert!(obs.contains("first") && !obs.contains("never"), "step 1 must have run, step 3 not (chrome={chrome}):\n{obs}");
+    assert!(
+        obs.contains("first") && !obs.contains("never"),
+        "step 1 must have run, step 3 not (chrome={chrome}):\n{obs}"
+    );
 }
 
 fn navigation_stops(chrome: bool) {
@@ -201,7 +214,12 @@ fn navigation_stops(chrome: bool) {
             {"tool": "type", "handle": b, "text": "late"},
         ]}),
     );
-    assert!(r.contains("STOPPED after step 1 of 2") && r.contains("navigated") && r.contains("via=link"), "(chrome={chrome}) {r}");
+    assert!(
+        r.contains("STOPPED after step 1 of 2")
+            && r.contains("navigated")
+            && r.contains("via=link"),
+        "(chrome={chrome}) {r}"
+    );
 }
 
 fn wait_for_text(chrome: bool) {
@@ -212,18 +230,30 @@ fn wait_for_text(chrome: bool) {
     assert!(r.starts_with("found text"), "(chrome={chrome}) {r}");
     let t0 = std::time::Instant::now();
     let r = c.tool("wait_for", json!({"text": "never-appears", "timeout": 1}));
-    assert!(r.starts_with("TIMED OUT") && t0.elapsed().as_secs() < 5, "(chrome={chrome}) {r}");
+    assert!(
+        r.starts_with("TIMED OUT") && t0.elapsed().as_secs() < 5,
+        "(chrome={chrome}) {r}"
+    );
 }
 
 fn back_works(chrome: bool) {
     let base = serve();
     let mut c = Client::start(chrome, &[]);
     let nav = c.tool("navigate", json!({"url": format!("{base}/one")}));
-    c.tool("act", json!({"handle": handle_of(&nav, "link \"Next page\""), "action": "click"}));
+    c.tool(
+        "act",
+        json!({"handle": handle_of(&nav, "link \"Next page\""), "action": "click"}),
+    );
     let r = c.tool("back", json!({}));
-    assert!(r.contains("navigated") && r.contains("/one"), "(chrome={chrome}) {r}");
+    assert!(
+        r.contains("navigated") && r.contains("/one"),
+        "(chrome={chrome}) {r}"
+    );
     let (err, t, _) = c.call("back", json!({}));
-    assert!(err && t.contains("no earlier page"), "(chrome={chrome}) back past the start must say so: {t}");
+    assert!(
+        err && t.contains("no earlier page"),
+        "(chrome={chrome}) back past the start must say so: {t}"
+    );
 }
 
 #[test]
@@ -281,8 +311,13 @@ fn dialog_stops_the_batch_chrome() {
             {"tool": "type", "handle": b, "text": "after-dialog"},
         ]}),
     );
-    assert!(r.contains("STOPPED after step 2 of 3") && r.contains("dialog"), "{r}");
+    assert!(
+        r.contains("STOPPED after step 2 of 3") && r.contains("dialog"),
+        "{r}"
+    );
     let obs = c.tool("observe", json!({}));
-    assert!(!obs.contains("after-dialog"), "step 3 must not have run:\n{obs}");
+    assert!(
+        !obs.contains("after-dialog"),
+        "step 3 must not have run:\n{obs}"
+    );
 }
-

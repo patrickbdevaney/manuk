@@ -27,7 +27,10 @@ fn serve() -> String {
                 let n = s.read(&mut buf).unwrap_or(0);
                 let req = String::from_utf8_lossy(&buf[..n]).to_string();
                 let (status, body) = if req.starts_with("GET /gone") {
-                    ("404 Not Found", "<html><body><h1>404 Not Found</h1></body></html>")
+                    (
+                        "404 Not Found",
+                        "<html><body><h1>404 Not Found</h1></body></html>",
+                    )
                 } else {
                     ("200 OK", PAGE)
                 };

@@ -1,7 +1,7 @@
 //! W3.9.a: origin sets enforced below the MCP hub. The hub judges what the *agent* asks for; this
 //! judges what the *page* asks for (subresources, redirect hops, fetch/XHR, form POSTs, frames).
 //! Every request passes `send_raw`, which asks [`check`] first, so a refused URL never reaches a
-//! socket. Empty set = unrestricted. `MANUK_SCOPE_MUTATE=1` disables the check (gate mutation).
+//! socket (W4.D1: WebSocket upgrades too, judged as a write: frames carry data out). Empty set = unrestricted. `MANUK_SCOPE_MUTATE=1` disables the check (gate mutation).
 
 use std::sync::Mutex;
 
@@ -23,9 +23,15 @@ static SCOPE: Mutex<Scope> = Mutex::new(Scope {
 fn origin(url: &str) -> Option<String> {
     let u = Url::parse(url.trim()).ok()?;
     let h = u.host_str()?;
+    // W4.D1: a WebSocket is the same origin as its http(s) twin.
+    let scheme = match u.scheme() {
+        "ws" => "http",
+        "wss" => "https",
+        s => s,
+    };
     Some(match u.port() {
-        Some(p) => format!("{}://{}:{p}", u.scheme(), h.to_ascii_lowercase()),
-        None => format!("{}://{}", u.scheme(), h.to_ascii_lowercase()),
+        Some(p) => format!("{scheme}://{}:{p}", h.to_ascii_lowercase()),
+        None => format!("{scheme}://{}", h.to_ascii_lowercase()),
     })
 }
 
@@ -49,7 +55,7 @@ pub fn active() -> bool {
 
 /// Judge one outgoing request. `Err` carries the refusal text (also logged).
 pub fn check(method: &str, url: &str) -> Result<(), String> {
-    if !matches!(url.split(':').next(), Some("http" | "https")) {
+    if !matches!(url.split(':').next(), Some("http" | "https" | "ws" | "wss")) {
         return Ok(()); // data:/blob:/about: never leave the process
     }
     let mut s = SCOPE.lock().unwrap();
@@ -90,6 +96,8 @@ mod tests {
         assert!(check("GET", "http://evil.test/x").is_err());
         assert!(check("POST", "http://evil.test/x").is_err());
         assert!(check("GET", "data:text/plain,hi").is_ok());
+        assert!(check("WS", "ws://a.test/s").is_ok());
+        assert!(check("WS", "ws://evil.test/s").is_err());
         set(&[], &[]);
         assert!(check("GET", "http://evil.test/x").is_ok());
     }

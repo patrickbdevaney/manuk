@@ -110,17 +110,27 @@ pub trait Backend {
     /// W4.C4: every storage key now set, keyed `local <origin> <key>` / `session ...` / `cookie <name>@<domain>`.
     fn storage_map(&mut self) -> std::collections::BTreeMap<String, String> {
         let mut m = std::collections::BTreeMap::new();
-        let Ok(st) = self.export_storage_state() else { return m };
+        let Ok(st) = self.export_storage_state() else {
+            return m;
+        };
         for c in st["cookies"].as_array().into_iter().flatten() {
             m.insert(
-                format!("cookie {}@{}", c["name"].as_str().unwrap_or(""), c["domain"].as_str().unwrap_or("")),
+                format!(
+                    "cookie {}@{}",
+                    c["name"].as_str().unwrap_or(""),
+                    c["domain"].as_str().unwrap_or("")
+                ),
                 c["value"].as_str().unwrap_or("").to_string(),
             );
         }
         for o in st["origins"].as_array().into_iter().flatten() {
             for e in o["localStorage"].as_array().into_iter().flatten() {
                 m.insert(
-                    format!("local {} {}", o["origin"].as_str().unwrap_or(""), e["name"].as_str().unwrap_or("")),
+                    format!(
+                        "local {} {}",
+                        o["origin"].as_str().unwrap_or(""),
+                        e["name"].as_str().unwrap_or("")
+                    ),
                     e["value"].as_str().unwrap_or("").to_string(),
                 );
             }
@@ -281,7 +291,10 @@ impl Backend for AgentBrowser {
         manuk_net::ledger::position()
     }
     fn writes_since(&self, mark: usize) -> Vec<String> {
-        manuk_net::ledger::sent_since(mark).iter().map(|s| s.short()).collect()
+        manuk_net::ledger::sent_since(mark)
+            .iter()
+            .map(|s| s.short())
+            .collect()
     }
     fn storage_map(&mut self) -> std::collections::BTreeMap<String, String> {
         use manuk_net::webstorage::{get, keys, origins, Area};
@@ -289,7 +302,11 @@ impl Backend for AgentBrowser {
         if let Ok(st) = manuk_net::storage_state::export() {
             for c in st["cookies"].as_array().into_iter().flatten() {
                 m.insert(
-                    format!("cookie {}@{}", c["name"].as_str().unwrap_or(""), c["domain"].as_str().unwrap_or("")),
+                    format!(
+                        "cookie {}@{}",
+                        c["name"].as_str().unwrap_or(""),
+                        c["domain"].as_str().unwrap_or("")
+                    ),
                     c["value"].as_str().unwrap_or("").to_string(),
                 );
             }

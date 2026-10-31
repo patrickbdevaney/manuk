@@ -337,8 +337,15 @@ fn extract_pages_a_long_page_with_a_cursor() {
     let mut c = Client::start();
     c.tool("navigate", json!({"url": fixture("long.html")}));
     let (_, first) = c.tool("extract", json!({}));
-    assert!(first.chars().count() < 21_000, "uncapped: {} chars", first.chars().count());
-    assert!(first.contains("Paragraph 0000") && !first.contains("FINAL_SENTINEL"), "{first}");
+    assert!(
+        first.chars().count() < 21_000,
+        "uncapped: {} chars",
+        first.chars().count()
+    );
+    assert!(
+        first.contains("Paragraph 0000") && !first.contains("FINAL_SENTINEL"),
+        "{first}"
+    );
     let mut text = first;
     let mut pages = 1;
     while let Some(i) = text.find("call extract again with offset=") {
@@ -350,7 +357,10 @@ fn extract_pages_a_long_page_with_a_cursor() {
         pages += 1;
         assert!(pages < 20, "cursor never ends");
     }
-    assert!(text.contains("FINAL_SENTINEL") && text.contains(", end]"), "{text}");
+    assert!(
+        text.contains("FINAL_SENTINEL") && text.contains(", end]"),
+        "{text}"
+    );
     assert!(pages >= 2);
 }
 
@@ -366,11 +376,26 @@ fn navigate_with_query_answers_in_one_call() {
         json!({"url": fixture("lookup.html"), "query": "Mount Zorblat summit elevation"}),
     );
     assert!(ans.contains("4812 metres"), "{ans}");
-    assert!(ans.contains("blocks shown") && ans.contains("Zorblat survey"), "{ans}");
-    assert!(ans.chars().count() * 4 < full.chars().count(), "not smaller: {} vs {}", ans.len(), full.len());
-    assert!(ans.lines().any(|l| l.starts_with("[h") && l.contains("Zorblat survey")), "no link handle:\n{ans}");
+    assert!(
+        ans.contains("blocks shown") && ans.contains("Zorblat survey"),
+        "{ans}"
+    );
+    assert!(
+        ans.chars().count() * 4 < full.chars().count(),
+        "not smaller: {} vs {}",
+        ans.len(),
+        full.len()
+    );
+    assert!(
+        ans.lines()
+            .any(|l| l.starts_with("[h") && l.contains("Zorblat survey")),
+        "no link handle:\n{ans}"
+    );
     let (_, e) = c.tool("extract", json!({"query": "Zorblat elevation"}));
-    assert!(e.contains("4812 metres") && e.contains("blocks shown"), "{e}");
+    assert!(
+        e.contains("4812 metres") && e.contains("blocks shown"),
+        "{e}"
+    );
     let (_, none) = c.tool("extract", json!({"query": "xylophone"}));
     assert!(none.contains("no passage matches"), "{none}");
 }

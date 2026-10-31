@@ -253,7 +253,10 @@ fn label_of(n: &A11yNode) -> String {
     // A heading names a card better than its text content does ("Teal Kettle", not "Teal Kettle Add to cart").
     // (A list or form is named by its own label; only item-like containers lean on their heading.)
     let own = Some(n).filter(|n| !n.name.is_empty());
-    let named_first = matches!(n.role, Role::List | Role::Table | Role::Form | Role::Region | Role::Dialog | Role::AlertDialog);
+    let named_first = matches!(
+        n.role,
+        Role::List | Role::Table | Role::Form | Role::Region | Role::Dialog | Role::AlertDialog
+    );
     own.filter(|_| named_first)
         .or_else(|| kids().find(|k| matches!(k.role, Role::Heading { .. }) && !k.name.is_empty()))
         .or(own)
@@ -285,7 +288,12 @@ fn text_under(n: &A11yNode) -> String {
 
 /// The tree walk behind every handle line: each node's nearest two named containers, and whether it
 /// sits in page chrome. `MANUK_TREE_MUTATE=flat` drops the context (the gate's mutant).
-fn walk_where(n: &A11yNode, stack: &mut Vec<String>, chrome: bool, out: &mut HashMap<NodeId, Where>) {
+fn walk_where(
+    n: &A11yNode,
+    stack: &mut Vec<String>,
+    chrome: bool,
+    out: &mut HashMap<NodeId, Where>,
+) {
     let flat = std::env::var("MANUK_TREE_MUTATE").is_ok_and(|v| v == "flat");
     let ctx = if flat {
         String::new()
@@ -519,7 +527,9 @@ impl<B: Backend> Session<B> {
                 ));
                 Ok((h, n))
             }
-            [] => Err(anyhow!("STALE: h{h} is no longer on the page (call observe)")),
+            [] => Err(anyhow!(
+                "STALE: h{h} is no longer on the page (call observe)"
+            )),
             many => Err(anyhow!(
                 "STALE: h{h} is gone and {} elements now match what it was (call observe)",
                 many.len()
@@ -615,7 +625,8 @@ impl<B: Backend> Session<B> {
         let mut kept = vec![false; lines.len()];
         let mut used = 0;
         // Tiers in priority order; `MANUK_FIT_MUTATE=chrome-first` inverts 1 and 2 for the gate's mutant.
-        let order: [u8; 3] = if std::env::var("MANUK_FIT_MUTATE").is_ok_and(|v| v == "chrome-first") {
+        let order: [u8; 3] = if std::env::var("MANUK_FIT_MUTATE").is_ok_and(|v| v == "chrome-first")
+        {
             [0, 2, 1]
         } else {
             [0, 1, 2]
@@ -887,7 +898,11 @@ impl<B: Backend> Session<B> {
         if text.is_none() == handle.is_none() {
             bail!("wait_for needs exactly one of `text` or `handle`");
         }
-        let secs = a.get("timeout").and_then(Value::as_f64).unwrap_or(10.0).clamp(0.0, 60.0);
+        let secs = a
+            .get("timeout")
+            .and_then(Value::as_f64)
+            .unwrap_or(10.0)
+            .clamp(0.0, 60.0);
         let want = text.map(str::to_lowercase);
         let t0 = std::time::Instant::now();
         loop {
@@ -903,11 +918,15 @@ impl<B: Backend> Session<B> {
             let ms = t0.elapsed().as_millis();
             if found {
                 let settle = self.settled().await;
-                let what = text.map(|t| format!("text {t:?}")).unwrap_or_else(|| format!("{}", handle.unwrap_or("")));
+                let what = text
+                    .map(|t| format!("text {t:?}"))
+                    .unwrap_or_else(|| format!("{}", handle.unwrap_or("")));
                 return Ok(format!("found {what} after {ms} ms\n{settle}"));
             }
             if t0.elapsed().as_secs_f64() >= secs {
-                let what = text.map(|t| format!("text {t:?}")).unwrap_or_else(|| format!("{}", handle.unwrap_or("")));
+                let what = text
+                    .map(|t| format!("text {t:?}"))
+                    .unwrap_or_else(|| format!("{}", handle.unwrap_or("")));
                 return Ok(format!("TIMED OUT after {ms} ms: {what} did not appear (observe to see the page as it is)"));
             }
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
@@ -923,7 +942,10 @@ impl<B: Backend> Session<B> {
             .ok_or_else(|| anyhow!("fill_form needs `fields`: [{{handle, value}}, ...]"))?;
         let mut steps = Vec::new();
         for f in fields {
-            let mut m = f.as_object().cloned().ok_or_else(|| anyhow!("each field must be an object {{handle, value}}"))?;
+            let mut m = f
+                .as_object()
+                .cloned()
+                .ok_or_else(|| anyhow!("each field must be an object {{handle, value}}"))?;
             m.insert("tool".into(), json!("fill"));
             steps.push(Value::Object(m));
         }
@@ -945,7 +967,19 @@ impl<B: Backend> Session<B> {
         let mut args = step.clone();
         args.remove("tool");
         if tool != "fill" {
-            if !matches!(tool.as_str(), "act" | "type" | "key" | "upload" | "drag" | "scroll" | "wait_for" | "navigate" | "back" | "dialog") {
+            if !matches!(
+                tool.as_str(),
+                "act"
+                    | "type"
+                    | "key"
+                    | "upload"
+                    | "drag"
+                    | "scroll"
+                    | "wait_for"
+                    | "navigate"
+                    | "back"
+                    | "dialog"
+            ) {
                 bail!("a step cannot be {tool:?}: use act, type, key, upload, drag, scroll, wait_for, navigate, back or dialog");
             }
             if tool == "act" && args.contains_key("steps") {
@@ -1033,7 +1067,9 @@ impl<B: Backend> Session<B> {
             };
             let stop = if text.contains("\nnavigated: ") {
                 Some("it navigated")
-            } else if text.contains("\nrouted (same document") || text.starts_with("routed (same document") {
+            } else if text.contains("\nrouted (same document")
+                || text.starts_with("routed (same document")
+            {
                 Some("it routed to a new URL")
             } else if text.lines().any(|l| l.starts_with("dialog:")) {
                 Some("it opened a dialog")
@@ -1064,7 +1100,11 @@ impl<B: Backend> Session<B> {
                 .collect();
             log.push(format!(
                 "step {n}/{total} ({name}) done{}",
-                if notes.is_empty() { String::new() } else { format!("; {}", notes.join("; ")) }
+                if notes.is_empty() {
+                    String::new()
+                } else {
+                    format!("; {}", notes.join("; "))
+                }
             ));
         }
         unreachable!()
@@ -1253,18 +1293,25 @@ impl<B: Backend> Session<B> {
         for (k, v) in &store_after {
             match store_before.get(k) {
                 None => lines.push(format!("+ {k} = {}", preview(k, v))),
-                Some(o) if o != v => lines.push(format!("~ {k}: {} -> {}", preview(k, o), preview(k, v))),
+                Some(o) if o != v => {
+                    lines.push(format!("~ {k}: {} -> {}", preview(k, o), preview(k, v)))
+                }
                 _ => {}
             }
         }
-        for k in store_before.keys().filter(|k| !store_after.contains_key(*k)) {
+        for k in store_before
+            .keys()
+            .filter(|k| !store_after.contains_key(*k))
+        {
             lines.push(format!("- {k} (removed)"));
         }
         for w in self.b.writes_since(net_before) {
             lines.push(format!("sent {w}"));
         }
         if lines.is_empty() {
-            Ok(format!("{r}\nwrites: none (no storage key changed, no non-safe request sent)"))
+            Ok(format!(
+                "{r}\nwrites: none (no storage key changed, no non-safe request sent)"
+            ))
         } else {
             Ok(format!("{r}\nwrites:\n  {}", lines.join("\n  ")))
         }
@@ -1360,14 +1407,26 @@ impl<B: Backend> Session<B> {
     /// An error page the act landed on (a 4xx/5xx or "error" heading) is as good as no effect.
     fn looks_like_error(&self) -> bool {
         let t = self.b.page_text().unwrap_or_default();
-        let head: String = t.trim_start().chars().take(80).collect::<String>().to_ascii_lowercase();
-        ["404", "403", "500", "502", "503", "not found", "error"].iter().any(|k| head.contains(k))
+        let head: String = t
+            .trim_start()
+            .chars()
+            .take(80)
+            .collect::<String>()
+            .to_ascii_lowercase();
+        ["404", "403", "500", "502", "503", "not found", "error"]
+            .iter()
+            .any(|k| head.contains(k))
     }
 
     /// The click changed nothing. Try, in order: the keyboard (Enter, then Space) on the focused target,
     /// then the target's own interactive descendant. Each attempt is judged by the same effect diff; an
     /// attempt that lands on an error page is undone with `back` before the next. `None` = nothing worked.
-    async fn retry_noop(&mut self, h: u32, node: NodeId, url_before: &str) -> Result<Option<String>> {
+    async fn retry_noop(
+        &mut self,
+        h: u32,
+        node: NodeId,
+        url_before: &str,
+    ) -> Result<Option<String>> {
         let mut tried: Vec<&str> = Vec::new();
         for method in ["Enter", "Space", "descendant"] {
             let tree = self.tree()?;
@@ -1376,7 +1435,13 @@ impl<B: Backend> Session<B> {
                 let Some(inner) = tree
                     .iter()
                     .find(|n| n.node == node)
-                    .and_then(|n| n.iter().find(|c| c.node != node && matches!(c.role, Role::Link | Role::Button) && c.bbox.is_some()))
+                    .and_then(|n| {
+                        n.iter().find(|c| {
+                            c.node != node
+                                && matches!(c.role, Role::Link | Role::Button)
+                                && c.bbox.is_some()
+                        })
+                    })
                     .map(|c| c.node)
                 else {
                     continue;
@@ -1402,7 +1467,11 @@ impl<B: Backend> Session<B> {
                 }
             };
             let settle = self.settled().await;
-            let r = self.effect(before, url_before, &format!("retried by the layer: first click had no effect; {method} ({evidence})"))?;
+            let r = self.effect(
+                before,
+                url_before,
+                &format!("retried by the layer: first click had no effect; {method} ({evidence})"),
+            )?;
             let navigated = !r.contains("url: unchanged");
             if navigated && self.looks_like_error() {
                 let _ = self.b.back().await;
@@ -1439,10 +1508,16 @@ impl<B: Backend> Session<B> {
             })
             .map(|c| c.node)
             .ok_or_else(|| {
-                anyhow!("h{h} opened but no option named {v:?} appeared (call observe to see what did)")
+                anyhow!(
+                    "h{h} opened but no option named {v:?} appeared (call observe to see what did)"
+                )
             })?;
         let oh = {
-            let e = tree.iter().find(|c| c.node == opt).map(|c| self.ent(c)).unwrap_or_else(|| entry(&tree));
+            let e = tree
+                .iter()
+                .find(|c| c.node == opt)
+                .map(|c| self.ent(c))
+                .unwrap_or_else(|| entry(&tree));
             self.bind(opt, &e)
         };
         self.verify_landing(oh, opt)?;
@@ -1467,7 +1542,10 @@ impl<B: Backend> Session<B> {
             if ok {
                 format!("the control now shows {v:?}")
             } else {
-                format!("NOT CONFIRMED: the control reads {:?}; observe to check", shown.trim())
+                format!(
+                    "NOT CONFIRMED: the control reads {:?}; observe to check",
+                    shown.trim()
+                )
             }
         ))
     }
@@ -1639,10 +1717,7 @@ impl<B: Backend> Session<B> {
             if !vis_before.contains(&n.node.0) {
                 let h = self.handle(n.node);
                 let tier = if n.role.is_interactive() { 0 } else { 1 };
-                fresh.push((
-                    tier,
-                    format!("+{}", Self::fmt_entry(h, &self.ent(n), "")),
-                ));
+                fresh.push((tier, format!("+{}", Self::fmt_entry(h, &self.ent(n), ""))));
             }
         }
         let body = if fresh.is_empty() {
@@ -1687,11 +1762,16 @@ impl<B: Backend> Session<B> {
         let tree = self.tree()?;
         let text = self.page_text()?;
         let Some((passages, k, total)) = top_passages(&text, query) else {
-            return Ok(format!("no passage matches {query:?}; try extract() for the whole page or find(query)"));
+            return Ok(format!(
+                "no passage matches {query:?}; try extract() for the whole page or find(query)"
+            ));
         };
         let mut out = format!("{k} of {total} blocks shown for {query:?}:\n{passages}");
         let mut links = Vec::new();
-        for n in tree.iter().filter(|n| n.role.is_interactive() && !n.name.trim().is_empty()) {
+        for n in tree
+            .iter()
+            .filter(|n| n.role.is_interactive() && !n.name.trim().is_empty())
+        {
             if links.len() >= 8 {
                 break;
             }

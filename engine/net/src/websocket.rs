@@ -66,6 +66,7 @@ impl WebSocketConn {
             "ws" => false,
             other => bail!("not a WebSocket URL scheme: {other}"),
         };
+        crate::scope::check("WS", url).map_err(|e| anyhow::anyhow!(e))?;
         crate::ledger::gate("WS", url, &[], &bytes::Bytes::new(), false)?;
         let host = u
             .host_str()

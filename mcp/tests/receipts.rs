@@ -142,10 +142,22 @@ fn run(no_receipts: bool, labels: &[&str]) -> Vec<String> {
 #[test]
 fn an_add_to_cart_click_reports_the_key_it_wrote_and_the_post_it_sent() {
     let r = run(false, &["Add Blue Mug", "Add Blue Mug"]);
-    assert!(r[0].contains("writes:") && r[0].contains("cart") && r[0].contains("Blue Mug"), "{}", r[0]);
+    assert!(
+        r[0].contains("writes:") && r[0].contains("cart") && r[0].contains("Blue Mug"),
+        "{}",
+        r[0]
+    );
     assert!(r[0].contains("sent POST /api/cart"), "{}", r[0]);
-    assert!(r[0].contains("+ local"), "first add creates the key: {}", r[0]);
-    assert!(r[1].contains("~ local") && r[1].contains("sent POST /api/cart"), "second add changes it: {}", r[1]);
+    assert!(
+        r[0].contains("+ local"),
+        "first add creates the key: {}",
+        r[0]
+    );
+    assert!(
+        r[1].contains("~ local") && r[1].contains("sent POST /api/cart"),
+        "second add changes it: {}",
+        r[1]
+    );
 }
 
 #[test]
