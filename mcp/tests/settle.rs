@@ -27,7 +27,10 @@ fn serve() -> String {
                 let req = String::from_utf8_lossy(&buf[..n]).to_string();
                 let body = if req.starts_with("GET /api/data") {
                     // W3.12.a: MANUK_SETTLE_FETCH_MS=0 serves the fetch instantly (the --deterministic wall).
-                    let ms = std::env::var("MANUK_SETTLE_FETCH_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(400);
+                    let ms = std::env::var("MANUK_SETTLE_FETCH_MS")
+                        .ok()
+                        .and_then(|v| v.parse().ok())
+                        .unwrap_or(400);
                     std::thread::sleep(std::time::Duration::from_millis(ms));
                     "ORDER-42"
                 } else {

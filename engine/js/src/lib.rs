@@ -532,6 +532,17 @@ pub fn set_scroll_geometry(g: std::collections::HashMap<manuk_dom::NodeId, [f32;
     dom_bindings::set_scroll_geometry(g);
 }
 
+/// W4.A4.a: nodes script attached a click-class listener to on the current page.
+#[cfg(feature = "_sm")]
+pub fn click_listener_nodes() -> Vec<manuk_dom::NodeId> {
+    dom_bindings::click_listener_nodes()
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn click_listener_nodes() -> Vec<manuk_dom::NodeId> {
+    Vec::new()
+}
+
 #[cfg(not(feature = "_sm"))]
 pub fn set_scroll_geometry(_g: std::collections::HashMap<manuk_dom::NodeId, [f32; 6]>) {}
 

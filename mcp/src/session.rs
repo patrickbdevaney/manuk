@@ -391,12 +391,14 @@ impl<B: Backend> Session<B> {
     /// W4.D2: refuse a payload carrying a value read on another origin, unless the destination is
     /// explicitly granted for writes.
     fn taint_check(&self, payload: &str, dest: &str, what: &str) -> Result<()> {
-        if !self.grants.write.is_empty() && crate::policy::origin(dest).is_some_and(|o| {
-            self.grants
-                .write
-                .iter()
-                .any(|w| crate::policy::origin(w).as_deref() == Some(&o))
-        }) {
+        if !self.grants.write.is_empty()
+            && crate::policy::origin(dest).is_some_and(|o| {
+                self.grants
+                    .write
+                    .iter()
+                    .any(|w| crate::policy::origin(w).as_deref() == Some(&o))
+            })
+        {
             return Ok(());
         }
         if let Err(e) = self.taint.check(payload, dest, what) {

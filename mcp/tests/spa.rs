@@ -207,12 +207,10 @@ fn run(chrome: bool) {
         line_of(&nav, "Gift wrap").contains("[clickable]"),
         "onclick div unmarked (chrome={chrome}):\n{nav}"
     );
-    if chrome {
-        assert!(
-            line_of(&nav, "Promo banner").contains("[clickable]"),
-            "listener div unmarked:\n{nav}"
-        );
-    }
+    assert!(
+        line_of(&nav, "Promo banner").contains("[clickable]"),
+        "listener div unmarked (chrome={chrome}):\n{nav}"
+    );
     // Act on the second card only.
     let mug = handle_of(&nav, "button \"Add to cart\" in listitem \"Red Mug\"");
     let teal = handle_of(&nav, "button \"Add to cart\" in listitem \"Teal Kettle\"");

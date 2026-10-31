@@ -144,7 +144,8 @@ impl Taint {
         let Some(dest) = origin(dest_url) else {
             return Ok(());
         };
-        let foreign: Vec<&(String, String)> = self.seen.iter().filter(|(_, o)| *o != dest).collect();
+        let foreign: Vec<&(String, String)> =
+            self.seen.iter().filter(|(_, o)| *o != dest).collect();
         if foreign.is_empty() {
             return Ok(());
         }
@@ -197,7 +198,10 @@ mod tests {
             format!("x={hex}"),
         ] {
             assert!(t.check(&p, B, "typed text").is_err(), "{p}");
-            assert!(t.check(&p, "http://a.test/other", "typed text").is_ok(), "{p}");
+            assert!(
+                t.check(&p, "http://a.test/other", "typed text").is_ok(),
+                "{p}"
+            );
         }
         assert!(t.check("hello world", B, "typed text").is_ok());
     }

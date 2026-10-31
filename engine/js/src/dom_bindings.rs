@@ -276,6 +276,21 @@ thread_local! {
         const { std::cell::RefCell::new(Vec::new()) };
 }
 
+thread_local! {
+    /// W4.A4.a: nodes that script attached a pointer-activation listener to (`click`, `mousedown`,
+    /// `mouseup`, `pointerdown`, `pointerup`) — the host-readable mirror of the JS `__listeners` registry,
+    /// for the agent layer's `[clickable]` mark. The document, `<html>` and `<body>` are left out: a
+    /// delegated root (React 17+ attaches to the app container, older ones to `document`) says nothing
+    /// about any one element. Removal is not mirrored, so this over-reports a removed listener.
+    static CLICK_LISTENER_NODES: std::cell::RefCell<std::collections::HashSet<NodeId>> =
+        std::cell::RefCell::new(std::collections::HashSet::new());
+}
+
+/// Nodes with a script-attached click-class listener on the current page (see `CLICK_LISTENER_NODES`).
+pub fn click_listener_nodes() -> Vec<NodeId> {
+    CLICK_LISTENER_NODES.with(|s| s.borrow().iter().copied().collect())
+}
+
 /// The most errors one document's list will hold. Past this the count keeps rising and the
 /// messages stop being appended, so `n` stays honest while memory does not move.
 const MAX_SCRIPT_ERRORS: usize = 64;
@@ -10133,7 +10148,7 @@ unsafe fn return_string_array(cx: *mut RawJSContext, vp: *mut Value, items: &[St
 /// is stashed on the global, then a helper appends it — keeping it GC-rooted via the
 /// registry. Requires [`install`]'s registry prelude.
 unsafe fn el_add_event_listener(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
-    let Some((_, node)) = this_node(vp) else {
+    let Some((dom, node)) = this_node(vp) else {
         *vp = UndefinedValue();
         return true;
     };
@@ -10144,6 +10159,14 @@ unsafe fn el_add_event_listener(cx: *mut RawJSContext, argc: u32, vp: *mut Value
     if argc < 2 {
         *vp = UndefinedValue();
         return true;
+    }
+    if matches!(
+        ty.as_str(),
+        "click" | "mousedown" | "mouseup" | "pointerdown" | "pointerup"
+    ) && node != (*dom).root()
+        && !matches!((*dom).tag_name(node), Some("html" | "body") | None)
+    {
+        CLICK_LISTENER_NODES.with(|s| s.borrow_mut().insert(node));
     }
     // The third argument is passed through RAW, because it is not a boolean — it is `boolean | {capture,
     // once, passive, signal}`. Collapsing it to `opt.is_boolean() && opt.to_boolean()` (as this did)
@@ -14247,6 +14270,7 @@ pub unsafe fn install(
     doc_url: &str,
 ) {
     DOC_URL.with(|u| *u.borrow_mut() = doc_url.to_string());
+    CLICK_LISTENER_NODES.with(|s| s.borrow_mut().clear());
     set_current_dom(dom);
     let root = (*dom).root();
     // `document` inherits `Document.prototype` → `Node.prototype` → `EventTarget.prototype`, so it gets
