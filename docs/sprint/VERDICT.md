@@ -65,3 +65,26 @@ Source: REAL det subset rows in docs/sprint/w4/A6-real.tsv (141 new rows, chrome
 - **Engine vs layer:** manuk (10-11) stays behind cdp-layer (15-18) outside both bands on REAL. Any gain attributed to W4.A1/A4/A5 is a LAYER gain that cdp-layer also has; no engine win is claimed. Playwright (23-25) is still ahead of both.
 - **Node status:** BLOCKED on the own-suite clause (manuk 38/39/38). The cdp-layer clause was met. Follow-up W4.A6.a investigates F08 and L12 on the manuk backend.
 - **Harness notes:** playwright ran once only (its run 1 was inside its band, so the node's "3 if it moved" did not apply). Runs 2-3 for manuk and cdp-layer were run serially after run 1, interleaved per run. All rows: chrome_ver=145.0.7632.116.
+
+## Addendum W4.B4 (token re-measure after W4.B1-B3; the verdict and addenda above are not edited)
+Source: docs/sprint/w4/B4/{manuk,cdp_layer,playwright,playwright_preload}.tsv (+ `.turns.tsv` per-turn logs); report `bench/agent-tasks/b4_token_report.py` → docs/sprint/w4/B4/REPORT.md. Full suite = own 40 + external 14 (54 tasks), Haiku, 3 runs, 4 arms, chrome_ver=145.0.7632.116. Run 2026-10-31 by the W4.B4 agent. Transcripts are kept outside the repo (~/.cache/manuk-b4/transcripts).
+Metrics are named, because the rankings differ by metric: **in+out** = input+output tokens (the metric used in the verdict above); **total** = in+out + cache_read + cache_create; **USD** = `cost_usd`.
+
+| arm | pass per run (of 54) | tasks ≥2/3 | turns/task | in+out tok/task (3-run band) | total tok/task (band) | USD/task (band) |
+|---|---|---|---|---|---|---|
+| manuk (engine) | 48, 48, 48 | 48/54 | 5.38 | 727 [718, 733] | 126,540 [122,667, 132,230] | 0.0026 [0.0025, 0.0029] |
+| cdp-layer | 50, 49, 51 | 51/54 | 4.58 | 604 [574, 637] | 108,586 [105,057, 110,983] | 0.0027 [0.0022, 0.0036] |
+| playwright (no preload) | 49, 49, 48 | 50/54 | 6.27 | 696 [669, 721] | 122,686 [121,452, 124,331] | 0.0031 [0.0026, 0.0040] |
+| playwright+preload | 51, 50, 48 | 51/54 | 5.35 | 517 [498, 542] | 169,018 [165,806, 175,135] | 0.0031 [0.0026, 0.0039] |
+
+**Bar 2.2 tokens branch, read as SUCCESS.md writes it (manuk vs the best Playwright arm per metric, need ≥30% fewer at equal or better success, bands disjoint):**
+- in+out: manuk 727 vs playwright+preload 517 → manuk uses **40.6% MORE**. NOT MET.
+- total: manuk 126,540 vs playwright 122,686 → manuk uses 3.1% more. NOT MET.
+- USD: manuk 0.0026 vs playwright 0.0031 → manuk is 14% cheaper; the bands overlap, and 14% is short of 30%. NOT MET.
+- Success: manuk 48/54 per run vs Playwright band 48–51 → within 10 points (not the limiting condition).
+
+**Verdict for the token branch: NOT MET on every metric.** Nothing is stated as a win: the only lower-than-Playwright number (USD, −14%) is inside the band overlap and below the 30% line. Turns are not the gap: manuk's 5.38 turns/task equals playwright+preload's 5.35, so the in+out deficit sits in tokens per turn (and in observation size, which shows up in total/USD), not in the turn count. cdp-layer is the cheapest manuk-surface arm (4.58 turns, 604 in+out), so the tool-layer gap to cdp-layer is larger than the engine-vs-Chrome gap.
+
+**Harness checks (done on this run):** every row is at chrome_ver 145.0.7632.116 (the report refuses any other pin); 0 error rows in any arm (is_error column). Pass counts were not cross-checked against the transcripts. **Red check:** a halved-token mutant of the manuk arm flips the total metric to MET with disjoint bands, which shows the report can go green; a row at a wrong pin is refused (exit 1). Both mutations ran on copies in ~/.cache, not on the data.
+
+**Caveat, not resolved here:** the per-turn `.turns.tsv` output_tokens do not sum to the run-level `output_tokens` (the per-turn average sums to far less than ~717 output tokens/task). Per-turn attribution is therefore not used for any claim in this addendum; follow-up W4.B4.a.
