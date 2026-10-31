@@ -164,12 +164,10 @@ fn form_in_one_call(chrome: bool) {
         ], "submit": handle_of(&nav, "button \"Send\"")}),
     );
     assert!(r.contains("ran 6 of 6 steps"), "(chrome={chrome}) {r}");
-    // The engine's <option> click does not change a <select> yet (follow-up W4.A5.a), so `plan` is only
-    // asserted on Chrome.
     assert!(
         r.contains("/done?")
             && r.contains("name=Ada+Lovelace")
-            && (!chrome || r.contains("plan=Pro") || r.contains("plan=pro"))
+            && (r.contains("plan=Pro") || r.contains("plan=pro"))
             && r.contains("news=yes")
             && r.contains("bill=y")
             && r.contains("email=ada%40example.org"),

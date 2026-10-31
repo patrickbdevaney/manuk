@@ -301,6 +301,9 @@ pub enum Activation {
     /// `open` state. The web's standard "show more" — every docs FAQ and folded diff — and it
     /// carries no script, so `Inert` was both wrong and unfalsifiable from the outside.
     Disclosed(bool),
+    /// Clicked an `<option>`; the string is the `<select>`'s value afterwards (the engine's
+    /// native-dropdown actuation, `Page::select_option`).
+    Selected(String),
     /// The element carries no activation behavior (e.g. a heading).
     Inert,
 }
@@ -1385,6 +1388,13 @@ impl AgentBrowser {
             }
         }
 
+        // Clicking an `<option>` is how a native dropdown is operated: choose it (input then change).
+        if proceed {
+            if let Some(v) = self.choose_clicked_option(node) {
+                return Ok(Activation::Selected(v));
+            }
+        }
+
         // OBSERVE the outcome; do not restate the intent.
         let page = self.page.as_ref().expect("checked above");
         if let Some(d) = details {
@@ -1402,6 +1412,50 @@ impl AgentBrowser {
             return Ok(Activation::Toggled(now.unwrap_or(false)));
         }
         Ok(Activation::Inert)
+    }
+
+    /// If `node` is (inside) an `<option>` of a `<select>`, choose it and return the select's value.
+    fn choose_clicked_option(&mut self, node: manuk_dom::NodeId) -> Option<String> {
+        let (sel, idx) = {
+            let dom = self.page.as_ref()?.dom();
+            let mut cur = Some(node);
+            let opt = loop {
+                let n = cur?;
+                if dom.element(n).is_some_and(|e| e.name == "option") {
+                    break n;
+                }
+                cur = dom.parent(n);
+            };
+            let mut sel = dom.parent(opt);
+            while let Some(s) = sel {
+                if dom.element(s).is_some_and(|e| e.name == "select") {
+                    break;
+                }
+                sel = dom.parent(s);
+            }
+            let sel = sel?;
+            let idx = dom
+                .flat_descendants(sel)
+                .into_iter()
+                .filter(|n| dom.element(*n).is_some_and(|e| e.name == "option"))
+                .position(|n| n == opt)?;
+            (sel, idx)
+        };
+        let w = self.width as f32;
+        let page = self.page.as_mut()?;
+        if !page.select_option(sel, idx, &self.fonts, w) {
+            return None;
+        }
+        let dom = page.dom();
+        dom.flat_descendants(sel)
+            .into_iter()
+            .filter(|n| dom.element(*n).is_some_and(|e| e.name == "option"))
+            .nth(idx)
+            .map(|o| {
+                dom.element(o)
+                    .and_then(|e| e.attr("value").map(str::to_string))
+                    .unwrap_or_else(|| dom.text_content(o).trim().to_string())
+            })
     }
 
     /// §4b — click the element with this role + accessible name.

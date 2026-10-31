@@ -162,6 +162,7 @@ fn describe(a: Activation) -> String {
         Activation::Disclosed(open) => {
             format!("disclosure {}", if open { "opened" } else { "closed" })
         }
+        Activation::Selected(v) => format!("selected option {v:?}"),
         Activation::Inert => "dispatched click (no built-in activation behaviour)".into(),
     }
 }
