@@ -353,3 +353,24 @@ fn extract_pages_a_long_page_with_a_cursor() {
     assert!(text.contains("FINAL_SENTINEL") && text.contains(", end]"), "{text}");
     assert!(pages >= 2);
 }
+
+/// W4.B3: a lookup completes in ONE call: `navigate(url, query)` returns the header plus only the
+/// passages that answer the query, `extract(query)` does the same on the loaded page.
+#[test]
+fn navigate_with_query_answers_in_one_call() {
+    let mut c = Client::start();
+    c.tool("navigate", json!({"url": fixture("lookup.html")}));
+    let (_, full) = c.tool("extract", json!({}));
+    let (_, ans) = c.tool(
+        "navigate",
+        json!({"url": fixture("lookup.html"), "query": "Mount Zorblat summit elevation"}),
+    );
+    assert!(ans.contains("4812 metres"), "{ans}");
+    assert!(ans.contains("blocks shown") && ans.contains("Zorblat survey"), "{ans}");
+    assert!(ans.chars().count() * 4 < full.chars().count(), "not smaller: {} vs {}", ans.len(), full.len());
+    assert!(ans.lines().any(|l| l.starts_with("[h") && l.contains("Zorblat survey")), "no link handle:\n{ans}");
+    let (_, e) = c.tool("extract", json!({"query": "Zorblat elevation"}));
+    assert!(e.contains("4812 metres") && e.contains("blocks shown"), "{e}");
+    let (_, none) = c.tool("extract", json!({"query": "xylophone"}));
+    assert!(none.contains("no passage matches"), "{none}");
+}

@@ -114,6 +114,90 @@ fn page_slice(out: &str, offset: usize) -> String {
     format!("[chars {offset}-{end} of {total}; more: call extract again with offset={end}]\n{cut}")
 }
 
+/// Passages shown by a query extract (each kept with one block of context either side).
+const QUERY_TOP_K: usize = 6;
+
+/// Lowercased alphanumeric tokens of `s`.
+fn toks(s: &str) -> Vec<String> {
+    s.split(|c: char| !c.is_alphanumeric())
+        .filter(|t| !t.is_empty())
+        .map(str::to_lowercase)
+        .collect()
+}
+
+/// BM25 over the blocks (lines) of `text`: the top-k blocks for `query`, each with one block of
+/// context either side, in page order. `None` when nothing matches. Also returns "k" and "N" so
+/// the caller can say how much was left out.
+fn top_passages(text: &str, query: &str) -> Option<(String, usize, usize)> {
+    // page_text is often one long line, so long lines are cut into sentences.
+    let mut blocks: Vec<&str> = Vec::new();
+    for l in text.lines().filter(|l| !l.trim().is_empty()) {
+        if l.len() <= 300 {
+            blocks.push(l);
+            continue;
+        }
+        let mut start = 0;
+        for (i, _) in l.match_indices(|c| matches!(c, '.' | '!' | '?')) {
+            let end = i + 1;
+            if l[end..].starts_with(' ') && l[start..end].trim().len() > 20 {
+                blocks.push(l[start..end].trim());
+                start = end;
+            }
+        }
+        if !l[start..].trim().is_empty() {
+            blocks.push(l[start..].trim());
+        }
+    }
+    let q = toks(query);
+    if blocks.is_empty() || q.is_empty() {
+        return None;
+    }
+    let docs: Vec<Vec<String>> = blocks.iter().map(|b| toks(b)).collect();
+    let n = docs.len() as f64;
+    let avg = docs.iter().map(Vec::len).sum::<usize>() as f64 / n;
+    let mut scored: Vec<(f64, usize)> = Vec::new();
+    for (i, d) in docs.iter().enumerate() {
+        let mut s = 0.0;
+        for t in &q {
+            let tf = d.iter().filter(|x| *x == t).count() as f64;
+            if tf == 0.0 {
+                continue;
+            }
+            let df = docs.iter().filter(|d| d.contains(t)).count() as f64;
+            let idf = (1.0 + (n - df + 0.5) / (df + 0.5)).ln();
+            s += idf * tf * 2.2 / (tf + 1.2 * (0.25 + 0.75 * d.len() as f64 / avg.max(1.0)));
+        }
+        if s > 0.0 {
+            scored.push((s, i));
+        }
+    }
+    if scored.is_empty() {
+        return None;
+    }
+    scored.sort_by(|a, b| b.0.total_cmp(&a.0).then(a.1.cmp(&b.1)));
+    let mut keep = std::collections::BTreeSet::new();
+    let hits = scored.len().min(QUERY_TOP_K);
+    for &(_, i) in scored.iter().take(hits) {
+        keep.insert(i.saturating_sub(1));
+        keep.insert(i);
+        if i + 1 < blocks.len() {
+            keep.insert(i + 1);
+        }
+    }
+    let mut out = String::new();
+    let mut prev: Option<usize> = None;
+    for &i in &keep {
+        if prev.is_some_and(|p| i > p + 1) {
+            out.push_str("…\n");
+        }
+        let b: String = blocks[i].chars().take(600).collect();
+        out.push_str(&b);
+        out.push('\n');
+        prev = Some(i);
+    }
+    Some((out, hits, blocks.len()))
+}
+
 fn clip(s: &str) -> String {
     let s = s.split_whitespace().collect::<Vec<_>>().join(" ");
     if s.chars().count() > NAME_CLIP {
@@ -669,7 +753,10 @@ impl<B: Backend> Session<B> {
                 .storage_state(arg_str(a, "action").unwrap_or("export"), arg_str(a, "path"))
                 .map(Output::Text),
             "navigate" => self
-                .navigate(arg_str(a, "url").ok_or_else(|| anyhow!("navigate needs `url`"))?)
+                .navigate(
+                    arg_str(a, "url").ok_or_else(|| anyhow!("navigate needs `url`"))?,
+                    arg_str(a, "query"),
+                )
                 .await
                 .map(Output::Text),
             "observe" => self
@@ -762,6 +849,7 @@ impl<B: Backend> Session<B> {
                     arg_str(a, "format").unwrap_or("text"),
                     arg_str(a, "scope"),
                     a.get("offset").and_then(Value::as_u64).unwrap_or(0) as usize,
+                    arg_str(a, "query"),
                 )
                 .map(Output::Text),
             "find" => self
@@ -990,13 +1078,21 @@ impl<B: Backend> Session<B> {
         self.b.settle_line().await
     }
 
-    async fn navigate(&mut self, url: &str) -> Result<String> {
+    async fn navigate(&mut self, url: &str, query: Option<&str>) -> Result<String> {
         self.gate(crate::policy::Op::Navigate(url), None, "")?;
         self.b.navigate(url).await?;
         let settle = self.settled().await;
         self.new_document();
         let tree = self.tree()?;
         self.snap = Some(self.snapshot(&tree));
+        if let Some(q) = query.filter(|q| !q.trim().is_empty()) {
+            let ans = self.answer(q)?;
+            return Ok(format!(
+                "{UNTRUSTED}{}\n{}\n{settle}\n{ans}",
+                self.warn(),
+                self.header()
+            ));
+        }
         let body = Self::fit(
             self.lines(&tree, false),
             DEFAULT_BUDGET_TOKENS,
@@ -1477,7 +1573,41 @@ impl<B: Backend> Session<B> {
             .collect())
     }
 
-    fn extract(&mut self, format: &str, scope: Option<&str>, offset: usize) -> Result<String> {
+    /// The passages of the page that answer `query`, with handles for links inside them.
+    fn answer(&mut self, query: &str) -> Result<String> {
+        let tree = self.tree()?;
+        let text = self.page_text()?;
+        let Some((passages, k, total)) = top_passages(&text, query) else {
+            return Ok(format!("no passage matches {query:?}; try extract() for the whole page or find(query)"));
+        };
+        let mut out = format!("{k} of {total} blocks shown for {query:?}:\n{passages}");
+        let mut links = Vec::new();
+        for n in tree.iter().filter(|n| n.role.is_interactive() && !n.name.trim().is_empty()) {
+            if links.len() >= 8 {
+                break;
+            }
+            if passages.contains(clip(&n.name).trim_end_matches('…')) {
+                links.push(n);
+            }
+        }
+        for n in links {
+            let h = self.handle(n.node);
+            let _ = writeln!(out, "{}", Self::fmt_entry(h, &self.ent(n), ""));
+        }
+        Ok(out)
+    }
+
+    fn extract(
+        &mut self,
+        format: &str,
+        scope: Option<&str>,
+        offset: usize,
+        query: Option<&str>,
+    ) -> Result<String> {
+        if let (Some(q), None) = (query.filter(|q| !q.trim().is_empty()), scope) {
+            let out = self.answer(q)?;
+            return Ok(format!("{UNTRUSTED}{}\n{out}", self.warn()));
+        }
         let tree = self.tree()?;
         let scoped: Option<&A11yNode> = match scope {
             Some(hs) => Some(self.resolve(&tree, hs)?.1),

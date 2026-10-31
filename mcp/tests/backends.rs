@@ -154,6 +154,8 @@ fn matrix(chrome: bool) {
 
     // extract text / markdown / table, find
     assert!(c.tool("extract", json!({})).contains("Backend parity"));
+    let q = c.tool("extract", json!({"query": "backend parity"}));
+    assert!(q.contains("blocks shown") && q.contains("Backend parity"), "query extract:\n{q}");
     assert!(c
         .tool("extract", json!({"format": "markdown"}))
         .contains("Other page"));
