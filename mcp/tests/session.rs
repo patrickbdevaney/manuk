@@ -329,3 +329,27 @@ fn injection_shield_withholds_invisible_text() {
     }
     assert!(!all.contains("⚠hidden-text"), "{all}");
 }
+
+/// R2.1.5.a.a: a long page is paged by `extract` (cap + offset cursor), never one oversized
+/// result that the client spills to a file.
+#[test]
+fn extract_pages_a_long_page_with_a_cursor() {
+    let mut c = Client::start();
+    c.tool("navigate", json!({"url": fixture("long.html")}));
+    let (_, first) = c.tool("extract", json!({}));
+    assert!(first.chars().count() < 21_000, "uncapped: {} chars", first.chars().count());
+    assert!(first.contains("Paragraph 0000") && !first.contains("FINAL_SENTINEL"), "{first}");
+    let mut text = first;
+    let mut pages = 1;
+    while let Some(i) = text.find("call extract again with offset=") {
+        let rest = &text[i + "call extract again with offset=".len()..];
+        let off: u64 = rest[..rest.find(']').unwrap()].parse().unwrap();
+        let (_, next) = c.tool("extract", json!({"offset": off}));
+        assert!(next.chars().count() < 21_000);
+        text = next;
+        pages += 1;
+        assert!(pages < 20, "cursor never ends");
+    }
+    assert!(text.contains("FINAL_SENTINEL") && text.contains(", end]"), "{text}");
+    assert!(pages >= 2);
+}

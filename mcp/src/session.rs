@@ -91,6 +91,29 @@ fn role_str(r: &Role) -> String {
     }
 }
 
+/// Largest extract result, in chars. A bigger one is spilled by the MCP client to a file the
+/// agent has to Read back, which costs more than the page; so it is paged with a cursor instead.
+pub const EXTRACT_PAGE: usize = 20_000;
+
+/// One page of `out` starting at char `offset`, cut at a line break, with a cursor line when
+/// there is more.
+fn page_slice(out: &str, offset: usize) -> String {
+    let total = out.chars().count();
+    if offset == 0 && total <= EXTRACT_PAGE {
+        return out.to_string();
+    }
+    let rest: String = out.chars().skip(offset).collect();
+    if rest.chars().count() <= EXTRACT_PAGE {
+        return format!("[chars {offset}-{total} of {total}, end]\n{rest}");
+    }
+    let mut cut: String = rest.chars().take(EXTRACT_PAGE).collect();
+    if let Some(nl) = cut.rfind('\n').filter(|&i| i > cut.len() / 2) {
+        cut.truncate(nl);
+    }
+    let end = offset + cut.chars().count();
+    format!("[chars {offset}-{end} of {total}; more: call extract again with offset={end}]\n{cut}")
+}
+
 fn clip(s: &str) -> String {
     let s = s.split_whitespace().collect::<Vec<_>>().join(" ");
     if s.chars().count() > NAME_CLIP {
@@ -735,7 +758,11 @@ impl<B: Backend> Session<B> {
                 .await
                 .map(Output::Text),
             "extract" => self
-                .extract(arg_str(a, "format").unwrap_or("text"), arg_str(a, "scope"))
+                .extract(
+                    arg_str(a, "format").unwrap_or("text"),
+                    arg_str(a, "scope"),
+                    a.get("offset").and_then(Value::as_u64).unwrap_or(0) as usize,
+                )
                 .map(Output::Text),
             "find" => self
                 .find(arg_str(a, "query").ok_or_else(|| anyhow!("find needs `query`"))?)
@@ -1450,7 +1477,7 @@ impl<B: Backend> Session<B> {
             .collect())
     }
 
-    fn extract(&mut self, format: &str, scope: Option<&str>) -> Result<String> {
+    fn extract(&mut self, format: &str, scope: Option<&str>, offset: usize) -> Result<String> {
         let tree = self.tree()?;
         let scoped: Option<&A11yNode> = match scope {
             Some(hs) => Some(self.resolve(&tree, hs)?.1),
@@ -1525,6 +1552,7 @@ impl<B: Backend> Session<B> {
             }
             f => bail!("unknown extract format {f:?}: use markdown, text or table"),
         };
+        let out = page_slice(&out, offset);
         Ok(format!("{UNTRUSTED}{}\n{out}", self.warn()))
     }
 
