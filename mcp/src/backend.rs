@@ -172,7 +172,10 @@ impl Backend for AgentBrowser {
         AgentBrowser::navigate(self, url).await
     }
     fn tree(&self) -> Result<A11yNode> {
-        self.a11y_tree()
+        if std::env::var("MANUK_TEXT_MUTATE").is_ok_and(|v| v == "off") {
+            return self.a11y_tree();
+        }
+        self.a11y_tree_with_text()
     }
     fn url(&self) -> String {
         self.current_url().unwrap_or("").to_string()

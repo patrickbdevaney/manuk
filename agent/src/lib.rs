@@ -977,6 +977,25 @@ impl AgentBrowser {
         Ok(self.page.as_ref().context("no page loaded")?.a11y_tree())
     }
 
+    /// The a11y tree with paragraph and cell text surfaced as names, for an agent *observation*.
+    /// The engine's tree leaves them unnamed (ARIA gives `paragraph` no name-from-content), so
+    /// prices and body copy never reached the agent; `resolve` keeps using the plain tree so a
+    /// click-by-name cannot match prose.
+    pub fn a11y_tree_with_text(&self) -> Result<manuk_a11y::A11yNode> {
+        let page = self.page.as_ref().context("no page loaded")?;
+        let mut t = page.a11y_tree();
+        fn fill(n: &mut manuk_a11y::A11yNode, dom: &manuk_dom::Dom) {
+            if n.name.is_empty() && matches!(n.role, manuk_a11y::Role::Paragraph) {
+                n.name = dom.text_content(n.node).split_whitespace().collect::<Vec<_>>().join(" ");
+            }
+            for k in &mut n.children {
+                fill(k, dom);
+            }
+        }
+        fill(&mut t, page.dom());
+        Ok(t)
+    }
+
     /// Resolve a `role` + accessible `name` to a DOM node (substring, case-insensitive).
     fn resolve(&self, role: &manuk_a11y::Role, name: &str) -> Result<manuk_dom::NodeId> {
         let tree = self.a11y_tree()?;

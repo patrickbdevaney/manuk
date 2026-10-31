@@ -246,11 +246,10 @@ fn run(chrome: bool) {
     );
 }
 
-/// Over budget, the content text survives and chrome text is what is cut. Chrome only: the engine's
-/// a11y tree does not carry paragraph text at all yet (W4.A4.b).
-fn budget() {
+/// Over budget, the content text survives and chrome text is what is cut, on both backends.
+fn budget(chrome: bool) {
     let url = serve();
-    let mut c = Client::start(true);
+    let mut c = Client::start(chrome);
     c.tool("navigate", json!({"url": format!("{url}budget")}));
     let o = c.tool("observe", json!({"budget_tokens": 150}));
     assert!(o.contains("cut "), "budget did not bite:\n{o}");
@@ -276,5 +275,10 @@ fn spa_observation_on_the_chrome_backend() {
 
 #[test]
 fn budget_keeps_content_before_chrome_on_the_chrome_backend() {
-    budget();
+    budget(true);
+}
+
+#[test]
+fn budget_keeps_content_before_chrome_on_the_manuk_backend() {
+    budget(false);
 }
