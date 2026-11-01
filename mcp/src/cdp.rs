@@ -49,6 +49,8 @@ struct Cdp {
     dl_names: HashMap<String, String>,
     dl_over: Vec<String>,
     dl_tmp: PathBuf,
+    /// W3.7: out-of-process iframes Chrome attached to the page, frameId -> flat session id.
+    oopif: HashMap<String, String>,
 }
 
 impl Cdp {
@@ -63,6 +65,14 @@ impl Cdp {
     }
 
     /// A browser-level command (no page session), e.g. `Target.*`.
+    /// A command in another flat session (an out-of-process frame), then back on the page's.
+    fn call_in(&mut self, session: &str, method: &str, params: Value) -> Result<Value> {
+        let keep = self.session.replace(session.to_string());
+        let r = self.call(method, params);
+        self.session = keep;
+        r
+    }
+
     fn call_browser(&mut self, method: &str, params: Value) -> Result<Value> {
         let keep = self.session.take();
         let r = self.call(method, params);
@@ -78,6 +88,22 @@ impl Cdp {
         match self.ws.read() {
             Ok(Message::Text(t)) => {
                 let m: Value = serde_json::from_str(t.as_str())?;
+                match m["method"].as_str() {
+                    Some("Target.attachedToTarget") if m["params"]["targetInfo"]["type"] == "iframe" => {
+                        if let (Some(t), Some(s)) = (
+                            m["params"]["targetInfo"]["targetId"].as_str(),
+                            m["params"]["sessionId"].as_str(),
+                        ) {
+                            self.oopif.insert(t.to_string(), s.to_string());
+                        }
+                    }
+                    Some("Target.detachedFromTarget") => {
+                        if let Some(s) = m["params"]["sessionId"].as_str() {
+                            self.oopif.retain(|_, v| v != s);
+                        }
+                    }
+                    _ => {}
+                }
                 if m["method"] == "Fetch.requestPaused" {
                     self.judge_request(&m);
                     return Ok(None);
@@ -320,11 +346,15 @@ struct Raw {
     checked: HashSet<usize>,
     opt_selected: HashSet<usize>,
     clickable: HashSet<usize>,
+    /// W3.7: `<iframe>` node index → index of the document it contains (in the snapshot's document list).
+    content: HashMap<usize, usize>,
+    /// W3.7: the document's own URL, for the `iframe <origin>` label.
+    url: String,
     /// node index → (bounds, paint order, style)
     layout: HashMap<usize, ([f32; 4], i64, Style)>,
 }
 
-fn parse_snapshot(snap: &Value) -> Result<(Raw, f32, f32)> {
+fn parse_snapshot(snap: &Value, doc: usize, tag: u64) -> Result<(Raw, f32, f32)> {
     let strings: Vec<String> = snap["strings"]
         .as_array()
         .ok_or_else(|| anyhow!("no strings"))?
@@ -338,7 +368,7 @@ fn parse_snapshot(snap: &Value) -> Result<(Raw, f32, f32)> {
             .cloned()
             .unwrap_or_default()
     };
-    let d = &snap["documents"][0];
+    let d = &snap["documents"][doc];
     let nd = &d["nodes"];
     let arr = |v: &Value| -> Vec<Value> { v.as_array().cloned().unwrap_or_default() };
     let parent: Vec<i64> = arr(&nd["parentIndex"])
@@ -354,7 +384,7 @@ fn parse_snapshot(snap: &Value) -> Result<(Raw, f32, f32)> {
     let value: Vec<String> = arr(&nd["nodeValue"]).iter().map(&s).collect();
     let backend: Vec<u64> = arr(&nd["backendNodeId"])
         .iter()
-        .map(|v| v.as_u64().unwrap_or(0))
+        .map(|v| v.as_u64().unwrap_or(0) | (tag << 48))
         .collect();
     let attrs: Vec<HashMap<String, String>> = arr(&nd["attributes"])
         .iter()
@@ -441,6 +471,12 @@ fn parse_snapshot(snap: &Value) -> Result<(Raw, f32, f32)> {
         checked: idx_set(&nd["inputChecked"]),
         opt_selected: idx_set(&nd["optionSelected"]),
         clickable: idx_set(&nd["isClickable"]),
+        content: arr(&nd["contentDocumentIndex"]["index"])
+            .iter()
+            .zip(arr(&nd["contentDocumentIndex"]["value"]).iter())
+            .filter_map(|(a, b)| Some((a.as_u64()? as usize, b.as_u64()? as usize)))
+            .collect(),
+        url: s(&d["documentURL"]),
         layout,
     };
     Ok((
@@ -631,6 +667,22 @@ fn role_of(r: &Raw, i: usize, body_child: bool) -> Role {
         "section" if r.attr(i, "aria-label").is_some() => Role::Region,
         _ => Role::Generic,
     }
+}
+
+/// `iframe <origin>`: the origin of the document the frame holds, else of its `src`.
+fn iframe_label(r: &Raw, i: usize, held: Option<&str>) -> String {
+    let src = r.attr(i, "src").unwrap_or("");
+    let origin = |u: &str| {
+        url::Url::parse(u)
+            .ok()
+            .map(|u| u.origin().ascii_serialization())
+            .filter(|o| o != "null")
+    };
+    let doc = held.unwrap_or("");
+    let o = origin(doc)
+        .or_else(|| origin(src))
+        .unwrap_or_else(|| if r.attr(i, "srcdoc").is_some() { "srcdoc".into() } else { "about:blank".into() });
+    format!("iframe {o}")
 }
 
 fn name_of(r: &Raw, i: usize, role: &Role) -> String {
@@ -828,6 +880,9 @@ struct Idents {
     parent: HashMap<u64, u64>,
     /// W4.A4: stable ids Chrome reports as clickable (a click listener or `cursor:pointer`)
     click: HashMap<u64, String>,
+    /// W3.7: stable ids of `<iframe>` elements, and of every node inside a child document.
+    frame_els: HashSet<u64>,
+    in_frame: HashSet<u64>,
 }
 
 struct Built {
@@ -839,6 +894,12 @@ struct Built {
 
 struct Builder<'a> {
     r: &'a Raw,
+    /// W3.7: every document of the page (main first); `r` is the one being walked, `d` its index,
+    /// `off` the page-coordinate offset of its origin (its iframe's box).
+    docs: &'a [Raw],
+    d: usize,
+    off: (f32, f32),
+    zbase: i32,
     alias: &'a mut HashMap<u64, u64>,
     /// orphaned stable ids from the previous tree, by re-mount key
     orphans: HashMap<String, VecDeque<u64>>,
@@ -882,6 +943,7 @@ impl Builder<'_> {
     ) -> Option<A11yNode> {
         let r = self.r;
         let tag = r.tag(i);
+        let is_iframe = tag == "iframe";
         if depth > 400 || is_skipped_tag(&tag) || (tag == "input" && r.input_type(i) == "hidden") {
             return None;
         }
@@ -890,8 +952,8 @@ impl Builder<'_> {
             // display:none (or inside a collapsed container): not part of what a human sees.
             return None;
         }
-        let role = role_of(r, i, body_child);
-        let mut name = name_of(r, i, &role);
+        let role = if is_iframe { Role::Region } else { role_of(r, i, body_child) };
+        let mut name = if is_iframe { iframe_label(r, i, r.content.get(&i).map(|&cd| self.docs[cd].url.as_str())) } else { name_of(r, i, &role) };
         let mut role = role;
         let was_generic_click = matches!(role, Role::Generic) && r.clickable.contains(&i);
         if was_generic_click && !name.is_empty() {
@@ -906,7 +968,14 @@ impl Builder<'_> {
         let full_key = format!("{key}#{n}");
         let id = self.stable(i, &full_key);
         self.idents.backend.insert(id, r.backend[i]);
-        self.idents.index.insert(id, i);
+        if self.d == 0 {
+            self.idents.index.insert(id, i);
+        } else {
+            self.idents.in_frame.insert(id);
+        }
+        if is_iframe {
+            self.idents.frame_els.insert(id);
+        }
         self.idents.key.insert(id, full_key);
         if was_generic_click {
             self.idents.click.insert(id, r.text_of(i));
@@ -917,13 +986,19 @@ impl Builder<'_> {
         let (bbox, z, hittable) = match r.layout.get(&i) {
             Some((b, po, st)) => (
                 Some(Rect {
-                    x: b[0],
-                    y: b[1],
+                    x: b[0] + self.off.0,
+                    y: b[1] + self.off.1,
                     width: b[2],
                     height: b[3],
                 })
                 .filter(|b| b.width > 0.0 && b.height > 0.0),
-                (*po).max(1) as i32,
+                // A child frame's boxes stack inside their iframe's slot, above the iframe itself and below
+                // whatever the parent paints over it later.
+                if self.d == 0 {
+                    ((*po).max(1) as i32).saturating_mul(1000)
+                } else {
+                    self.zbase + ((*po).max(1) as i32).min(999)
+                },
                 !st.pointer_none && !st.visibility_hidden,
             ),
             None => (None, 0, true),
@@ -941,7 +1016,11 @@ impl Builder<'_> {
                 let k = format!("{key}#{n}");
                 let oid = self.stable(o, &k);
                 self.idents.backend.insert(oid, r.backend[o]);
-                self.idents.index.insert(oid, o);
+                if self.d == 0 {
+                    self.idents.index.insert(oid, o);
+                } else {
+                    self.idents.in_frame.insert(oid);
+                }
                 self.idents.key.insert(oid, k);
                 self.idents.parent.insert(oid, id);
                 children.push(A11yNode {
@@ -955,6 +1034,21 @@ impl Builder<'_> {
                     children: vec![],
                 });
             }
+        } else if let Some(&cd) = r.content.get(&i).filter(|_| is_iframe) {
+            // W3.7: the child document nests under its iframe; its boxes are in its own coordinates.
+            let docs = self.docs;
+            let child = &docs[cd];
+            if let Some(html) =
+                (0..child.kind.len()).find(|&j| child.kind[j] == 1 && child.tag(j) == "html")
+            {
+                let saved = (self.r, self.d, self.off, self.zbase);
+                let at = bbox.map(|b| (b.x, b.y)).unwrap_or(self.off);
+                (self.r, self.d, self.off, self.zbase) = (child, cd, at, z);
+                let k = self.node(html, false, Some(id), depth + 1);
+                (self.r, self.d, self.off, self.zbase) = saved;
+                children.extend(k);
+            }
+        } else if is_iframe {
         } else {
             let bc = tag == "body";
             for &c in &r.kids[i] {
@@ -1102,13 +1196,13 @@ fn shield_of(r: &Raw, ids: &Idents, viewport_w: f32) -> Shield {
 }
 
 fn build(
-    snap: &Value,
+    docs: &[Raw],
     alias: &mut HashMap<u64, u64>,
     prev: &Idents,
     viewport_w: f32,
-) -> Result<(Built, f32, f32)> {
-    let (raw, sx, sy) = parse_snapshot(snap)?;
-    let live: HashSet<u64> = raw.backend.iter().copied().collect();
+) -> Result<Built> {
+    let raw = &docs[0];
+    let live: HashSet<u64> = docs.iter().flat_map(|d| d.backend.iter().copied()).collect();
     let mut orphans: HashMap<String, VecDeque<u64>> = HashMap::new();
     let mut stale: Vec<(&u64, &u64)> = prev
         .backend
@@ -1126,7 +1220,11 @@ fn build(
         .find(|&i| raw.kind[i] == 1 && raw.tag(i) == "html")
         .ok_or_else(|| anyhow!("snapshot has no <html>"))?;
     let mut b = Builder {
-        r: &raw,
+        r: raw,
+        docs,
+        d: 0,
+        off: (0.0, 0.0),
+        zbase: 0,
         alias,
         orphans,
         ord: HashMap::new(),
@@ -1138,7 +1236,7 @@ fn build(
         .ok_or_else(|| anyhow!("page has no rendered root"))?;
     root.role = Role::Document;
     let idents = b.idents;
-    let shield = shield_of(&raw, &idents, viewport_w);
+    let shield = shield_of(raw, &idents, viewport_w);
     let mut links = vec![];
     for (&id, &i) in &idents.index {
         if raw.tag(i) == "a" {
@@ -1150,16 +1248,12 @@ fn build(
     }
     links.sort();
     let links = links.into_iter().map(|(_, t, h)| (t, h)).collect();
-    Ok((
-        Built {
-            tree: root,
-            shield,
-            idents,
-            links,
-        },
-        sx,
-        sy,
-    ))
+    Ok(Built {
+        tree: root,
+        shield,
+        idents,
+        links,
+    })
 }
 
 // ───────────────────────────── the backend ─────────────────────────────
@@ -1191,6 +1285,10 @@ pub struct CdpBackend {
     ls_snap: std::collections::BTreeMap<String, Vec<Value>>,
     /// Imported localStorage for origins not yet loaded: origin -> the new-document script that seeds it.
     ls_pending: HashMap<String, String>,
+    /// W3.7: frame number (high bits of a tagged backend id) -> the session that owns that frame.
+    frame_session: HashMap<u64, String>,
+    /// W3.7: frameId -> its frame number, stable across refreshes so a handle keeps its identity.
+    frame_nums: HashMap<String, u64>,
 }
 
 /// Test-only: `MANUK_CDP_MUTATE=no-taint|no-revalidate|no-remount` switches one discipline off, so the
@@ -1262,6 +1360,13 @@ fn init_page_session(cdp: &mut Cdp, width: u32, height: u32) -> Result<()> {
         cdp.call(m, json!({}))?;
     }
     cdp.call("Page.setLifecycleEventsEnabled", json!({"enabled": true}))?;
+    // W3.7: cross-site iframes run in their own process; attach so their documents can be read and driven.
+    if !mutated("no-frames") {
+        cdp.call(
+            "Target.setAutoAttach",
+            json!({"autoAttach": true, "waitForDebuggerOnStart": false, "flatten": true}),
+        )?;
+    }
     // W3.12: count the page's own pending fetches and timers so a settle line can be read from it.
     cdp.call(
         "Page.addScriptToEvaluateOnNewDocument",
@@ -1354,6 +1459,7 @@ impl CdpBackend {
             dl_names: HashMap::new(),
             dl_over: Vec::new(),
             dl_tmp: dir.join("dl"),
+            oopif: HashMap::new(),
         };
         let ver = cdp.call("Browser.getVersion", json!({}))?;
         let product = ver["product"].as_str().unwrap_or("?").to_string();
@@ -1413,6 +1519,8 @@ impl CdpBackend {
             tab_notes: Vec::new(),
             ls_snap: Default::default(),
             ls_pending: HashMap::new(),
+            frame_session: HashMap::new(),
+            frame_nums: HashMap::new(),
         })
     }
 
@@ -1500,12 +1608,78 @@ impl CdpBackend {
             .map(|b| b.idents.clone())
             .unwrap_or_default();
         let before = self.alias.len();
-        let (built, _, _) = build(&snap, &mut self.alias, &prev, self.width)?;
+        let docs = self.frame_docs(&snap)?;
+        let built = build(&docs, &mut self.alias, &prev, self.width)?;
         // Accumulates until the next click takes it: act() snapshots the page before the click's own refresh,
         // so the re-mount can happen in an earlier refresh than the one the click reads.
         self.remounted += (self.alias.len() - before.min(self.alias.len())) as u32;
         self.built = Some(built);
         Ok(())
+    }
+
+    /// W3.7: every document of the page. The snapshot already holds same-process frames; an
+    /// out-of-process frame (cross-site) is a separate target, snapshotted over its own session. Its
+    /// node ids are tagged with a stable frame number in the high bits so they cannot collide.
+    fn frame_docs(&mut self, snap: &Value) -> Result<Vec<Raw>> {
+        let n = snap["documents"].as_array().map_or(1, |a| a.len());
+        let mut docs = Vec::with_capacity(n);
+        for k in 0..n {
+            docs.push(parse_snapshot(snap, k, 0)?.0);
+        }
+        self.frame_session.clear();
+        if self.cdp.oopif.is_empty() || mutated("no-frames") {
+            return Ok(docs);
+        }
+        let mut at = 0;
+        while at < docs.len() && docs.len() < 64 {
+            let pending: Vec<(usize, u64)> = docs[at]
+                .kind
+                .iter()
+                .enumerate()
+                .filter(|&(i, &k)| {
+                    k == 1 && docs[at].tag(i) == "iframe" && !docs[at].content.contains_key(&i)
+                })
+                .map(|(i, _)| (i, docs[at].backend[i]))
+                .collect();
+            for (i, be) in pending {
+                // A child's own ids carry its frame number; describe in the session that owns the node.
+                let owner = self.frame_session.get(&(be >> 48)).cloned();
+                let be_raw = be & ((1 << 48) - 1);
+                let d = match &owner {
+                    Some(s) => self
+                        .cdp
+                        .call_in(s, "DOM.describeNode", json!({"backendNodeId": be_raw})),
+                    None => self
+                        .cdp
+                        .call("DOM.describeNode", json!({"backendNodeId": be_raw})),
+                };
+                let Some(fid) = d.ok().and_then(|d| d["node"]["frameId"].as_str().map(String::from))
+                else {
+                    continue;
+                };
+                let Some(sess) = self.cdp.oopif.get(&fid).cloned() else {
+                    continue;
+                };
+                let next = self.frame_nums.len() as u64 + 1;
+                let f = *self.frame_nums.entry(fid).or_insert(next);
+                let Ok(csnap) = self.cdp.call_in(
+                    &sess,
+                    "DOMSnapshot.captureSnapshot",
+                    json!({"computedStyles": STYLES, "includePaintOrder": true, "includeDOMRects": true}),
+                ) else {
+                    continue;
+                };
+                let Ok((child, _, _)) = parse_snapshot(&csnap, 0, f) else {
+                    continue;
+                };
+                self.frame_session.insert(f, sess);
+                let idx = docs.len();
+                docs[at].content.insert(i, idx);
+                docs.push(child);
+            }
+            at += 1;
+        }
+        Ok(docs)
     }
 
     fn built(&self) -> Result<&Built> {
@@ -1626,18 +1800,46 @@ impl CdpBackend {
         self.built()?.idents.backend.get(&node.0).copied().ok_or_else(|| anyhow!("STALE: that element is gone from the page and no re-mount match exists; observe again"))
     }
 
+    /// A JS handle for the element. One inside an out-of-process frame lives in that frame's session, so
+    /// its string is `<session>\u{1}<objectId>`; `call_on` routes by it.
     fn object_for(&mut self, be: u64) -> Result<String> {
-        let r = self
-            .cdp
-            .call("DOM.resolveNode", json!({"backendNodeId": be}))?;
-        r["object"]["objectId"]
+        let (f, raw) = (be >> 48, be & ((1 << 48) - 1));
+        let (r, sess) = if f > 0 {
+            let s = self
+                .frame_session
+                .get(&f)
+                .cloned()
+                .ok_or_else(|| anyhow!("STALE: the frame holding that element is gone; observe again"))?;
+            (
+                self.cdp.call_in(&s, "DOM.resolveNode", json!({"backendNodeId": raw}))?,
+                Some(s),
+            )
+        } else {
+            (
+                self.cdp
+                    .call("DOM.resolveNode", json!({"backendNodeId": raw}))?,
+                None,
+            )
+        };
+        let id = r["object"]["objectId"]
             .as_str()
-            .map(String::from)
-            .ok_or_else(|| anyhow!("element has no JS object"))
+            .ok_or_else(|| anyhow!("element has no JS object"))?;
+        Ok(match sess {
+            Some(s) => format!("{s}\u{1}{id}"),
+            None => id.to_string(),
+        })
     }
 
     fn call_on(&mut self, obj: &str, f: &str, args: Value) -> Result<Value> {
-        let r = self.cdp.call("Runtime.callFunctionOn", json!({"objectId": obj, "functionDeclaration": f, "arguments": args, "returnByValue": true}))?;
+        let (sess, obj) = match obj.split_once('\u{1}') {
+            Some((s, o)) => (Some(s), o),
+            None => (None, obj),
+        };
+        let p = json!({"objectId": obj, "functionDeclaration": f, "arguments": args, "returnByValue": true});
+        let r = match sess {
+            Some(s) => self.cdp.call_in(s, "Runtime.callFunctionOn", p)?,
+            None => self.cdp.call("Runtime.callFunctionOn", p)?,
+        };
         if let Some(e) = r.get("exceptionDetails") {
             bail!(
                 "page script error: {}",
@@ -1672,6 +1874,16 @@ impl CdpBackend {
             }
             cur = b.idents.parent.get(&c).copied();
         }
+        // W3.7: a point inside a child frame hit-tests to the frame's own element in this document.
+        if b.idents.frame_els.contains(&hid) {
+            let mut cur = tid;
+            while let Some(c) = cur {
+                if c == hid {
+                    return true;
+                }
+                cur = b.idents.parent.get(&c).copied();
+            }
+        }
         false
     }
 
@@ -1705,7 +1917,8 @@ impl CdpBackend {
         // The snapshot's scroll offset and box go stale once the page has scrolled or shifted
         // since (smooth scroll, a layout change); aim from the element's live box and scroll.
         let mut bbox = bbox;
-        if !mutated("cached-scroll") {
+        let framed = self.built()?.idents.in_frame.contains(&node.0);
+        if !mutated("cached-scroll") && !framed {
             let live = self.object_for(be).and_then(|o| {
                 self.call_on(&o, "function(){const r=this.getBoundingClientRect();return JSON.stringify([r.x+scrollX,r.y+scrollY,r.width,r.height,scrollX,scrollY])}", json!([]))
             });

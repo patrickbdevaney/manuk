@@ -61,8 +61,12 @@ Gaps (named, not faked):
 - **Chrome blocked iframe.** For a cross-origin iframe navigation Chrome may still open a bare TCP socket to the
   refused origin (no request line, 0 bytes). The loopback gate counts request lines, so it does not see this. Open as
   W3.9.a.a.
-- **Frames in observe.** `observe` returns no frame content on either backend, so there is nothing to drop from it
-  yet. Frame-merged observation is W3.7.
+- **Frames in observe (W3.7).** On `--backend chrome`, `observe` nests each iframe's document under a
+  `[hN] region "iframe <origin>"` line (same-site frames from the page snapshot, cross-site ones over their own
+  DevTools session), and `type`/`act` on a handle inside it reach the child's element. Gate:
+  `mcp/tests/frames.rs`; `MANUK_CDP_MUTATE=no-frames` turns the merge off. `--backend manuk` cannot do this: the engine
+  has no browsing context for a frame, so it shows nothing of a frame's content. Frames from origins outside the
+  read set are not yet hidden from the observation (W3.7.a).
 - **Name-based judgement.** When the backend cannot describe an element, a click is judged by its name alone; the
   risky-word list is a heuristic, not a classifier.
 - **WebSocket.** Upgrades are judged as writes in `manuk_net` (`engine/net/src/scope.rs`, `websocket.rs`); the chrome
