@@ -73,6 +73,16 @@ def arm_config(arm, tmp):
         cfg = {"mcpServers": {"browser": {"command": "npx", "args": [
             "-y", "@playwright/mcp@0.0.83", "--headless", "--isolated", "--executable-path", chrome]}}}
         allowed = "mcp__browser"
+    elif arm in ("manuk-no-receipts", "cdp-layer-no-receipts"):  # W4.C4.a: same binary, action receipts off (MANUK_NO_RECEIPTS)
+        exe = mcp_bin()
+        if not os.path.exists(exe):
+            return None, None
+        if arm.startswith("cdp-layer"):
+            cfg = {"mcpServers": {"browser": {"command": exe, "args": ["--backend", "chrome"],
+                                              "env": {"MANUK_CHROME": pinned_chrome(), "MANUK_NO_RECEIPTS": "1"}}}}
+        else:
+            cfg = {"mcpServers": {"browser": {"command": exe, "args": [], "env": {"MANUK_NO_RECEIPTS": "1"}}}}
+        allowed = "mcp__browser"
     elif arm in ("manuk", "manuk+rollback", "manuk+rollback.v2", "manuk-prealwaysload", "manuk-lean", "manuk-noquery"):  # W4.B1 before-arm: MANUK_MCP_BIN
         exe = mcp_bin()
         if not os.path.exists(exe):

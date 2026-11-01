@@ -243,7 +243,7 @@ def pin_chrome(arm, srv, tdir):
         args = [x for x in srv["args"] if x != "--no-sandbox"]
         args[args.index("--executable-path") + 1] = chrome_wrapper(tdir)
         srv["args"] = args
-    elif arm == "cdp-layer":
+    elif arm in ("cdp-layer", "cdp-layer-no-receipts"):
         srv["env"] = dict(srv.get("env", {}), MANUK_CHROME=chrome_wrapper(tdir))
 
 

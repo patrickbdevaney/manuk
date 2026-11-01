@@ -1,0 +1,9 @@
+REAL-47 receipts on vs off  chrome_ver=145.0.7632.116
+layer	arm	per-run pass	band	pass>=2/3	false-done	mean tok
+manuk	manuk	[12, 11, 11]	11-12	13/47	107/141	5283
+manuk	manuk-no-receipts	[10, 11, 11]	10-11	11/47	109/141	5188
+manuk: n=47 tasks; ON band (11, 12) vs OFF band (10, 11): overlapping/not higher
+cdp-layer	cdp-layer	[19, 18, 18]	18-19	19/47	82/141	6048
+cdp-layer	cdp-layer-no-receipts	[18, 18, 19]	18-19	17/47	80/141	5917
+cdp-layer: n=47 tasks; ON band (18, 19) vs OFF band (18, 19): overlapping/not higher
+GATE RED
