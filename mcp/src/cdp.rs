@@ -1176,6 +1176,11 @@ pub struct CdpBackend {
     cur: String,
     /// What changed about the tab set during the last action (popup surfaced, tab closed).
     tab_notes: Vec<String>,
+    /// localStorage of every web origin this session has loaded, as last seen (Chrome's DOMStorage domain
+    /// only answers for origins with a live frame, so a page we navigated away from is read from here).
+    ls_snap: std::collections::BTreeMap<String, Vec<Value>>,
+    /// Imported localStorage for origins not yet loaded: origin -> the new-document script that seeds it.
+    ls_pending: HashMap<String, String>,
 }
 
 /// Test-only: `MANUK_CDP_MUTATE=no-taint|no-revalidate|no-remount` switches one discipline off, so the
@@ -1395,6 +1400,8 @@ impl CdpBackend {
             tabs: vec![tid.clone()],
             cur: tid,
             tab_notes: Vec::new(),
+            ls_snap: Default::default(),
+            ls_pending: HashMap::new(),
         })
     }
 
@@ -1445,9 +1452,23 @@ impl CdpBackend {
 
     /// Re-snapshot the page and rebuild the tree, shield and identity tables.
     fn refresh(&mut self) -> Result<()> {
-        let info = self.eval("JSON.stringify({o:performance.timeOrigin,u:location.href,t:document.title,x:scrollX,y:scrollY,w:innerWidth,h:innerHeight,ch:Math.max(document.documentElement.scrollHeight,document.body?document.body.scrollHeight:0),tx:document.body?document.body.innerText:''})")?;
+        let info = self.eval("JSON.stringify({o:performance.timeOrigin,u:location.href,t:document.title,x:scrollX,y:scrollY,w:innerWidth,h:innerHeight,ch:Math.max(document.documentElement.scrollHeight,document.body?document.body.scrollHeight:0),tx:document.body?document.body.innerText:'',ls:(()=>{try{return Object.keys(localStorage).map(k=>({name:k,value:localStorage.getItem(k)}))}catch(e){return[]}})()})")?;
         let info: Value = serde_json::from_str(info.as_str().unwrap_or("{}"))?;
         self.url = info["u"].as_str().unwrap_or("").to_string();
+        if let Ok(u) = url::Url::parse(&self.url) {
+            if matches!(u.scheme(), "http" | "https") {
+                let o = u.origin().ascii_serialization();
+                if let Some(id) = self.ls_pending.remove(&o) {
+                    // The seeding script has run on this load; later loads must not overwrite the page's own writes.
+                    let _ = self.cdp.call(
+                        "Page.removeScriptToEvaluateOnNewDocument",
+                        json!({"identifier": id}),
+                    );
+                }
+                self.ls_snap
+                    .insert(o, info["ls"].as_array().cloned().unwrap_or_default());
+            }
+        }
         self.doc = info["o"].as_f64().unwrap_or(0.0).to_bits();
         self.title = info["t"].as_str().unwrap_or("").to_string();
         self.scroll = (
@@ -2251,13 +2272,22 @@ impl Backend for CdpBackend {
                     .collect()
             })
             .unwrap_or_default();
-        // Chrome exposes localStorage only for the page's own origin; other origins are not reachable.
+        // The page's own origin live; every other origin this session loaded from its last snapshot (`current-origin-only` mutant: the old single-origin export).
         let ls = self.eval("JSON.stringify({o:location.origin,l:Object.keys(localStorage).map(k=>({name:k,value:localStorage.getItem(k)}))})");
         let mut origins = Vec::new();
+        let mut here = String::new();
         if let Ok(v) = ls {
             let v: Value = serde_json::from_str(v.as_str().unwrap_or("{}")).unwrap_or_default();
             if let (Some(o), Some(l)) = (v["o"].as_str(), v["l"].as_array()) {
+                here = o.to_string();
                 if o != "null" && !l.is_empty() {
+                    origins.push(json!({"origin": o, "localStorage": l}));
+                }
+            }
+        }
+        if !mutated("current-origin-only") {
+            for (o, l) in &self.ls_snap {
+                if *o != here && !l.is_empty() {
                     origins.push(json!({"origin": o, "localStorage": l}));
                 }
             }
@@ -2280,7 +2310,7 @@ impl Backend for CdpBackend {
                 }
             }
         }
-        // Only the current page's origin can be written (Chrome has no cross-origin storage API here).
+        // The page's own origin is written through the page, any other through DOMStorage.
         let here = self
             .eval("location.origin")
             .ok()
@@ -2288,14 +2318,34 @@ impl Backend for CdpBackend {
             .unwrap_or_default();
         let mut nl = 0;
         for o in state["origins"].as_array().into_iter().flatten() {
-            if o["origin"].as_str() != Some(here.as_str()) {
+            let origin = o["origin"].as_str().unwrap_or("");
+            let items: Vec<(&str, &str)> = o["localStorage"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|kv| (kv["name"].as_str().unwrap_or(""), kv["value"].as_str().unwrap_or("")))
+                .collect();
+            if origin != here {
+                if mutated("current-origin-only") || !origin.starts_with("http") || items.is_empty() {
+                    continue;
+                }
+                // Chrome can't write storage for an origin with no frame: seed it when it next loads.
+                let src = format!(
+                    "if(location.origin=={}){{try{{for(const [k,v] of {})localStorage.setItem(k,v)}}catch(e){{}}}}",
+                    serde_json::to_string(origin)?,
+                    serde_json::to_string(&items)?
+                );
+                let r = self.cdp.call(
+                    "Page.addScriptToEvaluateOnNewDocument",
+                    json!({"source": src}),
+                )?;
+                if let Some(id) = r["identifier"].as_str() {
+                    self.ls_pending.insert(origin.to_string(), id.to_string());
+                }
+                nl += items.len();
                 continue;
             }
-            for kv in o["localStorage"].as_array().into_iter().flatten() {
-                let (k, v) = (
-                    kv["name"].as_str().unwrap_or(""),
-                    kv["value"].as_str().unwrap_or(""),
-                );
+            for (k, v) in items {
                 self.eval(&format!(
                     "localStorage.setItem({},{});0",
                     serde_json::to_string(k)?,

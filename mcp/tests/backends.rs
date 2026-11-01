@@ -54,7 +54,13 @@ struct Client {
 
 impl Client {
     fn start(chrome: bool) -> Client {
+        Client::start_env(chrome, None)
+    }
+    fn start_env(chrome: bool, mutate: Option<&str>) -> Client {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_manuk-mcp"));
+        if let Some(m) = mutate {
+            cmd.env("MANUK_CDP_MUTATE", m);
+        }
         if chrome {
             cmd.args(["--backend", "chrome"]);
         }
@@ -371,4 +377,99 @@ fn chrome_screenshot_mutant_fails() {
     c.tool("navigate", json!({"url": url}));
     let (err, _, img) = c.call("screenshot", json!({}));
     assert!(err && img.is_none(), "mutant still produced a screenshot");
+}
+
+/// Loopback origin whose `/seed` writes localStorage `seed=<port>` and whose `/` shows it.
+fn serve_ls() -> String {
+    let l = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = l.local_addr().unwrap();
+    std::thread::spawn(move || {
+        for s in l.incoming() {
+            let Ok(mut s) = s else { continue };
+            std::thread::spawn(move || {
+                let mut buf = [0u8; 4096];
+                let n = s.read(&mut buf).unwrap_or(0);
+                let seed = String::from_utf8_lossy(&buf[..n]).starts_with("GET /seed");
+                let body = if seed {
+                    "<!doctype html><title>s</title><p>seeding</p><script>localStorage.setItem('seed','val-'+location.port)</script>"
+                } else {
+                    "<!doctype html><title>r</title><p id=o>reading</p><script>document.getElementById('o').textContent='ls='+(localStorage.getItem('seed')||'none')</script>"
+                };
+                let _ = write!(
+                    s,
+                    "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+            });
+        }
+    });
+    format!("http://{addr}")
+}
+
+/// CB.1.b: localStorage of every origin the session visited is exported, and an import restores
+/// origins other than the loaded page's.
+fn storage_two_origins(chrome: bool, mutant: Option<&str>) {
+    let (a, b) = (serve_ls(), serve_ls().replace("127.0.0.1", "localhost"));
+    let mut c = Client::start_env(chrome, mutant);
+    c.tool("navigate", json!({"url": format!("{a}/seed")}));
+    c.tool("navigate", json!({"url": format!("{b}/seed")}));
+    let ex: Value = serde_json::from_str(json_part(
+        &c.tool("storage_state", json!({"action": "export"})),
+    ))
+    .expect("export is JSON");
+    let origins = ex["origins"].as_array().unwrap();
+    for o in [&a, &b] {
+        let port = format!("val-{}", o.rsplit(':').next().unwrap());
+        assert!(
+            origins.iter().any(|e| e["origin"] == json!(o)
+                && e["localStorage"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|kv| kv["name"] == "seed" && kv["value"] == json!(port))),
+            "origin {o} missing from export: {ex}"
+        );
+    }
+    let path = std::env::temp_dir().join(format!("cb1b-{}-{chrome}.json", std::process::id()));
+    std::fs::write(&path, ex.to_string()).unwrap();
+    let mut c2 = Client::start_env(chrome, mutant);
+    let imp = c2.tool(
+        "storage_state",
+        json!({"action": "import", "path": path.to_str().unwrap()}),
+    );
+    let _ = std::fs::remove_file(&path);
+    for o in [&a, &b] {
+        let port = format!("val-{}", o.rsplit(':').next().unwrap());
+        let t = c2.tool("navigate", json!({"url": format!("{o}/")}));
+        assert!(
+            t.contains(&format!("ls={port}")),
+            "import did not restore {o}: {t}\nimport said: {imp}"
+        );
+    }
+}
+
+#[test]
+fn storage_state_two_origins_on_the_manuk_backend() {
+    if std::env::var("MANUK_CDP_MUTATE").is_ok() {
+        return;
+    }
+    storage_two_origins(false, None);
+}
+
+#[test]
+fn storage_state_two_origins_on_the_chrome_backend() {
+    if std::env::var("MANUK_CDP_MUTATE").is_ok() {
+        return;
+    }
+    storage_two_origins(true, None);
+}
+
+/// Twin: a chrome backend that only handles the current origin must fail the two-origin check.
+#[test]
+fn chrome_current_origin_only_mutant_fails() {
+    if std::env::var("MANUK_CDP_MUTATE").is_ok() {
+        return;
+    }
+    let r = std::panic::catch_unwind(|| storage_two_origins(true, Some("current-origin-only")));
+    assert!(r.is_err(), "current-origin-only mutant passed the gate");
 }
