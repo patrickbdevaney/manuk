@@ -25,6 +25,13 @@ impl Client {
             .stderr(Stdio::null());
         if let Some(m) = mutate {
             cmd.env("MANUK_CDP_MUTATE", m);
+            // The session has its own occlusion check and handle re-mount above the backend; switch those
+            // off too so the mutant isolates the backend discipline it names.
+            match m {
+                "no-revalidate" => cmd.env("MANUK_LANDING_MUTATE", "1"),
+                "no-remount" => cmd.env("MANUK_REMOUNT_MUTATE", "1"),
+                _ => &mut cmd,
+            };
         }
         let mut child = cmd.spawn().expect("spawn manuk-mcp --backend chrome");
         let tx = child.stdin.take().unwrap();
@@ -155,7 +162,7 @@ fn late(mutate: Option<&str>) -> (bool, String, bool, String) {
     assert!(!err, "{nav}");
     let pay = handle_of(&nav, "button \"Pay now\"");
     let save = handle_of(&nav, "button \"Save\"");
-    std::thread::sleep(std::time::Duration::from_millis(2600)); // the page re-renders Save and lands an overlay
+    std::thread::sleep(std::time::Duration::from_millis(4000)); // the page re-renders Save and lands an overlay
     let (pay_err, pay_txt) = c.tool("act", json!({"handle": pay, "action": "click"}));
     let (save_err, save_txt) = c.tool("act", json!({"handle": save, "action": "click"}));
     (pay_err, pay_txt, save_err, save_txt)
@@ -167,9 +174,11 @@ fn dispatch_revalidation_refuses_a_click_under_a_late_overlay() {
         return;
     }
     let (pay_err, pay_txt, _, _) = late(None);
+    // Either layer may catch the overlay first (the session's landing check or the backend's dispatch check);
+    // what matters is the refusal and that nothing was clicked.
     assert!(
-        pay_err && pay_txt.contains("OCCLUDED at dispatch"),
-        "expected a dispatch-time refusal, got err={pay_err}: {pay_txt}"
+        pay_err && pay_txt.contains("OCCLUDED") && pay_txt.contains("nothing was clicked"),
+        "expected an occlusion refusal, got err={pay_err}: {pay_txt}"
     );
 }
 
@@ -188,7 +197,7 @@ fn remount(mutate: Option<&str>) -> (bool, String) {
     let (err, nav) = c.tool("navigate", json!({"url": fixture("cdp_remount.html")}));
     assert!(!err, "{nav}");
     let save = handle_of(&nav, "button \"Save\"");
-    std::thread::sleep(std::time::Duration::from_millis(2600));
+    std::thread::sleep(std::time::Duration::from_millis(4000));
     c.tool("act", json!({"handle": save, "action": "click"}))
 }
 

@@ -1169,7 +1169,7 @@ pub struct CdpBackend {
     scroll: (f32, f32),
     content_h: f32,
     text: String,
-    /// Dispatch-time facts for the last click, for the tool result.
+    /// Elements re-mounted by identity since the last click, for the tool result.
     pub remounted: u32,
     /// W3.8: page targets in the order the agent met them, and the one it is attached to.
     tabs: Vec<String>,
@@ -1490,7 +1490,9 @@ impl CdpBackend {
             .unwrap_or_default();
         let before = self.alias.len();
         let (built, _, _) = build(&snap, &mut self.alias, &prev, self.width)?;
-        self.remounted = (self.alias.len() - before.min(self.alias.len())) as u32;
+        // Accumulates until the next click takes it: act() snapshots the page before the click's own refresh,
+        // so the re-mount can happen in an earlier refresh than the one the click reads.
+        self.remounted += (self.alias.len() - before.min(self.alias.len())) as u32;
         self.built = Some(built);
         Ok(())
     }
@@ -1943,7 +1945,7 @@ impl Backend for CdpBackend {
     async fn click(&mut self, node: NodeId) -> Result<String> {
         // Dispatch-time re-validation: fresh snapshot, re-mount, then a real hit-test.
         self.refresh()?;
-        let remounted = self.remounted;
+        let remounted = std::mem::take(&mut self.remounted);
         let be = self.backend_of(node)?;
         let n = find(&self.built()?.tree, node).ok_or_else(|| anyhow!("STALE: element gone"))?;
         if matches!(n.role, Role::Option) {

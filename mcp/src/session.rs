@@ -1237,6 +1237,8 @@ impl<B: Backend> Session<B> {
                 Landing::OffScreen { dy } => {
                     self.b.scroll_by(dy);
                 }
+                // Test-only (MANUK_LANDING_MUTATE): lets the backend's dispatch-time check be tested alone.
+                Landing::Obstructed { .. } if std::env::var_os("MANUK_LANDING_MUTATE").is_some() => return Ok(()),
                 Landing::Obstructed { by, .. } => {
                     let who = tree.iter().find(|n| n.node == by).map(|n| (n.role.clone(), n.name.clone()));
                     let hb = self.handle(by);
