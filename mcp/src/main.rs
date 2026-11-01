@@ -3,6 +3,30 @@ fn main() -> anyhow::Result<()> {
     if args.first().map(String::as_str) == Some("--confine-selftest") {
         return manuk_mcp::confine::selftest(&args[1..]);
     }
+    // W4.E2.d: `--agent-profile=lean|full` selects the agent profile without the env var. Absent,
+    // the env var (MANUK_AGENT_PROFILE) decides as before. Parsed before the zygote fork so children inherit it.
+    if let Some(i) = args.iter().position(|a| a.starts_with("--agent-profile")) {
+        let v = match args[i].strip_prefix("--agent-profile=") {
+            Some(v) => v.to_string(),
+            None => {
+                eprintln!("manuk-mcp: --agent-profile takes `=lean` or `=full`");
+                std::process::exit(2);
+            }
+        };
+        args.remove(i);
+        match v.as_str() {
+            "lean" => manuk_net::lean::set(true),
+            "full" => manuk_net::lean::set(false),
+            other => {
+                eprintln!("manuk-mcp: unknown --agent-profile `{other}` (lean|full)");
+                std::process::exit(2);
+            }
+        }
+    }
+    eprintln!(
+        "manuk-mcp: agent profile={}",
+        if manuk_net::lean::enabled() { "lean" } else { "full" }
+    );
     // W4.E4: `--zygote <socket>` serves a warmed pre-forked process pool; each connection becomes
     // one ordinary stdio session (the socket is its stdin/stdout) in a fresh forked child.
     if let Some(i) = args.iter().position(|a| a == "--zygote") {
@@ -70,5 +94,13 @@ fn main() -> anyhow::Result<()> {
             eprintln!("manuk-mcp: WARNING: OS confinement unavailable ({why}); running unconfined");
         }
     }
-    manuk_mcp::server::run_stdio(1280, 800, grants)
+    let r = manuk_mcp::server::run_stdio(1280, 800, grants);
+    // W4.E2.d: the session's subresource accounting, on stderr at exit (the gate reads it).
+    eprintln!(
+        "manuk-mcp: profile={} wire_bytes={} blocked={}",
+        if manuk_net::lean::enabled() { "lean" } else { "full" },
+        manuk_net::lean::WIRE_BYTES.load(std::sync::atomic::Ordering::Relaxed),
+        manuk_net::lean::BLOCKED.load(std::sync::atomic::Ordering::Relaxed)
+    );
+    r
 }
