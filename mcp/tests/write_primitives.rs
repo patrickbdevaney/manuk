@@ -32,6 +32,14 @@ c.addEventListener('keydown',function(e){if(e.key==='ArrowDown'){idx=Math.min(id
 else if(e.key==='ArrowUp'){idx=Math.max(idx-1,0);e.preventDefault();}
 else if(e.key==='Enter'&&idx>=0){document.getElementById('o').textContent='picked:'+items[idx];document.getElementById('l').hidden=true;e.preventDefault();}});</script>"#
         }
+        "/dnd" => {
+            r#"<!doctype html><title>DnD</title><div id="card" role="button" aria-label="Card Alpha" draggable="true">Card Alpha</div>
+<div id="zone" role="button" aria-label="Drop zone">Drop here</div><p id="o">dropped:none</p>
+<script>var card=document.getElementById('card'),z=document.getElementById('zone');
+card.addEventListener('dragstart',function(e){e.dataTransfer.setData('text/plain','alpha');});
+z.addEventListener('dragover',function(e){e.preventDefault();});
+z.addEventListener('drop',function(e){e.preventDefault();document.getElementById('o').textContent='dropped:'+e.dataTransfer.getData('text/plain');});</script>"#
+        }
         "/confirm" => {
             r#"<!doctype html><title>Confirm</title><button id="d">Discard draft</button><p id="o">draft:present</p>
 <script>document.getElementById('d').onclick=function(){document.getElementById('o').textContent=confirm('Really discard the draft?')?'draft:discarded':'draft:kept';};</script>"#
@@ -258,6 +266,28 @@ fn combobox(chrome: bool) {
     );
 }
 
+fn drag_drop(chrome: bool) {
+    let base = serve();
+    let mut c = Client::start(chrome, &[]);
+    let nav = c.tool("navigate", json!({"url": format!("{base}/dnd")}));
+    let from = handle_of(&nav, "Card Alpha");
+    let to = handle_of(&nav, "Drop zone");
+    let r = c.tool("drag", json!({"from": from, "to": to}));
+    let seen = format!("{r}\n{}", c.tool("extract", json!({})));
+    assert!(
+        seen.contains("dropped:alpha"),
+        "drag-and-drop (chrome={chrome}) not seen by the page:\n{seen}"
+    );
+}
+
+#[test]
+fn drag_drop_manuk() {
+    drag_drop(false);
+}
+#[test]
+fn drag_drop_chrome() {
+    drag_drop(true);
+}
 #[test]
 fn upload_manuk() {
     upload(false);
