@@ -132,3 +132,43 @@ cargo build --release -p manuk-mcp
 MANUK_CHROME_PIN=145.0.7632.116 python3 -I scripts/w4e0-footprint.py --out docs/sprint/footprint
 python3 -I scripts/w4e0-footprint.py --selftest
 ```
+
+## Pages on real URLs (W4.E0.c): the fixture ratio does not carry over
+
+_Measured 2026-10-31, `chrome_ver = 145.0.7632.116`, `manuk-mcp` built from the tree at this commit. Raw rows:
+`docs/sprint/footprint/runs-real-pages.tsv`. Summary: `docs/sprint/footprint/summary-real-pages.tsv`. Run with
+`MANUK_CHROME_PIN=145.0.7632.116 python3 -I scripts/w4e0-footprint.py --real-pages --out docs/sprint/footprint`._
+
+Set: the 5 URLs that loaded OK in all 3 runs on both arms of the URL sweep (`paired_targets()` in the harness, derived
+from `runs.tsv`, not picked by hand): comix.to, client.dkitrxmdwoqruvsi.net, www.mobile.bg, app.ordertime.com,
+www.puentedemando.com. N = 10 pages, round-robin over them, so each URL is open twice in a run. Arms: `manuk-proc` (10
+`manuk-mcp` processes, one navigate each) and `chrome-tabs` (one Chrome, 10 tabs). Every page must land on its own
+registered domain, or the run is `WRONG_PAGE`. All 6 runs landed 10 of 10 pages.
+
+| arm | total PSS (MB) | per page (MB) | runs |
+|---|---|---|---|
+| manuk-proc | 1901–1909 | 190.1–190.9 | 3 |
+| chrome-tabs | 848–860 | 84.8–86.0 | 3 |
+
+**manuk / chrome-tabs per-page PSS: 2.22–2.24×** (3 runs). On real pages manuk is heavier per page than Chrome's
+tabs, not lighter. This reverses the fixture result at N=10 (0.27×). Two things differ from the fixtures: the real
+pages are about 6× heavier per manuk process (190 MB against 31 MB for a 37 KB fixture), and Chrome's tabs get cheaper
+on real pages as they share one browser.
+
+The earlier 0.30–0.31× figure is a different comparison: manuk one page per process against Chrome one process per
+page (`chrome-procs`-style), on the same 5 URLs. Do not put the two next to each other as if they were one number.
+
+Caveats:
+- **Duplicate URLs.** N = 10 over 5 URLs means every site is open twice. Chrome may share work between same-site tabs,
+  which would make the chrome-tabs number smaller than a unique-URL run. W4.E0.c.a runs N = 5 with each URL once.
+- **chrome-procs is not run on real URLs yet** (W4.E0.c.b). It is the arm that matches manuk's process-per-page model.
+- **Wall clock is not in this claim.** manuk-proc took 68–71 s for the 10 navigates and chrome-tabs 13–14 s. The
+  navigates run one after another and the live sites are slow and noisy (see above). Not a claim.
+- **Set size.** `BASELINE-URLS.txt` has **10** URLs, not 20. The earlier "20 baseline URLs" wording in this file is
+  wrong. The sweep had 30 rows per arm = 10 URLs × 3 runs. Only the 5 paired ones are used here.
+- **Live pages.** The same sites can fail or change between runs. A run that loses a page is reported as FAIL, not
+  averaged in.
+
+Gate evidence: `--real-pages-mutant` navigates fixture pages while checking against the real hosts. Both arms come out
+`WRONG_PAGE` with `landed_ok=0/10` (`docs/sprint/footprint/runs-real-pages-mutant.tsv`). The harness selftest covers
+the same-site rule and the manuk landed-host parse.

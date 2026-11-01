@@ -1,0 +1,4 @@
+axis	arm	n	value	per_page	runs	chrome_ver
+pages-real	manuk-proc	10	1901-1909 MB total	190.1-190.9 MB/page	runs=3	145.0.7632.116
+pages-real	chrome-tabs	10	848-860 MB total	84.8-86.0 MB/page	runs=3	145.0.7632.116
+pages-real	manuk-proc / chrome-tabs per-page PSS	10	2.22-2.24x	-	runs=3	145.0.7632.116

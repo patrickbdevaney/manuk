@@ -16,6 +16,12 @@ fork	manuk-fork	50	36-43 ms	-	-	forks=147	145.0.7632.116
 fork	chrome-context	1	65-70 ms	-	-	runs=3	145.0.7632.116
 cold	manuk-proc	1	55-57 ms	-	-	runs=3	145.0.7632.116
 cold	chrome-proc	1	305-314 ms	-	-	runs=3	145.0.7632.116
+urls	manuk-proc CHALLENGE	https://basescan.org/	https://basescan.org/?__cf_chl_rt_tk=_8vvtJ6JMMDwTufghlT5h9gJe6hK.lQqxzpbGFzZ7vo	-	-	run=1	145.0.7632.116
+urls	manuk-proc CHALLENGE	https://admin.zoomph.com/	https://authentication.zoomph.com/login?client_id=knsjmnjp6fjan19vr58kptg2c&resp	-	-	run=1	145.0.7632.116
+urls	manuk-proc CHALLENGE	https://basescan.org/	https://basescan.org/?__cf_chl_rt_tk=C.43OyBQVoJX3q5aZ0upwnMIiYZbq5Sh1JkliG5.eWU	-	-	run=2	145.0.7632.116
+urls	manuk-proc CHALLENGE	https://admin.zoomph.com/	https://authentication.zoomph.com/login?client_id=knsjmnjp6fjan19vr58kptg2c&resp	-	-	run=2	145.0.7632.116
+urls	manuk-proc CHALLENGE	https://basescan.org/	https://basescan.org/?__cf_chl_rt_tk=NI3mXtd0S2BoM.Vkvii7tK_x72Q6cx0VkprrDPLM6AQ	-	-	run=3	145.0.7632.116
+urls	manuk-proc CHALLENGE	https://admin.zoomph.com/	https://authentication.zoomph.com/login?client_id=knsjmnjp6fjan19vr58kptg2c&resp	-	-	run=3	145.0.7632.116
 urls	manuk-proc / chrome-proc	5 paired URLs	manuk:{'OK': 17, 'CHALLENGE': 6, 'FAIL': 7, 'TIMEOUT': 0} chrome:{'OK': 24, 'CHALLENGE': 0, 'FAIL': 3, 'TIMEOUT': 3}	-	-	OK-in-all-runs	145.0.7632.116
 urls	manuk/chrome wall ratio	5 URLs	1.66-1.96x (median of per-URL ratios, per run)	-	-	runs=3	145.0.7632.116
 urls	manuk/chrome pss ratio	5 URLs	0.30-0.31x (median of per-URL ratios, per run)	-	-	runs=3	145.0.7632.116

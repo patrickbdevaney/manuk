@@ -35,6 +35,7 @@ import sys
 import tempfile
 import threading
 import time
+import urllib.parse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -180,8 +181,14 @@ def mcp_env(log_dir):
     return env
 
 
-def run_manuk_proc(n, fx, log_root):
-    """N manuk-mcp processes, one page each. Returns (wall_s, peak_pss_kb, status, [])."""
+def page_target(k, fx, urls=None):
+    """Page k's URL: a local fixture by default, or round-robin over the real URLs when `urls` is given."""
+    return urls[k % len(urls)] if urls else f"{fx}{k}"
+
+
+def run_manuk_proc(n, fx, log_root, urls=None, landed=None):
+    """N manuk-mcp processes, one page each. Returns (wall_s, peak_pss_kb, status, []).
+    If `landed` is a list, the host each page reports after navigate is appended to it."""
     procs = []
     sampler = Sampler(lambda: [p.p.pid for p in procs])
     t0 = time.monotonic()
@@ -192,9 +199,11 @@ def run_manuk_proc(n, fx, log_root):
             procs.append(m)
             if k == 0:
                 sampler.start()
-            err, _, _ = m.call("navigate", {"url": f"{fx}{k}"})
+            err, text, _ = m.call("navigate", {"url": page_target(k, fx, urls)})
             if err:
                 return time.monotonic() - t0, 0, "FAIL", []
+            if landed is not None:
+                landed.append(landed_host_manuk(text))
         time.sleep(SETTLE_S)
         return time.monotonic() - t0, sampler.finish(), "OK", []
     finally:
@@ -321,7 +330,7 @@ def chrome_connect(proc, profile, timeout):
     return Cdp(int(port_s), path, timeout)
 
 
-def run_chrome_tabs(n, fx, _):
+def run_chrome_tabs(n, fx, _, urls=None, landed=None):
     """One Chrome, n tabs. Returns (wall_s, peak_pss_kb, status, [])."""
     profile = tempfile.mkdtemp(prefix="w4e0-chrome-")
     proc = subprocess.Popen(chrome_argv(profile), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -331,9 +340,13 @@ def run_chrome_tabs(n, fx, _):
         t0 = time.monotonic()
         sampler.start()
         cdp = chrome_connect(proc, profile, PAGE_TIMEOUT_S)
-        sessions = [cdp.new_page(f"{fx}{k}") for k in range(n)]
+        sessions = [cdp.new_page(page_target(k, fx, urls)) for k in range(n)]
         cdp.wait_loads(sessions, PAGE_TIMEOUT_S)
         time.sleep(SETTLE_S)
+        if landed is not None:
+            for s in sessions:
+                host = cdp.call("Runtime.evaluate", {"expression": "location.host", "returnByValue": True}, s)
+                landed.append(host.get("result", {}).get("value", "").split(":")[0])
         return time.monotonic() - t0, sampler.finish(), "OK", []
     except (TimeoutError, OSError, KeyError, ValueError):
         return 0.0, 0, "FAIL", []
@@ -346,7 +359,7 @@ def run_chrome_tabs(n, fx, _):
         shutil.rmtree(profile, ignore_errors=True)
 
 
-def run_chrome_procs(n, fx, _):
+def run_chrome_procs(n, fx, _, urls=None):
     """n Chrome processes, one tab each. Returns (wall_s, peak_pss_kb, status, [])."""
     procs, profiles = [], []
     sampler = Sampler(lambda: [p.pid for p in procs])
@@ -362,7 +375,7 @@ def run_chrome_procs(n, fx, _):
         for k, proc in enumerate(procs):
             cdp = chrome_connect(proc, profiles[k], PAGE_TIMEOUT_S)
             cdps.append(cdp)
-            sess = cdp.new_page(f"{fx}{k}")
+            sess = cdp.new_page(page_target(k, fx, urls))
             cdp.wait_loads([sess], PAGE_TIMEOUT_S)
         time.sleep(SETTLE_S)
         return time.monotonic() - t0, sampler.finish(), "OK", []
@@ -451,6 +464,84 @@ def challenge_marker(text, markers=CHALLENGE_MARKERS):
         if m in text:
             return m
     return None
+
+
+REAL_N = 10          # tabs/processes per run, round-robin over the paired real URLs
+REAL_RUNS = 3
+
+
+def landed_host_manuk(text):
+    """Host of the URL manuk-mcp reports for the page (line 2 of its observation, `https://host/... — "title"`)."""
+    m = re.search(r"(?m)^https?://([^/\s?#]+)", text)
+    return m.group(1).split(":")[0] if m else ""
+
+
+def same_site(landed, want):
+    """The page landed on the requested registered domain (last two labels), so redirects inside a site pass.
+    A fixture page on 127.0.0.1 does not match a real host, and neither does an empty landing."""
+    return bool(landed) and landed.split(".")[-2:] == want.split(".")[-2:]
+
+
+def run_real_pages(out_dir, fx, log_root, mutant=False):
+    """pages-real: N=10 pages round-robin over the paired real URLs, manuk-proc vs chrome-tabs, 3 runs.
+    Every page must land on its own site; otherwise the run is WRONG_PAGE. `mutant` navigates fixture pages
+    while still checking against the real URLs, so every run must come out WRONG_PAGE or FAIL."""
+    urls = paired_targets(load_runs(os.path.join(out_dir, "runs.tsv")))
+    if not urls:
+        sys.exit("no URL loaded OK on both arms in runs.tsv: nothing to round-robin")
+    rows = []
+    arms = [("manuk-proc", run_manuk_proc), ("chrome-tabs", run_chrome_tabs)]
+    for run in range(1, (1 if mutant else REAL_RUNS) + 1):
+        for arm, fn in arms:
+            landed = []
+            wall, pss, st, _ = fn(REAL_N, fx, log_root, urls=None if mutant else urls, landed=landed)
+            want = [urllib.parse.urlparse(page_target(k, fx, urls)).hostname or "" for k in range(REAL_N)]
+            bad = [k for k in range(len(landed)) if not same_site(landed[k], want[k])]
+            if st == "OK" and (bad or len(landed) != REAL_N):
+                st = "WRONG_PAGE"
+            rows.append({"axis": "pages-real", "arm": arm, "n": REAL_N, "run": run, "target": "|".join(urls),
+                         "wall_s": round(wall, 3), "pss_kb": pss, "status": st,
+                         "note": f"landed_ok={REAL_N - len(bad)}/{REAL_N}" + (" MUTANT_FIXTURE" if mutant else "")})
+            print(f"pages-real run{run} {arm:12} N={REAL_N} {st:10} pss={pss/1024:8.1f}MB wall={wall:6.2f}s "
+                  f"landed_ok={REAL_N - len(bad)}/{REAL_N}", file=sys.stderr)
+            touch()
+    return rows
+
+
+def write_real_pages(out_dir, rows, name="runs-real-pages.tsv"):
+    """Raw rows first (re-derivable summary follows). Every row carries chrome_ver = the pin."""
+    os.makedirs(out_dir, exist_ok=True)
+    with open(os.path.join(out_dir, name), "w") as f:
+        f.write("axis\tarm\tn\trun\ttarget\twall_s_or_ms\tpeak_pss_kb\tstatus\tnote\tchrome_ver\n")
+        for r in rows:
+            f.write("\t".join(str(x) for x in [r["axis"], r["arm"], r["n"], r["run"], r["target"], r["wall_s"],
+                                                r["pss_kb"], r["status"], r["note"], PIN]) + "\n")
+    return os.path.join(out_dir, name)
+
+
+def summarize_real_pages(rows):
+    """Per arm: total and per-page PSS band over the OK runs. Ratio = manuk total / chrome total per run,
+    band = min-max over the runs where both arms are OK. Nothing is summarised from a non-OK run."""
+    out = ["axis\tarm\tn\tvalue\tper_page\truns\tchrome_ver"]
+    by = {}
+    for r in rows:
+        by.setdefault(r["arm"], []).append(r)
+    for arm, rs in by.items():
+        ok = [r for r in rs if r["status"] == "OK"]
+        if not ok:
+            out.append(f"pages-real\t{arm}\t{REAL_N}\tNO_OK_RUNS (not OK: {len(rs)})\t-\t0\t{PIN}")
+            continue
+        tot = [r["pss_kb"] / 1024 for r in ok]
+        out.append(f"pages-real\t{arm}\t{REAL_N}\t{min(tot):.0f}-{max(tot):.0f} MB total\t"
+                   f"{min(tot)/REAL_N:.1f}-{max(tot)/REAL_N:.1f} MB/page\truns={len(ok)}\t{PIN}")
+    m = {r["run"]: r for r in rows if r["arm"] == "manuk-proc" and r["status"] == "OK"}
+    c = {r["run"]: r for r in rows if r["arm"] == "chrome-tabs" and r["status"] == "OK"}
+    both = sorted(set(m) & set(c))
+    if both:
+        ratios = [m[k]["pss_kb"] / c[k]["pss_kb"] for k in both if c[k]["pss_kb"] > 0]
+        out.append(f"pages-real\tmanuk-proc / chrome-tabs per-page PSS\t{REAL_N}\t"
+                   f"{min(ratios):.2f}-{max(ratios):.2f}x\t-\truns={len(ratios)}\t{PIN}")
+    return out
 
 
 def run_urls(log_root, chrome_ver):
@@ -545,6 +636,22 @@ def build_summary(rows):
     return out
 
 
+def paired_targets(rows):
+    """URLs that loaded OK in all RUNS runs on BOTH urls arms, in file order. The rule is fixed here, not picked by hand."""
+    urls = [r for r in rows if r["axis"] == "urls"]
+    ok = {}
+    for r in urls:
+        if r["status"] == "OK":
+            ok.setdefault(r["target"], {}).setdefault(r["arm"], {})[r["run"]] = r
+    arms = ("manuk-proc", "chrome-proc")
+    seen = []
+    for r in urls:
+        t = r["target"]
+        if t not in seen and all(len(ok.get(t, {}).get(a, {})) == RUNS for a in arms):
+            seen.append(t)
+    return seen
+
+
 def urls_summary(rows):
     """Paired comparison: only URLs that loaded OK in all 3 runs on BOTH arms. Per run, the ratio of the
     median over those URLs; the band is min-max over the 3 runs. Both arms now label
@@ -562,7 +669,7 @@ def urls_summary(rows):
         for r in urls:
             if r["arm"] == arm and r["status"] == "OK":
                 ok.setdefault(r["target"], {}).setdefault(arm, {})[r["run"]] = r
-    paired = [t for t, arms in ok.items() if all(len(arms.get(a, {})) == RUNS for a in counts)]
+    paired = paired_targets(rows)
     out.append(f"urls\tmanuk-proc / chrome-proc\t{len(paired)} paired URLs\t"
                f"manuk:{counts['manuk-proc']} chrome:{counts['chrome-proc']}\t-\t-\tOK-in-all-runs\t{PIN}")
     for axis, key in (("wall", "wall"), ("pss", "pss_kb")):
@@ -619,6 +726,14 @@ def selftest():
            "status": "CHALLENGE", "note": "marker=__cf_chl | t"}]
     if not any("marker=__cf_chl" in l and "CHALLENGE" in l for l in urls_summary(ur)):
         fails.append("summary does not show the matched marker for CHALLENGE rows")
+    # 2e. Real-pages landing: a real host matches its own site (redirects within it pass); a fixture or empty
+    #     landing does not. The manuk host comes from the observation's URL line.
+    if not same_site("www.mobile.bg", "www.mobile.bg") or not same_site("basescan.org", "www.basescan.org") \
+            or same_site("127.0.0.1", "www.mobile.bg") or same_site("", "www.mobile.bg"):
+        fails.append("same-site landing rule does not separate own-site pages from fixtures or empty landings")
+    if landed_host_manuk('[names below]\nhttps://www.mobile.bg/?x=1 — "t"\nsettled') != "www.mobile.bg" \
+            or landed_host_manuk("no url line here") != "":
+        fails.append("manuk landed-host parse is wrong")
     # 3. The pin must be present: a row with no pin is a refusal, not a number.
     if not PIN:
         fails.append("MANUK_CHROME_PIN unset (refused)")
@@ -633,11 +748,36 @@ def main():
     ap.add_argument("--live-fork-check", type=int, metavar="N", help="run one manuk-fork at N pages and print the result")
     ap.add_argument("--skip-urls", action="store_true")
     ap.add_argument("--summarize-only", action="store_true", help="re-derive summary.tsv from runs.tsv")
+    ap.add_argument("--real-pages", action="store_true",
+                    help="pages axis on the paired real URLs (N=10 round-robin, manuk-proc vs chrome-tabs, 3 runs)")
+    ap.add_argument("--real-pages-mutant", action="store_true",
+                    help="gate check: same run but navigating fixture pages; must come out WRONG_PAGE/FAIL")
     args = ap.parse_args()
     if args.selftest:
         sys.exit(selftest())
     if args.summarize_only:
         write_summary(args.out)
+        return
+    if args.real_pages or args.real_pages_mutant:
+        if not PIN:
+            sys.exit("MANUK_CHROME_PIN unset: refusing to write rows without a chrome_ver")
+        if not os.path.exists(MCP) or not os.path.exists(CHROME):
+            sys.exit(f"missing {MCP} or pinned Chrome {CHROME}")
+        srv, fx = start_fixture()
+        log_root = tempfile.mkdtemp(prefix="w4e0-root-")
+        try:
+            rows = run_real_pages(args.out, fx, log_root, mutant=args.real_pages_mutant)
+        finally:
+            srv.shutdown()
+            shutil.rmtree(log_root, ignore_errors=True)
+        name = "runs-real-pages-mutant.tsv" if args.real_pages_mutant else "runs-real-pages.tsv"
+        path = write_real_pages(args.out, rows, name)
+        summ = summarize_real_pages(rows)
+        if not args.real_pages_mutant:  # the mutant never writes the summary a reader would quote
+            with open(os.path.join(args.out, "summary-real-pages.tsv"), "w") as f:
+                f.write("\n".join(summ) + "\n")
+        print("\n".join(summ))
+        print(f"raw rows: {path}")
         return
     if args.live_fork_check:
         srv, fx = start_fixture()
