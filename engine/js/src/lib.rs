@@ -2063,6 +2063,10 @@ pub mod history_bindings;
 #[cfg(feature = "_sm")]
 pub mod event_loop;
 
+/// W4.E3.a — on-disk stencil cache for page scripts.
+#[cfg(feature = "_sm")]
+pub mod stencil_cache;
+
 /// The watchdog thread that lets the drain budget PREEMPT a single long-running task, rather than
 /// only bound a chain of short ones. See the module docs — registration alone is inert (t1197).
 #[cfg(feature = "_sm")]

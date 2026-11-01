@@ -14729,9 +14729,8 @@ pub fn run_scripts(
         } else {
             set_current_script(Some(*node));
             rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
-            let opts =
-                CompileOptionsWrapper::new(runtime.cx_no_gc(), inline_script_source_name(*node), 1);
-            match evaluate_script(runtime.cx(), global.handle(), src, rval.handle_mut(), opts) {
+            let name = inline_script_source_name(*node);
+            match crate::stencil_cache::evaluate_page_script(runtime, global.handle(), src, name) {
                 Ok(()) => {}
                 Err(()) => {
                     let msg = pending_exception(raw_cx);
@@ -17387,9 +17386,8 @@ fn run_one_script(
     } else {
         set_current_script(Some(node));
         rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
-        let opts =
-            CompileOptionsWrapper::new(runtime.cx_no_gc(), inline_script_source_name(node), 1);
-        if evaluate_script(runtime.cx(), global, src, rval.handle_mut(), opts).is_err() {
+        let name = inline_script_source_name(node);
+        if crate::stencil_cache::evaluate_page_script(runtime, global, src, name).is_err() {
             if crate::watchdog::fired() {
                 // Not a page error — we cut it off. The same distinction `preempt_aware` draws in
                 // the drain: the two arrive here byte-identically, and reporting a deliberate cut as

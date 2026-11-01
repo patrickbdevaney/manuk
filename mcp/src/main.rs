@@ -25,7 +25,11 @@ fn main() -> anyhow::Result<()> {
     }
     eprintln!(
         "manuk-mcp: agent profile={}",
-        if manuk_net::lean::enabled() { "lean" } else { "full" }
+        if manuk_net::lean::enabled() {
+            "lean"
+        } else {
+            "full"
+        }
     );
     // W4.E4: `--zygote <socket>` serves a warmed pre-forked process pool; each connection becomes
     // one ordinary stdio session (the socket is its stdin/stdout) in a fresh forked child.
@@ -98,7 +102,11 @@ fn main() -> anyhow::Result<()> {
     // W4.E2.d: the session's subresource accounting, on stderr at exit (the gate reads it).
     eprintln!(
         "manuk-mcp: profile={} wire_bytes={} blocked={}",
-        if manuk_net::lean::enabled() { "lean" } else { "full" },
+        if manuk_net::lean::enabled() {
+            "lean"
+        } else {
+            "full"
+        },
         manuk_net::lean::WIRE_BYTES.load(std::sync::atomic::Ordering::Relaxed),
         manuk_net::lean::BLOCKED.load(std::sync::atomic::Ordering::Relaxed)
     );
