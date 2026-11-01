@@ -209,7 +209,12 @@ def forks_valid(page_ids, n):
     return len(page_ids) == n - 1
 
 
-def run_manuk_fork(n, fx, log_root):
+def heading_ok(text, idx):
+    """A forked page must show the checkpoint's fixture heading (markdown `# fixture <idx>`), as a whole line."""
+    return re.search(rf"(?m)^# fixture {re.escape(str(idx))}\s*$", text) is not None
+
+
+def run_manuk_fork(n, fx, log_root, expect_idx=0):
     """One manuk-mcp process: page 0 navigated, then n-1 pages forked from its checkpoint.
     Returns (wall_s, peak_pss_kb, status, per-fork wall ms list)."""
     m = Mcp(mcp_env(tempfile.mkdtemp(prefix="w4e0-log-", dir=log_root)))
@@ -234,6 +239,10 @@ def run_manuk_fork(n, fx, log_root):
                 return time.monotonic() - t0, 0, "FAIL", forks
             page_ids.add(pid.group(1))
             forks.append(round(wall * 1000, 1))
+            # read the new page back: it must hold the checkpoint's content, not just have a fresh id
+            err, body, _ = m.call("extract", {"format": "markdown", "page": pid.group(1)})
+            if err or not heading_ok(body, expect_idx):
+                return time.monotonic() - t0, 0, "FAIL", forks
         # manuk has no tab list on its single-page backend, so the proof that N-1 new pages exist is that
         # each fork returned its own page id. A repeated id means a fork reused a page: that is a FAIL.
         if not forks_valid(page_ids, n):
@@ -570,6 +579,10 @@ def selftest():
     # 2b. Fork check: a fork that reuses a page id (mutant: all ids equal) must be refused.
     if not forks_valid({"p1:1", "p2:1"}, 3) or forks_valid({"p1:1", "p1:1"}, 3) or forks_valid({"p1:1"}, 3):
         fails.append("fork-id check does not separate distinct from repeated ids")
+    # 2c. Heading check: an empty page or another fixture's heading must be refused.
+    if not heading_ok("# fixture 0\n\ntext", 0) or heading_ok("", 0) or heading_ok("# fixture 1\n", 0) \
+            or heading_ok("# fixture 05\n", 0):
+        fails.append("fork heading check does not separate the checkpoint heading from empty/other pages")
     # 3. The pin must be present: a row with no pin is a refusal, not a number.
     if not PIN:
         fails.append("MANUK_CHROME_PIN unset (refused)")
@@ -581,6 +594,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=os.path.join(ROOT, "docs", "sprint", "footprint"))
     ap.add_argument("--selftest", action="store_true")
+    ap.add_argument("--live-fork-check", type=int, metavar="N", help="run one manuk-fork at N pages and print the result")
     ap.add_argument("--skip-urls", action="store_true")
     ap.add_argument("--summarize-only", action="store_true", help="re-derive summary.tsv from runs.tsv")
     args = ap.parse_args()
@@ -588,6 +602,12 @@ def main():
         sys.exit(selftest())
     if args.summarize_only:
         write_summary(args.out)
+        return
+    if args.live_fork_check:
+        srv, fx = start_fixture()
+        for exp in (0, 7):  # 7 is the mutant: a heading the checkpoint does not have
+            r = run_manuk_fork(args.live_fork_check, fx, tempfile.mkdtemp(prefix="w4e0-root-"), expect_idx=exp)
+            print(f"live fork n={args.live_fork_check} expect_heading=fixture {exp}: {r[2]} ({len(r[3])} forks read)")
         return
     if not PIN:
         sys.exit("MANUK_CHROME_PIN unset: refusing to write rows without a chrome_ver")

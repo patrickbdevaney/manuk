@@ -104,9 +104,10 @@ spawn and the navigate call. The two are close to the same thing, but not identi
 - On the 5 paired real URLs, manuk's per-page PSS is 0.30–0.31× Chrome's across the 3 runs.
 
 **Not shown, and not claimed:**
-- **Forked pages are not content-verified.** manuk's single-page backend has no tab list, so the fork check only
-  proves that N−1 forks each returned a distinct page id (`forks_valid`). It does not prove that each fork shows
-  the checkpoint's DOM. The 4.9 MB/page figure depends on that being true. Verifying it is node W4.E0.b.
+- **Fork content check is separate from the memory runs.** W4.E0.a added a read-back to the harness (`extract` on each
+  fork's page id, `# fixture 0` must be a whole line). A live check (`--live-fork-check N`) read 9 of 9 forks at N=10
+  and 49 of 49 at N=50, so the 4.9 MB/page fork figure is for pages that hold the checkpoint's content. The recorded
+  `runs.tsv` rows pre-date the read-back and were not re-taken.
 - **Pages/GB is a projection** from fixture pages of about 37 KB. Real pages are heavier, and the paired real-URL
   PSS ratio (0.30×) is the number to read for real pages.
 - **No pages/GB claim against the 0.47× number in BRIEF.** That figure came from the 10 corpus URLs, not from this
@@ -122,7 +123,7 @@ spawn and the navigate call. The two are close to the same thing, but not identi
 - The first full run was discarded. It used a `manuk-mcp` binary built at 15:01, before three `mcp/src` files changed
   (the W4.D2 taint commit). The fix was a rebuild, not a change to the numbers. The final run is the only one reported.
 - `summary.tsv` is re-derived from `runs.tsv` with `python3 -I scripts/w4e0-footprint.py --out docs/sprint/footprint --summarize-only`.
-- Selftest (`--selftest`) goes red when the fork-id check is removed or the pin is unset. Both mutants were run.
+- Selftest (`--selftest`) goes red when the fork-id check is removed or the pin is unset. Both mutants were run. The heading check goes red on an empty page and on a wrong expected heading (live: `fixture 7` expected, FAIL after 1 fork).
 
 ## Reproduce
 
