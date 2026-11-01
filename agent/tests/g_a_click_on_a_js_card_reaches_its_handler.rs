@@ -43,7 +43,9 @@ fn click_card(attach: bool) -> (String, Option<String>) {
     std::fs::write(&path, page(attach)).unwrap();
     let mut b = AgentBrowser::new(1024, 768);
     rt.block_on(async {
-        b.navigate(&format!("file://{}", path.display())).await.expect("navigate");
+        b.navigate(&format!("file://{}", path.display()))
+            .await
+            .expect("navigate");
         let node = b
             .resolve_handle(&manuk_a11y::Role::Image, "Image Papa Johns Pizza")
             .expect("the card image resolves");
@@ -59,7 +61,10 @@ fn click_card(attach: bool) -> (String, Option<String>) {
 #[test]
 fn a_click_on_a_card_image_reaches_the_pages_handler_and_leaves_its_navigation_pending() {
     let (log, nav) = click_card(true);
-    assert_eq!(log, "handled target=IMG", "the page's own listener must run with the inner element as target");
+    assert_eq!(
+        log, "handled target=IMG",
+        "the page's own listener must run with the inner element as target"
+    );
     assert!(
         nav.as_deref().is_some_and(|u| u.ends_with("/store/42")),
         "the handler asked for /store/42; got {nav:?}"
@@ -67,6 +72,9 @@ fn a_click_on_a_card_image_reaches_the_pages_handler_and_leaves_its_navigation_p
 
     // MUTANT: the handler never attached (a click that skips it) must read as red.
     let (log, nav) = click_card(false);
-    assert_ne!(log, "handled target=IMG", "no handler attached: the probe must NOT see a call");
+    assert_ne!(
+        log, "handled target=IMG",
+        "no handler attached: the probe must NOT see a call"
+    );
     assert_eq!(nav, None);
 }

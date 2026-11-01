@@ -18383,7 +18383,13 @@ const LISTENER_PRELUDE: &str = r#"
                 var oh = node['on' + type];
                 if (typeof oh === 'function') {
                     ev.currentTarget = node;
-                    try { oh.call(node, ev); } catch (e) {
+                    try {
+                        // HTML "event handler processing": a handler property returning `false` cancels
+                        // the event (`<a onclick="return false">` must not navigate). `error` on a
+                        // Window inverts this, but that is not dispatched through this element path.
+                        var ohr = oh.call(node, ev);
+                        if (ohr === false && ev.cancelable) ev.defaultPrevented = true;
+                    } catch (e) {
                         if (typeof __reportError === 'function') __reportError(e);
                     }
                     if (ev._stopImmediate) return;

@@ -55,7 +55,10 @@ document.addEventListener('click',function(e){log.push('doc-bub');},false);})()"
         let (o, e) = b.probe_eval(
             "(function(){var p=document.createElement('pre');p.id='__probe';document.body.appendChild(p);p.textContent=JSON.stringify({log:window.__plog,href:location.href,rt:(window.next&&next.router?next.router.pathname+' ready='+next.router.isReady:'nonext'),pep:document.body.innerText.indexOf('Pepperoni'),len:document.body.innerText.length,next:(document.getElementById('__next')||{}).innerText.slice(300,700)});})()",
         );
-        println!("activation={act:?} script_navigation={:?}", b.probe_take_script_navigation());
+        println!(
+            "activation={act:?} script_navigation={:?}",
+            b.probe_take_script_navigation()
+        );
         (o, e)
     } else {
         b.probe_eval(&src)

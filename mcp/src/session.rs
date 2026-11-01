@@ -1508,7 +1508,10 @@ impl<B: Backend> Session<B> {
         }
         if matches!(action, "click" | "check" | "select") && Self::is_noop(&r) {
             let cause = self.no_effect_cause(node, &role, &errs);
-            let e = self.noeff.entry((h, action.to_string(), state_hash)).or_insert((0, self.step));
+            let e = self
+                .noeff
+                .entry((h, action.to_string(), state_hash))
+                .or_insert((0, self.step));
             // Test-only (MANUK_NOEFF_MUTATE): a counter that never counts, so the repeat test can go red.
             if std::env::var_os("MANUK_NOEFF_MUTATE").is_none() {
                 e.0 += 1;
@@ -1526,7 +1529,10 @@ impl<B: Backend> Session<B> {
                     state_hash as u32
                 )
             };
-            return Ok(format!("{r}\n{settle}\nNO EFFECT (step {}{rep}): {cause}", self.step));
+            return Ok(format!(
+                "{r}\n{settle}\nNO EFFECT (step {}{rep}): {cause}",
+                self.step
+            ));
         }
         Ok(format!("{r}\n{settle}"))
     }
@@ -1534,13 +1540,20 @@ impl<B: Backend> Session<B> {
     /// W3.6: why a click changed nothing, in one line that survives client compaction.
     fn no_effect_cause(&mut self, node: NodeId, role: &Role, errs: &[String]) -> String {
         if let Some(e) = errs.first() {
-            let more = if errs.len() > 1 { format!(" (+{} more)", errs.len() - 1) } else { String::new() };
+            let more = if errs.len() > 1 {
+                format!(" (+{} more)", errs.len() - 1)
+            } else {
+                String::new()
+            };
             // SpiderMonkey's message drops the class name; name it so the cause reads the same on both backends.
             let named = if e.contains("Error") {
                 e.clone()
             } else if e.contains("is not defined") {
                 format!("ReferenceError: {e}")
-            } else if e.contains("is not a function") || e.contains("undefined") || e.contains("null") {
+            } else if e.contains("is not a function")
+                || e.contains("undefined")
+                || e.contains("null")
+            {
                 format!("TypeError: {e}")
             } else {
                 e.clone()
@@ -1904,7 +1917,11 @@ impl<B: Backend> Session<B> {
             "{UNTRUSTED}\nscrolled to y={:.0} of {:.0}{}\n{body}",
             self.b.scroll_y(),
             self.b.content_height(),
-            if at_end { " AT-END (no more page below)" } else { "" }
+            if at_end {
+                " AT-END (no more page below)"
+            } else {
+                ""
+            }
         ))
     }
 

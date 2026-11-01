@@ -552,14 +552,17 @@ impl AgentBrowser {
     /// W3.6: how many click-class handlers (`onclick` attribute or `addEventListener`) sit on `node`
     /// and its ancestors: the path a click bubbles along.
     pub fn click_handlers_on_path(&self, node: manuk_dom::NodeId) -> usize {
-        let Some(page) = self.page.as_ref() else { return 0 };
+        let Some(page) = self.page.as_ref() else {
+            return 0;
+        };
         let dom = page.dom();
         let scripted: std::collections::HashSet<_> =
             manuk_js::click_listener_nodes().into_iter().collect();
         let mut n = 0;
         let mut cur = Some(node);
         while let Some(c) = cur {
-            if scripted.contains(&c) || dom.element(c).is_some_and(|e| e.attr("onclick").is_some()) {
+            if scripted.contains(&c) || dom.element(c).is_some_and(|e| e.attr("onclick").is_some())
+            {
                 n += 1;
             }
             cur = dom.parent(c);
@@ -861,7 +864,13 @@ impl AgentBrowser {
             .get_element_by_id(dom.root(), "__probe")
             .map(|n| dom.text_content(n))
             .unwrap_or_default();
-        (out, page.boot_errors().iter().map(|e| format!("{}: {}", e.phase, e.message)).collect())
+        (
+            out,
+            page.boot_errors()
+                .iter()
+                .map(|e| format!("{}: {}", e.phase, e.message))
+                .collect(),
+        )
     }
 
     /// Probe support: the URL a page script navigated to (`location.href = u` and kin) that no

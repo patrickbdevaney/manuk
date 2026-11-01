@@ -1996,9 +1996,19 @@ impl Backend for CdpBackend {
         let mut obj = self.object_for(be).ok()?;
         let mut n = 0;
         for _ in 0..16 {
-            let r = self.cdp.call("DOMDebugger.getEventListeners", json!({"objectId": obj})).ok()?;
+            let r = self
+                .cdp
+                .call("DOMDebugger.getEventListeners", json!({"objectId": obj}))
+                .ok()?;
             n += r["listeners"].as_array().map_or(0, |l| {
-                l.iter().filter(|x| matches!(x["type"].as_str(), Some("click" | "mousedown" | "mouseup" | "pointerdown" | "pointerup"))).count()
+                l.iter()
+                    .filter(|x| {
+                        matches!(
+                            x["type"].as_str(),
+                            Some("click" | "mousedown" | "mouseup" | "pointerdown" | "pointerup")
+                        )
+                    })
+                    .count()
             });
             let r = self.cdp.call("Runtime.callFunctionOn", json!({"objectId": obj, "functionDeclaration": "function(){return this.parentElement}", "returnByValue": false})).ok()?;
             match r["result"]["objectId"].as_str() {

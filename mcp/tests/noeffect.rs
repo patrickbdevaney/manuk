@@ -131,17 +131,31 @@ fn click_twice(chrome: bool, mutate: bool, label: &str) -> Vec<String> {
     let mut c = Client::start(chrome, mutate);
     let nav = c.tool("navigate", json!({"url": url}));
     let h = handle_of(&nav, label);
-    (0..2).map(|_| c.tool("act", json!({"handle": h, "action": "click"}))).collect()
+    (0..2)
+        .map(|_| c.tool("act", json!({"handle": h, "action": "click"})))
+        .collect()
 }
 
 fn check(chrome: bool) {
     let r = click_twice(chrome, false, "Broken save");
     assert!(r[0].contains("NO EFFECT"), "{}", r[0]);
     assert!(r[0].contains("handler threw ReferenceError"), "{}", r[0]);
-    assert!(!r[0].contains("identical act"), "first is not a repeat: {}", r[0]);
-    assert!(r[1].contains("2nd identical act") && r[1].contains("unchanged since step 1"), "{}", r[1]);
+    assert!(
+        !r[0].contains("identical act"),
+        "first is not a repeat: {}",
+        r[0]
+    );
+    assert!(
+        r[1].contains("2nd identical act") && r[1].contains("unchanged since step 1"),
+        "{}",
+        r[1]
+    );
     let r = click_twice(chrome, false, "Just a label");
-    assert!(r[0].contains("NO EFFECT") && r[0].contains("0 click listeners"), "{}", r[0]);
+    assert!(
+        r[0].contains("NO EFFECT") && r[0].contains("0 click listeners"),
+        "{}",
+        r[0]
+    );
 }
 
 #[test]
@@ -157,7 +171,11 @@ fn chrome_no_effect_acts_name_their_cause_and_count_repeats() {
 #[test]
 fn frozen_counter_mutant_goes_red() {
     let r = click_twice(false, true, "Broken save");
-    assert!(!r[1].contains("2nd identical act"), "mutant must not count: {}", r[1]);
+    assert!(
+        !r[1].contains("2nd identical act"),
+        "mutant must not count: {}",
+        r[1]
+    );
 }
 
 #[test]
