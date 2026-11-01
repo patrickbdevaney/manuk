@@ -14,7 +14,14 @@ const PAGE: &str = r#"<!doctype html><html><head><title>Shop</title></head><body
 <button aria-label="Misses">Misses</button>
 <h2 id="o">idle</h2></body></html>"#;
 
-fn serve() -> String {
+/// W4.C4.b: the click rewrites a `<div>` text run, not a heading. A div has no accessible name of its own,
+/// so the tree cannot show the edit; the effect diff must read the page text or it says "no change".
+const TEXT_PAGE: &str = r#"<!doctype html><html><head><title>Shop</title></head><body>
+<h1>Shop</h1>
+<button onclick="document.getElementById('o').textContent='Order placed: 3 mugs'">Place order</button>
+<div id="o">Your cart is empty.</div></body></html>"#;
+
+fn serve(page: &'static str) -> String {
     let l = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = l.local_addr().unwrap();
     std::thread::spawn(move || {
@@ -23,7 +30,7 @@ fn serve() -> String {
             std::thread::spawn(move || {
                 let mut buf = [0u8; 4096];
                 let _ = s.read(&mut buf);
-                let body = PAGE;
+                let body = page;
                 let _ = write!(
                     s,
                     "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
@@ -127,7 +134,7 @@ fn handle_of(text: &str, needle: &str) -> String {
 }
 
 fn run(no_receipts: bool, labels: &[&str]) -> Vec<String> {
-    let url = serve();
+    let url = serve(PAGE);
     let mut c = Client::start(false, no_receipts);
     let nav = c.tool("navigate", json!({"url": url}));
     labels
@@ -170,4 +177,15 @@ fn a_click_that_wrote_nothing_says_so() {
 fn baseline_without_receipts_says_nothing_about_writes() {
     let r = run(true, &["Add Blue Mug"]);
     assert!(!r[0].contains("writes"), "{}", r[0]);
+}
+
+#[test]
+fn a_click_that_only_rewrote_a_div_reports_the_new_text() {
+    let url = serve(TEXT_PAGE);
+    let mut c = Client::start(false, false);
+    let nav = c.tool("navigate", json!({"url": url}));
+    let h = handle_of(&nav, "Place order");
+    let r = c.tool("act", json!({"handle": h, "action": "click"}));
+    assert!(!r.contains("no change"), "{r}");
+    assert!(r.contains("Order placed: 3 mugs"), "{r}");
 }
