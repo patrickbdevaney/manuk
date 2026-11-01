@@ -83,3 +83,8 @@ tokio-tungstenite = { version = "0.24", default-features = false, features = ["h
 # the gate proves the COMPOSITION the binding performs rather than restating one half of it.
 [dev-dependencies]
 manuk-layout.workspace = true
+
+# W4.P0.a: where does a click on a JS-handled card go? Instruments the page's listeners.
+[[bin]]
+name = "click-probe"
+path = "src/bin/click_probe.rs"

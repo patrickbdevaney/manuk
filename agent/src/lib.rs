@@ -818,6 +818,27 @@ impl AgentBrowser {
     }
 
     /// The history stack (oldest first) and the index of the current entry.
+    /// Probe support: run `src` in the loaded page's JS context (result discarded; have the script
+    /// write to a `#__probe` element) and return that element's text plus the boot errors seen so far. Used by `click_probe`.
+    pub fn probe_eval(&mut self, src: &str) -> (String, Vec<String>) {
+        let Some(page) = self.page.as_mut() else {
+            return (String::new(), Vec::new());
+        };
+        page.eval_for_test(src);
+        let dom = page.dom();
+        let out = dom
+            .get_element_by_id(dom.root(), "__probe")
+            .map(|n| dom.text_content(n))
+            .unwrap_or_default();
+        (out, page.boot_errors().iter().map(|e| format!("{}: {}", e.phase, e.message)).collect())
+    }
+
+    /// Probe support: the URL a page script navigated to (`location.href = u` and kin) that no
+    /// caller has followed yet, taken and cleared. `activate` does not follow it (W4.P0.a).
+    pub fn probe_take_script_navigation(&self) -> Option<String> {
+        self.page.as_ref()?.take_script_navigation()
+    }
+
     pub fn history(&self) -> (&[String], usize) {
         (self.history.entries(), self.history.index())
     }
