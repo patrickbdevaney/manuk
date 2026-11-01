@@ -39,6 +39,8 @@ struct Cdp {
     next: u64,
     session: Option<String>,
     events: VecDeque<Value>,
+    /// W3.6: uncaught page errors (`Runtime.exceptionThrown`) since the last click began.
+    exc: Vec<String>,
     /// W3.8: the answer the agent armed for the next JS dialog (`dialog` tool), and what dialogs did.
     dialog_arm: Option<(bool, Option<String>)>,
     dialog_log: Vec<String>,
@@ -115,6 +117,14 @@ impl Cdp {
 
     /// A page dialog blocks every other command until answered, so it is answered the moment it is seen.
     fn auto_dialog(&mut self, m: &Value) {
+        if m["method"] == "Runtime.exceptionThrown" {
+            let d = &m["params"]["exceptionDetails"];
+            let t = d["exception"]["description"]
+                .as_str()
+                .or(d["text"].as_str())
+                .unwrap_or("exception");
+            self.exc.push(t.lines().next().unwrap_or("").to_string());
+        }
         if m["method"] == "Page.javascriptDialogOpening" {
             let ty = m["params"]["type"].as_str().unwrap_or("alert").to_string();
             let msg = m["params"]["message"].as_str().unwrap_or("").to_string();
@@ -1337,6 +1347,7 @@ impl CdpBackend {
             next: 0,
             session: None,
             events: VecDeque::new(),
+            exc: Vec::new(),
             dialog_arm: None,
             dialog_log: Vec::new(),
             downloads: Vec::new(),
@@ -1963,6 +1974,7 @@ impl Backend for CdpBackend {
             let _ = self.call_on(&obj, "function(){const a=this.closest('a');if(a&&a.target==='_blank')a.removeAttribute('target');}", json!([]));
         }
         self.cdp.events.clear();
+        self.cdp.exc.clear();
         for (t, cc) in [("mouseMoved", 0), ("mousePressed", 1), ("mouseReleased", 1)] {
             self.cdp.call("Input.dispatchMouseEvent", json!({"type": t, "x": x, "y": y, "button": "left", "buttons": if t == "mousePressed" { 1 } else { 0 }, "clickCount": cc}))?;
         }
@@ -1975,6 +1987,26 @@ impl Backend for CdpBackend {
                 String::new()
             }
         ))
+    }
+    fn act_errors(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.cdp.exc)
+    }
+    fn click_handlers(&mut self, node: NodeId) -> Option<usize> {
+        let be = self.backend_of(node).ok()?;
+        let mut obj = self.object_for(be).ok()?;
+        let mut n = 0;
+        for _ in 0..16 {
+            let r = self.cdp.call("DOMDebugger.getEventListeners", json!({"objectId": obj})).ok()?;
+            n += r["listeners"].as_array().map_or(0, |l| {
+                l.iter().filter(|x| matches!(x["type"].as_str(), Some("click" | "mousedown" | "mouseup" | "pointerdown" | "pointerup"))).count()
+            });
+            let r = self.cdp.call("Runtime.callFunctionOn", json!({"objectId": obj, "functionDeclaration": "function(){return this.parentElement}", "returnByValue": false})).ok()?;
+            match r["result"]["objectId"].as_str() {
+                Some(o) => obj = o.to_string(),
+                None => break,
+            }
+        }
+        Some(n)
     }
     async fn focus(&mut self, node: NodeId) -> Result<bool> {
         self.refresh()?;

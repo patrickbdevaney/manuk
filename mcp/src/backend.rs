@@ -147,6 +147,14 @@ pub trait Backend {
     fn writes_since(&self, _mark: usize) -> Vec<String> {
         Vec::new()
     }
+    /// W3.6: uncaught page errors raised during the last act (first line each).
+    fn act_errors(&mut self) -> Vec<String> {
+        Vec::new()
+    }
+    /// W3.6: click-class handlers on `node` and its ancestors; `None` = this backend cannot say.
+    fn click_handlers(&mut self, _node: NodeId) -> Option<usize> {
+        None
+    }
     /// Whether this process's request ledger sees the backend's network traffic. A backend whose
     /// requests bypass it (Chrome over CDP) cannot tell CLIENT from WORLD, so checkpoints say UNKNOWN.
     fn sees_network(&self) -> bool {
@@ -229,6 +237,12 @@ impl Backend for AgentBrowser {
     }
     fn page_text(&self) -> Result<String> {
         Ok(self.observe()?.text)
+    }
+    fn act_errors(&mut self) -> Vec<String> {
+        AgentBrowser::act_errors(self)
+    }
+    fn click_handlers(&mut self, node: NodeId) -> Option<usize> {
+        Some(self.click_handlers_on_path(node))
     }
     async fn back(&mut self) -> Result<()> {
         AgentBrowser::back(self).await

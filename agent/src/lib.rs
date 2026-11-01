@@ -184,6 +184,8 @@ pub struct AgentBrowser {
     ),
     /// Bumped per loaded page so a late event from the previous page's socket is dropped.
     ws_gen: u64,
+    /// W3.6: `manuk_js::script_error_count()` when the current act began.
+    act_err_mark: usize,
     /// W4.A4: where the page's own `pushState` put the URL; cleared by every load.
     routed_url: Option<String>,
 }
@@ -481,6 +483,7 @@ impl AgentBrowser {
             ws_send: std::collections::HashMap::new(),
             ws_events: tokio::sync::mpsc::unbounded_channel(),
             ws_gen: 0,
+            act_err_mark: 0,
             routed_url: None,
         }
     }
@@ -537,8 +540,36 @@ impl AgentBrowser {
             .collect()
     }
 
+    /// W3.6: uncaught page errors raised since [`begin_act`](Self::begin_act), first line each.
+    pub fn act_errors(&self) -> Vec<String> {
+        manuk_js::script_errors()
+            .into_iter()
+            .skip(self.act_err_mark)
+            .map(|e| e.message.lines().next().unwrap_or("").to_string())
+            .collect()
+    }
+
+    /// W3.6: how many click-class handlers (`onclick` attribute or `addEventListener`) sit on `node`
+    /// and its ancestors: the path a click bubbles along.
+    pub fn click_handlers_on_path(&self, node: manuk_dom::NodeId) -> usize {
+        let Some(page) = self.page.as_ref() else { return 0 };
+        let dom = page.dom();
+        let scripted: std::collections::HashSet<_> =
+            manuk_js::click_listener_nodes().into_iter().collect();
+        let mut n = 0;
+        let mut cur = Some(node);
+        while let Some(c) = cur {
+            if scripted.contains(&c) || dom.element(c).is_some_and(|e| e.attr("onclick").is_some()) {
+                n += 1;
+            }
+            cur = dom.parent(c);
+        }
+        n
+    }
+
     /// W3.12: call before dispatching an action; timers armed by it beyond [`SOON_MS`] stay pending.
     pub fn begin_act(&mut self) {
+        self.act_err_mark = manuk_js::script_error_count();
         if let Some(p) = self.page.as_mut() {
             p.hold_clock(SOON_MS);
         }

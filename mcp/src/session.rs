@@ -89,6 +89,9 @@ pub struct Session<B: Backend> {
     rebound: Vec<String>,
     /// W4.A4: `Backend::document_id` at the last observation (0 = unknown).
     doc: u64,
+    /// W3.6: acts so far, and per (handle, action, page-state hash) the no-effect repeats: (count, first step).
+    step: u32,
+    noeff: HashMap<(u32, String, u64), (u32, u32)>,
 }
 
 fn role_str(r: &Role) -> String {
@@ -372,6 +375,8 @@ impl<B: Backend> Session<B> {
             keys: HashMap::new(),
             rebound: Vec::new(),
             doc: 0,
+            step: 0,
+            noeff: HashMap::new(),
         }
     }
 
@@ -1417,6 +1422,13 @@ impl<B: Backend> Session<B> {
             self.gate(crate::policy::Op::Click, Some(node), &name)?;
         }
         let before = self.snapshot(&tree);
+        let state_hash = {
+            use std::hash::{Hash, Hasher};
+            let mut hs = std::collections::hash_map::DefaultHasher::new();
+            (&before.text, &before.order, self.b.url()).hash(&mut hs);
+            hs.finish()
+        };
+        self.step += 1;
         let url_before = self.b.url();
         self.b.begin_act();
         let outcome = match action {
@@ -1473,6 +1485,7 @@ impl<B: Backend> Session<B> {
             &url_before,
             &format!("verified: target was topmost at dispatch; {outcome}"),
         )?;
+        let errs = self.b.act_errors();
         // A click that navigated to an error page did nothing useful either: undo it, then retry like a dead click.
         let landed_on_error = action == "click"
             && Self::retry_on()
@@ -1493,7 +1506,55 @@ impl<B: Backend> Session<B> {
         if landed_on_error {
             return Ok(format!("{r}\n{settle}\nlayer retry: the click led to an error page above; the layer went back and no keyboard/inner-link retry worked, so the page is the one before the click"));
         }
+        if matches!(action, "click" | "check" | "select") && Self::is_noop(&r) {
+            let cause = self.no_effect_cause(node, &role, &errs);
+            let e = self.noeff.entry((h, action.to_string(), state_hash)).or_insert((0, self.step));
+            // Test-only (MANUK_NOEFF_MUTATE): a counter that never counts, so the repeat test can go red.
+            if std::env::var_os("MANUK_NOEFF_MUTATE").is_none() {
+                e.0 += 1;
+            } else {
+                e.0 = 1;
+            }
+            let (n, first) = *e;
+            let rep = if n == 1 {
+                String::new()
+            } else {
+                format!(
+                    ", {}{} identical act on h{h}, page state {:08x} unchanged since step {first}; try something else",
+                    n,
+                    match n % 10 { 1 if n != 11 => "st", 2 if n != 12 => "nd", 3 if n != 13 => "rd", _ => "th" },
+                    state_hash as u32
+                )
+            };
+            return Ok(format!("{r}\n{settle}\nNO EFFECT (step {}{rep}): {cause}", self.step));
+        }
         Ok(format!("{r}\n{settle}"))
+    }
+
+    /// W3.6: why a click changed nothing, in one line that survives client compaction.
+    fn no_effect_cause(&mut self, node: NodeId, role: &Role, errs: &[String]) -> String {
+        if let Some(e) = errs.first() {
+            let more = if errs.len() > 1 { format!(" (+{} more)", errs.len() - 1) } else { String::new() };
+            // SpiderMonkey's message drops the class name; name it so the cause reads the same on both backends.
+            let named = if e.contains("Error") {
+                e.clone()
+            } else if e.contains("is not defined") {
+                format!("ReferenceError: {e}")
+            } else if e.contains("is not a function") || e.contains("undefined") || e.contains("null") {
+                format!("TypeError: {e}")
+            } else {
+                e.clone()
+            };
+            return format!("handler threw {}{more}", clip(&named));
+        }
+        match self.b.click_handlers(node) {
+            Some(0) if !role.is_interactive() => {
+                "0 click listeners on the element or its ancestors; it is not clickable".to_string()
+            }
+            Some(0) => "0 click listeners; the element's own default action did nothing (blocked, or nothing to do)".to_string(),
+            Some(n) => format!("{n} click listener(s) ran without error but changed nothing visible (default prevented, or state this page does not show)"),
+            None => "cause unknown on this backend".to_string(),
+        }
     }
 
     /// W4.C2: the layer retries a click that verifiably did nothing. `MANUK_NO_RETRY=1` turns it off (the
@@ -1838,10 +1899,12 @@ impl<B: Backend> Session<B> {
         } else {
             Self::fit(fresh, 2000, "use observe(mode=viewport)")
         };
+        let at_end = self.b.scroll_y() + self.b.viewport().height >= self.b.content_height() - 1.0;
         Ok(format!(
-            "{UNTRUSTED}\nscrolled to y={:.0} of {:.0}\n{body}",
+            "{UNTRUSTED}\nscrolled to y={:.0} of {:.0}{}\n{body}",
             self.b.scroll_y(),
-            self.b.content_height()
+            self.b.content_height(),
+            if at_end { " AT-END (no more page below)" } else { "" }
         ))
     }
 
