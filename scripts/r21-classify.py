@@ -9,6 +9,8 @@ Gate (exit 1 on failure): every failed row gets a class (100%) and the classifie
 docs/sprint/r21/hand-labels.tsv on >= 8 of 10 rows.
   --mutate drop-post   delete the POST rule: coverage or agreement must go red.
   --mutate drop-js-notice  delete the Wolfram no-result rule: external rows must go unclassified.
+  --hand-w36 [--mutate swap-labels]  W3.6.a: classify the NO EFFECT line of docs/sprint/w36/transcripts against
+      docs/sprint/w36/hand-labels.tsv (>= 9 of 10). Swapping two labels gives 8/10 and must go red.
 
 EXT.RUN.b: the full-suite hash (061ee22b3f67, slice external) is classified too, into FAILURES-EXTERNAL.tsv, so
 FAILURES.tsv (own suite) is byte-identical to before. External rows use RULES + EXT_RULES. SCOREBOARD answers are
@@ -27,6 +29,8 @@ RULES = [  # (cause, class, symptom regex over reasons+answer)
     ("document-write-head", "script", r"(second batch never loaded|Steve Martin|only the first 10)"),
     # W3.6: the layer now states why a click did nothing ("NO EFFECT ...: handler threw X").
     ("handler-threw", "script", r"NO EFFECT[^\n]*handler threw"),
+    # W3.6.a: a click on a non-interactive element with no listener (the hand-label set's "target" class).
+    ("no-click-listeners", "target", r"NO EFFECT[^\n]*0 click listeners on the element"),
     ("model-miscount", "target", r"fourth in the listing|counted from the top"),
     # R2.1.6: F08 answers "Item 45 is amber" (correct value) but the verifier wants the literal "Item 45: amber";
     # a verifier string-format mismatch, not an engine fault. Suite NOT changed (SUCCESS.md); see V1.4.md.
@@ -44,7 +48,31 @@ def classify(r, rules):
     for cause, cls, rx in rules:
         if re.search(rx, t, re.I): return cause, cls, rx
     return "", "", ""
+W36_DIR = os.path.join(REPO, "docs/sprint/w36")
+def hand_w36(mutate):
+    """W3.6.a: classify the first NO EFFECT line of each fixture transcript and compare to hand-labels.tsv.
+    --mutate swap-labels swaps two hand labels in memory (must go red: 8/10)."""
+    hand = list(csv.DictReader(open(os.path.join(W36_DIR, "hand-labels.tsv")), delimiter="\t"))
+    if mutate == "swap-labels":
+        hand[0]["class"], hand[-1]["class"] = hand[-1]["class"], hand[0]["class"]
+    agree, rows = 0, []
+    for h in hand:
+        path = os.path.join(W36_DIR, "transcripts", f"{h['task']}_r{h['run']}.txt")
+        if not os.path.exists(path):
+            rows.append((h["task"], "MISSING", h["class"])); continue
+        text = open(path).read()
+        line = next((l for l in text.splitlines() if l.startswith("NO EFFECT (step 1")), "")
+        cause, cls, rx = classify({"reasons": "", "answer": line}, RULES)
+        ok = cls == h["class"]
+        agree += ok
+        rows.append((h["task"], cls or "UNCLASSIFIED", h["class"], "ok" if ok else "DISAGREE", cause))
+    for r in rows: print(*r)
+    print(f"hand-w36 agreement {agree}/{len(hand)}; chrome_ver={CHROME}")
+    ok = agree >= 9 and len(hand) == 10
+    print("GATE", "PASS" if ok else "FAIL"); sys.exit(0 if ok else 1)
 def main():
+    if "--hand-w36" in sys.argv:
+        return hand_w36(sys.argv[sys.argv.index("--mutate") + 1] if "--mutate" in sys.argv else None)
     mutate = sys.argv[2] if len(sys.argv) > 2 and sys.argv[1] == "--mutate" else None
     rules = [x for x in RULES if x[0] != DROP.get(mutate)]
     ext_rules = [x for x in rules + EXT_RULES if x[0] != DROP.get(mutate)]

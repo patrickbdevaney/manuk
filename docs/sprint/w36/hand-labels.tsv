@@ -1,0 +1,11 @@
+task	run	class	chrome_ver	design
+H1	1	script	145.0.7632.116	button onclick calls an undefined function (ReferenceError)
+H2	1	script	145.0.7632.116	button onclick dereferences null (TypeError)
+H3	1	script	145.0.7632.116	div onclick throws new Error('boom')
+H4	1	script	145.0.7632.116	span onclick calls an undefined saveDraft()
+H5	1	script	145.0.7632.116	button onclick runs JSON.parse on malformed text (SyntaxError)
+T1	1	target	145.0.7632.116	h2 with no handler
+T2	1	target	145.0.7632.116	p with no handler
+T3	1	target	145.0.7632.116	h3 with no handler (a plain div is not in observe, so the fixture moved to h3)
+T4	1	target	145.0.7632.116	h4 with no handler (span not in observe)
+T5	1	target	145.0.7632.116	h5 with no handler (li not in observe)
