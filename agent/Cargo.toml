@@ -39,6 +39,10 @@ path = "src/bin/a11y-score.rs"
 name = "drive-probe"
 path = "src/bin/drive-probe.rs"
 
+[features]
+# W4.E2.c: EasyPrivacy for the lean profile (pulls the adblock crate).
+lean-easyprivacy = ["manuk-net/adblock"]
+
 [dependencies]
 # ⭐⭐⭐ **THE AGENT'S BROWSER HAD NO JAVASCRIPT AND NOT THE REAL CASCADE.** `manuk-page`'s `stylo`
 # and `spidermonkey` features are opt-in, and this line took neither — so `AgentBrowser` cascaded

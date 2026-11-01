@@ -1643,10 +1643,19 @@ impl CdpBackend {
 
     /// Backend id of the element the page itself reports under viewport point `(x, y)`.
     fn page_hit(&mut self, x: f32, y: f32) -> Result<u64> {
-        let r = self.cdp.call("Runtime.evaluate", json!({"expression": format!("document.elementFromPoint({x},{y})")}))?;
-        let obj = r["result"]["objectId"].as_str().ok_or_else(|| anyhow!("no element at point"))?;
-        let d = self.cdp.call("DOM.describeNode", json!({"objectId": obj}))?;
-        d["node"]["backendNodeId"].as_u64().ok_or_else(|| anyhow!("no backend id"))
+        let r = self.cdp.call(
+            "Runtime.evaluate",
+            json!({"expression": format!("document.elementFromPoint({x},{y})")}),
+        )?;
+        let obj = r["result"]["objectId"]
+            .as_str()
+            .ok_or_else(|| anyhow!("no element at point"))?;
+        let d = self
+            .cdp
+            .call("DOM.describeNode", json!({"objectId": obj}))?;
+        d["node"]["backendNodeId"]
+            .as_u64()
+            .ok_or_else(|| anyhow!("no backend id"))
     }
 
     /// Dispatch-time re-validation: pick a point of the (freshly re-found) element's box that
@@ -1666,8 +1675,16 @@ impl CdpBackend {
             let live = self.object_for(be).and_then(|o| {
                 self.call_on(&o, "function(){const r=this.getBoundingClientRect();return JSON.stringify([r.x+scrollX,r.y+scrollY,r.width,r.height,scrollX,scrollY])}", json!([]))
             });
-            if let Some(Ok(v)) = live.ok().map(|v| serde_json::from_str::<[f64; 6]>(v.as_str().unwrap_or(""))) {
-                bbox = Rect { x: v[0] as f32, y: v[1] as f32, width: v[2] as f32, height: v[3] as f32 };
+            if let Some(Ok(v)) = live
+                .ok()
+                .map(|v| serde_json::from_str::<[f64; 6]>(v.as_str().unwrap_or("")))
+            {
+                bbox = Rect {
+                    x: v[0] as f32,
+                    y: v[1] as f32,
+                    width: v[2] as f32,
+                    height: v[3] as f32,
+                };
                 self.scroll = (v[4] as f32, v[5] as f32);
             }
         }

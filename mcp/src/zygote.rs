@@ -45,7 +45,10 @@ pub fn serve(sock: &Path) -> Result<()> {
             bail!("zygote has {n} threads at fork; refusing (fork safety)");
         }
         match unsafe { libc::fork() } {
-            -1 => eprintln!("manuk-mcp: fork failed: {}", std::io::Error::last_os_error()),
+            -1 => eprintln!(
+                "manuk-mcp: fork failed: {}",
+                std::io::Error::last_os_error()
+            ),
             0 => {
                 let fd = conn.as_raw_fd();
                 unsafe {

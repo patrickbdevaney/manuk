@@ -67,3 +67,4 @@ tokio-tungstenite = { version = "0.24", default-features = false, features = ["h
 hyper = { workspace = true }
 hyper-util = { workspace = true }
 http-body-util = { workspace = true }
+sha2 = "0.10"

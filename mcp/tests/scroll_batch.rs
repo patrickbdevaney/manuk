@@ -24,7 +24,12 @@ impl Client {
             .expect("spawn manuk-mcp");
         let tx = child.stdin.take().unwrap();
         let rx = BufReader::new(child.stdout.take().unwrap());
-        let mut c = Client { child, tx, rx, id: 0 };
+        let mut c = Client {
+            child,
+            tx,
+            rx,
+            id: 0,
+        };
         c.rpc("initialize", json!({"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}));
         c.send(json!({"jsonrpc": "2.0", "method": "notifications/initialized"}));
         c
@@ -39,7 +44,10 @@ impl Client {
         self.send(json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}));
         loop {
             let mut line = String::new();
-            assert!(self.rx.read_line(&mut line).unwrap() > 0, "server closed stdout");
+            assert!(
+                self.rx.read_line(&mut line).unwrap() > 0,
+                "server closed stdout"
+            );
             let v: Value = serde_json::from_str(&line).unwrap();
             if v["id"] == json!(id) {
                 return v;
@@ -50,7 +58,12 @@ impl Client {
         let r = self.rpc("tools/call", json!({"name": name, "arguments": args}));
         r["result"]["content"]
             .as_array()
-            .map(|c| c.iter().filter_map(|b| b["text"].as_str()).collect::<Vec<_>>().join("\n"))
+            .map(|c| {
+                c.iter()
+                    .filter_map(|b| b["text"].as_str())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            })
             .unwrap_or_default()
     }
 }
@@ -63,12 +76,18 @@ impl Drop for Client {
 #[test]
 fn scrolling_to_the_bottom_loads_the_next_batch() {
     let mut c = Client::start();
-    let url = format!("file://{}/tests/fixtures/scroll_batch.html", env!("CARGO_MANIFEST_DIR"));
+    let url = format!(
+        "file://{}/tests/fixtures/scroll_batch.html",
+        env!("CARGO_MANIFEST_DIR")
+    );
     c.tool("navigate", json!({"url": url}));
     let mut last = String::new();
     for _ in 0..4 {
         last = c.tool("scroll", json!({"dy": 100000}));
     }
     let text = c.tool("extract", json!({"format": "text"}));
-    assert!(text.contains("Quote 11"), "second batch never loaded.\nscroll: {last}\n{text}");
+    assert!(
+        text.contains("Quote 11"),
+        "second batch never loaded.\nscroll: {last}\n{text}"
+    );
 }

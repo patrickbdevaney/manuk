@@ -993,7 +993,11 @@ impl AgentBrowser {
         let mut t = page.a11y_tree();
         fn fill(n: &mut manuk_a11y::A11yNode, dom: &manuk_dom::Dom) {
             if n.name.is_empty() && matches!(n.role, manuk_a11y::Role::Paragraph) {
-                n.name = dom.text_content(n.node).split_whitespace().collect::<Vec<_>>().join(" ");
+                n.name = dom
+                    .text_content(n.node)
+                    .split_whitespace()
+                    .collect::<Vec<_>>()
+                    .join(" ");
             }
             for k in &mut n.children {
                 fill(k, dom);

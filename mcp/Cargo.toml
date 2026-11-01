@@ -13,6 +13,10 @@ path = "src/lib.rs"
 name = "manuk-mcp"
 path = "src/main.rs"
 
+[features]
+# W4.E2.c: EasyPrivacy for the lean profile (pulls the adblock crate).
+lean-easyprivacy = ["manuk-net/adblock"]
+
 [dependencies]
 manuk-agent.workspace = true
 manuk-js.workspace = true
