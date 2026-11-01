@@ -598,6 +598,10 @@ impl AgentBrowser {
         //    modern site that page does not exist until its script has run — Wikipedia's navboxes
         //    are collapsed by `jquery.makeCollapsible`, and without it the accessibility tree
         //    carried 681 phantom list items that Chrome does not expose.
+        // The page's `innerHeight`/`vh` come from the css viewport global, which defaults to 1280x720.
+        // The agent scrolls in `self.height`, so without this a page that loads its next batch when
+        // `scrollY == scrollHeight - innerHeight` (quotes.toscrape.com/scroll) never sees that offset.
+        manuk_css::values::set_viewport(self.width as f32, self.height as f32);
         let mut page = Page::load_async(&html, &final_url, &self.fonts, self.width as f32).await;
         // ── ⭐⭐⭐ **ADOPTED AT t1470, AFTER t1467 REFUSED IT AGAINST A FLATTERING BASELINE.**
         //    `finish_loading` carries the dynamic-script drain, so without it no module loader on

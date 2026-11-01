@@ -1,0 +1,14 @@
+<!doctype html><html><head><title>scroll batch</title><style>body{margin:8px}.q{height:150px;border:1px solid #ccc}#loading{height:30px}</style></head>
+<body><div id="quotes"></div><div id="loading">Loading...</div><p id="diag" style="position:fixed;top:0;right:0;margin:0"></p>
+<script>
+// Mirrors quotes.toscrape.com/scroll: the next batch loads only when scrollTop lands within 1px of
+// (document height - window height). Both numbers must agree with the viewport the engine scrolls in.
+var page = 0;
+function add() { for (var i = 0; i < 10; i++) { var d = document.createElement("div"); d.className = "q"; d.textContent = "Quote " + (page * 10 + i + 1); document.getElementById("quotes").appendChild(d); } page++; }
+add();
+addEventListener("scroll", function () {
+  var st = window.scrollY, hd = document.documentElement.scrollHeight - window.innerHeight;
+  document.getElementById("diag").textContent = "st=" + st + " hd=" + hd + " ih=" + window.innerHeight + " sh=" + document.documentElement.scrollHeight + " bh=" + document.body.scrollHeight + " ch=" + document.documentElement.clientHeight;
+  if (page < 2 && Math.abs(st - hd) <= 1) add();
+});
+</script></body></html>
