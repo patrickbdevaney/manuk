@@ -33,6 +33,8 @@ pub fn serve(sock: &Path) -> Result<()> {
     unsafe { libc::signal(libc::SIGCHLD, libc::SIG_IGN) };
     // The thread-free warm-up: build the tool schemas once (touches the rmcp/serde paths).
     let _ = crate::server::tools();
+    // The system-font scan is plain data; do it here so no child repeats it.
+    manuk_text::FontContext::warm_system_fonts();
     eprintln!("manuk-mcp: zygote ready on {}", sock.display());
     loop {
         let (conn, _) = match listener.accept() {

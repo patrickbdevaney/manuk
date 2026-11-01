@@ -24,6 +24,7 @@ manuk-a11y.workspace = true
 manuk-dom.workspace = true
 manuk-css.workspace = true
 manuk-net.workspace = true
+manuk-text.workspace = true
 rmcp.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true

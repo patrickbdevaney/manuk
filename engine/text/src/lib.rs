@@ -596,9 +596,29 @@ fn resolve_system_ui_family(db: &fontdb::Database) -> Option<String> {
     .map(str::to_string)
 }
 
+static WARM_FONTS: std::sync::OnceLock<(fontdb::Database, Option<String>)> =
+    std::sync::OnceLock::new();
+
 impl FontContext {
     /// Build a context populated with the system's installed fonts.
     pub fn new() -> Self {
+        // W4.E4.a: a pre-forked parent scans the system fonts once (`warm_system_fonts`); every child
+        // starts from that database instead of re-walking the font directories.
+        if let Some((db, system_ui_family)) = WARM_FONTS.get() {
+            return Self::from_db(db.clone(), system_ui_family.clone());
+        }
+        let (db, system_ui_family) = Self::scan_system_fonts();
+        Self::from_db(db, system_ui_family)
+    }
+
+    /// Scan the system fonts once and keep the result for every later [`FontContext::new`] in this
+    /// process (and in its forked children). `fontdb::Database` is plain data, so it is `Send`,
+    /// unlike the context around it.
+    pub fn warm_system_fonts() {
+        WARM_FONTS.get_or_init(Self::scan_system_fonts);
+    }
+
+    fn scan_system_fonts() -> (fontdb::Database, Option<String>) {
         let mut db = fontdb::Database::new();
         db.load_system_fonts();
         // **Resolve the generic families the way the SYSTEM does.**
@@ -636,6 +656,10 @@ impl FontContext {
         if std::env::var("MANUK_FONT_DEBUG").is_ok() {
             eprintln!("[fonts] system-ui={system_ui_family:?}");
         }
+        (db, system_ui_family)
+    }
+
+    fn from_db(db: fontdb::Database, system_ui_family: Option<String>) -> Self {
         FontContext {
             system_ui_family,
             db: RefCell::new(db),
