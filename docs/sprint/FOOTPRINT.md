@@ -67,7 +67,7 @@ Per-URL outcomes over 3 runs (30 rows per arm):
 | manuk-proc | 17 | 6 | 7 | 0 |
 | chrome-proc | 24 | 0 | 3 | 3 |
 
-- **CHALLENGE** is a heuristic: the observation text contains "challenge". It catches Cloudflare pages on basescan.org
+- **CHALLENGE** (rule replaced by W4.E0.b, applies to re-runs only; the numbers below were taken with the old broad "challenge" text rule): the page text/DOM contains a specific marker (`__cf_chl`, `Just a moment`), logged per row in summary.tsv, on both arms. It catches Cloudflare pages on basescan.org
   (`__cf_chl_rt_tk`) and a zoomph.com login page. The rule is broad, and the matched text is not stored, so the
   zoomph row is not confirmed as a bot challenge. The Chrome side has no content check, so its OK rows may include
   challenge pages too. This is a load-level comparison, not a content-level one.

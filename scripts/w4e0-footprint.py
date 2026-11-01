@@ -440,6 +440,19 @@ def run_cold_chrome(fx):
         shutil.rmtree(profile, ignore_errors=True)
 
 
+# Specific bot-challenge markers. A bare word like "challenge" also appears on ordinary pages (blog posts,
+# game sites), so it is not a rule. Each marker is a Cloudflare interstitial signature.
+CHALLENGE_MARKERS = ("__cf_chl", "Just a moment")
+
+
+def challenge_marker(text, markers=CHALLENGE_MARKERS):
+    """The first marker found in the page text, or None. Case-sensitive on purpose: the signatures are exact."""
+    for m in markers:
+        if m in text:
+            return m
+    return None
+
+
 def run_urls(log_root, chrome_ver):
     """Per-URL wall and peak PSS on the 20 baseline URLs, 3 runs per arm. Chrome via r01's own driver."""
     with open(URLS) as f:
@@ -460,12 +473,14 @@ def run_urls(log_root, chrome_ver):
                 # so the observation text is checked and the row is labelled, not counted as a pass.
                 if err:
                     st = "FAIL"
-                elif "Just a moment" in text or "challenge" in text.lower():
+                elif challenge_marker(text):
                     st = "CHALLENGE"
                 else:
                     st = "OK"
                 lines = text.split("\n")
                 note = re.sub(r"\s+", " ", lines[1])[:80] if len(lines) > 1 else ""  # the page's URL and title line
+                if st == "CHALLENGE":
+                    note = f"marker={challenge_marker(text)} | {note}"
             except (TimeoutError, OSError):
                 wall, pss, st = 0.0, 0, "TIMEOUT"
                 if sampler.is_alive():
@@ -475,9 +490,13 @@ def run_urls(log_root, chrome_ver):
             rows.append({"axis": "urls", "arm": "manuk-proc", "n": 1, "run": run, "target": url,
                          "wall_s": round(wall, 3), "pss_kb": pss, "status": st, "note": note})
             print(f"urls run{run} manuk-proc {st:9} {wall:6.2f}s pss={pss/1024:7.1f}MB {url}", file=sys.stderr)
-            w, rss, pss_c, _, st_c = r01.run_chrome(CHROME, url, PAGE_TIMEOUT_S)
+            html = []
+            w, rss, pss_c, _, st_c = r01.run_chrome(CHROME, url, PAGE_TIMEOUT_S, html)
+            note_c = ""
+            if st_c == "OK" and html and challenge_marker(html[0]):
+                st_c, note_c = "CHALLENGE", f"marker={challenge_marker(html[0])}"
             rows.append({"axis": "urls", "arm": "chrome-proc", "n": 1, "run": run, "target": url,
-                         "wall_s": round(w, 3), "pss_kb": pss_c, "status": st_c, "note": ""})
+                         "wall_s": round(w, 3), "pss_kb": pss_c, "status": st_c, "note": note_c})
             print(f"urls run{run} chrome-proc {st_c:9} {w:6.2f}s pss={pss_c/1024:7.1f}MB {url}", file=sys.stderr)
             touch()
     return rows
@@ -528,12 +547,16 @@ def build_summary(rows):
 
 def urls_summary(rows):
     """Paired comparison: only URLs that loaded OK in all 3 runs on BOTH arms. Per run, the ratio of the
-    median over those URLs; the band is min-max over the 3 runs. Chrome OK also includes challenge pages
-    (r01 reports load events only), so this is a load-level comparison, not a content-level one."""
+    median over those URLs; the band is min-max over the 3 runs. Both arms now label
+    challenge pages by marker (CHALLENGE_MARKERS), so OK means loaded and no known challenge signature."""
     urls = [r for r in rows if r["axis"] == "urls"]
     out = []
     counts = {arm: {s: sum(1 for r in urls if r["arm"] == arm and r["status"] == s)
                     for s in ("OK", "CHALLENGE", "FAIL", "TIMEOUT")} for arm in ("manuk-proc", "chrome-proc")}
+    for arm in counts:
+        for r in urls:
+            if r["arm"] == arm and r["status"] == "CHALLENGE":
+                out.append(f"urls\t{arm} CHALLENGE\t{r['target']}\t{r['note'].split(' | ')[0]}\t-\t-\trun={r['run']}\t{PIN}")
     ok = {}
     for arm in counts:
         for r in urls:
@@ -583,6 +606,19 @@ def selftest():
     if not heading_ok("# fixture 0\n\ntext", 0) or heading_ok("", 0) or heading_ok("# fixture 1\n", 0) \
             or heading_ok("# fixture 05\n", 0):
         fails.append("fork heading check does not separate the checkpoint heading from empty/other pages")
+    # 2d. Challenge rule: specific markers hit, a page that merely says "challenge" does not, and a mutant
+    #     rule matching every page turns every OK row CHALLENGE in the summary.
+    if challenge_marker("<a href=/cdn-cgi/__cf_chl_tk=1>") != "__cf_chl" or challenge_marker("Just a moment...") != "Just a moment" \
+            or challenge_marker("Take the 30 day challenge") is not None:
+        fails.append("challenge marker rule does not separate Cloudflare signatures from ordinary text")
+    pages = ["ordinary page one", "Take the challenge", "another page"]
+    if [challenge_marker(t, ("",)) is not None for t in pages] != [True] * 3 \
+            or [challenge_marker(t) is not None for t in pages] != [False] * 3:
+        fails.append("mutant match-everything rule is not distinguishable from the real rule")
+    ur = [{"axis": "urls", "arm": "manuk-proc", "n": 1, "run": "1", "target": "http://x", "wall": 1.0, "pss_kb": 1,
+           "status": "CHALLENGE", "note": "marker=__cf_chl | t"}]
+    if not any("marker=__cf_chl" in l and "CHALLENGE" in l for l in urls_summary(ur)):
+        fails.append("summary does not show the matched marker for CHALLENGE rows")
     # 3. The pin must be present: a row with no pin is a refusal, not a number.
     if not PIN:
         fails.append("MANUK_CHROME_PIN unset (refused)")

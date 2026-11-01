@@ -168,8 +168,9 @@ class WS:
         self.s.close()
 
 
-def cdp_load(ws, url, deadline):
-    """Navigate a fresh tab and wait for the load event. Returns (status, dom_bytes)."""
+def cdp_load(ws, url, deadline, capture=None):
+    """Navigate a fresh tab and wait for the load event. Returns (status, dom_bytes).
+    If capture is a list, the page's outerHTML is appended to it (for content checks)."""
     ids = iter(range(1, 1 << 30))
 
     def call(method, params=None, session=None):
@@ -205,10 +206,13 @@ def cdp_load(ws, url, deadline):
             loaded = True
     dom = wait_result(call("Runtime.evaluate", {"expression": "document.documentElement.outerHTML",
                                                 "returnByValue": True}, sess))
-    return "OK", len(dom.get("result", {}).get("result", {}).get("value", "") or "")
+    html = dom.get("result", {}).get("result", {}).get("value", "") or ""
+    if capture is not None:
+        capture.append(html)
+    return "OK", len(html)
 
 
-def run_chrome(chrome, url, timeout_s):
+def run_chrome(chrome, url, timeout_s, capture=None):
     """Headless Chrome with the sandbox ON, driven over CDP because --dump-dom never exits on this box.
     Returns the same tuple as run_measured; the whole browser process tree is what is sampled."""
     profile = tempfile.mkdtemp(prefix="r01-chrome-")
@@ -248,7 +252,7 @@ def run_chrome(chrome, url, timeout_s):
         port_s, path = open(portfile).read().split("\n")[:2]
         ws = WS(int(port_s), path, timeout_s)
         # wall includes browser startup, to match a cold process per URL like a11y-dump.
-        status, _ = cdp_load(ws, url, deadline)
+        status, _ = cdp_load(ws, url, deadline, capture)
         wall = time.monotonic() - t0
         rc = 0 if status == "OK" else 1
         ws.close()
