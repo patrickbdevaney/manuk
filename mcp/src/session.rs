@@ -1434,10 +1434,25 @@ impl<B: Backend> Session<B> {
             &url_before,
             &format!("verified: target was topmost at dispatch; {outcome}"),
         )?;
-        if action == "click" && Self::retry_on() && Self::is_noop(&r) {
+        // A click that navigated to an error page did nothing useful either: undo it, then retry like a dead click.
+        let landed_on_error = action == "click"
+            && Self::retry_on()
+            && !r.contains("url: unchanged")
+            && !Self::is_noop(&r)
+            && self.looks_like_error();
+        if landed_on_error {
+            let _ = self.b.back().await;
+            self.new_document();
+            let t = self.tree()?;
+            self.snap = Some(self.snapshot(&t));
+        }
+        if action == "click" && Self::retry_on() && (landed_on_error || Self::is_noop(&r)) {
             if let Some(done) = self.retry_noop(h, node, &url_before).await? {
                 return Ok(done);
             }
+        }
+        if landed_on_error {
+            return Ok(format!("{r}\n{settle}\nlayer retry: the click led to an error page above; the layer went back and no keyboard/inner-link retry worked, so the page is the one before the click"));
         }
         Ok(format!("{r}\n{settle}"))
     }

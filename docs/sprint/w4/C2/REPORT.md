@@ -28,3 +28,14 @@ This is a proxy for a model, NOT the REAL / own-suite x3 LLM run the node's gate
   and the page reloaded); `event.preventDefault()` works. Follow-up W4.C2.b.
 - **C1 caveat**: `@playwright/mcp@0.0.83`'s `browser_click` takes `target`, not `ref`; c1_settle.py sends `ref`, so its
   playwright arm may have errored (0/3, 1 ms). The C1 playwright column is unproven; follow-up W4.C2.d.
+
+## Addendum W4.C2.a: why cdp-layer failed error-page (chrome_ver=145.0.7632.116)
+- Cause (reproduced by hand): on Chrome the click on `onclick="location='/gone'"` really navigates to the 404. The layer
+  retried only on "no change, url unchanged", so a navigation to an error page was returned as-is (6 calls, 0/3). It was a
+  LAYER bug. On manuk's engine the `location=` assignment from the handler is silently dropped, so the click was a
+  no-op and the existing retry fired: manuk's "1 call" on error-page was an engine gap, not a win. Follow-up W4.C2.a.a.
+- Fix: `mcp/src/session.rs` `act` — a click that navigated to an error page is undone with `back`, then retried
+  (Enter, Space, descendant). If no retry works the result says so and the page is the one before the click.
+- After: cdp-layer error-page 1,1,1 calls, 3/3 (was 6,6,6, 0/3); manuk 1,1,1 (via the no-op path); retry-off 3,3,3; playwright 5,5,5 0/3.
+- Gate red-proof: `mcp/tests/retry.rs` `chrome_error_page_baseline_without_retry_stays_on_the_404` (MANUK_NO_RETRY) shows the 404 with no
+  recovery; `chrome_click_to_an_error_page_is_undone_and_retried` passes only with the fix. 7/7 pass.

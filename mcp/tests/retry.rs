@@ -179,3 +179,25 @@ fn baseline_without_the_layer_retry_is_a_dead_click() {
         assert!(r.contains("no change") && !r.contains("OK"), "{l}: {r}");
     }
 }
+
+/// W4.C2.a: on the chrome backend the click really navigates to the 404 (manuk's engine drops the
+/// `location=` assignment, so the case above never exercised this). The layer must undo it and retry.
+fn chrome_act(no_retry: bool) -> String {
+    let url = serve();
+    let mut c = Client::start(true, no_retry);
+    let nav = c.tool("navigate", json!({"url": url}));
+    let h = handle_of(&nav, "Broken");
+    c.tool("act", json!({"handle": h, "action": "click"}))
+}
+
+#[test]
+fn chrome_click_to_an_error_page_is_undone_and_retried() {
+    let r = chrome_act(false);
+    assert!(r.contains("ERR-RECOVERED"), "{r}");
+}
+
+#[test]
+fn chrome_error_page_baseline_without_retry_stays_on_the_404() {
+    let r = chrome_act(true);
+    assert!(r.contains("404 Not Found") && !r.contains("ERR-RECOVERED"), "{r}");
+}

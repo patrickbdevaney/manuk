@@ -29,9 +29,9 @@ chrome_ver	arm	fixture	run	tool_calls	recovered	layer_retried
 145.0.7632.116	manuk-noretry	error-page	1	3	1	0
 145.0.7632.116	manuk-noretry	error-page	2	3	1	0
 145.0.7632.116	manuk-noretry	error-page	3	3	1	0
-145.0.7632.116	cdp-layer	error-page	1	6	0	0
-145.0.7632.116	cdp-layer	error-page	2	6	0	0
-145.0.7632.116	cdp-layer	error-page	3	6	0	0
+145.0.7632.116	cdp-layer	error-page	1	1	1	1
+145.0.7632.116	cdp-layer	error-page	2	1	1	1
+145.0.7632.116	cdp-layer	error-page	3	1	1	1
 145.0.7632.116	playwright	error-page	1	5	0	0
 145.0.7632.116	playwright	error-page	2	5	0	0
 145.0.7632.116	playwright	error-page	3	5	0	0
