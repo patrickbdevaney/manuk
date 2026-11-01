@@ -146,6 +146,7 @@ impl<B: Backend> Hub<B> {
     pub fn with_grants(mut self, g: crate::policy::Grants) -> Self {
         // Before any backend is made: Chrome decides at launch whether to intercept requests.
         manuk_net::scope::set(&g.read, &g.write);
+        crate::cdp::set_read_origins(&g.read);
         self.grants = g;
         self
     }

@@ -89,7 +89,9 @@ impl Cdp {
             Ok(Message::Text(t)) => {
                 let m: Value = serde_json::from_str(t.as_str())?;
                 match m["method"].as_str() {
-                    Some("Target.attachedToTarget") if m["params"]["targetInfo"]["type"] == "iframe" => {
+                    Some("Target.attachedToTarget")
+                        if m["params"]["targetInfo"]["type"] == "iframe" =>
+                    {
                         if let (Some(t), Some(s)) = (
                             m["params"]["targetInfo"]["targetId"].as_str(),
                             m["params"]["sessionId"].as_str(),
@@ -669,6 +671,30 @@ fn role_of(r: &Raw, i: usize, body_child: bool) -> Role {
     }
 }
 
+/// W3.7.a: the grant's read set. A child document whose origin is outside it is not shown to the model.
+static READ_ORIGINS: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
+/// Install the read-origin set (empty = unrestricted) that `observe` applies to iframe documents.
+pub fn set_read_origins(read: &[String]) {
+    *READ_ORIGINS.lock().unwrap() = read.to_vec();
+}
+
+/// Is the document at `doc_url` hidden by the read set? Only a real network origin can fall outside it.
+fn frame_hidden(doc_url: &str) -> bool {
+    if mutated("no-hide") {
+        return false;
+    }
+    let set = READ_ORIGINS.lock().unwrap();
+    if set.is_empty() {
+        return false;
+    }
+    let Some(o) = crate::policy::origin(doc_url) else {
+        return false;
+    };
+    !set.iter()
+        .any(|s| crate::policy::origin(s).as_deref() == Some(&o))
+}
+
 /// `iframe <origin>`: the origin of the document the frame holds, else of its `src`.
 fn iframe_label(r: &Raw, i: usize, held: Option<&str>) -> String {
     let src = r.attr(i, "src").unwrap_or("");
@@ -679,9 +705,13 @@ fn iframe_label(r: &Raw, i: usize, held: Option<&str>) -> String {
             .filter(|o| o != "null")
     };
     let doc = held.unwrap_or("");
-    let o = origin(doc)
-        .or_else(|| origin(src))
-        .unwrap_or_else(|| if r.attr(i, "srcdoc").is_some() { "srcdoc".into() } else { "about:blank".into() });
+    let o = origin(doc).or_else(|| origin(src)).unwrap_or_else(|| {
+        if r.attr(i, "srcdoc").is_some() {
+            "srcdoc".into()
+        } else {
+            "about:blank".into()
+        }
+    });
     format!("iframe {o}")
 }
 
@@ -952,8 +982,20 @@ impl Builder<'_> {
             // display:none (or inside a collapsed container): not part of what a human sees.
             return None;
         }
-        let role = if is_iframe { Role::Region } else { role_of(r, i, body_child) };
-        let mut name = if is_iframe { iframe_label(r, i, r.content.get(&i).map(|&cd| self.docs[cd].url.as_str())) } else { name_of(r, i, &role) };
+        let role = if is_iframe {
+            Role::Region
+        } else {
+            role_of(r, i, body_child)
+        };
+        let mut name = if is_iframe {
+            iframe_label(
+                r,
+                i,
+                r.content.get(&i).map(|&cd| self.docs[cd].url.as_str()),
+            )
+        } else {
+            name_of(r, i, &role)
+        };
         let mut role = role;
         let was_generic_click = matches!(role, Role::Generic) && r.clickable.contains(&i);
         if was_generic_click && !name.is_empty() {
@@ -1038,8 +1080,11 @@ impl Builder<'_> {
             // W3.7: the child document nests under its iframe; its boxes are in its own coordinates.
             let docs = self.docs;
             let child = &docs[cd];
-            if let Some(html) =
-                (0..child.kind.len()).find(|&j| child.kind[j] == 1 && child.tag(j) == "html")
+            if let Some(html) = (0..child.kind.len())
+                .find(|&j| child.kind[j] == 1 && child.tag(j) == "html")
+                .filter(|_| {
+                    !frame_hidden(&child.url) && !frame_hidden(r.attr(i, "src").unwrap_or(""))
+                })
             {
                 let saved = (self.r, self.d, self.off, self.zbase);
                 let at = bbox.map(|b| (b.x, b.y)).unwrap_or(self.off);
@@ -1202,7 +1247,10 @@ fn build(
     viewport_w: f32,
 ) -> Result<Built> {
     let raw = &docs[0];
-    let live: HashSet<u64> = docs.iter().flat_map(|d| d.backend.iter().copied()).collect();
+    let live: HashSet<u64> = docs
+        .iter()
+        .flat_map(|d| d.backend.iter().copied())
+        .collect();
     let mut orphans: HashMap<String, VecDeque<u64>> = HashMap::new();
     let mut stale: Vec<(&u64, &u64)> = prev
         .backend
@@ -1646,14 +1694,17 @@ impl CdpBackend {
                 let owner = self.frame_session.get(&(be >> 48)).cloned();
                 let be_raw = be & ((1 << 48) - 1);
                 let d = match &owner {
-                    Some(s) => self
-                        .cdp
-                        .call_in(s, "DOM.describeNode", json!({"backendNodeId": be_raw})),
+                    Some(s) => {
+                        self.cdp
+                            .call_in(s, "DOM.describeNode", json!({"backendNodeId": be_raw}))
+                    }
                     None => self
                         .cdp
                         .call("DOM.describeNode", json!({"backendNodeId": be_raw})),
                 };
-                let Some(fid) = d.ok().and_then(|d| d["node"]["frameId"].as_str().map(String::from))
+                let Some(fid) = d
+                    .ok()
+                    .and_then(|d| d["node"]["frameId"].as_str().map(String::from))
                 else {
                     continue;
                 };
@@ -1805,13 +1856,12 @@ impl CdpBackend {
     fn object_for(&mut self, be: u64) -> Result<String> {
         let (f, raw) = (be >> 48, be & ((1 << 48) - 1));
         let (r, sess) = if f > 0 {
-            let s = self
-                .frame_session
-                .get(&f)
-                .cloned()
-                .ok_or_else(|| anyhow!("STALE: the frame holding that element is gone; observe again"))?;
+            let s = self.frame_session.get(&f).cloned().ok_or_else(|| {
+                anyhow!("STALE: the frame holding that element is gone; observe again")
+            })?;
             (
-                self.cdp.call_in(&s, "DOM.resolveNode", json!({"backendNodeId": raw}))?,
+                self.cdp
+                    .call_in(&s, "DOM.resolveNode", json!({"backendNodeId": raw}))?,
                 Some(s),
             )
         } else {

@@ -209,3 +209,79 @@ fn without_the_merge_the_card_field_is_invisible() {
         "mutant must not see the frame:\n{obs}"
     );
 }
+
+/// W3.7.a: a frame whose origin is outside `--read-origins` keeps its `iframe <origin>` line but none of its children.
+fn grant_run(read: &[&str], mutate: bool) -> String {
+    let child = serve(|_| CARD.into());
+    let parent = serve(move |_| {
+        format!(
+            "<!doctype html><html><head><title>Checkout</title></head><body><h1>Checkout</h1>\
+             <iframe title=card src=\"http://localhost:{child}/card\" width=400 height=150></iframe></body></html>"
+        )
+    });
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_manuk-mcp"));
+    cmd.args(["--backend", "chrome", "--read-origins"]);
+    let mut set = vec![format!("http://127.0.0.1:{parent}")];
+    set.extend(read.iter().map(|r| r.replace("CHILD", &child.to_string())));
+    cmd.arg(set.join(","));
+    if mutate {
+        cmd.env("MANUK_CDP_MUTATE", "no-hide");
+    }
+    cmd.env(
+        "MANUK_ACTLOG_DIR",
+        std::env::temp_dir().join(format!(
+            "w37a-{}-{}-{mutate}",
+            std::process::id(),
+            read.len()
+        )),
+    );
+    let mut c = {
+        let mut child = cmd
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        let tx = child.stdin.take().unwrap();
+        let rx = BufReader::new(child.stdout.take().unwrap());
+        Client {
+            child,
+            tx,
+            rx,
+            id: 0,
+        }
+    };
+    c.rpc("initialize", json!({"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}));
+    c.send(json!({"jsonrpc": "2.0", "method": "notifications/initialized"}));
+    c.tool(
+        "navigate",
+        json!({"url": format!("http://127.0.0.1:{parent}/")}),
+    );
+    std::thread::sleep(std::time::Duration::from_millis(800));
+    c.tool("observe", json!({}))
+}
+
+#[test]
+fn frame_outside_read_origins_is_hidden_until_granted() {
+    let out = grant_run(&[], false);
+    assert!(
+        out.contains("iframe http://localhost:"),
+        "frame line kept:\n{out}"
+    );
+    assert!(!out.contains("Card number"), "child leaked:\n{out}");
+    assert!(
+        !out.contains("in region \"iframe"),
+        "a child line under the frame:\n{out}"
+    );
+    let inn = grant_run(&["http://localhost:CHILD"], false);
+    assert!(inn.contains("Card number"), "granted frame shown:\n{inn}");
+}
+
+#[test]
+fn no_hide_mutant_leaks_the_frame() {
+    let out = grant_run(&[], true);
+    assert!(
+        out.contains("in region \"iframe"),
+        "mutant should leak (gate can go red):\n{out}"
+    );
+}
