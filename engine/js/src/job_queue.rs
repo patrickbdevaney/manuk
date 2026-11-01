@@ -41,7 +41,9 @@ use mozjs::glue::{CreateJobQueue, JobQueueTraps};
 use mozjs::jsapi::{Handle, JSContext as RawJSContext, JSObject, MutableHandle};
 use mozjs::jsval::UndefinedValue;
 use mozjs::rooted;
-use mozjs::rust::wrappers2::{CurrentGlobalOrNull, JS_SetProperty};
+use mozjs::rust::wrappers2::{
+    CurrentGlobalOrNull, JS_CallFunctionName, JS_HasProperty, JS_SetProperty,
+};
 
 /// The name of the JS-side array the jobs live in. Held by the global, so the GC traces it.
 const JOBS: &str = "__promiseJobs";
@@ -116,20 +118,18 @@ unsafe extern "C" fn enqueue_promise_job(
     rooted!(in(cx) let g = global);
     rooted!(in(cx) let job_val = mozjs::jsval::ObjectValue(job.get()));
 
-    // Hand the job to JS through a scratch global property, then push it onto the array.
+    // Hand the job to JS through `__pendingJob`, an accessor whose setter pushes onto the array. The
+    // setter and the drain loop are compiled ONCE per global: evaluating a push script per job cost
+    // ~6 us each, which made a 3M-reaction promise chain take 8.4 s (Chrome 0.95 s).
+    if !ensure_installed(cx, g.handle()) {
+        return false;
+    }
     if !JS_SetProperty(
         &mut wrap_cx(cx),
         g.handle(),
         c"__pendingJob".as_ptr(),
         job_val.handle(),
     ) {
-        return false;
-    }
-    let script = format!(
-        "(globalThis.{JOBS} = globalThis.{JOBS} || []).push(globalThis.__pendingJob); \
-         globalThis.__pendingJob = undefined;"
-    );
-    if !eval(cx, &script) {
         return false;
     }
     q.pending.set(q.pending.get() + 1);
@@ -141,20 +141,56 @@ unsafe extern "C" fn enqueue_promise_job(
 /// *microtask* checkpoint rather than a single pass.
 unsafe extern "C" fn run_jobs(queue: *const c_void, cx: *mut RawJSContext) {
     let q = &*(queue as *const PromiseJobQueue);
+    let global = CurrentGlobalOrNull(&wrap_cx(cx));
+    if !global.is_null() {
+        rooted!(in(cx) let g = global);
+        if ensure_installed(cx, g.handle()) {
+            rooted!(in(cx) let mut rval = UndefinedValue());
+            let args = mozjs::jsapi::HandleValueArray {
+                length_: 0,
+                elements_: ptr::null(),
+            };
+            JS_CallFunctionName(
+                &mut wrap_cx(cx),
+                g.handle(),
+                c"__drainJobs".as_ptr(),
+                &args,
+                rval.handle_mut(),
+            );
+        }
+    }
+    q.pending.set(0);
+}
+
+/// Install (once per global) the `__pendingJob` setter and the `__drainJobs` loop.
+unsafe fn ensure_installed(cx: *mut RawJSContext, g: mozjs::rust::HandleObject) -> bool {
+    let mut installed = false;
+    if !JS_HasProperty(&mut wrap_cx(cx), g, c"__drainJobs".as_ptr(), &mut installed) {
+        return false;
+    }
+    if installed {
+        return true;
+    }
     // A job that throws must not abort the drain: report and continue, as the spec's
-    // "run the jobs" step does.
+    // "run the jobs" step does. The ceiling is a backstop against a runaway chain; the watchdog
+    // and drain budget are the real bound.
     let script = format!(
         "(function () {{ \
-           var q = globalThis.{JOBS} || []; \
-           var guard = 0; \
-           while (q.length && guard++ < 100000) {{ \
-             var j = q.shift(); \
-             try {{ j(); }} catch (e) {{ globalThis.__lastJobError = String(e); }} \
-           }} \
+           var q = globalThis.{JOBS} = globalThis.{JOBS} || []; \
+           Object.defineProperty(globalThis, '__pendingJob', {{ configurable: true, \
+             set: function (j) {{ q.push(j); }}, get: function () {{ return undefined; }} }}); \
+           Object.defineProperty(globalThis, '__drainJobs', {{ configurable: true, writable: true, value: function () {{ \
+             var i = 0, j; \
+             while (i < q.length && i < 100000000) {{ \
+               j = q[i]; q[i++] = undefined; \
+               try {{ j(); }} catch (e) {{ globalThis.__lastJobError = String(e); }} \
+               if (i >= 1024 && i === q.length) {{ q.length = 0; i = 0; }} \
+             }} \
+             q.length = 0; \
+           }} }}); \
          }})();"
     );
-    eval(cx, &script);
-    q.pending.set(0);
+    eval(cx, &script)
 }
 
 unsafe extern "C" fn is_empty(queue: *const c_void) -> bool {

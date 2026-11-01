@@ -70,6 +70,27 @@ pub fn fill(buf: &mut [u8]) {
     }
 }
 
+/// Non-deterministic mode: the page's clock must not lag the timer fast-forward. The loop jumps `__now`
+/// to the next due timer instead of sleeping, so a page timing a 1.2 s timer chain with `Date.now()` /
+/// `performance.now()` read ~0 ms (c1_settle `date-skew`). Time becomes `start + max(real elapsed,
+/// virtual `__now`)`: monotonic, equals real time when the page really waited, and never behind its timers.
+pub fn skew_prelude_js() -> &'static str {
+    r#"(function () {
+  var D = Date, start = D.now();
+  var skewed = function () { var el = D.now() - start, v = globalThis.__now || 0; return start + (v > el ? v : el); };
+  var F = function Date(a, b, c, d, e, f, g) {
+    if (!new.target) { return new D(skewed()).toString(); }
+    if (arguments.length === 0) { return Reflect.construct(D, [skewed()], new.target); }
+    return Reflect.construct(D, arguments, new.target);
+  };
+  F.prototype = D.prototype;
+  try { Object.defineProperty(D.prototype, 'constructor', { value: F, writable: true, configurable: true }); } catch (e) {}
+  F.now = function now() { return skewed(); };
+  F.parse = D.parse; F.UTC = D.UTC;
+  globalThis.Date = F;
+})();"#
+}
+
 /// JS half. Evaluated BEFORE the event-loop prelude so the prelude's `performance` origin
 /// (`t0 = Date.now()`) is taken on the logical clock too. `__now` is read lazily.
 pub fn prelude_js() -> String {

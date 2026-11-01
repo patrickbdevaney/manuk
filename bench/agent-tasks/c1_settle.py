@@ -23,6 +23,7 @@ FIXTURES = {
                         if os.environ.get("MANUK_C1_MUTATE") != "late" else "setTimeout(w,30000)"),  # mutation: lands beyond any wait
     "fetch-then-timer": (1900, "fetch('/d?ms=400').then(function(r){return r.text()}).then(function(){setTimeout(w,1500)})"),
     "chained-timers": (1200, "setTimeout(function(){setTimeout(function(){setTimeout(function(){w()},400)},400)},400)"),
+    "date-skew": (1200, "var t0=Date.now();setTimeout(function(){setTimeout(function(){setTimeout(function(){if(Date.now()-t0>=1000)w()},400)},400)},400)"),  # page clock must see the fast-forwarded time
     "font-swap": (900, "new FontFace('X','url(/f?ms=900)').load().then(w,w)"),
     "font-css": (900, "var st=document.createElement('style');st.textContent='@font-face{font-family:X;src:url(/f?ms=900)}#o{font-family:X}';document.head.appendChild(st);document.fonts.load('12px X').then(w,w)"),
     "microtask-100k": (0, "var n=0;(function s(){if(++n<100000)Promise.resolve().then(s);else w()})()"),
@@ -123,9 +124,16 @@ def main():
                 rows.append(f"{pin}\t{arm}\t{name}\t{run}\t{ms}\t{wall:.0f}\t{int(has)}\t{int(fs)}")
                 print(rows[-1], flush=True)
     open(a.out, "w").write("\n".join(rows) + "\n")
-    # GATE: the engine arm reads the 1.4 s fixture correctly in every run (rows: arm, fixture, ..., content)
-    ok = sum(int(r.split("\t")[6]) for r in rows[1:] if r.split("\t")[1] == "manuk" and r.split("\t")[2] == "late-fetch-1400")
-    print(f"GATE late-fetch-1400 manuk content {ok}/{a.runs}: {'PASS' if ok == a.runs else 'FAIL'}")
+    # GATE: the engine arm reads the 1.4 s fixture, the font swap, the microtask storm (under 3 s) and the Date.now skew fixture in every run
+    def got(fx): return sum(int(r.split("\t")[6]) for r in rows[1:] if r.split("\t")[1] == "manuk" and r.split("\t")[2] == fx)
+    def slow(fx): return [float(r.split("\t")[5]) for r in rows[1:] if r.split("\t")[1] == "manuk" and r.split("\t")[2] == fx]
+    res = {fx: got(fx) for fx in ("late-fetch-1400", "font-swap", "microtask-storm", "date-skew")}
+    fast = all(t < 3000 for t in slow("microtask-storm"))
+    for fx, n in res.items(): print(f"GATE {fx} manuk content {n}/{a.runs}")
+    print(f"GATE microtask-storm under 3 s: {fast}")
+    ok = sum(res.values()); ok_all = (ok == 4 * a.runs and fast)
+    print(f"GATE: {'PASS' if ok_all else 'FAIL'}")
+    ok = a.runs if ok_all else -1
     sys.exit(0 if ok == a.runs else 1)
 
 

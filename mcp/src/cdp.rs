@@ -2325,10 +2325,16 @@ impl Backend for CdpBackend {
                 .as_array()
                 .into_iter()
                 .flatten()
-                .map(|kv| (kv["name"].as_str().unwrap_or(""), kv["value"].as_str().unwrap_or("")))
+                .map(|kv| {
+                    (
+                        kv["name"].as_str().unwrap_or(""),
+                        kv["value"].as_str().unwrap_or(""),
+                    )
+                })
                 .collect();
             if origin != here {
-                if mutated("current-origin-only") || !origin.starts_with("http") || items.is_empty() {
+                if mutated("current-origin-only") || !origin.starts_with("http") || items.is_empty()
+                {
                     continue;
                 }
                 // Chrome can't write storage for an origin with no frame: seed it when it next loads.

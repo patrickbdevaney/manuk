@@ -4870,6 +4870,45 @@ const PRELUDE: &str = r#"
       iface('NavigatorUAData', function (o) { return !!o && o === navigator.userAgentData; });
       iface('ServiceWorkerContainer', function (o) { return !!o && o === navigator.serviceWorker; });
       iface('FontFaceSet',  function (o) { return !!o && o === document.fonts; });
+      // `new FontFace(family, source).load()` — a real object, not the inert constructor. It used to
+      // return `{}` with no `load`, so a page's "load the webfont, then reveal" chain threw and the
+      // reveal never ran (c1_settle `font-swap`, 0/3). **Scope:** `load()` genuinely FETCHES a
+      // `url(...)` source (so the wait is real, on the virtual clock) and resolves with the face, but
+      // the bytes are not registered with the text shaper — layout keeps its fallback face. The set
+      // does not list it either (see `document.fonts` above).
+      if (typeof globalThis.FontFace !== 'function' || !globalThis.FontFace.__real) {
+        var __FontFace = function FontFace(family, source, descriptors) {
+          if (!new.target) { throw new TypeError("Failed to construct 'FontFace': Please use the 'new' operator"); }
+          var d = descriptors || {};
+          this.family = String(family);
+          this.style = d.style || 'normal'; this.weight = d.weight || 'normal'; this.stretch = d.stretch || 'normal';
+          this.unicodeRange = d.unicodeRange || 'U+0-10FFFF'; this.variant = d.variant || 'normal';
+          this.featureSettings = d.featureSettings || 'normal'; this.display = d.display || 'auto';
+          this.status = 'unloaded';
+          this.__src = source;
+          var self = this;
+          this.loaded = new Promise(function (res, rej) { self.__res = res; self.__rej = rej; });
+          this.loaded.catch(function () {});   // an unobserved rejection is not an error report
+        };
+        __FontFace.prototype.load = function () {
+          var self = this;
+          if (self.status !== 'unloaded') { return self.loaded; }
+          self.status = 'loading';
+          var src = self.__src, m = typeof src === 'string' ? /url\(\s*["']?([^"')]+)["']?\s*\)/.exec(src) : null;
+          if (m) {
+            fetch(m[1]).then(function (r) {
+              if (!r.ok) { throw new Error('font fetch failed: ' + r.status); }
+              return r.arrayBuffer();
+            }).then(function () { self.status = 'loaded'; self.__res(self); },
+                    function (e) { self.status = 'error'; self.__rej(new DOMException('A network error occurred.', 'NetworkError')); });
+          } else if (typeof src === 'string' || src == null) {
+            self.status = 'error'; self.__rej(new DOMException('The source provided could not be parsed as a value list.', 'SyntaxError'));
+          } else { self.status = 'loaded'; self.__res(self); }
+          return self.loaded;
+        };
+        __FontFace.__real = true;
+        globalThis.FontFace = __FontFace;
+      }
       iface('FontFace', function (o) {
         return !!o && typeof o === 'object' && typeof o.family === 'string' && 'status' in o;
       });
@@ -8340,6 +8379,13 @@ pub fn install(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Result<()
             global,
             &crate::determinism::prelude_js(),
             "determinism.js",
+        )?;
+    } else {
+        eval(
+            rt,
+            global,
+            crate::determinism::skew_prelude_js(),
+            "clock_skew.js",
         )?;
     }
     eval(rt, global, PRELUDE, "event_loop_prelude.js")?;
