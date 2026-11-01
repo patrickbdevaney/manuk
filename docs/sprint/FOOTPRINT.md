@@ -172,3 +172,31 @@ Caveats:
 Gate evidence: `--real-pages-mutant` navigates fixture pages while checking against the real hosts. Both arms come out
 `WRONG_PAGE` with `landed_ok=0/10` (`docs/sprint/footprint/runs-real-pages-mutant.tsv`). The harness selftest covers
 the same-site rule and the manuk landed-host parse.
+
+## Wall clock on the URL set, 10 runs (W4.E0.d): not settled
+
+Note: `BASELINE-URLS.txt` has 10 URLs, not 20. Run: `--url-runs 10`, rows in `footprint/runs-urls.tsv`, summary in
+`footprint/summary-urls.tsv`, chrome_ver=145.0.7632.116. Rule fixed in `wall_verdict()` before the run: a wall ratio is
+quotable only with 10 runs, a band that excludes 1.0, and no overlap with the earlier runs (1.66–1.96× and 3.1–3.8×).
+
+| metric | value over 10 runs | verdict |
+|---|---|---|
+| paired URLs (OK in all 10 runs, both arms) | 7 | |
+| manuk / chrome per-URL wall, median per run | **1.67–3.85×** | NOT_SETTLED: overlaps the prior 1.66–1.96× range |
+| manuk / chrome per-URL PSS, median per run | 0.42–0.48× | band reported, not part of the wall claim |
+
+Why the wall stays unsettled: per-URL walls on live sites are bimodal between runs. Example: comix.to manuk ran
+10.3–13.6 s in runs 1–6 and 9.3–9.5 s in runs 7–10; app.ordertime.com ran 11.2 s once and 3.7–6.0 s in the others. Per-run
+ratios therefore move with which mode each URL lands in.
+
+Outcomes on the 10 URLs × 10 runs (100 rows per arm):
+
+| arm | OK | CHALLENGE | FAIL | TIMEOUT |
+|---|---|---|---|---|
+| manuk-proc | 70 | 10 (basescan.org, `__cf_chl`, every run) | 20 | 0 |
+| chrome-proc | 70 | 10 (basescan.org, `__cf_chl`, every run) | 10 | 10 |
+
+`virtual.lapampa.edu.ar` times out at 30 s on manuk and at 60 s on Chrome; `mkp.gem.gov.in` fails on both arms.
+
+**Claim:** none. The earlier per-URL wall ratios are not replaced by this table. The 10-run band is the number to quote, and
+it is 1.67–3.85×, not a single ratio.

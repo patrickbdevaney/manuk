@@ -652,6 +652,27 @@ def paired_targets(rows):
     return seen
 
 
+# Wall-ratio bands from earlier runs that a new band must not overlap (FOOTPRINT.md; W4.E0 notes).
+WALL_PRIOR = [(1.66, 1.96), (3.1, 3.8)]
+WALL_RUNS_NEEDED = 10
+
+
+def wall_verdict(per_run):
+    """W4.E0.d rule, fixed before the 10-run measurement: a wall ratio is quotable only with 10 runs, a band
+    that excludes 1.0, and no overlap with a prior run's range. Anything else is NOT_SETTLED, with the reason."""
+    if not per_run:
+        return "NOT_SETTLED (no paired URLs)"
+    if len(per_run) < WALL_RUNS_NEEDED:
+        return f"NOT_SETTLED (runs={len(per_run)} < {WALL_RUNS_NEEDED})"
+    lo, hi = min(per_run), max(per_run)
+    if lo <= 1.0 <= hi:
+        return f"NOT_SETTLED (band {lo:.2f}-{hi:.2f} contains 1.0)"
+    for plo, phi in WALL_PRIOR:
+        if lo <= phi and plo <= hi:
+            return f"NOT_SETTLED (band {lo:.2f}-{hi:.2f} overlaps prior {plo}-{phi}x)"
+    return f"QUOTABLE (band {lo:.2f}-{hi:.2f}x excludes 1.0 and no prior range)"
+
+
 def urls_summary(rows):
     """Paired comparison: only URLs that loaded OK in all 3 runs on BOTH arms. Per run, the ratio of the
     median over those URLs; the band is min-max over the 3 runs. Both arms now label
@@ -682,6 +703,9 @@ def urls_summary(rows):
         if per_run:
             out.append(f"urls\tmanuk/chrome {axis} ratio\t{len(paired)} URLs\t"
                        f"{min(per_run):.2f}-{max(per_run):.2f}x (median of per-URL ratios, per run)\t-\t-\t"
+                       f"runs={len(per_run)}\t{PIN}")
+        if axis == "wall":  # always written, so a run with no paired URLs shows NOT_SETTLED rather than nothing
+            out.append(f"urls\tmanuk/chrome wall VERDICT\t{len(paired)} URLs\t{wall_verdict(per_run)}\t-\t-\t"
                        f"runs={len(per_run)}\t{PIN}")
     return out
 
@@ -734,6 +758,14 @@ def selftest():
     if landed_host_manuk('[names below]\nhttps://www.mobile.bg/?x=1 — "t"\nsettled') != "www.mobile.bg" \
             or landed_host_manuk("no url line here") != "":
         fails.append("manuk landed-host parse is wrong")
+    # 2f. Wall verdict (W4.E0.d): quotable only with 10 runs, a band off 1.0, and no prior overlap. Each mutant
+    #     (too few runs, band through 1.0, band on a prior range, no paired URLs) must come out NOT_SETTLED.
+    if not wall_verdict([2.4 + 0.02 * i for i in range(10)]).startswith("QUOTABLE") \
+            or not wall_verdict([1.8] * 10).startswith("NOT_SETTLED") \
+            or not wall_verdict([0.9 + 0.02 * i for i in range(10)]).startswith("NOT_SETTLED") \
+            or not wall_verdict([2.4] * 3).startswith("NOT_SETTLED") \
+            or not wall_verdict([]).startswith("NOT_SETTLED"):
+        fails.append("wall verdict does not separate a quotable band from short, 1.0-spanning, or prior-overlapping ones")
     # 3. The pin must be present: a row with no pin is a refusal, not a number.
     if not PIN:
         fails.append("MANUK_CHROME_PIN unset (refused)")
@@ -741,7 +773,19 @@ def selftest():
     return 1 if fails else 0
 
 
+def write_runs(path, rows):
+    """runs.tsv layout. Every row carries the pin, so a row can never be compared under another chrome_ver."""
+    with open(path, "w") as f:
+        f.write("axis\tarm\tn\trun\ttarget\twall_s_or_ms\tpeak_pss_kb\tstatus\tnote\tchrome_ver\n")
+        for r in rows:
+            wall = r.get("wall_s", r.get("wall_ms", ""))
+            f.write("\t".join(str(x) for x in [r["axis"], r["arm"], r["n"], r.get("run", ""),
+                                                r.get("target", "-"), wall, r.get("pss_kb", ""),
+                                                r["status"], r.get("note", ""), PIN]) + "\n")
+
+
 def main():
+    global RUNS
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=os.path.join(ROOT, "docs", "sprint", "footprint"))
     ap.add_argument("--selftest", action="store_true")
@@ -752,9 +796,30 @@ def main():
                     help="pages axis on the paired real URLs (N=10 round-robin, manuk-proc vs chrome-tabs, 3 runs)")
     ap.add_argument("--real-pages-mutant", action="store_true",
                     help="gate check: same run but navigating fixture pages; must come out WRONG_PAGE/FAIL")
+    ap.add_argument("--url-runs", type=int, metavar="K",
+                    help="urls axis only, K runs per arm (W4.E0.d); writes runs-urls.tsv and summary-urls.tsv")
     args = ap.parse_args()
     if args.selftest:
         sys.exit(selftest())
+    if args.url_runs:
+        if not PIN:
+            sys.exit("MANUK_CHROME_PIN unset: refusing to write rows without a chrome_ver")
+        if not os.path.exists(MCP) or not os.path.exists(CHROME):
+            sys.exit(f"missing {MCP} or pinned Chrome {CHROME}")
+        RUNS = args.url_runs  # run_urls, paired_targets and the verdict read the global
+        os.makedirs(args.out, exist_ok=True)
+        log_root = tempfile.mkdtemp(prefix="w4e0-root-")
+        try:
+            url_rows = run_urls(log_root, PIN)
+        finally:
+            shutil.rmtree(log_root, ignore_errors=True)
+        path = os.path.join(args.out, "runs-urls.tsv")
+        write_runs(path, url_rows)  # raw rows first: a summary can be re-derived, a lost run cannot
+        summ = build_summary(load_runs(path))
+        with open(os.path.join(args.out, "summary-urls.tsv"), "w") as f:
+            f.write("\n".join(summ) + "\n")
+        print("\n".join(summ))
+        return
     if args.summarize_only:
         write_summary(args.out)
         return
@@ -835,13 +900,7 @@ def main():
         shutil.rmtree(log_root, ignore_errors=True)
 
     # Dump the raw rows first: a summary can be re-derived, a lost run cannot.
-    with open(os.path.join(args.out, "runs.tsv"), "w") as f:
-        f.write("axis\tarm\tn\trun\ttarget\twall_s_or_ms\tpeak_pss_kb\tstatus\tnote\tchrome_ver\n")
-        for r in rows + fork_rows + url_rows:
-            wall = r.get("wall_s", r.get("wall_ms", ""))
-            f.write("\t".join(str(x) for x in [r["axis"], r["arm"], r["n"], r.get("run", ""),
-                                                r.get("target", "-"), wall, r.get("pss_kb", ""),
-                                                r["status"], r.get("note", ""), PIN]) + "\n")
+    write_runs(os.path.join(args.out, "runs.tsv"), rows + fork_rows + url_rows)
 
     write_summary(args.out)
 

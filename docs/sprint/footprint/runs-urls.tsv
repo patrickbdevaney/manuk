@@ -1,0 +1,201 @@
+axis	arm	n	run	target	wall_s_or_ms	peak_pss_kb	status	note	chrome_ver
+urls	manuk-proc	1	1	https://comix.to/	11.589	337414	OK	⚠hidden-text: 1113 text fragment(s) a human cannot see were withheld (low-contra	145.0.7632.116
+urls	chrome-proc	1	1	https://comix.to/	3.233	359087	OK		145.0.7632.116
+urls	manuk-proc	1	1	https://client.dkitrxmdwoqruvsi.net/	0.722	23698	OK	https://client.dkitrxmdwoqruvsi.net/ — "PP Live Casino"	145.0.7632.116
+urls	chrome-proc	1	1	https://client.dkitrxmdwoqruvsi.net/	1.154	221102	OK		145.0.7632.116
+urls	manuk-proc	1	1	https://www.mobile.bg/	12.813	172308	OK	https://www.mobile.bg/ — "Mobile.bg — Продажба на нови и употребявани автомобили	145.0.7632.116
+urls	chrome-proc	1	1	https://www.mobile.bg/	7.547	334828	OK		145.0.7632.116
+urls	manuk-proc	1	1	https://mkp.gem.gov.in/	9.147	23163	FAIL	page: p52860f:1	145.0.7632.116
+urls	chrome-proc	1	1	https://mkp.gem.gov.in/	9.185	227159	FAIL		145.0.7632.116
+urls	manuk-proc	1	1	https://app.ordertime.com/	5.973	136300	OK	https://app.ordertime.com/ — "Order Time"	145.0.7632.116
+urls	chrome-proc	1	1	https://app.ordertime.com/	3.838	323565	OK		145.0.7632.116
+urls	manuk-proc	1	1	https://www.puentedemando.com/	16.421	332624	OK	⚠hidden-text: 2110 text fragment(s) a human cannot see were withheld (low-contra	145.0.7632.116
+urls	chrome-proc	1	1	https://www.puentedemando.com/	4.431	386808	OK		145.0.7632.116
+urls	manuk-proc	1	1	https://basescan.org/	0.344	30575	CHALLENGE	marker=__cf_chl | https://basescan.org/?__cf_chl_rt_tk=JLT1z.UAFY0UgejapstLKRPqBqej8utQfMgQ0BPKUMM	145.0.7632.116
+urls	chrome-proc	1	1	https://basescan.org/	1.842	277634	CHALLENGE	marker=__cf_chl	145.0.7632.116
+urls	manuk-proc	1	1	https://ebanking.bdm-sa.com/	9.989	67453	OK	https://ebanking.bdm-sa.com/index.ebk — "BDM-sa Web-Banking"	145.0.7632.116
+urls	chrome-proc	1	1	https://ebanking.bdm-sa.com/	2.008	222168	OK		145.0.7632.116
+urls	manuk-proc	1	1	https://admin.zoomph.com/	4.145	42183	OK	https://authentication.zoomph.com/login?client_id=knsjmnjp6fjan19vr58kptg2c&resp	145.0.7632.116
+urls	chrome-proc	1	1	https://admin.zoomph.com/	2.922	229884	OK		145.0.7632.116
+urls	manuk-proc	1	1	https://virtual.lapampa.edu.ar/	30.014	23547	FAIL	page: p547c6f:1	145.0.7632.116
+urls	chrome-proc	1	1	https://virtual.lapampa.edu.ar/	60.072	226468	TIMEOUT		145.0.7632.116
+urls	manuk-proc	1	2	https://comix.to/	9.462	335169	OK	⚠hidden-text: 1113 text fragment(s) a human cannot see were withheld (low-contra	145.0.7632.116
+urls	chrome-proc	1	2	https://comix.to/	2.509	343738	OK		145.0.7632.116
+urls	manuk-proc	1	2	https://client.dkitrxmdwoqruvsi.net/	0.328	23962	OK	https://client.dkitrxmdwoqruvsi.net/ — "PP Live Casino"	145.0.7632.116
+urls	chrome-proc	1	2	https://client.dkitrxmdwoqruvsi.net/	0.79	221316	OK		145.0.7632.116
+urls	manuk-proc	1	2	https://www.mobile.bg/	9.188	158097	OK	https://www.mobile.bg/ — "Mobile.bg — Продажба на нови и употребявани автомобили	145.0.7632.116
+urls	chrome-proc	1	2	https://www.mobile.bg/	4.346	333365	OK		145.0.7632.116
+urls	manuk-proc	1	2	https://mkp.gem.gov.in/	8.374	22883	FAIL	page: p51af0a:1	145.0.7632.116
+urls	chrome-proc	1	2	https://mkp.gem.gov.in/	8.758	227549	FAIL		145.0.7632.116
+urls	manuk-proc	1	2	https://app.ordertime.com/	4.152	136473	OK	https://app.ordertime.com/ — "Order Time"	145.0.7632.116
+urls	chrome-proc	1	2	https://app.ordertime.com/	1.928	322264	OK		145.0.7632.116
+urls	manuk-proc	1	2	https://www.puentedemando.com/	9.848	418098	OK	⚠hidden-text: 2110 text fragment(s) a human cannot see were withheld (low-contra	145.0.7632.116
+urls	chrome-proc	1	2	https://www.puentedemando.com/	2.294	383251	OK		145.0.7632.116
+urls	manuk-proc	1	2	https://basescan.org/	0.339	23791	CHALLENGE	marker=__cf_chl | https://basescan.org/?__cf_chl_rt_tk=5U.6J1CjrH8mCpalIg7KagiUkCnUnWhBiJw4NEvuMqM	145.0.7632.116
+urls	chrome-proc	1	2	https://basescan.org/	1.747	304640	CHALLENGE	marker=__cf_chl	145.0.7632.116
+urls	manuk-proc	1	2	https://ebanking.bdm-sa.com/	7.102	60048	OK	https://ebanking.bdm-sa.com/index.ebk — "BDM-sa Web-Banking"	145.0.7632.116
+urls	chrome-proc	1	2	https://ebanking.bdm-sa.com/	1.815	221990	OK		145.0.7632.116
+urls	manuk-proc	1	2	https://admin.zoomph.com/	1.738	45852	OK	https://authentication.zoomph.com/login?client_id=knsjmnjp6fjan19vr58kptg2c&resp	145.0.7632.116
+urls	chrome-proc	1	2	https://admin.zoomph.com/	1.685	227317	OK		145.0.7632.116
+urls	manuk-proc	1	2	https://virtual.lapampa.edu.ar/	30.015	23415	FAIL	page: pdb06b3:1	145.0.7632.116
+urls	chrome-proc	1	2	https://virtual.lapampa.edu.ar/	60.02	226440	TIMEOUT		145.0.7632.116
+urls	manuk-proc	1	3	https://comix.to/	9.491	329779	OK	⚠hidden-text: 1102 text fragment(s) a human cannot see were withheld (low-contra	145.0.7632.116
+urls	chrome-proc	1	3	https://comix.to/	2.307	347223	OK		145.0.7632.116
+urls	manuk-proc	1	3	https://client.dkitrxmdwoqruvsi.net/	1.281	24139	OK	https://client.dkitrxmdwoqruvsi.net/ — "PP Live Casino"	145.0.7632.116
+urls	chrome-proc	1	3	https://client.dkitrxmdwoqruvsi.net/	1.047	222171	OK		145.0.7632.116
+urls	manuk-proc	1	3	https://www.mobile.bg/	9.267	155831	OK	https://www.mobile.bg/ — "Mobile.bg — Продажба на нови и употребявани автомобили	145.0.7632.116
+urls	chrome-proc	1	3	https://www.mobile.bg/	4.531	333597	OK		145.0.7632.116
+urls	manuk-proc	1	3	https://mkp.gem.gov.in/	8.372	23183	FAIL	page: pec2774:1	145.0.7632.116
+urls	chrome-proc	1	3	https://mkp.gem.gov.in/	8.776	230180	FAIL		145.0.7632.116
+urls	manuk-proc	1	3	https://app.ordertime.com/	3.976	136220	OK	https://app.ordertime.com/ — "Order Time"	145.0.7632.116
+urls	chrome-proc	1	3	https://app.ordertime.com/	2.36	320239	OK		145.0.7632.116
+urls	manuk-proc	1	3	https://www.puentedemando.com/	9.541	424919	OK	⚠hidden-text: 2110 text fragment(s) a human cannot see were withheld (low-contra	145.0.7632.116
+urls	chrome-proc	1	3	https://www.puentedemando.com/	2.532	369824	OK		145.0.7632.116
+urls	manuk-proc	1	3	https://basescan.org/	0.404	23639	CHALLENGE	marker=__cf_chl | https://basescan.org/?__cf_chl_rt_tk=fFuUa46uhGwcfbco0iWoePKu_m3dl9pU7xkDq1MeUIg	145.0.7632.116
+urls	chrome-proc	1	3	https://basescan.org/	2.087	303939	CHALLENGE	marker=__cf_chl	145.0.7632.116
+urls	manuk-proc	1	3	https://ebanking.bdm-sa.com/	7.126	60102	OK	https://ebanking.bdm-sa.com/index.ebk — "BDM-sa Web-Banking"	145.0.7632.116
+urls	chrome-proc	1	3	https://ebanking.bdm-sa.com/	1.785	229017	OK		145.0.7632.116
+urls	manuk-proc	1	3	https://admin.zoomph.com/	1.742	45120	OK	https://authentication.zoomph.com/login?client_id=knsjmnjp6fjan19vr58kptg2c&resp	145.0.7632.116
+urls	chrome-proc	1	3	https://admin.zoomph.com/	1.643	238887	OK		145.0.7632.116
+urls	manuk-proc	1	3	https://virtual.lapampa.edu.ar/	30.015	23027	FAIL	page: p224dc2:1	145.0.7632.116
+urls	chrome-proc	1	3	https://virtual.lapampa.edu.ar/	60.101	227161	TIMEOUT		145.0.7632.116
+urls	manuk-proc	1	4	https://comix.to/	12.734	332896	OK	⚠hidden-text: 1102 text fragment(s) a human cannot see were withheld (low-contra	145.0.7632.116
+urls	chrome-proc	1	4	https://comix.to/	2.534	343307	OK		145.0.7632.116
+urls	manuk-proc	1	4	https://client.dkitrxmdwoqruvsi.net/	0.331	23703	OK	https://client.dkitrxmdwoqruvsi.net/ — "PP Live Casino"	145.0.7632.116
+urls	chrome-proc	1	4	https://client.dkitrxmdwoqruvsi.net/	0.822	218327	OK		145.0.7632.116
+urls	manuk-proc	1	4	https://www.mobile.bg/	8.707	164570	OK	https://www.mobile.bg/ — "Mobile.bg — Продажба на нови и употребявани автомобили	145.0.7632.116
+urls	chrome-proc	1	4	https://www.mobile.bg/	4.192	334015	OK		145.0.7632.116
+urls	manuk-proc	1	4	https://mkp.gem.gov.in/	8.369	23095	FAIL	page: pbd1050:1	145.0.7632.116
+urls	chrome-proc	1	4	https://mkp.gem.gov.in/	8.686	226230	FAIL		145.0.7632.116
+urls	manuk-proc	1	4	https://app.ordertime.com/	4.347	138848	OK	https://app.ordertime.com/ — "Order Time"	145.0.7632.116
+urls	chrome-proc	1	4	https://app.ordertime.com/	1.945	323035	OK		145.0.7632.116
+urls	manuk-proc	1	4	https://www.puentedemando.com/	10.295	421331	OK	⚠hidden-text: 2110 text fragment(s) a human cannot see were withheld (low-contra	145.0.7632.116
+urls	chrome-proc	1	4	https://www.puentedemando.com/	2.367	368040	OK		145.0.7632.116
+urls	manuk-proc	1	4	https://basescan.org/	0.445	23843	CHALLENGE	marker=__cf_chl | https://basescan.org/?__cf_chl_rt_tk=X4n4kfn5TvdIyNURpoJKgssavg299mkRouKjH7gfugo	145.0.7632.116
+urls	chrome-proc	1	4	https://basescan.org/	2.299	286972	CHALLENGE	marker=__cf_chl	145.0.7632.116
+urls	manuk-proc	1	4	https://ebanking.bdm-sa.com/	7.282	68944	OK	https://ebanking.bdm-sa.com/index.ebk — "BDM-sa Web-Banking"	145.0.7632.116
+urls	chrome-proc	1	4	https://ebanking.bdm-sa.com/	1.663	221025	OK		145.0.7632.116
+urls	manuk-proc	1	4	https://admin.zoomph.com/	1.327	41919	OK	https://authentication.zoomph.com/login?client_id=knsjmnjp6fjan19vr58kptg2c&resp	145.0.7632.116
+urls	chrome-proc	1	4	https://admin.zoomph.com/	1.646	229666	OK		145.0.7632.116
+urls	manuk-proc	1	4	https://virtual.lapampa.edu.ar/	30.015	23224	FAIL	page: pd238bf:1	145.0.7632.116
+urls	chrome-proc	1	4	https://virtual.lapampa.edu.ar/	60.026	227953	TIMEOUT		145.0.7632.116
+urls	manuk-proc	1	5	https://comix.to/	13.577	329375	OK	⚠hidden-text: 1102 text fragment(s) a human cannot see were withheld (low-contra	145.0.7632.116
+urls	chrome-proc	1	5	https://comix.to/	1.975	337468	OK		145.0.7632.116
+urls	manuk-proc	1	5	https://client.dkitrxmdwoqruvsi.net/	0.325	24256	OK	https://client.dkitrxmdwoqruvsi.net/ — "PP Live Casino"	145.0.7632.116
+urls	chrome-proc	1	5	https://client.dkitrxmdwoqruvsi.net/	0.81	218924	OK		145.0.7632.116
+urls	manuk-proc	1	5	https://www.mobile.bg/	9.119	157164	OK	https://www.mobile.bg/ — "Mobile.bg — Продажба на нови и употребявани автомобили	145.0.7632.116
+urls	chrome-proc	1	5	https://www.mobile.bg/	4.143	335894	OK		145.0.7632.116
+urls	manuk-proc	1	5	https://mkp.gem.gov.in/	8.354	23251	FAIL	page: p1ed8af:1	145.0.7632.116
+urls	chrome-proc	1	5	https://mkp.gem.gov.in/	8.995	227242	FAIL		145.0.7632.116
+urls	manuk-proc	1	5	https://app.ordertime.com/	3.909	138201	OK	https://app.ordertime.com/ — "Order Time"	145.0.7632.116
+urls	chrome-proc	1	5	https://app.ordertime.com/	2.693	321512	OK		145.0.7632.116
+urls	manuk-proc	1	5	https://www.puentedemando.com/	12.011	420904	OK	⚠hidden-text: 2110 text fragment(s) a human cannot see were withheld (low-contra	145.0.7632.116
+urls	chrome-proc	1	5	https://www.puentedemando.com/	4.574	370393	OK		145.0.7632.116
+urls	manuk-proc	1	5	https://basescan.org/	1.292	23803	CHALLENGE	marker=__cf_chl | https://basescan.org/?__cf_chl_rt_tk=.Z6cnZo7wCQA1Lolesaj1hMfLY8f0KvRcgNQViioDDU	145.0.7632.116
+urls	chrome-proc	1	5	https://basescan.org/	2.06	276870	CHALLENGE	marker=__cf_chl	145.0.7632.116
+urls	manuk-proc	1	5	https://ebanking.bdm-sa.com/	9.555	59642	OK	https://ebanking.bdm-sa.com/index.ebk — "BDM-sa Web-Banking"	145.0.7632.116
+urls	chrome-proc	1	5	https://ebanking.bdm-sa.com/	1.455	222255	OK		145.0.7632.116
+urls	manuk-proc	1	5	https://admin.zoomph.com/	3.923	41810	OK	https://authentication.zoomph.com/login?client_id=knsjmnjp6fjan19vr58kptg2c&resp	145.0.7632.116
+urls	chrome-proc	1	5	https://admin.zoomph.com/	3.027	224915	OK		145.0.7632.116
+urls	manuk-proc	1	5	https://virtual.lapampa.edu.ar/	30.015	23431	FAIL	page: pf5ab50:1	145.0.7632.116
+urls	chrome-proc	1	5	https://virtual.lapampa.edu.ar/	60.1	226245	TIMEOUT		145.0.7632.116
+urls	manuk-proc	1	6	https://comix.to/	10.276	330210	OK	⚠hidden-text: 1102 text fragment(s) a human cannot see were withheld (low-contra	145.0.7632.116
+urls	chrome-proc	1	6	https://comix.to/	2.453	343494	OK		145.0.7632.116
+urls	manuk-proc	1	6	https://client.dkitrxmdwoqruvsi.net/	0.316	23791	OK	https://client.dkitrxmdwoqruvsi.net/ — "PP Live Casino"	145.0.7632.116
+urls	chrome-proc	1	6	https://client.dkitrxmdwoqruvsi.net/	0.951	219086	OK		145.0.7632.116
+urls	manuk-proc	1	6	https://www.mobile.bg/	9.261	158099	OK	https://www.mobile.bg/ — "Mobile.bg — Продажба на нови и употребявани автомобили	145.0.7632.116
+urls	chrome-proc	1	6	https://www.mobile.bg/	3.983	328023	OK		145.0.7632.116
+urls	manuk-proc	1	6	https://mkp.gem.gov.in/	8.406	22781	FAIL	page: p65c2ec:1	145.0.7632.116
+urls	chrome-proc	1	6	https://mkp.gem.gov.in/	8.762	226415	FAIL		145.0.7632.116
+urls	manuk-proc	1	6	https://app.ordertime.com/	3.697	138413	OK	https://app.ordertime.com/ — "Order Time"	145.0.7632.116
+urls	chrome-proc	1	6	https://app.ordertime.com/	2.384	324107	OK		145.0.7632.116
+urls	manuk-proc	1	6	https://www.puentedemando.com/	9.598	420677	OK	⚠hidden-text: 2110 text fragment(s) a human cannot see were withheld (low-contra	145.0.7632.116
+urls	chrome-proc	1	6	https://www.puentedemando.com/	2.226	380950	OK		145.0.7632.116
+urls	manuk-proc	1	6	https://basescan.org/	0.377	24299	CHALLENGE	marker=__cf_chl | https://basescan.org/?__cf_chl_rt_tk=0q1vYFKfKuVtxK3cBwPO5aStNBL4_a_aI1SQFbjGfk8	145.0.7632.116
+urls	chrome-proc	1	6	https://basescan.org/	1.862	291259	CHALLENGE	marker=__cf_chl	145.0.7632.116
+urls	manuk-proc	1	6	https://ebanking.bdm-sa.com/	7.365	60168	OK	https://ebanking.bdm-sa.com/index.ebk — "BDM-sa Web-Banking"	145.0.7632.116
+urls	chrome-proc	1	6	https://ebanking.bdm-sa.com/	1.64	223392	OK		145.0.7632.116
+urls	manuk-proc	1	6	https://admin.zoomph.com/	1.855	45483	OK	https://authentication.zoomph.com/login?client_id=knsjmnjp6fjan19vr58kptg2c&resp	145.0.7632.116
+urls	chrome-proc	1	6	https://admin.zoomph.com/	1.89	240034	OK		145.0.7632.116
+urls	manuk-proc	1	6	https://virtual.lapampa.edu.ar/	30.014	23025	FAIL	page: pf2857d:1	145.0.7632.116
+urls	chrome-proc	1	6	https://virtual.lapampa.edu.ar/	60.101	228570	TIMEOUT		145.0.7632.116
+urls	manuk-proc	1	7	https://comix.to/	11.531	330083	OK	⚠hidden-text: 1102 text fragment(s) a human cannot see were withheld (low-contra	145.0.7632.116
+urls	chrome-proc	1	7	https://comix.to/	2.629	343241	OK		145.0.7632.116
+urls	manuk-proc	1	7	https://client.dkitrxmdwoqruvsi.net/	1.349	23759	OK	https://client.dkitrxmdwoqruvsi.net/ — "PP Live Casino"	145.0.7632.116
+urls	chrome-proc	1	7	https://client.dkitrxmdwoqruvsi.net/	1.541	217775	OK		145.0.7632.116
+urls	manuk-proc	1	7	https://www.mobile.bg/	13.592	160895	OK	https://www.mobile.bg/ — "Mobile.bg — Продажба на нови и употребявани автомобили	145.0.7632.116
+urls	chrome-proc	1	7	https://www.mobile.bg/	5.134	337325	OK		145.0.7632.116
+urls	manuk-proc	1	7	https://mkp.gem.gov.in/	8.381	23015	FAIL	page: p4fa701:1	145.0.7632.116
+urls	chrome-proc	1	7	https://mkp.gem.gov.in/	8.823	226116	FAIL		145.0.7632.116
+urls	manuk-proc	1	7	https://app.ordertime.com/	5.531	135899	OK	https://app.ordertime.com/ — "Order Time"	145.0.7632.116
+urls	chrome-proc	1	7	https://app.ordertime.com/	2.429	266343	OK		145.0.7632.116
+urls	manuk-proc	1	7	https://www.puentedemando.com/	12.957	425597	OK	⚠hidden-text: 2110 text fragment(s) a human cannot see were withheld (low-contra	145.0.7632.116
+urls	chrome-proc	1	7	https://www.puentedemando.com/	4.467	382197	OK		145.0.7632.116
+urls	manuk-proc	1	7	https://basescan.org/	0.363	29295	CHALLENGE	marker=__cf_chl | https://basescan.org/?__cf_chl_rt_tk=DHfxdMHyF0AO8dmvy.j.0tTXabFlKlXoX3R2Hjhz4DA	145.0.7632.116
+urls	chrome-proc	1	7	https://basescan.org/	2.057	287639	CHALLENGE	marker=__cf_chl	145.0.7632.116
+urls	manuk-proc	1	7	https://ebanking.bdm-sa.com/	10.46	60378	OK	https://ebanking.bdm-sa.com/index.ebk — "BDM-sa Web-Banking"	145.0.7632.116
+urls	chrome-proc	1	7	https://ebanking.bdm-sa.com/	1.883	227579	OK		145.0.7632.116
+urls	manuk-proc	1	7	https://admin.zoomph.com/	3.926	41977	OK	https://authentication.zoomph.com/login?client_id=knsjmnjp6fjan19vr58kptg2c&resp	145.0.7632.116
+urls	chrome-proc	1	7	https://admin.zoomph.com/	3.128	226906	OK		145.0.7632.116
+urls	manuk-proc	1	7	https://virtual.lapampa.edu.ar/	30.015	22991	FAIL	page: p79ae9b:1	145.0.7632.116
+urls	chrome-proc	1	7	https://virtual.lapampa.edu.ar/	60.101	226595	TIMEOUT		145.0.7632.116
+urls	manuk-proc	1	8	https://comix.to/	9.302	330859	OK	⚠hidden-text: 1102 text fragment(s) a human cannot see were withheld (low-contra	145.0.7632.116
+urls	chrome-proc	1	8	https://comix.to/	2.568	342377	OK		145.0.7632.116
+urls	manuk-proc	1	8	https://client.dkitrxmdwoqruvsi.net/	0.303	23821	OK	https://client.dkitrxmdwoqruvsi.net/ — "PP Live Casino"	145.0.7632.116
+urls	chrome-proc	1	8	https://client.dkitrxmdwoqruvsi.net/	0.793	220844	OK		145.0.7632.116
+urls	manuk-proc	1	8	https://www.mobile.bg/	9.139	160616	OK	https://www.mobile.bg/ — "Mobile.bg — Продажба на нови и употребявани автомобили	145.0.7632.116
+urls	chrome-proc	1	8	https://www.mobile.bg/	4.731	333243	OK		145.0.7632.116
+urls	manuk-proc	1	8	https://mkp.gem.gov.in/	8.409	23165	FAIL	page: p6f5709:1	145.0.7632.116
+urls	chrome-proc	1	8	https://mkp.gem.gov.in/	8.863	227091	FAIL		145.0.7632.116
+urls	manuk-proc	1	8	https://app.ordertime.com/	4.002	136837	OK	https://app.ordertime.com/ — "Order Time"	145.0.7632.116
+urls	chrome-proc	1	8	https://app.ordertime.com/	2.625	323858	OK		145.0.7632.116
+urls	manuk-proc	1	8	https://www.puentedemando.com/	9.699	421245	OK	⚠hidden-text: 2110 text fragment(s) a human cannot see were withheld (low-contra	145.0.7632.116
+urls	chrome-proc	1	8	https://www.puentedemando.com/	3.222	363359	OK		145.0.7632.116
+urls	manuk-proc	1	8	https://basescan.org/	0.534	23793	CHALLENGE	marker=__cf_chl | https://basescan.org/?__cf_chl_rt_tk=RbG4ZGRpQQk0leBq5pE84Fp.GszJ0ZQ6c_z2DLRexYY	145.0.7632.116
+urls	chrome-proc	1	8	https://basescan.org/	1.674	289251	CHALLENGE	marker=__cf_chl	145.0.7632.116
+urls	manuk-proc	1	8	https://ebanking.bdm-sa.com/	7.066	59782	OK	https://ebanking.bdm-sa.com/index.ebk — "BDM-sa Web-Banking"	145.0.7632.116
+urls	chrome-proc	1	8	https://ebanking.bdm-sa.com/	1.571	221060	OK		145.0.7632.116
+urls	manuk-proc	1	8	https://admin.zoomph.com/	1.657	42168	OK	https://authentication.zoomph.com/login?client_id=knsjmnjp6fjan19vr58kptg2c&resp	145.0.7632.116
+urls	chrome-proc	1	8	https://admin.zoomph.com/	1.909	238980	OK		145.0.7632.116
+urls	manuk-proc	1	8	https://virtual.lapampa.edu.ar/	30.016	23028	FAIL	page: p4e535a:1	145.0.7632.116
+urls	chrome-proc	1	8	https://virtual.lapampa.edu.ar/	60.101	228519	TIMEOUT		145.0.7632.116
+urls	manuk-proc	1	9	https://comix.to/	10.613	334127	OK	⚠hidden-text: 1102 text fragment(s) a human cannot see were withheld (low-contra	145.0.7632.116
+urls	chrome-proc	1	9	https://comix.to/	2.113	341707	OK		145.0.7632.116
+urls	manuk-proc	1	9	https://client.dkitrxmdwoqruvsi.net/	0.421	24045	OK	https://client.dkitrxmdwoqruvsi.net/ — "PP Live Casino"	145.0.7632.116
+urls	chrome-proc	1	9	https://client.dkitrxmdwoqruvsi.net/	0.791	220965	OK		145.0.7632.116
+urls	manuk-proc	1	9	https://www.mobile.bg/	9.078	158533	OK	https://www.mobile.bg/ — "Mobile.bg — Продажба на нови и употребявани автомобили	145.0.7632.116
+urls	chrome-proc	1	9	https://www.mobile.bg/	4.276	329999	OK		145.0.7632.116
+urls	manuk-proc	1	9	https://mkp.gem.gov.in/	8.37	23097	FAIL	page: p62bf00:1	145.0.7632.116
+urls	chrome-proc	1	9	https://mkp.gem.gov.in/	8.791	227029	FAIL		145.0.7632.116
+urls	manuk-proc	1	9	https://app.ordertime.com/	11.185	137632	OK	https://app.ordertime.com/ — "Order Time"	145.0.7632.116
+urls	chrome-proc	1	9	https://app.ordertime.com/	2.479	325341	OK		145.0.7632.116
+urls	manuk-proc	1	9	https://www.puentedemando.com/	10.331	417870	OK	⚠hidden-text: 2110 text fragment(s) a human cannot see were withheld (low-contra	145.0.7632.116
+urls	chrome-proc	1	9	https://www.puentedemando.com/	2.684	368244	OK		145.0.7632.116
+urls	manuk-proc	1	9	https://basescan.org/	0.521	24284	CHALLENGE	marker=__cf_chl | https://basescan.org/?__cf_chl_rt_tk=hVqD3nbV2E3mhnIg2ZvyzbEvJI37M2XmW8v.RQ6uDoo	145.0.7632.116
+urls	chrome-proc	1	9	https://basescan.org/	1.311	262434	CHALLENGE	marker=__cf_chl	145.0.7632.116
+urls	manuk-proc	1	9	https://ebanking.bdm-sa.com/	7.114	59951	OK	https://ebanking.bdm-sa.com/index.ebk — "BDM-sa Web-Banking"	145.0.7632.116
+urls	chrome-proc	1	9	https://ebanking.bdm-sa.com/	1.701	228359	OK		145.0.7632.116
+urls	manuk-proc	1	9	https://admin.zoomph.com/	1.303	42062	OK	https://authentication.zoomph.com/login?client_id=knsjmnjp6fjan19vr58kptg2c&resp	145.0.7632.116
+urls	chrome-proc	1	9	https://admin.zoomph.com/	1.782	240644	OK		145.0.7632.116
+urls	manuk-proc	1	9	https://virtual.lapampa.edu.ar/	30.016	22891	FAIL	page: p96c862:1	145.0.7632.116
+urls	chrome-proc	1	9	https://virtual.lapampa.edu.ar/	60.1	225555	TIMEOUT		145.0.7632.116
+urls	manuk-proc	1	10	https://comix.to/	9.266	329698	OK	⚠hidden-text: 1098 text fragment(s) a human cannot see were withheld (low-contra	145.0.7632.116
+urls	chrome-proc	1	10	https://comix.to/	2.394	348872	OK		145.0.7632.116
+urls	manuk-proc	1	10	https://client.dkitrxmdwoqruvsi.net/	0.317	23783	OK	https://client.dkitrxmdwoqruvsi.net/ — "PP Live Casino"	145.0.7632.116
+urls	chrome-proc	1	10	https://client.dkitrxmdwoqruvsi.net/	0.891	221039	OK		145.0.7632.116
+urls	manuk-proc	1	10	https://www.mobile.bg/	9.358	156656	OK	https://www.mobile.bg/ — "Mobile.bg — Продажба на нови и употребявани автомобили	145.0.7632.116
+urls	chrome-proc	1	10	https://www.mobile.bg/	5.591	339335	OK		145.0.7632.116
+urls	manuk-proc	1	10	https://mkp.gem.gov.in/	8.379	23044	FAIL	page: pc58d62:1	145.0.7632.116
+urls	chrome-proc	1	10	https://mkp.gem.gov.in/	8.923	227616	FAIL		145.0.7632.116
+urls	manuk-proc	1	10	https://app.ordertime.com/	3.945	138195	OK	https://app.ordertime.com/ — "Order Time"	145.0.7632.116
+urls	chrome-proc	1	10	https://app.ordertime.com/	2.362	264395	OK		145.0.7632.116
+urls	manuk-proc	1	10	https://www.puentedemando.com/	10.131	423963	OK	⚠hidden-text: 2110 text fragment(s) a human cannot see were withheld (low-contra	145.0.7632.116
+urls	chrome-proc	1	10	https://www.puentedemando.com/	2.391	375793	OK		145.0.7632.116
+urls	manuk-proc	1	10	https://basescan.org/	0.456	30647	CHALLENGE	marker=__cf_chl | https://basescan.org/?__cf_chl_rt_tk=FQZEGE6RA_R4inxXkY0U9AJoS301gaZgJA_Ddf5R9P0	145.0.7632.116
+urls	chrome-proc	1	10	https://basescan.org/	2.189	288127	CHALLENGE	marker=__cf_chl	145.0.7632.116
+urls	manuk-proc	1	10	https://ebanking.bdm-sa.com/	8.049	60133	OK	https://ebanking.bdm-sa.com/index.ebk — "BDM-sa Web-Banking"	145.0.7632.116
+urls	chrome-proc	1	10	https://ebanking.bdm-sa.com/	1.753	221895	OK		145.0.7632.116
+urls	manuk-proc	1	10	https://admin.zoomph.com/	3.96	41884	OK	https://authentication.zoomph.com/login?client_id=knsjmnjp6fjan19vr58kptg2c&resp	145.0.7632.116
+urls	chrome-proc	1	10	https://admin.zoomph.com/	2.742	225929	OK		145.0.7632.116
+urls	manuk-proc	1	10	https://virtual.lapampa.edu.ar/	30.014	23060	FAIL	page: pdb3575:1	145.0.7632.116
+urls	chrome-proc	1	10	https://virtual.lapampa.edu.ar/	60.016	227534	TIMEOUT		145.0.7632.116
