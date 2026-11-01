@@ -129,6 +129,10 @@ cargo run -p manuk-wpt
 - **Agent surface:** accessibility tree (role, accessible name, state, focus, geometry) computed without page
   JavaScript; occlusion-aware hit testing; actions that dispatch real DOM events; a provider-neutral inference
   interface; page text delivered to models only inside an untrusted-content boundary.
+- **Agent grants:** `manuk-mcp` takes `--read-origins` and `--write-origins` (origin sets for navigation, reads, typing
+  and POSTs), and `--confirm=submit,download,navigate-new-origin` (actions that need `confirm=true`). Credential and
+  payment fields are never typed by the agent (HANDOFF), and out-of-set origins are REFUSED on both the in-process and
+  Chrome backends (the Chrome blocked-iframe socket residual is listed in the gaps). Flags, verdicts and open gaps: [docs/sprint/BACKENDS.md](docs/sprint/BACKENDS.md#grants-w39b).
 
 ## Known gaps and non-goals
 

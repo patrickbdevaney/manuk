@@ -28,6 +28,48 @@ page, both backends); `cdp.rs` / `checkpoint.rs` / `world.rs` cover the deeper p
 - **screenshot `handle`.** Ignored on both backends (viewport only), as the tool reply says.
 - **Injection shield.** Both backends return a verdict; chrome computes it from DOMSnapshot paint data (R4.1), manuk from its own layout.
 
+## Grants (W3.9.b)
+
+Grants are the agent's permission surface, enforced in the backend-agnostic session (`mcp/src/session.rs`, `gate`)
+so one policy covers `--backend manuk` and `--backend chrome`. A refused or confirm-gated call is judged before it
+reaches the backend. Page-side enforcement is separate (see Gaps). Source of truth for the flags:
+`parse_grants` in `mcp/src/policy.rs`; both `--flag value` and `--flag=value` forms are accepted.
+
+| flag | meaning |
+|---|---|
+| `--read-origins a,b` | origins the agent may GET: navigate, follow a link, submit a GET form. Repeatable, values merge. |
+| `--write-origins a,b` | origins the agent may type into or POST to. Repeatable, values merge. |
+| `--confirm=submit,download,navigate-new-origin` | these actions need an explicit `confirm=true` on the call. Unknown kinds are an error. |
+
+Origins are `scheme://host[:port]`; anything else is an error at startup. An empty set means unrestricted on that
+axis. With no flags at all the gate is off (`is_open`), the headless default. `--read-origins` alone leaves typing and
+same-origin POSTs unrestricted, and a cross-origin form POST is refused whenever `--write-origins` is empty.
+
+Verdicts and the wording the agent sees (each reply ends `; nothing was sent`):
+
+- **allow**: the call runs.
+- **CONFIRM REQUIRED (`<kind>`)**: `submit`, `download` or `navigate-new-origin` need `confirm=true`. The same call
+  repeated with `confirm=true` runs. `--confirm=submit` also gates clicks whose accessible name contains a risky word
+  (delete, remove, pay, purchase, buy now, place order, transfer, send money, confirm order, unsubscribe, close account).
+- **HANDOFF**: the target is a password, one-time-code, `cc-*`, `current-password` or `new-password` field. The agent
+  never types credentials or payment data; no flag lets it. The reply asks the human to do the step.
+- **REFUSED**: the origin is outside `--read-origins` or `--write-origins` (`origin not in read set` /
+  `origin not in write set`), or a cross-origin form POST with no write set.
+
+Gaps (named, not faked):
+
+- **Chrome blocked iframe.** For a cross-origin iframe navigation Chrome may still open a bare TCP socket to the
+  refused origin (no request line, 0 bytes). The loopback gate counts request lines, so it does not see this. Open as
+  W3.9.a.a.
+- **Frames in observe.** `observe` returns no frame content on either backend, so there is nothing to drop from it
+  yet. Frame-merged observation is W3.7.
+- **Name-based judgement.** When the backend cannot describe an element, a click is judged by its name alone; the
+  risky-word list is a heuristic, not a classifier.
+- **WebSocket.** Upgrades are judged as writes in `manuk_net` (`engine/net/src/scope.rs`, `websocket.rs`); the chrome
+  WebSocket leak is closed by W4.D1.a. Frames carry data out, so a read-set origin is not enough to open one.
+- **Page-side enforcement** is in `manuk_net` on the manuk backend and in a `Fetch.requestPaused` interceptor on the
+  chrome backend (W3.9.a). Gate: `mcp/tests/origins.rs`, `mcp/tests/grants.rs`.
+
 ## Follow-ups (no cell above is "missing" without one)
 - CB.1.a.a: manuk fires `focus`/`focusin` events on `act focus` (engine `el_focus` binding), so the page probe passes on both backends.
 - R4.1.b (existing): chrome checkpoint must not claim CLIENT.
