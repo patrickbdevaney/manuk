@@ -1,0 +1,455 @@
+chrome_ver	arm	task	run	turn	tool	result_bytes	output_tokens
+145.0.7632.116	manuk-noretry	L01	1	1	mcp__browser__navigate	20568	65
+145.0.7632.116	manuk-noretry	L01	1	2		0	126
+145.0.7632.116	manuk-noretry	L02	1	1	mcp__browser__navigate	2352	84
+145.0.7632.116	manuk-noretry	L02	1	2	mcp__browser__act	3173	117
+145.0.7632.116	manuk-noretry	L02	1	3		0	245
+145.0.7632.116	manuk-noretry	L03	1	1	mcp__browser__navigate	20568	60
+145.0.7632.116	manuk-noretry	L03	1	2	mcp__browser__act	16402	52
+145.0.7632.116	manuk-noretry	L03	1	3	mcp__browser__extract	1403	165
+145.0.7632.116	manuk-noretry	L03	1	4		0	170
+145.0.7632.116	manuk-noretry	L04	1	1	mcp__browser__navigate	20568	41
+145.0.7632.116	manuk-noretry	L04	1	2	mcp__browser__act	2367	37
+145.0.7632.116	manuk-noretry	L04	1	3		0	129
+145.0.7632.116	manuk-noretry	L05	1	1	mcp__browser__navigate	2788	90
+145.0.7632.116	manuk-noretry	L05	1	2	mcp__browser__navigate	1782	143
+145.0.7632.116	manuk-noretry	L05	1	3		0	254
+145.0.7632.116	manuk-noretry	L06	1	1	mcp__browser__navigate	21113	69
+145.0.7632.116	manuk-noretry	L06	1	2		0	268
+145.0.7632.116	manuk-noretry	L07	1	1	mcp__browser__navigate	20568	51
+145.0.7632.116	manuk-noretry	L07	1	2		0	135
+145.0.7632.116	manuk-noretry	L08	1	1	mcp__browser__navigate	256	57
+145.0.7632.116	manuk-noretry	L08	1	2	mcp__browser__extract	1788	24
+145.0.7632.116	manuk-noretry	L08	1	3		0	133
+145.0.7632.116	manuk-noretry	L09	1	1	mcp__browser__navigate	1886	85
+145.0.7632.116	manuk-noretry	L09	1	2	mcp__browser__act	2363	73
+145.0.7632.116	manuk-noretry	L09	1	3		0	412
+145.0.7632.116	manuk-noretry	L10	1	1	mcp__browser__navigate	1886	57
+145.0.7632.116	manuk-noretry	L10	1	2	mcp__browser__find	242	50
+145.0.7632.116	manuk-noretry	L10	1	3	mcp__browser__navigate	256	86
+145.0.7632.116	manuk-noretry	L10	1	4	mcp__browser__navigate	575	74
+145.0.7632.116	manuk-noretry	L10	1	5		0	366
+145.0.7632.116	manuk-noretry	L11	1	1	mcp__browser__navigate	514	42
+145.0.7632.116	manuk-noretry	L11	1	2	mcp__browser__extract	1619	25
+145.0.7632.116	manuk-noretry	L11	1	3		0	159
+145.0.7632.116	manuk-noretry	L12	1	1	mcp__browser__navigate	453	102
+145.0.7632.116	manuk-noretry	L12	1	2	mcp__browser__scroll+mcp__browser__extract	117	154
+145.0.7632.116	manuk-noretry	L12	1	3	mcp__browser__scroll	116	81
+145.0.7632.116	manuk-noretry	L12	1	4	mcp__browser__scroll	282	81
+145.0.7632.116	manuk-noretry	L12	1	5	mcp__browser__wait_for	64	66
+145.0.7632.116	manuk-noretry	L12	1	6	mcp__browser__wait_for	94	98
+145.0.7632.116	manuk-noretry	L12	1	7	mcp__browser__extract	4848	92
+145.0.7632.116	manuk-noretry	L12	1	8	mcp__browser__scroll	145	81
+145.0.7632.116	manuk-noretry	L12	1	9	mcp__browser__wait_for	100	107
+145.0.7632.116	manuk-noretry	L12	1	10	mcp__browser__extract	4849	92
+145.0.7632.116	manuk-noretry	L12	1	11	mcp__browser__scroll	118	83
+145.0.7632.116	manuk-noretry	L12	1	12	mcp__browser__scroll	283	83
+145.0.7632.116	manuk-noretry	L12	1	13	mcp__browser__wait_for	110	101
+145.0.7632.116	manuk-noretry	L12	1	14	mcp__browser__observe	436	66
+145.0.7632.116	manuk-noretry	L12	1	15	mcp__browser__scroll	118	82
+145.0.7632.116	manuk-noretry	L12	1	16	mcp__browser__scroll	283	81
+145.0.7632.116	manuk-noretry	L12	1	17	mcp__browser__extract	3294	164
+145.0.7632.116	manuk-noretry	L12	1	18	mcp__browser__wait_for	110	122
+145.0.7632.116	manuk-noretry	L12	1	19	mcp__browser__scroll	117	84
+145.0.7632.116	manuk-noretry	L12	1	20	mcp__browser__scroll	283	82
+145.0.7632.116	manuk-noretry	L12	1	21		0	848
+145.0.7632.116	manuk-noretry	L13	1	1	mcp__browser__navigate	2352	37
+145.0.7632.116	manuk-noretry	L13	1	2	mcp__browser__extract	2320	98
+145.0.7632.116	manuk-noretry	L13	1	3		0	234
+145.0.7632.116	manuk-noretry	L14	1	1	mcp__browser__navigate	972	54
+145.0.7632.116	manuk-noretry	L14	1	2	mcp__browser__extract	279	57
+145.0.7632.116	manuk-noretry	L14	1	3		0	470
+145.0.7632.116	manuk-noretry	L15	1	1	mcp__browser__navigate	317	52
+145.0.7632.116	manuk-noretry	L15	1	2		0	100
+145.0.7632.116	manuk-noretry	L16	1	1	mcp__browser__navigate	2457	100
+145.0.7632.116	manuk-noretry	L16	1	2		0	118
+145.0.7632.116	manuk-noretry	L17	1	1	mcp__browser__navigate	4114	100
+145.0.7632.116	manuk-noretry	L17	1	2	mcp__browser__extract	2465	155
+145.0.7632.116	manuk-noretry	L17	1	3	mcp__browser__extract	6556	87
+145.0.7632.116	manuk-noretry	L17	1	4		0	165
+145.0.7632.116	manuk-noretry	L18	1	1	mcp__browser__navigate	1825	127
+145.0.7632.116	manuk-noretry	L18	1	2		0	280
+145.0.7632.116	manuk-noretry	L19	1	1	mcp__browser__navigate	1822	110
+145.0.7632.116	manuk-noretry	L19	1	2		0	103
+145.0.7632.116	manuk-noretry	L20	1	1	mcp__browser__navigate	4108	149
+145.0.7632.116	manuk-noretry	L20	1	2		0	177
+145.0.7632.116	manuk-noretry	L21	1	1	mcp__browser__navigate	31836	61
+145.0.7632.116	manuk-noretry	L21	1	2	mcp__browser__type	16301	62
+145.0.7632.116	manuk-noretry	L21	1	3	mcp__browser__extract	3180	161
+145.0.7632.116	manuk-noretry	L21	1	4		0	155
+145.0.7632.116	manuk-noretry	L22	1	1	mcp__browser__navigate	11258	51
+145.0.7632.116	manuk-noretry	L22	1	2	mcp__browser__extract	2957	85
+145.0.7632.116	manuk-noretry	L22	1	3		0	155
+145.0.7632.116	manuk-noretry	L23	1	1	mcp__browser__navigate	20568	82
+145.0.7632.116	manuk-noretry	L23	1	2	mcp__browser__act	14074	71
+145.0.7632.116	manuk-noretry	L23	1	3	mcp__browser__extract	1406	106
+145.0.7632.116	manuk-noretry	L23	1	4		0	362
+145.0.7632.116	manuk-noretry	L24	1	1	mcp__browser__navigate	11258	49
+145.0.7632.116	manuk-noretry	L24	1	2	mcp__browser__extract	2970	102
+145.0.7632.116	manuk-noretry	L24	1	3		0	174
+145.0.7632.116	manuk-noretry	L25	1	1	mcp__browser__navigate	21113	111
+145.0.7632.116	manuk-noretry	L25	1	2		0	102
+145.0.7632.116	manuk-noretry	F01	1	1	mcp__browser__navigate	249	54
+145.0.7632.116	manuk-noretry	F01	1	2	mcp__browser__type+mcp__browser__type	554	94
+145.0.7632.116	manuk-noretry	F01	1	3	mcp__browser__act	495	46
+145.0.7632.116	manuk-noretry	F01	1	4		0	173
+145.0.7632.116	manuk-noretry	F02	1	1	mcp__browser__navigate	249	66
+145.0.7632.116	manuk-noretry	F02	1	2	mcp__browser__type+mcp__browser__type	319	160
+145.0.7632.116	manuk-noretry	F02	1	3	mcp__browser__type	300	83
+145.0.7632.116	manuk-noretry	F02	1	4	mcp__browser__act	495	79
+145.0.7632.116	manuk-noretry	F02	1	5	mcp__browser__act	446	79
+145.0.7632.116	manuk-noretry	F02	1	6	mcp__browser__type	251	76
+145.0.7632.116	manuk-noretry	F02	1	7	mcp__browser__type	288	82
+145.0.7632.116	manuk-noretry	F02	1	8	mcp__browser__act	490	80
+145.0.7632.116	manuk-noretry	F02	1	9		0	273
+145.0.7632.116	manuk-noretry	F03	1	1	mcp__browser__navigate	270	88
+145.0.7632.116	manuk-noretry	F03	1	2	mcp__browser__type+mcp__browser__type	348	184
+145.0.7632.116	manuk-noretry	F03	1	3	mcp__browser__type	315	94
+145.0.7632.116	manuk-noretry	F03	1	4	mcp__browser__act	512	83
+145.0.7632.116	manuk-noretry	F03	1	5	mcp__browser__act	292	83
+145.0.7632.116	manuk-noretry	F03	1	6	mcp__browser__act	492	83
+145.0.7632.116	manuk-noretry	F03	1	7	mcp__browser__act	438	149
+145.0.7632.116	manuk-noretry	F03	1	8		0	299
+145.0.7632.116	manuk-noretry	F04	1	1	mcp__browser__navigate	570	58
+145.0.7632.116	manuk-noretry	F04	1	2	mcp__browser__extract	186	38
+145.0.7632.116	manuk-noretry	F04	1	3	mcp__browser__act	554	122
+145.0.7632.116	manuk-noretry	F04	1	4	mcp__browser__extract	112	37
+145.0.7632.116	manuk-noretry	F04	1	5	mcp__browser__navigate+mcp__browser__extract	825	160
+145.0.7632.116	manuk-noretry	F04	1	6	mcp__browser__act	531	78
+145.0.7632.116	manuk-noretry	F04	1	7	mcp__browser__extract	126	37
+145.0.7632.116	manuk-noretry	F04	1	8	mcp__browser__act	456	108
+145.0.7632.116	manuk-noretry	F04	1	9		0	192
+145.0.7632.116	manuk-noretry	F05	1	1	mcp__browser__navigate	694	56
+145.0.7632.116	manuk-noretry	F05	1	2	mcp__browser__extract	212	36
+145.0.7632.116	manuk-noretry	F05	1	3	mcp__browser__act	450	113
+145.0.7632.116	manuk-noretry	F05	1	4	mcp__browser__extract	113	35
+145.0.7632.116	manuk-noretry	F05	1	5	mcp__browser__act	456	108
+145.0.7632.116	manuk-noretry	F05	1	6		0	121
+145.0.7632.116	manuk-noretry	F06	1	1	mcp__browser__navigate	203	50
+145.0.7632.116	manuk-noretry	F06	1	2	mcp__browser__act	429	43
+145.0.7632.116	manuk-noretry	F06	1	3	mcp__browser__type	301	52
+145.0.7632.116	manuk-noretry	F06	1	4	mcp__browser__act	413	42
+145.0.7632.116	manuk-noretry	F06	1	5		0	209
+145.0.7632.116	manuk-noretry	F07	1	1	mcp__browser__navigate	320	52
+145.0.7632.116	manuk-noretry	F07	1	2	mcp__browser__act	408	62
+145.0.7632.116	manuk-noretry	F07	1	3		0	110
+145.0.7632.116	manuk-noretry	F08	1	1	mcp__browser__navigate	162	77
+145.0.7632.116	manuk-noretry	F08	1	2	mcp__browser__extract	966	76
+145.0.7632.116	manuk-noretry	F08	1	3		0	254
+145.0.7632.116	manuk-noretry	F09	1	1	mcp__browser__navigate	378	76
+145.0.7632.116	manuk-noretry	F09	1	2	mcp__browser__act+mcp__browser__extract	820	180
+145.0.7632.116	manuk-noretry	F09	1	3	mcp__browser__navigate	391	159
+145.0.7632.116	manuk-noretry	F09	1	4		0	232
+145.0.7632.116	manuk-noretry	F10	1	1	mcp__browser__navigate	257	45
+145.0.7632.116	manuk-noretry	F10	1	2	mcp__browser__act	436	52
+145.0.7632.116	manuk-noretry	F10	1	3		0	146
+145.0.7632.116	manuk-noretry	F11	1	1	mcp__browser__navigate	350	57
+145.0.7632.116	manuk-noretry	F11	1	2	mcp__browser__act	729	149
+145.0.7632.116	manuk-noretry	F11	1	3		0	172
+145.0.7632.116	manuk-noretry	F12	1	1	mcp__browser__navigate	269	58
+145.0.7632.116	manuk-noretry	F12	1	2		0	100
+145.0.7632.116	manuk-noretry	F13	1	1	mcp__browser__navigate	388	62
+145.0.7632.116	manuk-noretry	F13	1	2		0	196
+145.0.7632.116	manuk-noretry	F14	1	1	mcp__browser__navigate	403	58
+145.0.7632.116	manuk-noretry	F14	1	2		0	196
+145.0.7632.116	manuk-noretry	F15	1	1	mcp__browser__navigate	374	58
+145.0.7632.116	manuk-noretry	F15	1	2		0	161
+145.0.7632.116	manuk-noretry	L01	2	1	mcp__browser__navigate	20568	57
+145.0.7632.116	manuk-noretry	L01	2	2		0	89
+145.0.7632.116	manuk-noretry	L02	2	1	mcp__browser__navigate	2352	84
+145.0.7632.116	manuk-noretry	L02	2	2	mcp__browser__navigate	900	212
+145.0.7632.116	manuk-noretry	L02	2	3		0	201
+145.0.7632.116	manuk-noretry	L03	2	1	mcp__browser__navigate	20568	107
+145.0.7632.116	manuk-noretry	L03	2	2	mcp__browser__act	16402	93
+145.0.7632.116	manuk-noretry	L03	2	3	mcp__browser__act	15157	285
+145.0.7632.116	manuk-noretry	L03	2	4		0	399
+145.0.7632.116	manuk-noretry	L04	2	1	mcp__browser__navigate	20568	39
+145.0.7632.116	manuk-noretry	L04	2	2	mcp__browser__act	2367	35
+145.0.7632.116	manuk-noretry	L04	2	3		0	159
+145.0.7632.116	manuk-noretry	L05	2	1	mcp__browser__navigate	20568	45
+145.0.7632.116	manuk-noretry	L05	2	2	mcp__browser__act	2367	56
+145.0.7632.116	manuk-noretry	L05	2	3		0	146
+145.0.7632.116	manuk-noretry	L06	2	1	mcp__browser__navigate	21113	113
+145.0.7632.116	manuk-noretry	L06	2	2		0	243
+145.0.7632.116	manuk-noretry	L07	2	1	mcp__browser__navigate	20568	84
+145.0.7632.116	manuk-noretry	L07	2	2		0	245
+145.0.7632.116	manuk-noretry	L08	2	1	mcp__browser__navigate	1886	43
+145.0.7632.116	manuk-noretry	L08	2	2	mcp__browser__extract	2010	51
+145.0.7632.116	manuk-noretry	L08	2	3		0	154
+145.0.7632.116	manuk-noretry	L09	2	1	mcp__browser__navigate	1886	89
+145.0.7632.116	manuk-noretry	L09	2	2	mcp__browser__act	2363	77
+145.0.7632.116	manuk-noretry	L09	2	3		0	458
+145.0.7632.116	manuk-noretry	L10	2	1	mcp__browser__navigate	1886	103
+145.0.7632.116	manuk-noretry	L10	2	2	mcp__browser__find	242	91
+145.0.7632.116	manuk-noretry	L10	2	3	mcp__browser__extract	1061	76
+145.0.7632.116	manuk-noretry	L10	2	4	mcp__browser__act	813	89
+145.0.7632.116	manuk-noretry	L10	2	5	mcp__browser__navigate	576	351
+145.0.7632.116	manuk-noretry	L10	2	6		0	538
+145.0.7632.116	manuk-noretry	L11	2	1	mcp__browser__navigate	514	45
+145.0.7632.116	manuk-noretry	L11	2	2	mcp__browser__extract	159	37
+145.0.7632.116	manuk-noretry	L11	2	3	mcp__browser__extract	1619	28
+145.0.7632.116	manuk-noretry	L11	2	4		0	183
+145.0.7632.116	manuk-noretry	L12	2	1	mcp__browser__navigate	453	106
+145.0.7632.116	manuk-noretry	L12	2	2	mcp__browser__scroll+mcp__browser__extract	117	159
+145.0.7632.116	manuk-noretry	L12	2	3	mcp__browser__scroll	116	83
+145.0.7632.116	manuk-noretry	L12	2	4	mcp__browser__wait_for+mcp__browser__scroll	129	151
+145.0.7632.116	manuk-noretry	L12	2	5	mcp__browser__scroll	282	83
+145.0.7632.116	manuk-noretry	L12	2	6	mcp__browser__wait_for	94	101
+145.0.7632.116	manuk-noretry	L12	2	7	mcp__browser__extract	4848	94
+145.0.7632.116	manuk-noretry	L12	2	8		0	484
+145.0.7632.116	manuk-noretry	L13	2	1	mcp__browser__navigate	1004	86
+145.0.7632.116	manuk-noretry	L13	2	2	mcp__browser__extract	3587	153
+145.0.7632.116	manuk-noretry	L13	2	3		0	188
+145.0.7632.116	manuk-noretry	L14	2	1	mcp__browser__navigate	972	61
+145.0.7632.116	manuk-noretry	L14	2	2	mcp__browser__extract	1411	50
+145.0.7632.116	manuk-noretry	L14	2	3		0	480
+145.0.7632.116	manuk-noretry	L15	2	1	mcp__browser__navigate	317	65
+145.0.7632.116	manuk-noretry	L15	2	2		0	126
+145.0.7632.116	manuk-noretry	L16	2	1	mcp__browser__navigate	2457	110
+145.0.7632.116	manuk-noretry	L16	2	2		0	123
+145.0.7632.116	manuk-noretry	L17	2	1	mcp__browser__navigate	4114	108
+145.0.7632.116	manuk-noretry	L17	2	2	mcp__browser__extract	3961	140
+145.0.7632.116	manuk-noretry	L17	2	3	mcp__browser__extract	6556	33
+145.0.7632.116	manuk-noretry	L17	2	4		0	207
+145.0.7632.116	manuk-noretry	L18	2	1	mcp__browser__navigate	1825	124
+145.0.7632.116	manuk-noretry	L18	2	2		0	151
+145.0.7632.116	manuk-noretry	L19	2	1	mcp__browser__navigate	1827	117
+145.0.7632.116	manuk-noretry	L19	2	2		0	218
+145.0.7632.116	manuk-noretry	L20	2	1	mcp__browser__navigate	2539	105
+145.0.7632.116	manuk-noretry	L20	2	2	mcp__browser__extract	3221	201
+145.0.7632.116	manuk-noretry	L20	2	3		0	289
+145.0.7632.116	manuk-noretry	L21	2	1	mcp__browser__navigate	31836	66
+145.0.7632.116	manuk-noretry	L21	2	2	mcp__browser__type	16301	67
+145.0.7632.116	manuk-noretry	L21	2	3	mcp__browser__extract	3215	56
+145.0.7632.116	manuk-noretry	L21	2	4		0	194
+145.0.7632.116	manuk-noretry	L22	2	1	mcp__browser__navigate	11258	52
+145.0.7632.116	manuk-noretry	L22	2	2	mcp__browser__extract	2957	113
+145.0.7632.116	manuk-noretry	L22	2	3		0	145
+145.0.7632.116	manuk-noretry	L23	2	1	mcp__browser__navigate	20568	85
+145.0.7632.116	manuk-noretry	L23	2	2	mcp__browser__act	14074	104
+145.0.7632.116	manuk-noretry	L23	2	3	mcp__browser__extract	1400	132
+145.0.7632.116	manuk-noretry	L23	2	4		0	204
+145.0.7632.116	manuk-noretry	L24	2	1	mcp__browser__navigate	11258	48
+145.0.7632.116	manuk-noretry	L24	2	2	mcp__browser__extract	2970	119
+145.0.7632.116	manuk-noretry	L24	2	3		0	172
+145.0.7632.116	manuk-noretry	L25	2	1	mcp__browser__navigate	21113	85
+145.0.7632.116	manuk-noretry	L25	2	2		0	106
+145.0.7632.116	manuk-noretry	F01	2	1	mcp__browser__navigate	249	50
+145.0.7632.116	manuk-noretry	F01	2	2	mcp__browser__type+mcp__browser__type	554	89
+145.0.7632.116	manuk-noretry	F01	2	3	mcp__browser__act	495	43
+145.0.7632.116	manuk-noretry	F01	2	4		0	200
+145.0.7632.116	manuk-noretry	F02	2	1	mcp__browser__navigate	249	69
+145.0.7632.116	manuk-noretry	F02	2	2	mcp__browser__type+mcp__browser__type	319	168
+145.0.7632.116	manuk-noretry	F02	2	3	mcp__browser__type	300	87
+145.0.7632.116	manuk-noretry	F02	2	4	mcp__browser__act	495	83
+145.0.7632.116	manuk-noretry	F02	2	5	mcp__browser__act	446	82
+145.0.7632.116	manuk-noretry	F02	2	6	mcp__browser__type	251	80
+145.0.7632.116	manuk-noretry	F02	2	7	mcp__browser__type	288	86
+145.0.7632.116	manuk-noretry	F02	2	8	mcp__browser__act	490	84
+145.0.7632.116	manuk-noretry	F02	2	9		0	231
+145.0.7632.116	manuk-noretry	F03	2	1	mcp__browser__navigate	270	63
+145.0.7632.116	manuk-noretry	F03	2	2	mcp__browser__type+mcp__browser__type	348	164
+145.0.7632.116	manuk-noretry	F03	2	3	mcp__browser__type	315	83
+145.0.7632.116	manuk-noretry	F03	2	4	mcp__browser__act	512	74
+145.0.7632.116	manuk-noretry	F03	2	5	mcp__browser__act	292	74
+145.0.7632.116	manuk-noretry	F03	2	6	mcp__browser__act	492	74
+145.0.7632.116	manuk-noretry	F03	2	7	mcp__browser__act	438	134
+145.0.7632.116	manuk-noretry	F03	2	8		0	229
+145.0.7632.116	manuk-noretry	F04	2	1	mcp__browser__navigate	570	64
+145.0.7632.116	manuk-noretry	F04	2	2	mcp__browser__extract	186	42
+145.0.7632.116	manuk-noretry	F04	2	3	mcp__browser__act	589	190
+145.0.7632.116	manuk-noretry	F04	2	4	mcp__browser__extract	112	41
+145.0.7632.116	manuk-noretry	F04	2	5	mcp__browser__navigate	579	123
+145.0.7632.116	manuk-noretry	F04	2	6	mcp__browser__act	449	56
+145.0.7632.116	manuk-noretry	F04	2	7	mcp__browser__extract	126	41
+145.0.7632.116	manuk-noretry	F04	2	8	mcp__browser__act	456	123
+145.0.7632.116	manuk-noretry	F04	2	9		0	127
+145.0.7632.116	manuk-noretry	F05	2	1	mcp__browser__navigate	694	54
+145.0.7632.116	manuk-noretry	F05	2	2	mcp__browser__extract	212	35
+145.0.7632.116	manuk-noretry	F05	2	3	mcp__browser__act	450	105
+145.0.7632.116	manuk-noretry	F05	2	4	mcp__browser__extract	113	34
+145.0.7632.116	manuk-noretry	F05	2	5	mcp__browser__act	456	103
+145.0.7632.116	manuk-noretry	F05	2	6		0	180
+145.0.7632.116	manuk-noretry	F06	2	1	mcp__browser__navigate	203	52
+145.0.7632.116	manuk-noretry	F06	2	2	mcp__browser__act	429	45
+145.0.7632.116	manuk-noretry	F06	2	3	mcp__browser__type	301	73
+145.0.7632.116	manuk-noretry	F06	2	4	mcp__browser__act	413	63
+145.0.7632.116	manuk-noretry	F06	2	5		0	219
+145.0.7632.116	manuk-noretry	F07	2	1	mcp__browser__navigate	320	54
+145.0.7632.116	manuk-noretry	F07	2	2	mcp__browser__act	408	64
+145.0.7632.116	manuk-noretry	F07	2	3		0	98
+145.0.7632.116	manuk-noretry	F08	2	1	mcp__browser__navigate	162	69
+145.0.7632.116	manuk-noretry	F08	2	2	mcp__browser__observe	131	27
+145.0.7632.116	manuk-noretry	F08	2	3	mcp__browser__wait_for	64	50
+145.0.7632.116	manuk-noretry	F08	2	4	mcp__browser__scroll	52	72
+145.0.7632.116	manuk-noretry	F08	2	5	mcp__browser__scroll	116	61
+145.0.7632.116	manuk-noretry	F08	2	6	mcp__browser__extract	1268	69
+145.0.7632.116	manuk-noretry	F08	2	7		0	241
+145.0.7632.116	manuk-noretry	F09	2	1	mcp__browser__navigate	378	85
+145.0.7632.116	manuk-noretry	F09	2	2	mcp__browser__act	522	174
+145.0.7632.116	manuk-noretry	F09	2	3	mcp__browser__navigate	385	155
+145.0.7632.116	manuk-noretry	F09	2	4		0	143
+145.0.7632.116	manuk-noretry	F10	2	1	mcp__browser__navigate	257	49
+145.0.7632.116	manuk-noretry	F10	2	2	mcp__browser__act	436	56
+145.0.7632.116	manuk-noretry	F10	2	3		0	138
+145.0.7632.116	manuk-noretry	F11	2	1	mcp__browser__navigate	350	68
+145.0.7632.116	manuk-noretry	F11	2	2	mcp__browser__act+mcp__browser__act	1293	128
+145.0.7632.116	manuk-noretry	F11	2	3	mcp__browser__extract	167	41
+145.0.7632.116	manuk-noretry	F11	2	4		0	250
+145.0.7632.116	manuk-noretry	F12	2	1	mcp__browser__navigate	269	87
+145.0.7632.116	manuk-noretry	F12	2	2		0	150
+145.0.7632.116	manuk-noretry	F13	2	1	mcp__browser__navigate	388	51
+145.0.7632.116	manuk-noretry	F13	2	2		0	237
+145.0.7632.116	manuk-noretry	F14	2	1	mcp__browser__navigate	403	51
+145.0.7632.116	manuk-noretry	F14	2	2		0	290
+145.0.7632.116	manuk-noretry	F15	2	1	mcp__browser__navigate	374	63
+145.0.7632.116	manuk-noretry	F15	2	2		0	133
+145.0.7632.116	manuk-noretry	L01	3	1	mcp__browser__navigate	20568	55
+145.0.7632.116	manuk-noretry	L01	3	2		0	104
+145.0.7632.116	manuk-noretry	L02	3	1	mcp__browser__navigate	2352	66
+145.0.7632.116	manuk-noretry	L02	3	2	mcp__browser__act	3173	106
+145.0.7632.116	manuk-noretry	L02	3	3		0	222
+145.0.7632.116	manuk-noretry	L03	3	1	mcp__browser__navigate	20568	54
+145.0.7632.116	manuk-noretry	L03	3	2	mcp__browser__act	16402	66
+145.0.7632.116	manuk-noretry	L03	3	3	mcp__browser__extract	2574	173
+145.0.7632.116	manuk-noretry	L03	3	4		0	154
+145.0.7632.116	manuk-noretry	L04	3	1	mcp__browser__navigate	20568	38
+145.0.7632.116	manuk-noretry	L04	3	2	mcp__browser__act	2367	47
+145.0.7632.116	manuk-noretry	L04	3	3		0	191
+145.0.7632.116	manuk-noretry	L05	3	1	mcp__browser__navigate	2788	86
+145.0.7632.116	manuk-noretry	L05	3	2	mcp__browser__find	1066	71
+145.0.7632.116	manuk-noretry	L05	3	3	mcp__browser__act	2344	67
+145.0.7632.116	manuk-noretry	L05	3	4		0	176
+145.0.7632.116	manuk-noretry	L06	3	1	mcp__browser__navigate	21113	63
+145.0.7632.116	manuk-noretry	L06	3	2		0	146
+145.0.7632.116	manuk-noretry	L07	3	1	mcp__browser__navigate	20568	80
+145.0.7632.116	manuk-noretry	L07	3	2		0	232
+145.0.7632.116	manuk-noretry	L08	3	1	mcp__browser__navigate	256	53
+145.0.7632.116	manuk-noretry	L08	3	2	mcp__browser__extract	1788	22
+145.0.7632.116	manuk-noretry	L08	3	3		0	157
+145.0.7632.116	manuk-noretry	L09	3	1	mcp__browser__navigate	1886	74
+145.0.7632.116	manuk-noretry	L09	3	2	mcp__browser__act	2363	89
+145.0.7632.116	manuk-noretry	L09	3	3		0	317
+145.0.7632.116	manuk-noretry	L10	3	1	mcp__browser__navigate	1886	60
+145.0.7632.116	manuk-noretry	L10	3	2	mcp__browser__navigate	575	77
+145.0.7632.116	manuk-noretry	L10	3	3		0	357
+145.0.7632.116	manuk-noretry	L11	3	1	mcp__browser__navigate	514	43
+145.0.7632.116	manuk-noretry	L11	3	2	mcp__browser__extract	1619	40
+145.0.7632.116	manuk-noretry	L11	3	3		0	169
+145.0.7632.116	manuk-noretry	L12	3	1	mcp__browser__navigate	453	112
+145.0.7632.116	manuk-noretry	L12	3	2	mcp__browser__scroll	52	68
+145.0.7632.116	manuk-noretry	L12	3	3	mcp__browser__scroll	116	89
+145.0.7632.116	manuk-noretry	L12	3	4	mcp__browser__scroll	282	88
+145.0.7632.116	manuk-noretry	L12	3	5	mcp__browser__wait_for	64	72
+145.0.7632.116	manuk-noretry	L12	3	6	mcp__browser__wait_for	100	117
+145.0.7632.116	manuk-noretry	L12	3	7	mcp__browser__extract	4848	100
+145.0.7632.116	manuk-noretry	L12	3	8		0	309
+145.0.7632.116	manuk-noretry	L13	3	1	mcp__browser__navigate	2352	59
+145.0.7632.116	manuk-noretry	L13	3	2	mcp__browser__extract	2320	143
+145.0.7632.116	manuk-noretry	L13	3	3		0	243
+145.0.7632.116	manuk-noretry	L14	3	1	mcp__browser__navigate	972	60
+145.0.7632.116	manuk-noretry	L14	3	2	mcp__browser__extract	1411	48
+145.0.7632.116	manuk-noretry	L14	3	3		0	506
+145.0.7632.116	manuk-noretry	L15	3	1	mcp__browser__navigate	317	47
+145.0.7632.116	manuk-noretry	L15	3	2		0	127
+145.0.7632.116	manuk-noretry	L16	3	1	mcp__browser__navigate	2457	133
+145.0.7632.116	manuk-noretry	L16	3	2		0	123
+145.0.7632.116	manuk-noretry	L17	3	1	mcp__browser__navigate	4109	103
+145.0.7632.116	manuk-noretry	L17	3	2	mcp__browser__extract	6556	115
+145.0.7632.116	manuk-noretry	L17	3	3		0	166
+145.0.7632.116	manuk-noretry	L18	3	1	mcp__browser__navigate	1825	113
+145.0.7632.116	manuk-noretry	L18	3	2		0	147
+145.0.7632.116	manuk-noretry	L19	3	1	mcp__browser__navigate	1822	216
+145.0.7632.116	manuk-noretry	L19	3	2	mcp__browser__extract	1663	145
+145.0.7632.116	manuk-noretry	L19	3	3		0	605
+145.0.7632.116	manuk-noretry	L20	3	1	mcp__browser__navigate	2539	110
+145.0.7632.116	manuk-noretry	L20	3	2	mcp__browser__extract	3221	186
+145.0.7632.116	manuk-noretry	L20	3	3		0	289
+145.0.7632.116	manuk-noretry	L21	3	1	mcp__browser__navigate	31836	58
+145.0.7632.116	manuk-noretry	L21	3	2	mcp__browser__type	16301	59
+145.0.7632.116	manuk-noretry	L21	3	3	mcp__browser__extract	3215	156
+145.0.7632.116	manuk-noretry	L21	3	4		0	149
+145.0.7632.116	manuk-noretry	L22	3	1	mcp__browser__navigate	11258	52
+145.0.7632.116	manuk-noretry	L22	3	2	mcp__browser__extract	2957	105
+145.0.7632.116	manuk-noretry	L22	3	3		0	114
+145.0.7632.116	manuk-noretry	L23	3	1	mcp__browser__navigate	20568	111
+145.0.7632.116	manuk-noretry	L23	3	2	mcp__browser__act	14074	136
+145.0.7632.116	manuk-noretry	L23	3	3		0	283
+145.0.7632.116	manuk-noretry	L24	3	1	mcp__browser__navigate	11258	49
+145.0.7632.116	manuk-noretry	L24	3	2	mcp__browser__extract	2970	121
+145.0.7632.116	manuk-noretry	L24	3	3		0	151
+145.0.7632.116	manuk-noretry	L25	3	1	mcp__browser__navigate	21113	100
+145.0.7632.116	manuk-noretry	L25	3	2		0	125
+145.0.7632.116	manuk-noretry	F01	3	1	mcp__browser__navigate	249	55
+145.0.7632.116	manuk-noretry	F01	3	2	mcp__browser__type+mcp__browser__type	554	97
+145.0.7632.116	manuk-noretry	F01	3	3	mcp__browser__act	495	47
+145.0.7632.116	manuk-noretry	F01	3	4		0	167
+145.0.7632.116	manuk-noretry	F02	3	1	mcp__browser__navigate	249	66
+145.0.7632.116	manuk-noretry	F02	3	2	mcp__browser__type+mcp__browser__type	319	161
+145.0.7632.116	manuk-noretry	F02	3	3	mcp__browser__type	300	84
+145.0.7632.116	manuk-noretry	F02	3	4	mcp__browser__act	495	79
+145.0.7632.116	manuk-noretry	F02	3	5	mcp__browser__act	446	119
+145.0.7632.116	manuk-noretry	F02	3	6	mcp__browser__type	251	77
+145.0.7632.116	manuk-noretry	F02	3	7	mcp__browser__type	288	82
+145.0.7632.116	manuk-noretry	F02	3	8	mcp__browser__act	490	80
+145.0.7632.116	manuk-noretry	F02	3	9		0	272
+145.0.7632.116	manuk-noretry	F03	3	1	mcp__browser__navigate	270	68
+145.0.7632.116	manuk-noretry	F03	3	2	mcp__browser__type+mcp__browser__type	348	176
+145.0.7632.116	manuk-noretry	F03	3	3	mcp__browser__type	315	90
+145.0.7632.116	manuk-noretry	F03	3	4	mcp__browser__act	512	80
+145.0.7632.116	manuk-noretry	F03	3	5	mcp__browser__act	292	80
+145.0.7632.116	manuk-noretry	F03	3	6	mcp__browser__act	492	80
+145.0.7632.116	manuk-noretry	F03	3	7	mcp__browser__act	438	142
+145.0.7632.116	manuk-noretry	F03	3	8		0	301
+145.0.7632.116	manuk-noretry	F04	3	1	mcp__browser__navigate	570	67
+145.0.7632.116	manuk-noretry	F04	3	2	mcp__browser__extract	186	44
+145.0.7632.116	manuk-noretry	F04	3	3	mcp__browser__act	554	142
+145.0.7632.116	manuk-noretry	F04	3	4	mcp__browser__extract	112	44
+145.0.7632.116	manuk-noretry	F04	3	5	mcp__browser__navigate+mcp__browser__act	746	219
+145.0.7632.116	manuk-noretry	F04	3	6	mcp__browser__act	65	83
+145.0.7632.116	manuk-noretry	F04	3	7	mcp__browser__act	449	83
+145.0.7632.116	manuk-noretry	F04	3	8	mcp__browser__extract	126	67
+145.0.7632.116	manuk-noretry	F04	3	9	mcp__browser__act	456	153
+145.0.7632.116	manuk-noretry	F04	3	10		0	175
+145.0.7632.116	manuk-noretry	F05	3	1	mcp__browser__navigate	694	54
+145.0.7632.116	manuk-noretry	F05	3	2	mcp__browser__extract	212	34
+145.0.7632.116	manuk-noretry	F05	3	3	mcp__browser__act	450	104
+145.0.7632.116	manuk-noretry	F05	3	4	mcp__browser__extract	113	34
+145.0.7632.116	manuk-noretry	F05	3	5	mcp__browser__act	456	102
+145.0.7632.116	manuk-noretry	F05	3	6		0	142
+145.0.7632.116	manuk-noretry	F06	3	1	mcp__browser__navigate	203	55
+145.0.7632.116	manuk-noretry	F06	3	2	mcp__browser__act	429	65
+145.0.7632.116	manuk-noretry	F06	3	3	mcp__browser__type	301	76
+145.0.7632.116	manuk-noretry	F06	3	4	mcp__browser__act	413	65
+145.0.7632.116	manuk-noretry	F06	3	5		0	202
+145.0.7632.116	manuk-noretry	F07	3	1	mcp__browser__navigate	320	54
+145.0.7632.116	manuk-noretry	F07	3	2	mcp__browser__act	408	63
+145.0.7632.116	manuk-noretry	F07	3	3		0	106
+145.0.7632.116	manuk-noretry	F08	3	1	mcp__browser__navigate	162	73
+145.0.7632.116	manuk-noretry	F08	3	2	mcp__browser__scroll	52	50
+145.0.7632.116	manuk-noretry	F08	3	3	mcp__browser__scroll	115	64
+145.0.7632.116	manuk-noretry	F08	3	4	mcp__browser__extract	966	72
+145.0.7632.116	manuk-noretry	F08	3	5		0	252
+145.0.7632.116	manuk-noretry	F09	3	1	mcp__browser__navigate	378	93
+145.0.7632.116	manuk-noretry	F09	3	2	mcp__browser__act	522	143
+145.0.7632.116	manuk-noretry	F09	3	3	mcp__browser__extract	298	69
+145.0.7632.116	manuk-noretry	F09	3	4	mcp__browser__act+mcp__browser__extract	363	152
+145.0.7632.116	manuk-noretry	F09	3	5	mcp__browser__act	529	83
+145.0.7632.116	manuk-noretry	F09	3	6	mcp__browser__extract	298	69
+145.0.7632.116	manuk-noretry	F09	3	7	mcp__browser__navigate	386	200
+145.0.7632.116	manuk-noretry	F09	3	8		0	299
+145.0.7632.116	manuk-noretry	F10	3	1	mcp__browser__navigate	257	47
+145.0.7632.116	manuk-noretry	F10	3	2	mcp__browser__act	436	54
+145.0.7632.116	manuk-noretry	F10	3	3		0	138
+145.0.7632.116	manuk-noretry	F11	3	1	mcp__browser__navigate	350	60
+145.0.7632.116	manuk-noretry	F11	3	2	mcp__browser__act	729	159
+145.0.7632.116	manuk-noretry	F11	3	3	mcp__browser__extract	167	56
+145.0.7632.116	manuk-noretry	F11	3	4		0	162
+145.0.7632.116	manuk-noretry	F12	3	1	mcp__browser__navigate	269	91
+145.0.7632.116	manuk-noretry	F12	3	2		0	156
+145.0.7632.116	manuk-noretry	F13	3	1	mcp__browser__navigate	388	58
+145.0.7632.116	manuk-noretry	F13	3	2		0	232
+145.0.7632.116	manuk-noretry	F14	3	1	mcp__browser__navigate	403	69
+145.0.7632.116	manuk-noretry	F14	3	2		0	222
+145.0.7632.116	manuk-noretry	F15	3	1	mcp__browser__navigate	374	60
+145.0.7632.116	manuk-noretry	F15	3	2		0	204

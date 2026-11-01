@@ -83,6 +83,12 @@ def arm_config(arm, tmp):
         else:
             cfg = {"mcpServers": {"browser": {"command": exe, "args": [], "env": {"MANUK_NO_RECEIPTS": "1"}}}}
         allowed = "mcp__browser"
+    elif arm == "manuk-noretry":  # W4.C2.c: same binary, layer-applied retry off (MANUK_NO_RETRY)
+        exe = mcp_bin()
+        if not os.path.exists(exe):
+            return None, None
+        cfg = {"mcpServers": {"browser": {"command": exe, "args": [], "env": {"MANUK_NO_RETRY": "1"}}}}
+        allowed = "mcp__browser"
     elif arm in ("manuk", "manuk+rollback", "manuk+rollback.v2", "manuk-prealwaysload", "manuk-lean", "manuk-noquery"):  # W4.B1 before-arm: MANUK_MCP_BIN
         exe = mcp_bin()
         if not os.path.exists(exe):
