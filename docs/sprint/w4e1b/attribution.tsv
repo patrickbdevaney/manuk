@@ -1,0 +1,5 @@
+url	runs	subres_fetch_s	cap_wait_s	server_ttfb_s	transfer_s	discovered_late_s	bucket_sum_s	recon_err_pct	late_cap_s	late_ttfb_s	late_transfer_s	n_sub	n_late	n_http1	chrome_ver
+https___comix_to_	3	2.472	0.000	0.130	0.011	2.331	2.473	0.0	0.000	2.068	0.263	210	207	0	145.0.7632.116
+https___ebanking_bdm_sa_com_	3	3.843	0.000	0.207	0.244	3.339	3.790	1.4	0.000	0.840	2.499	61	60	61	145.0.7632.116
+https___www_mobile_bg_	3	4.651	0.000	0.004	0.407	4.123	4.533	2.5	0.000	2.663	1.339	101	91	0	145.0.7632.116
+https___www_puentedemando_com_	3	5.675	0.000	0.102	0.103	5.474	5.679	0.1	0.000	4.582	2.121	130	129	4	145.0.7632.116
