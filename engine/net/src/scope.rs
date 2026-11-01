@@ -53,6 +53,11 @@ pub fn active() -> bool {
     !(s.read.is_empty() && s.write.is_empty())
 }
 
+/// The write set (WebSocket frames carry data out, so a socket is judged as a write). Empty = unrestricted.
+pub fn write_set() -> Vec<String> {
+    SCOPE.lock().unwrap().write.clone()
+}
+
 /// Judge one outgoing request. `Err` carries the refusal text (also logged).
 pub fn check(method: &str, url: &str) -> Result<(), String> {
     if !matches!(url.split(':').next(), Some("http" | "https" | "ws" | "wss")) {

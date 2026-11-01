@@ -251,7 +251,7 @@ fn open_arm_leaks_so_the_fixture_can_go_red() {
 }
 
 #[test]
-fn cdp_layer_arm_is_measured() {
+fn cdp_layer_arm_blocks_all_eight_channels() {
     let c = arm("chrome-granted", true, true);
-    eprintln!("cdp-layer arm: {c:?}");
+    assert!(c.iter().all(|(_, n)| *n == 0), "cdp arm leaked: {c:?}");
 }

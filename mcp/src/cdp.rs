@@ -223,6 +223,11 @@ impl Cdp {
 }
 
 /// Installed on every new document: counts fetch/XHR in flight and setTimeout timers pending.
+const WS_GUARD: &str = r#"(function(){var A=__ALLOWED__.map(function(u){try{return new URL(u).origin}catch(e){return u}}),W=window.WebSocket;
+function ok(u){try{var o=new URL(u,location.href);o.protocol=o.protocol==='wss:'?'https:':'http:';return A.indexOf(o.origin)>=0}catch(e){return false}}
+function G(u,p){if(!ok(u))throw new DOMException('origin not in write set','SecurityError');return p===undefined?new W(u):new W(u,p)}
+G.prototype=W.prototype;['CONNECTING','OPEN','CLOSING','CLOSED'].forEach(function(k){G[k]=W[k]});window.WebSocket=G;})();"#;
+
 const SETTLE_PROBE: &str = r#"(function(){if(window.__mk)return;var S=window.__mk={u:{},t:{},n:0};
 var of=window.fetch;if(of){window.fetch=function(a){var k=++S.n;S.u[k]=String((a&&a.url)||a);var d=function(){delete S.u[k];};var p=of.apply(this,arguments);p.then(d,d);return p;};}
 var xs=XMLHttpRequest.prototype.send,xo=XMLHttpRequest.prototype.open;
@@ -1251,6 +1256,17 @@ fn init_page_session(cdp: &mut Cdp, width: u32, height: u32) -> Result<()> {
     // so the judge sees it. Cheap when the sets are empty (continue immediately).
     if manuk_net::scope::active() {
         cdp.call("Fetch.enable", json!({"patterns": [{"urlPattern": "*"}]}))?;
+        // W4.D1.a: Fetch never sees a WebSocket upgrade, so the constructor is wrapped in every frame
+        // before any page script runs; a socket to an origin outside the write set throws SecurityError.
+        // (Dedicated workers are not covered: a residual, measured not claimed.)
+        let allowed = manuk_net::scope::write_set();
+        if !allowed.is_empty() && std::env::var_os("MANUK_SCOPE_MUTATE").is_none() {
+            let src = WS_GUARD.replace("__ALLOWED__", &json!(allowed).to_string());
+            cdp.call(
+                "Page.addScriptToEvaluateOnNewDocument",
+                json!({"source": src}),
+            )?;
+        }
     }
     cdp.call(
         "Emulation.setDeviceMetricsOverride",
