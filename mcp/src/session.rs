@@ -340,6 +340,16 @@ fn arg_str<'a>(a: &'a Map<String, Value>, k: &str) -> Option<&'a str> {
     a.get(k).and_then(Value::as_str)
 }
 
+/// Test and bench only: `MANUK_QUERY_MUTATE=ignore` drops `query`, so navigate/extract return the whole page as before
+/// W4.B3 (the W4.B4.q mutant arm). Without the variable the query is passed through unchanged.
+fn honour_query(q: Option<&str>) -> Option<&str> {
+    if std::env::var("MANUK_QUERY_MUTATE").is_ok_and(|v| v == "ignore") {
+        None
+    } else {
+        q
+    }
+}
+
 impl<B: Backend> Session<B> {
     pub fn new(b: B) -> Self {
         Session {
@@ -800,7 +810,7 @@ impl<B: Backend> Session<B> {
             "navigate" => self
                 .navigate(
                     arg_str(a, "url").ok_or_else(|| anyhow!("navigate needs `url`"))?,
-                    arg_str(a, "query"),
+                    honour_query(arg_str(a, "query")),
                 )
                 .await
                 .map(Output::Text),
@@ -894,7 +904,7 @@ impl<B: Backend> Session<B> {
                     arg_str(a, "format").unwrap_or("text"),
                     arg_str(a, "scope"),
                     a.get("offset").and_then(Value::as_u64).unwrap_or(0) as usize,
-                    arg_str(a, "query"),
+                    honour_query(arg_str(a, "query")),
                 )
                 .map(Output::Text),
             "find" => self

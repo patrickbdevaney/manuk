@@ -73,11 +73,13 @@ def arm_config(arm, tmp):
         cfg = {"mcpServers": {"browser": {"command": "npx", "args": [
             "-y", "@playwright/mcp@0.0.83", "--headless", "--isolated", "--executable-path", chrome]}}}
         allowed = "mcp__browser"
-    elif arm in ("manuk", "manuk+rollback", "manuk+rollback.v2", "manuk-prealwaysload", "manuk-lean"):  # W4.B1 before-arm: MANUK_MCP_BIN
+    elif arm in ("manuk", "manuk+rollback", "manuk+rollback.v2", "manuk-prealwaysload", "manuk-lean", "manuk-noquery"):  # W4.B1 before-arm: MANUK_MCP_BIN
         exe = mcp_bin()
         if not os.path.exists(exe):
             return None, None
         cfg = {"mcpServers": {"browser": {"command": exe, "args": []}}}
+        if arm == "manuk-noquery":  # W4.B4.q mutant: navigate/extract ignore `query` (the pre-W4.B3 behaviour)
+            cfg["mcpServers"]["browser"]["env"] = {"MANUK_QUERY_MUTATE": "ignore"}
         if arm == "manuk-lean":  # W4.E2.a: same binary, lean agent profile (deferred image bodies, tracker hosts refused)
             cfg["mcpServers"]["browser"]["env"] = {"MANUK_AGENT_PROFILE": "lean"}
         allowed = "mcp__browser"
