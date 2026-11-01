@@ -43,6 +43,7 @@ pub struct WebSocketConn {
     /// The subprotocol the SERVER chose, `""` when none was negotiated. A client that offered
     /// `["graphql-ws"]` and got back `""` must not then speak graphql-ws at it.
     protocol: String,
+    url: String,
 }
 
 /// `ws://` and `wss://` produce different stream types; boxing keeps one connection type.
@@ -119,11 +120,22 @@ impl WebSocketConn {
             .unwrap_or("")
             .to_string();
 
-        Ok(Self { inner, protocol })
+        Ok(Self {
+            inner,
+            protocol,
+            url: url.to_string(),
+        })
     }
 
     /// Send one message.
     pub async fn send(&mut self, msg: WsMessage) -> Result<()> {
+        // W4.D2.a: a frame carrying a value read/typed on another origin does not leave.
+        let payload = match &msg {
+            WsMessage::Text(t) => t.to_string(),
+            WsMessage::Binary(b) => String::from_utf8_lossy(b).into_owned(),
+        };
+        crate::taint::check_egress(&payload, &self.url, "WebSocket frame")
+            .map_err(|e| anyhow::anyhow!(e))?;
         let m = match msg {
             WsMessage::Text(t) => TMessage::Text(t),
             WsMessage::Binary(b) => TMessage::Binary(b),

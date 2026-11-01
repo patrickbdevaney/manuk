@@ -199,5 +199,8 @@ fn chrome_click_to_an_error_page_is_undone_and_retried() {
 #[test]
 fn chrome_error_page_baseline_without_retry_stays_on_the_404() {
     let r = chrome_act(true);
-    assert!(r.contains("404 Not Found") && !r.contains("ERR-RECOVERED"), "{r}");
+    assert!(
+        r.contains("404 Not Found") && !r.contains("ERR-RECOVERED"),
+        "{r}"
+    );
 }

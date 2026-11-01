@@ -378,6 +378,7 @@ impl<B: Backend> Session<B> {
     pub fn set_grants(&mut self, g: crate::policy::Grants) {
         // W3.9.a: the same sets bound what the page itself loads (manuk_net, and the Chrome interceptor).
         manuk_net::scope::set(&g.read, &g.write);
+        manuk_net::taint::set_write_grants(&g.write);
         self.grants = g;
     }
 
@@ -834,6 +835,7 @@ impl<B: Backend> Session<B> {
             if let Ok(Output::Text(t)) = &r {
                 let url = self.b.url();
                 self.taint.record(&url, t);
+                manuk_net::taint::record_global(&url, t);
             }
         }
         r
@@ -1777,6 +1779,11 @@ impl<B: Backend> Session<B> {
             .and_then(|f| f.form_action)
             .unwrap_or_else(|| self.b.url());
         self.taint_check(text, &dest, "typed text")?;
+        {
+            let page = self.b.url();
+            self.taint.record(&page, text);
+            manuk_net::taint::record_global(&page, text);
+        }
         let before = self.snapshot(&tree);
         let url_before = self.b.url();
         self.b.begin_act();

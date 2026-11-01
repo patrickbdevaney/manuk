@@ -3431,6 +3431,7 @@ dependencies = [
  "adblock",
  "anyhow",
  "async-compression",
+ "base64 0.22.1",
  "bytes",
  "chardetng",
  "encoding_rs",
