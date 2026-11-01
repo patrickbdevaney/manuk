@@ -1,0 +1,46 @@
+manuk L01 turns=2 sum=197 row=197 ok
+manuk L02 turns=3 sum=353 row=353 ok
+manuk L03 turns=4 sum=538 row=538 ok
+manuk L04 turns=3 sum=321 row=321 ok
+manuk L05 turns=4 sum=342 row=342 ok
+manuk F01 turns=4 sum=392 row=392 ok
+manuk F02 turns=9 sum=990 row=990 ok
+manuk F03 turns=8 sum=902 row=902 ok
+manuk F04 turns=10 sum=1240 row=1240 ok
+manuk F05 turns=6 sum=576 row=576 ok
+playwright+preload L01 turns=2 sum=267 row=267 ok
+playwright+preload L02 turns=2 sum=268 row=268 ok
+playwright+preload L03 turns=3 sum=323 row=323 ok
+playwright+preload L04 turns=3 sum=342 row=342 ok
+playwright+preload L05 turns=3 sum=369 row=369 ok
+playwright+preload F01 turns=3 sum=473 row=473 ok
+playwright+preload F02 turns=5 sum=790 row=790 ok
+playwright+preload F03 turns=8 sum=795 row=795 ok
+playwright+preload F04 turns=7 sum=955 row=955 ok
+playwright+preload F05 turns=5 sum=545 row=545 ok
+
+chrome_ver=145.0.7632.116
+
+manuk (10 rows)  tool | calls/task | out_tok/task | result_bytes/task
+  (final answer) | 1.00 | 204.7 | 0
+  mcp__browser__act | 1.50 | 132.6 | 2739
+  mcp__browser__navigate | 1.20 | 81.3 | 7035
+  mcp__browser__extract | 0.60 | 61.7 | 324
+  mcp__browser__type+mcp__browser__type | 0.30 | 42.3 | 86
+  mcp__browser__type | 0.50 | 40.5 | 94
+  mcp__browser__act+mcp__browser__act | 0.10 | 16.9 | 51
+  mcp__browser__find | 0.10 | 5.1 | 110
+  TOTAL | 5.30 | 585.1 | 10440
+
+playwright+preload (10 rows)  tool | calls/task | out_tok/task | result_bytes/task
+  (final answer) | 1.00 | 159.1 | 0
+  mcp__browser__browser_navigate+mcp__browser__browser_find | 0.70 | 69.3 | 815
+  mcp__browser__browser_click+mcp__browser__browser_snapshot | 0.50 | 61.3 | 363
+  mcp__browser__browser_fill_form+mcp__browser__browser_click | 0.30 | 57.6 | 122
+  mcp__browser__browser_navigate+mcp__browser__browser_snapshot | 0.60 | 45.7 | 3759
+  mcp__browser__browser_fill_form+mcp__browser__browser_click+mcp__browser__browser_snapshot | 0.20 | 45.5 | 148
+  mcp__browser__browser_fill_form+mcp__browser__browser_click+mcp__browser__browser_wait_for+mcp__browser__browser_snapshot | 0.10 | 24.4 | 103
+  mcp__browser__browser_snapshot | 0.50 | 19.8 | 175
+  mcp__browser__browser_click+mcp__browser__browser_navigate | 0.10 | 16.5 | 52
+  mcp__browser__browser_click | 0.10 | 13.5 | 26
+  TOTAL | 4.10 | 512.7 | 5563
