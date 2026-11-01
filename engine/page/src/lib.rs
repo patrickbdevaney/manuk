@@ -8108,9 +8108,9 @@ impl Page {
                 .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
                 .collect();
             let events: &[&str] = if value_changed {
-                &["change", "blur"]
+                &["change", "blur", "focusout"]
             } else {
-                &["blur"]
+                &["blur", "focusout"]
             };
             let _reflow = ReflowScope::install(
                 &self.dom,
@@ -10773,6 +10773,17 @@ impl Page {
         // and would move nothing; `relayout_incremental` would drop every external stylesheet.
         self.recascade_all_sources(viewport_width);
         self.relayout(fonts, viewport_width);
+        // The page hears about it: `focusin` (React's `onFocus` listens for this one, not `focus`) then
+        // `focus`. Without them a MUI Autocomplete never marks itself focused and resets its input to
+        // the selected value after every keystroke (udriver's pickup box, W4.P0.b).
+        if let Some(n) = node {
+            self.fire_plain_event(n, "focusin", fonts, viewport_width);
+            self.fire_plain_event(n, "focus", fonts, viewport_width);
+            let root = self.dom.root();
+            if self.dom.is_dirty(root) || self.dom.has_dirty_descendants(root) {
+                self.relayout(fonts, viewport_width);
+            }
+        }
         true
     }
 

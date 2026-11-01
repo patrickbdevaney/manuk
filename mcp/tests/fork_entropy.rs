@@ -38,9 +38,17 @@ impl Client {
             .expect("spawn manuk-mcp");
         let tx = child.stdin.take().unwrap();
         let rx = BufReader::new(child.stdout.take().unwrap());
-        let mut c = Client { child, tx, rx, id: 0 };
+        let mut c = Client {
+            child,
+            tx,
+            rx,
+            id: 0,
+        };
         let init = c.rpc("initialize", json!({"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}));
-        assert!(init["result"]["capabilities"]["tools"].is_object(), "{init}");
+        assert!(
+            init["result"]["capabilities"]["tools"].is_object(),
+            "{init}"
+        );
         c.send(json!({"jsonrpc": "2.0", "method": "notifications/initialized"}));
         c
     }
@@ -54,7 +62,10 @@ impl Client {
         self.send(json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}));
         loop {
             let mut line = String::new();
-            assert!(self.rx.read_line(&mut line).unwrap() > 0, "server closed stdout");
+            assert!(
+                self.rx.read_line(&mut line).unwrap() > 0,
+                "server closed stdout"
+            );
             let v: Value = serde_json::from_str(&line).unwrap();
             if v["id"] == json!(id) {
                 return v;
@@ -67,7 +78,12 @@ impl Client {
         let res = &r["result"];
         let text = res["content"]
             .as_array()
-            .map(|c| c.iter().filter_map(|b| b["text"].as_str()).collect::<Vec<_>>().join("\n"))
+            .map(|c| {
+                c.iter()
+                    .filter_map(|b| b["text"].as_str())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            })
             .unwrap_or_default();
         (res["isError"].as_bool().unwrap_or(false), text)
     }
@@ -79,11 +95,18 @@ impl Drop for Client {
 }
 
 fn fixture(name: &str) -> String {
-    format!("file://{}/tests/fixtures/{name}", env!("CARGO_MANIFEST_DIR"))
+    format!(
+        "file://{}/tests/fixtures/{name}",
+        env!("CARGO_MANIFEST_DIR")
+    )
 }
 
 fn tmp(tag: &str) -> std::path::PathBuf {
-    let p = std::env::temp_dir().join(format!("manuk-forkent-{tag}-{}-{:?}", std::process::id(), std::time::Instant::now()));
+    let p = std::env::temp_dir().join(format!(
+        "manuk-forkent-{tag}-{}-{:?}",
+        std::process::id(),
+        std::time::Instant::now()
+    ));
     let _ = std::fs::remove_dir_all(&p);
     std::fs::create_dir_all(&p).unwrap();
     p
@@ -91,7 +114,10 @@ fn tmp(tag: &str) -> std::path::PathBuf {
 
 /// The handle of the first line containing `needle`.
 fn handle_of(text: &str, needle: &str) -> String {
-    let line = text.lines().find(|l| l.contains(needle)).unwrap_or_else(|| panic!("no line with {needle:?} in:\n{text}"));
+    let line = text
+        .lines()
+        .find(|l| l.contains(needle))
+        .unwrap_or_else(|| panic!("no line with {needle:?} in:\n{text}"));
     let start = line.find("[h").unwrap();
     let end = line[start..].find(']').unwrap() + start;
     line[start + 1..end].to_string()
@@ -99,19 +125,33 @@ fn handle_of(text: &str, needle: &str) -> String {
 
 /// The `page: <id>:<seq>` trailer of a tool result.
 fn page_of(text: &str) -> String {
-    text.lines().rev().find_map(|l| l.strip_prefix("page: ")).unwrap_or_else(|| panic!("no page handle in:\n{text}")).to_string()
+    text.lines()
+        .rev()
+        .find_map(|l| l.strip_prefix("page: "))
+        .unwrap_or_else(|| panic!("no page handle in:\n{text}"))
+        .to_string()
 }
 
 fn ckpt_of(t: &str) -> String {
-    t.split_whitespace().skip_while(|w| *w != "checkpoint").nth(1).unwrap().to_string()
+    t.split_whitespace()
+        .skip_while(|w| *w != "checkpoint")
+        .nth(1)
+        .unwrap()
+        .to_string()
 }
 
 /// The `Roll: <random> at <now>` line, as (random, now). Panics if the page did not roll.
 fn roll_of(text: &str) -> (String, String) {
-    let line = text.lines().find(|l| l.contains("Roll: ") && l.contains(" at ")).unwrap_or_else(|| panic!("no roll line in:\n{text}"));
+    let line = text
+        .lines()
+        .find(|l| l.contains("Roll: ") && l.contains(" at "))
+        .unwrap_or_else(|| panic!("no roll line in:\n{text}"));
     let after = &line[line.find("Roll: ").unwrap() + "Roll: ".len()..];
     let (r, rest) = after.split_once(" at ").unwrap();
-    let now: String = rest.chars().take_while(|c| c.is_ascii_digit() || *c == '.').collect();
+    let now: String = rest
+        .chars()
+        .take_while(|c| c.is_ascii_digit() || *c == '.')
+        .collect();
     (r.trim().to_string(), now)
 }
 
@@ -130,7 +170,10 @@ fn roll_in_forks(chrome: bool, det: bool, n: usize, tag: &str) -> Vec<(String, S
             assert!(!e, "fork {i}: {f}");
             let (_, obs) = c.tool("observe", json!({"mode": "full", "page": page_of(&f)}));
             let h = handle_of(&obs, "Roll");
-            let (e, act) = c.tool("act", json!({"handle": h, "action": "click", "page": page_of(&obs)}));
+            let (e, act) = c.tool(
+                "act",
+                json!({"handle": h, "action": "click", "page": page_of(&obs)}),
+            );
             assert!(!e, "fork {i} click: {act}");
             roll_of(&act)
         })
@@ -154,7 +197,10 @@ fn manuk_deterministic_forks_roll_the_same_dice_the_recorded_gap() {
     let rolls = roll_in_forks(false, true, 3, "manuk-det");
     eprintln!("manuk --deterministic forks: {rolls:?}");
     let first = &rolls[0].0;
-    assert!(rolls.iter().all(|r| &r.0 == first), "deterministic forks diverged: {rolls:?}");
+    assert!(
+        rolls.iter().all(|r| &r.0 == first),
+        "deterministic forks diverged: {rolls:?}"
+    );
 }
 
 /// The red check for the parser the tests above trust: a page that did not roll must fail loudly.
@@ -171,5 +217,9 @@ fn chrome_forks_of_one_checkpoint_roll_distinct_dice() {
     let mut seen: Vec<&String> = rolls.iter().map(|r| &r.0).collect();
     seen.sort();
     seen.dedup();
-    assert_eq!(seen.len(), 3, "chrome forks rolled the same dice: {rolls:?}");
+    assert_eq!(
+        seen.len(),
+        3,
+        "chrome forks rolled the same dice: {rolls:?}"
+    );
 }

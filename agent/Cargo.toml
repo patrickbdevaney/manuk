@@ -88,3 +88,7 @@ manuk-layout.workspace = true
 [[bin]]
 name = "click-probe"
 path = "src/bin/click_probe.rs"
+
+[[bin]]
+name = "type-probe"
+path = "src/bin/type_probe.rs"

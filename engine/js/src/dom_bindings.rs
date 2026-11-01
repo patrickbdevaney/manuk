@@ -18324,8 +18324,8 @@ const LISTENER_PRELUDE: &str = r#"
         try { ev.__composedPath = path.slice(); } catch (e) {}
         ev.currentTarget = null;
         ev.eventPhase = 0;
-        if (ev.bubbles === undefined) ev.bubbles = true;
-        if (ev.cancelable === undefined) ev.cancelable = true;
+        if (ev.bubbles === undefined) ev.bubbles = !(type === 'focus' || type === 'blur');
+        if (ev.cancelable === undefined) ev.cancelable = !(type === 'focus' || type === 'blur' || type === 'focusin' || type === 'focusout');
         if (ev.isTrusted === undefined) ev.isTrusted = !supplied;
         // ── USER ACTIVATION (navigator.userActivation) ──────────────────────────────────────────
         // A real activation-triggering gesture grants user activation for the duration of its
