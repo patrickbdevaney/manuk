@@ -23,6 +23,14 @@ fn main() -> anyhow::Result<()> {
             }
         }
     }
+    // W4.E3.b: `--http-cache-dir <dir>` is the flag form of MANUK_HTTP_CACHE_DIR (the HTTP cache and the
+    // stencil cache both read it). Set before the zygote fork, so each forked session inherits it.
+    if let Some(i) = args.iter().position(|a| a == "--http-cache-dir") {
+        anyhow::ensure!(i + 1 < args.len(), "--http-cache-dir needs a directory");
+        let dir = args.remove(i + 1);
+        args.remove(i);
+        std::env::set_var("MANUK_HTTP_CACHE_DIR", dir);
+    }
     eprintln!(
         "manuk-mcp: agent profile={}",
         if manuk_net::lean::enabled() {
@@ -92,6 +100,10 @@ fn main() -> anyhow::Result<()> {
         // The action log directory is an explicit operator choice (server.rs reads the same var).
         g.write
             .extend(std::env::var_os("MANUK_ACTLOG_DIR").map(std::path::PathBuf::from));
+        // The HTTP cache (and the stencil cache under it) is an operator choice too (W4.E3.b): without this
+        // grant, a confined process silently fails every disk write and the warm visit is never warm.
+        g.write
+            .extend(std::env::var_os("MANUK_HTTP_CACHE_DIR").map(std::path::PathBuf::from));
         g.read.extend(opts.storage_state.clone());
         g.read.extend(std::env::current_dir().ok());
         if let manuk_mcp::confine::Outcome::Unsupported(why) = manuk_mcp::confine::confine(&g) {

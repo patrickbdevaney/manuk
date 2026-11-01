@@ -2867,52 +2867,53 @@
   - L1226 · HTTP conditional revalidation (tick 345)
   - L1242 · HTTP Expires header freshness (tick 347)
   - L1253 · HTTP Age header — CDN-aged freshness accounting (tick 348)
-  - L1261 · url.searchParams is live; its constructor takes any iterable of pairs (tick 426)
-  - L1282 · The passkey feature-detect surface exists and DEGRADES gracefully (tick 485)
-  - L1315 · @import chains are fetched — an unfetched import DELETES a stylesheet (tick 564)
-  - L1341 · Subresource Integrity — the check belongs at the fetch choke point, on the RAW bytes (tick 599)
-  - L1380 · Anti-framing — two mechanisms, one enforcement point, and frame-ancestors WINS (tick 600)
-  - L1396 · The thing an implementation written from intuition gets wrong
-  - L1404 · Two failure directions, and they point opposite ways
-  - L1422 · An HTTP error status is a DOCUMENT, and its body is what the site chose to say
-  - L1466 · The connection cap — a page's images are lost to our own stampede, not to the network (t609)
-  - L1537 · XMLHttpRequest had the legacy half of its API and none of the EventTarget half (tick 613)
-  - L1553 · The population, measured
-  - L1566 · Six open-coded dispatch sites, and they had already drifted
-  - L1586 · What the listener list must do to be an EventTarget rather than an array
-  - L1598 · Still missing on XHR, named rather than implied
-  - L1610 · A 404 page is a document to RENDER, not code to EXECUTE (tick 616)
-  - L1634 · One fact, three consumers, three different correct answers
-  - L1650 · The refusal must leave the ESTABLISHED "nothing to run" state
-  - L1662 · join_all is one future — a fan-out under a cancelling deadline delivers all or nothing (tick 655)
-  - L1683 · The primitive
-  - L1709 · Three things that are easy to get wrong
-  - L1732 · Where it is applied, and where it deliberately is not
-  - L1740 · The control that saved the gate
-  - L1750 · We hung up on it — h2's 16 KiB header limit makes a class of origins unreachable (tick 658)
-  - L1769 · It is a class, and the number is not ours to choose
-  - L1787 · The finding underneath the finding: a bucket that assigned blame
-  - L1800 · The cheap discriminator, and what it found
-  - L1817 · Gating a transport setting honestly
-  - L1832 · A reload inherited the previous load's failures, for the life of the process (tick 683)
-  - L1864 · What it did NOT fix, stated plainly
-  - L1880 · A comma is a legal URL character, and the reference does not wait for images (tick 1046)
-  - L1882 · The defect: srcset split on commas
-  - L1907 · ⚠⚠⚠ Instrument trap 1: --dump-dom does not wait for network images
-  - L1919 · ⚠⚠⚠ Instrument trap 2: the battery could not express its own subject
-  - L1930 · And a fix that could not be made to fail was reverted
-  - L1939 · Open, and it needs an instrument before it needs an engine change
-  - L1948 · The engine picked the candidate and the DOM published src (tick 1274)
-  - L1961 · The empty string, and why one of them cost 795 subtests
-  - L1972 · ⚠⚠⚠ The correction that arrived as a regression
-  - L1996 · Two boundaries, and they are separate arms
-  - L2006 · The table is keyed by (arena, NodeId)
-  - L2015 · Not trimmed, and that is a test
-  - L2022 · sizes is a FIRST-MATCH list, not a last entry (tick 1275)
-  - L2028 · The old code estimated its own damage, and the estimate was wrong
-  - L2049 · What the rewrite covers
-  - L2061 · ⚠⚠⚠ One histogram bar, two mechanisms — the rank was right and the price was wrong
-  - L2083 · TLS chain completion via AIA (R0.1.a.a)
+  - L1261 · Heuristic freshness and the confined cache dir (W4.E3.b)
+  - L1280 · url.searchParams is live; its constructor takes any iterable of pairs (tick 426)
+  - L1301 · The passkey feature-detect surface exists and DEGRADES gracefully (tick 485)
+  - L1334 · @import chains are fetched — an unfetched import DELETES a stylesheet (tick 564)
+  - L1360 · Subresource Integrity — the check belongs at the fetch choke point, on the RAW bytes (tick 599)
+  - L1399 · Anti-framing — two mechanisms, one enforcement point, and frame-ancestors WINS (tick 600)
+  - L1415 · The thing an implementation written from intuition gets wrong
+  - L1423 · Two failure directions, and they point opposite ways
+  - L1441 · An HTTP error status is a DOCUMENT, and its body is what the site chose to say
+  - L1485 · The connection cap — a page's images are lost to our own stampede, not to the network (t609)
+  - L1556 · XMLHttpRequest had the legacy half of its API and none of the EventTarget half (tick 613)
+  - L1572 · The population, measured
+  - L1585 · Six open-coded dispatch sites, and they had already drifted
+  - L1605 · What the listener list must do to be an EventTarget rather than an array
+  - L1617 · Still missing on XHR, named rather than implied
+  - L1629 · A 404 page is a document to RENDER, not code to EXECUTE (tick 616)
+  - L1653 · One fact, three consumers, three different correct answers
+  - L1669 · The refusal must leave the ESTABLISHED "nothing to run" state
+  - L1681 · join_all is one future — a fan-out under a cancelling deadline delivers all or nothing (tick 655)
+  - L1702 · The primitive
+  - L1728 · Three things that are easy to get wrong
+  - L1751 · Where it is applied, and where it deliberately is not
+  - L1759 · The control that saved the gate
+  - L1769 · We hung up on it — h2's 16 KiB header limit makes a class of origins unreachable (tick 658)
+  - L1788 · It is a class, and the number is not ours to choose
+  - L1806 · The finding underneath the finding: a bucket that assigned blame
+  - L1819 · The cheap discriminator, and what it found
+  - L1836 · Gating a transport setting honestly
+  - L1851 · A reload inherited the previous load's failures, for the life of the process (tick 683)
+  - L1883 · What it did NOT fix, stated plainly
+  - L1899 · A comma is a legal URL character, and the reference does not wait for images (tick 1046)
+  - L1901 · The defect: srcset split on commas
+  - L1926 · ⚠⚠⚠ Instrument trap 1: --dump-dom does not wait for network images
+  - L1938 · ⚠⚠⚠ Instrument trap 2: the battery could not express its own subject
+  - L1949 · And a fix that could not be made to fail was reverted
+  - L1958 · Open, and it needs an instrument before it needs an engine change
+  - L1967 · The engine picked the candidate and the DOM published src (tick 1274)
+  - L1980 · The empty string, and why one of them cost 795 subtests
+  - L1991 · ⚠⚠⚠ The correction that arrived as a regression
+  - L2015 · Two boundaries, and they are separate arms
+  - L2025 · The table is keyed by (arena, NodeId)
+  - L2034 · Not trimmed, and that is a test
+  - L2041 · sizes is a FIRST-MATCH list, not a last entry (tick 1275)
+  - L2047 · The old code estimated its own damage, and the estimate was wrong
+  - L2068 · What the rewrite covers
+  - L2080 · ⚠⚠⚠ One histogram bar, two mechanisms — the rank was right and the price was wrong
+  - L2102 · TLS chain completion via AIA (R0.1.a.a)
 
 ## Nineteen of five hundred and sixty-seven
 `docs/wiki/nineteen-of-five-hundred-and-sixty-seven.md`
@@ -3772,4 +3773,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3083 sections across 171 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3084 sections across 171 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

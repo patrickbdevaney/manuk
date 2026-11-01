@@ -1258,6 +1258,25 @@ a response has already sat in an upstream shared cache before reaching us, so it
 `put` does `fresh_secs = lifetime.saturating_sub(age)`. An `Age` >= the lifetime is stale on arrival —
 and, composing with t345, still revalidatable iff a validator was present. [[js-engine]]
 
+## Heuristic freshness and the confined cache dir (W4.E3.b)
+
+A `200` with **no** `max-age`/`s-maxage`, **no** `Expires` and **no** `no-cache` but a parseable
+`Last-Modified` now gets a heuristic lifetime: 10% of (`Date` − `Last-Modified`), `Date` defaulting to now
+(RFC 9111 §4.2.2). `heuristic_secs` in `engine/net/src/lib.rs` feeds `put`, after `Age` is subtracted like
+any other lifetime. An explicit `max-age=0` or any `Expires` header (a past or unparseable one included)
+beats the heuristic, so it never overrides an origin's own answer. Without this, static assets with a
+validator but no lifetime were stored stale and revalidated on every visit. On books.toscrape.com the warm
+run now serves 33 subresources from the disk cache and counts 0 wire bytes (the cold run counts 792684).
+The top-level document has an `ETag` and no lifetime, so it still revalidates with a `304`; the `304` is not
+counted by `WIRE_BYTES`.
+
+`manuk-mcp --http-cache-dir <dir>` sets `MANUK_HTTP_CACHE_DIR` before the zygote fork. The confined process
+could not write there at all: the Landlock write grant covered only the agent cache dir (`~/.cache/manuk`),
+so every `rename` failed with `EACCES` and the disk cache stayed empty (strace showed the `EACCES` from the
+`openat` on `<hash>.tmp<pid>`). `mcp/src/main.rs` now grants `MANUK_HTTP_CACHE_DIR` as a write dir, the same
+way it grants `MANUK_ACTLOG_DIR`. Lesson: a disk cache that writes into a confined process needs its dir in
+the write grant, or the cache is silently inert and only the wire counter shows it.
+
 ## `url.searchParams` is live; its constructor takes any iterable of pairs (tick 426)
 
 `new URL(...)` (dom_bindings.rs) parses the href once and copies the components (`href`, `search`,

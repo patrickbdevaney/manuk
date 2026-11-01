@@ -440,9 +440,9 @@ pub mod charset {
 
 /// A minimal in-memory HTTP cache (a subset of RFC 9111): fresh `GET` `200` responses
 /// with an explicit freshness lifetime (`Cache-Control: max-age` / `s-maxage`) are stored
-/// and served without a network round-trip until they go stale. Deliberately omitted for
-/// now (documented, not faked): `Vary`, conditional revalidation (`ETag`/`If-None-Match`),
-/// heuristic freshness, and disk persistence.
+/// and served without a network round-trip until they go stale. Responses with no explicit lifetime
+/// but a `Last-Modified` get a heuristic one (10% of its age, W4.E3.b). Deliberately omitted for now
+/// (documented, not faked): `Vary`.
 mod http_cache {
     use super::Response;
     use std::collections::HashMap;
@@ -520,12 +520,17 @@ mod http_cache {
         // freshness signal a great many CDNs and static-asset servers still send *instead of* a
         // `max-age`. `Expires` is converted to a lifetime-from-now here, so a past or unparseable date
         // is simply a zero lifetime — stale, and revalidatable iff it carried a validator.
+        // Then, with neither, a *heuristic* lifetime (RFC 9111 §4.2.2): 10% of the time since `Last-Modified`,
+        // so a long-unchanged static asset (a stylesheet, a script, an image) is served without a round-trip.
+        // A response carrying an `Expires` header is never heuristic: an unparseable `Expires` is already expired.
         let lifetime = if cc.contains("no-cache") {
             0
         } else if let Some(secs) = max_age(&cc) {
             secs
-        } else {
+        } else if response.header("expires").is_some() {
             expires_secs(response)
+        } else {
+            heuristic_secs(response)
         };
         // The `Age` header is how long the response has ALREADY sat in a shared cache (a CDN) before
         // reaching us, so its remaining freshness is `lifetime - age`, not the whole lifetime (RFC 7234
@@ -621,6 +626,24 @@ mod http_cache {
         };
         when.duration_since(std::time::SystemTime::now())
             .map(|d| d.as_secs())
+            .unwrap_or(0)
+    }
+
+    /// The heuristic freshness lifetime: 10% of (`Date` - `Last-Modified`), in seconds. `Date` defaults to
+    /// now when absent. 0 when there is no parseable `Last-Modified`, or it is not in the past of `Date`.
+    fn heuristic_secs(response: &Response) -> u64 {
+        let Some(lm) = response
+            .header("last-modified")
+            .and_then(crate::cookies::parse_http_date)
+        else {
+            return 0;
+        };
+        let date = response
+            .header("date")
+            .and_then(crate::cookies::parse_http_date)
+            .unwrap_or_else(std::time::SystemTime::now);
+        date.duration_since(lm)
+            .map(|d| d.as_secs() / 10)
             .unwrap_or(0)
     }
 
@@ -875,6 +898,75 @@ mod http_cache {
             assert!(
                 get(P, "https://e.test/zero").is_none(),
                 "max-age=0 is not cached"
+            );
+        }
+
+        /// A `200` with no `Cache-Control`, a `Date` and a `Last-Modified` `years_before` the `Date` (a fixed
+        /// anchor, so the test does not depend on the wall clock).
+        fn dated(url: &str, extra: &[(&str, &str)], last_modified: &str) -> Response {
+            let mut headers = vec![
+                (
+                    "date".to_string(),
+                    "Wed, 01 Nov 2026 00:00:00 GMT".to_string(),
+                ),
+                ("last-modified".to_string(), last_modified.to_string()),
+            ];
+            headers.extend(extra.iter().map(|(k, v)| (k.to_string(), v.to_string())));
+            Response {
+                status: 200,
+                headers,
+                body: Bytes::from_static(b"x"),
+                final_url: Url::parse(url).unwrap(),
+                http_version: HttpVersion::Http11,
+            }
+        }
+
+        #[test]
+        fn heuristic_freshness_is_ten_percent_of_age_since_last_modified() {
+            // Last-Modified 1000 days before Date: heuristic lifetime 100 days, so a fresh hit.
+            let u = "https://h.test/static.css";
+            put(P, u, &dated(u, &[], "Thu, 10 Feb 2024 00:00:00 GMT"));
+            assert!(get(P, u).is_some(), "10% heuristic lifetime serves a hit");
+            // Last-Modified only just before Date: 10% of seconds is 0 — stale, not cached blind.
+            let v = "https://h.test/fresh.css";
+            put(P, v, &dated(v, &[], "Wed, 01 Nov 2026 00:00:00 GMT"));
+            assert!(get(P, v).is_none(), "a zero heuristic lifetime is stale");
+        }
+
+        #[test]
+        fn heuristic_never_overrides_an_explicit_lifetime_or_expires() {
+            let a = "https://h.test/zero-max-age";
+            put(
+                P,
+                a,
+                &dated(
+                    a,
+                    &[("cache-control", "max-age=0")],
+                    "Thu, 10 Feb 2024 00:00:00 GMT",
+                ),
+            );
+            assert!(
+                get(P, a).is_none(),
+                "explicit max-age=0 beats the heuristic"
+            );
+            let b = "https://h.test/past-expires";
+            put(
+                P,
+                b,
+                &dated(
+                    b,
+                    &[("expires", "Sun, 06 Nov 1994 08:49:37 GMT")],
+                    "Thu, 10 Feb 2024 00:00:00 GMT",
+                ),
+            );
+            assert!(get(P, b).is_none(), "a past Expires beats the heuristic");
+            let c = "https://h.test/no-validator";
+            let mut r = dated(c, &[], "");
+            r.headers.retain(|(k, _)| k != "last-modified");
+            put(P, c, &r);
+            assert!(
+                get(P, c).is_none(),
+                "no Last-Modified means no heuristic lifetime"
             );
         }
 
