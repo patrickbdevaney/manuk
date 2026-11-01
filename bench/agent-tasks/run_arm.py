@@ -138,7 +138,10 @@ def run_claude(prompt, cfg, allowed, timeout, claude=None, cwd=None, sys_hint=No
         out, err = p.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
         for c in psutil.Process(p.pid).children(recursive=True):
-            c.kill()
+            try:
+                c.kill()
+            except psutil.NoSuchProcess:
+                pass
         p.kill(); out, err = p.communicate()
         out = out or ""; err = (err or "") + "TIMEOUT"
     stop.set(); th.join()

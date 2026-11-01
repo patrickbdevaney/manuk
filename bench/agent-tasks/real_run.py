@@ -265,9 +265,9 @@ def one(arm, task, run, pin, tdir, timeout):
     srv["command"] = sys.executable
     json.dump(cfg, open(cfg_path, "w"))
     prompt = run_arm.PROMPT.format(url=site, goal=task["goal"])
-    out, err, secs, _ = run_arm.run_claude(prompt, cfg_path, allowed, timeout, stream=True, sys_hint=run_arm.HINTS.get(arm))
+    out, err, secs, _ = run_arm.run_claude(prompt, cfg_path, allowed, timeout, sys_hint=run_arm.HINTS.get(arm))
     open(os.path.join(tmp, "transcript.jsonl"), "w").write(out)
-    j = run_arm.parse(out, stream=True) or {}
+    j = run_arm.parse(out) or {}
     u = j.get("usage", {})
     st = None
     for _ in range(240):  # claude may exit before the shim has read /finish
@@ -323,6 +323,12 @@ def main():
     tdir = os.path.join(ROOT, "target/real-runs")
     os.makedirs(tdir, exist_ok=True)
     new = not os.path.exists(a.out)
+    have = set()  # resume: (arm, task, run) rows already in the TSV are not re-run
+    if not new:
+        for l in open(a.out).read().splitlines()[1:]:
+            c = l.split("\t")
+            if len(c) > 6:
+                have.add((c[1], c[4], c[6]))
     lock = threading.Lock()
     with open(a.out, "a") as f:
         if new:
@@ -336,7 +342,7 @@ def main():
                 print(f"{a.arm} {t['id']} r{run}: {'PASS' if r['pass'] else 'FAIL'} {r['evals_ok']}/{r['evals_n']} state_ok={r['state_ok']} restores={r['restores']}", flush=True)
                 os.utime(os.path.join(ROOT, ".git/sprint-working"), None)
         with cf.ThreadPoolExecutor(a.jobs) as ex:
-            list(ex.map(job, [(a.run_base + r, t) for r in range(1, a.runs + 1) for t in tasks]))
+            list(ex.map(job, [(a.run_base + r, t) for r in range(1, a.runs + 1) for t in tasks if (a.arm, t['id'], str(a.run_base + r)) not in have]))
 
 
 if __name__ == "__main__":
