@@ -1,0 +1,54 @@
+0	epoch	1793498677505122
+20148	dns	admin.zoomph.com	20111
+64953	connect	admin.zoomph.com	64922
+125834	req	https://admin.zoomph.com/	0	125832	302	HTTP/2.0	61	GET
+127785	body	https://admin.zoomph.com/	61
+135809	dns	authentication.zoomph.com	7956
+179467	connect	authentication.zoomph.com	51616
+243833	req	https://authentication.zoomph.com/oauth2/authorize?client_id=knsjmnjp6fjan19vr58kptg2c&response_type=code&scope=aws.cognito.signin.user.admin%20email%20openid%20phone%20profile&code_challenge=lTuD5PK4rOKiHaPW48dgXNppigOTrvJKHxgiV6lHOWE&code_challenge_method=S256&state=OpenIdConnect.AuthenticationProperties%3D9COa8B16gEVj4FcSzeGjmYQQBVFh8svzz5qmNJrrb1ygk6rNDU6_X-kkkj-vsKECmNjVBxHhQzE6VCTe93l3D0RLtu7QAApdLTqMy0rddIgUq6h3p576GEIDR3kBbNXejVkSnyiUFzCyh6D8roZmCcixVoaWRxP_D-5HNww5PQ2jtl9hfdWwJKbggbrlHYlVM3UIFw&response_mode=form_post&nonce=639290954776109991.YTAyNTY0YzYtOGU0Yi00MDJmLTljYWEtMWIyNWZhODY4MjQzYzZlYzdhOWUtZjliZi00YzM1LThjMDUtMDIyOWUxNDljNTlk&redirect_uri=https%3A%2F%2Fadmin.zoomph.com%2Fsignin-oidc&x-client-SKU=ID_NET472&x-client-ver=8.22.0.0	127843	115989	302	HTTP/2.0	0	GET
+245169	body	https://authentication.zoomph.com/oauth2/authorize?client_id=knsjmnjp6fjan19vr58kptg2c&response_type=code&scope=aws.cognito.signin.user.admin%20email%20openid%20phone%20profile&code_challenge=lTuD5PK4rOKiHaPW48dgXNppigOTrvJKHxgiV6lHOWE&code_challenge_method=S256&state=OpenIdConnect.AuthenticationProperties%3D9COa8B16gEVj4FcSzeGjmYQQBVFh8svzz5qmNJrrb1ygk6rNDU6_X-kkkj-vsKECmNjVBxHhQzE6VCTe93l3D0RLtu7QAApdLTqMy0rddIgUq6h3p576GEIDR3kBbNXejVkSnyiUFzCyh6D8roZmCcixVoaWRxP_D-5HNww5PQ2jtl9hfdWwJKbggbrlHYlVM3UIFw&response_mode=form_post&nonce=639290954776109991.YTAyNTY0YzYtOGU0Yi00MDJmLTljYWEtMWIyNWZhODY4MjQzYzZlYzdhOWUtZjliZi00YzM1LThjMDUtMDIyOWUxNDljNTlk&redirect_uri=https%3A%2F%2Fadmin.zoomph.com%2Fsignin-oidc&x-client-SKU=ID_NET472&x-client-ver=8.22.0.0	0
+406317	req	https://authentication.zoomph.com/login?client_id=knsjmnjp6fjan19vr58kptg2c&response_type=code&scope=aws.cognito.signin.user.admin%20email%20openid%20phone%20profile&code_challenge=lTuD5PK4rOKiHaPW48dgXNppigOTrvJKHxgiV6lHOWE&code_challenge_method=S256&state=OpenIdConnect.AuthenticationProperties%3D9COa8B16gEVj4FcSzeGjmYQQBVFh8svzz5qmNJrrb1ygk6rNDU6_X-kkkj-vsKECmNjVBxHhQzE6VCTe93l3D0RLtu7QAApdLTqMy0rddIgUq6h3p576GEIDR3kBbNXejVkSnyiUFzCyh6D8roZmCcixVoaWRxP_D-5HNww5PQ2jtl9hfdWwJKbggbrlHYlVM3UIFw&response_mode=form_post&nonce=639290954776109991.YTAyNTY0YzYtOGU0Yi00MDJmLTljYWEtMWIyNWZhODY4MjQzYzZlYzdhOWUtZjliZi00YzM1LThjMDUtMDIyOWUxNDljNTlk&redirect_uri=https%3A%2F%2Fadmin.zoomph.com%2Fsignin-oidc&x-client-SKU=ID_NET472&x-client-ver=8.22.0.0	245220	161095	200	HTTP/2.0	-	GET
+406794	body	https://authentication.zoomph.com/login?client_id=knsjmnjp6fjan19vr58kptg2c&response_type=code&scope=aws.cognito.signin.user.admin%20email%20openid%20phone%20profile&code_challenge=lTuD5PK4rOKiHaPW48dgXNppigOTrvJKHxgiV6lHOWE&code_challenge_method=S256&state=OpenIdConnect.AuthenticationProperties%3D9COa8B16gEVj4FcSzeGjmYQQBVFh8svzz5qmNJrrb1ygk6rNDU6_X-kkkj-vsKECmNjVBxHhQzE6VCTe93l3D0RLtu7QAApdLTqMy0rddIgUq6h3p576GEIDR3kBbNXejVkSnyiUFzCyh6D8roZmCcixVoaWRxP_D-5HNww5PQ2jtl9hfdWwJKbggbrlHYlVM3UIFw&response_mode=form_post&nonce=639290954776109991.YTAyNTY0YzYtOGU0Yi00MDJmLTljYWEtMWIyNWZhODY4MjQzYzZlYzdhOWUtZjliZi00YzM1LThjMDUtMDIyOWUxNDljNTlk&redirect_uri=https%3A%2F%2Fadmin.zoomph.com%2Fsignin-oidc&x-client-SKU=ID_NET472&x-client-ver=8.22.0.0	10992
+407433	phase	html parse	609
+407653	dns	d3oia8etllorh5.cloudfront.net	624
+423392	req	https://authentication.zoomph.com/ALL/20200701202209/assets/CSS/custom-css.css	407027	16364	200	HTTP/2.0	1801	GET
+423421	body	https://authentication.zoomph.com/ALL/20200701202209/assets/CSS/custom-css.css	1801
+440040	req	https://authentication.zoomph.com/ALL/20200701202209/assets/images/image.jpg	423503	16536	200	HTTP/2.0	19669	GET
+443733	body	https://authentication.zoomph.com/ALL/20200701202209/assets/images/image.jpg	19669
+494739	connect	d3oia8etllorh5.cloudfront.net	87715
+561602	req	https://d3oia8etllorh5.cloudfront.net/20240614193835/js/amazon-cognito-advanced-security-data.min.js	406993	154608	200	HTTP/2.0	268377	GET
+638162	body	https://d3oia8etllorh5.cloudfront.net/20240614193835/js/amazon-cognito-advanced-security-data.min.js	268377
+640139	req	https://d3oia8etllorh5.cloudfront.net/20240614193835/css/bootstrap.min.css	494789	145348	200	HTTP/2.0	121154	GET
+649476	req	https://d3oia8etllorh5.cloudfront.net/20240614193835/css/cognito-login.css	494843	154632	200	HTTP/2.0	6166	GET
+649504	body	https://d3oia8etllorh5.cloudfront.net/20240614193835/css/cognito-login.css	6166
+649515	body	https://d3oia8etllorh5.cloudfront.net/20240614193835/css/bootstrap.min.css	121154
+664357	phase	external scripts	256909
+664387	phase	module graph prefetch	18
+664533	phase	blocking stylesheets	136
+674804	cascade	3878
+675906	layout	1078
+727668	cascade	409
+728168	layout	481
+729127	phase	cascade+layout+blocking scripts	64582
+738813	phase	deferred scripts	9673
+745618	phase	DOMContentLoaded	6788
+823104	req	https://d3oia8etllorh5.cloudfront.net/20240614193835/fonts/glyphicons-halflings-regular.woff2	764137	58966	403	HTTP/2.0	-	GET
+823137	body	https://d3oia8etllorh5.cloudfront.net/20240614193835/fonts/glyphicons-halflings-regular.woff2	111
+870424	req	https://d3oia8etllorh5.cloudfront.net/20240614193835/fonts/glyphicons-halflings-regular.woff	823185	47239	403	HTTP/2.0	-	GET
+870446	body	https://d3oia8etllorh5.cloudfront.net/20240614193835/fonts/glyphicons-halflings-regular.woff	111
+923080	req	https://d3oia8etllorh5.cloudfront.net/20240614193835/fonts/glyphicons-halflings-regular.ttf	870489	52590	403	HTTP/2.0	-	GET
+923105	body	https://d3oia8etllorh5.cloudfront.net/20240614193835/fonts/glyphicons-halflings-regular.ttf	111
+984528	req	https://d3oia8etllorh5.cloudfront.net/20240614193835/fonts/glyphicons-halflings-regular.svg#glyphicons_halflingsregular	923152	61375	403	HTTP/2.0	-	GET
+984552	body	https://d3oia8etllorh5.cloudfront.net/20240614193835/fonts/glyphicons-halflings-regular.svg#glyphicons_halflingsregular	111
+984733	phase	subframes (pre-load)	239098
+987638	phase	initial images+masks	2891
+1002302	phase	load event	14644
+1012505	phase	finish_loading: external CSS	10181
+1012525	phase	finish_loading: dynamic scripts	7
+1012555	phase	finish_loading: subframes	19
+1012595	phase	finish_loading: page fetches	30
+1012629	phase	finish_loading: images	23
+1012647	phase	finish_loading: icon masks	8
+1012662	phase	finish_loading: background images	4
+1012991	mark	navigate_returned
+1013146	mark	a11y_built

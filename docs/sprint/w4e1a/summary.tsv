@@ -1,0 +1,4 @@
+arm	desc	run1_s	run2_s	run3_s	median_s	min_s	max_s	chrome_ver
+manuk	HEAD (no <script src> early scan)	20.45	22.30	24.56	22.30	20.45	24.56	145.0.7632.116
+manuk-b	HEAD + <script src> early scan only	18.34	19.44	25.63	19.44	18.34	25.63	145.0.7632.116
+verdict	keep only if B max < A min: 25.63 < 20.45 -> NOT KEPT (bands overlap)							145.0.7632.116
