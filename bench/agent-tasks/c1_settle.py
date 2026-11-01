@@ -4,7 +4,7 @@
 Each arm is driven over raw MCP stdio: navigate, click #go, read the act's own returned observation.
 A false settle = the act returned before the fixture's content landed (expected token absent from the act result).
 Arms: manuk (manuk-mcp), cdp-layer (manuk-mcp --backend chrome), playwright (@playwright/mcp@0.0.83 --isolated).
-Usage: python3 -I c1_settle.py [--runs 3] [--out FILE]      (needs MANUK_CHROME_PIN; MANUK_C1_MUTATE=no-wait breaks the oracle)
+Usage: python3 -I c1_settle.py [--runs 3] [--out FILE]      (needs MANUK_CHROME_PIN; MANUK_C1_MUTATE=no-wait breaks the oracle; MANUK_C1_ARMS=playwright runs one arm)
 """
 import argparse, json, os, re, statistics, subprocess, sys, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -67,8 +67,10 @@ class Mcp:
             v = json.loads(line)
             if v.get("id") == self.id: return v
     def tool(self, name, args):
+        return self.tool_full(name, args)[0]
+    def tool_full(self, name, args):
         r = self.rpc("tools/call", {"name": name, "arguments": args}).get("result", {})
-        return "\n".join(b.get("text", "") for b in r.get("content", []))
+        return "\n".join(b.get("text", "") for b in r.get("content", [])), bool(r.get("isError"))
     def close(self):
         self.p.kill()
 
@@ -93,7 +95,8 @@ def run_one(arm, url):
             m = re.search(r'button "Go"[^\n]*\[ref=(\w+)\]', snap)
             if not m: sys.exit("playwright snapshot has no Go button:\n" + snap)
             ref = m.group(1)
-            t0 = time.time(); r = s.tool("browser_click", {"element": "Go", "ref": ref})
+            t0 = time.time(); r, err = s.tool_full("browser_click", {"element": "Go", "target": ref})
+            if err: sys.exit("playwright browser_click returned an error (not a measurement):\n" + r)
         else:
             nav = s.tool("navigate", {"url": url})
             line = next(l for l in nav.splitlines() if 'button "Go"' in l)
@@ -115,7 +118,7 @@ def main():
     allf = list(FIXTURES.items()) + [CONTROL]
     for name, (ms, _) in allf:
         if os.environ.get("MANUK_C1_ONLY") and name != os.environ["MANUK_C1_ONLY"]: continue
-        for arm in ("manuk", "cdp-layer", "playwright"):
+        for arm in os.environ.get("MANUK_C1_ARMS", "manuk,cdp-layer,playwright").split(","):
             for run in range(1, a.runs + 1):
                 wall, r = run_one(arm, base + name)
                 has = f"LANDED-{name}" in r
