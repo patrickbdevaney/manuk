@@ -3442,6 +3442,7 @@ dependencies = [
  "hyper-rustls",
  "hyper-util",
  "psl",
+ "ring",
  "rustls",
  "rustls-pki-types",
  "serde",

@@ -36,6 +36,9 @@ chardetng.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 base64.workspace = true
+# W3.19: Web Bot Auth (RFC 9421) Ed25519 signing; ring is already the TLS backend, so no new crypto crate.
+ring = "0.17"
+sha2 = "0.10"
 # Calling the connector's `Service<Uri>` directly for speculative preconnect (warm
 # TCP+TLS without an HTTP request). Already in the tree transitively.
 tower-service = "0.3"

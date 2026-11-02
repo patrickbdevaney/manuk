@@ -70,3 +70,4 @@ scripts/local-*
 **/*.local.*
 METHODOLOGY_RESEARCH.MD
 .verify-cache/
+scripts/botauth-verify/node_modules/

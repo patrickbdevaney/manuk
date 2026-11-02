@@ -134,13 +134,20 @@ impl Cdp {
             return;
         };
         let method = p["request"]["method"].as_str().unwrap_or("GET");
+        // A frame in its own process answers on its own flat session.
+        let keep = m["sessionId"]
+            .as_str()
+            .and_then(|s| self.session.replace(s.to_string()));
         let _ = match manuk_net::scope::check(method, url) {
-            Ok(()) => self.send("Fetch.continueRequest", json!({"requestId": rid})),
+            Ok(()) => self.send("Fetch.continueRequest", continue_params(rid, p)),
             Err(_) => self.send(
                 "Fetch.failRequest",
                 json!({"requestId": rid, "errorReason": "BlockedByClient"}),
             ),
         };
+        if m["sessionId"].as_str().is_some() {
+            self.session = keep;
+        }
     }
 
     /// A page dialog blocks every other command until answered, so it is answered the moment it is seen.
@@ -1403,6 +1410,31 @@ fn chrome_args(unsafe_no_sandbox: bool) -> Vec<&'static str> {
 
 /// Enable the domains and per-page hooks on the session `cdp` is attached to (the first tab, and every
 /// tab the agent is moved to).
+/// W3.19: `Fetch.continueRequest` params for a paused request. With a Web Bot Auth identity the request
+/// continues with the original headers plus the signature headers (`headers` replaces the whole set, so the
+/// originals are passed through); without one it continues untouched.
+fn continue_params(rid: &str, p: &Value) -> Value {
+    if !manuk_net::botauth::active() || mutated("no-sign") {
+        return json!({"requestId": rid});
+    }
+    let Ok(url) = url::Url::parse(p["request"]["url"].as_str().unwrap_or("")) else {
+        return json!({"requestId": rid});
+    };
+    let body = p["request"]["postData"].as_str().unwrap_or("");
+    let mut headers: Vec<Value> = p["request"]["headers"]
+        .as_object()
+        .map(|o| {
+            o.iter()
+                .map(|(k, v)| json!({"name": k, "value": v.as_str().unwrap_or("")}))
+                .collect()
+        })
+        .unwrap_or_default();
+    for (k, v) in manuk_net::botauth::sign(&url, body.as_bytes()) {
+        headers.push(json!({"name": k, "value": v}));
+    }
+    json!({"requestId": rid, "headers": headers})
+}
+
 fn init_page_session(cdp: &mut Cdp, width: u32, height: u32) -> Result<()> {
     for m in ["Page.enable", "DOM.enable", "Runtime.enable"] {
         cdp.call(m, json!({}))?;
@@ -1422,7 +1454,7 @@ fn init_page_session(cdp: &mut Cdp, width: u32, height: u32) -> Result<()> {
     )?;
     // W3.9.a: sets are installed by the session before the first navigation; hold every request
     // so the judge sees it. Cheap when the sets are empty (continue immediately).
-    if manuk_net::scope::active() {
+    if manuk_net::scope::active() || manuk_net::botauth::active() {
         cdp.call("Fetch.enable", json!({"patterns": [{"urlPattern": "*"}]}))?;
         // W4.D1.a: Fetch never sees a WebSocket upgrade, so the constructor is wrapped in every frame
         // before any page script runs; a socket to an origin outside the write set throws SecurityError.

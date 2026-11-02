@@ -31,6 +31,46 @@ fn main() -> anyhow::Result<()> {
         args.remove(i);
         std::env::set_var("MANUK_HTTP_CACHE_DIR", dir);
     }
+    // W3.19: Web Bot Auth. `--agent-key <jwk file|json>` + `--signature-agent <url>` sign every request
+    // either backend makes; `--print-key-directory` writes the JWKS the operator hosts, then exits.
+    // Set before the zygote fork, so each forked session inherits the identity.
+    let take = |args: &mut Vec<String>, flag: &str| -> anyhow::Result<Option<String>> {
+        match args.iter().position(|a| a == flag) {
+            Some(i) => {
+                anyhow::ensure!(i + 1 < args.len(), "{flag} needs a value");
+                let v = args.remove(i + 1);
+                args.remove(i);
+                Ok(Some(v))
+            }
+            None => Ok(None),
+        }
+    };
+    let (key, agent) = (
+        take(&mut args, "--agent-key")?,
+        take(&mut args, "--signature-agent")?,
+    );
+    let print_dir = args
+        .iter()
+        .position(|a| a == "--print-key-directory")
+        .map(|i| args.remove(i))
+        .is_some();
+    match (key, agent) {
+        (Some(k), Some(a)) => {
+            manuk_net::botauth::configure(&k, &a)?;
+            if print_dir {
+                println!(
+                    "{}",
+                    manuk_net::botauth::key_directory().unwrap_or_default()
+                );
+                return Ok(());
+            }
+        }
+        (None, None) => anyhow::ensure!(
+            !print_dir,
+            "--print-key-directory needs --agent-key and --signature-agent"
+        ),
+        _ => anyhow::bail!("--agent-key and --signature-agent go together"),
+    }
     eprintln!(
         "manuk-mcp: agent profile={}",
         if manuk_net::lean::enabled() {

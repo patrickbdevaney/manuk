@@ -34,6 +34,7 @@ use tokio_util::io::StreamReader;
 use url::Url;
 
 pub mod aia;
+pub mod botauth;
 pub mod cookies;
 
 pub mod cors;
@@ -2714,6 +2715,12 @@ async fn send_raw(
     }
     if !has_ae {
         builder = builder.header(ACCEPT_ENCODING, "gzip, deflate, br");
+    }
+    // W3.19: the operator's Web Bot Auth identity rides every page request (not our own trusted ones).
+    if !trusted {
+        for (k, v) in botauth::sign(url, &body) {
+            builder = builder.header(k, v);
+        }
     }
     let req = builder.body(Full::new(body)).context("building request")?;
 
