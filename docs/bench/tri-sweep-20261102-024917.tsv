@@ -1,0 +1,42 @@
+cat	url	m1_status	cov	shape	vis	paths	m2_tag	m2_rate	m2_ceil	m2_targets	m2_drivable	m2_ungrounded	m2_ambiguous	m2_mishit	a11y_tag	a11y_prec	a11y_rec	a11y_f1	chrome_ver
+HEAD	https://www.naukri.com/	OK	94.0	98.6	83.3	451	OK	82.9	92.7	41	34	0	4	3	OK	1.0	25.0	1.9	145.0.7632.116
+TAIL	https://allticketscol.com/	EMPTY				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.ikea.com/	OK	94.6	65.5	56.4	874	OK	17.5	19.3	171	30	16	4	121	OK	99.2	92.1	95.5	145.0.7632.116
+HEAD	https://tukrd.com/	OK	100.0	80.4	74.1	46	OK	100.0	100.0	9	9	0	0	0	OK	100.0	100.0	100.0	145.0.7632.116
+TAIL	https://admin.munchbakery.com/	OK	100.0	91.1	83.4	45	OK	100.0	100.0	6	6	0	0	0	OK	100.0	78.6	88.0	145.0.7632.116
+TAIL	https://www.dapam-sirius.fr/	OK	100.0	96.7	79.1	30	OK	100.0	100.0	8	8	0	0	0	OK	100.0	100.0	100.0	145.0.7632.116
+HEAD	https://linkmake.in/	OK	98.6	79.5	87.8	74	OK	100.0	100.0	9	9	0	0	0	OK	100.0	66.7	80.0	145.0.7632.116
+HEAD	https://255md.com/	OK	100.0	88.4	94.8	43	OK	100.0	100.0	8	8	0	0	0	OK	100.0	100.0	100.0	145.0.7632.116
+TAIL	https://profissionaliza.cademi.com.br/	OK	100.0	84.6	81.7	26	OK	100.0	100.0	6	6	0	0	0	OK	100.0	80.0	88.9	145.0.7632.116
+HEAD	https://merchant.upi9.pro/	EMPTY				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://redinfor.com.pe/	OK	100.0	95.0	99.1	40	OK	33.3	33.3	6	2	0	0	4	OK	100.0	45.5	62.5	145.0.7632.116
+HEAD	https://mobcup.fm/	OK	100.0	100.0	46.7	34	OK	100.0	100.0	6	6	0	0	0	OK	100.0	55.6	71.4	145.0.7632.116
+TAIL	https://admin.zoomph.com/	OK	100.0	58.8	93.4	34	OK	100.0	100.0	4	4	0	0	0	OK	83.3	55.6	66.7	145.0.7632.116
+TAIL	https://simplepdf.com/	OK	88.4	90.9	74.4	199	OK	94.4	100.0	54	51	0	3	0	OK	100.0	68.9	81.6	145.0.7632.116
+HEAD	https://chat.google.com/	OK	100.0	88.1	98.2	59	OK	100.0	100.0	91	91	0	0	0	OK	100.0	98.1	99.0	145.0.7632.116
+TAIL	https://hipmiluwuutara.org/	OK	100.0	100.0	71.4	31	OK	0.0	0.0	0	0	0	0	0	OK	0.0	0.0	0.0	145.0.7632.116
+HEAD	https://tracker.shadowfax.in/	OK	7.7	0.0		13	OK	100.0	100.0	2	2	0	0	0	OK	100.0	75.0	85.7	145.0.7632.116
+TAIL	https://portagelearning.edu/	OK	13.0	52.2	16.1	177	OK	77.6	85.1	67	52	0	5	10	OK	87.4	86.2	86.8	145.0.7632.116
+HEAD	https://www.kicktipp.com/	OK	100.0	92.5	83.9	93	OK	100.0	100.0	26	26	0	0	0	OK	66.7	84.8	74.7	145.0.7632.116
+HEAD	https://nitter.net/	OK	100.0	95.0	94.0	40	OK	100.0	100.0	5	5	0	0	0	OK	86.5	82.1	84.2	145.0.7632.116
+TAIL	https://www.wdimax.com/	OK	100.0	97.6	88.7	377	OK	32.8	96.7	122	40	1	81	0	OK	100.0	99.5	99.7	145.0.7632.116
+TAIL	https://gismart.com/	OK	98.3	81.9	35.1	286	OK	87.5	100.0	16	14	0	2	0	OK	100.0	72.1	83.8	145.0.7632.116
+HEAD	https://dashboard.twitch.tv/	OK	37.1	54.2	83.4	159	OK	0.0	0.0	0	0	0	0	0	OK	100.0	8.0	14.8	145.0.7632.116
+HEAD	https://www.tz.de/	OK	87.4	90.1	55.4	1830	OK	48.1	80.3	183	88	0	65	30	OK	80.5	87.7	84.0	145.0.7632.116
+HEAD	https://hope.cap-systems.org/	OK	100.0	100.0	98.1	17	OK	100.0	100.0	4	4	0	0	0	OK	100.0	100.0	100.0	145.0.7632.116
+TAIL	https://hnhbkis.edu.in/	OK	97.8	99.7	29.6	321	OK	56.2	100.0	48	27	0	21	0	OK	96.2	97.4	96.8	145.0.7632.116
+TAIL	https://experiencia.pichincha.com/	OK	32.4	16.7	96.6	37	OK	100.0	100.0	3	3	0	0	0	OK	100.0	75.0	85.7	145.0.7632.116
+TAIL	https://sestra.cc/	OK	99.3	93.0	56.5	430	OK	99.0	99.0	104	103	0	0	1	OK	9.6	17.8	12.5	145.0.7632.116
+HEAD	https://lms.sltc.ac.lk/	OK	100.0	90.0	86.6	130	OK	80.0	100.0	10	8	0	2	0	OK	97.9	87.0	92.2	145.0.7632.116
+HEAD	https://app.ordertime.com/	OK	100.0	100.0	99.9	29	OK	100.0	100.0	6	6	0	0	0	OK	100.0	90.9	95.2	145.0.7632.116
+TAIL	https://ru4.bongacams-ru.com/	OK	88.6	100.0	64.9	44	OK	100.0	100.0	4	4	0	0	0	OK	37.5	0.6	1.1	145.0.7632.116
+TAIL	https://portal.ensuretyfinance.com/	OK	100.0	59.1	91.5	22	OK	100.0	100.0	5	5	0	0	0	OK	100.0	75.0	85.7	145.0.7632.116
+TAIL	https://www.jazzguitar.be/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://secure5.entertimeonline.com/	OK	100.0	69.2	94.3	39	OK	100.0	100.0	5	5	0	0	0	OK	64.3	60.0	62.1	145.0.7632.116
+TAIL	https://meuconsultordigital.com.br/	OK	97.8	37.6	2.1	536	OK	45.0	60.0	20	9	0	11	0	OK	44.2	83.5	57.8	145.0.7632.116
+HEAD	https://mexcbt.ed-cl.com/	OK	100.0	72.0	80.0	25	OK	100.0	100.0	4	4	0	0	0	OK	90.0	81.8	85.7	145.0.7632.116
+HEAD	https://www.smecel.com.br/	OK	100.0	53.2	65.6	47	OK	81.8	100.0	11	9	0	2	0	OK	100.0	100.0	100.0	145.0.7632.116
+HEAD	https://promo.golesliga1max.pe/	OK	100.0	74.6	62.0	59	OK	100.0	100.0	7	7	0	0	0	OK	100.0	97.1	98.6	145.0.7632.116
+HEAD	https://serennu.com/	OK	100.0	82.0	74.2	61	OK	93.5	93.5	31	29	0	0	2	OK	100.0	59.3	74.5	145.0.7632.116
+HEAD	https://possssno.sbs/	OK	100.0	92.0	45.2	575	OK	92.9	95.3	170	158	0	6	6	OK	87.1	87.5	87.3	145.0.7632.116
+HEAD	https://booking.directferries.com/	OK	100.0	45.0	92.5	20	OK	100.0	100.0	2	2	0	0	0	OK	100.0	100.0	100.0	145.0.7632.116
