@@ -1,6 +1,7 @@
 //! W3.16: secret handles. The agent names a credential (`type(handle, secret='bank')`); the bytes come from
 //! the operator's store and never enter the transcript, the action log or any observation.
 //!
+//! * External stores (`op`, `secret-tool`) are read only for names in `MANUK_SECRET_ALLOW` (SEC.DID.7.a).
 //! * Providers: `op://…` references via the 1Password CLI (`op read`), libsecret via `secret-tool lookup
 //!   service manuk account <name>`, and `MANUK_SECRET_<NAME>` (tests, CI). `<name>.totp` computes the RFC 6238
 //!   code host-side from the seed stored under that name; the model never sees the seed.
@@ -48,9 +49,23 @@ fn env_key(name: &str) -> String {
     format!("MANUK_SECRET_{n}")
 }
 
+/// SEC.DID.7.a: the operator's list of external-store names (`MANUK_SECRET_ALLOW`, comma separated). A
+/// name the agent supplies reaches the argv of `op read` / `secret-tool lookup` only if it is listed, so a
+/// prompt-injected agent cannot probe arbitrary keyring accounts or `op://` references. The env provider
+/// (`MANUK_SECRET_<NAME>`) needs no entry: the operator already set that variable by name.
+fn allowed(name: &str) -> bool {
+    std::env::var("MANUK_SECRET_ALLOW").is_ok_and(|l| {
+        l.split(',')
+            .any(|n| !n.trim().is_empty() && n.trim() == name)
+    })
+}
+
 fn lookup(name: &str) -> Result<String> {
     if let Ok(v) = std::env::var(env_key(name)) {
         return Ok(v);
+    }
+    if !allowed(name) {
+        bail!("secret {name:?} is not in the operator's list: set {} or add the name to MANUK_SECRET_ALLOW (comma separated) to let it be read from the keyring or 1Password", env_key(name));
     }
     let out = if name.starts_with("op://") {
         std::process::Command::new("op")

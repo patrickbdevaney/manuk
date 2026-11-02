@@ -162,7 +162,9 @@ impl Client {
             // The password must come from the OS keyring (secret-tool), not the env provider. The confined
             // process cannot exec secret-tool (landlock grants no exec: agent/src/confine.rs), so this run
             // is unconfined; see the W3.16.a follow-up row.
-            cmd.arg("--no-confine").env_remove("MANUK_SECRET_PORTALPW");
+            cmd.arg("--no-confine")
+                .env("MANUK_SECRET_ALLOW", KEYRING_ITEM)
+                .env_remove("MANUK_SECRET_PORTALPW");
         } else {
             cmd.env("MANUK_SECRET_PORTALPW", SECRET);
         }
@@ -374,8 +376,16 @@ fn assert_green(chrome: bool, keyring: bool) {
             .iter()
             .filter(|r| r.contains("WebSocket frame"))
             .count();
-        assert!(wsf >= 3, "want >=3 WS-frame refusals (text, Blob, worker), got {wsf}: {:#?}", o.refusals);
-        assert!(pr >= 5, "want >=5 page-request refusals incl. worker fetch + EventSource, got {pr}: {:#?}", o.refusals);
+        assert!(
+            wsf >= 3,
+            "want >=3 WS-frame refusals (text, Blob, worker), got {wsf}: {:#?}",
+            o.refusals
+        );
+        assert!(
+            pr >= 5,
+            "want >=5 page-request refusals incl. worker fetch + EventSource, got {pr}: {:#?}",
+            o.refusals
+        );
     }
     assert!(
         o.app
@@ -502,4 +512,101 @@ fn guard_off_chrome_run_leaks_the_w316b_channels() {
             o.evil
         );
     }
+}
+
+/// SEC.DID.7.a: a secret name outside the operator's list never reaches the argv of a provider process.
+/// A fake `secret-tool` on PATH records every spawn; unlisted -> refused, no spawn; listed -> resolves.
+fn fake_tool_run(allow: Option<&str>, name: &str) -> (bool, String, bool) {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = std::env::temp_dir().join(format!(
+        "sec-did7a-{}-{}",
+        std::process::id(),
+        allow.map_or(0, |a| a.len())
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    let bin = dir.join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let marker = dir.join("spawned");
+    let tool = bin.join("secret-tool");
+    std::fs::write(
+        &tool,
+        format!(
+            "#!/bin/sh\necho \"$@\" >> {}\nprintf fake-pw-7a\n",
+            marker.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&tool, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let html = Arc::new(Mutex::new(
+        "<!doctype html><title>t</title><input type=password aria-label=\"Password\">".to_string(),
+    ));
+    let (app, _log) = serve(html);
+    let path = format!(
+        "{}:{}",
+        bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_manuk-mcp"));
+    cmd.env("PATH", path)
+        .env_remove("MANUK_SECRET_ALLOW")
+        .env("MANUK_ACTLOG_DIR", dir.join("actlog"))
+        .env("MANUK_HTTP_CACHE_DIR", dir.join("cache"))
+        .arg("--no-confine");
+    if let Some(a) = allow {
+        cmd.env("MANUK_SECRET_ALLOW", a);
+    }
+    let stderr = dir.join("stderr.txt");
+    let mut child = cmd
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(std::fs::File::create(&stderr).unwrap())
+        .spawn()
+        .expect("spawn manuk-mcp");
+    let tx = child.stdin.take().unwrap();
+    let rx = BufReader::new(child.stdout.take().unwrap());
+    let mut c = Client {
+        child,
+        tx,
+        rx,
+        id: 0,
+        stderr,
+    };
+    c.rpc("initialize", json!({"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}));
+    c.send(json!({"jsonrpc": "2.0", "method": "notifications/initialized"}));
+    let (_, nav) = c.call("navigate", json!({"url": format!("{app}/")}));
+    let (err, text) = c.call(
+        "type",
+        json!({"handle": handle_of(&nav, "\"Password\""), "secret": name}),
+    );
+    (err, text, marker.exists())
+}
+
+#[test]
+fn secret_name_outside_operator_list_spawns_no_process() {
+    let (err, text, spawned) = fake_tool_run(None, "somebody-elses-bank");
+    assert!(err, "unlisted name must be refused: {text}");
+    assert!(
+        text.contains("MANUK_SECRET_ALLOW"),
+        "refusal should say why: {text}"
+    );
+    assert!(!spawned, "secret-tool was spawned for an unlisted name");
+    let (err, text, spawned) = fake_tool_run(Some("other"), "somebody-elses-bank");
+    assert!(
+        err && !spawned,
+        "a different listed name must not admit this one: {text}"
+    );
+}
+
+#[test]
+fn secret_name_in_operator_list_still_resolves() {
+    let (err, text, spawned) = fake_tool_run(Some("a, mine ,b"), "mine");
+    assert!(!err, "listed name must resolve: {text}");
+    assert!(
+        spawned,
+        "secret-tool should have been asked for a listed name: {text}"
+    );
+    assert!(
+        !text.contains("fake-pw-7a"),
+        "secret bytes leaked into the result: {text}"
+    );
 }
