@@ -45,6 +45,9 @@ impl Options {
 /// Holds the profile lock for the life of the process.
 pub struct Held(#[allow(dead_code)] Option<File>);
 
+/// The profile lock file's name. It is never a storage-state target (see `guard_state_path`).
+pub const PROFILE_LOCK: &str = ".manuk-profile.lock";
+
 /// Claim a profile directory: exactly one process at a time.
 pub fn lock_profile(dir: &std::path::Path) -> Result<File> {
     std::fs::create_dir_all(dir).with_context(|| format!("create profile {}", dir.display()))?;
@@ -52,7 +55,7 @@ pub fn lock_profile(dir: &std::path::Path) -> Result<File> {
         .create(true)
         .truncate(false)
         .write(true)
-        .open(dir.join(".manuk-profile.lock"))?;
+        .open(dir.join(PROFILE_LOCK))?;
     f.try_lock().map_err(|_| {
         anyhow!(
             "profile {} is already in use by another manuk-mcp process",
@@ -60,6 +63,40 @@ pub fn lock_profile(dir: &std::path::Path) -> Result<File> {
         )
     })?;
     Ok(f)
+}
+
+/// Read a Playwright storage-state file. Valid JSON with no `cookies` or `origins` array is not
+/// storage state; importing it would be a silent no-op, so it is refused instead.
+pub fn read_storage_state(p: &std::path::Path) -> Result<serde_json::Value> {
+    let bytes = std::fs::read(p).with_context(|| format!("read {}", p.display()))?;
+    let v: serde_json::Value = serde_json::from_slice(&bytes)
+        .with_context(|| format!("parse storage state {}", p.display()))?;
+    anyhow::ensure!(
+        v.get("cookies").is_some_and(serde_json::Value::is_array)
+            || v.get("origins").is_some_and(serde_json::Value::is_array),
+        "{} is not Playwright storage state (no `cookies` or `origins` array)",
+        p.display()
+    );
+    Ok(v)
+}
+
+/// Refuse a storage-state path that resolves to the profile lock. An export over it truncates the
+/// file the profile's flock is keyed to. Symlinks and `..` are resolved before the name check.
+pub fn guard_state_path(p: &std::path::Path) -> Result<()> {
+    let name = p.file_name().unwrap_or_default();
+    let dir = p
+        .parent()
+        .filter(|d| !d.as_os_str().is_empty())
+        .unwrap_or(std::path::Path::new("."));
+    let real = std::fs::canonicalize(p)
+        .or_else(|_| std::fs::canonicalize(dir).map(|d| d.join(name)))
+        .unwrap_or_else(|_| p.to_path_buf());
+    anyhow::ensure!(
+        real.file_name().and_then(|n| n.to_str()) != Some(PROFILE_LOCK),
+        "refusing storage state at {}: that is the profile lock",
+        p.display()
+    );
+    Ok(())
 }
 
 /// Configure the engine's process-global state. Must run before any page loads (and before the
@@ -88,8 +125,7 @@ pub fn apply(o: &Options) -> Result<Held> {
         );
     }
     if let Some(p) = &o.storage_state {
-        let v: serde_json::Value = serde_json::from_slice(&std::fs::read(p)?)
-            .with_context(|| format!("parse storage state {}", p.display()))?;
+        let v = read_storage_state(p)?;
         let (c, l) = manuk_net::storage_state::import(&v)?;
         eprintln!(
             "manuk-mcp: storage state: {c} cookie(s), {l} localStorage key(s) from {}",

@@ -369,3 +369,80 @@ fn storage_state_round_trips_between_sessions() {
     let mut d = Client::start(&[]);
     assert!(d.seen(port).contains("cookie-seen:[]"));
 }
+
+/// SEC.DID.11: the storage-state path is agent-supplied. Under confinement an export outside the
+/// write set fails loudly and writes nothing; `--no-confine` is the control that can write there.
+#[test]
+fn storage_state_export_outside_the_write_set_fails_loudly() {
+    let dir = tmp("ss-deny");
+    let f = dir.join("state.json");
+    let mut a = Client::start(&[]);
+    let msg = a.tool(
+        "storage_state",
+        json!({"action": "export", "path": f.to_str().unwrap()}),
+    );
+    assert!(!msg.contains("written"), "confined export reported success: {msg}");
+    assert!(!f.exists(), "confined export wrote {}", f.display());
+}
+
+#[test]
+fn storage_state_export_outside_the_write_set_succeeds_unconfined() {
+    let dir = tmp("ss-control");
+    let f = dir.join("state.json");
+    let mut a = Client::start(&["--no-confine"]);
+    let msg = a.tool(
+        "storage_state",
+        json!({"action": "export", "path": f.to_str().unwrap()}),
+    );
+    assert!(msg.contains("written"), "{msg}");
+    assert!(f.exists());
+}
+
+/// SEC.DID.11: valid JSON that is not storage state is refused, both as a tool import and as the
+/// `--storage-state` startup seed. The old code imported it as a silent "0 cookies" no-op.
+#[test]
+fn storage_state_import_of_a_non_storage_state_file_fails_loudly() {
+    let dir = tmp("ss-notstate");
+    let f = dir.join("notes.json");
+    std::fs::write(&f, r#"{"hello": "world"}"#).unwrap();
+    let fs = f.to_str().unwrap();
+    let mut a = Client::start(&[]);
+    let msg = a.tool("storage_state", json!({"action": "import", "path": fs}));
+    assert!(!msg.contains("imported"), "non-state file imported: {msg}");
+    assert!(msg.contains("not Playwright storage state"), "{msg}");
+    let out = Command::new(env!("CARGO_BIN_EXE_manuk-mcp"))
+        .args(["--storage-state", fs])
+        .stdin(Stdio::null())
+        .output()
+        .unwrap();
+    assert!(!out.status.success(), "startup seed accepted a non-state file");
+}
+
+/// SEC.DID.11: an export whose path is inside a profile dir may not overwrite `.manuk-profile.lock`,
+/// directly or through a symlink. An ordinary file in the same dir still exports (not over-broad).
+#[test]
+fn storage_state_export_cannot_overwrite_the_profile_lock() {
+    let dir = tmp("ss-lock");
+    let lock = dir.join(".manuk-profile.lock");
+    let mut a = Client::start(&["--profile", dir.to_str().unwrap()]);
+    let lock_now = std::fs::read(&lock).unwrap();
+    let direct = a.tool(
+        "storage_state",
+        json!({"action": "export", "path": lock.to_str().unwrap()}),
+    );
+    assert!(direct.contains("profile lock"), "{direct}");
+    let alias = dir.join("alias.json");
+    std::os::unix::fs::symlink(&lock, &alias).unwrap();
+    let via_link = a.tool(
+        "storage_state",
+        json!({"action": "export", "path": alias.to_str().unwrap()}),
+    );
+    assert!(via_link.contains("profile lock"), "{via_link}");
+    assert_eq!(std::fs::read(&lock).unwrap(), lock_now, "lock rewritten");
+    let ok = dir.join("state.json");
+    let fine = a.tool(
+        "storage_state",
+        json!({"action": "export", "path": ok.to_str().unwrap()}),
+    );
+    assert!(fine.contains("written"), "{fine}");
+}
