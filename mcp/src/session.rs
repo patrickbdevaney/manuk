@@ -959,6 +959,14 @@ impl<B: Backend> Session<B> {
                     honour_query(arg_str(a, "query")),
                 )
                 .map(Output::Text),
+            "webmcp_list" => self.webmcp_list().await.map(Output::Text),
+            "webmcp_call" => self
+                .webmcp_call(
+                    arg_str(a, "name").ok_or_else(|| anyhow!("webmcp_call needs `name`"))?,
+                    a.get("arguments").cloned().unwrap_or(json!({})),
+                )
+                .await
+                .map(Output::Text),
             "find" => self
                 .find(arg_str(a, "query").ok_or_else(|| anyhow!("find needs `query`"))?)
                 .map(Output::Text),
@@ -2093,6 +2101,35 @@ impl<B: Backend> Session<B> {
         };
         let out = page_slice(&out, offset);
         Ok(format!("{UNTRUSTED}{}\n{out}", self.warn()))
+    }
+
+    /// W3.20: the page's WebMCP tools as a JSON array (registered, declarative, one synthesized
+    /// `fill_form_*` per form). A tool whose description holds paint-hidden text is listed `withheld`.
+    async fn webmcp_list(&mut self) -> Result<String> {
+        self.b.settle().await;
+        self.b
+            .page_eval("JSON.stringify(window.__manukWebmcp?window.__manukWebmcp.list():[])")
+            .await
+    }
+
+    async fn webmcp_call(&mut self, name: &str, args: Value) -> Result<String> {
+        let tools: Vec<Value> = serde_json::from_str(&self.webmcp_list().await?)?;
+        match tools.iter().find(|t| t["name"] == name) {
+            None => bail!("no WebMCP tool {name:?} on this page"),
+            Some(t) if t["withheld"].is_string() => bail!(
+                "WebMCP tool {name:?} is withheld: {}. A human cannot see this text, so the tool is not run.",
+                t["withheld"].as_str().unwrap_or("")
+            ),
+            Some(_) => {}
+        }
+        let js = format!(
+            "window.__manukWebmcp.call({}, {}).then(r=>String(r))",
+            serde_json::to_string(name)?,
+            args
+        );
+        let out = self.b.page_eval(&js).await?;
+        self.b.settle().await;
+        Ok(out)
     }
 
     fn find(&mut self, query: &str) -> Result<String> {

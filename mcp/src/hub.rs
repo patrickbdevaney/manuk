@@ -13,7 +13,7 @@ use crate::session::{Output, Session};
 use crate::Backend;
 
 /// Calls that do not touch page state and are never logged.
-const UNLOGGED: &[&str] = &["screenshot", "storage_state"];
+const UNLOGGED: &[&str] = &["screenshot", "storage_state", "webmcp_list"];
 
 /// FNV-1a 64: stable across builds and platforms (unlike `DefaultHasher`).
 pub fn fnv(bytes: &[u8]) -> u64 {
@@ -421,6 +421,10 @@ impl<B: Backend> Hub<B> {
                 })?
                 .to_string();
             return self.from_ckpt(&cid, tool == "restore").await;
+        }
+        if tool == "webmcp_list" && self.default.is_none() && args.get("page").is_none() {
+            // Listing must not launch a browser: no page yet means no tools.
+            return Ok(Output::Text("[]".into()));
         }
         let want = args.get("page").and_then(Value::as_str).map(str::to_string);
         let id = match want.as_deref() {

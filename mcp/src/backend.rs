@@ -75,6 +75,11 @@ pub trait Backend {
     async fn wait_download(&mut self, _secs: u64) -> Vec<String> {
         Vec::new()
     }
+    /// W3.20: evaluate `js` in the page (awaiting a returned promise) and return its string result. Only a
+    /// backend that can read a script's value back has it; the engine's embedder discards results.
+    async fn page_eval(&mut self, _js: &str) -> Result<String> {
+        anyhow::bail!("this backend cannot read a script's value back (WebMCP needs the chrome backend)")
+    }
     /// The injection shield's verdict (R1.4); `None` for a backend that cannot compute paint truth.
     fn shield(&self) -> Result<Option<manuk_agent::shield::Shield>> {
         Ok(None)

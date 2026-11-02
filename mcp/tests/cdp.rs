@@ -398,3 +398,102 @@ fn no_sandbox_mutant_is_red() {
         p.renderer_seccomp
     );
 }
+
+// ---- W3.20: WebMCP consumer ----
+
+fn webmcp_tools(c: &mut Client) -> Vec<Value> {
+    let r = c.rpc("tools/list", json!({}));
+    r["result"]["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|t| t["name"].as_str().unwrap().starts_with("webmcp_"))
+        .cloned()
+        .collect()
+}
+
+fn names(v: &[Value]) -> Vec<String> {
+    v.iter()
+        .map(|t| t["name"].as_str().unwrap().to_string())
+        .collect()
+}
+
+#[test]
+fn webmcp_tools_list_call_and_fill_a_form() {
+    if std::env::var("MANUK_CDP_MUTATE").is_ok() {
+        return;
+    }
+    let mut c = Client::start(None);
+    assert!(webmcp_tools(&mut c).is_empty(), "tools before any page");
+    let (err, nav) = c.tool("navigate", json!({"url": fixture("webmcp.html")}));
+    assert!(!err, "{nav}");
+    let tools = webmcp_tools(&mut c);
+    let n = names(&tools);
+    for want in ["webmcp_add_numbers", "webmcp_subscribe", "webmcp_fill_form_booking"] {
+        assert!(n.contains(&want.to_string()), "{want} missing from {n:?}");
+    }
+    assert!(!n.contains(&"webmcp_search".to_string()), "search is not registered yet");
+    // schema of a registered tool is the page's own
+    let add = tools.iter().find(|t| t["name"] == "webmcp_add_numbers").unwrap();
+    assert_eq!(add["inputSchema"]["properties"]["a"]["type"], "number");
+    // the synthesized form tool carries all six fields
+    let form = tools.iter().find(|t| t["name"] == "webmcp_fill_form_booking").unwrap();
+    let props = form["inputSchema"]["properties"].as_object().unwrap();
+    for f in ["name", "email", "guests", "room", "notes", "newsletter"] {
+        assert!(props.contains_key(f), "field {f} missing: {props:?}");
+    }
+    assert_eq!(props["room"]["enum"], json!(["std", "ste"]));
+    assert_eq!(form["inputSchema"]["required"], json!(["name"]));
+    // call a registered tool
+    let (err, out) = c.tool("webmcp_add_numbers", json!({"a": 2, "b": 40}));
+    assert!(!err && out.contains("42"), "{out}");
+    // one call fills six fields
+    let (err, out) = c.tool(
+        "webmcp_fill_form_booking",
+        json!({"name": "Ada Lovelace", "email": "ada@example.com", "guests": 3, "room": "ste", "notes": "late arrival", "newsletter": true}),
+    );
+    assert!(!err && out.contains("filled 6 field(s)"), "{out}");
+    let (_, ob) = c.tool("observe", json!({}));
+    for v in ["Ada Lovelace", "ada@example.com", "=3", "Suite"] {
+        assert!(ob.contains(v), "{v} not in the page after fill:\n{ob}");
+    }
+    // a tool registered later is announced and listed
+    let h = handle_of(&ob, "Enable search tool");
+    let (err, o) = c.tool("act", json!({"handle": h, "action": "click"}));
+    assert!(!err, "{o}");
+    assert!(names(&webmcp_tools(&mut c)).contains(&"webmcp_search".to_string()));
+    let (_, out) = c.tool("webmcp_search", json!({"q": "boats"}));
+    assert!(out.contains("results for boats"), "{out}");
+}
+
+#[test]
+fn webmcp_tool_with_hidden_description_is_withheld() {
+    if std::env::var("MANUK_CDP_MUTATE").is_ok() {
+        return;
+    }
+    let (marked, ran) = webmcp_hidden(None);
+    assert!(marked.contains("WITHHELD"), "helper not marked: {marked}");
+    assert!(ran.0 && !ran.1.contains("pwned"), "withheld tool ran: {ran:?}");
+}
+
+/// The twin: with the hidden-text check off the poisoned tool is listed clean and runs.
+#[test]
+fn webmcp_hidden_description_mutant_goes_red() {
+    if std::env::var("MANUK_CDP_MUTATE").is_ok() {
+        return;
+    }
+    let (marked, ran) = webmcp_hidden(Some("webmcp-no-taint"));
+    assert!(!marked.contains("WITHHELD"), "mutant still withheld: {marked}");
+    assert!(!ran.0 && ran.1.contains("pwned"), "mutant tool did not run: {ran:?}");
+}
+
+fn webmcp_hidden(mutate: Option<&str>) -> (String, (bool, String)) {
+    let mut c = Client::start(mutate);
+    let (err, nav) = c.tool("navigate", json!({"url": fixture("webmcp.html")}));
+    assert!(!err, "{nav}");
+    let tools = webmcp_tools(&mut c);
+    let helper = tools.iter().find(|t| t["name"] == "webmcp_helper").unwrap();
+    let desc = helper["description"].as_str().unwrap().to_string();
+    let r = c.tool("webmcp_helper", json!({}));
+    (desc, r)
+}

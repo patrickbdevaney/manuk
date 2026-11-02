@@ -1434,6 +1434,18 @@ fn mutated(what: &str) -> bool {
     std::env::var("MANUK_CDP_MUTATE").is_ok_and(|v| v == what)
 }
 
+/// W3.20: the WebMCP bridge (`webmcp.js`). `MANUK_CDP_MUTATE=webmcp-no-taint` drops the hidden-text check.
+fn webmcp_bridge() -> String {
+    let src = include_str!("webmcp.js");
+    if mutated("webmcp-no-taint") {
+        return src.replace(
+            "const taintOf = (desc, hidden) => {",
+            "const taintOf = (desc, hidden) => { return '';",
+        );
+    }
+    src.to_string()
+}
+
 /// The Chrome-for-Testing build the whole sprint measures against (docs/sprint/CHROME_PIN).
 const CHROME_PIN: &str = include_str!("../../docs/sprint/CHROME_PIN");
 
@@ -1533,6 +1545,11 @@ fn init_page_session(cdp: &mut Cdp, width: u32, height: u32) -> Result<()> {
     cdp.call(
         "Page.addScriptToEvaluateOnNewDocument",
         json!({"source": SETTLE_PROBE}),
+    )?;
+    // W3.20: capture WebMCP registrations from the first script of every document.
+    cdp.call(
+        "Page.addScriptToEvaluateOnNewDocument",
+        json!({"source": webmcp_bridge()}),
     )?;
     // W3.9.a: sets are installed by the session before the first navigation; hold every request
     // so the judge sees it. Cheap when the sets are empty (continue immediately).
@@ -2535,6 +2552,22 @@ impl Backend for CdpBackend {
                 "a pointer drag (no dragstart)"
             }
         ))
+    }
+    async fn page_eval(&mut self, js: &str) -> Result<String> {
+        let r = self.cdp.call(
+            "Runtime.evaluate",
+            json!({"expression": js, "returnByValue": true, "awaitPromise": true}),
+        )?;
+        if let Some(e) = r.get("exceptionDetails") {
+            bail!(
+                "page script error: {}",
+                e["exception"]["description"]
+                    .as_str()
+                    .or(e["text"].as_str())
+                    .unwrap_or("exception")
+            );
+        }
+        Ok(r["result"]["value"].as_str().unwrap_or("").to_string())
     }
     fn arm_dialog(&mut self, accept: bool, text: Option<String>) -> Result<()> {
         self.cdp.dialog_arm = Some((accept, text));

@@ -60,6 +60,24 @@ pub fn spawn_session<B: Backend + 'static>(
 pub struct ManukMcp {
     tx: mpsc::UnboundedSender<Job>,
     tools: Arc<Vec<Tool>>,
+    /// W3.20: hash of the page's WebMCP tool list as last announced, for `list_changed`.
+    webmcp_sig: Arc<std::sync::atomic::AtomicU64>,
+}
+
+/// One WebMCP tool the page offers, as an MCP tool `webmcp_<name>`. A withheld one stays listed, marked, and
+/// refuses to run.
+pub fn webmcp_tool(t: &Value) -> Option<Tool> {
+    let name = t["name"].as_str()?;
+    let mut desc = t["description"].as_str().unwrap_or("").to_string();
+    if let Some(why) = t["withheld"].as_str() {
+        desc = format!("⚠ WITHHELD (not runnable): {why}");
+    }
+    let schema = match &t["inputSchema"] {
+        Value::Object(m) => m.clone(),
+        _ => schema(json!({}), &[]),
+    };
+    let ann = rmcp::model::ToolAnnotations::new().read_only(t["annotations"]["readOnlyHint"] == json!(true));
+    Some(Tool::new(format!("webmcp_{name}"), desc, Arc::new(schema)).annotate(ann))
 }
 
 fn schema(props: Value, required: &[&str]) -> Map<String, Value> {
@@ -127,6 +145,32 @@ impl ManukMcp {
         ManukMcp {
             tx,
             tools: Arc::new(tools()),
+            webmcp_sig: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+        }
+    }
+
+    async fn ask(&self, tool: &str, args: Map<String, Value>) -> Result<Reply, String> {
+        let (reply, rx) = oneshot::channel();
+        self.tx
+            .send(Job {
+                tool: tool.to_string(),
+                args,
+                reply,
+            })
+            .map_err(|_| "session thread is gone".to_string())?;
+        rx.await
+            .map_err(|_| "session thread dropped the call".to_string())
+    }
+
+    /// The page's current WebMCP tools; empty when there is no page or the backend cannot say.
+    async fn webmcp(&self) -> Vec<Value> {
+        match self.ask("webmcp_list", Map::new()).await {
+            Ok(Ok(Output::Text(t))) => {
+                // The hub appends a `page:` footer line.
+                let body = t.lines().next().unwrap_or("[]");
+                serde_json::from_str(body).unwrap_or_default()
+            }
+            _ => Vec::new(),
         }
     }
 }
@@ -134,7 +178,12 @@ impl ManukMcp {
 impl ServerHandler for ManukMcp {
     #[allow(deprecated)]
     fn get_info(&self) -> ServerConfig {
-        ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
+        ServerConfig::new(
+            ServerCapabilities::builder()
+                .enable_tools()
+                .enable_tool_list_changed()
+                .build(),
+        )
     }
 
     async fn list_tools(
@@ -144,6 +193,12 @@ impl ServerHandler for ManukMcp {
     ) -> Result<ListToolsResult, McpError> {
         let mut r = ListToolsResult::default();
         r.tools = (*self.tools).clone();
+        let dynamic = self.webmcp().await;
+        self.webmcp_sig.store(
+            crate::hub::fnv(Value::Array(dynamic.clone()).to_string().as_bytes()),
+            std::sync::atomic::Ordering::SeqCst,
+        );
+        r.tools.extend(dynamic.iter().filter_map(webmcp_tool));
         Ok(r)
     }
 
@@ -154,20 +209,34 @@ impl ServerHandler for ManukMcp {
     async fn call_tool(
         &self,
         req: CallToolRequestParams,
-        _c: RequestContext<RoleServer>,
+        c: RequestContext<RoleServer>,
     ) -> Result<CallToolResponse, McpError> {
-        let (reply, rx) = oneshot::channel();
-        let job = Job {
-            tool: req.name.to_string(),
-            args: req.arguments.unwrap_or_default(),
-            reply,
+        let name = req.name.to_string();
+        let args = req.arguments.unwrap_or_default();
+        let (tool, args) = match name.strip_prefix("webmcp_") {
+            Some(n) if !self.tools.iter().any(|t| t.name == name) => {
+                let mut a = Map::new();
+                a.insert("name".into(), json!(n));
+                a.insert("arguments".into(), Value::Object(args));
+                ("webmcp_call".to_string(), a)
+            }
+            _ => (name.clone(), args),
         };
-        self.tx
-            .send(job)
-            .map_err(|_| McpError::internal_error("session thread is gone", None))?;
-        let res = rx
+        let res = self
+            .ask(&tool, args)
             .await
-            .map_err(|_| McpError::internal_error("session thread dropped the call", None))?;
+            .map_err(|e| McpError::internal_error(e, None))?;
+        // W3.20: a page that registers or drops a tool announces it, so the client re-lists.
+        let mutating = !matches!(
+            tool.as_str(),
+            "observe" | "extract" | "find" | "screenshot" | "storage_state" | "checkpoint"
+        );
+        if mutating {
+            let now = crate::hub::fnv(Value::Array(self.webmcp().await).to_string().as_bytes());
+            if self.webmcp_sig.swap(now, std::sync::atomic::Ordering::SeqCst) != now {
+                let _ = c.peer.notify_tool_list_changed().await;
+            }
+        }
         Ok(match res {
             Ok(Output::Text(t)) => CallToolResult::success(vec![ContentBlock::text(t)]),
             Ok(Output::Image { png, note }) => {
