@@ -200,6 +200,10 @@ if [ -n "${PCT:-}" ] && [ "$PCT" -ge 88 ]; then
   bash scripts/disk-hygiene.sh | sed 's/^/  /'
 fi
 
+# SEC.DID.7: no process exec or fork from shipped Rust code outside the reviewed inventory (static, no build).
+head_ "SEC.DID.7 · exec inventory (shipped Rust spawns/forks only where reviewed)"
+if python3 -I scripts/sec-did7-exec-tripwire.py >/dev/null; then ok "exec inventory matches docs/sprint/SEC-DID7-ALLOWLIST.tsv"; else bad "new or changed process exec in shipped code — see scripts/sec-did7-exec-tripwire.py --list"; fi
+
 head_ "B · build (workspace)"
 if cargo build -q --workspace 2>&1 | grep -qE '^error'; then bad "workspace does not compile"; else ok "workspace compiles (shipping)"; fi
 # HEADLESS GATE (observer, tick 186). The `--no-default-features` lane broke CI on EVERY OS (E0433: the

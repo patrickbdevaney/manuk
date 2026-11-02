@@ -1,0 +1,9 @@
+# SEC.DID.7 allowlist: (path, token, count) exec/fork sites in shipped Rust code that were reviewed. Format: path<TAB>token<TAB>count<TAB>reason.
+# scripts/sec-did7-exec-tripwire.py turns RED on a new (file, token), on an extra occurrence in a listed file, and on a stale row.
+# A new row needs a security review (a SEC.DID node), not a quiet edit. Run with --list to see the live inventory.
+agent/src/confine.rs	Command::new	1	confine selftest probe: execs /bin/true to check landlock denies exec; reached only via the selftest subcommand, never page content
+agent/src/confine.rs	process::Command	1	import/path for the same selftest probe (see above)
+engine/net/src/secrets.rs	Command::new	2	operator secret provider: `op read <ref>` or `secret-tool lookup`; argv only (no shell). The name can be agent-supplied via the type tool's secret arg; see SEC.DID.7.a
+engine/net/src/secrets.rs	process::Command	2	import/path for the secret provider (see above)
+mcp/src/cdp.rs	Command::new	1	launches the operator-chosen Chrome executable for the CDP backend (chrome_exe); argv fixed by the server, page content cannot name the binary
+mcp/src/zygote.rs	libc::fork	1	fork-only zygote: the forked child serves requests and never execs page-derived content (no exec token in this file)
