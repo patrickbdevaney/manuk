@@ -74,3 +74,8 @@ baseline 394 ms, jitless 3620 ms; baseline is 9.2x faster than jitless, Ion read
 Page loads (wall s, baseline vs none): comix.to 13.2 vs 12.7; mobile.bg 11.2 vs 14.2; basescan.org 0.49 vs 0.26.
 These pages are network-bound, so the page-level difference is within run-to-run noise at n=1; no page-level
 speedup is claimed. The R1.6 "~124x" figure in the node text is not reproduced here.
+
+SEC.DID.9 (shell JIT tier cost): chrome_ver=145.0.7632.116. `manuk render <url> --jit-mode=baseline|full`, release build, wall s, n=3 each.
+mobile.bg baseline 3.08/2.65/2.66 vs full 2.67/3.13/2.69; basescan.org baseline 0.28/0.29/0.24 vs full 0.25/0.24/0.29;
+mkp.gem.gov.in baseline 8.69/8.30/8.29 vs full 8.29/8.31/8.30. Page loads are network/parse-bound; baseline vs full is within
+run-to-run noise on all three (medians 2.66/2.69, 0.28/0.25, 8.30/8.30). No page-level speed claim either way.

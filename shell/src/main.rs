@@ -47,7 +47,25 @@ fn main() -> Result<()> {
         args.remove(i);
         manuk_net::egress::set_allow_private_network(true);
     }
+    // SEC.DID.9: baseline-only JIT (Ion/wasm-JIT off) for untrusted pages; `--jit-mode=` overrides.
+    let override_mode = match args.iter().position(|a| a.starts_with("--jit-mode=")) {
+        Some(i) => match args.remove(i).as_str() {
+            "--jit-mode=full" => Some(manuk_js::hardening::JitMode::Full),
+            "--jit-mode=baseline" => Some(manuk_js::hardening::JitMode::Baseline),
+            "--jit-mode=none" => Some(manuk_js::hardening::JitMode::None),
+            m => anyhow::bail!("{m}: want --jit-mode=full|baseline|none"),
+        },
+        None => None,
+    };
+    let sub = args.first().cloned();
+    let mode = manuk_js::hardening::shell_mode(
+        matches!(sub.as_deref(), Some("browse") | None),
+        positional(args.get(1..).unwrap_or(&[])),
+        override_mode,
+    );
+    manuk_js::hardening::set_mode(mode);
     let result = match args.first().map(String::as_str) {
+        Some("jit-status") => cmd_jit_status(),
         Some("render") => cmd_render(&args[1..]),
         Some("browse") => cmd_browse(&args[1..]),
         #[cfg(feature = "_sm")]
@@ -213,6 +231,24 @@ fn cmd_eval(args: &[String]) -> Result<()> {
         }
         Err(e) => bail!("{e}"),
     }
+}
+
+/// SEC.DID.9 gate hook: report the tier set a page in this shell process would run under.
+#[cfg(feature = "_sm")]
+fn cmd_jit_status() -> Result<()> {
+    let mut rt =
+        manuk_js::spidermonkey::SpiderMonkeyRuntime::new().map_err(|e| anyhow::anyhow!("{e}"))?;
+    println!(
+        "jit={} tiers={:?}",
+        manuk_js::hardening::mode().name(),
+        rt.jit_tiers()
+    );
+    Ok(())
+}
+
+#[cfg(not(feature = "_sm"))]
+fn cmd_jit_status() -> Result<()> {
+    bail!("jit-status needs the spidermonkey feature")
 }
 
 #[cfg(feature = "gui")]

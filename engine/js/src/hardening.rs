@@ -57,6 +57,42 @@ pub fn enable_baseline_only() {
     set_mode(JitMode::Baseline);
 }
 
+/// SEC.DID.9: whether `target` (a URL, `file:` URL or path as typed) is a local page.
+pub fn is_local_target(target: &str) -> bool {
+    let t = target.trim();
+    if t.starts_with("about:") || t.starts_with("file:") || t.starts_with("data:") {
+        return true;
+    }
+    let Some((scheme, rest)) = t.split_once("://") else {
+        return !t.contains('.') || t.starts_with('/') || t.starts_with('.');
+    };
+    if scheme != "http" && scheme != "https" {
+        return true;
+    }
+    let host = rest.split(['/', '?', '#']).next().unwrap_or("");
+    let host = host.rsplit('@').next().unwrap_or("");
+    let host = if host.starts_with('[') {
+        host.split(']').next().unwrap_or("").trim_start_matches('[')
+    } else {
+        host.split(':').next().unwrap_or("")
+    };
+    host == "localhost" || host == "::1" || host.starts_with("127.")
+}
+
+/// SEC.DID.9: the shell binary's tier set. Untrusted (non-local) pages get the same set as agent
+/// mode (baseline tiers on, Ion/wasm-JIT off); only a local target runs every tier. `browse` can
+/// navigate anywhere from its address bar, so it is baseline unless the user passes
+/// `--jit-mode=full`; `override_mode` is that explicit choice.
+pub fn shell_mode(browse: bool, target: Option<&str>, override_mode: Option<JitMode>) -> JitMode {
+    if let Some(m) = override_mode {
+        return m;
+    }
+    match target {
+        Some(t) if !browse && is_local_target(t) => JitMode::Full,
+        _ => JitMode::Baseline,
+    }
+}
+
 pub fn jitless() -> bool {
     mode() == JitMode::None
 }
