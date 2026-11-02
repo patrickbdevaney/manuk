@@ -255,8 +255,17 @@ def one(task, arm, run, base, cfg, allowed, ver, timeout, tdir=None, turns_fh=No
                 "input_tokens": u.get("input_tokens", 0), "output_tokens": u.get("output_tokens", 0),
                 "cache_read_tokens": u.get("cache_read_input_tokens", 0), "cache_create_tokens": u.get("cache_creation_input_tokens", 0),
                 "cost_usd": j.get("total_cost_usd", 0), "turns": j.get("num_turns", ""), "is_error": int(bool(j.get("is_error"))),
-                "reasons": "; ".join(r["reasons"]), "answer": answer.replace("\t", " ").replace("\n", " ")[:300]})
+                "reasons": "; ".join(r["reasons"]), "answer": flat_answer(answer)})
     return row
+
+
+ANSWER_CAP = None  # W4.P0.h: stored answers are the full final text (was [:300]; verdicts are computed on full text)
+
+
+def flat_answer(text):
+    """The final answer as one TSV cell: tabs/newlines flattened, never truncated."""
+    t = (text or "").replace("\t", " ").replace("\n", " ")
+    return t if ANSWER_CAP is None else t[:ANSWER_CAP]
 
 
 def main():

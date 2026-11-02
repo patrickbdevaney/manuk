@@ -286,7 +286,7 @@ def one(arm, task, run, pin, tdir, timeout):
             "forks": tc["fork"], "input_tokens": u.get("input_tokens", 0), "output_tokens": u.get("output_tokens", 0),
             "cost_usd": j.get("total_cost_usd", 0), "seconds": f"{secs:.1f}", "turns": j.get("num_turns", ""),
             "is_error": int(bool(j.get("is_error")) or "result" not in j),
-            "answer": (j.get("result") or err or "")[:200].replace("\t", " ").replace("\n", " ")}
+            "answer": run_arm.flat_answer(j.get("result") or err or "")}
 
 
 def main():
