@@ -10,6 +10,8 @@
 //! E  a page cannot post to a window id it holds no handle to (guessed id): nothing is queued
 //! F  a page that never called window.open cannot post to a tab another page opened, nor to any
 //!    guessed id — handles are per document, not per thread (the shell runs every tab on one thread)
+//! G  `event.source` is the host-assigned window id: a page that overwrites `__winId` (or passes a
+//!    different source to the native seam) still queues its true id (SEC.DID.8.b)
 //! D  vacuity: an honest window.open().postMessage still queues, with the sender's real origin
 //! ```
 use manuk_page::Page;
@@ -98,7 +100,11 @@ fn a_page_cannot_read_or_forge_across_windows() {
         </script></body></html>";
     let x = Page::load(html, "https://app.test/", &fonts, 800.0);
     let xs = x.take_messages();
-    assert_eq!(xs.len(), 1, "F vacuity: X's real handle to B must queue: {xs:?}");
+    assert_eq!(
+        xs.len(),
+        1,
+        "F vacuity: X's real handle to B must queue: {xs:?}"
+    );
     let b = xs[0].0;
     let html = format!(
         "<!doctype html><html><body><script>\
@@ -117,4 +123,29 @@ fn a_page_cannot_read_or_forge_across_windows() {
         "G_CROSS_WINDOW_REACH F: a page that never called window.open posted to tab ids it holds no \
          handle to (tab B = win {b}): {ys:?}"
     );
+
+    // ── G (SEC.DID.8.b): the queued source is the host-assigned id, not the page-writable __winId. ──
+    manuk_page::set_pending_identity(777, 0);
+    let html = "<!doctype html><html><body><script>\
+        var h = window.open('https://bank.test/', 'b');\
+        window.__winId = 4242;\
+        h.postMessage({spoof: 1}, '*');\
+        __winId = 31337;\
+        h.postMessage({spoof: 2}, '*');\
+        </script></body></html>";
+    let g = Page::load(html, "https://evil.test/", &fonts, 800.0);
+    let gs = g.take_messages();
+    println!("XW G: queued {gs:?}");
+    assert_eq!(
+        gs.len(),
+        2,
+        "G vacuity: both honest-handle posts must queue: {gs:?}"
+    );
+    for m in &gs {
+        assert_eq!(
+            m.3, 777,
+            "G_CROSS_WINDOW_REACH G: event.source is the page-writable __winId, not the host-assigned \
+             id 777 — a page can impersonate another window as the reply target. msg {m:?}"
+        );
+    }
 }

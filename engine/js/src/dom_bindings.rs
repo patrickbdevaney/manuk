@@ -14840,6 +14840,7 @@ impl PageContext {
         // it reads `null` and the opener's callback never fires.
         if let Some((win_id, opener_win)) = Self::take_pending_identity() {
             unsafe { hold_window(raw_cx, opener_win) };
+            unsafe { set_host_win_id(raw_cx, win_id) };
             let script = format!(
                 "globalThis.__winId = {win_id}; globalThis.opener = {};",
                 if opener_win == 0 {
@@ -15906,6 +15907,7 @@ impl PageContext {
         rooted!(&in(runtime.cx()) let global = self.global.get());
         let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
         unsafe { hold_window(raw_cx, opener_win) };
+        unsafe { set_host_win_id(raw_cx, win_id) };
         let script = format!(
             "globalThis.__winId = {win_id}; globalThis.opener = {};",
             if opener_win == 0 {
@@ -23764,8 +23766,27 @@ unsafe fn holds_window(cx: *mut RawJSContext, id: u64) -> bool {
     HELD_WINDOWS.with(|h| h.borrow().get(&k).is_some_and(|s| s.contains(&id)))
 }
 
+thread_local! {
+    /// Per document (keyed by its JS realm), the window id the HOST assigned it. `__winId` on the
+    /// global is page-writable, so `__postMessage` must take `event.source` from here, never from
+    /// the caller's argument (SEC.DID.8.b).
+    static HOST_WIN_ID: std::cell::RefCell<std::collections::HashMap<usize, u64>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+unsafe fn set_host_win_id(cx: *mut RawJSContext, id: u64) {
+    let k = held_key(cx);
+    HOST_WIN_ID.with(|h| h.borrow_mut().insert(k, id));
+}
+
+unsafe fn host_win_id(cx: *mut RawJSContext) -> u64 {
+    let k = held_key(cx);
+    HOST_WIN_ID.with(|h| h.borrow().get(&k).copied().unwrap_or(0))
+}
+
 unsafe fn forget_held_windows(cx: *mut RawJSContext) {
     let k = held_key(cx);
+    HOST_WIN_ID.with(|h| h.borrow_mut().remove(&k));
     HELD_WINDOWS.with(|h| h.borrow_mut().remove(&k));
 }
 
@@ -23840,8 +23861,11 @@ unsafe fn window_open(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool 
     let url = arg_string(cx, vp, argc, 0).unwrap_or_default();
     let win = next_window_id();
     hold_window(cx, win);
-    let allowed = eval_in_current_global(cx, &format!("globalThis.__navAllowed({})", js_string_literal(&url)))
-        .is_none_or(|v| v.is_boolean() && v.to_boolean());
+    let allowed = eval_in_current_global(
+        cx,
+        &format!("globalThis.__navAllowed({})", js_string_literal(&url)),
+    )
+    .is_none_or(|v| v.is_boolean() && v.to_boolean());
     if !url.is_empty() && allowed {
         PENDING_OPENS.with(|q| q.borrow_mut().push((win, url)));
     }
@@ -23918,9 +23942,8 @@ unsafe fn post_message(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool
         let url = DOC_URL.with(|u| u.borrow().clone());
         manuk_net::webstorage::origin_of(&url).unwrap_or_else(|| "null".to_string())
     };
-    let source: u64 = arg_string(cx, vp, argc, 3)
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(0);
+    // SEC.DID.8.b: likewise the source window id is the host-assigned one, not arg 3 / `__winId`.
+    let source: u64 = host_win_id(cx);
     if target != 0 && holds_window(cx, target) {
         PENDING_MESSAGES.with(|q| q.borrow_mut().push((target, json, origin, source)));
     }
