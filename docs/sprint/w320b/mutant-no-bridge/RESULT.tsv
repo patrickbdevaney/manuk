@@ -1,0 +1,8 @@
+demo	verdict	native_n	manuk_n	native_names	manuk_names	missing_in_manuk	extra_in_manuk	schema_diff	error	chrome_ver
+pizza-maker	FAIL	7	0	add_topping,manage_pizza,remove_topping,set_pizza_size,set_pizza_style,share_pizza,toggle_layer		add_topping,manage_pizza,remove_topping,set_pizza_size,set_pizza_style,share_pizza,toggle_layer	-	-	-	145.0.7632.116
+coffee-shop	FAIL	4	0	get_machine_specifications,get_order_history,reorder_product,search_catalog		get_machine_specifications,get_order_history,reorder_product,search_catalog	-	-	-	145.0.7632.116
+ticket-booking	FAIL	3	0	query_content,select_showtime,update_location		query_content,select_showtime,update_location	-	-	-	145.0.7632.116
+smart-home	FAIL	6	0	getGuestMessages,getPlaylistQueue,lockFrontDoor,rearrangeDOMComponents,setLivingRoomLights,unlockFrontDoor		getGuestMessages,getPlaylistQueue,lockFrontDoor,rearrangeDOMComponents,setLivingRoomLights,unlockFrontDoor	-	-	-	145.0.7632.116
+doors	FAIL	0	0			-	-	-	-	145.0.7632.116
+french-bistro	FAIL	0	0			-	-	-	-	145.0.7632.116
+# pages_pass=0 of 6 chrome_ver=145.0.7632.116 browser=Chrome/145.0.7632.116

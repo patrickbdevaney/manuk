@@ -1,0 +1,896 @@
+{
+  "chrome_ver": "145.0.7632.116",
+  "browser": "Chrome/145.0.7632.116",
+  "transcript": {
+    "pizza-maker": {
+      "url": "https://googlechromelabs.github.io/webmcp-tools/demos/pizza-maker/",
+      "native": [
+        {
+          "name": "add_topping",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "topping": {
+                "type": "string",
+                "enum": [
+                  "🍕",
+                  "🍄",
+                  "🌿",
+                  "🍍",
+                  "🫑",
+                  "🥓",
+                  "🧅",
+                  "🫒",
+                  "🌽",
+                  "🌶️",
+                  "🐑"
+                ]
+              },
+              "size": {
+                "type": "string",
+                "enum": [
+                  "Small",
+                  "Medium",
+                  "Large",
+                  "Extra Large"
+                ]
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 50,
+                "description": "Number of toppings to add"
+              }
+            },
+            "required": [
+              "topping"
+            ]
+          },
+          "description": "Add one or more toppings to the pizza"
+        },
+        {
+          "name": "manage_pizza",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "remove_last",
+                  "reset"
+                ]
+              }
+            },
+            "required": [
+              "action"
+            ]
+          },
+          "description": "Manage pizza state"
+        },
+        {
+          "name": "remove_topping",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "topping": {
+                "type": "string",
+                "enum": [
+                  "🍕",
+                  "🍄",
+                  "🌿",
+                  "🍍",
+                  "🫑",
+                  "🥓",
+                  "🧅",
+                  "🫒",
+                  "🌽",
+                  "🌶️",
+                  "🐑"
+                ]
+              },
+              "all": {
+                "type": "boolean",
+                "description": "Remove all toppings of this type"
+              }
+            },
+            "required": [
+              "topping"
+            ]
+          },
+          "description": "Remove a specific topping from the pizza"
+        },
+        {
+          "name": "set_pizza_size",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "size": {
+                "type": "string",
+                "enum": [
+                  "Small",
+                  "Medium",
+                  "Large",
+                  "Extra Large"
+                ],
+                "description": "The specific size name."
+              },
+              "number_of_persons": {
+                "type": "number",
+                "description": "The number of people eating to help infer the correct size."
+              }
+            }
+          },
+          "description": "Set the pizza size directly or infer it based on the number of people."
+        },
+        {
+          "name": "set_pizza_style",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "style": {
+                "type": "string",
+                "enum": [
+                  "Classic",
+                  "Bianca",
+                  "BBQ",
+                  "Pesto",
+                  "Wales"
+                ]
+              }
+            },
+            "required": [
+              "style"
+            ]
+          },
+          "description": "Set the style of the pizza (colors/theme)"
+        },
+        {
+          "name": "share_pizza",
+          "schema": "",
+          "description": "Get a shareable URL for the current pizza creation"
+        },
+        {
+          "name": "toggle_layer",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "layer": {
+                "type": "string",
+                "enum": [
+                  "sauce-layer",
+                  "cheese-layer"
+                ]
+              },
+              "action": {
+                "type": "string",
+                "enum": [
+                  "add",
+                  "remove",
+                  "toggle"
+                ]
+              }
+            },
+            "required": [
+              "layer"
+            ]
+          },
+          "description": "Control pizza layers (sauce, cheese). Use \"add\", \"remove\", or \"toggle\"."
+        }
+      ],
+      "manuk": [
+        {
+          "name": "add_topping",
+          "schema": {
+            "properties": {
+              "count": {
+                "description": "Number of toppings to add",
+                "maximum": 50,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "size": {
+                "enum": [
+                  "Small",
+                  "Medium",
+                  "Large",
+                  "Extra Large"
+                ],
+                "type": "string"
+              },
+              "topping": {
+                "enum": [
+                  "🍕",
+                  "🍄",
+                  "🌿",
+                  "🍍",
+                  "🫑",
+                  "🥓",
+                  "🧅",
+                  "🫒",
+                  "🌽",
+                  "🌶️",
+                  "🐑"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "topping"
+            ],
+            "type": "object"
+          },
+          "description": "Add one or more toppings to the pizza"
+        },
+        {
+          "name": "manage_pizza",
+          "schema": {
+            "properties": {
+              "action": {
+                "enum": [
+                  "remove_last",
+                  "reset"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
+          },
+          "description": "Manage pizza state"
+        },
+        {
+          "name": "remove_topping",
+          "schema": {
+            "properties": {
+              "all": {
+                "description": "Remove all toppings of this type",
+                "type": "boolean"
+              },
+              "topping": {
+                "enum": [
+                  "🍕",
+                  "🍄",
+                  "🌿",
+                  "🍍",
+                  "🫑",
+                  "🥓",
+                  "🧅",
+                  "🫒",
+                  "🌽",
+                  "🌶️",
+                  "🐑"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "topping"
+            ],
+            "type": "object"
+          },
+          "description": "Remove a specific topping from the pizza"
+        },
+        {
+          "name": "set_pizza_size",
+          "schema": {
+            "properties": {
+              "number_of_persons": {
+                "description": "The number of people eating to help infer the correct size.",
+                "type": "number"
+              },
+              "size": {
+                "description": "The specific size name.",
+                "enum": [
+                  "Small",
+                  "Medium",
+                  "Large",
+                  "Extra Large"
+                ],
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "description": "Set the pizza size directly or infer it based on the number of people."
+        },
+        {
+          "name": "set_pizza_style",
+          "schema": {
+            "properties": {
+              "style": {
+                "enum": [
+                  "Classic",
+                  "Bianca",
+                  "BBQ",
+                  "Pesto",
+                  "Wales"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "style"
+            ],
+            "type": "object"
+          },
+          "description": "Set the style of the pizza (colors/theme)"
+        },
+        {
+          "name": "share_pizza",
+          "schema": {
+            "properties": {},
+            "type": "object"
+          },
+          "description": "Get a shareable URL for the current pizza creation"
+        },
+        {
+          "name": "toggle_layer",
+          "schema": {
+            "properties": {
+              "action": {
+                "enum": [
+                  "add",
+                  "remove",
+                  "toggle"
+                ],
+                "type": "string"
+              },
+              "layer": {
+                "enum": [
+                  "sauce-layer",
+                  "cheese-layer"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "layer"
+            ],
+            "type": "object"
+          },
+          "description": "Control pizza layers (sauce, cheese). Use \"add\", \"remove\", or \"toggle\"."
+        }
+      ],
+      "error": null,
+      "nativeMeta": {
+        "modelContext": "object",
+        "testing": "object"
+      },
+      "missing": [],
+      "extra": [],
+      "schemaDiff": [
+        "share_pizza"
+      ],
+      "pass": false
+    },
+    "coffee-shop": {
+      "url": "https://googlechromelabs.github.io/webmcp-tools/demos/coffee-shop/",
+      "native": [
+        {
+          "name": "get_machine_specifications",
+          "schema": "",
+          "description": "Provides technical dimensions, height, and water tank capacity for the Alchemist machine."
+        },
+        {
+          "name": "get_order_history",
+          "schema": "",
+          "description": "Retrieves past orders to identify a user's 'usual' beans for reordering."
+        },
+        {
+          "name": "reorder_product",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "item_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "item_id"
+            ]
+          },
+          "description": "Adds an item to the cart and visually updates the UI bag icon."
+        },
+        {
+          "name": "search_catalog",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ]
+          },
+          "description": "Navigates the boutique to find a product and opens its page."
+        }
+      ],
+      "manuk": [
+        {
+          "name": "get_machine_specifications",
+          "schema": {
+            "properties": {},
+            "type": "object"
+          },
+          "description": "Provides technical dimensions, height, and water tank capacity for the Alchemist machine."
+        },
+        {
+          "name": "get_order_history",
+          "schema": {
+            "properties": {},
+            "type": "object"
+          },
+          "description": "Retrieves past orders to identify a user's 'usual' beans for reordering."
+        },
+        {
+          "name": "reorder_product",
+          "schema": {
+            "properties": {
+              "item_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "item_id"
+            ],
+            "type": "object"
+          },
+          "description": "Adds an item to the cart and visually updates the UI bag icon."
+        },
+        {
+          "name": "search_catalog",
+          "schema": {
+            "properties": {
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "description": "Navigates the boutique to find a product and opens its page."
+        }
+      ],
+      "error": null,
+      "nativeMeta": {
+        "modelContext": "object",
+        "testing": "object"
+      },
+      "missing": [],
+      "extra": [],
+      "schemaDiff": [
+        "get_machine_specifications",
+        "get_order_history"
+      ],
+      "pass": false
+    },
+    "ticket-booking": {
+      "url": "https://googlechromelabs.github.io/webmcp-tools/demos/ticket-booking/",
+      "native": [
+        {
+          "name": "query_content",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "genre": {
+                "type": "string",
+                "description": "The genre to filter by (e.g., horror, action, comedy)."
+              }
+            },
+            "required": [
+              "genre"
+            ]
+          },
+          "description": "Filters the movie catalog by a specific genre."
+        },
+        {
+          "name": "select_showtime",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "movie_id": {
+                "type": "string",
+                "description": "The ID of the movie to select."
+              },
+              "date": {
+                "type": "string",
+                "description": "The date of the show in YYYY-MM-DD format. Must be one of the dates returned by query_content for this movie.",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              },
+              "time": {
+                "type": "string",
+                "description": "The start time of the show in 12-hour format with AM/PM (e.g., '8:30 PM').",
+                "pattern": "^[1-12]:[0-5][0-9] (AM|PM)$"
+              },
+              "tickets": {
+                "type": "number",
+                "description": "Number of tickets.",
+                "default": 1
+              }
+            },
+            "required": [
+              "movie_id",
+              "date",
+              "time"
+            ]
+          },
+          "description": "Selects a movie and a specific showtime to initiate the checkout process."
+        },
+        {
+          "name": "update_location",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "city": {
+                "type": "string",
+                "description": "The city to set as the user's location. (e.g. Montpelier, Paris, New York)"
+              }
+            },
+            "required": [
+              "city"
+            ]
+          },
+          "description": "Updates the user's location."
+        }
+      ],
+      "manuk": [
+        {
+          "name": "query_content",
+          "schema": {
+            "properties": {
+              "genre": {
+                "description": "The genre to filter by (e.g., horror, action, comedy).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "genre"
+            ],
+            "type": "object"
+          },
+          "description": "Filters the movie catalog by a specific genre."
+        },
+        {
+          "name": "select_showtime",
+          "schema": {
+            "properties": {
+              "date": {
+                "description": "The date of the show in YYYY-MM-DD format. Must be one of the dates returned by query_content for this movie.",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                "type": "string"
+              },
+              "movie_id": {
+                "description": "The ID of the movie to select.",
+                "type": "string"
+              },
+              "tickets": {
+                "default": 1,
+                "description": "Number of tickets.",
+                "type": "number"
+              },
+              "time": {
+                "description": "The start time of the show in 12-hour format with AM/PM (e.g., '8:30 PM').",
+                "pattern": "^[1-12]:[0-5][0-9] (AM|PM)$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "movie_id",
+              "date",
+              "time"
+            ],
+            "type": "object"
+          },
+          "description": "Selects a movie and a specific showtime to initiate the checkout process."
+        },
+        {
+          "name": "update_location",
+          "schema": {
+            "properties": {
+              "city": {
+                "description": "The city to set as the user's location. (e.g. Montpelier, Paris, New York)",
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ],
+            "type": "object"
+          },
+          "description": "Updates the user's location."
+        }
+      ],
+      "error": null,
+      "nativeMeta": {
+        "modelContext": "object",
+        "testing": "object"
+      },
+      "missing": [],
+      "extra": [],
+      "schemaDiff": [],
+      "pass": true
+    },
+    "smart-home": {
+      "url": "https://googlechromelabs.github.io/webmcp-tools/demos/smart-home/",
+      "native": [
+        {
+          "name": "getGuestMessages",
+          "schema": "",
+          "description": "Reads visitor and guest sticky notes left on the smart home digital message board."
+        },
+        {
+          "name": "getPlaylistQueue",
+          "schema": "",
+          "description": "Returns the list of songs and artist metadata currently queued in the Living Room Soniq collaborative party playlist."
+        },
+        {
+          "name": "lockFrontDoor",
+          "schema": "",
+          "description": "Locks the smart home front door lock to secure the house."
+        },
+        {
+          "name": "rearrangeDOMComponents",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "componentIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "weather_widget",
+                    "thermostat_control",
+                    "camera_front_door",
+                    "lock_front_door",
+                    "guest_message_board",
+                    "smart_lights_living_room",
+                    "media_player_living_room",
+                    "alarm_panel",
+                    "air_quality_sensor",
+                    "energy_summary"
+                  ]
+                },
+                "description": "Array of component IDs to display on the dashboard."
+              }
+            },
+            "required": [
+              "componentIds"
+            ]
+          },
+          "description": "Rearranges the user's home dashboard by adding, removing, or reordering smart home control components based on the user's intent."
+        },
+        {
+          "name": "setLivingRoomLights",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "power": {
+                "type": "string",
+                "enum": [
+                  "on",
+                  "off"
+                ],
+                "description": "Whether to turn the lights 'on' or 'off'."
+              },
+              "brightness": {
+                "type": "number",
+                "description": "Brightness level from 0 (blackout) to 100 (maximum brightness)."
+              }
+            },
+            "required": [
+              "power"
+            ]
+          },
+          "description": "Turns the living room smart lights ON or OFF and adjusts their brightness percentage (0 to 100)."
+        },
+        {
+          "name": "unlockFrontDoor",
+          "schema": "",
+          "description": "Unlocks the smart home front door lock. Grants physical access to the home."
+        }
+      ],
+      "manuk": [
+        {
+          "name": "getGuestMessages",
+          "schema": {
+            "properties": {},
+            "type": "object"
+          },
+          "description": "Reads visitor and guest sticky notes left on the smart home digital message board."
+        },
+        {
+          "name": "getPlaylistQueue",
+          "schema": {
+            "properties": {},
+            "type": "object"
+          },
+          "description": "Returns the list of songs and artist metadata currently queued in the Living Room Soniq collaborative party playlist."
+        },
+        {
+          "name": "lockFrontDoor",
+          "schema": {
+            "properties": {},
+            "type": "object"
+          },
+          "description": "Locks the smart home front door lock to secure the house."
+        },
+        {
+          "name": "rearrangeDOMComponents",
+          "schema": {
+            "properties": {
+              "componentIds": {
+                "description": "Array of component IDs to display on the dashboard.",
+                "items": {
+                  "enum": [
+                    "weather_widget",
+                    "thermostat_control",
+                    "camera_front_door",
+                    "lock_front_door",
+                    "guest_message_board",
+                    "smart_lights_living_room",
+                    "media_player_living_room",
+                    "alarm_panel",
+                    "air_quality_sensor",
+                    "energy_summary"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "componentIds"
+            ],
+            "type": "object"
+          },
+          "description": "Rearranges the user's home dashboard by adding, removing, or reordering smart home control components based on the user's intent."
+        },
+        {
+          "name": "setLivingRoomLights",
+          "schema": {
+            "properties": {
+              "brightness": {
+                "description": "Brightness level from 0 (blackout) to 100 (maximum brightness).",
+                "type": "number"
+              },
+              "power": {
+                "description": "Whether to turn the lights 'on' or 'off'.",
+                "enum": [
+                  "on",
+                  "off"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "power"
+            ],
+            "type": "object"
+          },
+          "description": "Turns the living room smart lights ON or OFF and adjusts their brightness percentage (0 to 100)."
+        },
+        {
+          "name": "unlockFrontDoor",
+          "schema": {
+            "properties": {},
+            "type": "object"
+          },
+          "description": "Unlocks the smart home front door lock. Grants physical access to the home."
+        }
+      ],
+      "error": null,
+      "nativeMeta": {
+        "modelContext": "object",
+        "testing": "object"
+      },
+      "missing": [],
+      "extra": [],
+      "schemaDiff": [
+        "getGuestMessages",
+        "getPlaylistQueue",
+        "lockFrontDoor",
+        "unlockFrontDoor"
+      ],
+      "pass": false
+    },
+    "doors": {
+      "url": "https://googlechromelabs.github.io/webmcp-tools/demos/doors/",
+      "native": [],
+      "manuk": [],
+      "error": null,
+      "nativeMeta": {
+        "modelContext": "object",
+        "testing": "object"
+      },
+      "missing": [],
+      "extra": [],
+      "schemaDiff": [],
+      "pass": false
+    },
+    "french-bistro": {
+      "url": "https://googlechromelabs.github.io/webmcp-tools/demos/french-bistro/",
+      "native": [],
+      "manuk": [
+        {
+          "name": "book_table_le_petit_bistro",
+          "schema": {
+            "properties": {
+              "date": {
+                "description": "Date",
+                "type": "string"
+              },
+              "guests": {
+                "description": "Guests",
+                "enum": [
+                  "1",
+                  "2",
+                  "3",
+                  "4",
+                  "5",
+                  "6"
+                ],
+                "type": "string"
+              },
+              "name": {
+                "description": "Full Name",
+                "type": "string"
+              },
+              "phone": {
+                "description": "Phone Number",
+                "type": "string"
+              },
+              "requests": {
+                "description": "Special Requests",
+                "type": "string"
+              },
+              "seating": {
+                "description": "Seating Preference",
+                "enum": [
+                  "Main Dining",
+                  "Terrace",
+                  "Private Booth",
+                  "Bar"
+                ],
+                "type": "string"
+              },
+              "submit": {
+                "description": "also submit the form after filling (default false)",
+                "type": "boolean"
+              },
+              "time": {
+                "description": "Time",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "phone",
+              "date",
+              "time",
+              "guests"
+            ],
+            "type": "object"
+          },
+          "description": "Initiates a dining reservation request at Le Petit Bistro. Accepts customer details, timing, and seating preferences."
+        }
+      ],
+      "error": null,
+      "nativeMeta": {
+        "modelContext": "object",
+        "testing": "object"
+      },
+      "missing": [],
+      "extra": [
+        "book_table_le_petit_bistro"
+      ],
+      "schemaDiff": [],
+      "pass": false
+    }
+  }
+}
