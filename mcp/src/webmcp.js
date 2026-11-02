@@ -130,8 +130,11 @@
         else if (f.type === 'checkbox') { f.checked = v === true || v === 'true'; fire(f); }
         else if (f.tagName === 'SELECT') { f.value = String(v); if (f.value !== String(v)) { missing.push(k + '=' + v); continue; } fire(f); }
         else {
-          const set = Object.getOwnPropertyDescriptor(f.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype, 'value').set;
-          set.call(f, String(v)); fire(f);
+          // The native setter keeps React-style value trackers honest; an engine whose `value` is not an
+          // accessor on the prototype just takes the assignment.
+          const d = Object.getOwnPropertyDescriptor(f.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype, 'value');
+          if (d && d.set) d.set.call(f, String(v)); else f.value = String(v);
+          fire(f);
         }
         done.push(k);
       }

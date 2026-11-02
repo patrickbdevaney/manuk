@@ -255,7 +255,16 @@ impl ServerHandler for ManukMcp {
 
 pub fn run_stdio(width: u32, height: u32, grants: crate::policy::Grants) -> Result<()> {
     let log_dir = std::env::var_os("MANUK_ACTLOG_DIR").map(std::path::PathBuf::from);
-    let tx = spawn_session(move || AgentBrowser::new(width, height), log_dir, grants);
+    let tx = spawn_session(
+        move || {
+            let mut b = AgentBrowser::new(width, height);
+            // W3.20.a: the WebMCP bridge runs before page script, as on the chrome backend.
+            b.set_init_script(crate::cdp::webmcp_bridge());
+            b
+        },
+        log_dir,
+        grants,
+    );
     serve(tx)
 }
 

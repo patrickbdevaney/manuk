@@ -1435,8 +1435,11 @@ fn mutated(what: &str) -> bool {
 }
 
 /// W3.20: the WebMCP bridge (`webmcp.js`). `MANUK_CDP_MUTATE=webmcp-no-taint` drops the hidden-text check.
-fn webmcp_bridge() -> String {
+pub(crate) fn webmcp_bridge() -> String {
     let src = include_str!("webmcp.js");
+    if mutated("webmcp-no-bridge") {
+        return String::new();
+    }
     if mutated("webmcp-no-taint") {
         return src.replace(
             "const taintOf = (desc, hidden) => {",

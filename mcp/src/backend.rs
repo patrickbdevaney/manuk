@@ -185,6 +185,9 @@ fn describe(a: Activation) -> String {
 
 #[async_trait(?Send)]
 impl Backend for AgentBrowser {
+    async fn page_eval(&mut self, js: &str) -> Result<String> {
+        AgentBrowser::eval_value(self, js).await
+    }
     async fn navigate(&mut self, url: &str) -> Result<()> {
         AgentBrowser::navigate(self, url).await
     }

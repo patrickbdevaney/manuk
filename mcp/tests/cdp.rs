@@ -18,9 +18,15 @@ struct Client {
 
 impl Client {
     fn start(mutate: Option<&str>) -> Client {
+        Client::start_on("chrome", mutate)
+    }
+    /// `backend` = `chrome` (CDP) or `manuk` (the in-process engine, no flag).
+    fn start_on(backend: &str, mutate: Option<&str>) -> Client {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_manuk-mcp"));
-        cmd.args(["--backend", "chrome"])
-            .stdin(Stdio::piped())
+        if backend == "chrome" {
+            cmd.args(["--backend", "chrome"]);
+        }
+        cmd.stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null());
         if let Some(m) = mutate {
@@ -423,7 +429,13 @@ fn webmcp_tools_list_call_and_fill_a_form() {
     if std::env::var("MANUK_CDP_MUTATE").is_ok() {
         return;
     }
-    let mut c = Client::start(None);
+    for backend in ["chrome", "manuk"] {
+        webmcp_list_call_fill(backend);
+    }
+}
+
+fn webmcp_list_call_fill(backend: &str) {
+    let mut c = Client::start_on(backend, None);
     assert!(webmcp_tools(&mut c).is_empty(), "tools before any page");
     let (err, nav) = c.tool("navigate", json!({"url": fixture("webmcp.html")}));
     assert!(!err, "{nav}");
@@ -471,9 +483,11 @@ fn webmcp_tool_with_hidden_description_is_withheld() {
     if std::env::var("MANUK_CDP_MUTATE").is_ok() {
         return;
     }
-    let (marked, ran) = webmcp_hidden(None);
-    assert!(marked.contains("WITHHELD"), "helper not marked: {marked}");
-    assert!(ran.0 && !ran.1.contains("pwned"), "withheld tool ran: {ran:?}");
+    for backend in ["chrome", "manuk"] {
+        let (marked, ran) = webmcp_hidden(backend, None);
+        assert!(marked.contains("WITHHELD"), "{backend}: helper not marked: {marked}");
+        assert!(ran.0 && !ran.1.contains("pwned"), "{backend}: withheld tool ran: {ran:?}");
+    }
 }
 
 /// The twin: with the hidden-text check off the poisoned tool is listed clean and runs.
@@ -482,13 +496,27 @@ fn webmcp_hidden_description_mutant_goes_red() {
     if std::env::var("MANUK_CDP_MUTATE").is_ok() {
         return;
     }
-    let (marked, ran) = webmcp_hidden(Some("webmcp-no-taint"));
-    assert!(!marked.contains("WITHHELD"), "mutant still withheld: {marked}");
-    assert!(!ran.0 && ran.1.contains("pwned"), "mutant tool did not run: {ran:?}");
+    for backend in ["chrome", "manuk"] {
+        let (marked, ran) = webmcp_hidden(backend, Some("webmcp-no-taint"));
+        assert!(!marked.contains("WITHHELD"), "{backend}: mutant still withheld: {marked}");
+        assert!(!ran.0 && ran.1.contains("pwned"), "{backend}: mutant tool did not run: {ran:?}");
+    }
 }
 
-fn webmcp_hidden(mutate: Option<&str>) -> (String, (bool, String)) {
-    let mut c = Client::start(mutate);
+/// W3.20.a: a broken bridge (never installed) must turn the list-and-call test red on the engine.
+#[test]
+fn webmcp_broken_bridge_goes_red() {
+    if std::env::var("MANUK_CDP_MUTATE").is_ok() {
+        return;
+    }
+    let mut c = Client::start_on("manuk", Some("webmcp-no-bridge"));
+    let (err, nav) = c.tool("navigate", json!({"url": fixture("webmcp.html")}));
+    assert!(!err, "{nav}");
+    assert!(webmcp_tools(&mut c).is_empty(), "tools listed without a bridge");
+}
+
+fn webmcp_hidden(backend: &str, mutate: Option<&str>) -> (String, (bool, String)) {
+    let mut c = Client::start_on(backend, mutate);
     let (err, nav) = c.tool("navigate", json!({"url": fixture("webmcp.html")}));
     assert!(!err, "{nav}");
     let tools = webmcp_tools(&mut c);

@@ -14,7 +14,7 @@
 //!
 //! This decoupling is the point: any runner — committed or local — plugs a different
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use manuk_page::{fetch_html, Link, Page};
 
 pub mod confine;
@@ -154,6 +154,8 @@ pub struct AgentBrowser {
     width: u32,
     height: u32,
     page: Option<Page>,
+    /// W3.20.a: script run first in every document this browser loads (see `set_init_script`).
+    init_script: Option<String>,
     scroll_y: f32,
     /// §4b/N1 — the per-tab navigation stack. One shared `SessionHistory` model, the
     /// same type the shell and BiDi's `traverseHistory` drive.
@@ -474,6 +476,7 @@ impl AgentBrowser {
             width: width.max(1),
             height: height.max(1),
             page: None,
+            init_script: None,
             scroll_y: 0.0,
             history: manuk_page::history::SessionHistory::new(),
             last_a11y: None,
@@ -626,6 +629,10 @@ impl AgentBrowser {
 
     /// Build the page for an already-fetched document (a GET's body or a form POST's response).
     async fn build_loaded(&mut self, html: String, final_url: String) -> Result<()> {
+        let html = match &self.init_script {
+            Some(js) => with_init_script(&html, js),
+            None => html,
+        };
         // ── ⚠⚠⚠ **`load`, NOT `load_async`, WAS A BROWSER THAT NEVER FINISHED LOADING.** The
         //    synchronous constructor parses and lays out and stops: no subresources, no lifecycle,
         //    no scripts. An agent driving the real web needs the page the user would see, and on a
@@ -849,6 +856,59 @@ impl AgentBrowser {
         let landed = self.page.as_ref().expect("just loaded").final_url.clone();
         self.history.push(landed);
         Ok(())
+    }
+
+    /// W3.20.a: have every document loaded from now on run `js` before any of its own script (the
+    /// engine has no `Page.addScriptToEvaluateOnNewDocument`, so it is spliced in as the first script).
+    pub fn set_init_script(&mut self, js: String) {
+        self.init_script = Some(js);
+    }
+
+    /// W3.20.a: evaluate `js` in the page and read its value back. A promise is awaited (the page is
+    /// settled until it resolves, at most a few rounds). The engine's embedder discards eval results, so
+    /// the value travels out through a `#__manuk_eval` element the script writes and this reads.
+    pub async fn eval_value(&mut self, js: &str) -> Result<String> {
+        const ID: &str = "__manuk_eval";
+        let wrapped = format!(
+            "(function(){{var o=document.getElementById('{ID}');if(o)o.remove();\
+             var w=function(k,v){{var e=document.createElement('div');e.id='{ID}';\
+             e.setAttribute('data-k',k);e.textContent=v==null?'':String(v);\
+             (document.body||document.documentElement).appendChild(e);}};\
+             try{{var r=({js});if(r&&typeof r.then==='function')\
+             r.then(function(v){{w('ok',v)}},function(e){{w('err',e&&e.message||e)}});\
+             else w('ok',r);}}catch(e){{w('err',e&&e.message||e)}}}})()"
+        );
+        let mut rounds = 0;
+        loop {
+            if rounds == 0 {
+                let Some(page) = self.page.as_mut() else {
+                    bail!("no page loaded");
+                };
+                page.eval_for_test(&wrapped);
+            }
+            if let Some(page) = self.page.as_mut() {
+                let dom = page.dom();
+                if let Some(n) = dom.get_element_by_id(dom.root(), ID) {
+                    let text = dom.text_content(n);
+                    let err = dom.element(n)
+                        .and_then(|e| e.attr("data-k"))
+                        .is_some_and(|k| k == "err");
+                    // Leave no trace: a recorded act must replay against the same document.
+                    page.eval_for_test(&format!(
+                        "var o=document.getElementById('{ID}');if(o)o.remove();"
+                    ));
+                    if err {
+                        bail!("page script error: {text}");
+                    }
+                    return Ok(text);
+                }
+            }
+            rounds += 1;
+            if rounds > 6 {
+                bail!("page script did not produce a value (a promise that never settles?)");
+            }
+            self.settle().await;
+        }
     }
 
     /// The history stack (oldest first) and the index of the current entry.
@@ -3594,4 +3654,26 @@ impl Drop for PrewarmSettle {
     fn drop(&mut self) {
         manuk_page::prewarm_js_settle();
     }
+}
+
+/// W3.20.a: `html` with `<script>js</script>` as the first thing the parser meets after `<head>` (or
+/// `<html>`, else the very start), so it runs before every script of the page itself.
+fn with_init_script(html: &str, js: &str) -> String {
+    let tag = format!("<script>{}</script>", js.replace("</script", "<\\/script"));
+    let lower = html.to_ascii_lowercase();
+    for open in ["<head", "<html"] {
+        if let Some(i) = lower.find(open) {
+            if let Some(j) = lower[i..].find('>') {
+                let at = i + j + 1;
+                return format!("{}{tag}{}", &html[..at], &html[at..]);
+            }
+        }
+    }
+    // No head/html tag: put it after a doctype if there is one, so quirks mode is not triggered.
+    let at = if lower.trim_start().starts_with("<!doctype") {
+        lower.find('>').map_or(0, |j| j + 1)
+    } else {
+        0
+    };
+    format!("{}{tag}{}", &html[..at], &html[at..])
 }
