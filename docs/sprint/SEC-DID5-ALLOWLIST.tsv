@@ -1,0 +1,15 @@
+# SEC.DID.5 allowlist: (path, identifier) pairs that name a credential or autofill identifier and are NOT a page-reachable sink.
+# Format: path<TAB>identifier<TAB>reason. A new pair turns scripts/sec-did5-tripwire.py RED; add a row only after a review.
+engine/css/src/lib.rs	autofill	CSS :autofill pseudo-class is never-static matching; no form-filling behaviour
+engine/css/src/selector_syntax.rs	autofill	CSS :autofill pseudo-class name in the selector table; no form-filling behaviour
+engine/css/src/stylo_map.rs	autofill	grid auto-fill RepeatCount enum (CSS grid), not credential autofill
+engine/layout/src/taffy_tree.rs	autofill	grid auto-fill RepetitionCount enum (CSS grid), not credential autofill
+engine/page/tests/g_grid_auto_repeat.rs	autofill	comment on grid auto-fill RepeatCount, not credential autofill
+engine/page/tests/g_webauthn_surface.rs	autofill	comment: isConditionalMediationAvailable must be false (no autofill UI); the gate pins the absence
+engine/net/src/secrets.rs	keyring	operator-side secret provider (W3.16); page JS cannot read it, error text only
+engine/net/src/secrets.rs	libsecret	operator-side secret provider reads the OS keyring via secret-tool; not reachable from page content
+engine/net/src/secrets.rs	secret-tool	operator-side secret provider reads the OS keyring via secret-tool; not reachable from page content
+mcp/src/server.rs	keyring	type tool 'secret' arg names an operator-held credential; page text cannot name the store
+mcp/tests/secrets.rs	keyring	integration gate for the operator keyring backend (W3.16); test only
+mcp/tests/secrets.rs	secret-tool	integration gate for the operator keyring backend (W3.16); test only
+mcp/tests/secrets.rs	secret service	integration gate for the operator keyring backend (W3.16); test only
