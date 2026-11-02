@@ -204,6 +204,10 @@ fi
 head_ "SEC.DID.7 · exec inventory (shipped Rust spawns/forks only where reviewed)"
 if python3 -I scripts/sec-did7-exec-tripwire.py >/dev/null; then ok "exec inventory matches docs/sprint/SEC-DID7-ALLOWLIST.tsv"; else bad "new or changed process exec in shipped code — see scripts/sec-did7-exec-tripwire.py --list"; fi
 
+# SEC.DID.5: no password manager, keyring or autofill identifier in shell/ engine/ mcp/ outside the reviewed census (static, no build).
+head_ "SEC.DID.5 · credential census (no credential store named outside docs/sprint/SEC-DID5-ALLOWLIST.tsv)"
+if OUT=$(python3 -I scripts/sec-did5-tripwire.py); then ok "credential identifiers match docs/sprint/SEC-DID5-ALLOWLIST.tsv"; else bad "new credential-store identifier in shipped code — review it (SEC.DID node), do not just add a row:"; printf '%s\n' "$OUT" | sed 's/^/      /'; fi
+
 head_ "B · build (workspace)"
 if cargo build -q --workspace 2>&1 | grep -qE '^error'; then bad "workspace does not compile"; else ok "workspace compiles (shipping)"; fi
 # HEADLESS GATE (observer, tick 186). The `--no-default-features` lane broke CI on EVERY OS (E0433: the
