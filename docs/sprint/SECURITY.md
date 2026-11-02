@@ -27,9 +27,10 @@ browser, which has none of those three.
 | P12 | agent `storage_state` path arg -> disk write/read | landlock (mut) write set@mcp/tests/confine.rs | SEC.DID.11 |
 | P13 | page script injection (XSS-style) via CSP | script-src enforcement (mut)@engine/page/tests/g_csp.rs (other CSP directives unimplemented per csp.rs header) | SEC.DID.12 |
 | P14 | page script steers the tab/new window to `javascript:`/`data:`/`blob:`/`file:` | `__navAllowed` (http(s) only; `file:` from file pages)@engine/page/tests/g_script_nav_schemes.rs (mut: return true / return false both RED) | SEC.DID.12 |
+| P15 | https page -> http subresource (active mixed content) | `<script src>` over http on an https document is refused before the request, parse-time and runtime-inserted (mut both ways)@engine/page/tests/g_mixed_content.rs. Decision: only scripts are blocked; http stylesheet/img/fetch/XHR/iframe on an https page are NOT blocked (no layer, no claim), filed as SEC.DID.12.a.a. No loopback exemption | SEC.DID.12.a |
 
 ## Not yet probed (no claim made)
-Each entry has its own node: mixed content / https downgrade of subresources (SEC.DID.12.a), anchor-click and
+Each entry has its own node: http stylesheet/fetch/img/iframe mixed content (SEC.DID.12.a.a; scripts are P15), anchor-click and
 form-submit navigation to `data:`/`file:`/`javascript:` (SEC.DID.12.b), WebRTC, service-worker scope and the shell's
 extension/IPC surfaces (SEC.DID.12.c). Script `location`/`window.open` navigation is covered (P14).
 

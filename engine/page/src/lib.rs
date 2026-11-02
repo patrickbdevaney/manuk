@@ -7116,7 +7116,8 @@ impl Page {
                 // been enforcement on the half that matters least.
                 .filter(|(_, url)| match Url::parse(url) {
                     Ok(u) => {
-                        let ok = csp.allows_script_url(&u);
+                        let ok =
+                            csp.allows_script_url(&u) && !mixed_content_blocks(&self.final_url, &u);
                         if !ok {
                             tracing::info!(%url, "CSP blocked a dynamically added <script src>");
                         }
@@ -12319,6 +12320,13 @@ fn sri_matches(spec: &str, bytes: &[u8]) -> bool {
 /// `/chunks/react.BPdhuoKc.js` (404, 414KB of HTML), which then compiled as a module:
 /// `SyntaxError: expected expression, got '<'`. Carrying the origin URL forward is what lets the
 /// graph walk ask the right question.
+/// **Active mixed content.** An `https:` document must not load an `http:` script: anyone on the path can
+/// rewrite that response and so run code in the secure origin. Decided (SECURITY.md P15): `<script src>`
+/// (parse-time and dynamic) is blocked before the request; passive/other subresources are not touched here.
+pub fn mixed_content_blocks(doc_url: &str, sub: &Url) -> bool {
+    sub.scheme() == "http" && Url::parse(doc_url).map_or(false, |d| d.scheme() == "https")
+}
+
 async fn fetch_external_scripts(
     dom: &mut Dom,
     base: &str,
@@ -12352,6 +12360,10 @@ async fn fetch_external_scripts(
                     // for the same reason it skips a failed fetch: there is nothing to run.
                     if !csp.allows_script_url(&u) {
                         tracing::info!(url = %u, "CSP blocked a <script src> — not fetched");
+                        continue;
+                    }
+                    if mixed_content_blocks(base, &u) {
+                        tracing::info!(url = %u, "mixed content: http <script src> on an https page — not fetched");
                         continue;
                     }
                     // `integrity` is read HERE, with the node, because after the fetch the
