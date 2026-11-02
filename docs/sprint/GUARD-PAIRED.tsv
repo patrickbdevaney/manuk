@@ -1,0 +1,103 @@
+row	cat	url	status_base	status_new	cov_base	cov_new	cov_delta	shape_base	shape_new	shape_delta	vis_base	vis_new	vis_delta	paths_base	paths_new	paths_delta	m2_rate_base	m2_rate_new	m2_rate_delta	a11y_prec_base	a11y_prec_new	a11y_prec_delta	a11y_rec_base	a11y_rec_new	a11y_rec_delta	a11y_f1_base	a11y_f1_new	a11y_f1_delta
+only_base	HEAD	https://255md.com/	OK	absent
+only_base	TAIL	https://admin.munchbakery.com/	OK	absent
+only_base	TAIL	https://admin.zoomph.com/	OK	absent
+only_base	TAIL	https://allticketscol.com/	OK	absent
+only_base	HEAD	https://app.ordertime.com/	OK	absent
+only_base	HEAD	https://booking.directferries.com/	OK	absent
+only_base	HEAD	https://chat.google.com/	OK	absent
+only_base	HEAD	https://dashboard.twitch.tv/	OK	absent
+only_base	TAIL	https://experiencia.pichincha.com/	OK	absent
+only_base	TAIL	https://gismart.com/	OK	absent
+only_base	TAIL	https://hipmiluwuutara.org/	OK	absent
+only_base	TAIL	https://hnhbkis.edu.in/	OK	absent
+only_base	HEAD	https://hope.cap-systems.org/	OK	absent
+only_base	HEAD	https://linkmake.in/	OK	absent
+only_base	HEAD	https://linxonline.co.pierce.wa.us/	OK	absent
+only_base	HEAD	https://lms.sltc.ac.lk/	OK	absent
+only_base	HEAD	https://merchant.upi9.pro/	OK	absent
+only_base	TAIL	https://meuconsultordigital.com.br/	OK	absent
+only_base	HEAD	https://mexcbt.ed-cl.com/	OK	absent
+only_base	HEAD	https://mobcup.fm/	OK	absent
+only_base	HEAD	https://nitter.net/	OK	absent
+only_base	TAIL	https://portagelearning.edu/	OK	absent
+only_base	TAIL	https://portal.ensuretyfinance.com/	OK	absent
+only_base	HEAD	https://possssno.sbs/	OK	absent
+only_base	TAIL	https://profissionaliza.cademi.com.br/	OK	absent
+only_base	HEAD	https://promo.golesliga1max.pe/	OK	absent
+only_base	TAIL	https://redinfor.com.pe/	OK	absent
+only_base	TAIL	https://ru4.bongacams-ru.com/	OK	absent
+only_base	HEAD	https://secure5.entertimeonline.com/	OK	absent
+only_base	HEAD	https://serennu.com/	OK	absent
+only_base	TAIL	https://sestra.cc/	OK	absent
+only_base	TAIL	https://simplepdf.com/	OK	absent
+only_base	HEAD	https://tracker.shadowfax.in/	OK	absent
+only_base	HEAD	https://tukrd.com/	OK	absent
+only_base	TAIL	https://www.dapam-sirius.fr/	OK	absent
+only_base	HEAD	https://www.ikea.com/	OK	absent
+only_base	TAIL	https://www.jazzguitar.be/	OK	absent
+only_base	HEAD	https://www.kicktipp.com/	OK	absent
+only_base	HEAD	https://www.naukri.com/	OK	absent
+only_base	HEAD	https://www.smecel.com.br/	OK	absent
+only_base	HEAD	https://www.tz.de/	OK	absent
+only_base	TAIL	https://www.wdimax.com/	OK	absent
+only_new	blog	https://a11yproject.com/	absent	OK
+only_new	corp	https://apple.com/	absent	OK
+only_new	tools	https://archive.ph/	absent	OK
+only_new	blog	https://blog.rust-lang.org/	absent	OK
+only_new	code	https://codeberg.org/	absent	OK
+only_new	blog	https://danluu.com/	absent	OK
+only_new	reference	https://developer.mozilla.org/	absent	OK
+only_new	forum	https://discourse.org/	absent	OK
+only_new	forum	https://discuss.python.org/	absent	OK
+only_new	docs	https://doc.rust-lang.org/	absent	OK
+only_new	docs	https://docs.djangoproject.com/	absent	OK
+only_new	docs	https://docs.python.org/	absent	OK
+only_new	reference	https://en.wikipedia.org/	absent	OK
+only_new	tools	https://example.com/	absent	OK
+only_new	docs	https://flask.palletsprojects.com/	absent	OK
+only_new	forum	https://forum.golangbridge.org/	absent	OK
+only_new	docs	https://go.dev/	absent	OK
+only_new	gov_edu	https://gov.uk/	absent	OK
+only_new	tools	https://httpbin.org/	absent	OK
+only_new	ecommerce	https://ikea.com/	absent	OK
+only_new	blog	https://joelonsoftware.com/	absent	OK
+only_new	tools	https://jsonformatter.org/	absent	OK
+only_new	blog	https://jvns.ca/	absent	OK
+only_new	code	https://lobste.rs/	absent	OK
+only_new	blog	https://martinfowler.com/	absent	OK
+only_new	social	https://mastodon.social/	absent	OK
+only_new	blog	https://matklad.github.io/	absent	OK
+only_new	gov_edu	https://mit.edu/	absent	OK
+only_new	corp	https://mozilla.org/	absent	OK
+only_new	code	https://news.ycombinator.com/	absent	OK
+only_new	docs	https://nodejs.org/	absent	OK
+only_new	blog	https://overreacted.io/	absent	OK
+only_new	code	https://packagist.org/	absent	OK
+only_new	docs	https://php.net/	absent	OK
+only_new	tools	https://play.rust-lang.org/	absent	OK
+only_new	code	https://pypi.org/	absent	OK
+only_new	docs	https://reactjs.org/	absent	OK
+only_new	code	https://rubygems.org/	absent	OK
+only_new	docs	https://svelte.dev/	absent	OK
+only_new	blog	https://this-week-in-rust.org/	absent	OK
+only_new	social	https://tumblr.com/	absent	OK
+only_new	gov_edu	https://usa.gov/	absent	OK
+only_new	forum	https://users.rust-lang.org/	absent	OK
+only_new	docs	https://vuejs.org/	absent	OK
+only_new	reference	https://w3.org/	absent	OK
+only_new	tools	https://web.archive.org/	absent	OK
+only_new	reference	https://whatwg.org/	absent	OK
+only_new	gov_edu	https://whitehouse.gov/	absent	OK
+only_new	reference	https://wiktionary.org/	absent	OK
+only_new	blog	https://without.boats/	absent	OK
+SUMMARY	cov n=0		mean_base=n/a	mean_new=n/a	mean_delta=n/a
+SUMMARY	shape n=0		mean_base=n/a	mean_new=n/a	mean_delta=n/a
+SUMMARY	vis n=0		mean_base=n/a	mean_new=n/a	mean_delta=n/a
+SUMMARY	paths n=0		mean_base=n/a	mean_new=n/a	mean_delta=n/a
+SUMMARY	m2_rate n=0		mean_base=n/a	mean_new=n/a	mean_delta=n/a
+SUMMARY	a11y_prec n=0		mean_base=n/a	mean_new=n/a	mean_delta=n/a
+SUMMARY	a11y_rec n=0		mean_base=n/a	mean_new=n/a	mean_delta=n/a
+SUMMARY	a11y_f1 n=0		mean_base=n/a	mean_new=n/a	mean_delta=n/a
+SUMMARY	paired_n		0		min_required=30
+SUMMARY	chrome_ver		145.0.7632.116	145.0.7632.116	
