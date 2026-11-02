@@ -23114,7 +23114,21 @@ const WINDOW_PRELUDE: &str = r#"
             else abs = loc.origin + loc.pathname.replace(/[^\/]*$/, '') + u;
             g.__loc = g.__parseUrl(abs);
         };
+        // ⚠ SEC.DID.12 (P14): WHICH SCHEMES A PAGE MAY SEND A TOP-LEVEL NAVIGATION OR A NEW WINDOW TO.
+        // http(s) only — plus `file:` from a page that is itself a local file. `javascript:` would
+        // otherwise be mangled into a bogus relative path, `data:`/`blob:` top-level documents are
+        // blocked in every browser (they are the phishing-page vector), and `file:` reachable from an
+        // https page would let a remote page steer the tab onto a local file. Relative URLs inherit the
+        // page's own (allowed) scheme. One predicate, used by `__navigateTo` and by `window.open`.
+        g.__navAllowed = function (u) {
+            var m = /^[\u0000-\u0020]*([a-zA-Z][a-zA-Z0-9+.\-]*):/.exec(String(u).replace(/[\t\n\r]/g, ''));
+            if (!m) return true;
+            var sc = m[1].toLowerCase();
+            if (sc === 'http' || sc === 'https') return true;
+            return sc === 'file' && g.__loc && g.__loc.protocol === 'file:';
+        };
         g.__navigateTo = function (u) {
+            if (!g.__navAllowed(u)) return;
             g.__applyUrl(u);
             // ⚠ THE HOST PERFORMS IT, NOT THE PAGE — the same contract as `Page::meta_refresh`,
             // `take_scroll_requests` and `take_form_submits`. A page does not own the tab it is
@@ -23788,7 +23802,9 @@ pub fn take_pending_media_props() -> Vec<(u64, String, f64)> {
 unsafe fn window_open(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let url = arg_string(cx, vp, argc, 0).unwrap_or_default();
     let win = next_window_id();
-    if !url.is_empty() {
+    let allowed = eval_in_current_global(cx, &format!("globalThis.__navAllowed({})", js_string_literal(&url)))
+        .is_none_or(|v| v.is_boolean() && v.to_boolean());
+    if !url.is_empty() && allowed {
         PENDING_OPENS.with(|q| q.borrow_mut().push((win, url)));
     }
     match eval_in_current_global(cx, &format!("globalThis.__makeWindowRef({win})")) {

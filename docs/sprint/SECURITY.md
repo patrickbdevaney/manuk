@@ -26,10 +26,12 @@ browser, which has none of those three.
 | P11 | page content -> agent tool calls (prompt injection) | hidden-text shield (mut)@mcp/tests/session.rs. Visible injected text: no layer. navigate/act/type have no origin allowlist, so an injected `navigate` to an attacker URL carrying data in its query is unblocked | SEC.DID.10 |
 | P12 | agent `storage_state` path arg -> disk write/read | landlock (mut) write set@mcp/tests/confine.rs | SEC.DID.11 |
 | P13 | page script injection (XSS-style) via CSP | script-src enforcement (mut)@engine/page/tests/g_csp.rs (other CSP directives unimplemented per csp.rs header) | SEC.DID.12 |
+| P14 | page script steers the tab/new window to `javascript:`/`data:`/`blob:`/`file:` | `__navAllowed` (http(s) only; `file:` from file pages)@engine/page/tests/g_script_nav_schemes.rs (mut: return true / return false both RED) | SEC.DID.12 |
 
 ## Not yet probed (no claim made)
-mixed content / https downgrade, `javascript:` and `data:` top-level navigation, `window.open` features, WebRTC,
-service-worker scope, extension/IPC surfaces of the shell. SEC.DID.12 covers the probe.
+Each entry has its own node: mixed content / https downgrade of subresources (SEC.DID.12.a), anchor-click and
+form-submit navigation to `data:`/`file:`/`javascript:` (SEC.DID.12.b), WebRTC, service-worker scope and the shell's
+extension/IPC surfaces (SEC.DID.12.c). Script `location`/`window.open` navigation is covered (P14).
 
 ## JIT layer (JIT.BASE, owner decision 2026-10-29)
 
