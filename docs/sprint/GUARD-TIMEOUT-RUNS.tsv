@@ -1,0 +1,7 @@
+row	n	m1_timeouts	cov	shape	chrome_ver	note
+run1	41	2	76.72	67.02	145.0.7632.116	frozen F, M1 fresh, --m1-timeout 120
+run2	41	0	79.11	70.05	145.0.7632.116	frozen F, M1 fresh, --m1-timeout 120
+run3	41	0	81.20	69.65	145.0.7632.116	frozen F, M1 fresh, --m1-timeout 120
+run4	41	0	81.37	68.81	145.0.7632.116	frozen F, M1 fresh, --m1-timeout 120
+band			[76.72,81.20]	[67.02,70.05]	145.0.7632.116	min..max of runs 1-3
+verdict					145.0.7632.116	FAIL: run4 cov 81.37 outside [76.72,81.20]; run1 has 2 TIMEOUT rows: https://admin.munchbakery.com/, https://www.ikea.com/
