@@ -804,7 +804,7 @@ impl<B: Backend> Session<B> {
             "export" => {
                 let text = serde_json::to_string_pretty(&self.b.export_storage_state()?)?;
                 let Some(p) = path else { return Ok(text) };
-                crate::isolation::guard_state_path(std::path::Path::new(p))?;
+                crate::isolation::guard_state_path(std::path::Path::new(p), true)?;
                 use std::os::unix::fs::OpenOptionsExt;
                 std::fs::OpenOptions::new()
                     .write(true)
@@ -817,7 +817,7 @@ impl<B: Backend> Session<B> {
             }
             "import" => {
                 let p = path.ok_or_else(|| anyhow!("import needs `path`"))?;
-                crate::isolation::guard_state_path(std::path::Path::new(p))?;
+                crate::isolation::guard_state_path(std::path::Path::new(p), false)?;
                 let v = crate::isolation::read_storage_state(std::path::Path::new(p))?;
                 let (c, l) = self.b.import_storage_state(&v)?;
                 Ok(format!("imported {c} cookie(s), {l} localStorage key(s)"))

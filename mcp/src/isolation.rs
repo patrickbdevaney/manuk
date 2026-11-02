@@ -82,7 +82,7 @@ pub fn read_storage_state(p: &std::path::Path) -> Result<serde_json::Value> {
 
 /// Refuse a storage-state path that resolves to the profile lock. An export over it truncates the
 /// file the profile's flock is keyed to. Symlinks and `..` are resolved before the name check.
-pub fn guard_state_path(p: &std::path::Path) -> Result<()> {
+pub fn guard_state_path(p: &std::path::Path, writing: bool) -> Result<()> {
     let name = p.file_name().unwrap_or_default();
     let dir = p
         .parent()
@@ -96,6 +96,22 @@ pub fn guard_state_path(p: &std::path::Path) -> Result<()> {
         "refusing storage state at {}: that is the profile lock",
         p.display()
     );
+    // An existing target is only overwritten if it is empty or already storage state, so an export
+    // cannot clobber `cookies.json` or any other profile file. A multiply-linked file may be a hard
+    // link to the lock (the name check cannot see those), so it is refused outright.
+    if let Some(m) = std::fs::metadata(p).ok().filter(|_| writing) {
+        use std::os::unix::fs::MetadataExt;
+        anyhow::ensure!(
+            m.nlink() <= 1,
+            "refusing storage state at {}: it has other hard links (possibly the profile lock)",
+            p.display()
+        );
+        anyhow::ensure!(
+            !m.is_file() || m.len() == 0 || read_storage_state(p).is_ok(),
+            "refusing storage state at {}: it exists and is not storage state",
+            p.display()
+        );
+    }
     Ok(())
 }
 

@@ -446,3 +446,37 @@ fn storage_state_export_cannot_overwrite_the_profile_lock() {
     );
     assert!(fine.contains("written"), "{fine}");
 }
+
+/// SEC.DID.11.a: an export may not overwrite an existing non-state file in the profile
+/// (`cookies.json`) nor a hard link to the profile lock, which the name guard cannot see.
+#[test]
+fn storage_state_export_cannot_overwrite_profile_files_or_a_lock_hard_link() {
+    let dir = tmp("ss-clobber");
+    let mut a = Client::start(&["--profile", dir.to_str().unwrap()]);
+    let lock = dir.join(".manuk-profile.lock");
+    let cookies = dir.join("cookies.json");
+    std::fs::write(&cookies, r#"[{"human":"cookie jar"}]"#).unwrap();
+    let hard = dir.join("hard.json");
+    std::fs::hard_link(&lock, &hard).unwrap();
+    for target in [&cookies, &hard] {
+        let msg = a.tool(
+            "storage_state",
+            json!({"action": "export", "path": target.to_str().unwrap()}),
+        );
+        assert!(!msg.contains("written"), "overwrote {}: {msg}", target.display());
+    }
+    assert_eq!(
+        std::fs::read_to_string(&cookies).unwrap(),
+        r#"[{"human":"cookie jar"}]"#
+    );
+    assert_eq!(std::fs::metadata(&lock).unwrap().len(), 0, "lock rewritten");
+    // Re-exporting over a previous export is still allowed.
+    let ok = dir.join("state.json");
+    for _ in 0..2 {
+        let m = a.tool(
+            "storage_state",
+            json!({"action": "export", "path": ok.to_str().unwrap()}),
+        );
+        assert!(m.contains("written"), "{m}");
+    }
+}
