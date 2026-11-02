@@ -325,12 +325,34 @@ function ok(u){try{var o=new URL(u,location.href);o.protocol=o.protocol==='wss:'
 function G(u,p){if(!ok(u))throw new DOMException('origin not in write set','SecurityError');return p===undefined?new W(u):new W(u,p)}
 G.prototype=W.prototype;['CONNECTING','OPEN','CLOSING','CLOSED'].forEach(function(k){G[k]=W[k]});window.WebSocket=G;})();"#;
 
-/// W3.16: every WebSocket send waits for the host's verdict (`__mkEgress` binding -> `__mkV`), so the
-/// secret bytes are checked where they leave and never held by the page.
-const WS_SECRET_GUARD: &str = r#"(function(){if(window.__mkV||!window.__mkEgress)return;var q={},n=0,S=WebSocket.prototype.send,E=window.__mkEgress;
+/// W3.16/W3.16.b: every WebSocket send (string, ArrayBuffer/view or Blob) waits for the host's verdict
+/// (`__mkEgress` binding -> `__mkV`), so the secret bytes are checked where they leave and never held by
+/// the page. Dedicated workers get `WORKER_SECRET_GUARD` prepended to their script (a worker context has no
+/// CDP binding): its sends are relayed through the owning page's binding. WebTransport is removed outright
+/// (a datagram/stream cannot be judged per frame here). Fetch already covers worker fetch and EventSource.
+const WS_SECRET_GUARD: &str = r#"(function(){if(window.__mkV||!window.__mkEgress)return;var q={},n=0,S=WebSocket.prototype.send,E=window.__mkEgress,O=window.Worker,PM=O&&O.prototype.postMessage;
+function str(d,cb){if(typeof d==='string')cb(d);else if(typeof Blob!=='undefined'&&d instanceof Blob){var r=new FileReader();r.onload=function(){cb(String(r.result))};r.onerror=function(){cb('\u0000unreadable')};r.readAsText(d)}else if(d instanceof ArrayBuffer||ArrayBuffer.isView(d))cb(new TextDecoder().decode(d));else cb(String(d))}
+function chk(u,d,cb){str(d,function(s){var i=++n;q[i]=cb;E(JSON.stringify({i:i,u:u,d:s}))})}
 window.__mkV=function(i,ok){var f=q[i];delete q[i];f&&f(ok)};
-WebSocket.prototype.send=function(d){var me=this,i=++n,s=typeof d==='string'?d:(d instanceof ArrayBuffer||ArrayBuffer.isView(d)?new TextDecoder().decode(d):String(d));
-new Promise(function(r){q[i]=r;E(JSON.stringify({i:i,u:me.url,d:s}))}).then(function(ok){if(ok)S.call(me,d)});};})();"#;
+WebSocket.prototype.send=function(d){var me=this;chk(me.url,d,function(ok){if(ok)S.call(me,d)})};
+try{Object.defineProperty(window,'WebTransport',{value:undefined,configurable:true})}catch(e){}
+if(O){var G=function(u,o){var abs=new URL(u,location.href).href,mod=o&&o.type==='module',
+src=__WG__+';'+(mod?'import('+JSON.stringify(abs)+')':'importScripts('+JSON.stringify(abs)+')'),
+w=new O(URL.createObjectURL(new Blob([src],{type:'text/javascript'})),o);
+w.addEventListener('message',function(e){var m=e.data;if(m&&m.__mkq){e.stopImmediatePropagation();chk(m.u,m.d,function(ok){PM.call(w,{__mkv:1,i:m.i,ok:ok})})}});return w};
+G.prototype=O.prototype;window.Worker=G}})();"#;
+
+/// The worker half of the guard: runs first inside a wrapped dedicated worker (as a JS string literal for
+/// `WS_SECRET_GUARD`). Sends are posted to the page, which asks the host and answers `{__mkv,i,ok}`.
+const WORKER_SECRET_GUARD: &str = r#"(function(){var S=WebSocket.prototype.send,q={},n=0,P=self.postMessage.bind(self);
+function str(d,cb){if(typeof d==='string')cb(d);else if(typeof Blob!=='undefined'&&d instanceof Blob){var r=new FileReader();r.onload=function(){cb(String(r.result))};r.onerror=function(){cb('\u0000unreadable')};r.readAsText(d)}else if(d instanceof ArrayBuffer||ArrayBuffer.isView(d))cb(new TextDecoder().decode(d));else cb(String(d))}
+self.addEventListener('message',function(e){var m=e.data;if(m&&m.__mkv){e.stopImmediatePropagation();var f=q[m.i];delete q[m.i];f&&f(m.ok)}});
+WebSocket.prototype.send=function(d){var me=this;str(d,function(s){var i=++n;q[i]=function(ok){if(ok)S.call(me,d)};P({__mkq:1,i:i,u:me.url,d:s})})};
+try{Object.defineProperty(self,'WebTransport',{value:undefined,configurable:true})}catch(e){}})()"#;
+
+fn ws_secret_guard() -> String {
+    WS_SECRET_GUARD.replace("__WG__", &json!(WORKER_SECRET_GUARD).to_string())
+}
 
 const SETTLE_PROBE: &str = r#"(function(){if(window.__mk)return;var S=window.__mk={u:{},t:{},n:0};
 var of=window.fetch;if(of){window.fetch=function(a){var k=++S.n;S.u[k]=String((a&&a.url)||a);var d=function(){delete S.u[k];};var p=of.apply(this,arguments);p.then(d,d);return p;};}
@@ -2780,8 +2802,8 @@ impl Backend for CdpBackend {
             .call("Runtime.addBinding", json!({"name": "__mkEgress"}));
         let _ = self.cdp.call(
             "Page.addScriptToEvaluateOnNewDocument",
-            json!({"source": WS_SECRET_GUARD}),
+            json!({"source": ws_secret_guard()}),
         );
-        let _ = self.eval(&format!("{WS_SECRET_GUARD};0"));
+        let _ = self.eval(&format!("{};0", ws_secret_guard()));
     }
 }

