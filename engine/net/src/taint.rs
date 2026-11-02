@@ -105,7 +105,7 @@ fn b64_decode(s: &str) -> Option<String> {
 
 /// The payload as the receiver could read it: raw plus every decoding, up to depth 3, and the same
 /// for each separator-delimited piece (a query string `d=<b64>` decodes piecewise).
-fn views(payload: &str) -> Vec<String> {
+pub(crate) fn views(payload: &str) -> Vec<String> {
     let mut out = vec![payload.to_ascii_lowercase()];
     let mut frontier = vec![payload.to_string()];
     for _ in 0..3 {
@@ -207,6 +207,8 @@ pub fn set_write_grants(origins: &[String]) {
 
 /// Network-sink check for a page-initiated send of `payload` (URL, body) to `dest_url`.
 pub fn check_egress(payload: &str, dest_url: &str, what: &str) -> Result<(), String> {
+    // W3.16: secret handles are bound to their origin and are not liftable by a write grant.
+    crate::secrets::check(payload, dest_url, what)?;
     if let (Some(d), Ok(w)) = (origin(dest_url), WRITE_GRANTS.lock()) {
         if w.contains(&d) {
             return Ok(());

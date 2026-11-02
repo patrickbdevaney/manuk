@@ -110,6 +110,10 @@ impl Cdp {
                     self.judge_request(&m);
                     return Ok(None);
                 }
+                if m["method"] == "Runtime.bindingCalled" && m["params"]["name"] == "__mkEgress" {
+                    self.judge_frame(&m);
+                    return Ok(None);
+                }
                 Ok(Some(m))
             }
             Ok(Message::Close(_)) => bail!("Chrome closed the DevTools socket"),
@@ -138,13 +142,61 @@ impl Cdp {
         let keep = m["sessionId"]
             .as_str()
             .and_then(|s| self.session.replace(s.to_string()));
-        let _ = match manuk_net::scope::check(method, url) {
+        // W3.16: URL, headers and body (string or entries) against the origin-bound secrets.
+        let payload = {
+            let mut t = format!("{url}\n");
+            for (k, v) in p["request"]["headers"].as_object().into_iter().flatten() {
+                t.push_str(&format!("{k}: {}\n", v.as_str().unwrap_or("")));
+            }
+            t.push_str(p["request"]["postData"].as_str().unwrap_or(""));
+            for e in p["request"]["postDataEntries"]
+                .as_array()
+                .into_iter()
+                .flatten()
+            {
+                use base64::Engine;
+                if let Some(b) = e["bytes"]
+                    .as_str()
+                    .and_then(|b| base64::engine::general_purpose::STANDARD.decode(b).ok())
+                {
+                    t.push_str(&String::from_utf8_lossy(&b));
+                }
+            }
+            t
+        };
+        let verdict = manuk_net::scope::check(method, url)
+            .and_then(|()| manuk_net::secrets::check(&payload, url, "page request"));
+        let _ = match verdict {
             Ok(()) => self.send("Fetch.continueRequest", continue_params(rid, p)),
             Err(_) => self.send(
                 "Fetch.failRequest",
                 json!({"requestId": rid, "errorReason": "BlockedByClient"}),
             ),
         };
+        if m["sessionId"].as_str().is_some() {
+            self.session = keep;
+        }
+    }
+
+    /// W3.16: a WebSocket frame the page wants to send, held by the page-side wrapper until this verdict.
+    fn judge_frame(&mut self, m: &Value) {
+        let Ok(f) = serde_json::from_str::<Value>(m["params"]["payload"].as_str().unwrap_or(""))
+        else {
+            return;
+        };
+        let ok = manuk_net::secrets::check(
+            f["d"].as_str().unwrap_or(""),
+            f["u"].as_str().unwrap_or(""),
+            "WebSocket frame",
+        )
+        .is_ok();
+        let keep = m["sessionId"]
+            .as_str()
+            .and_then(|s| self.session.replace(s.to_string()));
+        let _ = self.send(
+            "Runtime.evaluate",
+            json!({"expression": format!("__mkV({},{ok})", f["i"]), "contextId": m["params"]["executionContextId"]}),
+        );
         if m["sessionId"].as_str().is_some() {
             self.session = keep;
         }
@@ -272,6 +324,13 @@ const WS_GUARD: &str = r#"(function(){var A=__ALLOWED__.map(function(u){try{retu
 function ok(u){try{var o=new URL(u,location.href);o.protocol=o.protocol==='wss:'?'https:':'http:';return A.indexOf(o.origin)>=0}catch(e){return false}}
 function G(u,p){if(!ok(u))throw new DOMException('origin not in write set','SecurityError');return p===undefined?new W(u):new W(u,p)}
 G.prototype=W.prototype;['CONNECTING','OPEN','CLOSING','CLOSED'].forEach(function(k){G[k]=W[k]});window.WebSocket=G;})();"#;
+
+/// W3.16: every WebSocket send waits for the host's verdict (`__mkEgress` binding -> `__mkV`), so the
+/// secret bytes are checked where they leave and never held by the page.
+const WS_SECRET_GUARD: &str = r#"(function(){if(window.__mkV||!window.__mkEgress)return;var q={},n=0,S=WebSocket.prototype.send,E=window.__mkEgress;
+window.__mkV=function(i,ok){var f=q[i];delete q[i];f&&f(ok)};
+WebSocket.prototype.send=function(d){var me=this,i=++n,s=typeof d==='string'?d:(d instanceof ArrayBuffer||ArrayBuffer.isView(d)?new TextDecoder().decode(d):String(d));
+new Promise(function(r){q[i]=r;E(JSON.stringify({i:i,u:me.url,d:s}))}).then(function(ok){if(ok)S.call(me,d)});};})();"#;
 
 const SETTLE_PROBE: &str = r#"(function(){if(window.__mk)return;var S=window.__mk={u:{},t:{},n:0};
 var of=window.fetch;if(of){window.fetch=function(a){var k=++S.n;S.u[k]=String((a&&a.url)||a);var d=function(){delete S.u[k];};var p=of.apply(this,arguments);p.then(d,d);return p;};}
@@ -1315,6 +1374,7 @@ fn build(
 
 pub struct CdpBackend {
     cdp: Cdp,
+    egress_armed: bool,
     child: Child,
     dir: PathBuf,
     width: f32,
@@ -1581,6 +1641,7 @@ impl CdpBackend {
         cdp.call("Target.getTargets", json!({}))?;
         Ok(CdpBackend {
             cdp,
+            egress_armed: false,
             child,
             dir,
             width: width as f32,
@@ -2703,5 +2764,24 @@ impl Backend for CdpBackend {
     }
     fn reset_storage(&mut self) {
         let _ = self.eval("localStorage.clear();sessionStorage.clear();0");
+    }
+    /// W3.16: a secret now exists. Fetch (URL, headers, body of every request incl. beacons) and the
+    /// WebSocket send wrapper are armed from here on, in this document and every later one.
+    fn arm_egress(&mut self) {
+        if self.egress_armed || mutated("no-secret-guard") {
+            return;
+        }
+        self.egress_armed = true;
+        let _ = self
+            .cdp
+            .call("Fetch.enable", json!({"patterns": [{"urlPattern": "*"}]}));
+        let _ = self
+            .cdp
+            .call("Runtime.addBinding", json!({"name": "__mkEgress"}));
+        let _ = self.cdp.call(
+            "Page.addScriptToEvaluateOnNewDocument",
+            json!({"source": WS_SECRET_GUARD}),
+        );
+        let _ = self.eval(&format!("{WS_SECRET_GUARD};0"));
     }
 }

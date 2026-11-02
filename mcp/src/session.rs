@@ -836,6 +836,13 @@ impl<B: Backend> Session<B> {
             self.b.settle().await;
         }
         let r = self.call_inner(tool, a).await;
+        // W3.16: no secret byte leaves in any result, observation or error (and the action-log diff
+        // hash is taken over the redacted text, so the log is the same with or without the secret).
+        let r = match r {
+            Ok(Output::Text(t)) => Ok(Output::Text(manuk_net::secrets::redact(&t))),
+            Err(e) => Err(anyhow!("{}", manuk_net::secrets::redact(&format!("{e:#}")))),
+            other => other,
+        };
         if matches!(tool, "navigate" | "observe" | "extract" | "find") {
             if let Ok(Output::Text(t)) = &r {
                 let url = self.b.url();
@@ -881,7 +888,8 @@ impl<B: Backend> Session<B> {
             "type" => self
                 .type_(
                     arg_str(a, "handle").ok_or_else(|| anyhow!("type needs `handle`"))?,
-                    arg_str(a, "text").ok_or_else(|| anyhow!("type needs `text`"))?,
+                    arg_str(a, "text"),
+                    arg_str(a, "secret"),
                     a.get("submit").and_then(Value::as_bool).unwrap_or(false),
                 )
                 .await
@@ -1825,7 +1833,21 @@ impl<B: Backend> Session<B> {
         Ok(lines.join("\n"))
     }
 
-    async fn type_(&mut self, hs: &str, text: &str, submit: bool) -> Result<String> {
+    async fn type_(
+        &mut self,
+        hs: &str,
+        text: Option<&str>,
+        secret: Option<&str>,
+        submit: bool,
+    ) -> Result<String> {
+        // W3.16: `secret` names a credential; its bytes come from the operator's store, not the model.
+        let resolved = match (text, secret) {
+            (Some(_), Some(_)) => bail!("type takes `text` or `secret`, not both"),
+            (None, None) => bail!("type needs `text` (or `secret`)"),
+            (None, Some(name)) => Some(manuk_net::secrets::resolve(name)?),
+            _ => None,
+        };
+        let text = resolved.as_deref().or(text).unwrap_or("");
         let tree = self.tree()?;
         let (h, n) = self.resolve(&tree, hs)?;
         let node = n.node;
@@ -1852,8 +1874,13 @@ impl<B: Backend> Session<B> {
             .node_facts(node)
             .and_then(|f| f.form_action)
             .unwrap_or_else(|| self.b.url());
-        self.taint_check(text, &dest, "typed text")?;
-        {
+        if let Some(name) = secret {
+            // Origin binding: the form's own destination and this page must both be the credential's.
+            manuk_net::secrets::bind(name, &self.b.url())?;
+            manuk_net::secrets::bind(name, &dest)?;
+            self.b.arm_egress();
+        } else {
+            self.taint_check(text, &dest, "typed text")?;
             let page = self.b.url();
             self.taint.record(&page, text);
             manuk_net::taint::record_global(&page, text);

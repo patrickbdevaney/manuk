@@ -94,6 +94,9 @@ pub trait Backend {
     /// Drop the web storage a previous page left behind, so a replay starts from the empty state a
     /// fresh process has (R3.2 restore). Cookies are not cleared.
     fn reset_storage(&mut self) {}
+    /// W3.16: a secret was registered; a backend that cannot see every request from the start arms its
+    /// request hooks now.
+    fn arm_egress(&mut self) {}
     /// W3.9: input type / autocomplete / owning form / link target of `node`, for the grant policy.
     /// `None` = this backend cannot say (the policy then treats the element as unknown).
     fn node_facts(&mut self, _node: NodeId) -> Option<NodeFacts> {

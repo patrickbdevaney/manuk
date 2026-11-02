@@ -41,6 +41,7 @@ pub mod cors;
 pub mod egress;
 pub mod nettrace;
 pub mod scope;
+pub mod secrets;
 pub mod storage_state;
 pub mod taint;
 /// E7 storage layer — RFC 6265 cookie jar.
@@ -2686,7 +2687,8 @@ async fn send_raw(
     if !trusted {
         egress::check_url_literal(url)?;
         // W4.D2.a: a value the agent read or typed on another origin may not leave in this request.
-        let payload = format!("{}\n{}", url.as_str(), String::from_utf8_lossy(&body));
+        let hdrs: String = headers.iter().map(|(k, v)| format!("{k}: {v}\n")).collect();
+        let payload = format!("{}\n{hdrs}{}", url.as_str(), String::from_utf8_lossy(&body));
         taint::check_egress(&payload, url.as_str(), "page request")
             .map_err(|e| anyhow::anyhow!(e))?;
         // W3.13: the one place every page-initiated HTTP request passes; non-safe ones are
