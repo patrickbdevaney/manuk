@@ -1,7 +1,7 @@
 chrome_ver	slice	task	manuk_runs	cdp_runs	manuk_outcome	cdp_outcome	agree	mechanism
 145.0.7632.116	external-live	X01	111	000	1	0	0	verifier + site: cdp-layer hits Cloudflare challenge; manuk pass not checkable (stored answer cut at 300 chars)
 145.0.7632.116	external-live	X02	110	000	1	0	0	site: cdp-layer hits Cloudflare challenge; manuk 2/3 pass on answers that report failure (verifier)
-145.0.7632.116	external-live	X03	001	010	0	0	1	site: Cambridge returns no page content (manuk r1-2, cdp r1,r3); mixed, unclassified
+145.0.7632.116	external-live	X03	001	010	0	0	1	site (W4.P0.f, traced): Cloudflare challenge intermittent on cdp-layer (r1,r3 blocked, r2 content); manuk empty body
 145.0.7632.116	external-live	X04	101	111	1	1	1	verifier-brittle: manuk r2 says 'Monday, 27 March 2023', verifier wants '27 Mar 2023'
 145.0.7632.116	external-live	X05	111	111	1	1	1	
 145.0.7632.116	external-live	X06	101	111	1	1	1	wolfram-js-gate (suspected engine JS gap): 'doesn't run without JavaScript'; manuk pass r1/r3 is own calculation (verifier)
@@ -74,11 +74,11 @@ chrome_ver	slice	task	manuk_runs	cdp_runs	manuk_outcome	cdp_outcome	agree	mechan
 145.0.7632.116	real	networkin-5	111	111	1	1	1	
 145.0.7632.116	real	networkin-6	000	000	0	0	1	
 145.0.7632.116	real	networkin-9	000	000	0	0	1	
-145.0.7632.116	real	opendining-10	111	010	1	0	0	cdp-side: cdp r1,r3 find the menus empty; unclassified
-145.0.7632.116	real	opendining-3	111	110	1	1	1	cdp-side: cdp r3 says booked, evals 0/5; verifier or state mismatch, unclassified
-145.0.7632.116	real	opendining-4	111	001	1	0	0	cdp-side: cdp r1-2 reservation form rejects every phone number; unclassified
-145.0.7632.116	real	opendining-5	111	011	1	1	1	cdp-side: cdp r1 says booked, evals 0/5; verifier or state mismatch, unclassified
-145.0.7632.116	real	opendining-8	111	001	1	0	0	cdp-side: cdp r1 booked the right place but evals 0/3; r2 booked another restaurant; unclassified
+145.0.7632.116	real	opendining-10	111	010	1	0	0	cdp-side (W4.P0.f, traced): menus are not empty in pinned Chrome DOM (8 priced items); cdp r1,r3 read them empty, read/settle side unclassified
+145.0.7632.116	real	opendining-3	111	110	1	1	1	cdp-side (W4.P0.f, unclassified): cdp r3 says booked, /finish held no booking; clean probe flow persists; settle with raw /finish + tool list
+145.0.7632.116	real	opendining-4	111	001	1	0	0	site validator (W4.P0.f, traced): clone rejects fake phone numbers on any backend, accepts a valid one through cdp insertText
+145.0.7632.116	real	opendining-5	111	011	1	1	1	cdp-side (W4.P0.f, unclassified): cdp r1 says booked, /finish held no booking; settle with raw /finish + tool list
+145.0.7632.116	real	opendining-8	111	001	1	0	0	cdp-side (W4.P0.f, unclassified): cdp r1 says booked the right place, /finish held no booking; settle with raw /finish + tool list
 145.0.7632.116	real	staynb-2	000	001	0	0	1	click-family (suspected): guest-count stepper does not change on manuk
 145.0.7632.116	real	staynb-4	000	000	0	0	1	
 145.0.7632.116	real	staynb-5	000	000	0	0	1	
