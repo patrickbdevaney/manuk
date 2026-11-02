@@ -43,7 +43,7 @@ full 30 ms, baseline 394 ms, jitless 3620 ms (9.2x), chrome_ver=145.0.7632.116.
 
 Each row: delete or invert one layer in the working tree, run its named gate, restore with `git checkout --`.
 Baseline: all gates green before mutation (g_private_egress 4/4, g_page_fetch_preflight 1/1, g_cookie_attributes 1/1,
-g_framing 1/1, g_csp 1/1, confine 3/3, isolation 5/5, session 8/8). Result is RED only when the test binary built
+g_framing 1/1, g_csp 1/1, confine 3/3, isolation 6/6, session 8/8). Result is RED only when the test binary built
 and a test panicked; a compile error is not counted.
 
 | layer | mutation | gate result |
@@ -59,6 +59,8 @@ and a test panicked; a compile error is not counted.
 | hidden-text shield | `session.rs` `if !self.include_hidden {` -> `if false {` (2 sites) | RED (injection_shield_withholds_invisible_text) |
 | landlock confinement | `confine.rs` restrict_self replaced by `0` | RED (confined_process_is_read_only...) |
 | per-origin human-cookie grant | `isolation.rs` grant loop -> `.take(0)` | RED (human_profile_cookie_is_invisible_until_a_per_origin_grant) |
-| ephemeral jar | `isolation.rs` remove `manuk_net::set_ephemeral(true)` | **NOT RED** under the old tests (session process cannot write MANUK_STATE, so the on-disk check is blind). SEC.DID.1.a added `ephemeral_session_does_not_load_the_human_jar` (read side): mutant RED, restored GREEN |
+| ephemeral jar | `isolation.rs` remove `manuk_net::set_ephemeral(true)` | RED under `ephemeral_session_does_not_load_the_human_jar` (read side, added by SEC.DID.1.a; the old on-disk check `ephemeral_session_leaves_nothing_on_disk` stays GREEN under this mutant, as it did before) |
 
-Gate headers record each mutation. Only the ephemeral jar row changed the census: it now reads UNPINNED.
+Gate headers record each mutation. The ephemeral jar row is now pinned by SEC.DID.1.a (read-side gate, mutant RED, restored GREEN). No layer in the table is UNPINNED for this node.
+
+Re-invocation 2026-11-01 (SEC.DID.1, chrome_ver=145.0.7632.116): baseline green for g_private_egress 4/4, g_cookie_attributes 1/1, g_csp 1/1, g_framing 1/1, g_page_fetch_preflight 1/1 (page gates built with `--features stylo,spidermonkey`, as verify.sh does), confine 3/3, session 8/8, isolation 6/6. Mutants re-run: HttpOnly filter -> RED (g_cookie_attributes:181), framing -> RED (g_framing:162); engine sources restored, `git diff` empty for them. The other mutations are the prior run's record and were not repeated.

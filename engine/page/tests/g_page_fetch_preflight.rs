@@ -1,3 +1,6 @@
+//! SEC.DID.1 mutation record (chrome_ver=145.0.7632.116): `page/src/lib.rs` CORS `if !allowed {`
+//! -> `if false {` turns this gate RED.
+//!
 //! **G_PAGE_FETCH_PREFLIGHT (W3.10.a) — the headless/MCP page-fetch executor enforces the egress guard
 //! and CORS preflight, not only the GUI pump.**
 //!

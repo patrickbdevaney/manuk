@@ -1,3 +1,6 @@
+//! SEC.DID.1 mutation record (chrome_ver=145.0.7632.116): `net/src/lib.rs` document_cookie
+//! HttpOnly filter `|c| !c.http_only` -> `|_c| true` turns this gate RED.
+//!
 //! **G_COOKIE_ATTRIBUTES — cookie flags are enforced across the JS ↔ wire boundary.**
 //!
 //! The constellation carried `cookies (SameSite/Secure/HttpOnly)` as **partial**, with the honest

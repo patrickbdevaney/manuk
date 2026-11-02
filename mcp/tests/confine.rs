@@ -1,3 +1,6 @@
+//! SEC.DID.1 mutation record (chrome_ver=145.0.7632.116): `agent/src/confine.rs` restrict_self call
+//! replaced by `0` turns the confined-process test RED (write_outside / exec assertions).
+//!
 //! R1.6 gate: after confinement the agent process cannot write outside its cache dir, cannot exec,
 //! and cannot read `$HOME`. The control run (`--no-confine`) can do all three, so the assertions can
 //! go red.

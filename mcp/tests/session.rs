@@ -1,3 +1,6 @@
+//! SEC.DID.1 mutation record (chrome_ver=145.0.7632.116): `mcp/src/session.rs` `if !self.include_hidden {`
+//! -> `if false {` (2 sites) turns injection_shield_withholds_invisible_text RED.
+//!
 //! R1.1 gate: a scripted MCP session over real stdio (JSON-RPC against the built `manuk-mcp`
 //! binary), on local fixtures: navigate, click, read the diff, fail loudly on a covered target.
 

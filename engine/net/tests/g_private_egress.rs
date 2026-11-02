@@ -1,3 +1,8 @@
+//! SEC.DID.1 mutation record (chrome_ver=145.0.7632.116): each deletion below turns this gate RED.
+//! `egress.rs` GuardResolver filter `if !guarded || !guard_active()` -> `if true` (test 1 red);
+//! `check_url_literal` `if is_private_ip(ip)` -> `if false` (test 1 red); `resolve_for_dial`
+//! filter `!is_private_ip` -> `|_a| true` (WebSocket and SOCKS tests red).
+//!
 //! **G_PRIVATE_EGRESS (W3.10) — a public page cannot make the browser dial loopback/LAN.**
 //!
 //! Class of CVE-2025-49596. Real sockets: a loopback server counts the connections it receives.

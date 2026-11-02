@@ -1,3 +1,6 @@
+//! SEC.DID.1 mutation record (chrome_ver=145.0.7632.116): `net/src/csp.rs` `allows_script_url` and
+//! `allows_inline_script`, each with `return true;` prepended, turn this gate RED (each alone).
+//!
 //! **G_CSP** — Content-Security-Policy `script-src` is enforced, and enforced in both directions.
 //!
 //! CSP is the one security mechanism where *receiving* the header and *honouring* it are completely

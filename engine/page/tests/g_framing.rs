@@ -1,3 +1,6 @@
+//! SEC.DID.1 mutation record (chrome_ver=145.0.7632.116): `page/src/lib.rs` `if !framing_allowed(`
+//! -> `if false {` turns this gate RED.
+//!
 //! **G_FRAMING — a site that says "do not frame me" is not framed.**
 //!
 //! `X-Frame-Options` and CSP `frame-ancestors` are the only clickjacking defence a page has: they
