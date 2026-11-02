@@ -184,6 +184,8 @@ enum FormSubmission {
 use crate::session::DownloadRecord;
 
 pub fn run(url: String, width: u32, measure_frames: Option<usize>) -> Result<()> {
+    // SEC.DID.3: the GUI saves a download only after a real user gesture (agent path unchanged).
+    manuk_net::downloads::require_user_gesture(true);
     let event_loop = EventLoop::<NavEvent>::with_user_event()
         .build()
         .context("creating winit event loop")?;
@@ -4375,6 +4377,7 @@ impl ApplicationHandler<NavEvent> for App {
             WindowEvent::ModifiersChanged(m) => self.modifiers = m.state(),
             WindowEvent::KeyboardInput { event, .. } => match event.state {
                 ElementState::Pressed => {
+                    manuk_net::downloads::note_user_gesture();
                     self.handle_key(&event.logical_key, event_loop);
                 }
                 // The release half of the keyboard trio: keydown+input fire on press (above / via
@@ -4470,6 +4473,9 @@ impl ApplicationHandler<NavEvent> for App {
                 }
             }
             WindowEvent::MouseInput { state, button, .. } => {
+                if state == ElementState::Pressed {
+                    manuk_net::downloads::note_user_gesture();
+                }
                 if state == ElementState::Released {
                     self.scrollbar_drag = None; // end any scrollbar drag
                     if button == winit::event::MouseButton::Left {

@@ -1860,6 +1860,9 @@ pub async fn fetch_document_or_download(url: &str, dir: &std::path::Path) -> Res
         .map(|(_, v)| v.as_str());
 
     if downloads::is_attachment(cd, ct) {
+        if !downloads::gesture_permits() {
+            bail!("download of {final_url} blocked: no user gesture");
+        }
         let decoded = wrap_decoder(body_reader(resp.into_body()), encoding.as_deref());
         let (path, filename, bytes) =
             stream_attachment_to_disk(cd, &final_url, dir, decoded).await?;

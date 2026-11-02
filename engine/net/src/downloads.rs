@@ -23,6 +23,33 @@ pub fn download_dir() -> PathBuf {
     PathBuf::from(".")
 }
 
+/// How long after a user gesture (key press / mouse press) a download may still be written.
+pub const GESTURE_WINDOW: std::time::Duration = std::time::Duration::from_secs(60);
+
+static REQUIRE_GESTURE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static LAST_GESTURE: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
+
+/// Second layer behind [`sanitize_filename`] (SEC.DID.3): when enabled (the GUI shell turns it on;
+/// the agent path never does), a response may only be saved to disk if a user gesture happened
+/// within [`GESTURE_WINDOW`] — a page that redirects/scripts its way to a
+/// `Content-Disposition: attachment` response with no one at the keyboard writes nothing.
+pub fn require_user_gesture(on: bool) {
+    REQUIRE_GESTURE.store(on, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// Record a real user gesture (called by the shell on key/mouse press).
+pub fn note_user_gesture() {
+    *LAST_GESTURE.lock().unwrap() = Some(std::time::Instant::now());
+}
+
+/// May a download be written right now?
+pub fn gesture_permits() -> bool {
+    if !REQUIRE_GESTURE.load(std::sync::atomic::Ordering::SeqCst) {
+        return true;
+    }
+    matches!(*LAST_GESTURE.lock().unwrap(), Some(t) if t.elapsed() <= GESTURE_WINDOW)
+}
+
 /// Whether a response should be **downloaded** rather than rendered. True when
 /// `Content-Disposition` is `attachment`, or the `Content-Type` is a clearly non-renderable
 /// binary payload (octet-stream / zip / gzip / tar / generic `application/*` we don't handle).
