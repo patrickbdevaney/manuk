@@ -1,0 +1,201 @@
+cat	url	m1_status	cov	shape	vis	paths	m2_tag	m2_rate	m2_ceil	m2_targets	m2_drivable	m2_ungrounded	m2_ambiguous	m2_mishit	a11y_tag	a11y_prec	a11y_rec	a11y_f1	chrome_ver
+blog	https://blog.rust-lang.org/	OK	100.0	100.0	87.5	1729	OK	96.9	100.0	426	413	0	13	0	OK	99.9	100.0	100.0	145.0.7632.116
+docs	https://docs.python.org/	OK	100.0	72.4	86.1	261	OK	37.2	100.0	156	58	0	98	0	OK	74.8	83.6	79.0	145.0.7632.116
+ecommerce	https://amazon.com/	BLANK				0	SKIPPED								SKIPPED				145.0.7632.116
+forum	https://old.reddit.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+corp	https://apple.com/	OK	99.9	56.4	37.1	1410	OK	58.6	64.8	145	85	9	18	33	OK	34.0	89.5	49.3	145.0.7632.116
+code	https://github.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+finance	https://coinbase.com/	NAVFAIL				0	SKIPPED								SKIPPED				145.0.7632.116
+gov_edu	https://usa.gov/	OK	99.7	84.6	29.7	319	OK	96.4	100.0	56	54	0	2	0	OK	87.6	97.5	92.3	145.0.7632.116
+reference	https://en.wikipedia.org/	OK	100.0	88.9	84.4	1122	OK	89.7	98.9	262	235	0	24	3	OK	100.0	97.8	98.9	145.0.7632.116
+media	https://youtube.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+news	https://nytimes.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+social	https://x.com/	EMPTY				0	SKIPPED								SKIPPED				145.0.7632.116
+saas	https://stripe.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+blog	https://this-week-in-rust.org/	OK	98.9	95.5	90.8	90	OK	100.0	100.0	17	17	0	0	0	OK	100.0	96.0	98.0	145.0.7632.116
+tools	https://archive.ph/	EMPTY				0	SKIPPED								SKIPPED				145.0.7632.116
+travel_food	https://booking.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+docs	https://doc.rust-lang.org/	OK	62.3	41.7	84.9	154	OK	100.0	100.0	23	23	0	0	0	OK	100.0	94.7	97.3	145.0.7632.116
+code	https://gitlab.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+forum	https://reddit.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+corp	https://microsoft.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+ecommerce	https://ebay.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+gov_edu	https://whitehouse.gov/	OK	99.7	80.4	46.8	674	OK	52.8	64.2	53	28	7	9	9	OK	85.1	73.0	78.6	145.0.7632.116
+finance	https://investopedia.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+media	https://vimeo.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+reference	https://developer.mozilla.org/	OK	69.7	23.3	13.7	357	OK	58.8	78.8	85	50	1	17	17	OK	82.4	93.7	87.7	145.0.7632.116
+news	https://theguardian.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+saas	https://twilio.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+social	https://mastodon.social/	OK	84.3	81.3	91.2	108	OK	82.4	94.1	17	14	0	2	1	OK	85.7	7.2	13.3	145.0.7632.116
+tools	https://web.archive.org/	OK	97.5	69.9	90.4	160	OK	42.9	42.9	35	15	6	0	14	OK	46.2	12.9	20.2	145.0.7632.116
+blog	https://overreacted.io/	OK	100.0	100.0	88.6	304	OK	100.0	100.0	61	61	0	0	0	OK	80.5	80.5	80.5	145.0.7632.116
+travel_food	https://airbnb.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+code	https://codeberg.org/	OK	100.0	93.8	46.0	226	OK	80.4	96.1	51	41	2	8	0	OK	100.0	100.0	100.0	145.0.7632.116
+corp	https://google.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+docs	https://docs.oracle.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+ecommerce	https://etsy.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+finance	https://marketwatch.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+forum	https://discourse.org/	OK	86.0	84.4	11.7	985	OK	82.6	96.7	92	76	0	15	1	OK	87.0	71.6	78.5	145.0.7632.116
+reference	https://w3.org/	OK	100.0	52.2	78.6	182	OK	92.7	92.7	41	38	0	0	3	OK	2.8	30.0	5.1	145.0.7632.116
+gov_edu	https://nasa.gov/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+media	https://twitch.tv/	OK	92.7	62.9		372	OK	4.8	14.3	21	1	1	2	17	OK	67.9	19.0	29.8	145.0.7632.116
+news	https://bbc.co.uk/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+tools	https://regex101.com/	OK	74.4	76.3	44.9	125	OK	60.9	65.2	46	28	4	2	12	OK	63.3	46.0	53.3	145.0.7632.116
+saas	https://cloudflare.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+social	https://bsky.app/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+blog	https://kentcdodds.com/	NAVFAIL				0	SKIPPED								SKIPPED				145.0.7632.116
+travel_food	https://expedia.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+docs	https://nodejs.org/	OK	51.5	95.6	83.9	569	OK	59.3	84.7	59	35	2	15	7	OK	95.8	77.3	85.5	145.0.7632.116
+code	https://sourceforge.net/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+corp	https://ibm.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+ecommerce	https://walmart.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+forum	https://users.rust-lang.org/	OK	100.0	92.9	94.3	437	OK	61.3	100.0	62	38	0	24	0	OK	60.0	24.4	34.6	145.0.7632.116
+finance	https://finance.yahoo.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+news	https://reuters.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+gov_edu	https://noaa.gov/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+reference	https://whatwg.org/	OK	100.0	100.0	69.2	37	OK	100.0	100.0	13	13	0	0	0	OK	100.0	100.0	100.0	145.0.7632.116
+media	https://soundcloud.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+saas	https://vercel.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+social	https://linkedin.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+tools	https://jsonformatter.org/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+travel_food	https://tripadvisor.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+corp	https://intel.com/	CRASH				0	SKIPPED								SKIPPED				145.0.7632.116
+blog	https://css-tricks.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+code	https://bitbucket.org/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+docs	https://reactjs.org/	OK	23.1	73.3	7.9	260	OK	2.8	2.8	107	3	4	40	60	TIMEOUT	0	0	0	145.0.7632.116
+gov_edu	https://cdc.gov/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+forum	https://discuss.python.org/	OK	100.0	36.6	94.4	216	OK	84.8	100.0	33	28	0	5	0	OK	76.7	47.4	58.6	145.0.7632.116
+news	https://apnews.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+ecommerce	https://target.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+finance	https://nerdwallet.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+media	https://spotify.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+reference	https://rfc-editor.org/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+travel_food	https://yelp.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+saas	https://netlify.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+social	https://pinterest.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+code	https://crates.io/	EMPTY				0	SKIPPED								SKIPPED				145.0.7632.116
+tools	https://caniuse.com/	OK	100.0	83.3	77.0	162	OK	90.6	98.1	53	48	0	4	1	OK	97.8	93.8	95.8	145.0.7632.116
+blog	https://smashingmagazine.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+docs	https://vuejs.org/	OK	98.2	97.0	86.3	334	OK	96.9	100.0	64	62	0	2	0	OK	85.4	95.3	90.1	145.0.7632.116
+corp	https://amd.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+media	https://imdb.com/	BLANK				0	SKIPPED								SKIPPED				145.0.7632.116
+forum	https://forum.golangbridge.org/	OK	100.0	93.5	93.9	459	OK	57.4	100.0	68	39	0	29	0	OK	53.1	30.3	38.6	145.0.7632.116
+reference	https://stackoverflow.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+ecommerce	https://bestbuy.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+gov_edu	https://nih.gov/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+social	https://tumblr.com/	OK	1.0	61.4	55.9	4212	OK	81.8	81.8	22	18	1	0	3	OK	19.4	0.7	1.3	145.0.7632.116
+news	https://npr.org/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+saas	https://heroku.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+tools	https://httpbin.org/	OK	20.9	68.8	95.3	153	OK	100.0	100.0	1	1	0	0	0	OK	100.0	30.3	46.5	145.0.7632.116
+code	https://npmjs.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+blog	https://a11yproject.com/	OK	97.3	90.5	47.1	226	OK	77.6	89.7	58	45	0	12	1	OK	97.5	97.5	97.5	145.0.7632.116
+travel_food	https://allrecipes.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+forum	https://community.cloudflare.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+docs	https://angular.io/	NAVFAIL				0	SKIPPED								SKIPPED				145.0.7632.116
+corp	https://nvidia.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+ecommerce	https://ikea.com/	OK	94.6	65.5	56.5	874	OK	17.5	19.3	171	30	16	4	121	OK	99.2	92.1	95.5	145.0.7632.116
+reference	https://superuser.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+gov_edu	https://irs.gov/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+media	https://rottentomatoes.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+tools	https://example.com/	OK	100.0	100.0	94.8	13	OK	100.0	100.0	1	1	0	0	0	OK	100.0	100.0	100.0	145.0.7632.116
+social	https://medium.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+news	https://washingtonpost.com/	EMPTY				0	SKIPPED								SKIPPED				145.0.7632.116
+saas	https://digitalocean.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+corp	https://oracle.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+code	https://pypi.org/	OK	100.0	72.9	65.8	207	OK	90.9	100.0	55	50	0	5	0	OK	92.4	96.5	94.4	145.0.7632.116
+travel_food	https://seriouseats.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+blog	https://web.dev/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+forum	https://meta.stackexchange.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+docs	https://svelte.dev/	OK	91.1	80.6	62.9	237	OK	93.7	96.9	127	119	3	4	1	OK	89.6	90.7	90.1	145.0.7632.116
+ecommerce	https://homedepot.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+reference	https://serverfault.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+saas	https://linode.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+gov_edu	https://europa.eu/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+media	https://metacritic.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+news	https://aljazeera.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+blog	https://martinfowler.com/	OK	100.0	90.9	82.9	342	OK	89.9	100.0	169	152	0	17	0	OK	98.3	99.0	98.7	145.0.7632.116
+social	https://substack.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+tools	https://w3schools.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+travel_food	https://bonappetit.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+ecommerce	https://newegg.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+code	https://rubygems.org/	OK	85.1	78.9	66.6	134	OK	87.5	87.5	24	21	3	0	0	OK	89.7	94.5	92.0	145.0.7632.116
+forum	https://quora.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+docs	https://docs.djangoproject.com/	OK	100.0	88.0	76.4	826	OK	68.0	85.6	250	170	0	44	36	OK	99.2	98.7	98.9	145.0.7632.116
+gov_edu	https://gov.uk/	OK	98.2	95.6	60.2	442	OK	60.2	98.9	88	53	1	34	0	OK	100.0	96.9	98.4	145.0.7632.116
+reference	https://askubuntu.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+corp	https://salesforce.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+media	https://goodreads.com/	BLANK				0	SKIPPED								SKIPPED				145.0.7632.116
+tools	https://codepen.io/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+blog	https://joelonsoftware.com/	OK	100.0	88.7	76.2	150	OK	90.5	100.0	42	38	0	4	0	OK	73.9	88.3	80.5	145.0.7632.116
+news	https://cnn.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+saas	https://fastly.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+social	https://dev.to/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+code	https://packagist.org/	OK	100.0	87.9	80.4	157	OK	89.2	100.0	37	33	0	4	0	OK	99.2	100.0	99.6	145.0.7632.116
+docs	https://flask.palletsprojects.com/	OK	100.0	84.9	79.1	687	OK	85.9	100.0	305	262	0	43	0	OK	100.0	99.7	99.8	145.0.7632.116
+corp	https://adobe.com/	NAVFAIL				0	SKIPPED								SKIPPED				145.0.7632.116
+media	https://letterboxd.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+reference	https://mathoverflow.net/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+gov_edu	https://canada.ca/	EMPTY				0	SKIPPED								SKIPPED				145.0.7632.116
+ecommerce	https://aliexpress.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+news	https://bloomberg.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+saas	https://auth0.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+social	https://hashnode.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+code	https://search.maven.org/	EMPTY				0	SKIPPED								SKIPPED				145.0.7632.116
+tools	https://jsfiddle.net/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+blog	https://paulgraham.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+docs	https://go.dev/	OK	99.2	82.7	63.2	489	OK	76.3	92.6	135	103	0	25	7	OK	96.8	93.8	95.3	145.0.7632.116
+media	https://flickr.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+corp	https://samsung.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+ecommerce	https://shopify.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+news	https://ft.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+gov_edu	https://mit.edu/	OK	97.1	80.2	47.4	244	OK	77.8	92.1	63	49	0	12	2	OK	96.0	94.2	95.1	145.0.7632.116
+blog	https://danluu.com/	OK	100.0	93.3	82.0	629	OK	100.0	100.0	211	211	0	0	0	OK	100.0	99.5	99.8	145.0.7632.116
+reference	https://britannica.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+code	https://news.ycombinator.com/	OK	100.0	99.9	93.5	808	OK	73.2	100.0	198	145	0	53	0	OK	99.8	96.0	97.9	145.0.7632.116
+saas	https://okta.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+tools	https://replit.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+corp	https://sony.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+docs	https://kotlinlang.org/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+ecommerce	https://bigcommerce.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+gov_edu	https://stanford.edu/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+news	https://economist.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+media	https://unsplash.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+blog	https://jvns.ca/	OK	100.0	99.7	78.5	2047	OK	97.1	100.0	688	668	0	20	0	OK	97.0	99.7	98.3	145.0.7632.116
+reference	https://dictionary.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+saas	https://datadoghq.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+tools	https://godbolt.org/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+corp	https://tesla.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+code	https://lobste.rs/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+media	https://pexels.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+docs	https://swift.org/	LOW_SAMPLE	25.0	0.0		4	OK	85.7	100.0	42	36	0	6	0	OK	99.3	90.7	94.8	145.0.7632.116
+reference	https://merriam-webster.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+ecommerce	https://wayfair.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+gov_edu	https://harvard.edu/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+tools	https://play.rust-lang.org/	OK	68.6	74.6	27.8	86	OK	69.2	69.2	13	9	0	0	4	OK	93.8	57.7	71.4	145.0.7632.116
+news	https://wsj.com/	NAVFAIL				0	SKIPPED								SKIPPED				145.0.7632.116
+blog	https://fasterthanli.me/	OK	98.6	74.0	30.6	292	OK	77.6	100.0	58	45	0	13	0	OK	79.6	53.6	64.1	145.0.7632.116
+saas	https://sentry.io/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+corp	https://mozilla.org/	OK	8.1	65.2	26.0	285	OK	99.4	99.4	154	153	0	0	1	OK	99.7	98.0	98.8	145.0.7632.116
+docs	https://ruby-lang.org/	NAVFAIL				0	SKIPPED								SKIPPED				145.0.7632.116
+media	https://behance.net/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+news	https://forbes.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+code	https://slashdot.org/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+ecommerce	https://costco.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+reference	https://wiktionary.org/	OK	100.0	79.0	91.2	580	OK	98.7	98.7	78	77	0	0	1	OK	100.0	97.1	98.5	145.0.7632.116
+gov_edu	https://berkeley.edu/	OK	97.8	96.9	34.9	366	OK	74.6	91.5	71	53	1	12	5	OK	96.9	99.5	98.2	145.0.7632.116
+blog	https://matklad.github.io/	OK	99.6	0.4	95.3	850	OK	98.1	100.0	216	212	0	4	0	OK	99.9	99.6	99.8	145.0.7632.116
+gov_edu	https://ox.ac.uk/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+media	https://dribbble.com/	BLANK				0	SKIPPED								SKIPPED				145.0.7632.116
+docs	https://php.net/	OK	100.0	98.0	79.3	688	OK	38.9	100.0	193	75	0	118	0	OK	95.4	97.3	96.3	145.0.7632.116
+saas	https://newrelic.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+corp	https://gnu.org/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+news	https://time.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+reference	https://wikihow.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+saas	https://pagerduty.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+blog	https://without.boats/	OK	100.0	100.0	96.4	83	OK	100.0	100.0	26	26	0	0	0	OK	100.0	96.2	98.1	145.0.7632.116
+corp	https://linuxfoundation.org/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+docs	https://perl.org/	OK	100.0	88.6	52.3	149	OK	92.5	97.5	40	37	1	2	0	OK	84.8	99.1	91.4	145.0.7632.116
+gov_edu	https://cam.ac.uk/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+news	https://theatlantic.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+media	https://deviantart.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+reference	https://archive.org/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116

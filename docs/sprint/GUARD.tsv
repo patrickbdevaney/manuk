@@ -11,3 +11,7 @@ band	ax_full	[72.06,73.64]	run4=68.50	inside=False
 band	ax_meas	[73.53,73.82]	run4=68.50	inside=False
 verdict	self-agreement	FAIL	3 of 6 metrics outside the 3-run band (cov, m2_full, ax_full, ax_meas); run4 ax_meas=68.50 far below band	commit: engine-identical to c28d82bd (engine/ agent/ tests/wpt unchanged); measured at HEAD 56d1e239
 note	reachable set varies run to run (40/42/44/49 sites reach); every metric is over that set, so run-to-run noise is the live-web reachability, not only the instrument
+R1run1	tri-sweep-20261102-041112.tsv	87d458e8	145.0.7632.116	200	51	86.89	78.98	79.06	79.06	80.94	82.56	R1 run1 (GUARD.R1, 200-site trend corpus, default 30 s M1, tree at 87d458e8 with uncommitted edits in agent/src/lib.rs and mcp/tests outside GUARD.R1)
+R1run2	tri-sweep-20261102-045116.tsv	87d458e8	145.0.7632.116	200	55	86.78	78.58	77.72	77.72	77.13	78.56	R1 run2 (same setup)
+R1run3	tri-sweep-20261102-053124.tsv	87d458e8	145.0.7632.116	200	54	87.41	78.21	77.44	77.44	78.81	80.30	R1 run3 (same setup)
+R1verdict	below-band-check	-	145.0.7632.116	-	-	-	-	-	-	-	-	GUARD.R1 gate: scripts/guard-r1-check.py against the run1-3 band; see JOURNAL. Band not widened; reach set differs (51/55/54 vs 40-49 in R0; 50 sites OK in R1 run1 not OK in R0 run1, 42 the other way), so cov/shape compare across differing site sets
