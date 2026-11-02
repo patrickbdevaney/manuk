@@ -1,0 +1,10 @@
+docs	https://docs.python.org/	OK	100.0	70.9	92.8	261	SKIPPED								SKIPPED				145.0.7632.116
+blog	https://blog.rust-lang.org/	OK	100.0	100.0	72.9	1729	SKIPPED								SKIPPED				145.0.7632.116
+ecommerce	https://amazon.com/	BLANK				0	SKIPPED								SKIPPED				145.0.7632.116
+forum	https://old.reddit.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+corp	https://apple.com/	OK	99.9	56.1	37.1	1408	SKIPPED								SKIPPED				145.0.7632.116
+finance	https://coinbase.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+gov_edu	https://usa.gov/	OK	95.6	70.2	38.9	319	SKIPPED								SKIPPED				145.0.7632.116
+code	https://github.com/	OK	94.5	57.3	89.7	1664	SKIPPED								SKIPPED				145.0.7632.116
+media	https://youtube.com/	OK	0.9	50.0		221	SKIPPED								SKIPPED				145.0.7632.116
+news	https://nytimes.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116

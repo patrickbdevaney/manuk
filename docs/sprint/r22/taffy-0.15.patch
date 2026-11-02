@@ -1,0 +1,265 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index 088e25e6..779c5ec8 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -2031,12 +2031,6 @@ dependencies = [
+  "bitflags 2.13.0",
+ ]
+ 
+-[[package]]
+-name = "grid"
+-version = "1.0.1"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "b40ca9252762c466af32d0b1002e91e4e1bc5398f77455e55474deb466355ff5"
+-
+ [[package]]
+ name = "h2"
+ version = "0.4.20"
+@@ -5988,14 +5982,13 @@ dependencies = [
+ 
+ [[package]]
+ name = "taffy"
+-version = "0.12.1"
++version = "0.15.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "73afc801dd6bd47529eaa7c7e90557f107527d1b7c9c7ed7d7803c7b8d0c357f"
++checksum = "31f7bd2d97198df05186f93a3a3c306845f40e8b3c22bf9279cdd7e5cf5fea7d"
+ dependencies = [
+- "arrayvec",
+- "grid",
+  "serde",
+  "slotmap",
++ "smallvec",
+ ]
+ 
+ [[package]]
+diff --git a/Cargo.toml b/Cargo.toml
+index fa9308be..03d08aa7 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -84,7 +84,7 @@ tendril = "0.4"
+ cssparser = "0.34"
+ 
+ # --- layout (Reuse + build) ---
+-taffy = "0.12"
++taffy = "0.15"
+ # ⭐ TRACK B — the standard Rust accessibility-tree crate (the one servo/ uses). We already compute a
+ # richer tree than most toolkits ever will; what was missing was the INTEROP shape every screen
+ # reader and a11y test harness already speaks. Adopted, never forked (CONSTITUTION I2).
+diff --git a/engine/layout/src/taffy_tree.rs b/engine/layout/src/taffy_tree.rs
+index 66bdf96f..147cd650 100644
+--- a/engine/layout/src/taffy_tree.rs
++++ b/engine/layout/src/taffy_tree.rs
+@@ -191,16 +191,16 @@ fn map_wrap(w: CssWrap) -> FlexWrap {
+ /// concrete `FLEX_START` instead — which is what we did while the CSS enum had no `Normal` — is
+ /// therefore not a harmless normalisation: it silently disables free-space distribution for every
+ /// `auto` grid track, on every grid, whether or not the author wrote `justify-content` at all.
+-fn map_justify(j: CssJustify) -> Option<JustifyContent> {
+-    Some(match j {
+-        CssJustify::Normal => return None,
++fn map_justify(j: CssJustify) -> JustifyContent {
++    match j {
++        CssJustify::Normal => JustifyContent::NORMAL,
+         CssJustify::FlexStart => JustifyContent::FLEX_START,
+         CssJustify::FlexEnd => JustifyContent::FLEX_END,
+         CssJustify::Center => JustifyContent::CENTER,
+         CssJustify::SpaceBetween => JustifyContent::SPACE_BETWEEN,
+         CssJustify::SpaceAround => JustifyContent::SPACE_AROUND,
+         CssJustify::SpaceEvenly => JustifyContent::SPACE_EVENLY,
+-    })
++    }
+ }
+ 
+ fn map_align(a: CssAlign) -> AlignItems {
+@@ -484,7 +484,7 @@ pub fn to_taffy_style(cs: &ComputedStyle, calc: &mut Vec<(f32, f32)>) -> Style {
+             {
+                 length(0.0)
+             } else {
+-                dimension(cs.min_width, calc)
++                lp_auto(cs.min_width, calc)
+             },
+             height: if let Some(h) = conflict_min_h {
+                 length(h)
+@@ -493,12 +493,12 @@ pub fn to_taffy_style(cs: &ComputedStyle, calc: &mut Vec<(f32, f32)>) -> Style {
+             {
+                 length(0.0)
+             } else {
+-                dimension(cs.min_height, calc)
++                lp_auto(cs.min_height, calc)
+             },
+         },
+         max_size: Size {
+-            width: dimension(cs.max_width, calc),
+-            height: dimension(cs.max_height, calc),
++            width: lp_auto(cs.max_width, calc),
++            height: lp_auto(cs.max_height, calc),
+         },
+         margin: Rect {
+             left: lp_auto(cs.margin.left, calc),
+@@ -518,13 +518,13 @@ pub fn to_taffy_style(cs: &ComputedStyle, calc: &mut Vec<(f32, f32)>) -> Style {
+             top: length(cs.border_width.top),
+             bottom: length(cs.border_width.bottom),
+         },
+-        align_items: Some(map_align(cs.align_items)),
++        align_items: map_align(cs.align_items),
+         // `justify-items` — the container-level default for a grid item's INLINE-axis alignment.
+         // The block-axis twin above has been here since flex landed; this line had no partner, so a
+         // grid declaring `justify-items: end` put every item at the start of its track (Chrome
+         // x=140 in a 200px track, ours x=0) — the same absence t980 found one level down in
+         // `justify-self`, one level up.
+-        justify_items: Some(map_align(cs.justify_items)),
++        justify_items: map_align(cs.justify_items),
+         align_self: cs.align_self.map(map_align),
+         justify_self: cs.justify_self.map(map_align),
+         justify_content: map_justify(cs.justify_content),
+@@ -688,6 +688,10 @@ struct TNode {
+     style: Style,
+     children: Vec<TId>,
+     cache: Cache,
++    /// Out-of-flow boxes whose containing block is this node (taffy 0.15 records them during layout).
++    hoisted: Vec<TId>,
++    /// Grid used-track info recorded by taffy; the out-of-flow pass reads it to find a grid area.
++    detailed: taffy::DetailedLayoutInfo,
+     /// The **exact** measure memo that sits in front of `cache`'s nine slots — see [`MeasureMemo`].
+     memo: MeasureMemo,
+     layout: Layout,
+@@ -1018,7 +1022,7 @@ impl<'m> TaffyDom<'m> {
+             // definite LENGTH can be compared here — a percentage bound resolves against a
+             // containing block this function does not know, so it is left alone rather than guessed
+             // at (which would replace a right-in-the-common-case answer with a wrong one).
+-            let as_len = |d: Dimension| -> Option<f32> {
++            let as_len = |d: LengthPercentageAuto| -> Option<f32> {
+                 let raw = d.into_raw();
+                 (raw.tag() == taffy::style::CompactLength::LENGTH_TAG).then(|| raw.value())
+             };
+@@ -1069,6 +1073,8 @@ impl<'m> TaffyDom<'m> {
+                 style,
+                 children: Vec::new(),
+                 cache: Cache::new(),
++                hoisted: Vec::new(),
++                detailed: taffy::DetailedLayoutInfo::None,
+                 memo: MeasureMemo::default(),
+                 layout: Layout::new(),
+                 container: false,
+@@ -1270,6 +1276,8 @@ impl<'m> TaffyDom<'m> {
+             style,
+             children,
+             cache: Cache::new(),
++                hoisted: Vec::new(),
++                detailed: taffy::DetailedLayoutInfo::None,
+             memo: MeasureMemo::default(),
+             layout: Layout::new(),
+             container,
+@@ -1423,10 +1431,7 @@ impl<'m> TaffyDom<'m> {
+             );
+             match baseline {
+                 Some(b) => LayoutOutput {
+-                    first_baselines: taffy::Point {
+-                        x: None,
+-                        y: Some(b + frame_top),
+-                    },
++                    baselines: taffy::Baselines::from_first(Some(b + frame_top)),
+                     ..out
+                 },
+                 None => out,
+@@ -1630,8 +1635,8 @@ impl LayoutPartialTree for TaffyDom<'_> {
+ }
+ 
+ impl CacheTree for TaffyDom<'_> {
+-    fn cache_get(&self, node_id: TId, inputs: &LayoutInput) -> Option<LayoutOutput> {
+-        let n = &self.nodes[usize::from(node_id)];
++    fn cache_get(&mut self, node_id: TId, inputs: &LayoutInput) -> Option<LayoutOutput> {
++        let n = &mut self.nodes[usize::from(node_id)];
+         // `ComputeSize` is served by the exact memo (see `MeasureMemo` for why only this run mode);
+         // everything else is taffy's cache verbatim.
+         if inputs.run_mode == taffy::RunMode::ComputeSize {
+@@ -1655,6 +1660,29 @@ impl CacheTree for TaffyDom<'_> {
+     }
+ }
+ 
++impl taffy::LayoutContainingBlock for TaffyDom<'_> {
++    type OofItemStyle<'a>
++        = &'a Style
++    where
++        Self: 'a;
++    fn get_oof_item_style(&self, node_id: TId) -> &Style {
++        &self.nodes[usize::from(node_id)].style
++    }
++    fn clear_hoisted_children(&mut self, node_id: TId) {
++        self.nodes[usize::from(node_id)].hoisted.clear();
++    }
++    fn get_detailed_layout_info(&self, node_id: TId) -> &taffy::DetailedLayoutInfo {
++        &self.nodes[usize::from(node_id)].detailed
++    }
++    fn add_hoisted_children(&mut self, node_id: TId, hoisted: &[TId]) {
++        self.nodes[usize::from(node_id)].hoisted.extend_from_slice(hoisted);
++    }
++}
++
++fn track_sizes(t: &taffy::DetailedGridTracksInfo) -> Vec<f32> {
++    t.positions.iter().map(|l| l.end - l.start).collect()
++}
++
+ impl RoundTree for TaffyDom<'_> {
+     fn get_unrounded_layout(&self, node_id: TId) -> Layout {
+         self.nodes[usize::from(node_id)].layout
+@@ -1662,6 +1690,16 @@ impl RoundTree for TaffyDom<'_> {
+     fn set_final_layout(&mut self, node_id: TId, layout: &Layout) {
+         self.nodes[usize::from(node_id)].layout = *layout;
+     }
++    fn is_out_of_flow(&self, node_id: TId) -> bool {
++        let st = &self.nodes[usize::from(node_id)].style;
++        st.display != Display::None && st.position == TaffyPosition::Absolute
++    }
++    fn hoisted_child_count(&self, node_id: TId) -> usize {
++        self.nodes[usize::from(node_id)].hoisted.len()
++    }
++    fn get_hoisted_child_id(&self, node_id: TId, index: usize) -> TId {
++        self.nodes[usize::from(node_id)].hoisted[index]
++    }
+ }
+ 
+ impl LayoutFlexboxContainer for TaffyDom<'_> {
+@@ -1710,11 +1748,13 @@ impl LayoutGridContainer for TaffyDom<'_> {
+     /// dependency* and absent from us because a hook nobody wrote defaults to silence.
+     fn set_detailed_grid_info(&mut self, node_id: TId, info: taffy::DetailedGridInfo) {
+         let dom = self.nodes[usize::from(node_id)].dom;
++        self.nodes[usize::from(node_id)].detailed =
++            taffy::DetailedLayoutInfo::Grid(Box::new(info.clone()));
+         self.grid_tracks.push((
+             dom,
+             GridTracks {
+-                columns: info.columns.sizes,
+-                rows: info.rows.sizes,
++                columns: track_sizes(&info.columns),
++                rows: track_sizes(&info.rows),
+             },
+         ));
+     }
+@@ -2189,6 +2229,8 @@ pub fn grid_area_containing_block<'m>(
+         style: phantom,
+         children: Vec::new(),
+         cache: Cache::new(),
++                hoisted: Vec::new(),
++                detailed: taffy::DetailedLayoutInfo::None,
+         memo: MeasureMemo::default(),
+         layout: Layout::new(),
+         container: false,
+@@ -2538,7 +2580,7 @@ fn clear_justify_stolen_by_auto_margins(tree: &mut TaffyDom) -> bool {
+     let mut changed = false;
+     for i in 0..tree.nodes.len() {
+         let n = &tree.nodes[i];
+-        if !matches!(n.style.display, taffy::Display::Flex) || n.style.justify_content.is_none() {
++        if !matches!(n.style.display, taffy::Display::Flex) || n.style.justify_content == JustifyContent::NORMAL {
+             continue;
+         }
+         let row = matches!(
+@@ -2587,7 +2629,7 @@ fn clear_justify_stolen_by_auto_margins(tree: &mut TaffyDom) -> bool {
+             })
+             .sum();
+         if inner - used > 0.0 {
+-            tree.nodes[i].style.justify_content = None;
++            tree.nodes[i].style.justify_content = JustifyContent::NORMAL;
+             changed = true;
+         }
+     }
