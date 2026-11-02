@@ -14,6 +14,8 @@ use std::sync::{Arc, Mutex};
 use serde_json::{json, Value};
 
 const SECRET: &str = "Tr0ub4dor3-zq91x";
+/// OS-keyring item (service=manuk, account=KEYRING_ITEM), stored by scripts/w316-keyring-gate.sh.
+const KEYRING_ITEM: &str = "w3a16a-pw";
 type Log = Arc<Mutex<Vec<String>>>;
 
 fn page(evil: &str) -> String {
@@ -126,7 +128,7 @@ struct Client {
 }
 
 impl Client {
-    fn start(chrome: bool, dir: &Path, mutate: bool) -> Client {
+    fn start(chrome: bool, dir: &Path, mutate: bool, keyring: bool) -> Client {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_manuk-mcp"));
         if chrome {
             cmd.args(["--backend", "chrome"]);
@@ -138,11 +140,18 @@ impl Client {
         // MANUK_TAINT=off isolates the secret guard: the separate value-flow taint would otherwise
         // refuse these requests first, on the fixture's loopback URL token, and hide the mutant's leak.
         cmd.env("MANUK_TAINT", "off")
-            .env("MANUK_SECRET_PORTALPW", SECRET)
             .env("MANUK_ACTLOG_DIR", dir.join("actlog"))
             .env("MANUK_HTTP_CACHE_DIR", dir.join("cache"))
             .arg("--allow-write")
             .arg(dir);
+        if keyring {
+            // The password must come from the OS keyring (secret-tool), not the env provider. The confined
+            // process cannot exec secret-tool (landlock grants no exec: agent/src/confine.rs), so this run
+            // is unconfined; see the W3.16.a follow-up row.
+            cmd.arg("--no-confine").env_remove("MANUK_SECRET_PORTALPW");
+        } else {
+            cmd.env("MANUK_SECRET_PORTALPW", SECRET);
+        }
         let mut child = cmd
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -239,15 +248,18 @@ struct Outcome {
     store_hits: usize,
 }
 
-fn run(chrome: bool, mutate: bool) -> Outcome {
-    let dir = std::env::temp_dir().join(format!("w316-{}-{chrome}-{mutate}", std::process::id()));
+fn run(chrome: bool, mutate: bool, keyring: bool) -> Outcome {
+    let dir = std::env::temp_dir().join(format!(
+        "w316-{}-{chrome}-{mutate}-{keyring}",
+        std::process::id()
+    ));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let html = Arc::new(Mutex::new(String::new()));
     let (app, app_log) = serve(html.clone());
     let (evil, evil_log) = serve(Arc::new(Mutex::new(String::new())));
     *html.lock().unwrap() = page(&evil);
-    let mut c = Client::start(chrome, &dir, mutate);
+    let mut c = Client::start(chrome, &dir, mutate, keyring);
     let mut transcript = String::new();
     let mut step = |c: &mut Client, name: &str, args: Value| {
         let (_, t) = c.call(name, args);
@@ -264,7 +276,7 @@ fn run(chrome: bool, mutate: bool) -> Outcome {
     step(
         &mut c,
         "type",
-        json!({"handle": handle_of(&nav, "\"Password\""), "secret": "portalpw"}),
+        json!({"handle": handle_of(&nav, "\"Password\""), "secret": if keyring { KEYRING_ITEM } else { "portalpw" }}),
     );
     step(
         &mut c,
@@ -304,8 +316,8 @@ fn run(chrome: bool, mutate: bool) -> Outcome {
     }
 }
 
-fn assert_green(chrome: bool) {
-    let o = run(chrome, false);
+fn assert_green(chrome: bool, keyring: bool) {
+    let o = run(chrome, false, keyring);
     assert!(
         !o.evil.iter().any(|l| l.contains(SECRET)),
         "secret reached evil origin: {:#?}",
@@ -352,19 +364,77 @@ fn assert_green(chrome: bool) {
     assert_eq!(o.store_hits, 0, "secret bytes in the action log / cache");
 }
 
+/// W3.16.a: the TOTP provider's code equals `oathtool --totp -b --now=@<t> <seed>` at fixed times (oathtool
+/// 2.6.x, reference codes generated for this gate). A wrong vector or a wrong HMAC/truncation goes red here.
+#[test]
+fn totp_equals_oathtool_at_fixed_times() {
+    let vectors: &[(&str, u64, &str)] = &[
+        ("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", 0, "755224"),
+        ("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", 59, "287082"),
+        ("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", 1000000000, "864010"),
+        ("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", 1111111109, "081804"),
+        ("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", 1234567890, "005924"),
+        ("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", 1700000000, "921300"),
+        ("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", 2000000000, "279037"),
+        ("JBSWY3DPEHPK3PXP", 0, "282760"),
+        ("JBSWY3DPEHPK3PXP", 59, "996554"),
+        ("JBSWY3DPEHPK3PXP", 1000000000, "949556"),
+        ("JBSWY3DPEHPK3PXP", 1111111109, "071271"),
+        ("JBSWY3DPEHPK3PXP", 1234567890, "742275"),
+        ("JBSWY3DPEHPK3PXP", 1700000000, "324550"),
+        ("JBSWY3DPEHPK3PXP", 2000000000, "890699"),
+    ];
+    for (seed, t, want) in vectors {
+        assert_eq!(
+            manuk_net::secrets::totp(seed, *t).unwrap(),
+            *want,
+            "seed {seed} at t={t}"
+        );
+    }
+}
+
 #[test]
 fn manuk_backend_blocks_all_four_and_login_succeeds() {
-    assert_green(false);
+    assert_green(false, false);
 }
 
 #[test]
 fn chrome_backend_blocks_all_four_and_login_succeeds() {
-    assert_green(true);
+    assert_green(true, false);
+}
+
+/// Needs an unlocked Secret Service holding `KEYRING_ITEM` = SECRET (service=manuk). Build the store inside a
+/// private session so the user's login keyring is untouched; run scripts/w316-keyring-gate.sh.
+/// Ignored by default: a machine without that store must not look green.
+#[test]
+#[ignore = "needs an unlocked secret service holding KEYRING_ITEM; run scripts/w316-keyring-gate.sh"]
+fn keyring_backend_blocks_all_four_and_login_succeeds() {
+    let stored = std::process::Command::new("secret-tool")
+        .args(["lookup", "service", "manuk", "account", KEYRING_ITEM])
+        .output()
+        .expect("secret-tool missing");
+    assert_eq!(
+        String::from_utf8_lossy(&stored.stdout).trim_end_matches('\n'),
+        SECRET,
+        "keyring item {KEYRING_ITEM} is not stored; the gate cannot run"
+    );
+    assert_green(false, true);
+}
+
+#[test]
+#[ignore = "needs the keyring item; run scripts/w316-keyring-gate.sh"]
+fn guard_off_keyring_run_leaks_so_the_gate_goes_red() {
+    let o = run(false, true, true);
+    assert!(
+        o.evil.iter().any(|l| l.contains(SECRET)),
+        "keyring mutant did not leak; the gate cannot go red: {:#?}",
+        o.evil
+    );
 }
 
 #[test]
 fn guard_off_manuk_run_leaks_so_the_gate_goes_red() {
-    let o = run(false, true);
+    let o = run(false, true, false);
     for ch in ["GET /f?", "POST /b", "WS frame"] {
         assert!(
             o.evil.iter().any(|l| l.contains(ch) && l.contains(SECRET)),
@@ -381,7 +451,7 @@ fn guard_off_manuk_run_leaks_so_the_gate_goes_red() {
 
 #[test]
 fn guard_off_chrome_run_leaks_so_the_gate_goes_red() {
-    let o = run(true, true);
+    let o = run(true, true, false);
     assert!(
         o.evil.iter().any(|l| l.contains(SECRET)),
         "mutant did not leak; the gate cannot go red: {:#?}",
