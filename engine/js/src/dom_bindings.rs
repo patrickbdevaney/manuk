@@ -14831,12 +14831,15 @@ impl PageContext {
         });
         let raw_cx = unsafe { runtime.cx().raw_cx() };
         let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
+        // A fresh document holds no window handles, even if its realm reuses a dead one's address.
+        unsafe { forget_held_windows(raw_cx) };
         unsafe { install(raw_cx, &global, dom as *mut Dom, doc_url) };
         crate::event_loop::install(runtime, global.handle())?;
         // Identity BEFORE scripts. A popup's load-time script reads `window.opener` to post its
         // result back; seeding after the scripts have run (which is all `set_identity` can do) means
         // it reads `null` and the opener's callback never fires.
         if let Some((win_id, opener_win)) = Self::take_pending_identity() {
+            unsafe { hold_window(raw_cx, opener_win) };
             let script = format!(
                 "globalThis.__winId = {win_id}; globalThis.opener = {};",
                 if opener_win == 0 {
@@ -15902,6 +15905,7 @@ impl PageContext {
         let raw_cx = unsafe { runtime.cx().raw_cx() };
         rooted!(&in(runtime.cx()) let global = self.global.get());
         let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
+        unsafe { hold_window(raw_cx, opener_win) };
         let script = format!(
             "globalThis.__winId = {win_id}; globalThis.opener = {};",
             if opener_win == 0 {
@@ -15948,6 +15952,7 @@ impl PageContext {
         let raw_cx = unsafe { runtime.cx().raw_cx() };
         rooted!(&in(runtime.cx()) let global = self.global.get());
         let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
+        unsafe { hold_window(raw_cx, source_win) };
         let script = format!(
             "globalThis.__deliverMessage({}, {}, {})",
             js_string_literal(json),
@@ -23732,6 +23737,38 @@ thread_local! {
     > = std::cell::RefCell::new(std::collections::HashMap::new());
 }
 
+thread_local! {
+    /// Per document (keyed by its JS realm), the window ids it legitimately holds a handle to:
+    /// ones it opened via `window.open`, its `window.opener`, or an `event.source` delivered to it.
+    /// `__postMessage` is page-callable and ids are small integers, so without this a page could post
+    /// to any tab by guessing its id (SEC.DID.8.a). Keyed per realm, not per thread: the shell runs
+    /// every tab on one thread, so a thread-wide set would let any tab use another tab's handles.
+    static HELD_WINDOWS: std::cell::RefCell<std::collections::HashMap<usize, std::collections::HashSet<u64>>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+/// The current document's key into [`HELD_WINDOWS`] (`cx` must be inside the document's realm).
+unsafe fn held_key(cx: *mut RawJSContext) -> usize {
+    mozjs::jsapi::GetCurrentRealmOrNull(cx) as usize
+}
+
+unsafe fn hold_window(cx: *mut RawJSContext, id: u64) {
+    if id != 0 {
+        let k = held_key(cx);
+        HELD_WINDOWS.with(|h| h.borrow_mut().entry(k).or_default().insert(id));
+    }
+}
+
+unsafe fn holds_window(cx: *mut RawJSContext, id: u64) -> bool {
+    let k = held_key(cx);
+    HELD_WINDOWS.with(|h| h.borrow().get(&k).is_some_and(|s| s.contains(&id)))
+}
+
+unsafe fn forget_held_windows(cx: *mut RawJSContext) {
+    let k = held_key(cx);
+    HELD_WINDOWS.with(|h| h.borrow_mut().remove(&k));
+}
+
 /// Allocate the next process-unique window id (host side, for ordinary tabs).
 pub fn next_window_id() -> u64 {
     WIN_ID.with(|c| {
@@ -23802,6 +23839,7 @@ pub fn take_pending_media_props() -> Vec<(u64, String, f64)> {
 unsafe fn window_open(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     let url = arg_string(cx, vp, argc, 0).unwrap_or_default();
     let win = next_window_id();
+    hold_window(cx, win);
     let allowed = eval_in_current_global(cx, &format!("globalThis.__navAllowed({})", js_string_literal(&url)))
         .is_none_or(|v| v.is_boolean() && v.to_boolean());
     if !url.is_empty() && allowed {
@@ -23883,7 +23921,7 @@ unsafe fn post_message(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool
     let source: u64 = arg_string(cx, vp, argc, 3)
         .and_then(|s| s.parse().ok())
         .unwrap_or(0);
-    if target != 0 {
+    if target != 0 && holds_window(cx, target) {
         PENDING_MESSAGES.with(|q| q.borrow_mut().push((target, json, origin, source)));
     }
     *vp = UndefinedValue();

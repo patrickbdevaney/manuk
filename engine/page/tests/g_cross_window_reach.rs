@@ -7,6 +7,9 @@
 //! B  storage is keyed by the host-derived document origin, never a page argument
 //! C  a page cannot forge the e.origin of a message: the queued origin is the page's own location.origin
 //!    even when the page calls the native seam directly with a different origin
+//! E  a page cannot post to a window id it holds no handle to (guessed id): nothing is queued
+//! F  a page that never called window.open cannot post to a tab another page opened, nor to any
+//!    guessed id — handles are per document, not per thread (the shell runs every tab on one thread)
 //! D  vacuity: an honest window.open().postMessage still queues, with the sender's real origin
 //! ```
 use manuk_page::Page;
@@ -36,7 +39,14 @@ fn a_page_cannot_read_or_forge_across_windows() {
     let page = Page::load(html, "https://evil.test/", &fonts, 800.0);
     let got = read(&page);
     println!("XW A: {got}");
-    for k in ["document", "localStorage", "sessionStorage", "location", "frames", "indexedDB"] {
+    for k in [
+        "document",
+        "localStorage",
+        "sessionStorage",
+        "location",
+        "frames",
+        "indexedDB",
+    ] {
         assert!(
             got.contains(&format!("{k}=undefined")),
             "G_CROSS_WINDOW_REACH A: a window handle exposes `{k}` — a cross-origin read. got {got}"
@@ -53,9 +63,26 @@ fn a_page_cannot_read_or_forge_across_windows() {
     let page = Page::load(html, "https://evil.test/", &fonts, 800.0);
     let msgs = page.take_messages();
     println!("XW C: {msgs:?}");
-    let honest = msgs.iter().filter(|m| m.1.contains("honest")).collect::<Vec<_>>();
-    assert_eq!(honest.len(), 1, "D vacuity: honest postMessage must still queue: {msgs:?}");
-    assert_eq!(honest[0].2, "https://evil.test", "D: origin is the sender's");
+    let honest = msgs
+        .iter()
+        .filter(|m| m.1.contains("honest"))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        honest.len(),
+        1,
+        "D vacuity: honest postMessage must still queue: {msgs:?}"
+    );
+    assert_eq!(
+        honest[0].2, "https://evil.test",
+        "D: origin is the sender's"
+    );
+    // E (SEC.DID.8.a): posting to ids the page holds no handle to (guessed, via the native seam or a
+    // hand-made ref) queues nothing — only the honest window.open handle's message is queued.
+    assert_eq!(
+        msgs.len(),
+        1,
+        "G_CROSS_WINDOW_REACH E: a page posted to a window id it holds no handle to: {msgs:?}"
+    );
     for m in &msgs {
         assert_eq!(
             m.2, "https://evil.test",
@@ -64,4 +91,30 @@ fn a_page_cannot_read_or_forge_across_windows() {
             m.2
         );
     }
+
+    // ── F (SEC.DID.8.a): tab X opens tab B and holds its handle; tab Y never calls window.open. ────
+    let html = "<!doctype html><html><body><script>\
+        window.open('https://bank.test/', 'b').postMessage({fromX: 1}, '*');\
+        </script></body></html>";
+    let x = Page::load(html, "https://app.test/", &fonts, 800.0);
+    let xs = x.take_messages();
+    assert_eq!(xs.len(), 1, "F vacuity: X's real handle to B must queue: {xs:?}");
+    let b = xs[0].0;
+    let html = format!(
+        "<!doctype html><html><body><script>\
+         for (var i = 1; i <= {hi}; i++) {{\
+           try {{ __postMessage(String(i), '{{\"guessY\":1}}', 'https://evil.test', '0'); }} catch (e) {{}}\
+           try {{ __makeWindowRef(i).postMessage({{guessY: 1}}, '*'); }} catch (e) {{}}\
+         }}\
+         </script></body></html>",
+        hi = b + 8
+    );
+    let y = Page::load(&html, "https://evil.test/", &fonts, 800.0);
+    let ys = y.take_messages();
+    println!("XW F: tab B = win {b}; Y queued {ys:?}");
+    assert!(
+        ys.is_empty(),
+        "G_CROSS_WINDOW_REACH F: a page that never called window.open posted to tab ids it holds no \
+         handle to (tab B = win {b}): {ys:?}"
+    );
 }
