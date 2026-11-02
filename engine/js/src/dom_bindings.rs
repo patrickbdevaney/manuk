@@ -23857,7 +23857,13 @@ unsafe fn post_message(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool
         .and_then(|s| s.parse().ok())
         .unwrap_or(0);
     let json = arg_string(cx, vp, argc, 1).unwrap_or_else(|| "null".to_string());
-    let origin = arg_string(cx, vp, argc, 2).unwrap_or_else(|| "*".to_string());
+    // SEC.DID.8: the sender origin is the HOST's view of this document (DOC_URL), never the caller's
+    // argument. `__postMessage` is a global the page can call directly, so trusting arg 2 let any page
+    // post to another tab claiming `https://bank.test` as `e.origin`.
+    let origin = {
+        let url = DOC_URL.with(|u| u.borrow().clone());
+        manuk_net::webstorage::origin_of(&url).unwrap_or_else(|| "null".to_string())
+    };
     let source: u64 = arg_string(cx, vp, argc, 3)
         .and_then(|s| s.parse().ok())
         .unwrap_or(0);
