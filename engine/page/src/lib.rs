@@ -613,6 +613,21 @@ fn frame_same_origin(embedder: &str, framed: &str) -> bool {
     }
 }
 
+/// **SEC.DID.12.b (SECURITY.md P16): which URLs a page's own markup may send the TOP-LEVEL tab to** — an
+/// anchor click, a form submission, a `<meta refresh>`. http(s) only, plus `file:` from a page that is
+/// itself a local file. `data:`/`javascript:`/`blob:`/`about:` are refused (the phishing-document
+/// vector, same as Chrome's top-level `data:` block) and `file:` from a web page is refused. `url` is
+/// the already-resolved absolute URL; `base` is the page's own URL. The markup twin of the script-side
+/// `__navAllowed` (P14).
+pub fn top_nav_allowed(base: &str, url: &str) -> bool {
+    let Ok(u) = Url::parse(url.trim()) else { return false };
+    match u.scheme() {
+        "http" | "https" => true,
+        "file" => Url::parse(base).is_ok_and(|b| b.scheme() == "file"),
+        _ => false,
+    }
+}
+
 /// Resolve `href` against `base` to an absolute URL string (falling back to `href`).
 ///
 /// `pub` since t1487 so `manuk-wpt` resolves a `<meta refresh>` target with the SAME function the
@@ -5084,10 +5099,12 @@ impl Page {
         })?;
         let content = self.dom.element(node)?.attr("content")?;
         let (secs, url) = parse_meta_refresh(content)?;
-        match url {
-            Some(u) => Some((secs, resolve_url(&self.final_url, &u))),
-            None => Some((secs, self.final_url.clone())),
-        }
+        let target = match url {
+            Some(u) => resolve_url(&self.final_url, &u),
+            None => self.final_url.clone(),
+        };
+        // SEC.DID.12.b: a refresh may not steer the tab to data:/javascript:/file: (P16).
+        top_nav_allowed(&self.final_url, &target).then_some((secs, target))
     }
 
     /// **The navigation this document's SCRIPTS asked for**, absolute, taken and cleared.

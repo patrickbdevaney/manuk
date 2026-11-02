@@ -199,6 +199,10 @@ pub fn submission_url(dom: &Dom, form: NodeId, base: &str) -> Result<String, Sub
         None => base_url,
     };
 
+    if !manuk_page::top_nav_allowed(base, url.as_str()) {
+        // SEC.DID.12.b (P16): a form may not submit to data:/javascript:/file: from a web page.
+        return Err(SubmitError::BadAction(url.to_string()));
+    }
     let pairs = fields(dom, form);
     url.query_pairs_mut()
         .clear()
@@ -267,6 +271,10 @@ pub fn urlencoded_submission_with_submitter(
         None => base_url,
     };
 
+    if !manuk_page::top_nav_allowed(base, url.as_str()) {
+        // SEC.DID.12.b (P16): a form may not submit to data:/javascript:/file: from a web page.
+        return Err(SubmitError::BadAction(url.to_string()));
+    }
     let body = url::form_urlencoded::Serializer::new(String::new())
         .extend_pairs(fields_with_submitter(dom, form, submitter))
         .finish();
@@ -498,6 +506,25 @@ mod tests {
                 // `empty` (nothing selected) contributes nothing — no first-option fallback.
             ]
         );
+    }
+
+    #[test]
+    fn a_form_cannot_submit_to_data_file_or_javascript_from_a_web_page() {
+        // SEC.DID.12.b (P16). Controls: https absolute and relative still resolve.
+        for (action, ok) in [
+            ("https://o.test/s", true),
+            ("/rel", true),
+            ("data:text/html,x", false),
+            ("file:///etc/passwd", false),
+            ("javascript:alert(1)", false),
+        ] {
+            let dom = dom_of(&format!(r#"<form action="{action}"><input name=q value=1></form>"#));
+            let form = dom.find_first("form").unwrap();
+            assert_eq!(submission_url(&dom, form, "https://ex.test/p").is_ok(), ok, "GET {action}");
+            let dom = dom_of(&format!(r#"<form method=post action="{action}"><input name=q value=1></form>"#));
+            let form = dom.find_first("form").unwrap();
+            assert_eq!(urlencoded_submission(&dom, form, "https://ex.test/p").is_ok(), ok, "POST {action}");
+        }
     }
 
     #[test]

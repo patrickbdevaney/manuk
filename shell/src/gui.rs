@@ -4632,7 +4632,9 @@ fn resolve_href(base: &str, href: &str) -> Option<String> {
         // Relative (incl. protocol-relative `//host/…`): resolve against the base document URL.
         Err(_) => url::Url::parse(base).ok().and_then(|b| b.join(h).ok())?,
     };
-    Some(unwrap_redirect(resolved).to_string())
+    let out = unwrap_redirect(resolved).to_string();
+    // SEC.DID.12.b (P16): an anchor may not steer the tab to data:/file:/blob: from a web page.
+    manuk_page::top_nav_allowed(base, &out).then_some(out)
 }
 
 /// Unwrap known search-engine redirect wrappers to their real destination. DuckDuckGo
@@ -4748,6 +4750,12 @@ mod tests {
 
     #[test]
     fn resolve_href_handles_relative_absolute_and_skips() {
+        // SEC.DID.12.b (P16): data:/file:/blob: anchors from a web page go nowhere; https still goes.
+        for h in ["data:text/html,x", "file:///etc/passwd", "blob:https://example.com/1", "DATA:text/html,x"] {
+            assert_eq!(resolve_href("https://example.com/p", h), None, "{h}");
+        }
+        assert!(resolve_href("https://example.com/p", "https://o.test/").is_some());
+        assert!(resolve_href("file:///tmp/a.html", "b.html").is_some());
         let base = "https://example.com/dir/page.html";
         // Relative resolves against the base's directory.
         assert_eq!(
