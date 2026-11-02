@@ -1,0 +1,9 @@
+run	site	rc	secs	oracle_paths	cov	shape	load1m_before	chrome_ver
+run1	https://simplepdf.com/	0	21	199	88.4	90.9	1.72	145.0.7632.116
+run1	https://www.ikea.com/	0	19	874	94.6	65.5	1.66	145.0.7632.116
+run2	https://simplepdf.com/	0	28	199	88.4	76.7	1.59	145.0.7632.116
+run2	https://www.ikea.com/	0	19	874	94.6	65.5	1.59	145.0.7632.116
+run3	https://simplepdf.com/	0	24	199	88.4	90.9	1.41	145.0.7632.116
+run3	https://www.ikea.com/	0	19	874	94.6	65.5	1.27	145.0.7632.116
+mutant	https://simplepdf.com/	124	2	-	-	-	1.28	145.0.7632.116
+# GUARD.R0.a.b.a.b.a verdict: 6/6 complete (rc!=124) at --m1-timeout 120 in 3 runs x 2 sites, GREEN; mutant at 2 s rc=124, RED. Both TIMEOUTs of .a.b.a.b did not recur. simplepdf shape flips 90.9 / 76.7 / 90.9 with rc=0 (cov constant 88.4); ikea constant. Follow-up GUARD.R0.a.b.a.b.a.a.
