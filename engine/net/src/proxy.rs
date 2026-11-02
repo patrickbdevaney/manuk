@@ -84,9 +84,12 @@ pub async fn fetch_via_proxy(proxy: &SocksProxy, url: &str) -> Result<Response> 
 
     // W3.10.a: the SOCKS proxy itself is embedder config (a local Tor is legitimate), but a public
     // page must not use it to reach a private *literal* target. Names are resolved by the proxy,
-    // out of our sight — a documented gap, not a pass.
+    // out of our sight, so local-only names are refused up front (check_proxy_hostname).
     if host.parse::<std::net::IpAddr>().is_ok() || host.starts_with('[') {
         crate::egress::resolve_for_dial(&host, port).await?;
+    } else {
+        // SEC.DID.4: names are resolved by the proxy; refuse the ones that can only be local.
+        crate::egress::check_proxy_hostname(&host)?;
     }
 
     let stream = proxy.connect(&host, port).await?;

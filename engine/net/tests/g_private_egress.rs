@@ -250,3 +250,30 @@ fn public_page_cannot_target_loopback_through_a_socks_proxy() {
     );
     manuk_net::egress::set_allow_private_network(false);
 }
+
+#[test]
+fn public_page_cannot_name_a_local_host_through_a_socks_proxy() {
+    // SEC.DID.4 mutant: `check_proxy_hostname` call in proxy.rs removed -> RED (proxy dialled).
+    let _g = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+    let rt = manuk_net::runtime();
+    let (proxy_port, proxy_hits, _) = server("");
+    let proxy = manuk_net::proxy::SocksProxy::new(format!("127.0.0.1:{proxy_port}"));
+    manuk_net::set_top_level_document("http://public.example/");
+    for name in ["localhost", "intranet", "printer.local", "api.localhost", "localhost."] {
+        let r = rt.block_on(manuk_net::proxy::fetch_via_proxy(
+            &proxy,
+            &format!("http://{name}:9/"),
+        ));
+        assert!(r.is_err(), "{name} must be refused");
+        assert_eq!(
+            proxy_hits.load(Ordering::SeqCst),
+            0,
+            "{name}: no proxy connection may be made"
+        );
+    }
+    // Control: opt-out reaches the proxy.
+    manuk_net::egress::set_allow_private_network(true);
+    let _ = rt.block_on(manuk_net::proxy::fetch_via_proxy(&proxy, "http://intranet:9/"));
+    assert!(proxy_hits.load(Ordering::SeqCst) >= 1, "control: opt-out reaches the proxy");
+    manuk_net::egress::set_allow_private_network(false);
+}

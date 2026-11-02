@@ -113,6 +113,27 @@ pub fn check_url_literal(url: &Url) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// SEC.DID.4: a name the SOCKS proxy would resolve out of our sight. While the guard is active,
+/// refuse the names that can only mean "this machine / this LAN" (localhost, `*.localhost`,
+/// `*.local`, `*.internal`, dotless single labels); IP literals are vetted separately.
+pub fn check_proxy_hostname(host: &str) -> anyhow::Result<()> {
+    if !guard_active() {
+        return Ok(());
+    }
+    let h = host.trim_end_matches('.').to_ascii_lowercase();
+    if h.is_empty() || h.parse::<IpAddr>().is_ok() || h.starts_with('[') {
+        return Ok(());
+    }
+    let local = !h.contains('.')
+        || h.ends_with(".localhost")
+        || h.ends_with(".local")
+        || h.ends_with(".internal");
+    if local {
+        anyhow::bail!("blocked: {host} is a local/intranet name the proxy would resolve out of sight and the page is public (--allow-private-network overrides)");
+    }
+    Ok(())
+}
+
 /// Resolve `host:port` for a raw socket dial (WebSocket, proxy target) with the same post-DNS rule
 /// as [`GuardResolver`]: while the guard is active, private addresses are dropped and an all-private
 /// answer fails. The caller dials the returned addresses, not the name, so a rebind cannot swap
