@@ -210,7 +210,7 @@ pub fn parse_grants(args: &mut Vec<String>) -> Result<Grants, String> {
         };
         if !matches!(
             key.as_str(),
-            "--read-origins" | "--write-origins" | "--confirm"
+            "--read-origins" | "--write-origins" | "--allow-origin" | "--confirm"
         ) {
             i += 1;
             continue;
@@ -229,6 +229,13 @@ pub fn parse_grants(args: &mut Vec<String>) -> Result<Grants, String> {
         match key.as_str() {
             "--read-origins" => g.read.extend(items),
             "--write-origins" => g.write.extend(items),
+            // One flag bounding both directions: where the agent may GET and where it may send.
+            "--allow-origin" if std::env::var_os("MANUK_ALLOW_MUTATE").is_some() => {}
+            "--allow-origin" => {
+                let v: Vec<String> = items.collect();
+                g.read.extend(v.iter().cloned());
+                g.write.extend(v);
+            }
             _ => {
                 for k in items {
                     if !matches!(k.as_str(), "submit" | "download" | "navigate-new-origin") {
@@ -247,6 +254,33 @@ pub fn parse_grants(args: &mut Vec<String>) -> Result<Grants, String> {
         }
     }
     Ok(g)
+}
+
+/// If a line of the observation tells the agent to go (or send data) to another origin than the page's
+/// own, name that origin. Page content is data, so the caller flags it rather than obeying it.
+pub fn nav_ask(text: &str, page_url: &str) -> Option<String> {
+    const VERBS: &[&str] = &[
+        "navigate to", "go to", "goto", "visit", "open ", "redirect", "send ", "post ", "submit to",
+        "upload to", "fetch ",
+    ];
+    let here = origin(page_url);
+    for line in text.lines() {
+        let low = line.to_ascii_lowercase();
+        if !VERBS.iter().any(|v| low.contains(v)) {
+            continue;
+        }
+        for w in line.split(|c: char| c.is_whitespace() || "\"'()<>[]".contains(c)) {
+            if !(w.starts_with("http://") || w.starts_with("https://")) {
+                continue;
+            }
+            if let Some(o) = origin(w.trim_end_matches(['.', ',', ';'])) {
+                if Some(&o) != here.as_ref() {
+                    return Some(o);
+                }
+            }
+        }
+    }
+    None
 }
 
 /// MCP tool annotations (`readOnlyHint` / `destructiveHint`) for each tool, from the same policy
