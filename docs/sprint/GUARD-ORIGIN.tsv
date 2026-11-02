@@ -1,0 +1,5 @@
+url	class	evidence	source
+https://esaj.tjsp.jus.br/	ORIGIN	reachable in 1 of 4 GUARD.R0 runs (UNREACHABLE in runs 1-3, OK with cov 0.4 in run 4); TAIL.md row, class ORIGIN (runs)	docs/sprint/TAIL.md
+https://www.amazon.com.mx/	ORIGIN	reachable in 1 of 4 runs (UNREACHABLE in runs 1-3; LOW_SAMPLE with 2 paths in run 4); TAIL.md row, class ORIGIN (runs)	docs/sprint/TAIL.md
+https://webfenix.movilidadbogota.gov.co/	ORIGIN	UNREACHABLE in runs 1 and 4, OK in runs 2-3 (flapping); TAIL.md row, class ORIGIN+ENGINE (live)	docs/sprint/TAIL.md
+https://linxonline.co.pierce.wa.us/	ORIGIN	served a 768-byte IIS default page today (curl and our fetch), ours 3 a11y nodes vs Chrome 133 at oracle capture; TAIL.md row, class ORIGIN (live)	docs/sprint/TAIL.md

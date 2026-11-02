@@ -1,0 +1,9 @@
+row	set	n	cov	shape	m2_full	ax_full	chrome_ver	note
+run1	old-GUARD.tsv	42	86.75	69.43	79.79	72.06	145.0.7632.116	mean over reachable rows incl. LOW_SAMPLE, as recorded
+run2	old-GUARD.tsv	49	83.30	66.87	73.13	73.64	145.0.7632.116	mean over reachable rows incl. LOW_SAMPLE, as recorded
+run3	old-GUARD.tsv	40	85.89	68.84	74.88	73.53	145.0.7632.116	mean over reachable rows incl. LOW_SAMPLE, as recorded
+run4	old-GUARD.tsv	44	81.40	67.42	72.04	68.50	145.0.7632.116	mean over reachable rows incl. LOW_SAMPLE, as recorded
+run1	frozen-F	41	86.43	70.07	79.3	73.82	145.0.7632.116	F = run1 OK minus ORIGIN; n = sites of F reachable (OK) in this run of 41
+run2	frozen-F	38	82.77	69.03	79.46	74.97	145.0.7632.116	F = run1 OK minus ORIGIN; n = sites of F reachable (OK) in this run of 41
+run3	frozen-F	33	83.55	70.5	77.93	76.2	145.0.7632.116	F = run1 OK minus ORIGIN; n = sites of F reachable (OK) in this run of 41
+run4	frozen-F	36	81.83	69.43	79.37	74.58	145.0.7632.116	F = run1 OK minus ORIGIN; n = sites of F reachable (OK) in this run of 41
