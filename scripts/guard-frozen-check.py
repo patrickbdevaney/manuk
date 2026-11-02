@@ -3,7 +3,7 @@
 
 Takes four tri-sweep persisted files (run1..run4, in order) that were all produced by
 scripts/guard-frozen-run.sh on the SAME frozen list. Computes six metrics per run over F:
-  cov, shape      mean of the M1 columns over F (M1 rows are imported, so these are constant by design)
+  cov, shape      mean of the M1 columns over F (a failed M1 scores 0; constant by design if M1 is imported)
   m2_full         mean m2_rate over all F rows (non-OK drive tags score 0)
   m2_meas         mean m2_rate over F rows with m2_tag OK
   ax_full         mean a11y_f1 over all F rows (non-OK a11y tags score 0)
@@ -19,7 +19,9 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FROZEN = os.path.join(ROOT, "docs", "sprint", "guard-frozen-m1.tsv")
-DEST = os.path.join(ROOT, "docs", "sprint", "GUARD-FROZEN-RUNS.tsv")
+# GUARD_FROZEN_DEST / GUARD_FROZEN_NOTE let a run write its own file (the fresh-M1 runs of GUARD.R0.a.b)
+DEST = os.environ.get("GUARD_FROZEN_DEST") or os.path.join(ROOT, "docs", "sprint", "GUARD-FROZEN-RUNS.tsv")
+NOTE = os.environ.get("GUARD_FROZEN_NOTE") or "frozen F, M1 imported"
 CHROME_VER = "145.0.7632.116"
 METRICS = ["cov", "shape", "m2_full", "m2_meas", "ax_full", "ax_meas"]
 
@@ -48,8 +50,9 @@ def run_metrics(path, urls):
     ax_ok = [r for r in fr if r["a11y_tag"] == "OK"]
     return {
         "n": len(fr),
-        "cov": mean([float(r["cov"]) for r in fr]),
-        "shape": mean([float(r["shape"]) for r in fr]),
+        # a site whose M1 fails in this run has an empty cov/shape: it scores 0, it is not dropped (GUARD.R0.a.b)
+        "cov": mean([float(r["cov"] or 0) for r in fr]),
+        "shape": mean([float(r["shape"] or 0) for r in fr]),
         "m2_full": mean([float(r["m2_rate"] or 0) for r in fr]),
         "m2_meas": mean([float(r["m2_rate"]) for r in m2_ok]),
         "ax_full": mean([float(r["a11y_f1"] or 0) for r in fr]),
@@ -75,7 +78,7 @@ def main(paths):
             "n_m2_ok", "n_ax_ok", "chrome_ver", "note"]]
     for i, r in enumerate(runs, 1):
         out.append(["run%d" % i, r["n"]] + ["%.2f" % r[m] for m in METRICS]
-                   + [r["n_m2_ok"], r["n_ax_ok"], CHROME_VER, "frozen F, M1 imported"])
+                   + [r["n_m2_ok"], r["n_ax_ok"], CHROME_VER, NOTE])
     out.append(["band", "", *["[%.2f,%.2f]" % band[m] for m in METRICS], "", "", CHROME_VER,
                 "min..max of runs 1-3"])
     out.append(["run4_inside", "", *[str(inside[m]) for m in METRICS], "", "", CHROME_VER,
