@@ -1,0 +1,11 @@
+# GUARD.R0.a.b.a.a: attribution of the two run1 M1 TIMEOUTs at --m1-timeout 120 (manuk-wpt fidelity, one site per invocation, same args as tri-sweep run_m1)
+# rc 124 = timeout (red); any other rc = completed. Source logs: /tmp/guard-attr/results.tsv and the per-site stderr (structural/SHAPE lines).
+run	site	rc	secs	oracle_paths	cov	shape	chrome_ver
+run1	admin.munchbakery.com	0	28	45	100.0	91.1	145.0.7632.116
+run1	www.ikea.com	0	20	874	94.6	65.5	145.0.7632.116
+run2	admin.munchbakery.com	0	31	45	100.0	91.1	145.0.7632.116
+run2	www.ikea.com	0	20	874	94.6	65.5	145.0.7632.116
+run3	admin.munchbakery.com	0	21	45	100.0	91.1	145.0.7632.116
+run3	www.ikea.com	0	20	874	94.6	65.5	145.0.7632.116
+mutant	admin.munchbakery.com	124	2	-	-	-	145.0.7632.116
+verdict	all 6 complete (rc!=124) at 120 s: GREEN. The run1 TIMEOUTs did not recur in 3 runs, which is consistent with load, not with a persistent reachability fault. The load hypothesis itself is not proven here.
