@@ -11,21 +11,21 @@ browser, which has none of those three.
 
 | id | path (untrusted source -> sink) | layers | node |
 |----|---------------------------------|--------|------|
-| P1 | web page -> local disk READ (iframe/xhr/img/script `file:`) | net initiator check@engine/page/tests/g_sop_floor.rs (mut); navigation policy@engine/page/tests/g_sop_floor.rs (mut); resolve_url guard@engine/page/tests/g_sop_floor.rs (mut); redirect-into-file block@UNPINNED; frame loader is_local_url@UNPINNED; landlock ($HOME unreadable, agent only)@mcp/tests/confine.rs | SEC.DID.2 |
-| P2 | web page -> local disk WRITE (download) | sanitize_filename + dedupe (no overwrite)@engine/net/src/downloads.rs; landlock write-only-cache (agent only)@mcp/tests/confine.rs. Shell: first layer only, and a response triggers the save with no prompt | SEC.DID.3 |
-| P3 | web page -> localhost / RFC1918 / link-local (fetch, xhr, img, ws) | post-DNS GuardResolver@engine/net/tests/g_private_egress.rs; literal-host check@engine/net/tests/g_private_egress.rs; CORS preflight@engine/page/tests/g_page_fetch_preflight.rs; WS resolve_for_dial@engine/net/tests/g_private_egress.rs | - |
+| P1 | web page -> local disk READ (iframe/xhr/img/script `file:`) | net initiator check@engine/page/tests/g_sop_floor.rs (mut); navigation policy@engine/page/tests/g_sop_floor.rs (mut); resolve_url guard@engine/page/tests/g_sop_floor.rs (mut); redirect-into-file block (mut)@engine/net/tests/g_redirect_into_file.rs; frame loader is_local_url (mut)@engine/page/src/lib.rs sec_did_2_loader_filter; landlock (mut) ($HOME unreadable, agent only)@mcp/tests/confine.rs | none (SEC.DID.2 pinned both) |
+| P2 | web page -> local disk WRITE (download) | sanitize_filename + dedupe (no overwrite)@engine/net/src/downloads.rs; landlock (mut) write-only-cache (agent only)@mcp/tests/confine.rs. Shell: first layer only, and a response triggers the save with no prompt | SEC.DID.3 |
+| P3 | web page -> localhost / RFC1918 / link-local (fetch, xhr, img, ws) | post-DNS GuardResolver (mut)@engine/net/tests/g_private_egress.rs; literal-host check (mut)@engine/net/tests/g_private_egress.rs; CORS preflight (mut)@engine/page/tests/g_page_fetch_preflight.rs; WS resolve_for_dial (mut)@engine/net/tests/g_private_egress.rs | - |
 | P3b | web page -> private net via SOCKS proxy-resolved hostname | literal check only; names are resolved by the proxy (documented gap in the W3.10 wiki page) | SEC.DID.4 |
-| P4 | web page -> cookie store (document.cookie, cross-site send) | HttpOnly filtered from script@engine/page/tests/g_cookie_attributes.rs; ephemeral jar per process (agent)@mcp/tests/isolation.rs; per-origin grant of human cookies@mcp/tests/isolation.rs | - |
+| P4 | web page -> cookie store (document.cookie, cross-site send) | HttpOnly filtered from script (mut)@engine/page/tests/g_cookie_attributes.rs; ephemeral jar per process (agent)@UNPINNED (mut: survives deletion); per-origin grant of human cookies (mut)@mcp/tests/isolation.rs | SEC.DID.1.a |
 | P5 | web page -> password / credential store | NO SINK: grep finds no password manager or autofill in shell/engine/mcp. Tripwire absent | SEC.DID.5 |
 | P6 | web page -> OS clipboard READ | host clipboard is never seeded in shell/mcp/bidi (set_host_clipboard has no non-test caller), so readText sees only page-written text@UNPINNED | SEC.DID.6 |
 | P6b | web page -> OS clipboard WRITE (overwrite without gesture) | gesture gating not verified in this census | SEC.DID.6 |
-| P7 | web page -> process exec | no Command::new in shipped shell/engine/mcp/agent/bidi code paths (test and dev-tool uses only)@UNPINNED; landlock execve denied (agent only)@mcp/tests/confine.rs | SEC.DID.7 |
-| P8 | cross-origin frame -> embedder DOM / embedder -> frame | contentDocument/contentWindow.document SecurityError@engine/page/tests/g_sop_floor.rs (mut); X-Frame-Options/frame-ancestors refusal@engine/page/tests/g_framing.rs | - |
+| P7 | web page -> process exec | no Command::new in shipped shell/engine/mcp/agent/bidi code paths (test and dev-tool uses only)@UNPINNED; landlock (mut) execve denied (agent only)@mcp/tests/confine.rs | SEC.DID.7 |
+| P8 | cross-origin frame -> embedder DOM / embedder -> frame | contentDocument/contentWindow.document SecurityError@engine/page/tests/g_sop_floor.rs (mut); X-Frame-Options/frame-ancestors refusal (mut)@engine/page/tests/g_framing.rs | - |
 | P9 | other tab / window.opener / named window access | not probed: shell tabs are separate Pages sharing the cookie jar and storage, no test of cross-tab reach | SEC.DID.8 |
-| P10 | page script -> engine memory corruption (SpiderMonkey/JIT, wasm) | optimizing JIT off (baseline tiers on; `--jitless` = none)@engine/js/tests/hardening.rs (mut, MANUK_TEST_BREAK); landlock@mcp/tests/confine.rs (agent only). Shell: neither. SpiderMonkey pin is past EOL (SYNTHESIS) | SEC.DID.9 |
-| P11 | page content -> agent tool calls (prompt injection) | hidden-text shield@mcp/tests/session.rs. Visible injected text: no layer. navigate/act/type have no origin allowlist, so an injected `navigate` to an attacker URL carrying data in its query is unblocked | SEC.DID.10 |
-| P12 | agent `storage_state` path arg -> disk write/read | landlock write set@mcp/tests/confine.rs | SEC.DID.11 |
-| P13 | page script injection (XSS-style) via CSP | script-src enforcement@engine/page/tests/g_csp.rs (other CSP directives unimplemented per csp.rs header) | SEC.DID.12 |
+| P10 | page script -> engine memory corruption (SpiderMonkey/JIT, wasm) | optimizing JIT off (baseline tiers on; `--jitless` = none)@engine/js/tests/hardening.rs (mut, MANUK_TEST_BREAK); landlock (mut)@mcp/tests/confine.rs (agent only). Shell: neither. SpiderMonkey pin is past EOL (SYNTHESIS) | SEC.DID.9 |
+| P11 | page content -> agent tool calls (prompt injection) | hidden-text shield (mut)@mcp/tests/session.rs. Visible injected text: no layer. navigate/act/type have no origin allowlist, so an injected `navigate` to an attacker URL carrying data in its query is unblocked | SEC.DID.10 |
+| P12 | agent `storage_state` path arg -> disk write/read | landlock (mut) write set@mcp/tests/confine.rs | SEC.DID.11 |
+| P13 | page script injection (XSS-style) via CSP | script-src enforcement (mut)@engine/page/tests/g_csp.rs (other CSP directives unimplemented per csp.rs header) | SEC.DID.12 |
 
 ## Not yet probed (no claim made)
 mixed content / https downgrade, `javascript:` and `data:` top-level navigation, `window.open` features, WebRTC,
@@ -38,3 +38,27 @@ and both wasm JIT tiers OFF. `--jitless` turns every tier off. Residual risk: th
 machine code, so a baseline-tier bug is reachable; the optimizing tier, where the recent SpiderMonkey JIT CVEs
 sit, is not. Landlock (no exec, read-only fs) bounds what a compromise could do. Measured on a hot numeric loop:
 full 30 ms, baseline 394 ms, jitless 3620 ms (9.2x), chrome_ver=145.0.7632.116.
+
+## Mutation results (SEC.DID.1, chrome_ver=145.0.7632.116)
+
+Each row: delete or invert one layer in the working tree, run its named gate, restore with `git checkout --`.
+Baseline: all gates green before mutation (g_private_egress 4/4, g_page_fetch_preflight 1/1, g_cookie_attributes 1/1,
+g_framing 1/1, g_csp 1/1, confine 3/3, isolation 5/5, session 8/8). Result is RED only when the test binary built
+and a test panicked; a compile error is not counted.
+
+| layer | mutation | gate result |
+|-------|----------|-------------|
+| GuardResolver post-DNS | `egress.rs` `if !guarded \|\| !guard_active()` -> `if true` | RED (public_page_cannot_reach_private_network) |
+| literal-host check | `check_url_literal` `if is_private_ip(ip)` -> `if false` | RED (public_page_cannot_reach_private_network) |
+| WS / SOCKS resolve_for_dial | filter -> `\|_a\| true` | RED (WebSocket and SOCKS tests) |
+| CORS preflight | `page/src/lib.rs` `if !allowed {` -> `if false {` | RED (headless_executor_applies_egress_guard_and_preflight) |
+| HttpOnly filter | `net/src/lib.rs` `\|c\| !c.http_only` -> `\|_c\| true` | RED (cookie_flags_hold_across_the_js_and_wire_boundaries) |
+| X-Frame-Options / frame-ancestors | `if !framing_allowed(` -> `if false {` | RED (a_site_that_refuses_framing_is_not_framed) |
+| CSP script-src (URL) | `allows_script_url` returns true | RED (csp_script_src_blocks_what_it_forbids...) |
+| CSP script-src (inline) | `allows_inline_script` returns true | RED (same test) |
+| hidden-text shield | `session.rs` `if !self.include_hidden {` -> `if false {` (2 sites) | RED (injection_shield_withholds_invisible_text) |
+| landlock confinement | `confine.rs` restrict_self replaced by `0` | RED (confined_process_is_read_only...) |
+| per-origin human-cookie grant | `isolation.rs` grant loop -> `.take(0)` | RED (human_profile_cookie_is_invisible_until_a_per_origin_grant) |
+| ephemeral jar | `isolation.rs` remove `manuk_net::set_ephemeral(true)` | **NOT RED**: all 5 isolation tests green. Layer is UNPINNED, follow-up SEC.DID.1.a |
+
+Gate headers record each mutation. Only the ephemeral jar row changed the census: it now reads UNPINNED.

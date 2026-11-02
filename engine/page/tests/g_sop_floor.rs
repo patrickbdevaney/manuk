@@ -35,7 +35,10 @@
 //! - the net navigation-policy check;
 //! - the `resolve_url` guard.
 //!
-//! One layer is NOT independently pinned: the frame loader's own `is_local_url` filter in
+//! (SEC.DID.2: that layer is now pinned by the in-crate test `sec_did_2_loader_filter`, which calls
+//! the loader directly with a `file:` URL; the paragraph below records why this file cannot.)
+//!
+//! One layer is NOT independently pinned HERE: the frame loader's own `is_local_url` filter in
 //! `fetch_and_load_iframes`. `resolve_url` already turns a web page's `file:` frame source into
 //! `about:blank` before the loader sees it, so deleting the filter changes nothing observable here.
 //! The filter stays as defence in depth for a source string that reaches the loader without passing

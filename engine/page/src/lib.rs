@@ -6295,6 +6295,16 @@ impl Page {
         if pending.is_empty() {
             return;
         }
+        self.load_pending_frames(fonts, pending).await;
+    }
+
+    /// The fetch-and-render half of [`Self::fetch_and_load_iframes`], taking its frame list as an
+    /// argument so a gate can hand the loader a source `resolve_url` would never have produced.
+    async fn load_pending_frames(
+        &mut self,
+        fonts: &FontContext,
+        pending: Vec<(manuk_dom::NodeId, String, u32, u32)>,
+    ) {
         // One round of fetches, concurrently. A frame inside a frame is handled by the child's own
         // load — `MAX_IFRAME_DEPTH` is the fork-bomb guard.
         // ⚠⚠⚠ **A web document may not frame the local disk (W3.1).** Checked against THIS document,
@@ -14648,6 +14658,49 @@ mod js_interactive_tests {
         drop(page18);
         drop(page19);
         manuk_js::shutdown();
+    }
+}
+
+#[cfg(test)]
+mod sec_did_2_loader_filter {
+    use super::*;
+
+    /// # SEC.DID.2 — the frame loader's own `is_local_url` filter, pinned by a direct loader call
+    ///
+    /// `resolve_url` already turns a web page's `file:` frame source into `about:blank`, so no page
+    /// can reach the loader's filter through markup. This hands `load_pending_frames` a `file:` URL
+    /// directly, as if a source string had skipped `resolve_url`. Control: the same call from a
+    /// local embedder renders the file. Mutation: deleting the `embedder_is_local ||` filter makes
+    /// the web-embedder arm render the canary (RED).
+    #[test]
+    fn loader_refuses_a_local_file_for_a_web_embedder() {
+        let dir = std::env::temp_dir().join(format!("manuk-did2-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let secret = dir.join("secret.html");
+        std::fs::write(&secret, "<p>DID2-CANARY</p>").unwrap();
+        let secret_url = format!("file://{}", secret.display());
+        let fonts = manuk_text::FontContext::new();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let html = "<!doctype html><html><body><iframe id=a></iframe></body></html>";
+        let run = |embedder: &str| -> Vec<String> {
+            let mut page = Page::load(html, embedder, &fonts, 800.0);
+            let root = page.dom().root();
+            let node = manuk_css::query_selector_all(page.dom(), root, "iframe")[0];
+            rt.block_on(
+                page.load_pending_frames(&fonts, vec![(node, secret_url.clone(), 300, 150)]),
+            );
+            page.rendered_iframe_urls()
+        };
+        let control = run(&format!("file://{}", dir.join("parent.html").display()));
+        assert!(
+            control.iter().any(|u| u.contains("secret.html")),
+            "vacuity guard: a local embedder must still load its file frame, got {control:?}"
+        );
+        let web = run("https://web.test/");
+        assert!(
+            !web.iter().any(|u| u.contains("secret.html")),
+            "a web embedder's loader rendered a local file: {web:?}"
+        );
     }
 }
 
