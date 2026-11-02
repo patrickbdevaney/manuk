@@ -15,7 +15,7 @@ browser, which has none of those three.
 | P2 | web page -> local disk WRITE (download) | sanitize_filename + dedupe (no overwrite)@engine/net/src/downloads.rs; landlock (mut) write-only-cache (agent only)@mcp/tests/confine.rs. Shell: first layer only, and a response triggers the save with no prompt | SEC.DID.3 |
 | P3 | web page -> localhost / RFC1918 / link-local (fetch, xhr, img, ws) | post-DNS GuardResolver (mut)@engine/net/tests/g_private_egress.rs; literal-host check (mut)@engine/net/tests/g_private_egress.rs; CORS preflight (mut)@engine/page/tests/g_page_fetch_preflight.rs; WS resolve_for_dial (mut)@engine/net/tests/g_private_egress.rs | - |
 | P3b | web page -> private net via SOCKS proxy-resolved hostname | literal check only; names are resolved by the proxy (documented gap in the W3.10 wiki page) | SEC.DID.4 |
-| P4 | web page -> cookie store (document.cookie, cross-site send) | HttpOnly filtered from script (mut)@engine/page/tests/g_cookie_attributes.rs; ephemeral jar per process (agent)@UNPINNED (mut: survives deletion); per-origin grant of human cookies (mut)@mcp/tests/isolation.rs | SEC.DID.1.a |
+| P4 | web page -> cookie store (document.cookie, cross-site send) | HttpOnly filtered from script (mut)@engine/page/tests/g_cookie_attributes.rs; ephemeral jar per process (agent) (mut)@mcp/tests/isolation.rs; per-origin grant of human cookies (mut)@mcp/tests/isolation.rs | SEC.DID.1.a |
 | P5 | web page -> password / credential store | NO SINK: grep finds no password manager or autofill in shell/engine/mcp. Tripwire absent | SEC.DID.5 |
 | P6 | web page -> OS clipboard READ | host clipboard is never seeded in shell/mcp/bidi (set_host_clipboard has no non-test caller), so readText sees only page-written text@UNPINNED | SEC.DID.6 |
 | P6b | web page -> OS clipboard WRITE (overwrite without gesture) | gesture gating not verified in this census | SEC.DID.6 |
@@ -59,6 +59,6 @@ and a test panicked; a compile error is not counted.
 | hidden-text shield | `session.rs` `if !self.include_hidden {` -> `if false {` (2 sites) | RED (injection_shield_withholds_invisible_text) |
 | landlock confinement | `confine.rs` restrict_self replaced by `0` | RED (confined_process_is_read_only...) |
 | per-origin human-cookie grant | `isolation.rs` grant loop -> `.take(0)` | RED (human_profile_cookie_is_invisible_until_a_per_origin_grant) |
-| ephemeral jar | `isolation.rs` remove `manuk_net::set_ephemeral(true)` | **NOT RED**: all 5 isolation tests green. Layer is UNPINNED, follow-up SEC.DID.1.a |
+| ephemeral jar | `isolation.rs` remove `manuk_net::set_ephemeral(true)` | **NOT RED** under the old tests (session process cannot write MANUK_STATE, so the on-disk check is blind). SEC.DID.1.a added `ephemeral_session_does_not_load_the_human_jar` (read side): mutant RED, restored GREEN |
 
 Gate headers record each mutation. Only the ephemeral jar row changed the census: it now reads UNPINNED.

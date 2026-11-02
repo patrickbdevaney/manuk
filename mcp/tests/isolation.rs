@@ -1,3 +1,11 @@
+//! SEC.DID.1 mutation record (chrome_ver=145.0.7632.116): `mcp/src/isolation.rs` grant loop
+//! `for origin in &o.grant_origins` -> `.take(0)` turns human_profile_cookie_is_invisible RED.
+//! SEC.DID.1.a: removing `manuk_net::set_ephemeral(true)` (the `None =>` arm of `apply`) was GREEN
+//! under the old tests because the session process cannot write to MANUK_STATE anyway (no file
+//! appears even in the mutant), so `ephemeral_session_leaves_nothing_on_disk` never saw it. The pin
+//! is the read side: `ephemeral_session_does_not_load_the_human_jar` seeds MANUK_STATE/cookies.json
+//! and the mutant turns it RED (chrome_ver=145.0.7632.116).
+//!
 //! W3.4 gate: session isolation over real stdio against the built `manuk-mcp` binary and a local
 //! cookie server. Each session is its own process.
 
@@ -207,7 +215,50 @@ fn ephemeral_session_leaves_nothing_on_disk() {
     );
 }
 
+#[test]
+fn ephemeral_session_does_not_load_the_human_jar() {
+    let port = server();
+    let state = tmp("humanjar");
+    let mut jar = manuk_net::cookies::CookieJar::new();
+    let url = url::Url::parse(&format!("http://127.0.0.1:{port}/")).unwrap();
+    jar.store(&url, &format!("gui={SECRET}; Path=/; Max-Age=3600"));
+    jar.save_to(&state.join("cookies.json")).unwrap();
+    // Positive control: a profile session on the same dir does load it (the seed is readable).
+    let mut p = Client::start_with_state(&state, &["--profile", state.to_str().unwrap()]);
+    assert!(
+        p.seen(port).contains(SECRET),
+        "control: seeded jar is loadable"
+    );
+    drop(p);
+    let mut a = Client::start_with_state(&state, &[]);
+    assert!(
+        a.seen(port).contains("cookie-seen:[]"),
+        "ephemeral session must not inherit the human's persisted cookies"
+    );
+}
+
 impl Client {
+    fn start_with_state(state: &std::path::Path, args: &[&str]) -> Client {
+        let mut child = Command::new(env!("CARGO_BIN_EXE_manuk-mcp"))
+            .env("MANUK_STATE", state)
+            .args(args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        let tx = child.stdin.take().unwrap();
+        let rx = BufReader::new(child.stdout.take().unwrap());
+        let mut c = Client {
+            child,
+            tx,
+            rx,
+            id: 0,
+        };
+        c.rpc("initialize", json!({"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}})).unwrap();
+        c.send(json!({"jsonrpc": "2.0", "method": "notifications/initialized"}));
+        c
+    }
     fn try_start_env(state: &std::path::Path, port: u16) -> Client {
         let mut child = Command::new(env!("CARGO_BIN_EXE_manuk-mcp"))
             .env("MANUK_STATE", state)
