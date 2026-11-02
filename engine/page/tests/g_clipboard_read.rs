@@ -25,12 +25,13 @@
 use manuk_text::FontContext;
 
 const HTML: &str = r##"<!doctype html><html><body>
-<div id="out">-</div>
+<div id="out">-</div><button id="go">go</button>
 <script>
 var r = [];
 function push(s) { r.push(s); }
 function finish() { document.getElementById('out').textContent = r.join(' '); }
 
+document.getElementById('go').addEventListener('click', function () {
 try {
   var c = navigator.clipboard;
   push('present:' + (typeof c === 'object' && c !== null &&
@@ -70,6 +71,7 @@ try {
   push('THREW:' + e);
   finish();
 }
+});
 </script></body></html>"##;
 
 #[test]
@@ -78,8 +80,11 @@ fn navigator_clipboard_read_is_a_real_paste_surface() {
     manuk_js::set_host_clipboard("copied-in-another-app".to_string());
 
     let fonts = FontContext::new();
-    let page = manuk_page::Page::load(HTML, "https://clip.test/", &fonts, 800.0);
+    let mut page = manuk_page::Page::load(HTML, "https://clip.test/", &fonts, 800.0);
     let root = page.dom().root();
+    // SEC.DID.6: the Clipboard API needs a user gesture, so drive the script from a real click.
+    let go = manuk_css::query_selector_all(page.dom(), root, "#go")[0];
+    page.dispatch_click(go, &fonts, 800.0);
     let out = manuk_css::query_selector_all(page.dom(), root, "#out")[0];
     let got = page.dom().text_content(out);
     println!("CLIPBOARD-READ RESULT: {got}");

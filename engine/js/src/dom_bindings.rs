@@ -15348,9 +15348,14 @@ impl PageContext {
                    /* The page owns the chord if its keydown handler preventDefault()-ed it (proceed above). */\
                    var lk=(typeof k==='string')?k.toLowerCase():'';\
                    var hassel=!!(globalThis.getSelection && String(globalThis.getSelection())!=='');\
-                   if(hassel && lk==='x' && typeof document.execCommand==='function'){{ try{{ document.execCommand('cut'); }}catch(e){{}} }}\
-                   else if(hassel && lk==='c' && typeof document.execCommand==='function'){{ try{{ document.execCommand('copy'); }}catch(e){{}} }}\
+                   /* SEC.DID.6: this default action is the user's own chord, so it holds transient activation */\
+                   /* for the clipboard write even though the keydown dispatch (which granted it) has returned. */\
+                   var uas=globalThis.__ua||(globalThis.__ua={{active:false,sticky:false}}), uaprev=uas.active; uas.active=true;\
+                   if(!(hassel && (lk==='x' || lk==='c'))){{ uas.active=uaprev; }}\
+                   if(hassel && lk==='x' && typeof document.execCommand==='function'){{ try{{ document.execCommand('cut'); }}catch(e){{}} uas.active=uaprev; }}\
+                   else if(hassel && lk==='c' && typeof document.execCommand==='function'){{ try{{ document.execCommand('copy'); }}catch(e){{}} uas.active=uaprev; }}\
                    else if(lk==='v' && typeof globalThis.__insertTextAtCaret==='function'){{\
+                     uas.active=uaprev;\
                      /* Read the clipboard text synchronously (host OS text, else the last copied/cut text), */\
                      /* find the editing host, fire a cancelable `paste` ClipboardEvent whose clipboardData */\
                      /* exposes getData('text/plain') — so an editor that intercepts paste can veto — and if */\
@@ -22018,15 +22023,33 @@ const WINDOW_PRELUDE: &str = r#"
                     return Promise.resolve(new g.Blob([String(v)], { type: type }));
                 };
             }
+            // SEC.DID.6 (P6/P6b): the async Clipboard API needs TRANSIENT user activation — a real
+            // click/key gesture's handler running (`__ua.active`). A script with no gesture can neither
+            // read the OS clipboard nor overwrite it; it gets a NotAllowedError rejection, and nothing
+            // reaches the host bridge. Agent sessions have no human gesture, so this is also the
+            // "empty in agent mode" guarantee even if the host clipboard were seeded.
+            var __clipDenied = function () {
+                return !(g.__ua && g.__ua.active);
+            };
+            var __clipReject = function () {
+                var e = new Error('Document is not focused or has no user activation.');
+                e.name = 'NotAllowedError';
+                return Promise.reject(e);
+            };
             g.navigator.clipboard = {
                 writeText: function (t) {
+                    if (__clipDenied()) { return __clipReject(); }
                     t = String(t == null ? '' : t);
                     g.__clipboardText = t;
                     try { g.__clipboardWrite(t); } catch (e) {}
                     return Promise.resolve();
                 },
-                readText: function () { return Promise.resolve(__clipRead()); },
+                readText: function () {
+                    if (__clipDenied()) { return __clipReject(); }
+                    return Promise.resolve(__clipRead());
+                },
                 read: function () {
+                    if (__clipDenied()) { return __clipReject(); }
                     var items = [];
                     // An IMAGE on the clipboard (a screenshot the user copied elsewhere) comes back as
                     // `"<mime>;base64,<data>"`; decode it to bytes and hand back a real image Blob, so a
@@ -22055,6 +22078,7 @@ const WINDOW_PRELUDE: &str = r#"
                     // OS-clipboard) AND image parts: copy-a-chart / copy-a-cropped-screenshot / copy the
                     // rendered canvas queue their bytes for the host to put on the real OS clipboard.
                     var self = this;
+                    if (__clipDenied()) { return __clipReject(); }
                     if (!items || !items.length) { return Promise.resolve(); }
                     var it = items[0];
                     var types = (it && it.types) || [];

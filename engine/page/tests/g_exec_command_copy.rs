@@ -60,7 +60,9 @@ const HTML: &str = r##"<!doctype html><html><body>
 <div id="edit" contenteditable="true">formatme</div>
 <div id="cutme" contenteditable="true">cutme</div>
 <div id="out">-</div>
+<button id="__g">g</button>
 <script>
+document.getElementById('__g').addEventListener('click', function () {
 var r = [];
 function k(n, v) { r.push(n + ':' + v); }
 try {
@@ -93,6 +95,7 @@ try {
   k('selAll', window.getSelection().toString().length > 0);      // selectAll left a non-empty selection
 } catch (e) { k('THREW', e); }
 document.getElementById('out').textContent = r.join(' ');
+});
 </script></body></html>"##;
 
 #[test]
@@ -100,7 +103,14 @@ fn document_exec_command_copy_is_the_legacy_copy_button_path() {
     let _ = manuk_js::take_clipboard_writes(); // drain prior state
 
     let fonts = FontContext::new();
-    let page = manuk_page::Page::load(HTML, "https://exec.test/", &fonts, 800.0);
+    let mut page = manuk_page::Page::load(HTML, "https://exec.test/", &fonts, 800.0);
+    // SEC.DID.6: the Clipboard API needs a user gesture — drive the script from a real click.
+    {
+        let root = page.dom().root();
+        let g = manuk_css::query_selector_all(page.dom(), root, "#__g")[0];
+        page.dispatch_click(g, &fonts, 800.0);
+    }
+
     let root = page.dom().root();
     let out = manuk_css::query_selector_all(page.dom(), root, "#out")[0];
     let got = page.dom().text_content(out);

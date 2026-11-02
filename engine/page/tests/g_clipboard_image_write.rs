@@ -24,7 +24,9 @@ use manuk_text::FontContext;
 
 const HTML: &str = r##"<!doctype html><html><body>
 <div id="out">-</div>
+<button id="__g">g</button>
 <script>
+document.getElementById('__g').addEventListener('click', function () {
 var bytes = new Uint8Array([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x2A]);
 var blob = new Blob([bytes], { type: 'image/png' });
 var item = new ClipboardItem({ 'image/png': blob });
@@ -32,6 +34,7 @@ navigator.clipboard.write([item]).then(
   function () { document.getElementById('out').textContent = 'wrote'; },
   function (e) { document.getElementById('out').textContent = 'THREW:' + e; }
 );
+});
 </script></body></html>"##;
 
 #[test]
@@ -40,7 +43,14 @@ fn navigator_clipboard_write_copies_an_image_to_the_host() {
     let _ = manuk_js::take_pending_clipboard_image_writes();
 
     let fonts = FontContext::new();
-    let page = manuk_page::Page::load(HTML, "https://clip-imgw.test/", &fonts, 800.0);
+    let mut page = manuk_page::Page::load(HTML, "https://clip-imgw.test/", &fonts, 800.0);
+    // SEC.DID.6: the Clipboard API needs a user gesture — drive the script from a real click.
+    {
+        let root = page.dom().root();
+        let g = manuk_css::query_selector_all(page.dom(), root, "#__g")[0];
+        page.dispatch_click(g, &fonts, 800.0);
+    }
+
     let root = page.dom().root();
     let out = manuk_css::query_selector_all(page.dom(), root, "#out")[0];
     let marker = page.dom().text_content(out);

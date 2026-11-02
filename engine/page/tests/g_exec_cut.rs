@@ -35,12 +35,14 @@ fn exec_command_cut_copies_the_selection_to_the_clipboard_and_removes_it() {
     let _ = manuk_js::take_clipboard_writes(); // drain prior state
 
     let fonts = FontContext::new();
-    let p = Page::load(
+    let mut p = Page::load(
         r#"<!doctype html><body>
 <div id="ed" contenteditable="true">Hello World</div>
 <pre id="ro">read only</pre>
 <div id="log"></div>
+<button id="__g">g</button>
 <script>
+document.getElementById('__g').addEventListener('click', function () {
   var evs = [];
   var ed = document.getElementById('ed');
   ed.addEventListener('beforeinput', function (e) { evs.push('bi:' + e.inputType); });
@@ -63,12 +65,16 @@ fn exec_command_cut_copies_the_selection_to_the_clipboard_and_removes_it() {
     k('noedit', document.execCommand('cut'));                // false — not editable
   } catch (e) { k('THREW', e); }
   document.getElementById('log').textContent = r.join(' ');
+});
 </script></body>"#,
         "https://cut.test/",
         &fonts,
         W,
     );
 
+    // SEC.DID.6: execCommand('cut') writes the clipboard, which needs a user gesture.
+    let g = node(&p, "#__g");
+    p.dispatch_click(g, &fonts, W);
     let out = p.dom().text_content(node(&p, "#log"));
     println!("EXEC-CUT RESULT: {out}");
 
