@@ -29,10 +29,10 @@ browser, which has none of those three.
 | P14 | page script steers the tab/new window to `javascript:`/`data:`/`blob:`/`file:` | `__navAllowed` (http(s) only; `file:` from file pages)@engine/page/tests/g_script_nav_schemes.rs (mut: return true / return false both RED) | SEC.DID.12 |
 | P15 | https page -> http subresource (active mixed content) | `<script src>` over http on an https document is refused before the request, parse-time and runtime-inserted (mut both ways)@engine/page/tests/g_mixed_content.rs. Decision: only scripts are blocked; http stylesheet/img/fetch/XHR/iframe on an https page are NOT blocked (no layer, no claim), filed as SEC.DID.12.a.a. No loopback exemption | SEC.DID.12.a |
 | P16 | page markup (anchor click, form submit, `<meta refresh>`) steers the tab to `data:`/`file:`/`javascript:`/`blob:` | `manuk_page::top_nav_allowed` (http(s); `file:` only from a file page) applied in `meta_refresh`, `forms::submission_url`/`urlencoded_submission`, shell `resolve_href` (mut true/false both RED)@engine/page/tests/g_markup_nav_schemes.rs + unit tests in agent/src/forms.rs, shell/src/gui.rs | SEC.DID.12.b |
+| P17 | page registers a foreign-origin service worker / out-of-directory scope (worker would own the page's fetches); WebRTC raw UDP; extension/IPC bridge from page script | `register()` same-origin + scope-in-script-dir check in `engine/js/src/event_loop.rs`; `RTCPeerConnection` absent; no `chrome.runtime`/`browser.runtime`/`window.ipc`/`webkit.messageHandlers` (the shell has no extension system) (check removed RED)@engine/page/tests/g_sw_scope.rs | SEC.DID.12.c |
 
 ## Not yet probed (no claim made)
-Each entry has its own node (anchor/form/meta-refresh schemes are P16): http stylesheet/fetch/img/iframe mixed content (SEC.DID.12.a.a; scripts are P15), WebRTC, service-worker scope and the shell's
-extension/IPC surfaces (SEC.DID.12.c). Script `location`/`window.open` navigation is covered (P14).
+Only http stylesheet/fetch/img/iframe mixed content remains (SEC.DID.12.a.a; scripts are P15). WebRTC, service-worker scope and extension/IPC surfaces are P17. Script `location`/`window.open` navigation is covered (P14).
 
 ## JIT layer (JIT.BASE, owner decision 2026-10-29)
 

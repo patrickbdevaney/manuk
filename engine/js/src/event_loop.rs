@@ -2834,6 +2834,32 @@ const PRELUDE: &str = r#"
             var u = String(url == null ? '' : url);
             var scopePath = (opts && opts.scope) ? String(opts.scope) : '/';
 
+            // SEC.DID.12.c: a worker script must be same-origin with the page (or a blob: the page
+            // minted), and its scope must be same-origin and inside the script's directory — the
+            // worker intercepts every fetch the page makes, so a foreign script would own them.
+            try {
+              var base = String(G.location && G.location.href || '');
+              if (!/^blob:/i.test(u)) {
+                var su = new URL(u, base), pu = new URL(base);
+                if (su.origin !== pu.origin) {
+                  return Promise.reject(new Error('SecurityError: service worker script must be same-origin'));
+                }
+                if (opts && opts.scope) {
+                  var sc = new URL(scopePath, base);
+                  var dir = su.pathname.replace(/[^\/]*$/, '');
+                  if (sc.origin !== su.origin || sc.pathname.indexOf(dir) !== 0) {
+                    return Promise.reject(new Error('SecurityError: service worker scope is outside the script directory'));
+                  }
+                }
+              } else if (opts && opts.scope) {
+                if (new URL(scopePath, base).origin !== new URL(base).origin) {
+                  return Promise.reject(new Error('SecurityError: service worker scope must be same-origin'));
+                }
+              }
+            } catch (e) {
+              return Promise.reject(new Error('SecurityError: invalid service worker url'));
+            }
+
             return new Promise(function (resolve, reject) {
               var boot = function (src) {
                 var scope = buildSwScope(u, scopePath);
