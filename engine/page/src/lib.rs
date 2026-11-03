@@ -6219,6 +6219,12 @@ impl Page {
     ///
     /// Same shape as the `<script>` completion event: dispatch on the element, through the ordinary
     /// event path, so inline handlers, listeners and the reflected property all see it.
+    //
+    // UNGUARDED (gate JUSTIFIED list): this takes no `fonts` and no viewport width, so it cannot arm a
+    // `ReflowScope`. A geometry read inside the frame's `load` handler, of a node that handler itself
+    // built, is therefore not forced to reflow and sees the pre-handler rects. Known gap, not a
+    // design choice; threading the frame's box width and fonts through is follow-up
+    // R0.4.a.c.a.b.a.a.a.a.a.a.b.b.a.a.aa.a.a.a.
     #[cfg(feature = "spidermonkey")]
     fn fire_frame_load(&mut self, node: manuk_dom::NodeId) {
         let Some(ctx) = &self.js else { return };
@@ -6632,6 +6638,11 @@ impl Page {
     /// The `scroll` event is not a nicety: an infinite-scroll feed listens for it to fetch the next
     /// page, and a sticky header listens for it to pin itself. A scroll that moves the pixels and fires
     /// nothing is half a scroll.
+    //
+    // UNGUARDED (gate JUSTIFIED list): the `scroll` dispatch below runs script with no `ReflowScope`,
+    // because this takes no `fonts` and no viewport width. A `scroll` handler that reads geometry of
+    // nodes it just built gets pre-handler rects. Known gap; follow-up
+    // R0.4.a.c.a.b.a.a.a.a.a.a.b.b.a.a.aa.a.a.a.
     fn drain_element_scrolls(&mut self) {
         let reqs = manuk_js::take_element_scrolls();
         if reqs.is_empty() {
@@ -8271,6 +8282,12 @@ impl Page {
         self.images.get(&node)
     }
 
+    //
+    // UNGUARDED (gate JUSTIFIED list): the raw primitive. It takes no `fonts` or viewport width, so it
+    // cannot arm a `ReflowScope`; the production re-entries that need one install their own (see
+    // `fire_lifecycle`). Tests call it directly, and that is why it is named `_for_test`. Its own
+    // trailing `drain_element_scrolls` is the gap noted there. Follow-up
+    // R0.4.a.c.a.b.a.a.a.a.a.a.b.b.a.a.aa.a.a.a.
     #[cfg(feature = "spidermonkey")]
     pub fn eval_for_test(&mut self, src: &str) {
         let Some(ctx) = &self.js else { return };
@@ -8305,6 +8322,11 @@ impl Page {
     /// Called by the host at the one moment it is true: navigation is committed and this page is
     /// about to be replaced. `.viewTransition` is null (the spec's no-transition value — no
     /// cross-document transition animation exists here, a named non-claim).
+    //
+    // UNGUARDED (gate JUSTIFIED list): the outgoing document's `pageswap` runs script with no
+    // `ReflowScope`, because this takes no `fonts` and no viewport width. Known gap; the shell caller
+    // (`stash_current` in shell/src/gui.rs) holds neither. Follow-up
+    // R0.4.a.c.a.b.a.a.a.a.a.a.b.b.a.a.aa.a.a.a.
     #[cfg(feature = "spidermonkey")]
     pub fn fire_pageswap(&mut self) {
         let Some(ctx) = &self.js else { return };
