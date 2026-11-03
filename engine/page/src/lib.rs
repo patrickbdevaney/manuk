@@ -7160,6 +7160,19 @@ impl Page {
 
             let mut any = false;
             for (node, text) in fetched {
+                // A runtime-fetched script is a script round like any other: it arms the forced-reflow
+                // hook so its geometry reads see the nodes it just appended (G_RUNTIME_SCRIPT_READS_FRESH_GEOMETRY).
+                let _reflow = ReflowScope::install(
+                    &self.dom,
+                    fonts,
+                    viewport_width,
+                    &self.images,
+                    &self.final_url,
+                    &self.external_css,
+                    &self.scroll_offsets,
+                    self.sticky_scroll_y,
+                    self.has_sticky,
+                );
                 // Mark it run *first*: a script that throws must not be retried forever. The mark is
                 // the SET, not the deletion of `src` — the attribute now outlives the evaluation so
                 // that `document.currentScript.src` is the URL while the script runs, and is removed
@@ -8033,6 +8046,19 @@ impl Page {
                 .into_iter()
                 .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
                 .collect();
+            // A key handler is a script round like any other: a geometry read of a node it just
+            // built answers 0 without the forced-reflow hook (G_KEYDOWN_HANDLER_READS_FRESH_GEOMETRY).
+            let _reflow = ReflowScope::install(
+                &self.dom,
+                fonts,
+                viewport_width,
+                &self.images,
+                &self.final_url,
+                &self.external_css,
+                &self.scroll_offsets,
+                self.sticky_scroll_y,
+                self.has_sticky,
+            );
             let proceed = match manuk_js::dispatch_key(
                 ctx,
                 &mut self.dom,
@@ -8089,6 +8115,18 @@ impl Page {
                 .into_iter()
                 .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
                 .collect();
+            // Same as `dispatch_key`: the composition sequence runs script, so it arms the hook.
+            let _reflow = ReflowScope::install(
+                &self.dom,
+                fonts,
+                viewport_width,
+                &self.images,
+                &self.final_url,
+                &self.external_css,
+                &self.scroll_offsets,
+                self.sticky_scroll_y,
+                self.has_sticky,
+            );
             let proceed = match manuk_js::dispatch_composition(
                 ctx,
                 &mut self.dom,
@@ -10188,6 +10226,18 @@ impl Page {
             .into_iter()
             .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
             .collect();
+        // A cross-window message handler is a script round: it arms the forced-reflow hook.
+        let _reflow = ReflowScope::install(
+            &self.dom,
+            fonts,
+            viewport_width,
+            &self.images,
+            &self.final_url,
+            &self.external_css,
+            &self.scroll_offsets,
+            self.sticky_scroll_y,
+            self.has_sticky,
+        );
         if let Err(e) = manuk_js::deliver_message(
             ctx,
             &mut self.dom,

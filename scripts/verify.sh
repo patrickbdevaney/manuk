@@ -325,6 +325,10 @@ head_ "G3 · affordance completeness (§1.8 — no dead buttons)"
 # shell test surfaces (nothing masked by a `grep ok | head -1`). G_TEARDOWN/G_RUNTIME_COUNT/G_INTERACT below
 # read this same captured output.
 SHELL_OUT=$(_out shell); SHELL_FAILED=$(printf '%s' "$SHELL_OUT" | grep -c 'test result: FAILED')
+# A suite that was KILLED (OOM / starved under the parallel launch) prints no `test result` line at all, which
+# the count above reads as zero failures and never retries (the wall went RED on it 3x on 2026-11-03 while the
+# suite passed alone). No result line is a failure to re-run quietly, exactly like a FAILED one.
+printf '%s' "$SHELL_OUT" | grep -q 'test result:' || SHELL_FAILED=1
 # ── FLAKY-GATE RETRY (observer). The shell suite carries the timing gates G_INTERACT (UI-thread latency
 # <16ms) and G_RUNTIME_COUNT, which measure PERFORMANCE and false-RED under the CPU contention of the ~25
 # gate builds launched in parallel above (confirmed tick 188: the suite passed 58/58 in the per-crate run
