@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# R0.1.a.a.a.a.a.a.a.a.a.a: 10 interleaved rounds against ebanking.bdm-sa.com in one window.
+# Each round: manuk a11y-dump (rc, bytes, secs) then openssl s_client cert check (cert 0/1, rc).
+# A round is FAILED only if manuk rc!=0. Every round is written to the table, failed or not.
+# usage: ebanking-interleave.sh <window-id> [--mutant-bad-host]
+#   --mutant-bad-host: red check. Points manuk at a host that refuses the connection; the table must
+#   record rc!=0 rows for every round (not drop them). Exit 0 only if all rounds were recorded as failed.
+# Output: docs/sprint/reach/EBANKING-INTERLEAVE-R0.1.a.a.a.a.a.a.a.a.a.a.tsv (chrome_ver per row).
+set -u
+REPO=/home/patrickd/manuk
+CHROME_VER=${MANUK_CHROME_PIN:?MANUK_CHROME_PIN not set}
+OUT=$REPO/docs/sprint/reach/EBANKING-INTERLEAVE-R0.1.a.a.a.a.a.a.a.a.a.a.tsv
+WIN=${1:?window id}
+MUTANT=${2:-}
+ROUNDS=10
+HOST=ebanking.bdm-sa.com
+URL=https://$HOST/
+[ -n "$MUTANT" ] && [ "$MUTANT" = "--mutant-bad-host" ] && { URL=https://127.0.0.1:9/; HOST=127.0.0.1; }
+D=$(mktemp -d /tmp/ebk-inter-XXXX)
+[ -f "$OUT" ] || printf 'window\tround\tutc\tprobe_url\tmanuk_rc\tmanuk_bytes\tmanuk_secs\topenssl_cert\topenssl_rc\trow_failed\tchrome_ver\n' > "$OUT"
+
+FAILS=0
+for R in $(seq 1 $ROUNDS); do
+  touch "$REPO/.git/sprint-working"
+  T1=$(date +%s)
+  timeout 120 "$REPO/target/release/a11y-dump" "$URL" > "$D/m$R.out" 2>"$D/m$R.err"; MRC=$?
+  MSECS=$(( $(date +%s)-T1 )); MBYTES=$(wc -c < "$D/m$R.out")
+  # openssl: a cert line in the handshake output means the server presented a certificate.
+  OS=$(timeout 20 openssl s_client -connect "$HOST:443" -servername "$HOST" </dev/null 2>"$D/o$R.err"); ORC=$?
+  if printf '%s' "$OS" | grep -q 'BEGIN CERTIFICATE'; then CERT=1; else CERT=0; fi
+  if [ "$MRC" -ne 0 ]; then FAILED=1; FAILS=$((FAILS+1)); else FAILED=0; fi
+  printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$WIN" "$R" "$(date -u +%FT%TZ)" "$URL" "$MRC" "$MBYTES" \
+    "$MSECS" "$CERT" "$ORC" "$FAILED" "$CHROME_VER" >> "$OUT"
+  echo "round $R: manuk rc=$MRC bytes=$MBYTES secs=$MSECS | openssl cert=$CERT rc=$ORC | failed=$FAILED"
+done
+echo "window=$WIN rounds=$ROUNDS failed=$FAILS dir=$D"
+if [ "$MUTANT" = "--mutant-bad-host" ]; then
+  # Red check: every round must have been recorded as failed.
+  [ "$FAILS" -eq "$ROUNDS" ] && [ "$(grep -c "^$WIN	" "$OUT")" -ge "$ROUNDS" ]; exit $?
+fi
+exit 0
