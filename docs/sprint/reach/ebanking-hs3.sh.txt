@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+# R0.1.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a: per-attempt TLS trace for failing vs passing manuk probes.
+# Instrument: manuk's own rustls trace (RUST_LOG=rustls=trace on a11y-dump stderr), nothing else. No engine edit.
+# Each stderr line is stamped with its arrival time (bash EPOCHREALTIME, microseconds) so ms-since-probe-start is exact.
+# One internal TLS attempt starts at a "No cached session" line. Its stage is the number of these markers seen (max 4):
+#   1 = "We got ServerHello", 2 = "Server cert is", 3 = "ECDHE curve is", 4 = "Server DNS name is"
+# (4 = ServerHello + cert + ECDHE parsed, the same definition as the HS2 node.)
+# rustls logs nothing when an attempt dies, so a non-final attempt has ended_by=none_logged (silent redial).
+# The final attempt's ended_by is the innermost cause from the "Caused by:" chain, or "ok" when the probe passes.
+# A probe with no TLS attempt at all still writes one row (attempt=0), so every probe is a row.
+# Block M (red mutant, first): 10 probes vs 127.0.0.1:9, 1 s apart, must all be recorded failed with no stage>=1.
+# Block C: 10 probes vs ebanking.bdm-sa.com, 10 s apart. Every probe is a row.
+# usage: ebanking-hs3.sh <window-id>
+set -u
+REPO=/home/patrickd/manuk
+CHROME_VER=${MANUK_CHROME_PIN:?MANUK_CHROME_PIN not set}
+ID=R0.1.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a
+OUT=$REPO/docs/sprint/reach/EBANKING-HS3-$ID.tsv
+WIN=${1:?window id}
+BIN=$REPO/target/release/a11y-dump
+HOST=ebanking.bdm-sa.com
+D=$(mktemp -d /tmp/ebk-hs3-XXXX)
+[ -f "$OUT" ] || printf 'window\tblock\tprobe\tutc\tprobe_ms\tmanuk_rc\tmanuk_bytes\tattempt\tattempt_start_ms\tstage\tstage4_ms\tended_by\trow_failed\tchrome_ver\n' > "$OUT"
+
+run_block() {  # $1 block, $2 probes, $3 spacing seconds, $4 url
+  local B=$1 N=$2 SP=$3 URL=$4 FAILS=0
+  for P in $(seq 1 "$N"); do
+    [ "$P" -gt 1 ] && sleep "$SP"
+    touch "$REPO/.git/sprint-working"
+    T0=${EPOCHREALTIME/./}
+    UTC=$(date -u +%FT%TZ)
+    # stderr -> stamped lines; stdout (page bytes) -> file. PIPESTATUS[0] is the probe's exit code.
+    RUST_LOG=rustls=trace timeout 120 "$BIN" "$URL" 2>&1 >"$D/$B$P.out" \
+      | sed -u 's/\x1b\[[0-9;]*m//g' \
+      | while IFS= read -r l; do printf '%s\t%s\n' "${EPOCHREALTIME/./}" "$l"; done > "$D/$B$P.err"
+    MRC=${PIPESTATUS[0]}
+    T1=${EPOCHREALTIME/./}
+    MBYTES=$(wc -c < "$D/$B$P.out")
+    [ "$MRC" -ne 0 ] && { FAILED=1; FAILS=$((FAILS+1)); } || FAILED=0
+    PMS=$(( (T1-T0)/1000 ))
+    awk -F'\t' -v T0="$T0" -v UTC="$UTC" -v PMS="$PMS" -v RC="$MRC" -v MB="$MBYTES" -v W="$WIN" -v B="$B" \
+        -v P="$P" -v FAILED="$FAILED" -v CV="$CHROME_VER" -v OUT="$OUT" '
+      function trim(x) { gsub(/^ +| +$/, "", x); return x }
+      BEGIN { a = 0; chain = ""; cb = 0; t0 = int(T0 / 1000) }
+      {
+        ms = int($1 / 1000); c = $2
+        # the "Caused by:" chain is printed once, after the last attempt; keep its innermost line
+        if (c ~ /^Caused by:/) { cb = 1; next }
+        if (cb && c ~ /^ +[0-9]+: /) { chain = trim(c); sub(/^[0-9]+: /, "", chain); next }
+        if (c ~ /No cached session/) { a++; s[a] = ms; n[a] = 0; next }
+        if (a == 0) next
+        if (c ~ /We got ServerHello/ && !seen[a, "sh"]) { seen[a, "sh"] = 1; n[a]++ }
+        if (c ~ /ECDHE curve is/     && !seen[a, "ec"]) { seen[a, "ec"] = 1; n[a]++ }
+        if (c ~ /Server cert is/     && !seen[a, "ce"]) { seen[a, "ce"] = 1; n[a]++ }
+        if (c ~ /Server DNS name is/ && !seen[a, "dn"]) { seen[a, "dn"] = 1; n[a]++ }
+        if (n[a] == 4 && !s4[a]) s4[a] = ms
+      }
+      END {
+        cause = (RC == 0) ? "ok" : (chain == "" ? "none" : chain)
+        if (a == 0) {
+          printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t0\t\t0\t\t%s\t%s\t%s\n", W, B, P, UTC, PMS, RC, MB, cause, FAILED, CV >> OUT
+          exit
+        }
+        for (i = 1; i <= a; i++) {
+          ended = (i < a) ? "none_logged" : cause
+          printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%d\t%d\t%d\t%s\t%s\t%s\t%s\n", W, B, P, UTC, PMS, RC, MB, i, s[i] - t0, n[i], (s4[i] ? s4[i] - t0 : ""), ended, FAILED, CV >> OUT
+        }
+      }' "$D/$B$P.err"
+    echo "block $B probe $P: rc=$MRC bytes=$MBYTES probe_ms=$PMS attempts=$(grep -c 'No cached session' "$D/$B$P.err") failed=$FAILED"
+  done
+  echo "block=$B probes=$N failed=$FAILS"
+}
+
+run_block M 10 1 https://127.0.0.1:9/
+run_block C 10 10 https://$HOST/
+MFAIL=$(awk -F'\t' -v w="$WIN" '$1==w && $2=="M" && $13==1' "$OUT" | wc -l)
+MSTAGE=$(awk -F'\t' -v w="$WIN" '$1==w && $2=="M" && $10>=1' "$OUT" | wc -l)
+CPROBES=$(awk -F'\t' -v w="$WIN" '$1==w && $2=="C" {print $3}' "$OUT" | sort -u | wc -l)
+echo "mutant probes failed=$MFAIL (need 10) | mutant rows with stage>=1=$MSTAGE (need 0) | C probes recorded=$CPROBES (need 10)"
+[ "$MFAIL" -eq 10 ] && [ "$MSTAGE" -eq 0 ] && [ "$CPROBES" -eq 10 ]

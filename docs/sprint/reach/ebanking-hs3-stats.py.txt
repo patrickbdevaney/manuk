@@ -1,0 +1,64 @@
+# R0.1.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a: per-attempt stage rates and Fisher tests for EBANKING-HS3 rows.
+# usage: python3 -I ebanking-hs3-stats.py.txt <EBANKING-HS3-<id>.tsv> <window-id>
+# Block C only. A probe is "failed" when manuk_rc != 0. Stage 4 = ServerHello + cert + ECDHE parsed.
+# Rule adoption threshold: two-sided Fisher exact p < 0.05 (no rule adopted otherwise).
+import sys
+from math import comb
+
+
+def fisher_two_sided(a, b, c, d):
+    # 2x2 table [[a, b], [c, d]]; two-sided p = sum of hypergeometric probs <= the observed prob
+    r1, c1, n = a + b, a + c, a + b + c + d
+
+    def prob(x):
+        return comb(r1, x) * comb(n - r1, c1 - x) / comb(n, c1)
+
+    lo, hi = max(0, c1 - (n - r1)), min(r1, c1)
+    p_obs = prob(a)
+    return min(1.0, sum(prob(x) for x in range(lo, hi + 1) if prob(x) <= p_obs * (1 + 1e-9)))
+
+
+path, win = sys.argv[1], sys.argv[2]
+rows = []
+with open(path, encoding="utf-8") as f:
+    next(f)
+    for line in f:
+        t = line.rstrip("\n").split("\t")
+        if t[0] == win and t[1] == "C":
+            rows.append(t)
+
+probes = {}
+for t in rows:
+    probes.setdefault(t[2], {"rc": int(t[5]), "att": []})
+    if int(t[7]) > 0:
+        probes[t[2]]["att"].append({"i": int(t[7]), "stage": int(t[9]), "ms": t[8]})
+
+fail = {p: v for p, v in probes.items() if v["rc"] != 0}
+ok = {p: v for p, v in probes.items() if v["rc"] == 0}
+print(f"block C probes={len(probes)} failed={len(fail)} passed={len(ok)}")
+
+def s4(v):
+    return any(a["stage"] >= 4 for a in v["att"])
+
+# probe-level: does any attempt reach stage 4?
+fa = sum(s4(v) for v in fail.values())
+pa = sum(s4(v) for v in ok.values())
+p = fisher_two_sided(fa, len(fail) - fa, pa, len(ok) - pa)
+print(f"probe-level any-attempt stage4: failed {fa}/{len(fail)}, passed {pa}/{len(ok)}, Fisher p={p:.3g}")
+
+# per attempt index: stage-4 rate among attempts at that index, failed probes vs passed probes
+print("attempt_index\tfailed_stage4/n\tpassed_stage4/n\tfisher_p")
+for i in range(1, 10):
+    fa_n = [a for v in fail.values() for a in v["att"] if a["i"] == i]
+    pa_n = [a for v in ok.values() for a in v["att"] if a["i"] == i]
+    x = sum(a["stage"] >= 4 for a in fa_n)
+    y = sum(a["stage"] >= 4 for a in pa_n)
+    pv = fisher_two_sided(x, len(fa_n) - x, y, len(pa_n) - y) if (fa_n or pa_n) else float("nan")
+    print(f"{i}\t{x}/{len(fa_n)}\t{y}/{len(pa_n)}\t{pv:.3g}")
+
+# per-attempt stage distribution, failed probes
+dist = {}
+for v in fail.values():
+    for a in v["att"]:
+        dist[a["stage"]] = dist.get(a["stage"], 0) + 1
+print("failed-probe attempt stage distribution:", dict(sorted(dist.items())))

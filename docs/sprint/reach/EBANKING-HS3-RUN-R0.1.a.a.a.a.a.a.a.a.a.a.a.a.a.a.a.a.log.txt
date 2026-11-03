@@ -1,0 +1,23 @@
+block M probe 1: rc=1 bytes=0 probe_ms=10880 attempts=0 failed=1
+block M probe 2: rc=1 bytes=0 probe_ms=10882 attempts=0 failed=1
+block M probe 3: rc=1 bytes=0 probe_ms=10882 attempts=0 failed=1
+block M probe 4: rc=1 bytes=0 probe_ms=10881 attempts=0 failed=1
+block M probe 5: rc=1 bytes=0 probe_ms=10881 attempts=0 failed=1
+block M probe 6: rc=1 bytes=0 probe_ms=10876 attempts=0 failed=1
+block M probe 7: rc=1 bytes=0 probe_ms=10882 attempts=0 failed=1
+block M probe 8: rc=1 bytes=0 probe_ms=10880 attempts=0 failed=1
+block M probe 9: rc=1 bytes=0 probe_ms=10882 attempts=0 failed=1
+block M probe 10: rc=1 bytes=0 probe_ms=10882 attempts=0 failed=1
+block=M probes=10 failed=10
+block C probe 1: rc=1 bytes=0 probe_ms=17719 attempts=9 failed=1
+block C probe 2: rc=1 bytes=0 probe_ms=17021 attempts=9 failed=1
+block C probe 3: rc=1 bytes=0 probe_ms=17943 attempts=9 failed=1
+block C probe 4: rc=1 bytes=0 probe_ms=17118 attempts=9 failed=1
+block C probe 5: rc=1 bytes=0 probe_ms=14713 attempts=9 failed=1
+block C probe 6: rc=1 bytes=0 probe_ms=14738 attempts=9 failed=1
+block C probe 7: rc=1 bytes=0 probe_ms=14730 attempts=9 failed=1
+block C probe 8: rc=1 bytes=0 probe_ms=14713 attempts=9 failed=1
+block C probe 9: rc=1 bytes=0 probe_ms=14690 attempts=9 failed=1
+block C probe 10: rc=0 bytes=3228 probe_ms=16970 attempts=7 failed=0
+block=C probes=10 failed=9
+mutant probes failed=10 (need 10) | mutant rows with stage>=1=0 (need 0) | C probes recorded=10 (need 10)
