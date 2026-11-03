@@ -30,12 +30,14 @@ while [ $# -gt 0 ]; do case "$1" in
   --no-a11y) A11Y=0; shift;; --no-m1) M1=0; shift;; --no-m2) M2RUN=0; shift;;
   *) echo "unknown flag: $1"; exit 2;; esac; done
 
-MW=${MW:-$R/target/release/manuk-wpt}; DP=${DP:-$R/target/debug/drive-probe}; AX=${AX:-$R/target/release/a11y-score}  # release: the debug build burns >86 s CPU on github.com and TIMEOUTs at 90 s (R0.4.a.c.a.b.b)
+MW=${MW:-$R/target/release/manuk-wpt}; AX=${AX:-$R/target/release/a11y-score}  # release: the debug build burns >86 s CPU on github.com and TIMEOUTs at 90 s (R0.4.a.c.a.b.b)
+# release drive-probe: the debug build reads salesforce.com at 56.4% vs release 21.2% (targets 225 vs 742, Ungrounded 0 vs 481; R0.4.a.c.a.b.a.a.a.a.a.a.a.a)
+DP=${DP:-$R/target/release/drive-probe}
 KEEP_PATHS_RE=${KEEP_PATHS_RE:-usa\.gov}; PERSIST=${PERSIST:-$R/docs/bench}; CHROME_VER=${MANUK_CHROME_PIN:-unpinned}
 for b in "$MW" "$DP" "$AX"; do [ -x "$b" ] || { echo "✗ missing: $b"; exit 1; }; done
 [ -n "${TRI_NO_CHROME_CHECK:-}" ] || command -v google-chrome >/dev/null || { echo "✗ google-chrome required"; exit 1; }
 mkdir -p "$OUT/iso" "$OUT/err"; ATTR="$OUT/attrib.tsv"; : > "$ATTR"; M2MAP="$OUT/m2.tsv"; M1M2="$OUT/m1m2.tsv"; AXF="$OUT/a11y.tsv"; FINAL="$OUT/results.tsv"
-: > "$M2MAP"; : > "$M1M2"; : > "$AXF"
+: > "$M2MAP"; : > "$OUT/load.tsv"; : > "$M1M2"; : > "$AXF"
 
 sel() { grep -vE '^#|^$' "$CORPUS" | awk 'NF>=2{n[$1]++;print n[$1]"\t"$1"\t"$2}' | sort -k1,1n -k2,2 | cut -f2-; }
 mapfile -t ROWS < <(sel); [ "$LIMIT" -gt 0 ] && ROWS=("${ROWS[@]:0:LIMIT}")
@@ -94,8 +96,10 @@ mapfile -t RURLS < <(awk -F'\t' '$3=="OK"||$3=="LOW_SAMPLE"||$3=="NO_STRUCT"{pri
 # A site that HANGS the driver is undriveable → it counts as rate 0 (tag TIMEOUT), it does NOT vanish.
 # Per-site timeout is the fix: the old code ran 20 sites under ONE 300s timeout, so one hang wiped the batch.
 run_m2() {
-  local url="$1" o rc rate ceil tg dr un am mh tag key
+  local url="$1" o rc rate ceil tg dr un am mh tag key ld
   key=$(printf '%s' "$url"|md5sum|cut -c1-10)
+  # R0.4.a.c.a.b.a.a.a.a.a.a.b: host load1 read BEFORE each drive, so a busy-host row is visible on its own line
+  ld=$(cut -d" " -f1 /proc/loadavg); printf '%s\t%s\n' "$url" "$ld" >> "$OUT/load.tsv"
   o=$(timeout "$M2TMO" nice -n 15 "$DP" "$url" 2>"$OUT/err/$key.m2.log"); rc=$?
   tag=$(classify_tag "$rc" "$o" "$(cat "$OUT/err/$key.m2.log")")
   rate=0; ceil=0; tg=0; dr=0; un=0; am=0; mh=0
@@ -145,6 +149,7 @@ awk -F'\t' '
 mkdir -p "$PERSIST"; PF="$PERSIST/tri-sweep-$(date +%Y%m%d-%H%M%S).tsv"
 { printf 'cat\turl\tm1_status\tcov\tshape\tvis\tpaths\tm2_tag\tm2_rate\tm2_ceil\tm2_targets\tm2_drivable\tm2_ungrounded\tm2_ambiguous\tm2_mishit\ta11y_tag\ta11y_prec\ta11y_rec\ta11y_f1\tchrome_ver\n'; cat "$FINAL"; } > "$PF"
 { printf 'url\toracle_sha256\tengine_fetch_sha256\toracle_paths\tchrome_ver\n'; cat "$ATTR"; } > "${PF%.tsv}.attrib.tsv"
+[ -s "$OUT/load.tsv" ] && cp "$OUT/load.tsv" "${PF%.tsv}.load.tsv"
 if [ -s "$OUT/keep/names.tsv" ]; then mkdir -p "$PERSIST/oracle-paths"; while IFS=$'\t' read -r k nm; do cp "$OUT/keep/$k.oracle-paths.tsv" "$PERSIST/oracle-paths/$(basename "$PF" .tsv).$nm.oracle-paths.tsv"; done < "$OUT/keep/names.tsv"; fi
 echo "  attribution sidecar → ${PF%.tsv}.attrib.tsv"
 echo "  persisted per-site rows → $PF   (stderr logs: $OUT/err/)"
