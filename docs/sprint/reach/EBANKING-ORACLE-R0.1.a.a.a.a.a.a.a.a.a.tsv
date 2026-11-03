@@ -1,0 +1,5 @@
+window	utc	probe	profile	chrome_flags	netlog_protocols	row_valid	dom_bytes	chrome_rc	chrome_secs	manuk_rc	manuk_bytes	manuk_secs	chrome_ver
+M0	2026-11-03T02:14:31Z	RED mutant: default profile, QUIC allowed	default (~/.config/google-chrome-headless)	none	rejected:quic protocol_str x4; protocols=h2,http/1.1,quic,unknown	PASS	0	124	120	-	-	-	145.0.7632.116
+W1	2026-11-03T02:16:42Z	chrome direct dump-dom	fresh --user-data-dir	--disable-quic	valid; protocols=h2,http/1.1,unknown	valid	0	124	120	0	3228	9	145.0.7632.116
+W2	2026-11-03T02:18:56Z	chrome direct dump-dom	fresh --user-data-dir	--disable-quic	valid; protocols=h2,http/1.1,unknown	valid	0	124	120	0	3228	12	145.0.7632.116
+W3	2026-11-03T02:21:05Z	chrome direct dump-dom	fresh --user-data-dir	--disable-quic	valid; protocols=h2,http/1.1,unknown	valid	0	124	120	0	3228	7	145.0.7632.116

@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# R0.1.a.a.a.a.a.a.a.a.a: one like-for-like window against ebanking.bdm-sa.com.
+# Runs a fresh --user-data-dir Chrome with --disable-quic (netlog on), then a manuk a11y-dump, back to back.
+# A Chrome row counts only if its netlog negotiated h2 or http/1.1 and never used QUIC (check below).
+# usage: ebanking-oracle-window.sh <window-id> [--mutant-quic]
+#   --mutant-quic: red check. Runs the DEFAULT profile WITHOUT --disable-quic (QUIC/h3 path) and asserts the
+#   checker REJECTS that row. Exit 0 only if the checker rejects it.
+# Output appended to docs/sprint/reach/EBANKING-ORACLE-R0.1.a.a.a.a.a.a.a.a.a.tsv (chrome_ver recorded per row).
+set -u
+REPO=/home/patrickd/manuk
+CHROME=/home/patrickd/.local/chrome-cft/bin/google-chrome
+CHROME_VER=${MANUK_CHROME_PIN:?MANUK_CHROME_PIN not set}
+OUT=$REPO/docs/sprint/reach/EBANKING-ORACLE-R0.1.a.a.a.a.a.a.a.a.a.tsv
+WIN=${1:?window id}
+MUTANT=${2:-}
+URL=https://ebanking.bdm-sa.com/
+D=$(mktemp -d /tmp/ebk-oracle-XXXX)
+[ -f "$OUT" ] || printf 'window\tutc\tprobe\tprofile\tchrome_flags\tnetlog_protocols\trow_valid\tdom_bytes\tchrome_rc\tchrome_secs\tmanuk_rc\tmanuk_bytes\tmanuk_secs\tchrome_ver\n' > "$OUT"
+
+# Checker: prints "valid" if the netlog negotiated h2 or http/1.1 with no QUIC evidence, else "rejected:<why>".
+# Netlog may be truncated (Chrome killed at timeout), so it is read line by line, not as one JSON document.
+check_netlog() {
+  python3 -I -c '
+import sys,re
+txt=open(sys.argv[1],errors="replace").read()
+prots=sorted(set(re.findall(r"\"negotiated_protocol\":\"([^\"]*)\"",txt)))
+quic=re.findall(r"\"protocol_str\":\"quic\"",txt)
+if quic: print("rejected:quic protocol_str x%d; protocols=%s" % (len(quic),",".join(prots))); sys.exit(0)
+if any(p in ("h2","http/1.1") for p in prots): print("valid; protocols=%s" % ",".join(prots))
+else: print("rejected:no h2/http1.1 negotiated; protocols=%s" % (",".join(prots) or "none"))
+' "$1"
+}
+
+if [ "$MUTANT" = "--mutant-quic" ]; then
+  PROFILE="default (~/.config/google-chrome-headless)"; FLAGS="none"
+  DIR="$HOME/.config/google-chrome-headless"
+  T0=$(date +%s); timeout 120 "$CHROME" --headless=new --disable-gpu --no-sandbox --user-data-dir="$DIR" \
+    --log-net-log="$D/netlog.json" --dump-dom "$URL" > "$D/dom.html" 2>"$D/err.txt"; RC=$?
+  SECS=$(( $(date +%s)-T0 )); BYTES=$(wc -c < "$D/dom.html")
+  VERDICT=$(check_netlog "$D/netlog.json")
+  case "$VERDICT" in rejected:*) RES=PASS ;; *) RES=FAIL ;; esac
+  printf '%s\t%s\tRED mutant: default profile, QUIC allowed\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t-\t-\t-\t%s\n' \
+    "$WIN" "$(date -u +%FT%TZ)" "$PROFILE" "$FLAGS" "$(echo "$VERDICT" | cut -c1-120)" "$RES" "$BYTES" "$RC" "$SECS" "$CHROME_VER" >> "$OUT"
+  echo "mutant: $VERDICT -> checker $RES (bytes=$BYTES rc=$RC)"
+  [ "$RES" = PASS ]; exit $?
+fi
+
+PROFILE="fresh --user-data-dir"; FLAGS="--disable-quic"
+T0=$(date +%s)
+timeout 120 "$CHROME" --headless=new --disable-gpu --no-sandbox --disable-quic --user-data-dir="$D/prof" \
+  --log-net-log="$D/netlog.json" --dump-dom "$URL" > "$D/dom.html" 2>"$D/err.txt"; CRC=$?
+CSECS=$(( $(date +%s)-T0 )); CBYTES=$(wc -c < "$D/dom.html")
+CVER=$(check_netlog "$D/netlog.json")
+case "$CVER" in valid*) VALID=valid ;; *) VALID=rejected ;; esac
+
+T1=$(date +%s)
+timeout 120 "$REPO/target/release/a11y-dump" "$URL" > "$D/manuk.out" 2>"$D/manuk.err"; MRC=$?
+MSECS=$(( $(date +%s)-T1 )); MBYTES=$(wc -c < "$D/manuk.out")
+
+printf '%s\t%s\tchrome direct dump-dom\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+  "$WIN" "$(date -u +%FT%TZ)" "$PROFILE" "$FLAGS" "$(echo "$CVER" | cut -c1-120)" "$VALID" "$CBYTES" "$CRC" "$CSECS" \
+  "$MRC" "$MBYTES" "$MSECS" "$CHROME_VER" >> "$OUT"
+echo "window=$WIN chrome: $CVER valid=$VALID bytes=$CBYTES rc=$CRC secs=$CSECS | manuk rc=$MRC bytes=$MBYTES secs=$MSECS | dir=$D"
