@@ -2675,6 +2675,9 @@ async fn send_raw_with_cookies(method: &str, url: &Url) -> Result<hyper::Respons
 
 /// Build and send one request, returning the raw hyper response with its body
 /// **unconsumed** (so callers can either buffer it or stream it).
+/// Extra attempts after a failed connect/TLS handshake on a GET/HEAD.
+const CONNECT_RETRIES: usize = 8;
+
 async fn send_raw(
     method: &str,
     url: &Url,
@@ -2731,10 +2734,28 @@ async fn send_raw(
 
     let c = if trusted { trusted_client() } else { client() };
     let t_start = nettrace::now_us();
-    let resp = c
-        .request(req)
-        .await
-        .with_context(|| format!("request to {url} failed"))?;
+    // A TLS handshake the server drops (EOF/reset before any response) is retried for safe
+    // methods, as Chrome does: ebanking.bdm-sa.com resets ~60% of handshakes from any client
+    // (openssl, curl), so one attempt is a coin flip, not a verdict.
+    let retriable = matches!(method, "GET" | "HEAD") && url.scheme() == "https";
+    let mut spare = req.headers().clone();
+    let mut resp = c.request(req).await;
+    let mut tries = 0;
+    while retriable && tries < CONNECT_RETRIES {
+        match &resp {
+            Err(e) if e.is_connect() => {}
+            _ => break,
+        }
+        tries += 1;
+        tokio::time::sleep(std::time::Duration::from_millis(300 * tries as u64)).await;
+        let mut b = Request::builder().method(method).uri(url.as_str());
+        if let Some(h) = b.headers_mut() {
+            *h = std::mem::take(&mut spare);
+            spare = h.clone();
+        }
+        resp = c.request(b.body(Full::new(Bytes::new())).context("building request")?).await;
+    }
+    let resp = resp.with_context(|| format!("request to {url} failed"))?;
     if nettrace::enabled() {
         let clen = resp
             .headers()
