@@ -8738,6 +8738,21 @@ pub fn deliver(
     deliver_bytes(rt, global, id, status, body, None, headers)
 }
 
+/// Evaluate a host→page delivery (`__deliver*`) under the script deadline. These evals run the
+/// page's `then`-handlers synchronously, so one that never returns would otherwise be unbounded:
+/// `run_deferred` arms the watchdog but a delivery happens OUTSIDE it. Nested arms are no-ops, so
+/// a delivery inside a drain keeps the drain's clock.
+fn eval_deliver(
+    rt: &mut Runtime,
+    global: mozjs::rust::HandleObject,
+    script: &str,
+    name: &str,
+) -> Result<(), String> {
+    let _deadline =
+        crate::watchdog::ScriptDeadline::arm(unsafe { rt.cx().raw_cx() }, max_drain_ms());
+    eval(rt, global, script, name).map(|_| ())
+}
+
 /// As [`deliver`], but also carrying the response's **raw bytes**.
 ///
 /// `raw` is the body as a binary string — one code unit per byte — and it is what
@@ -8771,7 +8786,7 @@ pub fn deliver_bytes(
         js_headers_literal(headers),
         raw_lit.as_deref().unwrap_or("undefined")
     );
-    eval(rt, global, &script, "event_loop_deliver.js").map(|_| ())
+    eval_deliver(rt, global, &script, "event_loop_deliver.js")
 }
 
 /// Drain what the page's WebSockets asked for since the last call, each paired with its socket id.
@@ -8894,7 +8909,7 @@ pub fn deliver_head(
         status,
         js_headers_literal(headers)
     );
-    eval(rt, global, &script, "event_loop_deliver_head.js").map(|_| ())
+    eval_deliver(rt, global, &script, "event_loop_deliver_head.js")
 }
 
 /// Feed one body chunk to request `id`'s open response stream. Unknown ids are a no-op (the page may
@@ -8906,7 +8921,7 @@ pub fn deliver_chunk(
     bytes: &[u8],
 ) -> Result<(), String> {
     let script = format!("__deliverChunk({}, {})", id, js_bytes_literal(bytes));
-    eval(rt, global, &script, "event_loop_deliver_chunk.js").map(|_| ())
+    eval_deliver(rt, global, &script, "event_loop_deliver_chunk.js")
 }
 
 /// Close request `id`'s response stream — the page's pump loop sees `{done: true}`.
@@ -8916,7 +8931,7 @@ pub fn deliver_end(
     id: u32,
 ) -> Result<(), String> {
     let script = format!("__deliverEnd({})", id);
-    eval(rt, global, &script, "event_loop_deliver_end.js").map(|_| ())
+    eval_deliver(rt, global, &script, "event_loop_deliver_end.js")
 }
 
 /// Serialize raw body bytes as a JS string literal of **one char per byte** — the same convention the
