@@ -1,0 +1,6 @@
+url	rc	tag	wall_s	load1_before	rate	chrome_ver
+https://salesforce.com/	124	TIMEOUT	180.1	12.53	NA	145.0.7632.116
+https://time.com/	124	TIMEOUT	180.2	13.10	NA	145.0.7632.116
+https://sentry.io/	124	TIMEOUT	180.0	13.29	NA	145.0.7632.116
+https://tailwindcss.com/	124	TIMEOUT	180.0	13.49	NA	145.0.7632.116
+https://newrelic.com/	124	TIMEOUT	180.0	13.64	NA	145.0.7632.116
