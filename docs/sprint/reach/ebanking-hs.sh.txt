@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# R0.1.a.a.a.a.a.a.a.a.a.a.a.a.a.a: what does the TLS handshake look like on a failing probe vs a passing one?
+# Block M (red mutant, run first): 10 manuk a11y-dump probes against 127.0.0.1:9, must all be recorded failed.
+# Block C: 10 manuk a11y-dump probes against ebanking.bdm-sa.com, 10 s apart, each paired with an
+#   `openssl s_client -msg` run against the same host. server_msgs = count of "<<<" (server->client) lines
+#   openssl printed before EOF, i.e. TLS records the server sent. A probe is FAILED only if manuk rc!=0.
+# Every probe is written to the table, failed or not. No threshold or rule is adopted from this run.
+# usage: ebanking-hs.sh <window-id>
+# Output: docs/sprint/reach/EBANKING-HS-R0.1.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.tsv (chrome_ver per row).
+# Exit 0 only if the mutant block recorded 10/10 failed rows and block C recorded 10 rows.
+set -u
+REPO=/home/patrickd/manuk
+CHROME_VER=${MANUK_CHROME_PIN:?MANUK_CHROME_PIN not set}
+OUT=$REPO/docs/sprint/reach/EBANKING-HS-R0.1.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.tsv
+WIN=${1:?window id}
+HOST=ebanking.bdm-sa.com
+D=$(mktemp -d /tmp/ebk-hs-XXXX)
+[ -f "$OUT" ] || printf 'window\tblock\tspacing_s\tprobe\tutc\tprobe_url\tmanuk_rc\tmanuk_bytes\tmanuk_secs\tmanuk_stderr1\trow_failed\topenssl_rc\tserver_msgs\tchrome_ver\n' > "$OUT"
+
+run_block() {  # $1 block id, $2 probes, $3 spacing seconds, $4 host:port for openssl, $5 url for manuk
+  local B=$1 N=$2 SP=$3 HP=$4 URL=$5 FAILS=0
+  for P in $(seq 1 "$N"); do
+    [ "$P" -gt 1 ] && sleep "$SP"
+    touch "$REPO/.git/sprint-working"
+    T1=$(date +%s)
+    timeout 120 "$REPO/target/release/a11y-dump" "$URL" > "$D/$B$P.out" 2>"$D/$B$P.err"; MRC=$?
+    MSECS=$(( $(date +%s)-T1 )); MBYTES=$(wc -c < "$D/$B$P.out")
+    MERR=$(head -1 "$D/$B$P.err" | tr '\t' ' ' | cut -c1-80)
+    if [ "$MRC" -ne 0 ]; then FAILED=1; FAILS=$((FAILS+1)); else FAILED=0; fi
+    # openssl: -msg prints one "<<<" line per server record; the handshake is driven to EOF by </dev/null
+    timeout 30 openssl s_client -msg -connect "$HP" -servername "${HP%:*}" </dev/null > "$D/$B$P.ossl" 2>&1; ORC=$?
+    SMSGS=$(grep -c '^<<<' "$D/$B$P.ossl")
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$WIN" "$B" "$SP" "$P" "$(date -u +%FT%TZ)" "$URL" \
+      "$MRC" "$MBYTES" "$MSECS" "$MERR" "$FAILED" "$ORC" "$SMSGS" "$CHROME_VER" >> "$OUT"
+    echo "block $B probe $P (spacing ${SP}s): manuk rc=$MRC bytes=$MBYTES secs=$MSECS failed=$FAILED | openssl rc=$ORC server_msgs=$SMSGS"
+  done
+  echo "block=$B spacing=${SP}s probes=$N manuk_failed=$FAILS"
+}
+
+run_block M 10 10 127.0.0.1:9 https://127.0.0.1:9/
+run_block C 10 10 $HOST:443 https://$HOST/
+echo "dir=$D"
+
+MROWS=$(awk -F'\t' -v w="$WIN" '$1==w && $2=="M"' "$OUT" | wc -l)
+MFAIL=$(awk -F'\t' -v w="$WIN" '$1==w && $2=="M" && $11==1' "$OUT" | wc -l)
+CROWS=$(awk -F'\t' -v w="$WIN" '$1==w && $2=="C"' "$OUT" | wc -l)
+echo "mutant rows=$MROWS failed=$MFAIL | C rows=$CROWS"
+[ "$MROWS" -eq 10 ] && [ "$MFAIL" -eq 10 ] && [ "$CROWS" -eq 10 ]
+exit $?

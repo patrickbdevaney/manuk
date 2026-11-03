@@ -1,0 +1,21 @@
+window	block	spacing_s	probe	utc	probe_url	manuk_rc	manuk_bytes	manuk_secs	manuk_stderr1	row_failed	openssl_rc	server_msgs	chrome_ver
+HS1	M	10	1	2026-11-03T03:40:52Z	https://127.0.0.1:9/	1	0	11	Error: loading https://127.0.0.1:9/	1	1	0	145.0.7632.116
+HS1	M	10	2	2026-11-03T03:41:13Z	https://127.0.0.1:9/	1	0	11	Error: loading https://127.0.0.1:9/	1	1	0	145.0.7632.116
+HS1	M	10	3	2026-11-03T03:41:34Z	https://127.0.0.1:9/	1	0	11	Error: loading https://127.0.0.1:9/	1	1	0	145.0.7632.116
+HS1	M	10	4	2026-11-03T03:41:55Z	https://127.0.0.1:9/	1	0	11	Error: loading https://127.0.0.1:9/	1	1	0	145.0.7632.116
+HS1	M	10	5	2026-11-03T03:42:16Z	https://127.0.0.1:9/	1	0	11	Error: loading https://127.0.0.1:9/	1	1	0	145.0.7632.116
+HS1	M	10	6	2026-11-03T03:42:37Z	https://127.0.0.1:9/	1	0	11	Error: loading https://127.0.0.1:9/	1	1	0	145.0.7632.116
+HS1	M	10	7	2026-11-03T03:42:58Z	https://127.0.0.1:9/	1	0	11	Error: loading https://127.0.0.1:9/	1	1	0	145.0.7632.116
+HS1	M	10	8	2026-11-03T03:43:19Z	https://127.0.0.1:9/	1	0	11	Error: loading https://127.0.0.1:9/	1	1	0	145.0.7632.116
+HS1	M	10	9	2026-11-03T03:43:40Z	https://127.0.0.1:9/	1	0	11	Error: loading https://127.0.0.1:9/	1	1	0	145.0.7632.116
+HS1	M	10	10	2026-11-03T03:44:00Z	https://127.0.0.1:9/	1	0	10	Error: loading https://127.0.0.1:9/	1	1	0	145.0.7632.116
+HS1	C	10	1	2026-11-03T03:44:08Z	https://ebanking.bdm-sa.com/	0	3228	7		0	0	13	145.0.7632.116
+HS1	C	10	2	2026-11-03T03:44:27Z	https://ebanking.bdm-sa.com/	0	3228	8		0	0	13	145.0.7632.116
+HS1	C	10	3	2026-11-03T03:44:45Z	https://ebanking.bdm-sa.com/	0	3228	8		0	1	8	145.0.7632.116
+HS1	C	10	4	2026-11-03T03:45:10Z	https://ebanking.bdm-sa.com/	1	0	15	Error: loading https://ebanking.bdm-sa.com/	1	1	8	145.0.7632.116
+HS1	C	10	5	2026-11-03T03:45:35Z	https://ebanking.bdm-sa.com/	1	0	15	Error: loading https://ebanking.bdm-sa.com/	1	1	0	145.0.7632.116
+HS1	C	10	6	2026-11-03T03:46:01Z	https://ebanking.bdm-sa.com/	1	0	15	Error: loading https://ebanking.bdm-sa.com/	1	1	0	145.0.7632.116
+HS1	C	10	7	2026-11-03T03:46:27Z	https://ebanking.bdm-sa.com/	1	0	15	Error: loading https://ebanking.bdm-sa.com/	1	1	0	145.0.7632.116
+HS1	C	10	8	2026-11-03T03:46:55Z	https://ebanking.bdm-sa.com/	1	0	17	Error: loading https://ebanking.bdm-sa.com/	1	1	8	145.0.7632.116
+HS1	C	10	9	2026-11-03T03:47:23Z	https://ebanking.bdm-sa.com/	1	0	17	Error: loading https://ebanking.bdm-sa.com/	1	1	0	145.0.7632.116
+HS1	C	10	10	2026-11-03T03:47:53Z	https://ebanking.bdm-sa.com/	1	0	18	Error: loading https://ebanking.bdm-sa.com/	1	1	8	145.0.7632.116
