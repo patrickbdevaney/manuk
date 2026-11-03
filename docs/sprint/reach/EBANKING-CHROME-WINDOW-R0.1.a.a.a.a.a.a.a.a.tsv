@@ -1,0 +1,10 @@
+probe	profile	chrome_flags	n	result	transport_seen	chrome_ver	utc_window
+chrome direct dump-dom	default (~/.config/google-chrome-headless)	none	3	38648 B x3 (transient)	not logged	145.0.7632.116	2026-11-03T02:00Z
+chrome direct dump-dom	default	none	3	187986 B x3	QUIC h3 (netlog protocol_str=quic x3)	145.0.7632.116	2026-11-03T02:01Z
+chrome via MAP to relay 127.0.0.1:8460	default	none	3	187986 B x3; relay: 6 accepted conns, server S>C 0 B EOF on all 6	TCP attempt to relay failed, content not from relay	145.0.7632.116	2026-11-03T02:10Z
+chrome via MAP to dead port 127.0.0.1:8461	default	none	1	187940 B	QUIC (MAP does not bind content)	145.0.7632.116	2026-11-03T02:20Z
+chrome via MAP to relay	default	--disable-quic	3	187986 B x3; relay 6 conns S>C 0 B	TCP to relay fails	145.0.7632.116	2026-11-03T02:25Z
+chrome direct dump-dom	default	--disable-quic	1	187986 B	HTTP/2 over TCP (netlog negotiated_protocol=h2)	145.0.7632.116	2026-11-03T02:27Z
+chrome direct dump-dom	fresh --user-data-dir	none	3	0 B x3, each killed at 90 s timeout	no alt-svc memory, TCP only	145.0.7632.116	2026-11-03T02:30Z
+manuk a11y-dump https://ebanking.bdm-sa.com/	n/a	n/a	3	rc=0 x3, 3228 B, 7-8 s	TCP+TLS	manuk-release-build	2026-11-03T02:05Z
+openssl s_client -connect :443 TLSv1.2	n/a	n/a	1	handshake completed, cipher ECDHE-RSA-AES256-GCM-SHA384, verify code 21	TCP+TLS	openssl	2026-11-03T02:04Z

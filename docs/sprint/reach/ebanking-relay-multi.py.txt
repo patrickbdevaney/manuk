@@ -1,0 +1,30 @@
+import socket,threading,time,sys
+HOST='ebanking.bdm-sa.com'; PORT=8460
+l=socket.socket();l.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1);l.bind(('127.0.0.1',PORT));l.listen(64)
+t0=time.time(); lock=threading.Lock(); conn=[0]
+def log(*a):
+    with lock: print(f'{time.time()-t0:7.2f}',*a,flush=True)
+def pump(a,b,n,cid):
+    tot=0; first=None
+    while True:
+        try: d=a.recv(65536)
+        except Exception as e: d=b''; log(cid,n,'recv-exc',type(e).__name__)
+        if not d:
+            log(cid,n,'EOF total=',tot)
+            try: b.shutdown(socket.SHUT_WR)
+            except Exception: pass
+            return
+        if first is None and n=='S>C': first=d[:6].hex()
+        tot+=len(d)
+        if n=='S>C' and d[:1]==b'\x16' and len(d)>5 and d[5]==2: log(cid,n,'SERVER_HELLO seen',len(d),'B')
+        if n=='S>C' and d[:1]==b'\x15': log(cid,n,'TLS ALERT',d.hex()[:20])
+        try: b.sendall(d)
+        except Exception: return
+def handle(c,cid):
+    try: s=socket.create_connection((HOST,443))
+    except Exception as e: log(cid,'upstream-exc',e); c.close(); return
+    log(cid,'accepted; upstream connected')
+    t=threading.Thread(target=pump,args=(s,c,'S>C',cid)); t.start()
+    pump(c,s,'C>S',cid); t.join(15)
+while True:
+    c,_=l.accept(); conn[0]+=1; threading.Thread(target=handle,args=(c,conn[0]),daemon=True).start()
