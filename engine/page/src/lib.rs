@@ -9603,6 +9603,20 @@ impl Page {
             .into_iter()
             .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
             .collect();
+        // A fetch handler is a script round like any other: without the forced-reflow hook its
+        // geometry reads of freshly built elements answer 0 from the pre-script snapshot
+        // (whitehouse.gov's live bar sizes its marquee as `ceil(1920 / offsetWidth)`).
+        let _reflow = ReflowScope::install(
+            &self.dom,
+            fonts,
+            viewport_width,
+            &self.images,
+            &self.final_url,
+            &self.external_css,
+            &self.scroll_offsets,
+            self.sticky_scroll_y,
+            self.has_sticky,
+        );
         if let Err(e) = manuk_js::resolve_fetch_bytes(
             ctx,
             &mut self.dom,
