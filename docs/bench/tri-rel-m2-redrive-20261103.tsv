@@ -1,0 +1,6 @@
+url	debug_rate	release_rate	debug_tag	release_tag	release_load1	debug_chrome_ver	release_chrome_ver
+https://berkeley.edu/	74.6	74.6	OK	OK	0.41	145.0.7632.116	145.0.7632.116
+https://matklad.github.io/	98.1	98.1	OK	OK	0.42	145.0.7632.116	145.0.7632.116
+https://php.net/	38.9	38.9	OK	OK	0.42	145.0.7632.116	145.0.7632.116
+https://without.boats/	100.0	100.0	OK	OK	0.47	145.0.7632.116	145.0.7632.116
+https://perl.org/	92.5	92.5	OK	OK	0.47	145.0.7632.116	145.0.7632.116
