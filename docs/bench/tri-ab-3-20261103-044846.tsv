@@ -1,0 +1,7 @@
+url	binary	rc	tag	wall_s	load1_before	rate	chrome_ver
+https://time.com/	debug	124	TIMEOUT	180.2	2.68	NA	145.0.7632.116
+https://time.com/	release	0	OK	20.1	2.67	62.0	145.0.7632.116
+https://sentry.io/	debug	124	TIMEOUT	180.0	2.48	NA	145.0.7632.116
+https://sentry.io/	release	0	OK	27.1	2.40	30.0	145.0.7632.116
+https://tailwindcss.com/	debug	124	TIMEOUT	180.0	2.34	NA	145.0.7632.116
+https://tailwindcss.com/	release	0	OK	16.3	2.03	86.1	145.0.7632.116
