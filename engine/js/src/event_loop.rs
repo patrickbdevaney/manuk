@@ -8878,6 +8878,16 @@ pub fn deliver_bytes(
     // binary-upload path already use. Reused rather than re-derived: the streaming path was always
     // byte-safe, and this buffered one being the odd path out is precisely how the corruption
     // survived unnoticed.
+    // Diagnostic (R0.4…b.b.a.a.a): MANUK_DELIVER_STUB=<needle> replaces the delivery of any body containing
+    // <needle> with a settle of an empty 200 body, to tell whether the page's handler for it is what stalls.
+    let stub = std::env::var("MANUK_DELIVER_STUB")
+        .ok()
+        .filter(|n| !n.is_empty() && body.contains(n.as_str()));
+    let (body, raw) = if stub.is_some() {
+        ("", None)
+    } else {
+        (body, raw)
+    };
     let raw_lit = raw.map(js_bytes_literal);
     let script = format!(
         "__deliver({}, {}, {}, {}, {})",

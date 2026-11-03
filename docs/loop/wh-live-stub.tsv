@@ -1,0 +1,3 @@
+arm	wall_s	result	stage	chrome_ver
+stubbed	7	clean		145.0.7632.116
+unstubbed	45	spinner	event_loop_micro_peek.js	145.0.7632.116
