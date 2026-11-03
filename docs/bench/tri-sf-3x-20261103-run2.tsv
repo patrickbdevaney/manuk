@@ -1,0 +1,7 @@
+url	binary	rc	tag	wall_s	load1_before	rate	chrome_ver
+https://salesforce.com/	debug	124	TIMEOUT	180.1	0.28	NA	145.0.7632.116
+https://salesforce.com/	release	0	OK	41.4	0.97	62.5	145.0.7632.116
+https://salesforce.com/	debug	124	TIMEOUT	180.1	1.14	NA	145.0.7632.116
+https://salesforce.com/	release	0	OK	41.1	1.06	62.5	145.0.7632.116
+https://salesforce.com/	debug	124	TIMEOUT	180.1	1.03	NA	145.0.7632.116
+https://salesforce.com/	release	0	OK	40.4	1.06	62.5	145.0.7632.116

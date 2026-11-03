@@ -1,0 +1,9 @@
+
+thread 'main' panicked at /home/patrickd/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/mozjs_sys-140.17.0-0-lts/src/jsval.rs:503:9:
+assertion failed: self.is_double()
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+[2m2026-11-03T21:13:27.566103Z[0m [31mERROR[0m [2mmanuk_js::dom_bindings[0m[2m:[0m a DOM native PANICKED — CONTAINED. Without this boundary the panic could not unwind out of `extern "C"` and would have ABORTED THE WHOLE BROWSER, and every tab in it. [3mnative[0m[2m=[0m"el_get_shadow_root"
+
+thread 'main' panicked at /home/patrickd/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/mozjs_sys-140.17.0-0-lts/src/jsval.rs:503:9:
+assertion failed: self.is_double()
+[2m2026-11-03T21:13:27.566257Z[0m [31mERROR[0m [2mmanuk_js::dom_bindings[0m[2m:[0m a DOM native PANICKED — CONTAINED. Without this boundary the panic could not unwind out of `extern "C"` and would have ABORTED THE WHOLE BROWSER, and every tab in it. [3mnative[0m[2m=[0m"el_get_shadow_root"

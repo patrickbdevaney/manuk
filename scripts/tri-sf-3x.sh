@@ -11,8 +11,10 @@ OUT="$1"
 URL="https://salesforce.com/"
 PIN="${MANUK_CHROME_PIN:?MANUK_CHROME_PIN not set}"
 printf 'url\tbinary\trc\ttag\twall_s\tload1_before\trate\tchrome_ver\n' > "$OUT"
-ERR=$(mktemp)
+# per-run stdout/stderr are kept (never overwritten) as ${OUT%.tsv}.<n>.<binary>.{out,err}
+n=0
 for b in debug release debug release debug release; do
+  n=$((n+1)); ERR="${OUT%.tsv}.$n.$b.err"
   touch .git/sprint-working
   DP="target/$b/drive-probe"
   waited=0
@@ -25,6 +27,7 @@ for b in debug release debug release debug release; do
   t0=$(date +%s.%N)
   o=$(timeout 180 nice -n 15 "$DP" "$URL" 2>"$ERR"); rc=$?
   t1=$(date +%s.%N)
+  printf '%s\n' "$o" > "${OUT%.tsv}.$n.$b.out"
   tag=$(classify_tag "$rc" "$o" "$(cat "$ERR")")
   rate=NA
   [ "$tag" = OK ] && rate=$(parse_m2 "$o" | awk '{print $1}')
@@ -32,4 +35,3 @@ for b in debug release debug release debug release; do
   printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$URL" "$b" "$rc" "$tag" "$wall" "$l" "${rate:-NA}" "$PIN" >> "$OUT"
   echo "$b rc=$rc $tag ${wall}s load=$l rate=${rate:-NA}"
 done
-rm -f "$ERR"
