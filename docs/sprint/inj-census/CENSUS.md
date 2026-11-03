@@ -32,3 +32,10 @@ a11y names, 35 hidden-style text that manuk's default surface still shows, 16+12
 - The prior "~70% non-rendered" does not reproduce here: 28.5% (44% of located). 28% of the corpus (43.5% of located) is plain visible text, which no paint-truth filter can remove.
 - Disagreement 12.1% >= 5%: labels.tsv is the label-correction artifact. Publishing to the dataset needs owner OK (not done).
 - Caveats: 35% unlocated (templated injections are over-represented among located); signature location is inferred, not annotated.
+
+## W3.15.a recall attempt (chrome_ver=145.0.7632.116) — gate NOT met
+Goal: unlocated <15% with benign false trigger <=2% on 300 controls. Unlocated at start: 642/1824 = 35.2%.
+- Sample of unlocated pages: payload is a sentence embedded mid-segment (e.g. inside a long video transcript); no benign twin exists in the test split (best sentence overlap with any benign page is 1-4 sentences), so pairing cannot locate it.
+- Signature-gram grid (df floor x min grams per segment; located % of 1824 / benign FP on 600 test benign): df10,k1 64.8/0.3 (current); df5,k2 64.0/1.8; df3,k3 65.9/8.8; df3,k1 84.2/43.3. No setting beats current at <=2% FP — the gram route is exhausted.
+- Sentence-level naive Bayes (`locate_nb.py`, weak labels from df>=10 grams): threshold at 99th pct of 500 held-out train-benign pages recovers 21.3% of the 642 (137 pages) with 2.0% FP on 300 test benign (98th pct: 23.5% / 2.3%; 99.5th: 18.2% / 0.7%). Resulting unlocated ≈ 505/1824 = 27.7%, still >15%.
+- Rendered-hidden share not re-stated: the 137 recovered pages are not rendered; hidden share stays 7.9% (12.3% of located); labels.tsv chrome_ver column is already 145.0.7632.116. R1.4 stays hygiene; unlocated 27.7% is the open uncertainty on that call.
