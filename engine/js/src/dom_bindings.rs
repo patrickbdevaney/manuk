@@ -4279,7 +4279,9 @@ unsafe fn node_and_dom(obj: *mut JSObject) -> Option<(*mut Dom, NodeId)> {
     // here. Everything else is checked by the registry, which is the real safety property.
     let mut ds = UndefinedValue();
     JS_GetReservedSlot(obj, SLOT_DOM, &mut ds);
-    let own: *mut Dom = if ds.is_undefined() || ds.is_null() || ds.is_object() {
+    // `to_private()` asserts `is_double()` in debug builds, so only a double (a genuine PrivateValue) may
+    // reach it. A non-node receiver such as `{a:1}` has int/bool/string/etc. in the aliased fixed slot 1.
+    let own: *mut Dom = if !ds.is_double() {
         std::ptr::null_mut()
     } else {
         ds.to_private() as *mut Dom
@@ -24315,5 +24317,21 @@ mod tests {
             before,
             dom.len()
         );
+    }
+
+    /// A getter invoked on a plain object whose fixed slots alias the reserved slots (slot 0 int32,
+    /// slot 1 int32) must read as "no node", not trip `to_private`'s `is_double` assertion (debug).
+    #[test]
+    #[ignore = "SpiderMonkey multi-Runtime-per-process teardown; run in isolation"]
+    fn getter_on_foreign_receiver_does_not_assert() {
+        let mut dom = Dom::new();
+        let html = dom.create_element("html");
+        dom.append_child(dom.root(), html);
+        let setup = "var e = document.createElement('div'); var pr = e, d = null;\n\
+            while (pr && !(d = Object.getOwnPropertyDescriptor(pr, 'shadowRoot'))) pr = Object.getPrototypeOf(pr);\n\
+            var o = {a: 1, b: 2, c: 3};\n\
+            globalThis.r = d.get.call(o);";
+        let ok = eval_scene(&mut dom, setup, false, "r === null").expect("eval");
+        assert!(ok);
     }
 }
