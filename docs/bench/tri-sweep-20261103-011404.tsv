@@ -1,0 +1,17 @@
+cat	url	m1_status	cov	shape	vis	paths	m2_tag	m2_rate	m2_ceil	m2_targets	m2_drivable	m2_ungrounded	m2_ambiguous	m2_mishit	a11y_tag	a11y_prec	a11y_rec	a11y_f1	chrome_ver
+code	https://github.com/	OK	94.5	55.0	90.8	1664	SKIPPED								OK	89.4	87.1	88.3	145.0.7632.116
+docs	https://reactjs.org/	OK	23.1	73.3	7.9	260	SKIPPED								OK	85.2	67.7	75.4	145.0.7632.116
+corp	https://salesforce.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+gov_edu	https://nasa.gov/	OK	98.8	70.2	16.8	771	SKIPPED								OK	93.6	84.1	88.6	145.0.7632.116
+media	https://rottentomatoes.com/	OK	98.6	0.3	48.1	2439	SKIPPED								OK	78.9	55.9	65.4	145.0.7632.116
+reference	https://wikihow.com/	OK	99.0	47.0	60.1	1122	SKIPPED								OK	0.2	10.0	0.4	145.0.7632.116
+news	https://time.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+saas	https://sentry.io/	OK	95.9	84.3	69.9	2553	SKIPPED								OK	96.3	97.5	96.9	145.0.7632.116
+docs	https://tailwindcss.com/	OK	97.9	69.2	68.2	1979	SKIPPED								OK	94.7	73.7	82.9	145.0.7632.116
+gov_edu	https://berkeley.edu/	OK	97.8	97.2	33.7	366	SKIPPED								OK	96.9	99.5	98.2	145.0.7632.116
+travel_food	https://bonappetit.com/	OK	55.1	16.0	25.6	1675	SKIPPED								OK	67.7	64.3	66.0	145.0.7632.116
+news	https://newyorker.com/	OK	32.8	39.3	39.6	2042	SKIPPED								OK	90.7	89.5	90.1	145.0.7632.116
+saas	https://newrelic.com/	OK	0.4	16.7		1569	SKIPPED								OK	66.1	71.2	68.6	145.0.7632.116
+news	https://gizmodo.com/	OK	97.6	47.7	74.0	1997	SKIPPED								OK	80.6	84.5	82.5	145.0.7632.116
+saas	https://pagerduty.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+saas	https://wix.com/	OK	94.1	39.1	42.6	3291	SKIPPED								OK	86.5	74.4	80.0	145.0.7632.116

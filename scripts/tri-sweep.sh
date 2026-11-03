@@ -30,7 +30,7 @@ while [ $# -gt 0 ]; do case "$1" in
   --no-a11y) A11Y=0; shift;; --no-m1) M1=0; shift;; --no-m2) M2RUN=0; shift;;
   *) echo "unknown flag: $1"; exit 2;; esac; done
 
-MW=${MW:-$R/target/release/manuk-wpt}; DP=${DP:-$R/target/debug/drive-probe}; AX=${AX:-$R/target/debug/a11y-score}
+MW=${MW:-$R/target/release/manuk-wpt}; DP=${DP:-$R/target/debug/drive-probe}; AX=${AX:-$R/target/release/a11y-score}  # release: the debug build burns >86 s CPU on github.com and TIMEOUTs at 90 s (R0.4.a.c.a.b.b)
 KEEP_PATHS_RE=${KEEP_PATHS_RE:-usa\.gov}; PERSIST=${PERSIST:-$R/docs/bench}; CHROME_VER=${MANUK_CHROME_PIN:-unpinned}
 for b in "$MW" "$DP" "$AX"; do [ -x "$b" ] || { echo "✗ missing: $b"; exit 1; }; done
 [ -n "${TRI_NO_CHROME_CHECK:-}" ] || command -v google-chrome >/dev/null || { echo "✗ google-chrome required"; exit 1; }
