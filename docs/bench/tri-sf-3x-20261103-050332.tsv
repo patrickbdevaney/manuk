@@ -1,0 +1,7 @@
+url	binary	rc	tag	wall_s	load1_before	rate	chrome_ver
+https://salesforce.com/	debug	0	OK	173.7	1.31	56.4	145.0.7632.116
+https://salesforce.com/	release	0	OK	49.9	3.69	21.2	145.0.7632.116
+https://salesforce.com/	debug	0	OK	176.2	2.37	56.4	145.0.7632.116
+https://salesforce.com/	release	0	OK	45.8	1.10	21.2	145.0.7632.116
+https://salesforce.com/	debug	0	OK	170.9	1.09	56.4	145.0.7632.116
+https://salesforce.com/	release	0	OK	40.2	1.12	20.9	145.0.7632.116
