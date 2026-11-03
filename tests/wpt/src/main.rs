@@ -1614,6 +1614,19 @@ fn run_fidelity_cmd(args: &[String], fonts: &FontContext) {
                         cseen.iter().map(|(k, v)| (k.clone(), v.rect)).collect();
                     let mboxes: std::collections::HashMap<String, [i64; 4]> =
                         mseen.iter().map(|(k, v)| (k.clone(), v.rect)).collect();
+                    // R2.2.a: our own path+rect set beside the oracle's, so two ENGINE builds can be diffed
+                    // path-by-path (a SHAPE move is attributed to the elements whose rect moved).
+                    {
+                        let mut lines: Vec<String> = mboxes
+                            .iter()
+                            .map(|(k, r)| format!("{k}\t{}\t{}\t{}\t{}", r[0], r[1], r[2], r[3]))
+                            .collect();
+                        lines.sort();
+                        let _ = std::fs::write(
+                            out.join(format!("{name}.manuk-paths.tsv")),
+                            lines.join("\n"),
+                        );
+                    }
                     let (sc, missing, misplaced, probed, missing_ids) =
                         manuk_wpt::fidelity::compare_structure_detail(&cmap, &mboxes, 8);
                     // Which elements are missing? A coverage number is only actionable if it names
