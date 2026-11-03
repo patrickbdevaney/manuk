@@ -8327,6 +8327,88 @@ const PRELUDE: &str = r#"
 
 "#;
 
+/// Name (callback source, truncated) of the task `NEXT_TASK` will pick next — same selection rule.
+/// Only evaluated when `MANUK_TASK_TRACE` is set (see [`trace_peek`]).
+const PEEK_TASK: &str = "(function(){ \
+     var bi = -1; \
+     for (var i = 0; i < __tasks.length; i++) { \
+       var a = __tasks[i]; \
+       if (a.w > __timeBudget) { continue; } \
+       if (bi < 0) { bi = i; continue; } \
+       var b = __tasks[bi]; \
+       if (a.w < b.w || (a.w === b.w && a.s < b.s)) { bi = i; } \
+     } \
+     if (bi < 0) return null; \
+     return String(__tasks[bi].u || __tasks[bi].f).replace(/\\s+/g, ' ').slice(0, 240); })()";
+
+/// The task the tick is about to run, readable from another thread when the JS thread never returns
+/// (a native allocation loop reaches no interrupt check, and ptrace is blocked by yama).
+static TRACE_CURRENT: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+static TRACE_AT: std::sync::Mutex<Option<(std::time::Instant, u64)>> = std::sync::Mutex::new(None);
+static TRACE_WATCHDOG: std::sync::Once = std::sync::Once::new();
+
+/// Stage marker for the `MANUK_TASK_TRACE` watchdog: which eval / native step the JS thread entered last.
+fn trace_stage(label: &str) {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    if !*ON.get_or_init(|| std::env::var("MANUK_TASK_TRACE").is_ok()) {
+        return;
+    }
+    if let Ok(mut g) = TRACE_STAGE.lock() {
+        *g = Some((label.to_string(), std::time::Instant::now()));
+    }
+}
+static TRACE_STAGE: std::sync::Mutex<Option<(String, std::time::Instant)>> =
+    std::sync::Mutex::new(None);
+
+/// `MANUK_TASK_TRACE=<secs>`: record the task about to run; after `<secs>` a watchdog thread prints
+/// `SPINNER_SUMMARY task="..."` to stderr (once) naming it. No-op, zero cost, when unset.
+fn trace_peek(rt: &mut Runtime, global: mozjs::rust::HandleObject) {
+    let Some(secs) = std::env::var("MANUK_TASK_TRACE")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+    else {
+        return;
+    };
+    TRACE_WATCHDOG.call_once(|| {
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(secs));
+            let cur = TRACE_CURRENT.lock().ok().and_then(|g| g.clone());
+            let (age, n) = TRACE_AT
+                .lock()
+                .ok()
+                .and_then(|g| *g)
+                .map(|(t, n)| (t.elapsed().as_secs(), n))
+                .unwrap_or((0, 0));
+            let stage = TRACE_STAGE
+                .lock()
+                .ok()
+                .and_then(|g| g.clone())
+                .map(|(l, t)| format!("{l} entered {}s ago", t.elapsed().as_secs()))
+                .unwrap_or_default();
+            eprintln!(
+                "SPINNER_SUMMARY t={}s stage=\"{}\" peeks={} last_peek_age_s={} task=\"{}\"",
+                secs,
+                stage,
+                n,
+                age,
+                cur.unwrap_or_else(|| "(none)".into())
+            );
+        });
+    });
+    let name = match eval_string(rt, global, PEEK_TASK, "event_loop_peek.js") {
+        Ok(Some(n)) => Some(n),
+        Ok(None) => Some("(no runnable task)".to_string()),
+        Err(e) => Some(format!("(peek failed: {e})")),
+    };
+    if let Ok(mut g) = TRACE_CURRENT.lock() {
+        *g = name;
+    }
+    if let Ok(mut g) = TRACE_AT.lock() {
+        let n = g.map(|(_, n)| n).unwrap_or(0) + 1;
+        *g = Some((std::time::Instant::now(), n));
+    }
+}
+
 /// Run the next macrotask if any; report whether one ran.
 const NEXT_TASK: &str = "(function(){ \
      var bi = -1; \
@@ -8528,13 +8610,31 @@ pub fn install(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Result<()
 /// A **microtask checkpoint**: drain the host `queueMicrotask` queue *and* SpiderMonkey's
 /// native promise-job queue. Both must run, and both must run to quiescence — a job may
 /// enqueue another job.
+/// `DRAIN_MICRO`, except under `MANUK_TASK_TRACE`, where each microtask runs in its own eval after its
+/// source text is recorded as the watchdog's stage — so a microtask that never returns is named.
+fn drain_micro(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Result<(), String> {
+    if std::env::var("MANUK_TASK_TRACE").is_err() {
+        return eval(rt, global, DRAIN_MICRO, "event_loop_micro.js").map(|_| ());
+    }
+    const PEEK: &str = "(function(){ return __micro.length ? String(__micro[0]).replace(/\\s+/g, ' ').slice(0, 300) : null; })()";
+    const ONE: &str =
+        "(function(){ var m = __micro.shift(); try { m(); } catch (e) { __reportError(e); } })()";
+    while let Some(name) = eval_string(rt, global, PEEK, "event_loop_micro_peek.js")? {
+        trace_stage(&format!("microtask {name}"));
+        eval(rt, global, ONE, "event_loop_micro_one.js")?;
+    }
+    Ok(())
+}
+
 fn microtask_checkpoint(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Result<(), String> {
-    eval(rt, global, DRAIN_MICRO, "event_loop_micro.js")?;
+    drain_micro(rt, global)?;
     let raw_cx = unsafe { rt.cx().raw_cx() };
+    trace_stage("job_queue::drain");
     unsafe { crate::job_queue::drain(raw_cx) };
+    trace_stage("after job_queue::drain");
     // A native reaction may have called `queueMicrotask`; drain again so the checkpoint is
     // a fixed point rather than one pass.
-    eval(rt, global, DRAIN_MICRO, "event_loop_micro.js")?;
+    drain_micro(rt, global)?;
     // ── **"NOTIFY ABOUT REJECTED PROMISES"** (HTML §8.1.7.5) — at the END of the checkpoint, and
     // that timing IS the algorithm. `(async () => …)().catch(h)` rejects before `.catch` attaches,
     // so an engine reporting at the instant of rejection reports failures the page has handled:
@@ -8597,6 +8697,7 @@ pub fn run_deferred(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Resu
             preempted = true;
             break 'drain;
         };
+        trace_peek(rt, global);
         let Some(ran) = preempt_aware(eval(rt, global, NEXT_TASK, "event_loop_tick.js"))? else {
             preempted = true;
             break 'drain;
@@ -9065,6 +9166,7 @@ where
             break 'drain;
         };
 
+        trace_peek(rt, global);
         let Some(ran) = preempt_aware(eval(rt, global, NEXT_TASK, "event_loop_tick.js"))? else {
             preempted = true;
             break 'drain;
@@ -9261,6 +9363,14 @@ fn eval(
     use mozjs::jsval::UndefinedValue;
     use mozjs::rooted;
     use mozjs::rust::{evaluate_script, CompileOptionsWrapper};
+    if file == "event_loop_deliver.js" {
+        trace_stage(&format!(
+            "{file} {}",
+            src.chars().take(160).collect::<String>()
+        ));
+    } else {
+        trace_stage(file);
+    }
     if let Some(r) = eval_cached(rt, global, src, file) {
         return r;
     }
@@ -9298,6 +9408,7 @@ fn eval_string(
     use mozjs::jsval::UndefinedValue;
     use mozjs::rooted;
     use mozjs::rust::{evaluate_script, CompileOptionsWrapper};
+    trace_stage(file);
     rooted!(&in(rt.cx()) let mut rval = UndefinedValue());
     let fname = std::ffi::CString::new(file).unwrap_or_default();
     let opts = CompileOptionsWrapper::new(rt.cx_no_gc(), fname, 1);
