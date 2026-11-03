@@ -1,0 +1,16 @@
+import socket,sys,threading,time
+l=socket.socket();l.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1);l.bind(('127.0.0.1',8460));l.listen(5)
+c,_=l.accept();s=socket.create_connection(('ebanking.bdm-sa.com',443))
+t0=time.time()
+def pump(a,b,n):
+    tot=0
+    while True:
+        try:d=a.recv(65536)
+        except Exception:d=b''
+        if not d: print(f'{n} closed at {time.time()-t0:.2f}s total={tot}',flush=True);
+        if not d:
+            try:b.shutdown(socket.SHUT_WR)
+            except:pass
+            return
+        tot+=len(d);print(f'{n} {len(d)}B rec_types={d[:1].hex()} hs={d[5:6].hex()} t={time.time()-t0:.2f}',flush=True);b.sendall(d)
+a=threading.Thread(target=pump,args=(c,s,'C>S'));b=threading.Thread(target=pump,args=(s,c,'S>C'));a.start();b.start();a.join(8);b.join(8)

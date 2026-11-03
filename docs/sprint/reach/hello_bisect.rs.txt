@@ -1,0 +1,52 @@
+//! ClientHello bisect probe: dial HOST:443 with one rustls config variant, print OK/err.
+//! usage: hello_bisect HOST VARIANT   (VARIANT: base | alpn1 | noalpn | nosni | tls12only | noresume | nosigsa)
+use std::sync::Arc;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+#[tokio::main]
+async fn main() {
+    let a: Vec<String> = std::env::args().collect();
+    let (host, variant) = (a[1].clone(), a[2].clone());
+    let _ = rustls::crypto::ring::default_provider().install_default();
+    let mut cfg = if variant.starts_with("p_") { custom(&variant) } else { manuk_net::aia::client_config() };
+    cfg.alpn_protocols = match variant.as_str() {
+        "alpn1" => vec![b"http/1.1".to_vec()],
+        "noalpn" => vec![],
+        _ => vec![b"h2".to_vec(), b"http/1.1".to_vec()],
+    };
+    if variant == "noresume" {
+        cfg.resumption = rustls::client::Resumption::disabled();
+    }
+    cfg.enable_sni = variant != "nosni";
+    let c = tokio_rustls::TlsConnector::from(Arc::new(cfg));
+    let tcp = tokio::net::TcpStream::connect(a.get(3).cloned().unwrap_or(format!("{host}:443"))).await.unwrap();
+    let name = rustls_pki_types::ServerName::try_from(host.clone()).unwrap();
+    match c.connect(name, tcp).await {
+        Ok(mut s) => {
+            let _ = s.write_all(format!("GET / HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n").as_bytes()).await;
+            let mut b = vec![0u8; 64];
+            let n = s.read(&mut b).await.unwrap_or(0);
+            println!("{variant} OK {}", String::from_utf8_lossy(&b[..n.min(15)]).replace('\r', ""));
+        }
+        Err(e) => println!("{variant} ERR {e}"),
+    }
+}
+
+fn custom(v: &str) -> rustls::ClientConfig {
+    use rustls::crypto::ring as r;
+    let mut p = r::default_provider();
+    let mut versions: Vec<&'static rustls::SupportedProtocolVersion> = vec![&rustls::version::TLS13, &rustls::version::TLS12];
+    match v {
+        "p_nochacha" => p.cipher_suites.retain(|s| !format!("{:?}", s.suite()).contains("CHACHA")),
+        "p_tls12suites" => p.cipher_suites.retain(|s| !format!("{:?}", s.suite()).starts_with("TLS13")),
+        "p_tls13suites" => p.cipher_suites.retain(|s| format!("{:?}", s.suite()).starts_with("TLS13")),
+        "p_ecdsaless" => p.cipher_suites.retain(|s| !format!("{:?}", s.suite()).contains("ECDSA")),
+        "p_nop384" => p.kx_groups.retain(|g| format!("{:?}", g.name()) != "secp384r1"),
+        "p_x25519" => p.kx_groups.retain(|g| format!("{:?}", g.name()) == "X25519"),
+        "p_tls12ver" => versions = vec![&rustls::version::TLS12],
+        _ => {}
+    }
+    let roots = rustls::RootCertStore { roots: webpki_roots::TLS_SERVER_ROOTS.to_vec() };
+    rustls::ClientConfig::builder_with_provider(Arc::new(p)).with_protocol_versions(&versions).unwrap()
+        .dangerous().with_custom_certificate_verifier(manuk_net::aia::AiaVerifier::new(roots)).with_no_client_auth()
+}

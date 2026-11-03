@@ -1,0 +1,7 @@
+probe	variant	n	server_flight_seen	full_handshake_ok	chrome_ver
+relay(manuk base hello 264B)	rustls default	30	12	0	145.0.7632.116
+relay(rustls x25519-only 260B)	p_x25519	10	~2	0	145.0.7632.116
+relay(rustls tls1.2-only 182B)	p_tls12ver	10	~2	0	145.0.7632.116
+relay(openssl -tls1_2 222B)	openssl	6	2	0	145.0.7632.116
+openssl full GET (default hello)	openssl	6	2	0	145.0.7632.116
+chrome 145 dump-dom (same window)	default	3	n/a	0 (empty DOM)	145.0.7632.116
