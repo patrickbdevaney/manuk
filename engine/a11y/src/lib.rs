@@ -2568,13 +2568,29 @@ fn label_index(dom: &Dom, ids: &HashMap<String, NodeId>) -> LabelIndex {
 /// ⚠ One level only, and that is a stated boundary rather than an accident: `aria-labelledby`
 /// chains are cycles waiting to happen, and the spec stops the recursion at the first hop for the
 /// same reason.
+thread_local! {
+    /// True while a name is being computed from an `aria-labelledby` reference.
+    static IN_LABELLEDBY: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
 fn aria_name_of(dom: &Dom, node: NodeId, index: &NameIndex, ctx: &NameCtx<'_>) -> Option<String> {
     let el = dom.element(node)?;
-    if let Some(refs) = el.attr("aria-labelledby") {
+    // ⚠ accname §4.3 step 2B applies only when "not already part of an aria-labelledby traversal".
+    // A DESCENDANT inside a referenced subtree that carries its own `aria-labelledby` pointing back
+    // at an ancestor (wired.com) used to re-enter and recurse until the stack overflowed.
+    if let Some(refs) = el
+        .attr("aria-labelledby")
+        .filter(|_| !IN_LABELLEDBY.with(|f| f.get()))
+    {
         let text = refs
             .split_ascii_whitespace()
             .filter_map(|id| index.ids.get(id))
-            .map(|&n| referenced_name(dom, n, index, ctx))
+            .map(|&n| {
+                let was = IN_LABELLEDBY.with(|f| f.replace(true));
+                let t = referenced_name(dom, n, index, ctx);
+                IN_LABELLEDBY.with(|f| f.set(was));
+                t
+            })
             .filter(|t| !t.is_empty())
             .collect::<Vec<_>>()
             .join(" ");
@@ -4024,6 +4040,18 @@ mod tests {
         let kids: Vec<NodeId> = dom.children(body).collect();
         assert_eq!(role_of(&dom, kids[0]), Some(Role::Generic));
         assert_eq!(role_of(&dom, kids[1]), Some(Role::Region));
+    }
+
+    /// wired.com: `aria-labelledby` on a node inside the subtree it references used to recurse
+    /// until the stack overflowed (exit 139). Must terminate and still name the button.
+    #[test]
+    fn labelledby_cycle_through_a_descendant_terminates() {
+        let dom = manuk_html::parse(
+            r#"<body><button id=a aria-labelledby="b">x</button>
+            <div id=b>Label <span aria-labelledby="b a">inner</span></div></body>"#,
+        );
+        let lines = build_tree(&dom).to_observation_lines();
+        assert!(lines.iter().any(|l| l.contains("button")), "{lines:?}");
     }
 
     /// The synthetic DOMs above are hand-built. This one goes through the **real**
