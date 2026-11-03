@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# R0.1.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a: how much of the server flight does manuk receive before a failed probe?
+# manuk's own rustls trace (RUST_LOG=rustls=trace on a11y-dump stderr) is the instrument, not openssl.
+# Per internal TLS attempt (one "No cached session" line starts an attempt) the server-flight stage is the count of
+# these rustls log markers seen: ServerHello, "Server cert is", "ECDHE curve", "Server DNS name" (=4 means
+# ServerHello+Certificate+ServerKeyExchange all parsed, i.e. the flight reached the cert-verify step).
+# rustls does not log a per-record count; stage is the finest server-side counter manuk exposes without an engine edit.
+# Block M (red mutant, first): 10 probes vs 127.0.0.1:9, must all be recorded failed.
+# Block C: 10 probes vs ebanking.bdm-sa.com, 10 s apart. Every probe is a row. No rule adopted without Fisher p<0.05.
+# usage: ebanking-hs2.sh <window-id>
+set -u
+REPO=/home/patrickd/manuk
+CHROME_VER=${MANUK_CHROME_PIN:?MANUK_CHROME_PIN not set}
+OUT=$REPO/docs/sprint/reach/EBANKING-HS2-R0.1.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.a.tsv
+WIN=${1:?window id}
+HOST=ebanking.bdm-sa.com
+D=$(mktemp -d /tmp/ebk-hs2-XXXX)
+[ -f "$OUT" ] || printf 'window\tblock\tprobe\tutc\tmanuk_rc\tmanuk_bytes\tmanuk_secs\tattempts\tserverhello_lines\tfinal_attempt_stage\tmax_stage\trow_failed\tchrome_ver\n' > "$OUT"
+run_block() {  # $1 block, $2 probes, $3 spacing, $4 url
+  local B=$1 N=$2 SP=$3 URL=$4 FAILS=0
+  for P in $(seq 1 "$N"); do
+    [ "$P" -gt 1 ] && sleep "$SP"
+    touch "$REPO/.git/sprint-working"
+    T1=$(date +%s)
+    RUST_LOG=rustls=trace timeout 120 "$REPO/target/release/a11y-dump" "$URL" > "$D/$B$P.out" 2>"$D/$B$P.err"; MRC=$?
+    MSECS=$(( $(date +%s)-T1 )); MBYTES=$(wc -c < "$D/$B$P.out")
+    [ "$MRC" -ne 0 ] && { FAILED=1; FAILS=$((FAILS+1)); } || FAILED=0
+    STATS=$(sed 's/\x1b\[[0-9;]*m//g' "$D/$B$P.err" | awk '
+      /No cached session/ {a++; st=0; next}
+      /We got ServerHello/ {st=1; sh++}
+      /Server cert is/ {st++}
+      /ECDHE curve is/ {st++}
+      /Server DNS name/ {st++}
+      {if (st>mx) mx=st; last=st}
+      END {printf "%d\t%d\t%d\t%d", a+0, sh+0, last+0, mx+0}')
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$WIN" "$B" "$P" "$(date -u +%FT%TZ)" "$MRC" "$MBYTES" "$MSECS" "$STATS" "$FAILED" "$CHROME_VER" >> "$OUT"
+    echo "block $B probe $P: rc=$MRC bytes=$MBYTES secs=$MSECS stats(attempts,sh,final,max)=$(echo "$STATS" | tr '\t' ,) failed=$FAILED"
+  done
+  echo "block=$B probes=$N failed=$FAILS"
+}
+run_block M 10 1 https://127.0.0.1:9/
+run_block C 10 10 https://$HOST/
+MFAIL=$(awk -F'\t' -v w="$WIN" '$1==w && $2=="M" && $12==1' "$OUT" | wc -l)
+CROWS=$(awk -F'\t' -v w="$WIN" '$1==w && $2=="C"' "$OUT" | wc -l)
+echo "mutant failed=$MFAIL | C rows=$CROWS"
+[ "$MFAIL" -eq 10 ] && [ "$CROWS" -eq 10 ]
