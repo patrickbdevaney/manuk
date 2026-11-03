@@ -13581,7 +13581,13 @@ unsafe fn lazy_view(cx: *mut RawJSContext, vp: *mut Value, maker: &str) -> bool 
         &args,
         rval.handle_mut(),
     );
-    *vp = if ok { rval.get() } else { NullValue() };
+    if !ok {
+        // The maker failed — typically the script deadline terminated it. Keep the pending
+        // exception/termination and fail the getter; returning `null` here let a cut-off script
+        // read `el.style` as null and wander into a hydration-recovery path instead of ending.
+        return false;
+    }
+    *vp = rval.get();
     true
 }
 
