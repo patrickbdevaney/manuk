@@ -252,6 +252,7 @@ fn collect_content_sizes(
 /// Cascade + layout with the `@container` re-pass folded in — the one join every restyle path
 /// shares, so a page using container queries gets them on EVERY route to a new box tree, not
 /// just first load.
+#[track_caller]
 fn restyle_and_layout(
     dom: &Dom,
     sheets: &[Stylesheet],
@@ -262,6 +263,7 @@ fn restyle_and_layout(
     // ⚠ Phase-split for the same reason `forced_reflow` is: t1237 measured ONE forced reflow at
     // 21,169 ms on `bhramarah.in` and this function is all of it. Reported only when it is slow
     // enough for a human to see, so a normal pass costs two `Instant`s and no log line.
+    let caller = std::panic::Location::caller();
     let t_cascade = std::time::Instant::now();
     let mut styles = cascade_styles(dom, sheets, viewport_width);
     // ⚠⚠⚠ **THE ROOT ELEMENT'S SCROLLBAR COMES OUT OF THE INITIAL CONTAINING BLOCK, AND THE ONLY
@@ -351,6 +353,7 @@ fn restyle_and_layout(
             cq_relaid,
             n_sheets = sheets.len(),
             nodes = dom.len(),
+            caller = %format_args!("{}:{}", caller.file(), caller.line()),
             "SLOW RESTYLE+LAYOUT"
         );
     }
