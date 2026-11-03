@@ -619,11 +619,16 @@ impl AgentBrowser {
         // The guard arms the runtime's teardown on every exit path, after the page's own
         // thread-locals exist.
         let _settle = PrewarmSettle;
+        let fetch_started = std::time::Instant::now();
         let (fetched, ()) = futures_util::future::join(fetch_html(url), async {
             manuk_page::prewarm_js();
         })
         .await;
         let (html, final_url) = fetched?;
+        tracing::info!(
+            ms = fetch_started.elapsed().as_millis() as u64,
+            "agent phase done: fetch html + prewarm js"
+        );
         self.build_loaded(html, final_url).await
     }
 
@@ -667,7 +672,12 @@ impl AgentBrowser {
         self.ws_gen += 1;
         self.routed_url = None;
         self.page = Some(page);
+        let ws_started = std::time::Instant::now();
         self.service_websockets(SETTLE_BUDGET).await;
+        tracing::info!(
+            ms = ws_started.elapsed().as_millis() as u64,
+            "agent phase done: service websockets"
+        );
         Ok(())
     }
 

@@ -5045,10 +5045,25 @@ impl Page {
         // only then applies it to the DOM, so a dropped future loses that phase's *enhancement* and
         // never a half-mutated document. Earlier phases keep what they already applied.
         let budget = load_budget();
-        if tokio::time::timeout(budget, self.finish_loading_inner(fonts, viewport_width))
-            .await
-            .is_err()
-        {
+        let fl_started = std::time::Instant::now();
+        FL_PHASE.with(|c| c.set(("<before first phase>", fl_started)));
+        let timed_out =
+            tokio::time::timeout(budget, self.finish_loading_inner(fonts, viewport_width))
+                .await
+                .is_err();
+        if timed_out {
+            // The phase the cancel landed in never reports itself (its `phase()` successor never runs),
+            // so name it here with its wall time — otherwise a synchronous restyle that outlives the
+            // budget is time the ledger cannot see (salesforce.com debug: ~35 s of 230 s).
+            let (name, at) = FL_PHASE.with(|c| c.get());
+            tracing::info!(
+                phase = name,
+                ms = at.elapsed().as_millis() as u64,
+                total_ms = fl_started.elapsed().as_millis() as u64,
+                "finish_loading cancelled in phase"
+            );
+        }
+        if timed_out {
             tracing::warn!(
                 "load budget of {:.1}s exhausted mid-phase — painting now. The document is what the \
                  user came for; the rest was an enhancement.",
@@ -5259,6 +5274,7 @@ impl Page {
             }
             last_at = std::time::Instant::now();
             last_name = Some(name);
+            FL_PHASE.with(|c| c.set((name, last_at)));
             true
         };
         if phase("external CSS") {
@@ -15986,4 +16002,11 @@ fn files_to_json(files: &[(String, String, String)]) -> String {
             .collect::<Vec<_>>()
             .join(",")
     )
+}
+
+thread_local! {
+    /// The `finish_loading` phase now running and when it began, so the budget-cancel path can name
+    /// the phase it cancelled (that phase's own closing `phase()` call never runs).
+    static FL_PHASE: std::cell::Cell<(&'static str, std::time::Instant)> =
+        std::cell::Cell::new(("<none>", std::time::Instant::now()));
 }
