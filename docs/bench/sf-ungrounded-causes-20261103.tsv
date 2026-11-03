@@ -1,0 +1,11 @@
+cause	debug_presence	count	chrome_ver
+no-layout-box in navigation:Salesforce Main Menu	absent-from-debug-tree	514	145.0.7632.116
+no-layout-box in dialog:	absent-from-debug-tree	45	145.0.7632.116
+no-layout-box in navigation:Salesforce Main Menu	also-in-debug-tree	4	145.0.7632.116
+no-layout-box in navigation:Site tools	absent-from-debug-tree	2	145.0.7632.116
+no-layout-box in banner:	absent-from-debug-tree	1	145.0.7632.116
+TOTAL_a11y_dump_nobox_targets	-	566	145.0.7632.116
+LIST_ungrounded	-	481	145.0.7632.116
+LIST_ungrounded_classified	-	481	145.0.7632.116
+DEBUG_navigation_landmarks	-	0	145.0.7632.116
+DEBUG_list_ungrounded	-	0	145.0.7632.116

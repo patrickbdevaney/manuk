@@ -1,0 +1,1 @@
+[2m2026-11-03T10:47:16.750766Z[0m [31mERROR[0m [2mpage.console[0m[2m:[0m Recovering from error while hydrating:  TypeError: can't access property "setProperty", document.documentElement.style is null
