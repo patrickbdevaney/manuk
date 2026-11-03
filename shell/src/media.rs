@@ -795,7 +795,7 @@ mod tests {
 
         // ── pageswap (tick 373): the host fires it on the outgoing page; the listener
         //    registered during parse records it. RED: delete the dispatch in fire_pageswap.
-        page.fire_pageswap();
+        page.fire_pageswap(&fonts);
         let record2 = page.dom().text_content(out);
         assert!(
             record2.contains("ps-fired:true") && record2.contains("ps-vt-null:true"),

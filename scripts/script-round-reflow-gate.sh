@@ -12,10 +12,10 @@ SRC="${1:-engine/page/src/lib.rs}"
 
 # Entries with no fonts / viewport in scope, or whose only callers are host or test paths. Each one is a
 # named follow-up, not a silent exemption: R0.4.a.c.a.b.a.a.a.a.a.a.b.b.a.a.aa.a.a.
-JUSTIFIED='fire_frame_load|drain_element_scrolls|eval_for_test|fire_pageswap'
+JUSTIFIED="NONE_EXEMPT"  # empty list (R0.4.a.c.a.b.a.a.a.a.a.a.b.b.a.a.aa.a.a.a): a fn passes only by installing a scope or taking `&ReflowScope`
 
 uncovered=$(awk '
-  /^[ \t]*(pub(\([a-z]+\))? )?(async )?fn / { fname=$0; installed=0 }
+  /^[ \t]*(pub(\([a-z]+\))? )?(async )?fn / { fname=$0; installed=(fname ~ /: &ReflowScope/) }
   /ReflowScope::install/ { installed=1 }
   /manuk_js::(dispatch_[a-z_]*|eval_in_page|resolve_fetch[a-z_]*|deliver_[a-z_]*|fire_[a-z_]*|run_deferred_scripts)\(/ {
     if ($0 ~ /^[ \t]*\/\//) next

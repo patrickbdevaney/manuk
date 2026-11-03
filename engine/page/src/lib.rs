@@ -2566,6 +2566,15 @@ struct ReflowScope {
     prev_maps: manuk_js::ViewMaps,
 }
 
+/// A process-lifetime font context for the entries that have no caller-supplied one (`eval_for_test`).
+/// Built once per thread from the same system fonts every other context uses.
+fn scratch_fonts() -> &'static FontContext {
+    thread_local! {
+        static F: &'static FontContext = Box::leak(Box::new(FontContext::new()));
+    }
+    F.with(|f| *f)
+}
+
 impl ReflowScope {
     /// `dom`/`fonts`/`viewport_width` must describe the layout currently published to JS.
     fn install(
@@ -5776,7 +5785,7 @@ impl Page {
         manuk_js::clear_module_registry();
         manuk_js::clear_import_map();
         self.drain_canvases();
-        self.drain_element_scrolls();
+        self.drain_element_scrolls(&_reflow);
         if ran > 0 {
             tracing::debug!(scripts = ran, "executed deferred page scripts");
             let sheets: Vec<Stylesheet> = self.all_sheets();
@@ -6041,7 +6050,7 @@ impl Page {
         // (`fetch_and_load_iframes`) and the network-free path (`load_inline_frames`: `srcdoc`,
         // `about:blank`, bare `<iframe>`) arrive here, and so does every direct caller.
         if !provisional {
-            self.fire_frame_load(node);
+            self.fire_frame_load(node, fonts);
         }
     }
 
@@ -6220,14 +6229,22 @@ impl Page {
     /// Same shape as the `<script>` completion event: dispatch on the element, through the ordinary
     /// event path, so inline handlers, listeners and the reflected property all see it.
     //
-    // UNGUARDED (gate JUSTIFIED list): this takes no `fonts` and no viewport width, so it cannot arm a
-    // `ReflowScope`. A geometry read inside the frame's `load` handler, of a node that handler itself
-    // built, is therefore not forced to reflow and sees the pre-handler rects. Known gap, not a
-    // design choice; threading the frame's box width and fonts through is follow-up
-    // R0.4.a.c.a.b.a.a.a.a.a.a.b.b.a.a.aa.a.a.a.
     #[cfg(feature = "spidermonkey")]
-    fn fire_frame_load(&mut self, node: manuk_dom::NodeId) {
+    fn fire_frame_load(&mut self, node: manuk_dom::NodeId, fonts: &FontContext) {
         let Some(ctx) = &self.js else { return };
+        // The embedder's own layout width: the `load` event fires on the `<iframe>` element in THIS
+        // document, so a handler's geometry reads are against this document's viewport.
+        let _reflow = ReflowScope::install(
+            &self.dom,
+            fonts,
+            self.root_box.rect.width,
+            &self.images,
+            &self.final_url,
+            &self.external_css,
+            &self.scroll_offsets,
+            self.sticky_scroll_y,
+            self.has_sticky,
+        );
         let rects: HashMap<manuk_dom::NodeId, [f32; 4]> = self
             .root_box
             .node_rects(&self.dom)
@@ -6239,7 +6256,7 @@ impl Page {
 
     /// Without SpiderMonkey there is no handler to notify — a no-op, not a lie.
     #[cfg(not(feature = "spidermonkey"))]
-    fn fire_frame_load(&mut self, _node: manuk_dom::NodeId) {}
+    fn fire_frame_load(&mut self, _node: manuk_dom::NodeId, _fonts: &FontContext) {}
 
     #[cfg(feature = "spidermonkey")]
     fn load_inline_frames(&mut self, fonts: &FontContext) {
@@ -6638,12 +6655,7 @@ impl Page {
     /// The `scroll` event is not a nicety: an infinite-scroll feed listens for it to fetch the next
     /// page, and a sticky header listens for it to pin itself. A scroll that moves the pixels and fires
     /// nothing is half a scroll.
-    //
-    // UNGUARDED (gate JUSTIFIED list): the `scroll` dispatch below runs script with no `ReflowScope`,
-    // because this takes no `fonts` and no viewport width. A `scroll` handler that reads geometry of
-    // nodes it just built gets pre-handler rects. Known gap; follow-up
-    // R0.4.a.c.a.b.a.a.a.a.a.a.b.b.a.a.aa.a.a.a.
-    fn drain_element_scrolls(&mut self) {
+    fn drain_element_scrolls(&mut self, _scope: &ReflowScope) {
         let reqs = manuk_js::take_element_scrolls();
         if reqs.is_empty() {
             return;
@@ -8282,14 +8294,26 @@ impl Page {
         self.images.get(&node)
     }
 
-    //
-    // UNGUARDED (gate JUSTIFIED list): the raw primitive. It takes no `fonts` or viewport width, so it
-    // cannot arm a `ReflowScope`; the production re-entries that need one install their own (see
-    // `fire_lifecycle`). Tests call it directly, and that is why it is named `_for_test`. Its own
-    // trailing `drain_element_scrolls` is the gap noted there. Follow-up
-    // R0.4.a.c.a.b.a.a.a.a.a.a.b.b.a.a.aa.a.a.a.
     #[cfg(feature = "spidermonkey")]
     pub fn eval_for_test(&mut self, src: &str) {
+        let _reflow = ReflowScope::install(
+            &self.dom,
+            scratch_fonts(),
+            self.root_box.rect.width,
+            &self.images,
+            &self.final_url,
+            &self.external_css,
+            &self.scroll_offsets,
+            self.sticky_scroll_y,
+            self.has_sticky,
+        );
+        self.eval_in_scope(src, &_reflow);
+    }
+
+    /// The body of [`eval_for_test`](Self::eval_for_test), for a caller that already holds the round's
+    /// `ReflowScope` (so the scope's adoptable layout is the caller's to take).
+    #[cfg(feature = "spidermonkey")]
+    fn eval_in_scope(&mut self, src: &str, _scope: &ReflowScope) {
         let Some(ctx) = &self.js else { return };
         let rects: HashMap<manuk_dom::NodeId, [f32; 4]> = self
             .root_box
@@ -8307,7 +8331,7 @@ impl Page {
         self.publish_image_sources();
         let _ = manuk_js::eval_in_page(ctx, &mut self.dom, src, &rects, &self.styles, None);
         self.drain_canvases();
-        self.drain_element_scrolls();
+        self.drain_element_scrolls(_scope);
         // ⚠ **THE PAGE KEEPS RUNNING AFTER `finish_loading`, AND SO MUST THE HARVEST.**
         // Absorbing only at the end of the load pass loses everything a page does afterwards, which
         // for a real SPA is most of what it does. Measured on `meet.google.com`: **eight**
@@ -8322,14 +8346,20 @@ impl Page {
     /// Called by the host at the one moment it is true: navigation is committed and this page is
     /// about to be replaced. `.viewTransition` is null (the spec's no-transition value — no
     /// cross-document transition animation exists here, a named non-claim).
-    //
-    // UNGUARDED (gate JUSTIFIED list): the outgoing document's `pageswap` runs script with no
-    // `ReflowScope`, because this takes no `fonts` and no viewport width. Known gap; the shell caller
-    // (`stash_current` in shell/src/gui.rs) holds neither. Follow-up
-    // R0.4.a.c.a.b.a.a.a.a.a.a.b.b.a.a.aa.a.a.a.
     #[cfg(feature = "spidermonkey")]
-    pub fn fire_pageswap(&mut self) {
+    pub fn fire_pageswap(&mut self, fonts: &FontContext) {
         let Some(ctx) = &self.js else { return };
+        let _reflow = ReflowScope::install(
+            &self.dom,
+            fonts,
+            self.root_box.rect.width,
+            &self.images,
+            &self.final_url,
+            &self.external_css,
+            &self.scroll_offsets,
+            self.sticky_scroll_y,
+            self.has_sticky,
+        );
         let rects: HashMap<manuk_dom::NodeId, [f32; 4]> = self
             .root_box
             .node_rects(&self.dom)
@@ -8345,7 +8375,7 @@ impl Page {
     }
 
     #[cfg(not(feature = "spidermonkey"))]
-    pub fn fire_pageswap(&mut self) {}
+    pub fn fire_pageswap(&mut self, _fonts: &FontContext) {}
 
     /// **Fire the document lifecycle: `DOMContentLoaded`, then `load`.**
     ///
@@ -8396,7 +8426,7 @@ impl Page {
             self.sticky_scroll_y,
             self.has_sticky,
         );
-        self.eval_for_test(src);
+        self.eval_in_scope(src, &_reflow);
         // The scripts' geometry reads may have left a fresh layout behind; adopt it rather than have
         // the next phase redo the identical cascade+layout (PERF.1.2.a).
         if self.zoom == 1.0 && std::env::var_os("MANUK_NO_ADOPT_REFLOW").is_none() {
@@ -9149,7 +9179,7 @@ impl Page {
                 // ad slot and payment frame decides it may start talking. "In `child_pages` but not
                 // in `iframes`" IS that state; see the installation loop above.
                 if page.iframes.contains_key(&n) {
-                    page.fire_frame_load(n);
+                    page.fire_frame_load(n, fonts);
                 }
             }
         }

@@ -3486,7 +3486,7 @@ impl App {
         // The outgoing page's last breath (tick 373): `pageswap` fires while the document is
         // still alive — exit animations and state-flush hooks listen on it.
         if let Some(p) = self.page.as_mut() {
-            p.fire_pageswap();
+            p.fire_pageswap(&self.fonts);
         }
         let Some(page) = self.page.take() else { return };
         let url = self.url.clone();
