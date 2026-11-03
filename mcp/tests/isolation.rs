@@ -381,7 +381,10 @@ fn storage_state_export_outside_the_write_set_fails_loudly() {
         "storage_state",
         json!({"action": "export", "path": f.to_str().unwrap()}),
     );
-    assert!(!msg.contains("written"), "confined export reported success: {msg}");
+    assert!(
+        !msg.contains("written"),
+        "confined export reported success: {msg}"
+    );
     assert!(!f.exists(), "confined export wrote {}", f.display());
 }
 
@@ -415,7 +418,10 @@ fn storage_state_import_of_a_non_storage_state_file_fails_loudly() {
         .stdin(Stdio::null())
         .output()
         .unwrap();
-    assert!(!out.status.success(), "startup seed accepted a non-state file");
+    assert!(
+        !out.status.success(),
+        "startup seed accepted a non-state file"
+    );
 }
 
 /// SEC.DID.11: an export whose path is inside a profile dir may not overwrite `.manuk-profile.lock`,
@@ -463,7 +469,11 @@ fn storage_state_export_cannot_overwrite_profile_files_or_a_lock_hard_link() {
             "storage_state",
             json!({"action": "export", "path": target.to_str().unwrap()}),
         );
-        assert!(!msg.contains("written"), "overwrote {}: {msg}", target.display());
+        assert!(
+            !msg.contains("written"),
+            "overwrote {}: {msg}",
+            target.display()
+        );
     }
     assert_eq!(
         std::fs::read_to_string(&cookies).unwrap(),

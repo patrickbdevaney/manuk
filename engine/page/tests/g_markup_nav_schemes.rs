@@ -14,7 +14,9 @@ fn refresh(base: &str, content: &str, fonts: &FontContext, rt: &tokio::runtime::
         r#"<!doctype html><html><head><meta http-equiv="refresh" content="{content}"></head><body>x</body></html>"#
     );
     let page = rt.block_on(async { manuk_page::Page::load_async(&html, base, fonts, 800.0).await });
-    page.meta_refresh().map(|(_, u)| u).unwrap_or_else(|| "none".into())
+    page.meta_refresh()
+        .map(|(_, u)| u)
+        .unwrap_or_else(|| "none".into())
 }
 
 #[test]
@@ -23,9 +25,18 @@ fn markup_navigation_is_web_schemes_only() {
     let rt = tokio::runtime::Runtime::new().unwrap();
     let web = "https://stub.test/a/b.html";
     // controls
-    assert_eq!(refresh(web, "0;url=https://o.test/x", &fonts, &rt), "https://o.test/x");
-    assert_eq!(refresh(web, "0;url=/rel", &fonts, &rt), "https://stub.test/rel");
-    assert_eq!(refresh("file:///tmp/a.html", "0;url=b.html", &fonts, &rt), "file:///tmp/b.html");
+    assert_eq!(
+        refresh(web, "0;url=https://o.test/x", &fonts, &rt),
+        "https://o.test/x"
+    );
+    assert_eq!(
+        refresh(web, "0;url=/rel", &fonts, &rt),
+        "https://stub.test/rel"
+    );
+    assert_eq!(
+        refresh("file:///tmp/a.html", "0;url=b.html", &fonts, &rt),
+        "file:///tmp/b.html"
+    );
     // refusals
     for c in [
         "0;url=data:text/html,<b>x</b>",
@@ -34,12 +45,19 @@ fn markup_navigation_is_web_schemes_only() {
         "0;url=blob:https://stub.test/1",
         "0;url=DATA:text/html,x",
     ] {
-        assert_eq!(refresh(web, c, &fonts, &rt), "none", "G_MARKUP_NAV_SCHEMES: refresh `{c}` must go nowhere");
+        assert_eq!(
+            refresh(web, c, &fonts, &rt),
+            "none",
+            "G_MARKUP_NAV_SCHEMES: refresh `{c}` must go nowhere"
+        );
     }
     // the predicate itself
     assert!(manuk_page::top_nav_allowed(web, "https://x.test/"));
     assert!(manuk_page::top_nav_allowed(web, "http://x.test/"));
     assert!(!manuk_page::top_nav_allowed(web, "data:text/html,x"));
     assert!(!manuk_page::top_nav_allowed(web, "file:///etc/passwd"));
-    assert!(manuk_page::top_nav_allowed("file:///a.html", "file:///b.html"));
+    assert!(manuk_page::top_nav_allowed(
+        "file:///a.html",
+        "file:///b.html"
+    ));
 }

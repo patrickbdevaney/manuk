@@ -518,12 +518,24 @@ mod tests {
             ("file:///etc/passwd", false),
             ("javascript:alert(1)", false),
         ] {
-            let dom = dom_of(&format!(r#"<form action="{action}"><input name=q value=1></form>"#));
+            let dom = dom_of(&format!(
+                r#"<form action="{action}"><input name=q value=1></form>"#
+            ));
             let form = dom.find_first("form").unwrap();
-            assert_eq!(submission_url(&dom, form, "https://ex.test/p").is_ok(), ok, "GET {action}");
-            let dom = dom_of(&format!(r#"<form method=post action="{action}"><input name=q value=1></form>"#));
+            assert_eq!(
+                submission_url(&dom, form, "https://ex.test/p").is_ok(),
+                ok,
+                "GET {action}"
+            );
+            let dom = dom_of(&format!(
+                r#"<form method=post action="{action}"><input name=q value=1></form>"#
+            ));
             let form = dom.find_first("form").unwrap();
-            assert_eq!(urlencoded_submission(&dom, form, "https://ex.test/p").is_ok(), ok, "POST {action}");
+            assert_eq!(
+                urlencoded_submission(&dom, form, "https://ex.test/p").is_ok(),
+                ok,
+                "POST {action}"
+            );
         }
     }
 

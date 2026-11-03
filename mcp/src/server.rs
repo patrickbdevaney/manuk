@@ -76,7 +76,8 @@ pub fn webmcp_tool(t: &Value) -> Option<Tool> {
         Value::Object(m) => m.clone(),
         _ => schema(json!({}), &[]),
     };
-    let ann = rmcp::model::ToolAnnotations::new().read_only(t["annotations"]["readOnlyHint"] == json!(true));
+    let ann = rmcp::model::ToolAnnotations::new()
+        .read_only(t["annotations"]["readOnlyHint"] == json!(true));
     Some(Tool::new(format!("webmcp_{name}"), desc, Arc::new(schema)).annotate(ann))
 }
 
@@ -233,7 +234,11 @@ impl ServerHandler for ManukMcp {
         );
         if mutating {
             let now = crate::hub::fnv(Value::Array(self.webmcp().await).to_string().as_bytes());
-            if self.webmcp_sig.swap(now, std::sync::atomic::Ordering::SeqCst) != now {
+            if self
+                .webmcp_sig
+                .swap(now, std::sync::atomic::Ordering::SeqCst)
+                != now
+            {
                 let _ = c.peer.notify_tool_list_changed().await;
             }
         }

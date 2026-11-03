@@ -260,8 +260,17 @@ pub fn parse_grants(args: &mut Vec<String>) -> Result<Grants, String> {
 /// own, name that origin. Page content is data, so the caller flags it rather than obeying it.
 pub fn nav_ask(text: &str, page_url: &str) -> Option<String> {
     const VERBS: &[&str] = &[
-        "navigate to", "go to", "goto", "visit", "open ", "redirect", "send ", "post ", "submit to",
-        "upload to", "fetch ",
+        "navigate to",
+        "go to",
+        "goto",
+        "visit",
+        "open ",
+        "redirect",
+        "send ",
+        "post ",
+        "submit to",
+        "upload to",
+        "fetch ",
     ];
     let here = origin(page_url);
     for line in text.lines() {

@@ -441,15 +441,28 @@ fn webmcp_list_call_fill(backend: &str) {
     assert!(!err, "{nav}");
     let tools = webmcp_tools(&mut c);
     let n = names(&tools);
-    for want in ["webmcp_add_numbers", "webmcp_subscribe", "webmcp_fill_form_booking"] {
+    for want in [
+        "webmcp_add_numbers",
+        "webmcp_subscribe",
+        "webmcp_fill_form_booking",
+    ] {
         assert!(n.contains(&want.to_string()), "{want} missing from {n:?}");
     }
-    assert!(!n.contains(&"webmcp_search".to_string()), "search is not registered yet");
+    assert!(
+        !n.contains(&"webmcp_search".to_string()),
+        "search is not registered yet"
+    );
     // schema of a registered tool is the page's own
-    let add = tools.iter().find(|t| t["name"] == "webmcp_add_numbers").unwrap();
+    let add = tools
+        .iter()
+        .find(|t| t["name"] == "webmcp_add_numbers")
+        .unwrap();
     assert_eq!(add["inputSchema"]["properties"]["a"]["type"], "number");
     // the synthesized form tool carries all six fields
-    let form = tools.iter().find(|t| t["name"] == "webmcp_fill_form_booking").unwrap();
+    let form = tools
+        .iter()
+        .find(|t| t["name"] == "webmcp_fill_form_booking")
+        .unwrap();
     let props = form["inputSchema"]["properties"].as_object().unwrap();
     for f in ["name", "email", "guests", "room", "notes", "newsletter"] {
         assert!(props.contains_key(f), "field {f} missing: {props:?}");
@@ -485,8 +498,14 @@ fn webmcp_tool_with_hidden_description_is_withheld() {
     }
     for backend in ["chrome", "manuk"] {
         let (marked, ran) = webmcp_hidden(backend, None);
-        assert!(marked.contains("WITHHELD"), "{backend}: helper not marked: {marked}");
-        assert!(ran.0 && !ran.1.contains("pwned"), "{backend}: withheld tool ran: {ran:?}");
+        assert!(
+            marked.contains("WITHHELD"),
+            "{backend}: helper not marked: {marked}"
+        );
+        assert!(
+            ran.0 && !ran.1.contains("pwned"),
+            "{backend}: withheld tool ran: {ran:?}"
+        );
     }
 }
 
@@ -498,8 +517,14 @@ fn webmcp_hidden_description_mutant_goes_red() {
     }
     for backend in ["chrome", "manuk"] {
         let (marked, ran) = webmcp_hidden(backend, Some("webmcp-no-taint"));
-        assert!(!marked.contains("WITHHELD"), "{backend}: mutant still withheld: {marked}");
-        assert!(!ran.0 && ran.1.contains("pwned"), "{backend}: mutant tool did not run: {ran:?}");
+        assert!(
+            !marked.contains("WITHHELD"),
+            "{backend}: mutant still withheld: {marked}"
+        );
+        assert!(
+            !ran.0 && ran.1.contains("pwned"),
+            "{backend}: mutant tool did not run: {ran:?}"
+        );
     }
 }
 
@@ -512,7 +537,10 @@ fn webmcp_broken_bridge_goes_red() {
     let mut c = Client::start_on("manuk", Some("webmcp-no-bridge"));
     let (err, nav) = c.tool("navigate", json!({"url": fixture("webmcp.html")}));
     assert!(!err, "{nav}");
-    assert!(webmcp_tools(&mut c).is_empty(), "tools listed without a bridge");
+    assert!(
+        webmcp_tools(&mut c).is_empty(),
+        "tools listed without a bridge"
+    );
 }
 
 fn webmcp_hidden(backend: &str, mutate: Option<&str>) -> (String, (bool, String)) {

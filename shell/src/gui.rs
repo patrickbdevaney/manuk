@@ -4751,7 +4751,12 @@ mod tests {
     #[test]
     fn resolve_href_handles_relative_absolute_and_skips() {
         // SEC.DID.12.b (P16): data:/file:/blob: anchors from a web page go nowhere; https still goes.
-        for h in ["data:text/html,x", "file:///etc/passwd", "blob:https://example.com/1", "DATA:text/html,x"] {
+        for h in [
+            "data:text/html,x",
+            "file:///etc/passwd",
+            "blob:https://example.com/1",
+            "DATA:text/html,x",
+        ] {
             assert_eq!(resolve_href("https://example.com/p", h), None, "{h}");
         }
         assert!(resolve_href("https://example.com/p", "https://o.test/").is_some());

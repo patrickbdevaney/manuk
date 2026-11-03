@@ -46,10 +46,21 @@ fn clipboard_read_and_write_require_a_user_gesture() {
     let root = page.dom().root();
     let out = manuk_css::query_selector_all(page.dom(), root, "#out")[0];
     let got = page.dom().text_content(out);
-    for claim in ["read-denied:true", "read-denied-item:true", "write-denied:true", "stage1"] {
-        assert!(got.contains(claim), "G_CLIPBOARD_GESTURE: expected `{claim}`\n  got: {got}");
+    for claim in [
+        "read-denied:true",
+        "read-denied-item:true",
+        "write-denied:true",
+        "stage1",
+    ] {
+        assert!(
+            got.contains(claim),
+            "G_CLIPBOARD_GESTURE: expected `{claim}`\n  got: {got}"
+        );
     }
-    assert!(!got.contains("SECRET"), "secret leaked without a gesture: {got}");
+    assert!(
+        !got.contains("SECRET"),
+        "secret leaked without a gesture: {got}"
+    );
     assert!(
         manuk_js::take_clipboard_writes().is_empty(),
         "G_CLIPBOARD_GESTURE: a gesture-less writeText reached the OS clipboard bridge"
@@ -58,5 +69,9 @@ fn clipboard_read_and_write_require_a_user_gesture() {
     page.dispatch_click(go, &fonts, 800.0);
     let out = manuk_css::query_selector_all(page.dom(), root, "#out")[0];
     let _ = out;
-    assert_eq!(manuk_js::take_clipboard_writes(), vec!["user-copy".to_string()], "write inside a click must reach the bridge");
+    assert_eq!(
+        manuk_js::take_clipboard_writes(),
+        vec!["user-copy".to_string()],
+        "write inside a click must reach the bridge"
+    );
 }

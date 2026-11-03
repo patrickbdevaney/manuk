@@ -34,7 +34,10 @@ async fn get_retries_dropped_handshakes_post_does_not() {
     assert!(r.is_err());
     let n = hits.load(Ordering::SeqCst);
     // The document deadline (~8s) may cut the last backoffs short: 7 dials measured, 9 at most.
-    assert!((5..=9).contains(&n), "GET must retry dropped handshakes, dialled {n}x");
+    assert!(
+        (5..=9).contains(&n),
+        "GET must retry dropped handshakes, dialled {n}x"
+    );
 
     let (port, hits) = dropper();
     let r = manuk_net::post_document(

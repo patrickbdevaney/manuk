@@ -2753,7 +2753,12 @@ async fn send_raw(
             *h = std::mem::take(&mut spare);
             spare = h.clone();
         }
-        resp = c.request(b.body(Full::new(Bytes::new())).context("building request")?).await;
+        resp = c
+            .request(
+                b.body(Full::new(Bytes::new()))
+                    .context("building request")?,
+            )
+            .await;
     }
     let resp = resp.with_context(|| format!("request to {url} failed"))?;
     if nettrace::enabled() {

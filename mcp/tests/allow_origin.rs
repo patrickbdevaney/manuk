@@ -53,7 +53,12 @@ impl Client {
             .expect("spawn manuk-mcp");
         let tx = child.stdin.take().unwrap();
         let rx = BufReader::new(child.stdout.take().unwrap());
-        let mut c = Client { child, tx, rx, id: 0 };
+        let mut c = Client {
+            child,
+            tx,
+            rx,
+            id: 0,
+        };
         c.rpc("initialize", json!({"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}));
         c.send(json!({"jsonrpc": "2.0", "method": "notifications/initialized"}));
         c
@@ -68,7 +73,10 @@ impl Client {
         self.send(json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}));
         loop {
             let mut line = String::new();
-            assert!(self.rx.read_line(&mut line).unwrap() > 0, "server closed stdout");
+            assert!(
+                self.rx.read_line(&mut line).unwrap() > 0,
+                "server closed stdout"
+            );
             let v: Value = serde_json::from_str(&line).unwrap();
             if v["id"] == json!(id) {
                 return v;
@@ -76,7 +84,10 @@ impl Client {
         }
     }
     fn nav(&mut self, url: &str) -> (bool, String) {
-        let r = self.rpc("tools/call", json!({"name": "navigate", "arguments": {"url": url}}));
+        let r = self.rpc(
+            "tools/call",
+            json!({"name": "navigate", "arguments": {"url": url}}),
+        );
         let res = &r["result"];
         let text = res["content"]
             .as_array()
@@ -105,7 +116,10 @@ fn allow_origin_refuses_other_origins_and_default_is_open() {
     // default off: B is reachable
     let mut open = Client::start(&[]);
     let (e, t) = open.nav(&format!("{b}/"));
-    assert!(!e && t.contains("B-SIDE"), "default must stay open: {e} {t}");
+    assert!(
+        !e && t.contains("B-SIDE"),
+        "default must stay open: {e} {t}"
+    );
     drop(open);
     b_log.lock().unwrap().clear();
 
@@ -117,7 +131,10 @@ fn allow_origin_refuses_other_origins_and_default_is_open() {
         "injected navigate request not flagged:\n{t}"
     );
     let (e, t) = c.nav(&format!("{b}/steal"));
-    assert!(e && t.contains("not in read set"), "navigate to B not refused: {e} {t}");
+    assert!(
+        e && t.contains("not in read set"),
+        "navigate to B not refused: {e} {t}"
+    );
     std::thread::sleep(std::time::Duration::from_millis(300));
     assert_eq!(b_log.lock().unwrap().len(), 0, "socket opened on B");
 }

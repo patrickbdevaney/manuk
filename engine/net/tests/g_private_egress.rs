@@ -259,7 +259,13 @@ fn public_page_cannot_name_a_local_host_through_a_socks_proxy() {
     let (proxy_port, proxy_hits, _) = server("");
     let proxy = manuk_net::proxy::SocksProxy::new(format!("127.0.0.1:{proxy_port}"));
     manuk_net::set_top_level_document("http://public.example/");
-    for name in ["localhost", "intranet", "printer.local", "api.localhost", "localhost."] {
+    for name in [
+        "localhost",
+        "intranet",
+        "printer.local",
+        "api.localhost",
+        "localhost.",
+    ] {
         let r = rt.block_on(manuk_net::proxy::fetch_via_proxy(
             &proxy,
             &format!("http://{name}:9/"),
@@ -273,7 +279,13 @@ fn public_page_cannot_name_a_local_host_through_a_socks_proxy() {
     }
     // Control: opt-out reaches the proxy.
     manuk_net::egress::set_allow_private_network(true);
-    let _ = rt.block_on(manuk_net::proxy::fetch_via_proxy(&proxy, "http://intranet:9/"));
-    assert!(proxy_hits.load(Ordering::SeqCst) >= 1, "control: opt-out reaches the proxy");
+    let _ = rt.block_on(manuk_net::proxy::fetch_via_proxy(
+        &proxy,
+        "http://intranet:9/",
+    ));
+    assert!(
+        proxy_hits.load(Ordering::SeqCst) >= 1,
+        "control: opt-out reaches the proxy"
+    );
     manuk_net::egress::set_allow_private_network(false);
 }

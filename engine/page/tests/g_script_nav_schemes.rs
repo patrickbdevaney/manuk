@@ -20,8 +20,13 @@ fn run(base: &str, script: &str, fonts: &FontContext, rt: &tokio::runtime::Runti
     let _ = manuk_js::take_window_opens();
     let html = format!("<!doctype html><body><script>{script}</script></body>");
     let page = rt.block_on(async { manuk_page::Page::load_async(&html, base, fonts, 800.0).await });
-    let nav = page.take_script_navigation().unwrap_or_else(|| "none".into());
-    let opens: Vec<String> = manuk_js::take_window_opens().into_iter().map(|(_, u)| u).collect();
+    let nav = page
+        .take_script_navigation()
+        .unwrap_or_else(|| "none".into());
+    let opens: Vec<String> = manuk_js::take_window_opens()
+        .into_iter()
+        .map(|(_, u)| u)
+        .collect();
     format!("nav={nav} opens={opens:?}")
 }
 
@@ -33,12 +38,34 @@ fn a_page_script_can_only_navigate_or_open_to_web_schemes() {
     let refused = "nav=none opens=[]";
 
     // ── CONTROLS: these must still work, or the refusals below are vacuous.
-    assert_eq!(run(web, r#"location.href = "https://other.test/x";"#, &fonts, &rt), r#"nav=https://other.test/x opens=[]"#);
-    assert_eq!(run(web, r#"location.assign("/rel");"#, &fonts, &rt), r#"nav=https://stub.test/rel opens=[]"#);
-    assert_eq!(run(web, r#"window.open("https://ok.test/");"#, &fonts, &rt), r#"nav=none opens=["https://ok.test/"]"#);
-    assert_eq!(run(web, r#"window.open("rel.html");"#, &fonts, &rt), r#"nav=none opens=["rel.html"]"#);
     assert_eq!(
-        run("file:///tmp/a.html", r#"window.open("file:///tmp/b.html");"#, &fonts, &rt),
+        run(
+            web,
+            r#"location.href = "https://other.test/x";"#,
+            &fonts,
+            &rt
+        ),
+        r#"nav=https://other.test/x opens=[]"#
+    );
+    assert_eq!(
+        run(web, r#"location.assign("/rel");"#, &fonts, &rt),
+        r#"nav=https://stub.test/rel opens=[]"#
+    );
+    assert_eq!(
+        run(web, r#"window.open("https://ok.test/");"#, &fonts, &rt),
+        r#"nav=none opens=["https://ok.test/"]"#
+    );
+    assert_eq!(
+        run(web, r#"window.open("rel.html");"#, &fonts, &rt),
+        r#"nav=none opens=["rel.html"]"#
+    );
+    assert_eq!(
+        run(
+            "file:///tmp/a.html",
+            r#"window.open("file:///tmp/b.html");"#,
+            &fonts,
+            &rt
+        ),
         r#"nav=none opens=["file:///tmp/b.html"]"#
     );
 
@@ -55,6 +82,10 @@ fn a_page_script_can_only_navigate_or_open_to_web_schemes() {
         r#"window.open("file:///etc/passwd");"#,
         r#"window.open("DATA:text/html,x");"#,
     ] {
-        assert_eq!(run(web, s, &fonts, &rt), refused, "G_SCRIPT_NAV_SCHEMES: `{s}` must go nowhere");
+        assert_eq!(
+            run(web, s, &fonts, &rt),
+            refused,
+            "G_SCRIPT_NAV_SCHEMES: `{s}` must go nowhere"
+        );
     }
 }

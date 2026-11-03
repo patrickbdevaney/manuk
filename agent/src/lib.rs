@@ -890,7 +890,8 @@ impl AgentBrowser {
                 let dom = page.dom();
                 if let Some(n) = dom.get_element_by_id(dom.root(), ID) {
                     let text = dom.text_content(n);
-                    let err = dom.element(n)
+                    let err = dom
+                        .element(n)
                         .and_then(|e| e.attr("data-k"))
                         .is_some_and(|k| k == "err");
                     // Leave no trace: a recorded act must replay against the same document.

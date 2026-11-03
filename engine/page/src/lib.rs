@@ -620,7 +620,9 @@ fn frame_same_origin(embedder: &str, framed: &str) -> bool {
 /// the already-resolved absolute URL; `base` is the page's own URL. The markup twin of the script-side
 /// `__navAllowed` (P14).
 pub fn top_nav_allowed(base: &str, url: &str) -> bool {
-    let Ok(u) = Url::parse(url.trim()) else { return false };
+    let Ok(u) = Url::parse(url.trim()) else {
+        return false;
+    };
     match u.scheme() {
         "http" | "https" => true,
         "file" => Url::parse(base).is_ok_and(|b| b.scheme() == "file"),

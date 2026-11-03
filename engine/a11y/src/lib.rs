@@ -3218,6 +3218,18 @@ fn build_children(
         if node_visibility(dom, child, ctx.styles).0 {
             continue;
         }
+        // ⚠ **NEVER STYLED + NEVER LAID OUT = NEVER RENDERED.** When the caller holds a style map, an
+        //    element absent from it was inserted after the cascade (script-built menus) and got no
+        //    computed `display`, so the `display:none` test above could not fire on it; with no
+        //    layout rect either it is not on the page. Chrome's `getFullAXTree` omits such closed
+        //    menus (salesforce.com: 559 of 566 box-less link/button nodes are absent from it), and
+        //    keeping them inflated the agent's target list with nodes that cannot be driven. An
+        //    element that IS rendered (even a 1px visually-hidden skip link) has a style entry
+        //    and a rect, so it is untouched; a bare-DOM build (empty style map) never prunes here.
+        if !ctx.styles.is_empty() && !ctx.styles.contains_key(&child) && !rects.contains_key(&child)
+        {
+            continue;
+        }
         // `visibility:hidden` drops the NODE but **keeps walking**, because `visibility` is the one
         // hiding mechanism a descendant can undo: `visibility:visible` inside a hidden ancestor is
         // shown, and is in Chrome's accessibility tree. Pruning the subtree here would delete it.
@@ -4040,6 +4052,58 @@ mod tests {
         let kids: Vec<NodeId> = dom.children(body).collect();
         assert_eq!(role_of(&dom, kids[0]), Some(Role::Generic));
         assert_eq!(role_of(&dom, kids[1]), Some(Role::Region));
+    }
+
+    /// R0.4.a.c.a.b.a.a.a.a.a.a.a.a.b.a: an element inserted after the cascade (no style entry, no
+    /// rect) is not on the page and is out of the tree; a rendered 1px visually-hidden skip link
+    /// (style entry + rect) stays; a bare-DOM build (empty style map) prunes nothing.
+    #[test]
+    fn unstyled_unlaid_out_element_is_pruned_but_tiny_rendered_one_is_kept() {
+        let dom = manuk_html::parse(
+            r##"<body><a id=skip href="#m">Skip to main</a><a id=late href="/x">Late menu</a></body>"##,
+        );
+        let id = |want: &str| {
+            dom.descendants(dom.root())
+                .find(|&n| dom.element(n).is_some_and(|e| e.attr("id") == Some(want)))
+                .unwrap()
+        };
+        let (skip, late) = (id("skip"), id("late"));
+        let mut styles = NameStyles::new();
+        for n in dom.descendants(dom.root()).filter(|&n| n != late) {
+            styles.insert(
+                n,
+                NameStyle {
+                    has_border: false,
+                    display: manuk_css::Display::Inline,
+                    text_transform: manuk_css::TextTransform::None,
+                    visibility: manuk_css::Visibility::Visible,
+                },
+            );
+        }
+        let mut rects = HashMap::new();
+        rects.insert(
+            skip,
+            Rect {
+                x: 0.0,
+                y: 0.0,
+                width: 1.0,
+                height: 1.0,
+            },
+        );
+        let (g, a) = (GeneratedText::new(), GeneratedAlt::new());
+        let tree = build_tree_generated(
+            &dom,
+            &rects,
+            &ZIndex::new(),
+            &HashSet::new(),
+            &HashSet::new(),
+            &empty_name_ctx(&g, &a, &styles),
+        );
+        let l = tree.to_observation_lines().join("\n");
+        assert!(l.contains("Skip to main"), "{l}");
+        assert!(!l.contains("Late menu"), "{l}");
+        let bare = build_tree(&dom).to_observation_lines().join("\n");
+        assert!(bare.contains("Late menu"), "{bare}");
     }
 
     /// wired.com: `aria-labelledby` on a node inside the subtree it references used to recurse
