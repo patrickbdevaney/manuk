@@ -1,0 +1,104 @@
+{
+ "chrome_ver": "145.0.7632.116",
+ "results": [
+  {
+   "sample_id": "P-vis",
+   "construction": "",
+   "manuk_render": "",
+   "chrome_paint": "visible",
+   "probes": [
+    {
+     "kind": "visible_text",
+     "needle": "account number ninety nine immediately",
+     "carriers": [
+      {
+       "carrier": "text",
+       "tag": "P",
+       "st": "visible",
+       "why": "box+opacity+unoccluded contrast 21.00:1"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "sample_id": "P-op0",
+   "construction": "",
+   "manuk_render": "",
+   "chrome_paint": "rendered-hidden",
+   "probes": [
+    {
+     "kind": "hidden_style",
+     "needle": "account number ninety nine immediately",
+     "carriers": [
+      {
+       "carrier": "text",
+       "tag": "DIV",
+       "st": "hidden",
+       "why": "opacity~0"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "sample_id": "P-dn",
+   "construction": "",
+   "manuk_render": "",
+   "chrome_paint": "non-rendered",
+   "probes": [
+    {
+     "kind": "nobox",
+     "needle": "account number ninety nine immediately",
+     "carriers": [
+      {
+       "carrier": "text",
+       "tag": "DIV",
+       "st": "nobox",
+       "why": "display:none ancestor"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "sample_id": "P-cmt",
+   "construction": "",
+   "manuk_render": "",
+   "chrome_paint": "non-rendered",
+   "probes": [
+    {
+     "kind": "comment",
+     "needle": "account number ninety nine immediately",
+     "carriers": [
+      {
+       "carrier": "comment",
+       "st": "not-painted-at-rest",
+       "why": "comment node"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "sample_id": "P-aria",
+   "construction": "",
+   "manuk_render": "",
+   "chrome_paint": "non-rendered",
+   "probes": [
+    {
+     "kind": "attr",
+     "needle": "account number ninety nine immediately",
+     "carriers": [
+      {
+       "carrier": "attr:aria-label",
+       "tag": "BUTTON",
+       "st": "not-painted-at-rest",
+       "why": "attribute value is not painted text"
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}
