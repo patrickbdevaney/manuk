@@ -1,0 +1,7 @@
+class	count	chrome_ver
+chrome-absent	559	145.0.7632.116
+chrome-exposed-with-box	7	145.0.7632.116
+TOTAL_manuk_nobox_targets	566	145.0.7632.116
+CLASSIFIED	559	145.0.7632.116
+CHROME_exposed_boxed_link_button	117	145.0.7632.116
+CHROME_total_link_button_nodes	117	145.0.7632.116
