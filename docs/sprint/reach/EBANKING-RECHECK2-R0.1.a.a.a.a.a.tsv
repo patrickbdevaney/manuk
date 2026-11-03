@@ -1,0 +1,8 @@
+attempt	utc	openssl_cert	openssl_rc	a11y_rc	a11y_secs	chrome_ver	probe_url
+1	2026-11-03T04:08:54Z	1	0	0	7.0	145.0.7632.116	https://ebanking.bdm-sa.com/
+2	2026-11-03T04:09:02Z	1	0	0	7.0	145.0.7632.116	https://ebanking.bdm-sa.com/
+3	2026-11-03T04:09:10Z	1	0	0	7.4	145.0.7632.116	https://ebanking.bdm-sa.com/
+4	2026-11-03T04:09:18Z	0	1	1	14.7	145.0.7632.116	https://ebanking.bdm-sa.com/
+5	2026-11-03T04:09:33Z	1	1	1	15.7	145.0.7632.116	https://ebanking.bdm-sa.com/
+6	2026-11-03T04:09:49Z	0	1	1	15.1	145.0.7632.116	https://ebanking.bdm-sa.com/
+7	2026-11-03T04:10:05Z	0	1	1	14.6	145.0.7632.116	https://ebanking.bdm-sa.com/
