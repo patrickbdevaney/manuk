@@ -51,19 +51,27 @@ async fn main() -> Result<()> {
     let mut total = drivability::Tally::default();
 
     for url in &args {
+        let phases = std::env::var_os("MANUK_PHASE_TIMING").is_some();
+        let t0 = std::time::Instant::now();
+        let mark = |what: &str| {
+            if phases {
+                eprintln!("PHASE {what} t={:.2}s", t0.elapsed().as_secs_f64());
+            }
+        };
         let mut browser = AgentBrowser::new(1024, 768);
-        let tree = match browser
-            .navigate(url)
-            .await
-            .and_then(|_| browser.a11y_tree())
-        {
+        mark("navigate-start");
+        let nav = browser.navigate(url).await;
+        mark("navigate-end");
+        let tree = match nav.and_then(|_| browser.a11y_tree()) {
             Ok(t) => t,
             Err(e) => {
                 println!("{url:<40} FAILED: {e}");
                 continue;
             }
         };
+        mark("a11y-end");
         let t = drivability::tally(&tree);
+        mark("tally-end");
         println!(
             "{:<40} {:>7} {:>9} {:>10} {:>8} {:>7.1}% {:>9.1}% {:>9.1}% {:>8.1}%",
             url.chars().take(40).collect::<String>(),
