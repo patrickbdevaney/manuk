@@ -1,0 +1,298 @@
+2026-11-03T11:24:59.597026Z  WARN manuk_js::dom_bindings: a page <script> threw error=(no exception object)
+2026-11-03T11:24:59.605812Z  WARN manuk_js::dom_bindings: a page <script> threw error=TypeError: can't access property "document", O is null at https://www.salesforce.com/ inline#109:1:1227
+t@https://www.salesforce.com/ inline#109:1:1227
+@https://www.salesforce.com/ inline#109:1:2307
+@https://www.salesforce.com/ inline#109:1:2435
+@https://www.salesforce.com/ inline#109:1:4221
+2026-11-03T11:24:59.646500Z  WARN mozjs::rust: Warning at https://www.salesforce.com/ inline#13869:1:5296: unreachable code after return statement
+
+2026-11-03T11:24:59.702544Z  WARN mozjs::rust: Warning at https://www.salesforce.com/ inline#13869:1:5296: unreachable code after return statement
+
+2026-11-03T11:24:59.702561Z  WARN mozjs::rust: Warning at https://www.salesforce.com/ inline#13869:1:605267: unreachable code after return statement
+
+2026-11-03T11:24:59.703429Z  WARN manuk_js::dom_bindings: UNHANDLED PROMISE REJECTION — a page's async code threw and nothing was listening. Every modern framework renders inside an async function, so this is where their failures go to die. error=undefined
+2026-11-03T11:25:01.814286Z  WARN manuk_js::dom_bindings: a page <script> threw error=(no exception object)
+2026-11-03T11:25:01.819504Z  WARN manuk_js::dom_bindings: a page <script> threw error=(no exception object)
+2026-11-03T11:25:01.821933Z  WARN manuk_js::dom_bindings: a page <script> threw error=(no exception object)
+2026-11-03T11:25:01.823392Z  WARN manuk_js::dom_bindings: a page <script> threw error=(no exception object)
+2026-11-03T11:25:07.747356Z  WARN manuk_js::dom_bindings: UNHANDLED PROMISE REJECTION — a page's async code threw and nothing was listening. Every modern framework renders inside an async function, so this is where their failures go to die. error=undefined
+2026-11-03T11:25:07.747409Z  WARN manuk_js::dom_bindings: UNHANDLED PROMISE REJECTION — a page's async code threw and nothing was listening. Every modern framework renders inside an async function, so this is where their failures go to die. error=performance.getEntriesByType(...).find(...) is undefined
+h@https://www.salesforce.com/ inline#82:2:29608
+@https://www.salesforce.com/ inline#82:2:31293
+@https://www.salesforce.com/ inline#82:2:31426
+@https://www.salesforce.com/ inline#82:2:31431
+
+2026-11-03T11:25:07.747445Z  WARN manuk_js::dom_bindings: UNHANDLED PROMISE REJECTION — a page's async code threw and nothing was listening. Every modern framework renders inside an async function, so this is where their failures go to die. error=undefined
+2026-11-03T11:25:07.747466Z  WARN manuk_js::dom_bindings: UNHANDLED PROMISE REJECTION — a page's async code threw and nothing was listening. Every modern framework renders inside an async function, so this is where their failures go to die. error=undefined
+2026-11-03T11:25:07.747482Z  WARN manuk_js::dom_bindings: UNHANDLED PROMISE REJECTION — a page's async code threw and nothing was listening. Every modern framework renders inside an async function, so this is where their failures go to die. error=undefined
+2026-11-03T11:25:07.747496Z  WARN manuk_js::dom_bindings: UNHANDLED PROMISE REJECTION — a page's async code threw and nothing was listening. Every modern framework renders inside an async function, so this is where their failures go to die. error=undefined
+2026-11-03T11:25:07.747521Z  WARN manuk_js::dom_bindings: UNHANDLED PROMISE REJECTION — a page's async code threw and nothing was listening. Every modern framework renders inside an async function, so this is where their failures go to die. error=undefined
+2026-11-03T11:25:07.747535Z  WARN manuk_js::dom_bindings: UNHANDLED PROMISE REJECTION — a page's async code threw and nothing was listening. Every modern framework renders inside an async function, so this is where their failures go to die. error=undefined
+2026-11-03T11:25:07.747548Z  WARN manuk_js::dom_bindings: UNHANDLED PROMISE REJECTION — a page's async code threw and nothing was listening. Every modern framework renders inside an async function, so this is where their failures go to die. error=undefined
+2026-11-03T11:25:07.747583Z  WARN manuk_js::dom_bindings: UNHANDLED PROMISE REJECTION — a page's async code threw and nothing was listening. Every modern framework renders inside an async function, so this is where their failures go to die. error=undefined
+2026-11-03T11:25:07.747610Z  WARN manuk_js::dom_bindings: UNHANDLED PROMISE REJECTION — a page's async code threw and nothing was listening. Every modern framework renders inside an async function, so this is where their failures go to die. error=undefined
+2026-11-03T11:25:07.747657Z  WARN manuk_js::dom_bindings: UNHANDLED PROMISE REJECTION — a page's async code threw and nothing was listening. Every modern framework renders inside an async function, so this is where their failures go to die. error=WeakMap key null must be an object
+Yn@module.js:1:43765
+He/t.renderRoot<@module.js:1:12958
+He@module.js:1:13052
+Fr@module.js:1:210022
+Qn/<@module.js:1:42730
+Qn@module.js:1:42912
+Ua/h</l<@module.js:1:30066
+Ua/h<@module.js:1:30105
+t@module.js:1:51876
+createCustomElement@module.js:1:55936
+Ua@module.js:1:29965
+Va@module.js:1:29795
+Wa@module.js:1:30321
+Va/<@module.js:1:29705
+Va@module.js:1:29729
+Wa@module.js:1:30321
+Va/<@module.js:1:29705
+Va@module.js:1:29729
+cn@module.js:1:34910
+$a@module.js:1:27908
+Zn/</<@module.js:1:44002
+co@module.js:1:45126
+Zn/<@module.js:1:43981
+Zn@module.js:1:44040
+qa/</<@module.js:1:28704
+qa/<@module.js:1:28708
+qa@module.js:1:28713
+cn@module.js:1:34833
+$a@module.js:1:27908
+qa/<@module.js:1:28325
+qa@module.js:1:28355
+cn@module.js:1:34833
+$a@module.js:1:27908
+qa/<@module.js:1:28325
+qa@module.js:1:28355
+cn@module.js:1:34833
+$a@module.js:1:27908
+qa/<@module.js:1:28325
+qa@module.js:1:28355
+cn@module.js:1:34833
+$a@module.js:1:27908
+qa/<@module.js:1:28325
+qa@module.js:1:28355
+cn@module.js:1:34833
+$a@module.js:1:27908
+qa/<@module.js:1:28325
+qa@module.js:1:28355
+cn@module.js:1:34833
+$a@module.js:1:27908
+qa/<@module.js:1:28325
+qa@module.js:1:28355
+cn@module.js:1:34833
+$a@module.js:1:27908
+qa/<@module.js:1:28325
+qa@module.js:1:28355
+cn@module.js:1:34833
+$a@module.js:1:27908
+qa/<@module.js:1:28325
+qa@module.js:1:28355
+cn@module.js:1:34833
+$a@module.js:1:27908
+Zn/</<@module.js:1:44002
+co@module.js:1:45126
+Zn/<@module.js:1:43981
+Zn@module.js:1:44040
+ao@module.js:1:44232
+Ot@module.js:1:5037
+value@promise_jobs.js:1:430
+
+2026-11-03T11:25:07.747682Z  WARN manuk_js::dom_bindings: UNHANDLED PROMISE REJECTION — a page's async code threw and nothing was listening. Every modern framework renders inside an async function, so this is where their failures go to die. error=WeakMap key null must be an object
+Yn@module.js:1:43765
+He/t.renderRoot<@module.js:1:12958
+He@module.js:1:13052
+Fr@module.js:1:210022
+Qn/<@module.js:1:42730
+Qn@module.js:1:42912
+Ua/h</l<@module.js:1:30066
+Ua/h<@module.js:1:30105
+t@module.js:1:51876
+createCustomElement@module.js:1:55936
+Ua@module.js:1:29965
+Va@module.js:1:29795
+Wa@module.js:1:30321
+Va/<@module.js:1:29705
+Va@module.js:1:29729
+Wa@module.js:1:30321
+Va/<@module.js:1:29705
+Va@module.js:1:29729
+cn@module.js:1:34910
+$a@module.js:1:27908
+Zn/</<@module.js:1:44002
+co@module.js:1:45126
+Zn/<@module.js:1:43981
+Zn@module.js:1:44040
+ao@module.js:1:44232
+Ot@module.js:1:5037
+value@promise_jobs.js:1:430
+
+2026-11-03T11:25:07.747706Z  WARN manuk_js::dom_bindings: UNHANDLED PROMISE REJECTION — a page's async code threw and nothing was listening. Every modern framework renders inside an async function, so this is where their failures go to die. error=WeakMap key null must be an object
+Yn@module.js:1:43765
+He/t.renderRoot<@module.js:1:12958
+He@module.js:1:13052
+Ql@module.js:1:291140
+Qn/<@module.js:1:42730
+Qn@module.js:1:42912
+Ua/h</l<@module.js:1:30066
+Ua/h<@module.js:1:30105
+t@module.js:1:51876
+createCustomElement@module.js:1:55936
+Ua@module.js:1:29965
+Va@module.js:1:29795
+cn@module.js:1:34910
+$a@module.js:1:27908
+Zn/</<@module.js:1:44002
+co@module.js:1:45126
+Zn/<@module.js:1:43981
+Zn@module.js:1:44040
+ao@module.js:1:44232
+Ot@module.js:1:5037
+value@promise_jobs.js:1:430
+
+2026-11-03T11:25:10.200212Z  WARN page.console: uncaught (reported): can't access property "querySelector", this.simpleTable is null at https://www.salesforce.com/ inline#90:3:147785
+t@https://www.salesforce.com/ inline#90:3:147785
+@https://www.salesforce.com/ inline#90:3:304098
+@https://www.salesforce.com/ inline#90:3:304035
+g.__fireWindowEvent@dom_event.js:4314:32
+g.dispatchEvent@dom_event.js:4348:19
+g.__fireDOMContentLoaded@dom_event.js:233:21
+@dynamic.js:1:38
+
+2026-11-03T11:25:10.317321Z  WARN page.console: [PBC] CRITICAL: OGS getUtmHistory() failed, falling back to sync digitalData read. This reintroduces race condition where digitalData.utm may be undefined during page load. [object Object]
+2026-11-03T11:25:10.340420Z  WARN manuk_js::dom_bindings: UNHANDLED PROMISE REJECTION — a page's async code threw and nothing was listening. Every modern framework renders inside an async function, so this is where their failures go to die. error=undefined
+2026-11-03T11:25:10.344668Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/shared/images/c360-nav/icons.svg#hamburger-blue
+2026-11-03T11:25:10.344704Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/shared/images/c360-nav/icons.svg#close-blue
+2026-11-03T11:25:10.344911Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/shared/images/c360-nav/link.svg
+2026-11-03T11:25:10.344939Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/shared/images/c360-nav/icons.svg#phone-blue
+2026-11-03T11:25:10.344961Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/shared/images/c360-nav/icons.svg#globe-blue
+2026-11-03T11:25:10.344984Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/shared/images/c360-nav/icons.svg#globe-light-blue
+2026-11-03T11:25:11.179827Z  WARN simplecss::selector: ':target' is not supported. Selector skipped.
+2026-11-03T11:25:11.179952Z  WARN simplecss::selector: ':target' is not supported. Selector skipped.
+2026-11-03T11:25:11.180094Z  WARN simplecss::selector: ':target' is not supported. Selector skipped.
+2026-11-03T11:25:11.180176Z  WARN simplecss::selector: ':target' is not supported. Selector skipped.
+2026-11-03T11:25:11.180261Z  WARN simplecss::selector: ':target' is not supported. Selector skipped.
+2026-11-03T11:25:20.414802Z  WARN manuk_page: FORCED-REFLOW BUDGET EXHAUSTED — this script round has re-laid-out the whole document for longer than its whole budget, so further geometry reads are answered from the layout already published. The alternative measured 125s in ONE task. used_ms=6515 budget_ms=5000 nodes=14960
+2026-11-03T11:25:21.214934Z  WARN page.console: Could not retrieve One Trust configs
+2026-11-03T11:25:21.261484Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www/open-blade-libs/pr/566/agentic-php/v0.0.17/video-modal-carousel.css
+2026-11-03T11:25:23.911513Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www-emu/digital-qualified/v1-stable/fonts/Inter-Thin.dafaa44d99.woff2
+2026-11-03T11:25:23.911566Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www-emu/digital-qualified/v1-stable/fonts/Inter-ThinItalic.4fc662b3cf.woff2
+2026-11-03T11:25:23.911599Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www-emu/digital-qualified/v1-stable/fonts/Inter-ExtraLight.6824177d1e.woff2
+2026-11-03T11:25:23.911628Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www-emu/digital-qualified/v1-stable/fonts/Inter-ExtraLightItalic.05138dddf3.woff2
+2026-11-03T11:25:23.911656Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www-emu/digital-qualified/v1-stable/fonts/Inter-Light.27083fa637.woff2
+2026-11-03T11:25:23.911684Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www-emu/digital-qualified/v1-stable/fonts/Inter-LightItalic.0a783b89b3.woff2
+2026-11-03T11:25:23.911713Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www-emu/digital-qualified/v1-stable/fonts/Inter-Regular.f1f0c35b32.woff2
+2026-11-03T11:25:23.911740Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www-emu/digital-qualified/v1-stable/fonts/Inter-Italic.d593a8df79.woff2
+2026-11-03T11:25:23.911776Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www-emu/digital-qualified/v1-stable/fonts/Inter-Medium.dc792b508e.woff2
+2026-11-03T11:25:23.911816Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www-emu/digital-qualified/v1-stable/fonts/Inter-MediumItalic.84d3493a9f.woff2
+2026-11-03T11:25:23.911845Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www-emu/digital-qualified/v1-stable/fonts/Inter-SemiBold.fcb100c760.woff2
+2026-11-03T11:25:23.911874Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www-emu/digital-qualified/v1-stable/fonts/Inter-SemiBoldItalic.d90f295d0c.woff2
+2026-11-03T11:25:23.911907Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www-emu/digital-qualified/v1-stable/fonts/Inter-Bold.579e0f95ca.woff2
+2026-11-03T11:25:23.911934Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www-emu/digital-qualified/v1-stable/fonts/Inter-BoldItalic.828a494e04.woff2
+2026-11-03T11:25:23.911960Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www-emu/digital-qualified/v1-stable/fonts/Inter-ExtraBold.d65f028165.woff2
+2026-11-03T11:25:23.911987Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www-emu/digital-qualified/v1-stable/fonts/Inter-ExtraBoldItalic.8c7eac5ce3.woff2
+2026-11-03T11:25:23.912014Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www-emu/digital-qualified/v1-stable/fonts/Inter-Black.796be8d8bf.woff2
+2026-11-03T11:25:23.912040Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www-emu/digital-qualified/v1-stable/fonts/Inter-BlackItalic.752f1e0aaa.woff2
+2026-11-03T11:25:23.912068Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www-emu/digital-qualified/v1-stable/fonts/Inter-roman.var.b2129c009c.woff2
+2026-11-03T11:25:23.912096Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www-emu/digital-qualified/v1-stable/fonts/Inter-italic.var.958a0b9742.woff2
+2026-11-03T11:25:26.551647Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www/open-blade-libs/pr/566/agentic-php/v0.0.17/marquee-blade2.js
+2026-11-03T11:25:26.551702Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www/open-blade-libs/pr/566/agentic-php/v0.0.17/rolldown-runtime.js
+2026-11-03T11:25:26.551729Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www/open-blade-libs/pr/566/agentic-php/v0.0.17/vendor-motion.js
+2026-11-03T11:25:26.551756Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www/open-blade-libs/pr/566/agentic-php/v0.0.17/Link.js
+2026-11-03T11:25:26.551790Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www/open-blade-libs/pr/566/agentic-php/v0.0.17/trackContentClick.js
+2026-11-03T11:25:26.551815Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www/open-blade-libs/pr/566/agentic-php/v0.0.17/dist.js
+2026-11-03T11:25:26.551838Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www/open-blade-libs/pr/566/agentic-php/v0.0.17/marquee-video-strip.js
+2026-11-03T11:25:26.551869Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www/open-blade-libs/pr/566/agentic-php/v0.0.17/VidyardEmbed.js
+2026-11-03T11:25:26.551894Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www/open-blade-libs/pr/566/agentic-php/v0.0.17/analytics.js
+2026-11-03T11:25:26.551917Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www/open-blade-libs/pr/566/agentic-php/v0.0.17/useTrackContentClick.js
+2026-11-03T11:25:26.551945Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www/open-blade-libs/pr/566/agentic-php/v0.0.17/icons2.js
+2026-11-03T11:25:26.551967Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www/open-blade-libs/pr/566/agentic-php/v0.0.17/DrawerModal.js
+2026-11-03T11:25:26.551989Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www/open-blade-libs/pr/566/agentic-php/v0.0.17/marquee-blade.js
+2026-11-03T11:25:26.552027Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www/open-blade-libs/pr/566/agentic-php/v0.0.17/useHasMaxModal.js
+2026-11-03T11:25:26.552049Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www/open-blade-libs/pr/566/agentic-php/v0.0.17/Icons.js
+2026-11-03T11:25:26.552071Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www/open-blade-libs/pr/566/agentic-php/v0.0.17/video-modal-carousel.js
+2026-11-03T11:25:26.552095Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www/open-blade-libs/pr/566/agentic-php/v0.0.17/max-modal.js
+2026-11-03T11:25:26.552118Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www/open-blade-libs/pr/566/agentic-php/v0.0.17/useHashModal.js
+2026-11-03T11:25:26.552140Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www/open-blade-libs/pr/566/agentic-php/v0.0.17/earnings-marquee.js
+2026-11-03T11:25:26.552162Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www/open-blade-libs/pr/566/agentic-php/v0.0.17/marquee-product-carousel.js
+2026-11-03T11:25:26.552183Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www/open-blade-libs/pr/566/agentic-php/v0.0.17/claudeforce-marquee.js
+2026-11-03T11:25:26.552204Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www/open-blade-libs/pr/566/agentic-php/v0.0.17/claudeforce-banner.js
+2026-11-03T11:25:26.552230Z  WARN manuk_net: DUPLICATE NETWORK REQUEST — the same URL went to the wire twice url=https://a.sfdcstatic.com/digital/@sfdc-www/open-blade-libs/pr/566/agentic-php/v0.0.17/dreamforce-banner.js
+2026-11-03T11:25:26.957077Z  WARN manuk_js::dom_bindings: UNHANDLED PROMISE REJECTION — a page's async code threw and nothing was listening. Every modern framework renders inside an async function, so this is where their failures go to die. error=WeakMap key null must be an object
+Yn@module.js:1:43765
+He/t.renderRoot<@module.js:1:12958
+He@module.js:1:13052
+Pi@module.js:1:92364
+Qn/<@module.js:1:42730
+Qn@module.js:1:42912
+Ua/h</l<@module.js:1:30066
+Ua/h<@module.js:1:30105
+t@module.js:1:51876
+createCustomElement@module.js:1:55936
+Ua@module.js:1:29965
+Va@module.js:1:29795
+Wa@module.js:1:30321
+Va/<@module.js:1:29705
+Va@module.js:1:29729
+Wa@module.js:1:30321
+Va/<@module.js:1:29705
+Va@module.js:1:29729
+Wa@module.js:1:30321
+ln@module.js:1:34587
+$a@module.js:1:27896
+qa/<@module.js:1:28325
+qa@module.js:1:28355
+cn@module.js:1:34833
+$a@module.js:1:27908
+Zn/</<@module.js:1:44002
+co@module.js:1:45126
+Zn/<@module.js:1:43981
+Zn@module.js:1:44040
+ao@module.js:1:44232
+Ot@module.js:1:5037
+value@promise_jobs.js:1:430
+
+2026-11-03T11:25:29.048201Z  WARN manuk_js::dom_bindings: UNHANDLED PROMISE REJECTION — a page's async code threw and nothing was listening. Every modern framework renders inside an async function, so this is where their failures go to die. error=can't access property "searchPrompts", t is undefined
+Ho</e</t.setProperty@module.js:1:55452
+za@module.js:1:26939
+tn@module.js:1:32227
+qa/<@module.js:1:28552
+qa@module.js:1:28713
+cn@module.js:1:34833
+$a@module.js:1:27908
+qa/<@module.js:1:28325
+qa@module.js:1:28355
+cn@module.js:1:34833
+$a@module.js:1:27908
+qa/<@module.js:1:28325
+qa@module.js:1:28355
+cn@module.js:1:34833
+$a@module.js:1:27908
+qa/<@module.js:1:28325
+qa@module.js:1:28355
+cn@module.js:1:34833
+$a@module.js:1:27908
+qa/<@module.js:1:28325
+qa@module.js:1:28355
+cn@module.js:1:34833
+$a@module.js:1:27908
+qa/<@module.js:1:28325
+qa@module.js:1:28355
+cn@module.js:1:34833
+$a@module.js:1:27908
+qa/<@module.js:1:28325
+qa@module.js:1:28355
+cn@module.js:1:34833
+$a@module.js:1:27908
+Zn/</<@module.js:1:44002
+co@module.js:1:45126
+Zn/<@module.js:1:43981
+Zn@module.js:1:44040
+ao@module.js:1:44232
+Ot@module.js:1:5037
+value@promise_jobs.js:1:430
+
+2026-11-03T11:25:33.879205Z  WARN manuk_page: load budget of 12.0s exhausted mid-phase — painting now. The document is what the user came for; the rest was an enhancement.
