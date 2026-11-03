@@ -1,0 +1,7 @@
+debug rc=124 TIMEOUT 180.1s load=3.72 rate=NA
+release rc=0 OK 40.7s load=1.20 rate=62.5
+debug rc=124 TIMEOUT 180.1s load=1.06 rate=NA
+release rc=0 OK 42.8s load=1.11 rate=62.5
+debug rc=124 TIMEOUT 180.1s load=1.09 rate=NA
+release rc=0 OK 47.6s load=1.65 rate=62.5
+EXIT=0
