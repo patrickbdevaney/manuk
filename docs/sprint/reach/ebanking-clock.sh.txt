@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# R0.1.a.a.a.a.a.a.a.a.a.a.a.a: is the fail-then-pass switch a function of elapsed time within one window?
+# Block M (red mutant, run first): 10 manuk a11y-dump probes against 127.0.0.1:9, must all be recorded failed.
+# Block C: 40 manuk a11y-dump probes against ebanking.bdm-sa.com, 30 s apart (about 25 min).
+# A probe is FAILED only if manuk rc!=0. Every probe is written to the table, failed or not.
+# usage: ebanking-clock.sh <window-id>
+# Output: docs/sprint/reach/EBANKING-CLOCK-R0.1.a.a.a.a.a.a.a.a.a.a.a.a.tsv (chrome_ver per row).
+# Exit 0 only if the mutant block recorded 10/10 failed rows and block C recorded 40 rows.
+set -u
+REPO=/home/patrickd/manuk
+CHROME_VER=${MANUK_CHROME_PIN:?MANUK_CHROME_PIN not set}
+OUT=$REPO/docs/sprint/reach/EBANKING-CLOCK-R0.1.a.a.a.a.a.a.a.a.a.a.a.a.tsv
+WIN=${1:?window id}
+HOST=ebanking.bdm-sa.com
+D=$(mktemp -d /tmp/ebk-clock-XXXX)
+[ -f "$OUT" ] || printf 'window\tblock\tspacing_s\tprobe\tutc\tprobe_url\tmanuk_rc\tmanuk_bytes\tmanuk_secs\trow_failed\tchrome_ver\n' > "$OUT"
+
+run_block() {  # $1 block id, $2 probes, $3 spacing seconds, $4 url
+  local B=$1 N=$2 SP=$3 URL=$4 FAILS=0
+  for P in $(seq 1 "$N"); do
+    [ "$P" -gt 1 ] && sleep "$SP"
+    touch "$REPO/.git/sprint-working"
+    T1=$(date +%s)
+    timeout 120 "$REPO/target/release/a11y-dump" "$URL" > "$D/$B$P.out" 2>"$D/$B$P.err"; MRC=$?
+    MSECS=$(( $(date +%s)-T1 )); MBYTES=$(wc -c < "$D/$B$P.out")
+    if [ "$MRC" -ne 0 ]; then FAILED=1; FAILS=$((FAILS+1)); else FAILED=0; fi
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$WIN" "$B" "$SP" "$P" "$(date -u +%FT%TZ)" "$URL" \
+      "$MRC" "$MBYTES" "$MSECS" "$FAILED" "$CHROME_VER" >> "$OUT"
+    echo "block $B probe $P (spacing ${SP}s): rc=$MRC bytes=$MBYTES secs=$MSECS failed=$FAILED"
+  done
+  echo "block=$B spacing=${SP}s probes=$N failed=$FAILS"
+}
+
+run_block M 10 10 https://127.0.0.1:9/
+run_block C 40 30 https://$HOST/
+echo "dir=$D"
+
+MROWS=$(awk -F'\t' -v w="$WIN" '$1==w && $2=="M"' "$OUT" | wc -l)
+MFAIL=$(awk -F'\t' -v w="$WIN" '$1==w && $2=="M" && $10==1' "$OUT" | wc -l)
+CROWS=$(awk -F'\t' -v w="$WIN" '$1==w && $2=="C"' "$OUT" | wc -l)
+echo "mutant rows=$MROWS failed=$MFAIL | C rows=$CROWS"
+[ "$MROWS" -eq 10 ] && [ "$MFAIL" -eq 10 ] && [ "$CROWS" -eq 40 ]
+exit $?
