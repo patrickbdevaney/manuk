@@ -394,6 +394,14 @@ impl PageStore {
         Ok(res)
     }
 
+    /// The number the next new handle of `site` would get: a session that seeds from the store
+    /// allocates above it, so its own numbers never collide with stored ones.
+    pub fn next_handle(&self, site: &str) -> Result<u32> {
+        let r = self.db.begin_read().map_err(nm)?;
+        let t = r.open_table(NEXT).map_err(nm)?;
+        Ok(t.get(site).map_err(nm)?.map(|v| v.value()).unwrap_or(1))
+    }
+
     /// Record that `action` taken on the page with root `from` led to root `to`.
     pub fn record_edge(&self, from: &str, action: &str, to: &str) -> Result<()> {
         let w = self.db.begin_write().map_err(nm)?;

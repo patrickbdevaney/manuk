@@ -94,6 +94,11 @@ pub struct Session<B: Backend> {
     noeff: HashMap<(u32, String, u64), (u32, u32)>,
     /// R2.3: page store (`MANUK_PAGE_STORE=<file>`); every observation is stored as Merkle a11y subtrees.
     pages: Option<manuk_pagestore::PageStore>,
+    /// R2.3.a: root of the last stored observation, and the (from-root, action) an act is waiting to end.
+    root: Option<String>,
+    pending: Option<(String, String)>,
+    /// R2.3.a: the next tree is a new document whose handles are not yet seeded from the store.
+    seed_due: bool,
 }
 
 fn role_str(r: &Role) -> String {
@@ -381,6 +386,9 @@ impl<B: Backend> Session<B> {
             noeff: HashMap::new(),
             pages: std::env::var_os("MANUK_PAGE_STORE")
                 .and_then(|p| manuk_pagestore::PageStore::open(std::path::Path::new(&p)).ok()),
+            root: None,
+            pending: None,
+            seed_due: false,
         }
     }
 
@@ -523,12 +531,32 @@ impl<B: Backend> Session<B> {
         h
     }
 
+    /// R2.3.a: number the new document's nodes from the page store, so a node keeps its `hN` across
+    /// visits and server restarts. Runs once per document, on the first tree built after it.
+    /// `MANUK_PAGESTORE_SEED_MUTATE` skips it (test-only mutation).
+    fn seed(&mut self, tree: &A11yNode) -> Result<()> {
+        if !std::mem::take(&mut self.seed_due) || std::env::var_os("MANUK_PAGESTORE_SEED_MUTATE").is_some() {
+            return Ok(());
+        }
+        let Some(ps) = &self.pages else { return Ok(()) };
+        let site = Self::site_of(&self.b.url());
+        // `handles` and `tree.iter()` are both document order, one entry per node.
+        let keys = ps.handles(&site, &manuk_pagestore::PNode::from_a11y(tree))?;
+        for (n, (_, h)) in tree.iter().zip(keys) {
+            self.ids.insert(n.node.0, h);
+            self.rev.insert(h, n.node);
+        }
+        self.next = self.next.max(ps.next_handle(&site)?);
+        Ok(())
+    }
+
     /// A new document invalidates every handle: arena ids are not meaningful across pages.
     fn new_document(&mut self) {
         self.ids.clear();
         self.rev.clear();
         self.keys.clear();
         self.doc = self.b.document_id();
+        self.seed_due = self.pages.is_some();
         // `next` is NOT reset: a stale `h2` from the old page must be "unknown", never silently
         // re-bound to a different element on the new one.
         self.snap = None;
@@ -1237,6 +1265,7 @@ impl<B: Backend> Session<B> {
         let settle = self.settled().await;
         self.new_document();
         let tree = self.tree()?;
+        self.seed(&tree)?;
         self.snap = Some(self.snapshot(&tree));
         if let Some(q) = query.filter(|q| !q.trim().is_empty()) {
             let ans = self.answer(q)?;
@@ -1284,8 +1313,15 @@ impl<B: Backend> Session<B> {
 
     fn observe(&mut self, mode: &str, budget: Option<usize>) -> Result<String> {
         let tree = self.tree()?;
+        self.seed(&tree)?;
         if let Some(ps) = &self.pages {
-            let _ = ps.put(&Self::site_of(&self.b.url()), &manuk_pagestore::PNode::from_a11y(&tree));
+            if let Ok(st) = ps.put(&Self::site_of(&self.b.url()), &manuk_pagestore::PNode::from_a11y(&tree)) {
+                // R2.3.a: the act that led here made a transition from the last stored root.
+                if let Some((from, action)) = self.pending.take() {
+                    let _ = ps.record_edge(&from, &action, &st.root);
+                }
+                self.root = Some(st.root);
+            }
         }
         let budget = budget.unwrap_or(DEFAULT_BUDGET_TOKENS);
         let now = self.snapshot(&tree);
@@ -1396,6 +1432,7 @@ impl<B: Backend> Session<B> {
         if url_now != url_before {
             self.new_document();
             let tree = self.tree()?;
+            self.seed(&tree)?;
             self.snap = Some(self.snapshot(&tree));
             let body = Self::fit(
                 self.lines(&tree, false),
@@ -1424,6 +1461,9 @@ impl<B: Backend> Session<B> {
     /// is the state change a task grader checks, so the agent need not re-read the page to learn that a
     /// click really added to the cart. `MANUK_NO_RECEIPTS=1` turns it off (the baseline arm).
     async fn act(&mut self, hs: &str, action: &str, value: Option<&str>) -> Result<String> {
+        if let Some(from) = self.root.clone() {
+            self.pending = Some((from, format!("{action} {}", hs.trim())));
+        }
         if std::env::var_os("MANUK_NO_RECEIPTS").is_some() {
             return self.act_inner(hs, action, value).await;
         }
@@ -1546,6 +1586,7 @@ impl<B: Backend> Session<B> {
             let _ = self.b.back().await;
             self.new_document();
             let t = self.tree()?;
+            self.seed(&t)?;
             self.snap = Some(self.snapshot(&t));
         }
         if action == "click" && Self::retry_on() && (landed_on_error || Self::is_noop(&r)) {
@@ -1703,6 +1744,7 @@ impl<B: Backend> Session<B> {
                 let _ = self.b.back().await;
                 self.new_document();
                 let t = self.tree()?;
+                self.seed(&t)?;
                 self.snap = Some(self.snapshot(&t));
                 continue;
             }
