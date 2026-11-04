@@ -206,6 +206,8 @@ def proxy(a, child):
 COLS = ["ts", "arm", "suite", "chrome_ver", "task", "site", "run", "model", "pass", "evals_ok", "evals_n", "state_ok",
         "checkpoints", "restores", "forks", "input_tokens", "output_tokens", "cost_usd", "seconds", "turns", "is_error", "answer"]
 SUITE = "real-v1-det"
+JUDGE_SUITE = "real-judge-gptoss120b"  # W3.18.a.a.b: llm_boolean evals graded by the owner-provided judge (real_judge.py)
+JUDGE_COLS = COLS + ["llm_ok", "llm_n", "judge_model"]
 
 
 def tool_counts(stream):
@@ -247,7 +249,7 @@ def pin_chrome(arm, srv, tdir):
         srv["env"] = dict(srv.get("env", {}), MANUK_CHROME=chrome_wrapper(tdir))
 
 
-def one(arm, task, run, pin, tdir, timeout):
+def one(arm, task, run, pin, tdir, timeout, judge_env=None):
     sys.path.insert(0, HERE)
     import run_arm
     tmp = os.path.join(tdir, f"{arm}_{task['id']}_r{run}")
@@ -276,17 +278,32 @@ def one(arm, task, run, pin, tdir, timeout):
         time.sleep(0.5)
     if os.path.exists(state):
         st = json.load(open(state))
-    ok, k, n = (False, 0, len(task["evals"]))
-    if st and st["ok"]:
-        ok, k, n = grade(task, st["state"])
+    final = run_arm.flat_answer(j.get("result") or err or "")
+    jm = dict(task, evals=[e for e in task["evals"] if e["type"] == "jmespath"])
+    ok, k, n = (True, 0, 0) if not jm["evals"] else (False, 0, len(jm["evals"]))
+    if st and st["ok"] and jm["evals"]:
+        ok, k, n = grade(jm, st["state"])
+    llm = [e for e in task["evals"] if e["type"] == "llm_boolean"]
+    llm_ok = 0
+    if judge_env is not None:  # judge mode: each llm_boolean rubric is one verdict, from the answer and the final state
+        import real_judge
+        for e in llm:
+            v, _ = real_judge.verdict(judge_env, e["rubric"], j.get("result") or err or "", st["state"] if st and st["ok"] else None)
+            llm_ok += (v == e["expected_value"])
     tc = tool_counts(out)
-    return {"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "arm": arm, "suite": SUITE, "chrome_ver": pin, "task": task["id"],
-            "site": task["website"]["id"], "run": run, "model": "haiku", "pass": int(ok and not j.get("is_error")), "evals_ok": k,
+    return {"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "arm": arm, "suite": JUDGE_SUITE if judge_env is not None else SUITE, "chrome_ver": pin, "task": task["id"],
+            "site": task["website"]["id"], "run": run, "model": "haiku", "pass": int(ok and llm_ok == len(llm) and not j.get("is_error")), "evals_ok": k,
             "evals_n": n, "state_ok": int(bool(st and st["ok"])), "checkpoints": tc["checkpoint"], "restores": tc["restore"],
             "forks": tc["fork"], "input_tokens": u.get("input_tokens", 0), "output_tokens": u.get("output_tokens", 0),
             "cost_usd": j.get("total_cost_usd", 0), "seconds": f"{secs:.1f}", "turns": j.get("num_turns", ""),
             "is_error": int(bool(j.get("is_error")) or "result" not in j),
-            "answer": run_arm.flat_answer(j.get("result") or err or "")}
+            "answer": final, "llm_ok": llm_ok, "llm_n": len(llm), "judge_model": judge_env["REAL_JUDGE_MODEL"] if judge_env else ""}
+
+
+def real_judge_env():
+    sys.path.insert(0, HERE)
+    import real_judge
+    return real_judge.load_env()  # read inside this process only; never printed
 
 
 def main():
@@ -294,7 +311,8 @@ def main():
     ap.add_argument("cmd", choices=["run", "list", "grade", "proxy"])
     ap.add_argument("rest", nargs="*")
     ap.add_argument("--arm"); ap.add_argument("--runs", type=int, default=3); ap.add_argument("--tasks"); ap.add_argument("--jobs", type=int, default=1)
-    ap.add_argument("--out", default=os.path.join(ROOT, "docs/sprint/w318/real-runs.tsv"))
+    ap.add_argument("--out", default=None, help="default: w318/real-runs.tsv, or w318/real-judge-runs.tsv with --judge")
+    ap.add_argument("--judge", action="store_true", help="W3.18.a.a.b: score llm_boolean evals with the owner judge (suite real-judge-gptoss120b)")
     ap.add_argument("--timeout", type=int, default=420); ap.add_argument("--run-base", type=int, default=0, help="first run number - 1 (to interleave arms per run)")
     ap.add_argument("--site"); ap.add_argument("--task"); ap.add_argument("--state")
     a, extra = ap.parse_known_args()
@@ -317,28 +335,36 @@ def main():
     got = subprocess.run([PINNED, "--version"], capture_output=True, text=True).stdout.split()[-1:]
     if got != [pin]:
         sys.exit(f"refusing: {PINNED} is {got}, not the pin {pin}")
-    tasks = [t for t in tasks if scored(t)]
+    if a.judge:  # every non-omnizon task: the jmespath evals and the llm_boolean evals are both scored
+        tasks = [t for t in tasks if t["website"]["id"] not in EXCLUDED_SITES]
+        judge_env = real_judge_env()
+    else:
+        tasks = [t for t in tasks if scored(t)]
+        judge_env = None
     if a.tasks:
         want = a.tasks.split(","); tasks = [t for t in tasks if t["id"] in want]
     tdir = os.path.join(ROOT, "target/real-runs")
     os.makedirs(tdir, exist_ok=True)
-    new = not os.path.exists(a.out)
+    out = a.out or os.path.join(ROOT, "docs/sprint/w318/real-judge-runs.tsv" if a.judge else "docs/sprint/w318/real-runs.tsv")
+    cols = JUDGE_COLS if a.judge else COLS
+    suite = JUDGE_SUITE if a.judge else SUITE
+    new = not os.path.exists(out)
     have = set()  # resume: (arm, task, run) rows already in the TSV are not re-run
     if not new:
-        for l in open(a.out).read().splitlines()[1:]:
+        for l in open(out).read().splitlines()[1:]:
             c = l.split("\t")
             if len(c) > 6:
                 have.add((c[1], c[4], c[6]))
     lock = threading.Lock()
-    with open(a.out, "a") as f:
+    with open(out, "a") as f:
         if new:
-            f.write("\t".join(COLS) + "\n")
+            f.write("\t".join(cols) + "\n")
 
         def job(rt):
             run, t = rt
-            r = one(a.arm, t, run, pin, tdir, a.timeout)
+            r = one(a.arm, t, run, pin, tdir, a.timeout, judge_env)
             with lock:
-                f.write("\t".join(str(r.get(c, "")) for c in COLS) + "\n"); f.flush()
+                f.write("\t".join(str(r.get(c, "")) for c in cols) + "\n"); f.flush()
                 print(f"{a.arm} {t['id']} r{run}: {'PASS' if r['pass'] else 'FAIL'} {r['evals_ok']}/{r['evals_n']} state_ok={r['state_ok']} restores={r['restores']}", flush=True)
                 os.utime(os.path.join(ROOT, ".git/sprint-working"), None)
         with cf.ThreadPoolExecutor(a.jobs) as ex:
