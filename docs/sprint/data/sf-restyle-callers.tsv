@@ -1,0 +1,6 @@
+phase	restyles	restyle_s	phase_s	callers	chrome_ver
+deferred scripts	3	90.9	97.5	/home/patrickd/manuk/engine/page/src/lib.rs:4842; engine/page/src/lib.rs:2466; engine/page/src/lib.rs:5836; 	145.0.7632.116
+initial images+masks	1	32.9	44.5	engine/page/src/lib.rs:7089; 	145.0.7632.116
+load event	1	32.4	34.2	engine/page/src/lib.rs:2466; 	145.0.7632.116
+external CSS	1	33.0	35.4	/home/patrickd/manuk/engine/page/src/lib.rs:11500; 	145.0.7632.116
+TOTAL	7	189.2	211.7	unattributed=0	145.0.7632.116

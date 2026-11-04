@@ -252,6 +252,30 @@ fn collect_content_sizes(
 /// Cascade + layout with the `@container` re-pass folded in — the one join every restyle path
 /// shares, so a page using container queries gets them on EVERY route to a new box tree, not
 /// just first load.
+/// The `SLOW RESTYLE+LAYOUT` line for restyles that do not go through [`restyle_and_layout`]
+/// (`relayout_zoomed`, `apply_stylesheets`, `relayout_incremental`). Same message and fields, so the
+/// per-caller accounting in `scripts/sf-restyle-callers.sh` sees every restyle, not only some.
+fn log_slow_restyle(
+    caller: &std::panic::Location<'_>,
+    us_cascade: u64,
+    us_layout: u64,
+    n_sheets: usize,
+    nodes: usize,
+) {
+    if (us_cascade + us_layout) / 1000 >= 100 {
+        tracing::info!(
+            cascade_ms = us_cascade / 1000,
+            layout_ms = us_layout / 1000,
+            container_query_ms = 0u64,
+            cq_relaid = false,
+            n_sheets,
+            nodes,
+            caller = %format_args!("{}:{}", caller.file(), caller.line()),
+            "SLOW RESTYLE+LAYOUT"
+        );
+    }
+}
+
 #[track_caller]
 fn restyle_and_layout(
     dom: &Dom,
@@ -10502,6 +10526,7 @@ impl Page {
         self.images.insert(node, std::rc::Rc::new(img));
     }
 
+    #[track_caller]
     pub fn relayout(&mut self, fonts: &FontContext, viewport_width: f32) {
         self.relayout_zoomed(fonts, viewport_width, self.zoom);
     }
@@ -10571,7 +10596,11 @@ impl Page {
     ///
     /// The scaled styles are always derived from the **base** cascade, so calling this
     /// repeatedly never compounds. `zoom` is clamped to a usable range.
+    #[track_caller]
     pub fn relayout_zoomed(&mut self, fonts: &FontContext, viewport_width: f32, zoom: f32) {
+        let caller = std::panic::Location::caller();
+        let t_cascade = std::time::Instant::now();
+        let mut us_cascade = 0u64;
         self.zoom = zoom.clamp(MIN_ZOOM, MAX_ZOOM);
         // **Never lay out a tree the cascade has not seen all of.**
         //
@@ -10617,7 +10646,9 @@ impl Page {
                 &self.images,
             );
             self.last_cascade = None; // the fingerprint no longer describes this tree
+            us_cascade = t_cascade.elapsed().as_micros() as u64;
         }
+        let t_layout = std::time::Instant::now();
         let scaled;
         let styles = if (self.zoom - 1.0).abs() < 1e-6 {
             &self.styles
@@ -10629,6 +10660,17 @@ impl Page {
         self.set_root_box(root);
         self.content_height = self.root_box.content_bottom();
         self.dom.clear_all_dirty();
+        // Same line and fields as `restyle_and_layout`'s, so the per-caller accounting sees the
+        // restyles that run between load phases (image sizing, stylesheet arrival), not only the
+        // ones that go through that function.
+        let us_layout = t_layout.elapsed().as_micros() as u64;
+        log_slow_restyle(
+            caller,
+            us_cascade,
+            us_layout,
+            self.all_sheets().len(),
+            self.dom.len(),
+        );
     }
 
     /// **Incremental relayout (A2 activation).** After DOM mutations (e.g. from the
@@ -10645,11 +10687,14 @@ impl Page {
     /// subtree-partial reuse (skipping clean subtrees via the DOM's summary bit) and a
     /// paint-only refresh that skips layout are the documented next fill-ins, since
     /// paint attributes are currently baked into the fragment tree.
+    #[track_caller]
     pub fn relayout_incremental(
         &mut self,
         fonts: &FontContext,
         viewport_width: f32,
     ) -> RestyleDamage {
+        let caller = std::panic::Location::caller();
+        let t_cascade = std::time::Instant::now();
         // Nothing changed since the last clean pass → reuse everything.
         if self.dom.subtree_clean(self.dom.root()) {
             return RestyleDamage::None;
@@ -10672,6 +10717,7 @@ impl Page {
             &self.images,
         );
 
+        let us_cascade = t_cascade.elapsed().as_micros() as u64;
         // A structural mutation adds/removes boxes → reflow at minimum.
         let mut damage = if self.dom.structure_changed() {
             RestyleDamage::Reflow
@@ -10690,6 +10736,7 @@ impl Page {
         // Geometry-affecting change → full relayout. A repaint-only change (color /
         // background / border color) updates the fragment tree's paint attributes in place
         // and skips layout entirely — the incremental fast path.
+        let t_layout = std::time::Instant::now();
         if damage >= RestyleDamage::Reflow {
             let root = layout_document(&self.dom, &self.styles, fonts, viewport_width);
             self.set_root_box(root);
@@ -10699,6 +10746,13 @@ impl Page {
             self.apply_paint_only();
         }
         self.dom.clear_all_dirty();
+        log_slow_restyle(
+            caller,
+            us_cascade,
+            t_layout.elapsed().as_micros() as u64,
+            sheets.len(),
+            self.dom.len(),
+        );
         damage
     }
 
@@ -11148,12 +11202,15 @@ impl Page {
     /// Callers fetch the CSS (via [`fetch_and_apply_stylesheets`](Self::fetch_and_apply_stylesheets)
     /// or their own network path) and hand the texts here — keeping this core
     /// deterministic and testable.
+    #[track_caller]
     pub fn apply_stylesheets(
         &mut self,
         external: &HashMap<String, String>,
         fonts: &FontContext,
         viewport_width: f32,
     ) -> RestyleDamage {
+        let caller = std::panic::Location::caller();
+        let t_cascade = std::time::Instant::now();
         let sources = self.cascade_sources(external);
 
         // **Do not re-cascade a document whose inputs have not changed.**
@@ -11211,6 +11268,7 @@ impl Page {
         );
         // Classify the change vs the pre-external styling (usually Reflow — external
         // rules add geometry).
+        let us_cascade = t_cascade.elapsed().as_micros() as u64;
         let mut damage = RestyleDamage::None;
         for (node, new_s) in &new_styles {
             let d = match self.styles.get(node) {
@@ -11224,10 +11282,18 @@ impl Page {
             .styles
             .values()
             .any(|s| s.position == manuk_css::Position::Sticky);
+        let t_layout = std::time::Instant::now();
         let root = layout_document(&self.dom, &self.styles, fonts, viewport_width);
         self.set_root_box(root);
         self.content_height = self.root_box.content_bottom();
         self.dom.clear_all_dirty();
+        log_slow_restyle(
+            caller,
+            us_cascade,
+            t_layout.elapsed().as_micros() as u64,
+            sheets.len(),
+            self.dom.len(),
+        );
         self.last_cascade = Some(clean_fp);
         damage
     }
