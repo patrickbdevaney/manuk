@@ -296,7 +296,7 @@ pub fn nav_ask(text: &str, page_url: &str) -> Option<String> {
 /// vocabulary: what a client may auto-approve versus what can leave the machine.
 pub fn annotations(tool: &str) -> (bool, bool) {
     match tool {
-        "observe" | "extract" | "find" | "screenshot" | "checkpoint" | "scroll" | "wait_for" => {
+        "observe" | "extract" | "find" | "screenshot" | "checkpoint" | "recall" | "scroll" | "wait_for" => {
             (true, false)
         }
         "act" | "fill_form" | "type" | "commit" | "key" | "upload" | "drag" | "download" => {

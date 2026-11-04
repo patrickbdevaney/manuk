@@ -21,6 +21,7 @@ lean-easyprivacy = ["manuk-net/adblock"]
 manuk-agent.workspace = true
 manuk-js.workspace = true
 manuk-a11y.workspace = true
+manuk-pagestore = { path = "../pagestore" }
 manuk-dom.workspace = true
 manuk-css.workspace = true
 manuk-net.workspace = true

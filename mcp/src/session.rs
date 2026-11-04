@@ -92,6 +92,8 @@ pub struct Session<B: Backend> {
     /// W3.6: acts so far, and per (handle, action, page-state hash) the no-effect repeats: (count, first step).
     step: u32,
     noeff: HashMap<(u32, String, u64), (u32, u32)>,
+    /// R2.3: page store (`MANUK_PAGE_STORE=<file>`); every observation is stored as Merkle a11y subtrees.
+    pages: Option<manuk_pagestore::PageStore>,
 }
 
 fn role_str(r: &Role) -> String {
@@ -377,6 +379,8 @@ impl<B: Backend> Session<B> {
             doc: 0,
             step: 0,
             noeff: HashMap::new(),
+            pages: std::env::var_os("MANUK_PAGE_STORE")
+                .and_then(|p| manuk_pagestore::PageStore::open(std::path::Path::new(&p)).ok()),
         }
     }
 
@@ -877,6 +881,7 @@ impl<B: Backend> Session<B> {
                 .map(Output::Text),
             "act" if a.get("steps").is_some() => self.batch(a).await.map(Output::Text),
             "fill_form" => self.fill_form(a).await.map(Output::Text),
+            "recall" => self.recall(arg_str(a, "site")).map(Output::Text),
             "back" => self.back().await.map(Output::Text),
             "wait_for" => self.wait_for(a).await.map(Output::Text),
             "act" => self
@@ -1256,8 +1261,32 @@ impl<B: Backend> Session<B> {
         ))
     }
 
+    /// R2.3: the site key of the current page (its host).
+    fn site_of(url: &str) -> String {
+        url.split("://").nth(1).unwrap_or(url).split(['/', '?', '#']).next().unwrap_or("").to_string()
+    }
+
+    /// R2.3: `recall(site)`: the last stored tree for `site` (default: this page's host) and its age.
+    fn recall(&self, site: Option<&str>) -> Result<String> {
+        let ps = self.pages.as_ref().ok_or_else(|| anyhow!("no page store: start the server with MANUK_PAGE_STORE=<file>"))?;
+        let site = site.map(str::to_string).unwrap_or_else(|| Self::site_of(&self.b.url()));
+        match ps.recall(&site)? {
+            None => Ok(format!("{UNTRUSTED}\nnothing stored for {site}")),
+            Some(r) => Ok(format!(
+                "{UNTRUSTED}\nrecalled {site}: visit #{} stored {}s ago (root {})\n{}",
+                r.seq,
+                r.age_secs,
+                &r.root[..12],
+                r.tree.outline()
+            )),
+        }
+    }
+
     fn observe(&mut self, mode: &str, budget: Option<usize>) -> Result<String> {
         let tree = self.tree()?;
+        if let Some(ps) = &self.pages {
+            let _ = ps.put(&Self::site_of(&self.b.url()), &manuk_pagestore::PNode::from_a11y(&tree));
+        }
         let budget = budget.unwrap_or(DEFAULT_BUDGET_TOKENS);
         let now = self.snapshot(&tree);
         let out = match mode {
