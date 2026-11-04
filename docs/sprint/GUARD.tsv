@@ -15,3 +15,6 @@ R1run1	tri-sweep-20261102-041112.tsv	87d458e8	145.0.7632.116	200	51	86.89	78.98	
 R1run2	tri-sweep-20261102-045116.tsv	87d458e8	145.0.7632.116	200	55	86.78	78.58	77.72	77.72	77.13	78.56	R1 run2 (same setup)
 R1run3	tri-sweep-20261102-053124.tsv	87d458e8	145.0.7632.116	200	54	87.41	78.21	77.44	77.44	78.81	80.30	R1 run3 (same setup)
 R1verdict	below-band-check	-	145.0.7632.116	-	-	-	-	-	-	-	-	GUARD.R1 gate: scripts/guard-r1-check.py against the run1-3 band; see JOURNAL. Band not widened; reach set differs (51/55/54 vs 40-49 in R0; 50 sites OK in R1 run1 not OK in R0 run1, 42 the other way), so cov/shape compare across differing site sets
+R2run1	tri-sweep-20261103-201834.tsv	793af938	145.0.7632.116	200	47	86.80	76.93	76.58	76.58	70.17	70.17	R2 run1 (GUARD.R2, 200-site trend corpus corpus-crux-trend.txt, default 30 s M1, HEAD 793af938)
+R2run2	tri-sweep-20261103-204611.tsv	793af938	145.0.7632.116	200	47	86.93	76.03	76.95	76.95	70.47	70.47	R2 run2 (GUARD.R2, 200-site trend corpus corpus-crux-trend.txt, default 30 s M1, HEAD 793af938)
+R2run3	tri-sweep-20261103-211330.tsv	793af938	145.0.7632.116	200	43	87.32	74.52	79.15	79.15	71.92	71.92	R2 run3 (GUARD.R2, 200-site trend corpus corpus-crux-trend.txt, default 30 s M1, HEAD 793af938)
