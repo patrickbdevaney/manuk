@@ -1,0 +1,201 @@
+cat	url	m1_status	cov	shape	vis	paths	m2_tag	m2_rate	m2_ceil	m2_targets	m2_drivable	m2_ungrounded	m2_ambiguous	m2_mishit	a11y_tag	a11y_prec	a11y_rec	a11y_f1	chrome_ver
+TAIL	https://lp.rsaiben.com/	EMPTY				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://service.smt.docomo.ne.jp/	EMPTY				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://comix.to/	NAVFAIL				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.naukri.com/	OK	94.0	98.6	83.5	451	OK	82.9	92.7	41	34	0	4	3	OK	1.0	25.0	1.9	145.0.7632.116
+TAIL	https://dla7h4u1.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://secure.paymentech.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://sip777man.site/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://www.kantorsupersam.pl/	EMPTY				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.mangago.me/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.ebay.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://fdown.net/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.agoda.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://www.villaggioposeidone.it/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://admin.munchbakery.com/	OK	100.0	91.1	83.4	45	OK	100.0	100.0	6	6	0	0	0	OK	100.0	78.6	88.0	145.0.7632.116
+TAIL	https://cloud.ssktco-op.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://bill.pitc.com.pk/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://creaturecock.com/	CRASH				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.ikea.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://allticketscol.com/	OK	91.2	72.6	22.6	80	OK	64.2	65.4	159	102	0	57	0	OK	100.0	99.2	99.6	145.0.7632.116
+HEAD	https://bbs.ruliweb.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.otomoto.pl/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://www.dapam-sirius.fr/	OK	100.0	96.7	79.1	30	OK	100.0	100.0	8	8	0	0	0	OK	100.0	100.0	100.0	145.0.7632.116
+TAIL	https://packages.booking.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://missav.live/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://payb.jp/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://mangaraw.ac/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://aternos.org/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://pivaldi.restoplace.ws/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.bilibili.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://www.taphouse23.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://ebanking.bdm-sa.com/	EMPTY				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://tukrd.com/	OK	100.0	80.4	74.1	46	OK	100.0	100.0	9	9	0	0	0	OK	100.0	100.0	100.0	145.0.7632.116
+HEAD	https://vk.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.amazon.com.be/	BLANK				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://meet.google.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.amazon.com.mx/	BLANK				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://www.ta3lemkonline.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://zainascarfs.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://phone.uslowcosthousing.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://client.dkitrxmdwoqruvsi.net/	EMPTY				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://beb88run.xyz/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://www.datacareservices.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://atendimentomondial.zendesk.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://toyhou.se/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.paypal.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://www.cuneocronaca.it/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://cibnext.icici.bank.in/	EMPTY				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://people.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://linkmake.in/	OK	100.0	79.7	87.8	74	OK	100.0	100.0	9	9	0	0	0	OK	100.0	66.7	80.0	145.0.7632.116
+HEAD	https://255md.com/	OK	100.0	88.4	94.8	43	OK	100.0	100.0	8	8	0	0	0	OK	100.0	100.0	100.0	145.0.7632.116
+TAIL	https://ofero.id/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://morikoshi.net/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://probidas.lt/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://777juegos.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://janitorai.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://stdn.iau.ir/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://redinfor.com.pe/	OK	100.0	92.5	99.1	40	OK	16.7	16.7	6	1	0	0	5	OK	100.0	45.5	62.5	145.0.7632.116
+HEAD	https://www.marktplaats.nl/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://ru.restaurantguru.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://mydogcot.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://awlyaa.education.dz/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://desiviral.net/	EMPTY				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://profissionaliza.cademi.com.br/	OK	93.3	82.1	89.7	30	OK	100.0	100.0	4	4	0	0	0	OK	100.0	75.0	85.7	145.0.7632.116
+TAIL	https://simplepdf.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.livescore.cz/	OK	99.9	100.0	49.8	1193	OK	3.8	98.1	426	16	0	409	1	OK	100.0	63.3	77.6	145.0.7632.116
+HEAD	https://www.repubblica.it/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://www.library.chiyoda.tokyo.jp/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://mobcup.fm/	OK	100.0	100.0	46.8	34	OK	100.0	100.0	6	6	0	0	0	OK	100.0	43.5	60.6	145.0.7632.116
+TAIL	https://www.timeline.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://admin.zoomph.com/	OK	100.0	58.8	93.4	34	OK	100.0	100.0	4	4	0	0	0	OK	83.3	55.6	66.7	145.0.7632.116
+TAIL	https://littlecaesarsbcs.libellum.com.mx/	OK	100.0	97.4	70.2	78	OK	37.9	37.9	29	11	0	0	18	OK	97.1	94.3	95.7	145.0.7632.116
+TAIL	https://7info.ru/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://m.youm7.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://e8c76.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://fr.download.it/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://momon-ga.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://ww1.goojara.to/	NAVFAIL				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.5movierulz.discount/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://esaj.tjsp.jus.br/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://cloud.email.cruzeirodosul.edu.br/	EMPTY				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://merchant.upi9.pro/	OK	100.0	80.9	71.1	47	OK	100.0	100.0	5	5	0	0	0	OK	100.0	60.0	75.0	145.0.7632.116
+TAIL	https://pordentrodetudo.com.br/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.mobile.bg/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://bhramarah.in/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://chat.google.com/	OK	100.0	88.1	98.2	59	OK	100.0	100.0	91	91	0	0	0	OK	100.0	98.1	99.0	145.0.7632.116
+HEAD	https://tracker.shadowfax.in/	OK	7.7	0.0		13	OK	100.0	100.0	2	2	0	0	0	OK	100.0	75.0	85.7	145.0.7632.116
+TAIL	https://portagelearning.edu/	OK	14.1	56.0	20.8	177	OK	76.1	83.6	67	51	0	5	11	OK	87.4	86.2	86.8	145.0.7632.116
+HEAD	https://www.kicktipp.com/	OK	100.0	92.5	84.1	93	OK	100.0	100.0	26	26	0	0	0	OK	66.7	84.8	74.7	145.0.7632.116
+TAIL	https://aksesjambi.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://dedebet252.com/	EMPTY				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://ab.asimakog.eu.org/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://www.kuechenmomente.de/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://alastonsuomi.com/	EMPTY				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://haraj.com.sa/	EMPTY				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://hipmiluwuutara.org/	OK	100.0	100.0	38.9	31	OK	0.0	0.0	0	0	0	0	0	OK	0.0	0.0	0.0	145.0.7632.116
+HEAD	https://id.vk.ru/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://altogel.fit/	EMPTY				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://www.kroftools.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://www.waitaly.net/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://videa.hu/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://seduniaselat.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.tz.de/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://www.wdimax.com/	OK	100.0	97.3	88.4	377	OK	59.8	96.7	122	73	1	46	2	OK	100.0	99.5	99.7	145.0.7632.116
+HEAD	https://coinmarketcap.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://nitter.net/	OK	100.0	95.0	94.0	40	OK	100.0	100.0	5	5	0	0	0	OK	86.5	82.1	84.2	145.0.7632.116
+HEAD	https://sports.yahoo.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://gw.geneanet.org/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://123moviesfree.day/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://gismart.com/	OK	98.3	81.9	37.3	286	OK	56.2	68.8	16	9	0	2	5	OK	100.0	72.1	83.8	145.0.7632.116
+HEAD	https://www.bolde.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://hnhbkis.edu.in/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://rpsc.rajasthan.gov.in/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://virtual.lapampa.edu.ar/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://rockstaractu.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://dashboard.twitch.tv/	OK	37.1	54.2	85.8	159	OK	0.0	0.0	0	0	0	0	0	OK	100.0	10.0	18.2	145.0.7632.116
+HEAD	https://funinjeet.com/	BLANK				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://experiencia.pichincha.com/	OK	32.4	16.7	96.6	37	OK	100.0	100.0	3	3	0	0	0	OK	100.0	75.0	85.7	145.0.7632.116
+HEAD	https://pasarbokep.com/	OK	99.6	76.7	26.9	254	OK	85.0	85.0	60	51	0	0	9	OK	62.7	82.2	71.1	145.0.7632.116
+TAIL	https://pt88.app/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://bhfudbal.ba/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://mkp.gem.gov.in/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://sestra.cc/	OK	99.8	90.5	56.8	424	OK	100.0	100.0	104	104	0	0	0	OK	9.6	17.8	12.5	145.0.7632.116
+HEAD	https://developers.google.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://www.hdnails.it/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://celeb.gate.cc/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://webfenix.movilidadbogota.gov.co/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://oilprice.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://mayatoys.in/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.fragrantica.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://ru4.bongacams-ru.com/	OK	88.6	100.0	64.9	44	OK	100.0	100.0	4	4	0	0	0	OK	37.5	0.6	1.1	145.0.7632.116
+TAIL	https://www.arw.ro/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.blick.ch/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.woolworths.com.au/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.hemnet.se/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://redemoura.gupy.io/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.netvasco.com.br/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://neutypechic.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://fr.bongacams.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://ioi-russia.vdi.mipt.ru/	EMPTY				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.cbse.gov.in/	OK	100.0	100.0	59.2	63	OK	100.0	100.0	7	7	0	0	0	OK	0.0	0.0	0.0	145.0.7632.116
+TAIL	https://nysainfo.pl/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://nortenoticia.com.br/	OK	100.0	39.6	33.4	700	OK	18.0	40.5	111	20	0	90	1	OK	89.3	92.8	91.0	145.0.7632.116
+HEAD	https://ubys.bingol.edu.tr/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://meuconsultordigital.com.br/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://portal.ensuretyfinance.com/	OK	100.0	86.4	93.8	22	OK	100.0	100.0	5	5	0	0	0	OK	100.0	75.0	85.7	145.0.7632.116
+HEAD	https://hope.cap-systems.org/	OK	100.0	100.0	98.1	17	OK	100.0	100.0	4	4	0	0	0	OK	100.0	100.0	100.0	145.0.7632.116
+TAIL	https://www.jazzguitar.be/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.mobile.ir/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+TAIL	https://venus.zeronline.cloud/	OK	100.0	73.1	90.9	26	OK	0.0	0.0	0	0	0	0	0	OK	0.0	0.0	0.0	145.0.7632.116
+HEAD	https://www.freesupertips.com/	OK	97.2	73.2	20.7	984	OK	73.4	77.8	203	149	1	11	42	OK	93.0	93.4	93.2	145.0.7632.116
+HEAD	https://www.alphanews.live/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://patrickmorin.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.broshurko.bg/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://linxonline.co.pierce.wa.us/	OK	100.0	43.2	54.8	185	OK	100.0	100.0	1	1	0	0	0	OK	0.0	0.0	0.0	145.0.7632.116
+HEAD	https://app.ordertime.com/	OK	100.0	100.0	99.9	29	OK	100.0	100.0	6	6	0	0	0	OK	100.0	90.9	95.2	145.0.7632.116
+HEAD	https://www.nautica.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://mexcbt.ed-cl.com/	OK	100.0	72.0	80.0	25	OK	100.0	100.0	4	4	0	0	0	OK	90.0	81.8	85.7	145.0.7632.116
+HEAD	https://lms.sltc.ac.lk/	OK	100.0	90.0	86.6	130	OK	80.0	100.0	10	8	0	2	0	OK	97.9	87.0	92.2	145.0.7632.116
+HEAD	https://xhdesign.today/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://ticket.jfa.jp/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.crazyshop.pl/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://house.udn.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://mirai-compass.net/	EMPTY				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.friulioggi.it/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://pogoda.by/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://d2rwkn96gppqo1.cloudfront.net/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.trivago.be/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.trivago.de/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.trivago.fr/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://secure5.entertimeonline.com/	OK	100.0	69.2	94.3	39	OK	100.0	100.0	5	5	0	0	0	OK	75.0	60.0	66.7	145.0.7632.116
+HEAD	https://www.trivago.jp/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.trivago.pl/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.monopolybingogame.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.mundotoro.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.aftenbladet.no/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://donate.onenation.org.au/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.puentedemando.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.jatekshop.eu/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://v8m5e6.com/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://cyoinatu-onna.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://forums.moneysavingexpert.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://swiftspinus.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://sparkivo.pro/	EMPTY				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://acesso.pagbank.com.br/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://a1.ro/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://aims.ucc-caloocan.edu.ph/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.razaoautomovel.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://promo.golesliga1max.pe/	OK	100.0	74.6	62.0	59	OK	100.0	100.0	7	7	0	0	0	OK	100.0	97.1	98.6	145.0.7632.116
+HEAD	https://crm.majoo.id/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.smecel.com.br/	OK	100.0	53.2	65.6	47	OK	81.8	100.0	11	9	0	2	0	OK	100.0	100.0	100.0	145.0.7632.116
+HEAD	https://www.radec.com.mx/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://serennu.com/	OK	100.0	82.0	74.2	61	OK	93.5	93.5	31	29	0	0	2	OK	100.0	59.3	74.5	145.0.7632.116
+HEAD	https://www.heart.org/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://lms12.tvu.ac.ir/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://basescan.org/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://app.levelupxx69.online/	BOTWALL				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://possssno.sbs/	OK	100.0	92.0	45.1	575	OK	94.7	98.2	170	161	0	8	1	OK	87.1	87.5	87.3	145.0.7632.116
+HEAD	https://booking.directferries.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.lyreco.com/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
+HEAD	https://www.unoeste.br/	TIMEOUT				0	SKIPPED								SKIPPED				145.0.7632.116
