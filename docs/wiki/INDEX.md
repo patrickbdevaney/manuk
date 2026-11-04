@@ -1544,6 +1544,10 @@
   - L5111 · AN @importED SHEET DELIVERED ITS FONTS AND NOT ONE OF ITS RULES (t1347)
   - L5141 · A ; INSIDE url() ENDED THE AT-RULE — AND THE EXPENSIVE HALF IS NOT THE AT-RULE (t1348)
 
+## Determinism has to hold across processes, not just across runs
+`docs/wiki/determinism-across-processes.md`
+
+
 ## `<dialog>`, `popover`, and the top layer (ticks 194-195)
 `docs/wiki/dialog-and-top-layer.md`
 
@@ -3773,4 +3777,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3084 sections across 171 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3084 sections across 172 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -201,9 +201,16 @@ pub(crate) fn engine_handle() -> Result<JSEngineHandle, JsError> {
         message: "SpiderMonkey engine lock poisoned".to_string(),
     })?;
     if slot.is_none() {
+        let det = crate::determinism::enabled();
+        if det {
+            crate::determinism::pin_host_environment();
+        }
         let engine = JSEngine::init().map_err(|_| JsError {
             message: "SpiderMonkey JSEngine::init() failed".to_string(),
         })?;
+        if det {
+            crate::determinism::reset_js_time_zone();
+        }
         *slot = Some(engine.handle());
         // Park the engine in a thread-local with NO drop glue, so TLS never tears it down behind our
         // back. `TeardownGuard` is the only thing that ever drops it, and it is armed later — after

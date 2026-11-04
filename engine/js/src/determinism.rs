@@ -13,7 +13,12 @@
 //!   [`LOAD_BACKSTOP_MS`]) instead of the tuned interactive ones, so load on the machine cannot move
 //!   where a page is cut. Logical bounds (`MAX_TASKS_PER_DRAIN`) are unchanged and do the real work.
 //!
-//! Not covered here (named so nobody assumes it): network record/replay, fdlibm/TZ/locale.
+//! * the host's time zone and locale (W3.11) are pinned to UTC / en-US ([`pin_host_environment`]), so
+//!   `new Date(0).toString()` and `toLocaleString()` do not depend on `TZ` / `LANG` of the machine.
+//!   `Math.sin` & co. are SpiderMonkey's bundled fdlibm (no libm), so they are already host-independent;
+//!   `scripts/w311-xproc-gate.sh` holds that with a fixture.
+//!
+//! Not covered here (named so nobody assumes it): network record/replay.
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
@@ -121,4 +126,36 @@ pub fn prelude_js() -> String {
         s2 = 0x85eb_ca6b_u32,
         s3 = 0xc2b2_ae35_u32,
     )
+}
+
+extern "C" {
+    fn setenv(name: *const std::ffi::c_char, value: *const std::ffi::c_char, overwrite: i32)
+        -> i32;
+    fn tzset();
+}
+
+/// Pin the process environment SpiderMonkey/ICU read for the default time zone and locale. Must run
+/// before `JSEngine::init` (ICU caches its default locale at first use). Idempotent.
+pub fn pin_host_environment() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| unsafe {
+        for (k, v) in [
+            (c"TZ", c"UTC"),
+            (c"LC_ALL", c"en_US.UTF-8"),
+            (c"LANG", c"en_US.UTF-8"),
+            (c"LANGUAGE", c"en_US"),
+        ] {
+            setenv(k.as_ptr(), v.as_ptr(), 1);
+        }
+        tzset();
+    });
+}
+
+/// `JS::ResetTimeZone()`: drop SpiderMonkey's cached zone so the next Date use re-reads `TZ`.
+pub fn reset_js_time_zone() {
+    extern "C" {
+        #[link_name = "_ZN2JS13ResetTimeZoneEv"]
+        fn js_reset_time_zone();
+    }
+    unsafe { js_reset_time_zone() }
 }

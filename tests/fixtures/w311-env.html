@@ -1,0 +1,17 @@
+<!doctype html>
+<title>w311 env fixture</title>
+<div id="out"></div>
+<script>
+  var out = document.getElementById('out');
+  function line(k, v) { var h = document.createElement('h2'); h.textContent = k + '=' + v; out.appendChild(h); }
+  line('sin', Math.sin(1e10));
+  line('cos', Math.cos(1e10));
+  line('tan', Math.tan(1e10));
+  line('exp', Math.exp(1.5));
+  line('pow', Math.pow(2.5, 3.7));
+  line('date0', new Date(0).toString());
+  line('tzoff', new Date(0).getTimezoneOffset());
+  line('locale', new Date(0).toLocaleString());
+  line('num', (1234567.891).toLocaleString());
+  line('lang', navigator.language);
+</script>

@@ -122,11 +122,18 @@ fn strip_page(a: &Map<String, Value>) -> Map<String, Value> {
 impl<B: Backend> Hub<B> {
     /// `dir`: where logs persist (`None` = in-memory only; nothing touches the disk).
     pub fn new(make: impl Fn() -> B + 'static, dir: Option<PathBuf>) -> Self {
-        let salt = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_nanos() as u64)
-            .unwrap_or(0)
-            ^ u64::from(std::process::id()) << 40;
+        // W3.11: the salt keeps ids from colliding with logs a previous process persisted in `dir`. With
+        // nothing persisted there is nothing to collide with, and `--deterministic` wants the same
+        // page ids (they appear in every observation) in every process.
+        let salt = if dir.is_none() && manuk_js::determinism::enabled() {
+            manuk_js::determinism::seed()
+        } else {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos() as u64)
+                .unwrap_or(0)
+                ^ u64::from(std::process::id()) << 40
+        };
         if let Some(d) = &dir {
             let _ = std::fs::create_dir_all(d);
         }
