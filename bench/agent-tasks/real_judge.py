@@ -3,6 +3,7 @@
 
   real_judge.py controls [--out TSV]     validity controls (a) negative, (b) positive, (c) two-pass agreement
   real_judge.py verdict RUBRIC ANSWER    one verdict (debug; prints JSON)
+  real_judge.py agree                    (c) two fresh passes vs the committed controls TSV -> judge-agreement.tsv
 MANUK_JUDGE_MUTATE=1 makes every verdict true (the gate must then go red).
 
 The judge is read from ~/manuk/.env (REAL_JUDGE_BASE_URL, REAL_JUDGE_API_KEY, REAL_JUDGE_MODEL) inside this process
@@ -139,9 +140,47 @@ def controls(env, out):
     return all(res[k] for k in ("neg_pass", "pos_pass", "agree_pass"))
 
 
+def agreement(env, committed, out):
+    """(c) two fresh judge passes over the committed control inputs; an input agrees only when pass 1, pass 2 and the
+    committed verdict are all the same boolean (None never agrees). Writes one row per input to `out`.
+    Resumable: rows already in `out + ".partial"` are kept and not re-judged (the gateway rate-limits with 429s)."""
+    rub = {r: t for t, r, _ in llm_rubrics()}
+    rows = [l.rstrip("\n").split("\t") for l in open(committed)][1:]
+    inputs = []
+    for model, control, task, rubric, verdict_s, _reason in rows:
+        ans = WRONG if control == "neg" else POSITIVE[rubric]
+        inputs.append((model, control, task, rubric, verdict_s == "True", ans))
+    assert len(inputs) == 71 and all(i[3] in rub for i in inputs)
+    part = out + ".partial"
+    done = [l.rstrip("\n").split("\t") for l in open(part)] if os.path.exists(part) else []
+    fh = open(part, "a")
+    if not done:
+        fh.write("judge_model\tcontrol\ttask\trubric\tcommitted\tpass1\tpass2\tagree3\n"); fh.flush()
+    for k, (model, control, task, rubric, committed_v, ans) in enumerate(inputs):
+        if k < len(done) - 1:
+            continue
+        v1, _ = verdict(env, rubric, ans)
+        v2, _ = verdict(env, rubric, ans)
+        line = f"{model}\t{control}\t{task}\t{rubric}\t{committed_v}\t{v1}\t{v2}\t{int(v1 is not None and v1 == v2 == committed_v)}"
+        fh.write(line + "\n"); fh.flush()
+        print(f"{k + 1}/{len(inputs)} {control} {task} committed={committed_v} p1={v1} p2={v2}", file=sys.stderr, flush=True)
+    fh.close()
+    body = [l.rstrip("\n").split("\t") for l in open(part)][1:]
+    assert len(body) == 71
+    a3 = sum(r[7] == "1" for r in body)
+    a_pair = sum(r[5] == r[6] != "None" for r in body)
+    a_commit = sum(r[5] == r[4] != "None" for r in body)
+    head = ["judge_model", "control", "task", "rubric", "committed", "pass1", "pass2", "agree3"]
+    open(out, "w").write("\n".join("\t".join(r) for r in [head] + body) + "\n")
+    os.remove(part)
+    res = {"n": len(body), "agree3": f"{a3}/{len(body)}", "pass_vs_pass": f"{a_pair}/{len(body)}",
+           "pass1_vs_committed": f"{a_commit}/{len(body)}", "agree_pass": a3 / len(body) >= 0.95}
+    print(json.dumps(res))
+    return res["agree_pass"]
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["controls", "verdict"])
+    ap.add_argument("cmd", choices=["controls", "verdict", "agree"])
     ap.add_argument("rest", nargs="*")
     ap.add_argument("--out", default=os.path.join(ROOT, "docs/sprint/w318/judge-controls.tsv"))
     a = ap.parse_args()
@@ -149,6 +188,10 @@ def main():
     if a.cmd == "verdict":
         print(json.dumps(verdict(env, a.rest[0], a.rest[1])))
         return
+    if a.cmd == "agree":
+        ok = agreement(env, os.path.join(ROOT, "docs/sprint/w318/judge-controls.tsv"),
+                       os.path.join(ROOT, "docs/sprint/w318/judge-agreement.tsv"))
+        sys.exit(0 if ok else 1)
     ok = controls(env, a.out)
     sys.exit(0 if ok else 1)
 
