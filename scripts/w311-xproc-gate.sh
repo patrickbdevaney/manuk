@@ -4,12 +4,17 @@
 # TZ=Asia/Tokyo LANG=de_DE vs the default env. Control arm: without --deterministic the pages that read
 # the clock/dice must differ, else the gate cannot go red.
 # usage: scripts/w311-xproc-gate.sh [procs=10]
+#        SITES=<file of URLs, one per line> scripts/w311-xproc-gate.sh [procs=10]   (live-site arm, W3.11.a)
 set -u
 cd "$(dirname "$0")/.."
 touch .git/sprint-working
 N=${1:-10}
 DUMP=${A11Y_DUMP:-./target/release/a11y-dump}; MCP=${MANUK_MCP:-./target/release/manuk-mcp}
-mapfile -t PAGES < <( (ls tests/wpt/corpus/*.html | head -19; echo tests/fixtures/determinism.html) | sed "s|^|file://$PWD/|")
+if [ -n "${SITES:-}" ]; then
+  mapfile -t PAGES < <(grep -v '^[[:space:]]*$' "$SITES")
+else
+  mapfile -t PAGES < <( (ls tests/wpt/corpus/*.html | head -19; echo tests/fixtures/determinism.html) | sed "s|^|file://$PWD/|")
+fi
 W=$(mktemp -d); trap 'rm -rf "$W"' EXIT
 for i in $(seq "$N"); do
   for u in "${PAGES[@]}"; do "$DUMP" --deterministic "$u" 2>/dev/null | sha256sum | cut -c1-16; done > "$W/a$i"

@@ -1,0 +1,30 @@
+chrome_ver	145.0.7632.116
+sites	20 (first 20 of docs/bench/corpus-crux-trend.txt)
+procs_completed	3 of 10 (run killed after ~40 min; ~17 min per process, divergence already visible)
+# a11y digest per site (first 16 hex of sha256 of a11y-dump --deterministic output), procs 1..3, in site order
+site_index	proc1	proc2	proc3	identical_across_3
+1	2c7c39cc33028e0d	39a55ddae4c78ea6	3b004b18c53975d1	no
+2	6db2836ca512b06f	6db2836ca512b06f	6db2836ca512b06f	yes
+3	4b134d8ad426a821	4b134d8ad426a821	4b134d8ad426a821	yes
+4	e101ebfe235d5eb9	54e78a0f305ffa98	7e2549d51f123567	no
+5	0947e75d82c0b691	d2752284916aca75	cdfddfa7390c210e	no
+6	e3b0c44298fc1c14	0918d3817969d1ed	92f03072c964ce69	no
+7	58290a3f30a1a119	58290a3f30a1a119	58290a3f30a1a119	yes
+8	e3b0c44298fc1c14	e3b0c44298fc1c14	e3b0c44298fc1c14	yes
+9	0895f3b0a83a8b9b	0895f3b0a83a8b9b	0895f3b0a83a8b9b	yes
+10	c18f19d38a83dedb	ee802aff93ae2a93	9bd5d3f82ca3b618	no
+11	aba7858721e1ecab	6572871d0e9828d8	e37c95197bbf8551	no
+12	feeea3c323fa43e1	fba10f08a75288fd	59bffda45ee99ade	no
+13	1df3a82fdfdd99ae	1df3a82fdfdd99ae	1df3a82fdfdd99ae	yes
+14	58290a3f30a1a119	58290a3f30a1a119	58290a3f30a1a119	yes
+15	dee3669b9475dd7e	f887c7bc8618d7ef	a3abe1c5d0a483c7	no
+16	0036faa47c176534	0036faa47c176534	0036faa47c176534	yes
+17	0b00fa630c43510a	0b00fa630c43510a	0b00fa630c43510a	yes
+18	659befc3b126c06e	659befc3b126c06e	659befc3b126c06e	yes
+19	d2d9188c39af43d4	18c7213a3cd2a4dd	18c7213a3cd2a4dd	no
+20	18c7213a3cd2a4dd	18c7213a3cd2a4dd	d2d9188c39af43d4	no
+# sites identical across all 3 procs: 9/20 (11 divergent)
+# MCP observation text, proc1 vs proc2: differs. Example: hidden-text count 1130 vs 1118 on comix.to; carousel link order swapped on mangago.me
+# Raw HTML is NOT stable across back-to-back fetches with the same client (plain curl -sL, same UA):
+# mangago.me 44010ff9d7fe3258 vs 03c0672d6138e544; ebay.com 0f5d735e74caa469 vs fdb1b668198dbf4a; fdown.net dd7be1865e4ecdd0 vs 359c371a7e247d9f
+# => divergence is upstream (live-site content variance), not engine-internal; the live-site arm cannot be green as specified
