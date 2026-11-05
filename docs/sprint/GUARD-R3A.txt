@@ -1,0 +1,9 @@
+run1 paired_n=35 mean_delta=-0.13
+run2 paired_n=37 mean_delta=-1.66
+run3 paired_n=35 mean_delta=0.04
+https://admin.zoomph.com/ [(1, 66.7)] INSTRUMENT | R0 itself flapped (0, 66.7, 66.7); R3 66.7 x3 equals the stable R0 value; oracle sha 2cf570 stable, engine fetch sha differs per run
+https://allticketscol.com/ [(1, 16.5), (2, 16.5), (3, 16.5)] ENGINE | improvement +16.5: R0 83.1 x3 vs R3 99.6 x3, engine fetch sha 52429b stable across R3 runs, F1 stable despite oracle sha varying; not a regression
+https://booking.directferries.com/ [(2, 75.0), (3, 75.0)] ORIGIN | R0 25.0 x3 vs R3 100.0 x2 (+ one empty); engine fetch sha differs every R3 run (78e646/757827/e46f89): varying origin response; direction is up
+https://hipmiluwuutara.org/ [(1, -100.0), (2, -100.0), (3, -100.0)] INSTRUMENT | R0 F1=100 was a Chrome AX snapshot with 2 kept nodes (GUARD.R2.a: 5/5 fresh runs F1 0.0, chrome_n=14, oracle+fetch sha identical); R3 oracle sha 6a7482 and fetch sha 0e1efd identical in all 3 runs, F1 0.0 x3
+https://www.paypal.com/ [(2, -69.6)] ORIGIN | R3 F1 empty in 2/3 runs and 1.0 in one, oracle sha '-' in 2/3; engine fetch sha differs every run (c38d3b/133b88/1f500b): bot-gated, varying origin response
+GREEN
