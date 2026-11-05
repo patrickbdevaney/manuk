@@ -1,3 +1,4 @@
 chrome_ver	suite	arm	tasks	full_runs	task_pass_2of3	run1	run2	run3	band	llm_judge_rows	judge_model
 145.0.7632.116	real-judge-gptoss120b	cdp-layer	2	0	0	0	0	0	n/a	2	openai/gpt-oss-120b
 145.0.7632.116	real-judge-gptoss120b	manuk	102	102	32	35	31	30	30-35	306	openai/gpt-oss-120b
+145.0.7632.116	real-judge-gptoss120b	playwright	102	102	52	46	49	52	46-52	306	openai/gpt-oss-120b
