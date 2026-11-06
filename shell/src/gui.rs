@@ -340,6 +340,8 @@ struct App {
     agent_open: bool,
     /// W3.17: the live agent run (one step per winit turn), if any.
     agent: Option<AgentRun>,
+    /// Live-window gate measurements (set only for a fixture run).
+    live: Option<LiveMetrics>,
     /// Minted from the winit input event being dispatched right now; `None` otherwise.
     consent: Option<HandoffConsent>,
     activation: Option<HumanActivation>,
@@ -529,6 +531,7 @@ impl App {
             store,
             agent_open: false,
             agent: None,
+            live: None,
             consent: None,
             activation: None,
             agent_input: String::new(),
@@ -1967,7 +1970,13 @@ impl App {
         let mut canvas = match &self.page {
             // Route through the page's own painter so decoded <img> bitmaps are blitted.
             Some(page) => page.paint_scrolled(&self.fonts, w, h, self.scroll_y - CHROME_TOP),
-            None => Canvas::new(w, h, Rgba::WHITE),
+            // The agent holds the page: show what it is working on, read-only, not a white window.
+            None => self
+                .agent
+                .as_ref()
+                .filter(|r| r.agent_has_page())
+                .and_then(|r| r.paint_view(w, h, CHROME_TOP))
+                .unwrap_or_else(|| Canvas::new(w, h, Rgba::WHITE)),
         };
 
         // Text selection highlight (offset into the page region).
@@ -3903,6 +3912,28 @@ impl App {
             tracing::warn!("agent: no page loaded");
             return;
         };
+        // Live-window gate: a scripted model, chosen by env var only.
+        if let Some(fx) = std::env::var("MANUK_AGENT_FIXTURE")
+            .ok()
+            .and_then(|s| crate::agent_run::FixtureBackend::from_spec(&s))
+        {
+            let (w, h) = match &self.gpu {
+                Some(g) => (g.config.width, g.config.height),
+                None => (self.width, 768),
+            };
+            let handoff = Handoff {
+                page,
+                scroll_y: self.scroll_y,
+                history: self.history.entries().to_vec(),
+            };
+            let mut cfg = PanelScope::assistant().agent_config();
+            cfg.max_steps = 40;
+            cfg.send_screenshots = false;
+            self.live = Some(LiveMetrics::default());
+            self.agent = Some(AgentRun::start(task, handoff, consent, cfg, Box::new(fx), (w, h)));
+            self.request_redraw();
+            return;
+        }
         // Resolve a backend from the environment; if none, tell the user how to get one.
         let llama_port = std::env::var("MANUK_LLAMA_PORT")
             .ok()
@@ -3971,6 +4002,9 @@ impl App {
                 }
             }
             if !run.is_active() {
+                if let Some(l) = self.live.take() {
+                    println!("{}", l.report(run.steps()));
+                }
                 self.agent_return_page();
             }
         }
@@ -4071,6 +4105,9 @@ impl App {
         if self.agent.as_ref().is_some_and(AgentRun::is_active) {
             if matches!(key, Key::Named(NamedKey::Escape)) {
                 if let Some(run) = self.agent.as_mut() {
+                    if let Some(l) = self.live.as_mut() {
+                        l.esc_at_step = Some(run.steps());
+                    }
                     run.request_stop();
                 }
                 self.request_redraw();
@@ -4793,6 +4830,7 @@ impl App {
                 self.advance_media();
                 // Coalesced paint: input bursts only set `needs_paint`; do the one CPU paint
                 // + texture upload here, then present.
+                let frame_start = std::time::Instant::now();
                 if self.needs_paint {
                     self.paint_and_upload();
                     self.needs_paint = false;
@@ -4803,6 +4841,9 @@ impl App {
                         tracing::warn!("draw: {e:?}");
                     }
                     self.frame.end();
+                    if let Some(l) = self.live.as_mut() {
+                        l.sample(frame_start);
+                    }
                     // Log frame stats once per window of frames.
                     if self.frame.len() == 120 {
                         if let (Some(avg), Some(fps)) = (self.frame.average(), self.frame.fps()) {
@@ -4852,6 +4893,39 @@ impl App {
             }
             _ => {}
         }
+    }
+}
+
+/// What the live-window gate reads off a fixture run: per-redraw cost, the longest gap between
+/// redraws while the run was live, and how many steps ran after Esc.
+#[derive(Default)]
+struct LiveMetrics {
+    last: Option<std::time::Instant>,
+    costs_ms: Vec<f64>,
+    max_gap_ms: f64,
+    esc_at_step: Option<usize>,
+}
+
+impl LiveMetrics {
+    fn sample(&mut self, start: std::time::Instant) {
+        let now = std::time::Instant::now();
+        self.costs_ms.push((now - start).as_secs_f64() * 1000.0);
+        if let Some(prev) = self.last {
+            self.max_gap_ms = self.max_gap_ms.max((start - prev).as_secs_f64() * 1000.0);
+        }
+        self.last = Some(now);
+    }
+
+    fn report(&self, steps: usize) -> String {
+        let mut c = self.costs_ms.clone();
+        c.sort_by(|a, b| a.total_cmp(b));
+        let p95 = c.get((c.len() * 95 / 100).min(c.len().saturating_sub(1))).copied().unwrap_or(0.0);
+        let after = self.esc_at_step.map_or(-1, |e| steps as i64 - e as i64);
+        format!(
+            "[live-frames] frames={} p95_ms={p95:.2} max_gap_ms={:.1} steps={steps} steps_after_esc={after}",
+            c.len(),
+            self.max_gap_ms
+        )
     }
 }
 

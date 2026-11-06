@@ -48,6 +48,46 @@ pub struct AgentRun {
     last_effect: Option<String>,
 }
 
+/// A scripted model for the live-window gate (`MANUK_AGENT_FIXTURE=<steps>:<ms>`): `steps` scroll
+/// actions, `ms` of think time each, then a finish. Selected by env var, never by a page.
+pub struct FixtureBackend {
+    left: std::sync::atomic::AtomicUsize,
+    think: std::time::Duration,
+}
+
+impl FixtureBackend {
+    /// Parse `"<steps>:<ms>"`.
+    pub fn from_spec(spec: &str) -> Option<Self> {
+        let (n, ms) = spec.split_once(':')?;
+        Some(FixtureBackend {
+            left: std::sync::atomic::AtomicUsize::new(n.parse().ok()?),
+            think: std::time::Duration::from_millis(ms.parse().ok()?),
+        })
+    }
+    pub fn steps(&self) -> usize {
+        self.left.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+#[async_trait::async_trait]
+impl manuk_agent::InferenceBackend for FixtureBackend {
+    async fn complete(&self, _m: &[manuk_agent::Message]) -> anyhow::Result<String> {
+        tokio::time::sleep(self.think).await;
+        let left = self.left.load(std::sync::atomic::Ordering::SeqCst);
+        if left == 0 {
+            return Ok(r#"{"action":"finish","answer":"fixture done"}"#.into());
+        }
+        self.left.store(left - 1, std::sync::atomic::Ordering::SeqCst);
+        Ok(r#"{"action":"scroll","dy":120}"#.into())
+    }
+    fn name(&self) -> String {
+        "fixture".into()
+    }
+    fn supports_images(&self) -> bool {
+        false
+    }
+}
+
 impl AgentRun {
     /// Start a run on `handoff`'s live page. The consent is the Ctrl+J / Enter gesture.
     pub fn start(
@@ -89,6 +129,11 @@ impl AgentRun {
     /// The agent owns the page right now (so the human view must not paint or act on it).
     pub fn agent_has_page(&self) -> bool {
         matches!(self.phase, Phase::Running)
+    }
+
+    /// What the human sees while the agent holds the page: the agent's page, painted read-only.
+    pub fn paint_view(&self, w: u32, h: u32, top: f32) -> Option<manuk_paint::Canvas> {
+        self.browser.paint_view(w, h, top)
     }
 
     pub fn steps(&self) -> usize {

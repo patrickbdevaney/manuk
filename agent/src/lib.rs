@@ -1899,6 +1899,13 @@ impl AgentBrowser {
         }
     }
 
+    /// The current viewport as a raster, for a human view that must keep painting the page while
+    /// the agent holds it. `top` is the chrome band the caller draws over the page's top edge.
+    pub fn paint_view(&self, width: u32, height: u32, top: f32) -> Option<manuk_paint::Canvas> {
+        let page = self.page.as_ref()?;
+        Some(page.paint_scrolled(&self.fonts, width, height, self.scroll_y - top))
+    }
+
     /// PNG screenshot of the current viewport.
     pub fn screenshot_png(&self) -> Result<Vec<u8>> {
         let page = self.page.as_ref().context("no page loaded")?;
