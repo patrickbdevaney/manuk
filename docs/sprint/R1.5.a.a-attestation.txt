@@ -1,0 +1,24 @@
+R1.5.a.a evidence: provenance of the pinned SpiderMonkey archive (mozjs_sys 140.17.0-0-lts, x86_64-unknown-linux-gnu)
+date: 2026-11-06, host has NO gh CLI and NO GitHub auth (gh auth status: not installed), so the authenticated
+`scripts/mozjs-fetch.sh` run is NOT possible here. This file records what could be checked without it.
+
+pin sha256 (scripts/mozjs-fetch.sh PIN_x86_64_unknown_linux_gnu):
+  69b2920f8787d202f3254bc6546b623c2f90e1224dab8a4f794b748f02dfa3a1
+
+1. Public attestation API (no auth needed for a public repo):
+   GET https://api.github.com/repos/servo/mozjs/attestations/sha256:69b2920f...a1  -> 2 attestations
+   - initiator=github, predicate release/v0.2, subject tag mozjs-sys-v140.17.0-0-lts
+   - initiator=user,   predicate slsa.dev/provenance/v1, builder
+       https://github.com/servo/mozjs/.github/workflows/publish.yml@refs/heads/servo-lts-v0.1
+       gitCommit 011b8fbe5a3c1cdb2148a3e3db72f3f1a28ffc29, run 36679786876 attempt 1
+       subject name libmozjs-x86_64-unknown-linux-gnu.tar.gz with sha256 69b2920f...a1
+2. Cryptographic check of the SLSA bundle against the pinned archive (sigstore 4.5.1, python -m sigstore verify github
+   --repository servo/mozjs; artifact = target/mozjs-verified/libmozjs-x86_64-unknown-linux-gnu.tar.gz, sha256 verified):
+   -> "OK: artifact.tar.gz"  (bundle 0, the release/v0.2 record, fails to parse under sigstore 4.5.1: pydantic 'missing' error)
+3. Gate-side mutations of scripts/mozjs-fetch.sh, run in an isolated copy (/tmp, not the repo):
+   a. real pin + good archive        -> "warning: gh is not authenticated ... sha256 pin only", path printed, exit 0
+   b. real pin + 1 byte flipped       -> "sha256 mismatch ... refusing to link it", exit 1
+   c. last pin digit a1 -> a3, good   -> "sha256 mismatch ... got 69b2...a1, pinned 69b2...a3", exit 1
+
+What this does NOT establish: the authenticated `gh attestation verify` path of the script itself (that still needs a
+gh-authenticated run, CI or a dev box). The sha pin is now corroborated by a signed provenance statement from servo/mozjs.
