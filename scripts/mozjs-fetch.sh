@@ -124,4 +124,6 @@ if [ -n "${GITHUB_ENV:-}" ]; then
   echo "exported MOZJS_ARCHIVE to GITHUB_ENV" >&2
 fi
 echo "fetch ok: $TRIPLE" >&2
+# Under Actions, also emit it as a check-run annotation: job logs need auth, annotations are public.
+if [ -n "${GITHUB_ACTIONS:-}" ]; then printf '::notice title=mozjs-fetch::fetch ok: %s\n' "$TRIPLE" >&2; fi
 echo "$DEST"
