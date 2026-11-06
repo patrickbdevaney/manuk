@@ -23,7 +23,9 @@ use winit::window::{Window, WindowId};
 
 use crate::chrome::{self, Bookmarks, History, Settings};
 use crate::find::{self, FindSession};
-use crate::panel::{self, AgentPanel, HandoffConsent, PanelScope};
+use crate::agent_run::{AgentRun, Phase};
+use crate::panel::{self, PanelScope};
+use manuk_consent::{HandoffConsent, HumanActivation};
 use crate::prerender;
 use crate::session::{self, SessionStore};
 use crate::tab::Browser;
@@ -73,6 +75,8 @@ const CHROME_HEIGHT: f32 = 44.0;
 const TAB_STRIP_H: f32 = 32.0;
 /// Total top chrome height — where the page content begins (tab strip + toolbar).
 const CHROME_TOP: f32 = TAB_STRIP_H + CHROME_HEIGHT;
+/// Height of the agent prompt / step-log strip along the bottom edge.
+const AGENT_STRIP_H: f32 = 28.0;
 /// Layout of the tab strip: per-tab width cap, the `+` new-tab button width.
 const TAB_MAX_W: f32 = 210.0;
 const TAB_MIN_W: f32 = 90.0;
@@ -334,6 +338,11 @@ struct App {
     // ---- §3 in-browser agent panel ----
     /// Ctrl+J opens a task prompt; typed text goes to the agent, not the page.
     agent_open: bool,
+    /// W3.17: the live agent run (one step per winit turn), if any.
+    agent: Option<AgentRun>,
+    /// Minted from the winit input event being dispatched right now; `None` otherwise.
+    consent: Option<HandoffConsent>,
+    activation: Option<HumanActivation>,
     agent_input: String,
 
     /// Last known cursor position in physical window pixels (for click hit-testing).
@@ -519,6 +528,9 @@ impl App {
             selecting: false,
             store,
             agent_open: false,
+            agent: None,
+            consent: None,
+            activation: None,
             agent_input: String::new(),
             cursor: (0.0, 0.0),
             focused_input: None,
@@ -2000,6 +2012,7 @@ impl App {
         self.draw_focus_caret(&mut canvas);
         self.draw_scrollbar(&mut canvas, w as f32, h as f32);
         self.draw_chrome(&mut canvas, w);
+        self.draw_agent_strip(&mut canvas, w, h);
         self.draw_overlays(&mut canvas, w as f32);
 
         // #2: upload only the rows that changed since last frame (exact row diff), so a
@@ -2197,6 +2210,12 @@ impl App {
                 "\u{00D7}",
                 &font(14.0, HINT),
             ); // × close
+            if is_active {
+                if let Some(badge) = self.agent.as_ref().and_then(AgentRun::badge) {
+                    canvas.fill_rect(x + tw - 62.0, 7.0, 42.0, TAB_STRIP_H - 14.0, Rgba { r: 26, g: 115, b: 232, a: 255 });
+                    canvas.draw_text(&self.fonts, x + tw - 58.0, tab_base - 1.0, badge, &font(10.0, Rgba::WHITE));
+                }
+            }
         }
         let ntx = self.new_tab_button_x(w);
         canvas.draw_text(&self.fonts, ntx + 9.0, tab_base, "+", &font(18.0, INK));
@@ -2887,7 +2906,15 @@ impl App {
     /// Drain `navigator.clipboard.writeText(...)` calls a handler made and write them to the real OS
     /// clipboard — how a page's "copy" button actually copies. Last write wins (one clipboard value).
     fn pump_clipboard(&mut self) {
-        for text in manuk_js::take_clipboard_writes() {
+        for text in {
+            let raw = manuk_js::take_clipboard_writes();
+            let n = raw.len();
+            let ok = manuk_consent::admit_clipboard(raw, self.activation.as_ref());
+            if ok.len() < n {
+                tracing::warn!(dropped = n - ok.len(), "clipboard: dropped writes made outside a human gesture");
+            }
+            ok
+        } {
             self.set_clipboard(&text);
             tracing::info!(
                 len = text.len(),
@@ -3757,7 +3784,121 @@ impl App {
     /// and a [`crate::session::BrowserTabs`] controller over the live `Browser`; the page is
     /// handed straight back. Page content stays untrusted throughout — the panel reuses
     /// `run_task`, whose observation fence is unconditional.
-    fn run_agent(&mut self, task: &str) {
+    /// The agent strip's buttons, left to right: `(label, x, width)`, for the window width `w`.
+    fn agent_strip_buttons(&self, w: f32) -> Vec<(&'static str, f32, f32)> {
+        let labels: &[&'static str] = match self.agent.as_ref().map(AgentRun::phase) {
+            Some(Phase::Running) => &["Take over", "Stop"],
+            Some(Phase::HumanTurn) => &["Resume", "Stop"],
+            _ => &[],
+        };
+        let mut x = w - 8.0;
+        let mut out = Vec::new();
+        for &l in labels.iter().rev() {
+            let bw = 14.0 + 7.5 * l.len() as f32;
+            x -= bw;
+            out.push((l, x, bw));
+            x -= 6.0;
+        }
+        out.reverse();
+        out
+    }
+
+    /// A press on a strip button. Consent comes from the pressed pointer event itself.
+    fn agent_strip_click(&mut self) -> bool {
+        let Some(gpu) = &self.gpu else { return false };
+        let (w, h) = (gpu.config.width as f32, gpu.config.height as f32);
+        let (cx, cy) = self.cursor;
+        if self.agent.is_none() || cy < h - AGENT_STRIP_H {
+            return false;
+        }
+        let hit = self
+            .agent_strip_buttons(w)
+            .into_iter()
+            .find(|(_, x, bw)| cx >= *x && cx < *x + *bw)
+            .map(|(l, _, _)| l);
+        match hit {
+            Some("Stop") => {
+                if let Some(run) = self.agent.as_mut() {
+                    run.request_stop();
+                }
+                self.request_redraw();
+            }
+            Some("Take over") => {
+                if let Some(c) = self.consent.take() {
+                    self.agent_take_over(c);
+                }
+            }
+            Some("Resume") => {
+                if let Some(c) = self.consent.take() {
+                    self.agent_resume(c);
+                }
+            }
+            _ => {}
+        }
+        true
+    }
+
+    /// The agent prompt (while open) and the step-log strip (while a run is live or just ended),
+    /// along the bottom edge.
+    fn draw_agent_strip(&self, canvas: &mut Canvas, w: u32, h: u32) {
+        let showing_run = self.agent.is_some();
+        if !showing_run && !self.agent_open {
+            return;
+        }
+        let (w, h) = (w as f32, h as f32);
+        let top = h - AGENT_STRIP_H;
+        let bg = Rgba { r: 32, g: 34, b: 40, a: 255 };
+        let ink = Rgba { r: 235, g: 236, b: 240, a: 255 };
+        let accent = Rgba { r: 138, g: 180, b: 248, a: 255 };
+        let style = |size: f32, color: Rgba| TextStyle {
+            rtl: false,
+            sideways: false,
+            decoration: Default::default(),
+            font_key: FontKey {
+                family: FontFamily::SansSerif,
+                weight: 400,
+                italic: false,
+                pua_family: None,
+            },
+            font_size: size,
+            color,
+            line_height: size + 3.0,
+            line_height_normal: false,
+            letter_spacing: 0.0,
+            word_spacing: 0.0,
+            shadow: None,
+        };
+        canvas.fill_rect(0.0, top, w, AGENT_STRIP_H, bg);
+        let base = top + AGENT_STRIP_H / 2.0 + 5.0;
+        if self.agent_open {
+            let t = format!("Agent task: {}\u{2502}   (Enter to run, Esc to cancel)", self.agent_input);
+            canvas.draw_text(&self.fonts, 12.0, base, &clip_text(&t, w - 24.0), &style(13.0, ink));
+            return;
+        }
+        let Some(run) = &self.agent else { return };
+        let status = match run.phase() {
+            Phase::Running => format!("AGENT step {}", run.steps()),
+            Phase::HumanTurn => "YOUR TURN".to_string(),
+            Phase::Done(_) => "agent done".to_string(),
+            Phase::Stopped => "agent stopped".to_string(),
+            Phase::Failed(_) => "agent failed".to_string(),
+        };
+        canvas.draw_text(&self.fonts, 12.0, base, &status, &style(13.0, accent));
+        let buttons = self.agent_strip_buttons(w);
+        let log_right = buttons.first().map_or(w - 12.0, |(_, x, _)| *x - 10.0);
+        let line = run.strip_tail().last().cloned().unwrap_or_default();
+        canvas.draw_text(&self.fonts, 130.0, base, &clip_text(&line, log_right - 130.0), &style(13.0, ink));
+        for (label, x, bw) in buttons {
+            canvas.fill_rect(x, top + 4.0, bw, AGENT_STRIP_H - 8.0, Rgba { r: 60, g: 64, b: 72, a: 255 });
+            canvas.draw_text(&self.fonts, x + 7.0, base, label, &style(13.0, ink));
+        }
+    }
+
+    fn run_agent(&mut self, task: &str, consent: HandoffConsent) {
+        if self.agent.as_ref().is_some_and(AgentRun::is_active) {
+            tracing::warn!("agent: a run is already active (Esc to stop it)");
+            return;
+        }
         let Some(page) = self.page.take() else {
             tracing::warn!("agent: no page loaded");
             return;
@@ -3791,31 +3932,57 @@ impl App {
             scroll_y: self.scroll_y,
             history: self.history.entries().to_vec(),
         };
-        let mut panel = AgentPanel::new(PanelScope::assistant(), w, h);
-        panel.take_over(handoff, HandoffConsent::user_approved());
+        tracing::info!(backend = ?kind, task, "agent: running one step per frame (Esc stops)");
+        self.agent = Some(AgentRun::start(
+            task,
+            handoff,
+            consent,
+            PanelScope::assistant().agent_config(),
+            Box::new(backend),
+            (w, h),
+        ));
+        self.request_redraw();
+    }
 
+    fn request_redraw(&self) {
+        if let Some(w) = &self.window {
+            w.request_redraw();
+        }
+    }
+
+    /// One agent step per winit turn (called from `about_to_wait`). The agent and the human never
+    /// hold the page at once: while the agent runs, `self.page` is `None`.
+    fn pump_agent(&mut self) {
         let known = self.known_history();
         let settings = self.settings.clone();
-        tracing::info!(backend = ?kind, task, "agent: running (assistant: read-only page + tab control)");
-        let result = {
+        let Some(run) = self.agent.as_mut() else { return };
+        let changed = {
             let mut tabs = crate::session::BrowserTabs::new(&mut self.browser, known, settings);
-            self.rt
-                .block_on(panel.run_with_tabs(&backend, task, &mut tabs))
+            run.pump(&self.rt, Some(&mut tabs))
         };
-        match result {
-            Ok(outcome) => {
-                let answer = outcome.answer.unwrap_or_else(|| "(no answer)".to_string());
-                tracing::info!(steps = outcome.steps, "agent answer: {answer}");
-                println!("\n[agent] {answer}\n");
+        if !changed {
+            return;
+        }
+        if let Some(run) = self.agent.as_mut() {
+            if let Phase::Done(a) | Phase::Failed(a) = run.phase().clone() {
+                println!("\n[agent] {a}\n");
                 if let Some(w) = &self.window {
-                    w.set_title(&format!("[agent] {} — manuk", truncate(&answer, 60)));
+                    w.set_title(&format!("[agent] {} — manuk", truncate(&a, 60)));
                 }
             }
-            Err(e) => tracing::error!("agent task failed: {e:#}"),
+            if !run.is_active() {
+                self.agent_return_page();
+            }
         }
+        self.needs_paint = true;
+        self.request_redraw();
+    }
 
-        // Hand the live session back and resume the human view on the same page.
-        if let Some(h) = panel.hand_back(HandoffConsent::user_approved()) {
+    /// The run ended: the page goes back to the human view.
+    fn agent_return_page(&mut self) {
+        let Some(run) = self.agent.as_mut() else { return };
+        if let Some(h) = run.release_to_human() {
+            let w = self.gpu.as_ref().map_or(self.width, |g| g.config.width);
             self.scroll_y = h.scroll_y;
             let mut page = h.page;
             page.relayout_zoomed(&self.fonts, w as f32, self.zoom);
@@ -3824,6 +3991,40 @@ impl App {
             self.clamp_scroll();
             self.rerender();
         }
+    }
+
+    /// "Take over" (strip button / Ctrl+Shift+T): the human gets the page mid-run.
+    fn agent_take_over(&mut self, consent: HandoffConsent) {
+        let Some(run) = self.agent.as_mut() else { return };
+        if let Some(h) = run.take_over(consent) {
+            let w = self.gpu.as_ref().map_or(self.width, |g| g.config.width);
+            self.scroll_y = h.scroll_y;
+            let mut page = h.page;
+            page.relayout_zoomed(&self.fonts, w as f32, self.zoom);
+            self.viewport.content_height = page.content_height;
+            self.page = Some(page);
+            self.clamp_scroll();
+            self.rerender();
+        }
+    }
+
+    /// "Resume": back to the agent, with an effect diff of what the human changed.
+    fn agent_resume(&mut self, consent: HandoffConsent) {
+        let phase_ok = self.agent.as_ref().is_some_and(|r| r.phase() == &Phase::HumanTurn);
+        if !phase_ok {
+            return;
+        }
+        let Some(page) = self.page.take() else { return };
+        let handoff = Handoff {
+            page,
+            scroll_y: self.scroll_y,
+            history: self.history.entries().to_vec(),
+        };
+        if let Some(run) = self.agent.as_mut() {
+            run.resume(handoff, consent);
+        }
+        self.needs_paint = true;
+        self.request_redraw();
     }
 
     /// Fire `keyup` on the focused field when a key is physically released — the release half of the
@@ -3865,6 +4066,41 @@ impl App {
         let alt = self.modifiers.alt_key();
         let shift = self.modifiers.shift_key();
 
+        // W3.17: Esc halts a live run before its next step; Ctrl+Shift+T takes over; Ctrl+Shift+R
+        // resumes. All three need a real key press (`self.consent` is minted from the winit event).
+        if self.agent.as_ref().is_some_and(AgentRun::is_active) {
+            if matches!(key, Key::Named(NamedKey::Escape)) {
+                if let Some(run) = self.agent.as_mut() {
+                    run.request_stop();
+                }
+                self.request_redraw();
+                return true;
+            }
+            if ctrl && shift {
+                if let Key::Character(c) = key {
+                    match c.to_ascii_lowercase().as_str() {
+                        "t" => {
+                            if let Some(c) = self.consent.take() {
+                                self.agent_take_over(c);
+                            }
+                            return true;
+                        }
+                        "r" => {
+                            if let Some(c) = self.consent.take() {
+                                self.agent_resume(c);
+                            }
+                            return true;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            // While the agent holds the page the human view is inert (no page to type into).
+            if self.agent.as_ref().is_some_and(AgentRun::agent_has_page) && !self.agent_open {
+                return true;
+            }
+        }
+
         // The agent prompt captures typed text while open — this is the trusted instruction
         // channel; it never touches the page.
         if self.agent_open {
@@ -3878,7 +4114,12 @@ impl App {
                     let task = std::mem::take(&mut self.agent_input);
                     self.agent_open = false;
                     if !task.trim().is_empty() {
-                        self.run_agent(task.trim());
+                        // The Enter that submits the task is the consent gesture; no human key
+                        // event in scope (a synthetic one) means no run.
+                        match self.consent.take() {
+                            Some(c) => self.run_agent(task.trim(), c),
+                            None => tracing::warn!("agent: no human gesture; not starting"),
+                        }
                     }
                     return true;
                 }
@@ -4368,17 +4609,42 @@ impl ApplicationHandler<NavEvent> for App {
         self.rerender();
     }
 
-    fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
+        self.window_event_inner(event_loop, id, event);
+        // Consent and activation live exactly as long as the input event's dispatch.
+        self.consent = None;
+        self.activation = None;
+    }
+
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        if self.agent.as_ref().is_some_and(|r| r.phase() == &Phase::Running) {
+            // One agent step per turn; Poll keeps turns coming while the run is live.
+            event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
+            self.pump_agent();
+        } else {
+            event_loop.set_control_flow(winit::event_loop::ControlFlow::Wait);
+        }
+    }
+}
+
+impl App {
+    fn window_event_inner(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
         match event {
             WindowEvent::CloseRequested => {
                 self.save_session();
                 event_loop.exit();
             }
             WindowEvent::ModifiersChanged(m) => self.modifiers = m.state(),
-            WindowEvent::KeyboardInput { event, .. } => match event.state {
+            WindowEvent::KeyboardInput { event, is_synthetic, .. } => match event.state {
                 ElementState::Pressed => {
                     manuk_net::downloads::note_user_gesture();
+                    // W3.17: the only place consent and clipboard activation are minted for keys.
+                    manuk_js::take_clipboard_writes(); // nothing queued before the gesture counts
+                    self.consent = HandoffConsent::from_key(&event, is_synthetic);
+                    self.activation = HumanActivation::from_key(&event, is_synthetic);
                     self.handle_key(&event.logical_key, event_loop);
+                    self.consent = None;
+                    self.activation = None;
                 }
                 // The release half of the keyboard trio: keydown+input fire on press (above / via
                 // edit), `keyup` fires here on release. Search-as-you-type and char-counters bind it.
@@ -4475,6 +4741,14 @@ impl ApplicationHandler<NavEvent> for App {
             WindowEvent::MouseInput { state, button, .. } => {
                 if state == ElementState::Pressed {
                     manuk_net::downloads::note_user_gesture();
+                    manuk_js::take_clipboard_writes(); // nothing queued before the gesture counts
+                    self.consent = HandoffConsent::from_pointer(&event);
+                    self.activation = HumanActivation::from_pointer(&event);
+                    if self.agent_strip_click() {
+                        self.consent = None;
+                        self.activation = None;
+                        return;
+                    }
                 }
                 if state == ElementState::Released {
                     self.scrollbar_drag = None; // end any scrollbar drag

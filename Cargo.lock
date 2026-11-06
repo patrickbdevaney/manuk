@@ -3322,6 +3322,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "manuk-consent"
+version = "1.0.0"
+dependencies = [
+ "winit",
+]
+
+[[package]]
 name = "manuk-css"
 version = "1.0.0"
 dependencies = [
@@ -3558,6 +3565,7 @@ dependencies = [
  "libc",
  "manuk-agent",
  "manuk-compositor",
+ "manuk-consent",
  "manuk-css",
  "manuk-dom",
  "manuk-html",

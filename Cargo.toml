@@ -23,6 +23,7 @@ members = [
     "engine/compositor",
     "engine/page",
     "shell",
+    "consent",
     "agent",
     "bidi",
     "store",
@@ -110,6 +111,7 @@ manuk-net = { path = "engine/net" }
 manuk-dom = { path = "engine/dom" }
 manuk-a11y = { path = "engine/a11y" }
 manuk-agent = { path = "agent" }
+manuk-consent = { path = "consent" }
 rmcp = { version = "3.7", default-features = false, features = ["server", "transport-io"] }
 manuk-html = { path = "engine/html" }
 manuk-css = { path = "engine/css" }

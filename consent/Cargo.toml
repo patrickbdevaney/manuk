@@ -1,0 +1,14 @@
+[package]
+name = "manuk-consent"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Unforgeable human-input tokens: HandoffConsent and HumanActivation can only be minted from a real winit input event."
+
+[dependencies]
+winit.workspace = true
+
+[features]
+# Lets the shell's unit tests stand in for the winit loop. Enabled only via the shell's [dev-dependencies].
+test-mint = []

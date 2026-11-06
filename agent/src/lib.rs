@@ -2446,24 +2446,113 @@ async fn run_loop(
     log: &mut replay::EventLog,
     mut tabs: Option<&mut dyn TabController>,
 ) -> Result<AgentOutcome> {
-    let mut outcome = AgentOutcome::default();
-    log.push(replay::Event::Start {
-        task: task.to_string(),
-        backend: backend.name(),
-        max_steps: config.max_steps,
-    });
-    // Conversation memory: (observation_text, action_json) per prior step.
-    let mut history: Vec<(String, String)> = Vec::new();
+    let mut run = TaskRun::new(task, config, backend.name(), std::mem::take(log));
+    let res = loop {
+        match run.step(browser, backend, &mut tabs).await {
+            Ok(StepStatus::Running) => continue,
+            Ok(_) => break Ok(()),
+            Err(e) => break Err(e),
+        }
+    };
+    let (outcome, l) = run.finish();
+    *log = l;
+    res.map(|()| outcome)
+}
 
-    for step in 0..config.max_steps {
-        outcome.steps = step + 1;
+/// W3.17: where a [`TaskRun`] stands after one step.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StepStatus {
+    /// More steps remain.
+    Running,
+    /// The model called `finish`.
+    Finished,
+    /// `max_steps` reached without a `finish`.
+    Exhausted,
+}
+
+/// W3.17: the agent loop as a state machine. [`run_task`] drives it to completion; the GUI shell
+/// drives it one [`step`](Self::step) per winit turn so the window stays live and Esc can halt it
+/// between steps (the `Page` is `!Send`, so it cannot move to a worker thread).
+pub struct TaskRun {
+    task: String,
+    config: AgentConfig,
+    log: replay::EventLog,
+    /// (observation_text, action_json) per prior step.
+    history: Vec<(String, String)>,
+    outcome: AgentOutcome,
+    step: usize,
+    done: bool,
+    /// Shown to the model once, with the next observation (e.g. what a human changed).
+    note: Option<String>,
+}
+
+impl TaskRun {
+    pub fn new(task: &str, config: &AgentConfig, backend_name: String, mut log: replay::EventLog) -> Self {
+        log.push(replay::Event::Start {
+            task: task.to_string(),
+            backend: backend_name,
+            max_steps: config.max_steps,
+        });
+        TaskRun {
+            task: task.to_string(),
+            config: config.clone(),
+            log,
+            history: Vec::new(),
+            outcome: AgentOutcome::default(),
+            step: 0,
+            done: false,
+            note: None,
+        }
+    }
+
+    /// Tell the model something before its next observation. The text must already be fenced as
+    /// untrusted by the caller if it derives from page content.
+    pub fn note_for_next_step(&mut self, text: String) {
+        self.note = Some(text);
+    }
+
+    pub fn steps_taken(&self) -> usize {
+        self.step
+    }
+
+    pub fn outcome(&self) -> &AgentOutcome {
+        &self.outcome
+    }
+
+    /// Close the run (logging `Finished`) and return what it produced.
+    pub fn finish(mut self) -> (AgentOutcome, replay::EventLog) {
+        if !self.done {
+            self.log.push(replay::Event::Finished {
+                steps: self.outcome.steps,
+                answer: self.outcome.answer.clone(),
+            });
+        }
+        (self.outcome, self.log)
+    }
+
+    /// Run exactly one observe -> decide -> act step.
+    pub async fn step(
+        &mut self,
+        browser: &mut AgentBrowser,
+        backend: &dyn InferenceBackend,
+        tabs: &mut Option<&mut dyn TabController>,
+    ) -> Result<StepStatus> {
+        if self.done {
+            return Ok(StepStatus::Finished);
+        }
+        if self.step >= self.config.max_steps {
+            return Ok(StepStatus::Exhausted);
+        }
+        let step = self.step;
+        self.step += 1;
+        self.outcome.steps = step + 1;
         let obs = browser.observe()?;
         // N6: one policy governs serialization depth. The legacy `text_budget` /
         // `send_screenshots` knobs fold onto it so existing callers are unchanged.
         let policy = observation_policy::ObservationPolicy {
-            text_budget: config.text_budget,
-            include_screenshot: config.send_screenshots,
-            ..config.observation.clone()
+            text_budget: self.config.text_budget,
+            include_screenshot: self.config.send_screenshots,
+            ..self.config.observation.clone()
         };
         let obs_text = obs.to_prompt_with(&policy);
         // G-d: record what the agent perceived, before it decides anything.
@@ -2473,7 +2562,7 @@ async fn run_loop(
         } else {
             None
         };
-        log.push(replay::Event::Observed {
+        self.log.push(replay::Event::Observed {
             step,
             observation: Box::new(replay::ObservationRecord::of(&obs, shot.as_deref())),
         });
@@ -2482,16 +2571,17 @@ async fn run_loop(
         // observation (with a screenshot if enabled + supported).
         let mut messages = vec![
             Message::text(Role::System, SYSTEM_PROMPT),
-            Message::text(Role::User, format!("TASK: {task}")),
+            Message::text(Role::User, format!("TASK: {}", self.task)),
         ];
         // §4b token budgeting: keep only the most recent `history_turns` exchanges.
-        let kept = history.len().saturating_sub(config.history_turns);
-        for (past_obs, past_act) in &history[kept..] {
+        let kept = self.history.len().saturating_sub(self.config.history_turns);
+        for (past_obs, past_act) in &self.history[kept..] {
             messages.push(Message::text(Role::User, past_obs.clone()));
             messages.push(Message::text(Role::Assistant, past_act.clone()));
         }
+        let note = self.note.take().map(|n| format!("{n}\n")).unwrap_or_default();
         let mut current = vec![Content::Text(format!(
-            "OBSERVATION (step {}):\n{obs_text}\nRespond with the next action as JSON.",
+            "{note}OBSERVATION (step {}):\n{obs_text}\nRespond with the next action as JSON.",
             step + 1
         ))];
         // Reuse the render already taken for the G-d provenance record; painting twice
@@ -2504,11 +2594,11 @@ async fn run_loop(
             content: current,
         });
 
-        let reply = complete_with_retry(backend, &messages, config)
+        let reply = complete_with_retry(backend, &messages, &self.config)
             .await
             .with_context(|| format!("inference failed at step {}", step + 1))?;
         // G-d: the model is the non-reproducible part, so its reply is stored verbatim.
-        log.push(replay::Event::Model {
+        self.log.push(replay::Event::Model {
             step,
             raw: reply.clone(),
         });
@@ -2516,17 +2606,17 @@ async fn run_loop(
         let action = match parse_action(&reply) {
             Ok(a) => a,
             Err(e) => {
-                outcome
+                self.outcome
                     .transcript
                     .push(format!("step {}: unparseable reply ({e})", step + 1));
                 // Record and continue so the next observation re-prompts the model.
-                history.push((obs_text, reply));
-                continue;
+                self.history.push((obs_text, reply));
+                return Ok(StepStatus::Running);
             }
         };
 
         let action_json = strip_think(&reply).trim().to_string();
-        outcome
+        self.outcome
             .transcript
             .push(format!("step {}: {action:?}", step + 1));
 
@@ -2536,40 +2626,41 @@ async fn run_loop(
         // N5 — the single enforcement point: authority (was this ever granted?) then the
         // E6 risk heuristic (does this target look dangerous?). Both must pass.
         {
-            let caps = config
+            let caps = self.config
                 .capabilities
                 .clone()
-                .allow_sensitive(config.allow_sensitive_actions);
+                .allow_sensitive(self.config.allow_sensitive_actions);
             if let Err(denial) = capabilities::check(&action, &obs, &caps) {
                 let reason = denial.to_string();
                 let note = format!("  BLOCKED: {reason}. Choose a different action.");
-                outcome.transcript.push(note.clone());
-                log.push(replay::Event::Blocked {
+                self.outcome.transcript.push(note.clone());
+                self.log.push(replay::Event::Blocked {
                     step,
                     reason: reason.clone(),
                 });
-                history.push((obs_text, format!("{action_json}\n{note}")));
-                continue;
+                self.history.push((obs_text, format!("{action_json}\n{note}")));
+                return Ok(StepStatus::Running);
             }
         }
 
-        log.push(replay::Event::Acted {
+        self.log.push(replay::Event::Acted {
             step,
             action: replay::action_repr(&action),
         });
 
         match action {
             Action::Finish { answer } => {
-                log.push(replay::Event::Finished {
-                    steps: outcome.steps,
+                self.log.push(replay::Event::Finished {
+                    steps: self.outcome.steps,
                     answer: Some(answer.clone()),
                 });
-                outcome.answer = Some(answer);
-                return Ok(outcome);
+                self.outcome.answer = Some(answer);
+                self.done = true;
+                return Ok(StepStatus::Finished);
             }
             Action::Navigate { url } => {
                 if let Err(e) = browser.navigate(&url).await {
-                    outcome.transcript.push(format!("  navigate error: {e:#}"));
+                    self.outcome.transcript.push(format!("  navigate error: {e:#}"));
                 }
             }
             Action::Click { index } => {
@@ -2577,10 +2668,10 @@ async fn run_loop(
                 match href {
                     Some(h) => {
                         if let Err(e) = browser.navigate(&h).await {
-                            outcome.transcript.push(format!("  click error: {e:#}"));
+                            self.outcome.transcript.push(format!("  click error: {e:#}"));
                         }
                     }
-                    None => outcome
+                    None => self.outcome
                         .transcript
                         .push(format!("  no link at index {index}")),
                 }
@@ -2589,43 +2680,43 @@ async fn run_loop(
 
             // ---- §4b ----
             Action::Type { field, text } => match browser.type_into(&field, &text) {
-                Ok(()) => outcome.transcript.push(format!("  typed into {field:?}")),
-                Err(e) => outcome.transcript.push(format!("  type error: {e:#}")),
+                Ok(()) => self.outcome.transcript.push(format!("  typed into {field:?}")),
+                Err(e) => self.outcome.transcript.push(format!("  type error: {e:#}")),
             },
             Action::ClickText { role, name } => {
                 let r = parse_role(&role);
                 match browser.click_by_name(&r, &name).await {
-                    Ok(act) => outcome.transcript.push(format!("  click_text -> {act:?}")),
-                    Err(e) => outcome
+                    Ok(act) => self.outcome.transcript.push(format!("  click_text -> {act:?}")),
+                    Err(e) => self.outcome
                         .transcript
                         .push(format!("  click_text error: {e:#}")),
                 }
             }
             Action::ClickAt { x, y } => match browser.click_at(x, y).await {
-                Ok(act) => outcome.transcript.push(format!("  click_at -> {act:?}")),
-                Err(e) => outcome.transcript.push(format!("  click_at error: {e:#}")),
+                Ok(act) => self.outcome.transcript.push(format!("  click_at -> {act:?}")),
+                Err(e) => self.outcome.transcript.push(format!("  click_at error: {e:#}")),
             },
             Action::Submit { field } => {
                 let target = field.as_deref().map(|f| (&manuk_a11y::Role::TextBox, f));
                 match browser.submit(target).await {
-                    Ok(act) => outcome.transcript.push(format!("  submit -> {act:?}")),
-                    Err(e) => outcome.transcript.push(format!("  submit error: {e:#}")),
+                    Ok(act) => self.outcome.transcript.push(format!("  submit -> {act:?}")),
+                    Err(e) => self.outcome.transcript.push(format!("  submit error: {e:#}")),
                 }
             }
             Action::Back => {
                 if let Err(e) = browser.back().await {
-                    outcome.transcript.push(format!("  back error: {e:#}"));
+                    self.outcome.transcript.push(format!("  back error: {e:#}"));
                 }
             }
             Action::Forward => {
                 if let Err(e) = browser.forward().await {
-                    outcome.transcript.push(format!("  forward error: {e:#}"));
+                    self.outcome.transcript.push(format!("  forward error: {e:#}"));
                 }
             }
             Action::ScrollTo { role, name } => {
                 let r = parse_role(&role);
                 if let Err(e) = browser.scroll_to(&r, &name) {
-                    outcome.transcript.push(format!("  scroll_to error: {e:#}"));
+                    self.outcome.transcript.push(format!("  scroll_to error: {e:#}"));
                 }
             }
 
@@ -2635,14 +2726,14 @@ async fn run_loop(
                 match (tabs.as_deref_mut(), sel) {
                     (Some(tc), Some(sel)) => {
                         let n = tc.close_tabs(&sel);
-                        outcome
+                        self.outcome
                             .transcript
                             .push(format!("  close_tabs {sel:?} -> closed {n}"));
                     }
-                    (Some(_), None) => outcome
+                    (Some(_), None) => self.outcome
                         .transcript
                         .push("  close_tabs: no domain/title/indices given".to_string()),
-                    (None, _) => outcome
+                    (None, _) => self.outcome
                         .transcript
                         .push("  close_tabs: no tab context in this run".to_string()),
                 }
@@ -2650,37 +2741,36 @@ async fn run_loop(
             Action::OpenTab { url } => match tabs.as_deref_mut() {
                 Some(tc) => {
                     let opened = tc.open_tab_from_history(&url);
-                    outcome.transcript.push(if opened {
+                    self.outcome.transcript.push(if opened {
                         format!("  open_tab -> {url}")
                     } else {
                         format!("  open_tab: {url} is not in history (refused)")
                     });
                 }
-                None => outcome
+                None => self.outcome
                     .transcript
                     .push("  open_tab: no tab context in this run".to_string()),
             },
             Action::SearchTab { query } => match tabs.as_deref_mut() {
                 Some(tc) => {
                     let url = tc.open_search(&query);
-                    outcome
+                    self.outcome
                         .transcript
                         .push(format!("  search_tab {query:?} -> {url}"));
                 }
-                None => outcome
+                None => self.outcome
                     .transcript
                     .push("  search_tab: no tab context in this run".to_string()),
             },
         }
 
-        history.push((obs_text, action_json));
+        self.history.push((obs_text, action_json));
+        if self.step >= self.config.max_steps {
+            Ok(StepStatus::Exhausted)
+        } else {
+            Ok(StepStatus::Running)
+        }
     }
-
-    log.push(replay::Event::Finished {
-        steps: outcome.steps,
-        answer: outcome.answer.clone(),
-    });
-    Ok(outcome)
 }
 
 /// Remove `<think>...</think>` reasoning blocks (qwen/DeepSeek-style models emit

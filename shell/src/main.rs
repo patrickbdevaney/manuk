@@ -12,6 +12,7 @@
 //!
 //! `<url>` may be `http(s)://…`, `file://…`, or a local path.
 
+mod agent_run;
 mod audio;
 mod chrome;
 mod find;
