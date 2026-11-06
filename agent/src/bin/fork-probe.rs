@@ -53,10 +53,11 @@ fn tree_text(b: &AgentBrowser) -> String {
 /// What a child does: a per-index mutation, allocation + GC, then an observation.
 fn child_work(b: &mut AgentBrowser, idx: usize) -> (String, String) {
     let js = format!(
-        "window.__who='child{idx}';document.getElementById('b').click();\
+        "window.__who='child{idx}';var bb=document.getElementById('b');\
+         if(bb)bb.click();else{{var d=document.querySelector('h1,h2,p,li,a');if(d)d.textContent='clicked child{idx}';var o2=document.createElement('p');o2.id='out';o2.textContent=d?d.textContent:'';}}\
          var a=[];for(var i=0;i<20000;i++)a.push({{i:i,s:'x'+i}});a=null;\
          if(typeof gc==='function')gc();\
-         var o=document.getElementById('out').textContent;o"
+         var o=document.getElementById('out');o=o?o.textContent:'';o"
     );
     let (_, errs) = b.probe_eval(&js);
     let tree = tree_text(b);
@@ -65,7 +66,22 @@ fn child_work(b: &mut AgentBrowser, idx: usize) -> (String, String) {
         "var p=document.createElement('pre');p.id='__probe';document.body.appendChild(p);\
          p.textContent=String(Math.random())+'/'+(typeof crypto==='object'?crypto.getRandomValues(new Uint32Array(2)).join(','):'nocrypto')",
     );
-    let rand = if rand.is_empty() { format!("ERR:{}", rerrs.join(";").replace('\t', " ")) } else { rand };
+    // R3.4.a: a Math.random cached by the page before the fork, and one from an iframe's window.
+    let (extra, _) = b.probe_eval(
+        "var q=document.getElementById('__probe');var f=document.getElementById('__fp_if');\
+         var ir=f&&f.contentWindow&&f.contentWindow.Math?f.contentWindow.Math.random():'none';\
+         q.textContent=String(window.__mr?window.__mr():'none')+'#'+ir",
+    );
+    let rand = if rand.is_empty() {
+        format!("ERR:{}", rerrs.join(";").replace('\t', " "))
+    } else {
+        rand
+    };
+    let rand = if std::env::var_os("FORK_PROBE_REALMS").is_some() {
+        format!("{rand}|x={extra}")
+    } else {
+        rand
+    };
     (format!("errs={}|{}", errs.len(), tree), rand)
 }
 
@@ -75,7 +91,13 @@ fn open_sockets() -> usize {
         .map(|rd| {
             rd.flatten()
                 // fds 0-2 are the harness's stdio (a socket under some launchers), not the page's.
-                .filter(|e| e.file_name().to_string_lossy().parse::<u32>().map(|n| n > 2).unwrap_or(true))
+                .filter(|e| {
+                    e.file_name()
+                        .to_string_lossy()
+                        .parse::<u32>()
+                        .map(|n| n > 2)
+                        .unwrap_or(true)
+                })
                 .filter(|e| {
                     std::fs::read_link(e.path())
                         .map(|t| t.to_string_lossy().starts_with("socket:"))
@@ -94,17 +116,26 @@ fn local_ports() -> Vec<u16> {
                 .filter_map(|e| std::fs::read_link(e.path()).ok())
                 .filter_map(|t| {
                     let t = t.to_string_lossy().to_string();
-                    t.strip_prefix("socket:[").map(|r| r.trim_end_matches(']').to_string())
+                    t.strip_prefix("socket:[")
+                        .map(|r| r.trim_end_matches(']').to_string())
                 })
                 .collect()
         })
         .unwrap_or_default();
     let mut ports = Vec::new();
     for f in ["/proc/net/tcp", "/proc/net/tcp6"] {
-        for l in std::fs::read_to_string(f).unwrap_or_default().lines().skip(1) {
+        for l in std::fs::read_to_string(f)
+            .unwrap_or_default()
+            .lines()
+            .skip(1)
+        {
             let c: Vec<&str> = l.split_whitespace().collect();
             if c.len() > 9 && inodes.iter().any(|i| i == c[9]) {
-                if let Some(p) = c[1].rsplit(':').next().and_then(|p| u16::from_str_radix(p, 16).ok()) {
+                if let Some(p) = c[1]
+                    .rsplit(':')
+                    .next()
+                    .and_then(|p| u16::from_str_radix(p, 16).ok())
+                {
                     ports.push(p);
                 }
             }
@@ -124,8 +155,19 @@ fn main() -> Result<()> {
     // `ref:<idx>`: no fork — run child `idx`'s work in a fresh process and print its digest, so the
     // gate can check a forked child's digest against an independent, never-forked run.
     let ref_idx: Option<usize> = mode.strip_prefix("ref:").and_then(|v| v.parse().ok());
-    let path = std::fs::canonicalize(&args[0])?;
-    let mk_rt = || tokio::runtime::Builder::new_current_thread().enable_all().build();
+    let target = if args[0].starts_with("http://")
+        || args[0].starts_with("https://")
+        || args[0].starts_with("file://")
+    {
+        args[0].clone()
+    } else {
+        format!("file://{}", std::fs::canonicalize(&args[0])?.display())
+    };
+    let mk_rt = || {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+    };
     let rt = mk_rt()?;
     if mode == "quiesced" {
         // Must precede the first SpiderMonkey runtime.
@@ -138,17 +180,42 @@ fn main() -> Result<()> {
             b.navigate(u).await?;
             b.settle().await;
         }
-        b.navigate(&format!("file://{}", path.display())).await?;
+        b.navigate(&target).await?;
         b.settle().await;
         Ok::<_, anyhow::Error>(())
     })?;
+    // R3.4.a: realms/caches that must not replay the parent's stream, set up in the parent pre-fork.
+    if std::env::var_os("FORK_PROBE_REALMS").is_some() {
+        b.probe_eval(
+            "window.__mr=Math.random;window.__mr();var f=document.createElement('iframe');f.id='__fp_if';\
+             f.srcdoc='<p>x</p>';document.body.appendChild(f);\
+             if(f.contentWindow&&f.contentWindow.Math){f.contentWindow.Math.random();f.contentWindow.Math.random();}",
+        );
+    }
+    {
+        let (n, perrs) = b.probe_eval(
+            "var p=document.createElement('pre');p.id='__probe';document.body.appendChild(p);\
+             p.textContent=String(document.getElementsByTagName('*').length)+'/'+document.documentElement.outerHTML.length;",
+        );
+        eprintln!(
+            "page_nodes/dom_bytes={n} target={target} errs={:?}",
+            perrs
+                .iter()
+                .map(|e| e.chars().take(160).collect::<String>())
+                .collect::<Vec<_>>()
+        );
+        b.probe_eval("var p=document.getElementById('__probe');if(p)p.remove();");
+    }
     // The page's own connections live on this runtime's tasks: dropping it closes them.
     drop(rt);
     // Mutant for the socket gate: a live socket at fork time.
     let _leak = std::env::var_os("FORK_PROBE_KEEP_SOCKET")
         .map(|_| std::os::unix::net::UnixStream::pair().expect("socketpair"));
     let socks = open_sockets();
-    eprintln!("open sockets before fork: {socks} ports={:?}", local_ports());
+    eprintln!(
+        "open sockets before fork: {socks} ports={:?}",
+        local_ports()
+    );
     if socks > 0 {
         for e in std::fs::read_dir("/proc/self/fd").unwrap().flatten() {
             if let Ok(t) = std::fs::read_link(e.path()) {
@@ -220,7 +287,12 @@ fn main() -> Result<()> {
                     Ok::<_, anyhow::Error>(())
                 });
                 let ports = local_ports();
-                net = format!("{}:{:?}{}", r.is_ok() && !ports.is_empty(), ports, r.err().map(|e| format!(":{e}")).unwrap_or_default());
+                net = format!(
+                    "{}:{:?}{}",
+                    r.is_ok() && !ports.is_empty(),
+                    ports,
+                    r.err().map(|e| format!(":{e}")).unwrap_or_default()
+                );
             }
             let pd = kb("Private_Dirty:", "/proc/self/smaps");
             let line = format!(
@@ -244,6 +316,7 @@ fn main() -> Result<()> {
     let deadline = Instant::now() + Duration::from_secs(20);
     let mut digests = Vec::new();
     let mut rands = Vec::new();
+    let mut xs: Vec<String> = Vec::new();
     let mut net_ok = 0;
     let mut all_ports: Vec<String> = Vec::new();
     let (mut ok, mut hung) = (0, 0);
@@ -276,6 +349,9 @@ fn main() -> Result<()> {
         let cols: Vec<&str> = s.split('\t').collect();
         digests.push(cols[1].to_string());
         rands.push(cols[6].split('/').next().unwrap_or("").to_string());
+        if let Some(x) = cols[6].split("|x=").nth(1) {
+            xs.push(x.split('|').next().unwrap_or("").to_string());
+        }
         if cols[7].starts_with("true") {
             net_ok += 1;
             all_ports.push(cols[7].to_string());
@@ -292,14 +368,26 @@ fn main() -> Result<()> {
         d.dedup();
         d.len()
     };
+    let (mut cached, mut iframes): (Vec<String>, Vec<String>) = (vec![], vec![]);
+    for r in &xs {
+        let mut it = r.split('#');
+        cached.push(it.next().unwrap_or("").to_string());
+        iframes.push(it.next().unwrap_or("").to_string());
+    }
+    cached.sort();
+    cached.dedup();
+    iframes.sort();
+    iframes.dedup();
     rands.sort();
     rands.dedup();
     all_ports.sort();
     all_ports.dedup();
     eprintln!(
-        "SUMMARY children={n} replied={} own_token={ok} distinct_digests={distinct} distinct_math_random={} net_ok={net_ok} distinct_conns={} sockets_at_fork={socks} hung={hung} parent_unchanged={}",
+        "SUMMARY children={n} replied={} own_token={ok} distinct_digests={distinct} distinct_math_random={} distinct_cached_random={} distinct_iframe_random={} net_ok={net_ok} distinct_conns={} sockets_at_fork={socks} hung={hung} parent_unchanged={}",
         digests.len(),
         rands.len(),
+        cached.len(),
+        iframes.len(),
         all_ports.len(),
         parent_before == parent_after
     );

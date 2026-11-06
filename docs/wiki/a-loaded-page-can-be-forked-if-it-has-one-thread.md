@@ -14,7 +14,8 @@ What broke, in the order it was found:
 * **`Math.random` replays the parent's stream in every child.** The xorshift state is heap data the
   fork duplicated. `JS::ResetRealmMathRandomSeed` did NOT help (siblings still drew the same value),
   so the child installs a fresh `getrandom`-seeded xorshift128+ as `Math.random` at its first script
-  entry. Not covered: other realms (iframes), pages that cached `Math.random` earlier.
+  entry. R3.4.a: a page that cached `var r = Math.random` before the fork still replayed (measured: `distinct_cached_random=1`).
+  The reason `ResetRealmMathRandomSeed` did nothing: SpiderMonkey 140 `Realm.cpp` does `auto rng = getOrCreateRandomNumberGenerator(); rng.setState(..)`, which copies the generator, so it is a no-op. The only public lever is to advance the native stream by an OS-random count (22 bits) per child, so cached calls are distinct but are shifted windows of ONE stream, not independent. iframes here share the page realm, so the replaced `Math.random` covers them.
   `crypto.getRandomValues` (OS) was already distinct.
 * **The watchdog thread is not inherited.** It used a `OnceLock` "spawned" flag, which reads true in a
   child that has no such thread, so scripts would run with no deadline. It is now a joinable handle:
@@ -24,4 +25,6 @@ What broke, in the order it was found:
   `net::runtime()` has no callers; the engine runs on the caller's runtime.
 
 Measured (N=64, fixture of ~300 list items, so ~14 MB RSS): see `docs/bench/r3-4-fork-*.tsv`. These are
-numbers for a small page; a large SPA's per-child Private_Dirty and fork time are not measured yet.
+numbers for a small page.
+
+**Real-page scale (R3.4.a, `scripts/r3-4a-fork-gate.sh`)**: `demo/www/pages/github.html` (corpus snapshot, scripts stripped, so one inline script is appended to give it a JS context; 2243 nodes, 3.9 MB serialised DOM), N=64, chrome_ver=145.0.7632.116, rows in `docs/bench/r3-4a-fork-*.tsv`: RSS 164.6 MB per child, Private_Dirty p50 8.7 MB, fork() 4.8 ms p50 / 9.5 ms p99 (child side). Measured on this host only; it is a corpus snapshot, not a live fetch. The shipped path is `manuk-mcp --zygote-after-load <sock> <url>` (`mcp/src/zygote.rs`): the loader and every session run on one big-stack thread because SpiderMonkey is thread-affine; the leader parks in `join` (the fork-safety census allows exactly that one extra thread); confinement is applied in the single-threaded child BEFORE `Preloaded::wake()` restarts the helper threads.

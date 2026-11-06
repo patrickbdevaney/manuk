@@ -25,33 +25,41 @@ struct Job {
     reply: oneshot::Sender<Reply>,
 }
 
+/// The session loop: one `Hub` serving jobs until every sender is dropped. Runs on the calling thread.
+fn session_loop<B: Backend + 'static>(
+    make: impl Fn() -> B + 'static,
+    log_dir: Option<std::path::PathBuf>,
+    grants: crate::policy::Grants,
+    mut rx: mpsc::UnboundedReceiver<Job>,
+) {
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("session runtime");
+    rt.block_on(async move {
+        let mut s = Hub::new(make, log_dir).with_grants(grants);
+        while let Some(job) = rx.recv().await {
+            let r = s
+                .call(&job.tool, &job.args)
+                .await
+                .map_err(|e| format!("{e:#}"));
+            let _ = job.reply.send(r);
+        }
+    });
+}
+
 /// Spawn the session thread around any backend built *on that thread* (it need not be `Send`).
 pub fn spawn_session<B: Backend + 'static>(
     make: impl Fn() -> B + Send + 'static,
     log_dir: Option<std::path::PathBuf>,
     grants: crate::policy::Grants,
 ) -> mpsc::UnboundedSender<Job> {
-    let (tx, mut rx) = mpsc::unbounded_channel::<Job>();
+    let (tx, rx) = mpsc::unbounded_channel::<Job>();
     std::thread::Builder::new()
         .name("manuk-session".into())
         // The engine recurses deeply on real pages.
         .stack_size(256 * 1024 * 1024)
-        .spawn(move || {
-            let rt = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .expect("session runtime");
-            rt.block_on(async move {
-                let mut s = Hub::new(make, log_dir).with_grants(grants);
-                while let Some(job) = rx.recv().await {
-                    let r = s
-                        .call(&job.tool, &job.args)
-                        .await
-                        .map_err(|e| format!("{e:#}"));
-                    let _ = job.reply.send(r);
-                }
-            });
-        })
+        .spawn(move || session_loop(make, log_dir, grants, rx))
         .expect("spawn session thread");
     tx
 }
@@ -305,22 +313,52 @@ impl manuk_agent::HumanSurface for ScriptedHuman {
     }
 }
 
+/// The browser a stdio session drives: bridge + (when configured) the scripted human surface.
+pub fn new_agent_browser(width: u32, height: u32) -> AgentBrowser {
+    let mut b = AgentBrowser::new(width, height);
+    // W3.20.a: the WebMCP bridge runs before page script, as on the chrome backend.
+    b.set_init_script(crate::cdp::webmcp_bridge());
+    if let Some(js) = HANDOFF_SCRIPT.get() {
+        b.set_human(Box::new(ScriptedHuman(js.clone())));
+    }
+    b
+}
+
 pub fn run_stdio(width: u32, height: u32, grants: crate::policy::Grants) -> Result<()> {
     let log_dir = std::env::var_os("MANUK_ACTLOG_DIR").map(std::path::PathBuf::from);
-    let tx = spawn_session(
+    let tx = spawn_session(move || new_agent_browser(width, height), log_dir, grants);
+    serve(tx)
+}
+
+/// R3.4.a: serve stdio from a browser that was loaded BEFORE this (forked) process existed. SpiderMonkey
+/// is thread-affine, so the session runs on the calling thread - the one that loaded the page - and
+/// the stdio transport runs on a fresh thread. The first page the hub opens is `browser`; later ones
+/// are built fresh.
+pub fn run_stdio_preloaded(
+    browser: AgentBrowser,
+    width: u32,
+    height: u32,
+    grants: crate::policy::Grants,
+) -> Result<()> {
+    let log_dir = std::env::var_os("MANUK_ACTLOG_DIR").map(std::path::PathBuf::from);
+    let (tx, rx) = mpsc::unbounded_channel::<Job>();
+    let transport = std::thread::Builder::new()
+        .name("manuk-stdio".into())
+        .spawn(move || serve(tx))?;
+    let slot = std::cell::RefCell::new(Some(browser));
+    session_loop(
         move || {
-            let mut b = AgentBrowser::new(width, height);
-            // W3.20.a: the WebMCP bridge runs before page script, as on the chrome backend.
-            b.set_init_script(crate::cdp::webmcp_bridge());
-            if let Some(js) = HANDOFF_SCRIPT.get() {
-                b.set_human(Box::new(ScriptedHuman(js.clone())));
-            }
-            b
+            slot.borrow_mut()
+                .take()
+                .unwrap_or_else(|| new_agent_browser(width, height))
         },
         log_dir,
         grants,
+        rx,
     );
-    serve(tx)
+    transport
+        .join()
+        .map_err(|_| anyhow::anyhow!("stdio thread panicked"))?
 }
 
 /// R4.1: the same tool surface over Chrome (CDP) instead of the in-process engine.

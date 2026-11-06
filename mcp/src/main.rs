@@ -1,5 +1,21 @@
 fn main() -> anyhow::Result<()> {
-    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.iter().any(|a| a == "--zygote-after-load") {
+        // R3.4.a: the page is loaded in this process and every session is forked from it, so the whole
+        // run is on one big-stack thread (the engine recurses deeply, and it is thread-affine); the
+        // leader parks in `join` and is not copied into children.
+        let h = std::thread::Builder::new()
+            .name("manuk-main".into())
+            .stack_size(256 * 1024 * 1024)
+            .spawn(move || real_main(args))?;
+        return h
+            .join()
+            .map_err(|_| anyhow::anyhow!("main thread panicked"))?;
+    }
+    real_main(args)
+}
+
+fn real_main(mut args: Vec<String>) -> anyhow::Result<()> {
     if args.first().map(String::as_str) == Some("--confine-selftest") {
         return manuk_mcp::confine::selftest(&args[1..]);
     }
@@ -130,6 +146,21 @@ fn main() -> anyhow::Result<()> {
     // Agent mode runs untrusted pages: baseline JIT tiers only, Ion/wasm-JIT off; `--jitless` = none.
     manuk_mcp::confine::set_jit_mode(&mut args);
     manuk_mcp::server::load_handoff_script()?;
+    // R3.4.a: `--zygote-after-load <socket> <url>`: load the page here, quiesce, fork one session per
+    // connection. Everything above (profile, JIT mode, determinism, handoff script) is already set
+    // so the children inherit it; confinement below is applied in each single-threaded child BEFORE
+    // its helper threads restart, so they inherit it too.
+    let mut preloaded = None;
+    if let Some(i) = args.iter().position(|a| a == "--zygote-after-load") {
+        anyhow::ensure!(
+            i + 2 < args.len(),
+            "--zygote-after-load needs a socket path and a URL"
+        );
+        let url = args.remove(i + 2);
+        let sock = std::path::PathBuf::from(args.remove(i + 1));
+        args.remove(i);
+        preloaded = Some(manuk_mcp::zygote::serve_after_load(&sock, &url, 1280, 800)?);
+    }
     let opts = manuk_mcp::isolation::Options::parse(args)?;
     let _held = manuk_mcp::isolation::apply(&opts)?;
     if confine {
@@ -151,7 +182,10 @@ fn main() -> anyhow::Result<()> {
             eprintln!("manuk-mcp: WARNING: OS confinement unavailable ({why}); running unconfined");
         }
     }
-    let r = manuk_mcp::server::run_stdio(1280, 800, grants);
+    let r = match preloaded {
+        Some(p) => manuk_mcp::server::run_stdio_preloaded(p.wake(), 1280, 800, grants),
+        None => manuk_mcp::server::run_stdio(1280, 800, grants),
+    };
     // W4.E2.d: the session's subresource accounting, on stderr at exit (the gate reads it).
     eprintln!(
         "manuk-mcp: profile={} wire_bytes={} blocked={}",

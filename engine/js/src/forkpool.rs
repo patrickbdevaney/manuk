@@ -222,10 +222,19 @@ pub(crate) fn reseed_if_pending(
         return;
     }
     let w = |i: usize| u32::from_le_bytes([seed[i], seed[i + 1], seed[i + 2], seed[i + 3]]);
+    // A page that cached `var r = Math.random` before the fork holds the ORIGINAL native, whose
+    // per-realm xorshift state is in the duplicated heap. `JS::ResetRealmMathRandomSeed` cannot reach
+    // it (js/src/vm/Realm.cpp: `auto rng = ...getOrCreateRandomNumberGenerator()` copies the
+    // generator, so `setState` writes a temporary - a no-op, which is what was measured). The only
+    // public lever is to advance the native stream by a child-specific, OS-random count first, so
+    // siblings' cached calls land on different outputs (a shifted window of one stream, distinct but
+    // NOT independent - documented, and the page-visible `Math.random` below is fully independent).
+    let burn = w(12) & 0x3f_ffff;
     let src = format!(
-        "(function(){{var s0={}|1,s1={},s2={},s3={};Math.random=function random(){{\
+        "(function(){{var f=Math.random;var s0={}|1,s1={},s2={},s3={};Math.random=function random(){{\
          var t=s1<<9,r=s0*5;r=((r<<7)|(r>>>25))*9;s2^=s0;s3^=s1;s1^=s2;s0^=s3;s2^=t;s3=(s3<<11)|(s3>>>21);\
-         return ((r>>>0)+((s1>>>0)&0x1fffff)*4294967296)/9007199254740992;}};}})()",
+         return ((r>>>0)+((s1>>>0)&0x1fffff)*4294967296)/9007199254740992;}};\
+         for(var n={burn};n>0;n--)f();}})()",
         w(0),
         w(4),
         w(8),
@@ -233,6 +242,10 @@ pub(crate) fn reseed_if_pending(
     );
     use mozjs::rooted;
     rooted!(&in(runtime.cx()) let mut rval = mozjs::jsval::UndefinedValue());
-    let opts = mozjs::rust::CompileOptionsWrapper::new(runtime.cx_no_gc(), c"fork-reseed.js".to_owned(), 1);
+    let opts = mozjs::rust::CompileOptionsWrapper::new(
+        runtime.cx_no_gc(),
+        c"fork-reseed.js".to_owned(),
+        1,
+    );
     let _ = mozjs::rust::evaluate_script(runtime.cx(), global, &src, rval.handle_mut(), opts);
 }
