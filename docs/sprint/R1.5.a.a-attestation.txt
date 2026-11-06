@@ -22,3 +22,11 @@ pin sha256 (scripts/mozjs-fetch.sh PIN_x86_64_unknown_linux_gnu):
 
 What this does NOT establish: the authenticated `gh attestation verify` path of the script itself (that still needs a
 gh-authenticated run, CI or a dev box). The sha pin is now corroborated by a signed provenance statement from servo/mozjs.
+
+R1.5.a.a.a (2026-11-06): scripts/mozjs-fetch.sh now verifies the SLSA bundle with sigstore when gh is not authenticated.
+Run in an isolated copy with a clean target/, SIGSTORE=<venv>/bin/sigstore:
+  real archive + real attestation API           -> "attestation ok: ... (sigstore, servo/mozjs)", exit 0
+  bundle payload edited (subject digest forged)  -> "sigstore attestation FAILED ... refusing to link it", exit 1
+  last pin digit a1 -> a3                        -> "sha256 mismatch", exit 1 (sha check still runs first)
+  no gh, no sigstore                             -> old warning, sha pin only, exit 0
+Note: the servo/mozjs bundle covers every release archive, so another triple's attestation URL is NOT a different subject.

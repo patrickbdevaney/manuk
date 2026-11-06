@@ -11,12 +11,15 @@
 # Both checks must pass when gh is available:
 #   1. sha256 equals the pin below. Offline, always. Bumping mozjs_sys means bumping this pin.
 #   2. `gh attestation verify` when gh is authenticated (CI, or a dev who ran `gh auth login`).
-#      Without auth we print a loud warning and rely on (1) alone.
+#   2b. Without gh auth, `sigstore verify github --repository servo/mozjs` on the bundle from the public
+#      attestation API (SIGSTORE=<cli>, `sigstore` on PATH, or python3 -m sigstore).
+#      With neither we print a loud warning and rely on (1) alone.
 #
 #   usage: scripts/mozjs-fetch.sh     (prints the verified archive path on stdout)
 #   env:   MOZJS_FETCH_URL=<url>      test hook: download from here instead of the release (mutation tests)
 #          MOZJS_TRIPLE=<triple>      fetch/verify the archive for this triple instead of the rustc host
 #                                     (cross-OS lanes; the pins below cover linux, mac arm64 and windows msvc)
+#          MOZJS_ATTEST_URL=<url>    test hook: fetch the attestation list from here (mutation tests)
 #          GITHUB_ENV                 when set (GitHub Actions), MOZJS_ARCHIVE=<abs path> is appended to it, so
 #                                     later steps of mac/windows lanes (where [env] does not apply) link the
 #                                     verified copy
@@ -51,6 +54,14 @@ mkdir -p "$DEST_DIR"
 # sha256sum is absent on stock macOS; shasum ships there.
 sha_of() { if command -v sha256sum >/dev/null; then sha256sum "$1"; else shasum -a 256 "$1"; fi | cut -d' ' -f1; }
 
+# The sigstore CLI: $SIGSTORE, `sigstore` on PATH, or python3 -m sigstore (pip install sigstore).
+find_sigstore() {
+  if [ -n "${SIGSTORE:-}" ]; then echo "$SIGSTORE"
+  elif command -v sigstore >/dev/null; then echo sigstore
+  elif python3 -c 'import sigstore' >/dev/null 2>&1; then echo "python3 -m sigstore"
+  else return 1; fi
+}
+
 if [ -f "$DEST" ] && [ "$(sha_of "$DEST")" = "$PIN" ]; then
   echo "cached, sha256 pin ok: $DEST" >&2
 else
@@ -65,8 +76,32 @@ else
     gh attestation verify "$TMP" -R servo/mozjs >/dev/null 2>&1 \
       || die "GitHub artifact attestation FAILED for $ARCH (refusing to link it)"
     echo "attestation ok: $ARCH" >&2
+  elif sigstore_cmd=$(find_sigstore); then
+    # No gh: verify the SLSA bundle ourselves. The public attestation API serves it without auth.
+    ATT_URL="${MOZJS_ATTEST_URL:-https://api.github.com/repos/servo/mozjs/attestations/sha256:$PIN}"
+    BDIR=$(mktemp -d "$DEST_DIR/bundles.XXXXXX")
+    curl -fsSL -H 'Accept: application/vnd.github+json' -o "$BDIR/att.json" "$ATT_URL" \
+      || { rm -rf "$BDIR"; die "attestation download failed: $ATT_URL"; }
+    python3 -I - "$BDIR" <<'PY' || { rm -rf "$BDIR"; die "attestation response has no bundles"; }
+import json, sys
+d = sys.argv[1]
+for i, a in enumerate(json.load(open(d + "/att.json")).get("attestations", [])):
+    json.dump(a["bundle"], open("%s/bundle%d.json" % (d, i), "w"))
+PY
+    # The archive must match the subject of at least one bundle signed by servo/mozjs's workflow. (Not every
+    # record parses in every sigstore release, e.g. the GitHub release/v0.2 one; one verified bundle is enough.)
+    VERIFIED=0
+    for b in "$BDIR"/bundle*.json; do
+      [ -e "$b" ] || continue
+      if $sigstore_cmd verify github --repository servo/mozjs --bundle "$b" "$TMP" >/dev/null 2>&1; then
+        VERIFIED=1; break
+      fi
+    done
+    rm -rf "$BDIR"
+    [ "$VERIFIED" = 1 ] || die "sigstore attestation FAILED for $ARCH (refusing to link it)"
+    echo "attestation ok: $ARCH (sigstore, servo/mozjs)" >&2
   else
-    echo "warning: gh is not authenticated; attestation NOT checked for $ARCH, sha256 pin only" >&2
+    echo "warning: neither authenticated gh nor sigstore available; attestation NOT checked for $ARCH, sha256 pin only" >&2
   fi
 
   mv -f "$TMP" "$DEST"
