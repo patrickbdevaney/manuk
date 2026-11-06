@@ -42,8 +42,12 @@ if [ "$STATUS" -ne 0 ]; then
   # `LNK[0-9]+` / `cannot open file` matter because MSVC's real diagnosis lives on a NOTE line, not an
   # `error:` line — `error: linking with link.exe failed: exit code 1104` names no file at all, and the
   # file it cannot open is the entire diagnosis.
-  ERRS="$(grep -E '^(error|error\[|thread .* panicked|.*signal: 9)|FAILED|^assertion|^ *left:|^ *right:|panicked at|^test result: FAILED|LNK[0-9]+|cannot open file|No such file' "$_CI_LOG" | head -40)"
-  [ -z "$ERRS" ] && ERRS="$(grep -vE "^(warning|note|help|  *=|  *\||  *[0-9]+ \|)" "$_CI_LOG" | tail -30)"
+  # CARGO_TERM_COLOR=always wraps the word `error` in ANSI codes, so `^error` never matched on a colored
+  # log — the windows annotations showed only an LNK4078 *warning* and missed the failing `error:` line.
+  # Strip the codes first, then list the `error` lines before the LNK/cannot-open lines (deduped).
+  CLEAN="$(sed -E 's/\x1b\[[0-9;]*[A-Za-z]//g' "$_CI_LOG")"
+  ERRS="$({ grep -E '^(error|error\[|thread .* panicked|.*signal: 9)|FAILED|^assertion|^ *left:|^ *right:|panicked at|^test result: FAILED' <<< "$CLEAN"; grep -E 'LNK[0-9]+|cannot open|No such file' <<< "$CLEAN"; } | awk '!seen[$0]++' | head -40)"
+  [ -z "$ERRS" ] && ERRS="$(grep -vE "^(warning|note|help|  *=|  *\||  *[0-9]+ \|)" <<< "$CLEAN" | tail -30)"
   while IFS= read -r line; do
     printf '::error title=%s::%s\n' "$LABEL" "${line//$'\r'/}"
   done <<< "$ERRS"
