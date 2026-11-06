@@ -15,17 +15,25 @@
 #
 #   usage: scripts/mozjs-fetch.sh     (prints the verified archive path on stdout)
 #   env:   MOZJS_FETCH_URL=<url>      test hook: download from here instead of the release (mutation tests)
+#          MOZJS_TRIPLE=<triple>      fetch/verify the archive for this triple instead of the rustc host
+#                                     (cross-OS lanes; the pins below cover linux, mac arm64 and windows msvc)
+#          GITHUB_ENV                 when set (GitHub Actions), MOZJS_ARCHIVE=<abs path> is appended to it, so
+#                                     later steps of mac/windows lanes (where [env] does not apply) link the
+#                                     verified copy
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# The pin. Only the linux x86_64 prebuilt is pinned; other hosts must set MOZJS_ARCHIVE themselves
-# (cargo's [env] never overrides a variable already in the environment).
+# The pins: linux x86_64, macOS arm64 and Windows msvc prebuilts. Other hosts must set MOZJS_ARCHIVE
+# themselves (cargo's [env] never overrides a variable already in the environment). The mac/windows shas
+# come from unauthenticated downloads (see docs/sprint/R1.5.a.a-attestation.txt for the linux provenance).
 MOZJS_SYS_VER="140.17.0-0-lts"
 PIN_x86_64_unknown_linux_gnu="69b2920f8787d202f3254bc6546b623c2f90e1224dab8a4f794b748f02dfa3a1"
+PIN_aarch64_apple_darwin="cc6c9d79a70f95ff6eb8450d19f2ee4e3221a68820bf4301bee84078a9aecbaf"
+PIN_x86_64_pc_windows_msvc="009c377adb193b1b7ec6e1b3bdd07d9d5d961030d545e0329b86f1223f0f7669"
 
 die() { printf '✗ mozjs-fetch: %s\n' "$1" >&2; exit 1; }
 
-TRIPLE=$(rustc -vV | sed -n 's/^host: //p')
+TRIPLE="${MOZJS_TRIPLE:-$(rustc -vV | sed -n 's/^host: //p')}"
 PIN_VAR="PIN_${TRIPLE//-/_}"
 PIN="${!PIN_VAR:-}"
 [ -n "$PIN" ] || die "no pinned archive for host $TRIPLE; set MOZJS_ARCHIVE to a verified archive yourself"
@@ -40,7 +48,8 @@ DEST_DIR="target/mozjs-verified"
 DEST="$DEST_DIR/$ARCH"
 mkdir -p "$DEST_DIR"
 
-sha_of() { sha256sum "$1" | cut -d' ' -f1; }
+# sha256sum is absent on stock macOS; shasum ships there.
+sha_of() { if command -v sha256sum >/dev/null; then sha256sum "$1"; else shasum -a 256 "$1"; fi | cut -d' ' -f1; }
 
 if [ -f "$DEST" ] && [ "$(sha_of "$DEST")" = "$PIN" ]; then
   echo "cached, sha256 pin ok: $DEST" >&2
@@ -75,4 +84,9 @@ for stale in target/*/build/mozjs_sys-*/out/"$ARCH"; do
   fi
 done
 
+if [ -n "${GITHUB_ENV:-}" ]; then
+  echo "MOZJS_ARCHIVE=$PWD/$DEST" >> "$GITHUB_ENV"
+  echo "exported MOZJS_ARCHIVE to GITHUB_ENV" >&2
+fi
+echo "fetch ok: $TRIPLE" >&2
 echo "$DEST"

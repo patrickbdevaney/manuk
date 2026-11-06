@@ -117,6 +117,9 @@ jobs:
       - name: musl toolchain
         if: matrix.target == 'x86_64-unknown-linux-musl'
         run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - name: fetch pinned SpiderMonkey (sha256 pin; exports MOZJS_ARCHIVE)
+        shell: bash
+        run: MOZJS_TRIPLE=${{ matrix.target }} ./scripts/mozjs-fetch.sh
       # Headless: the release binary is the RENDERER (`manuk render <url>`), which needs no display,
       # no GPU and no JS engine — so it is the one artifact that genuinely runs anywhere.
       - name: build
