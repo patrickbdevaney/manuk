@@ -5,6 +5,8 @@
 //!
 //! Modes: `naive` = fork with whatever threads are live; `quiesced` = after settle, assert the thread
 //! census first (refuse when a thread outside the known set is alive).
+#[cfg(unix)]
+mod imp {
 use anyhow::{bail, Result};
 use manuk_agent::AgentBrowser;
 use std::collections::BTreeMap;
@@ -144,7 +146,7 @@ fn local_ports() -> Vec<u16> {
     ports
 }
 
-fn main() -> Result<()> {
+pub fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.len() < 3 {
         bail!("usage: fork-probe <fixture.html> <children> <naive|quiesced>");
@@ -392,4 +394,18 @@ fn main() -> Result<()> {
         parent_before == parent_after
     );
     Ok(())
+}
+}
+
+#[cfg(unix)]
+fn main() -> anyhow::Result<()> {
+    imp::main()
+}
+
+// fork()/waitpid/AF_UNIX socketpair are unix-only: on other targets the probe is a stub so the
+// package still compiles.
+#[cfg(not(unix))]
+fn main() {
+    eprintln!("fork-probe: unix-only (uses fork/waitpid)");
+    std::process::exit(2);
 }
