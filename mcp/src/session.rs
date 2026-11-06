@@ -839,13 +839,11 @@ impl<B: Backend> Session<B> {
                 let text = serde_json::to_string_pretty(&self.b.export_storage_state()?)?;
                 let Some(p) = path else { return Ok(text) };
                 crate::isolation::guard_state_path(std::path::Path::new(p), true)?;
-                use std::os::unix::fs::OpenOptionsExt;
-                std::fs::OpenOptions::new()
-                    .write(true)
-                    .create(true)
-                    .truncate(true)
-                    .mode(0o600)
-                    .open(p)
+                let mut oo = std::fs::OpenOptions::new();
+                oo.write(true).create(true).truncate(true);
+                #[cfg(unix)]
+                std::os::unix::fs::OpenOptionsExt::mode(&mut oo, 0o600);
+                oo.open(p)
                     .and_then(|mut f| std::io::Write::write_all(&mut f, text.as_bytes()))?;
                 Ok(format!("storage state written to {p}"))
             }

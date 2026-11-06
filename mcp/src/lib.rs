@@ -11,6 +11,7 @@ pub mod policy;
 pub mod server;
 pub mod session;
 pub mod taint;
+#[cfg(unix)]
 pub mod zygote;
 
 pub use backend::Backend;

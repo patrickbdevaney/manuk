@@ -100,12 +100,15 @@ pub fn guard_state_path(p: &std::path::Path, writing: bool) -> Result<()> {
     // cannot clobber `cookies.json` or any other profile file. A multiply-linked file may be a hard
     // link to the lock (the name check cannot see those), so it is refused outright.
     if let Some(m) = std::fs::metadata(p).ok().filter(|_| writing) {
-        use std::os::unix::fs::MetadataExt;
-        anyhow::ensure!(
-            m.nlink() <= 1,
-            "refusing storage state at {}: it has other hard links (possibly the profile lock)",
-            p.display()
-        );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            anyhow::ensure!(
+                m.nlink() <= 1,
+                "refusing storage state at {}: it has other hard links (possibly the profile lock)",
+                p.display()
+            );
+        }
         anyhow::ensure!(
             !m.is_file() || m.len() == 0 || read_storage_state(p).is_ok(),
             "refusing storage state at {}: it exists and is not storage state",

@@ -3,6 +3,7 @@
 //! at [`CAP_BYTES`]. The result the agent sees is `{name, bytes, sha256, mime}` (MIME sniffed from the
 //! bytes, not trusted from the server).
 
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -115,6 +116,7 @@ pub fn finalize(tmp: &Path, suggested: &str) -> Result<String> {
         name = f.to_string_lossy().into_owned();
     }
     std::fs::write(&dest, &bytes)?;
+    #[cfg(unix)]
     std::fs::set_permissions(&dest, std::fs::Permissions::from_mode(0o600))?;
     let _ = std::fs::remove_file(tmp);
     let sha: String = Sha256::digest(&bytes)

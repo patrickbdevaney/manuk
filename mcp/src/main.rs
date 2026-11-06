@@ -101,7 +101,13 @@ fn real_main(mut args: Vec<String>) -> anyhow::Result<()> {
         anyhow::ensure!(i + 1 < args.len(), "--zygote needs a socket path");
         let sock = std::path::PathBuf::from(args.remove(i + 1));
         args.remove(i);
+        #[cfg(unix)]
         manuk_mcp::zygote::serve(&sock)?;
+        #[cfg(not(unix))]
+        anyhow::bail!(
+            "--zygote needs fork(), which this platform lacks ({})",
+            sock.display()
+        );
     }
     let grants = match manuk_mcp::policy::parse_grants(&mut args) {
         Ok(g) => g,
@@ -150,6 +156,7 @@ fn real_main(mut args: Vec<String>) -> anyhow::Result<()> {
     // connection. Everything above (profile, JIT mode, determinism, handoff script) is already set
     // so the children inherit it; confinement below is applied in each single-threaded child BEFORE
     // its helper threads restart, so they inherit it too.
+    #[cfg(unix)]
     let mut preloaded = None;
     if let Some(i) = args.iter().position(|a| a == "--zygote-after-load") {
         anyhow::ensure!(
@@ -159,7 +166,15 @@ fn real_main(mut args: Vec<String>) -> anyhow::Result<()> {
         let url = args.remove(i + 2);
         let sock = std::path::PathBuf::from(args.remove(i + 1));
         args.remove(i);
-        preloaded = Some(manuk_mcp::zygote::serve_after_load(&sock, &url, 1280, 800)?);
+        #[cfg(unix)]
+        {
+            preloaded = Some(manuk_mcp::zygote::serve_after_load(&sock, &url, 1280, 800)?);
+        }
+        #[cfg(not(unix))]
+        anyhow::bail!(
+            "--zygote-after-load needs fork(), which this platform lacks ({url}, {})",
+            sock.display()
+        );
     }
     let opts = manuk_mcp::isolation::Options::parse(args)?;
     let _held = manuk_mcp::isolation::apply(&opts)?;
@@ -182,10 +197,13 @@ fn real_main(mut args: Vec<String>) -> anyhow::Result<()> {
             eprintln!("manuk-mcp: WARNING: OS confinement unavailable ({why}); running unconfined");
         }
     }
+    #[cfg(unix)]
     let r = match preloaded {
         Some(p) => manuk_mcp::server::run_stdio_preloaded(p.wake(), 1280, 800, grants),
         None => manuk_mcp::server::run_stdio(1280, 800, grants),
     };
+    #[cfg(not(unix))]
+    let r = manuk_mcp::server::run_stdio(1280, 800, grants);
     // W4.E2.d: the session's subresource accounting, on stderr at exit (the gate reads it).
     eprintln!(
         "manuk-mcp: profile={} wire_bytes={} blocked={}",
