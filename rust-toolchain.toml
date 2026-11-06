@@ -1,0 +1,5 @@
+# Pins the compiler and rustfmt for local builds and CI alike (CI's dtolnay/rust-toolchain@stable only
+# bootstraps rustup; cargo then honours this file). Bump deliberately, with a `cargo fmt --all` in the same commit.
+[toolchain]
+channel = "1.99.1"
+components = ["rustfmt", "clippy"]
