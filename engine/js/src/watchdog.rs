@@ -144,18 +144,52 @@ fn register_once(cx: *mut JSContext) {
     });
 }
 
+/// Set while the watchdog thread should exit (R3.4 fork quiesce).
+static STOP: AtomicBool = AtomicBool::new(false);
+/// The watchdog thread, if one is running. `Some` is the "spawned" fact — it is kept here rather
+/// than in a `OnceLock` so a forked child (which has no such thread) can be told so and respawn it.
+static HANDLE: Mutex<Option<std::thread::JoinHandle<()>>> = Mutex::new(None);
+/// Whether a drain ever armed the watchdog in this process lineage.
+static EVER: AtomicBool = AtomicBool::new(false);
+
 fn spawn_once() {
-    static SPAWNED: OnceLock<()> = OnceLock::new();
-    SPAWNED.get_or_init(|| {
-        let _ = std::thread::Builder::new()
+    EVER.store(true, Ordering::SeqCst);
+    let Ok(mut h) = HANDLE.lock() else { return };
+    if h.is_none() {
+        STOP.store(false, Ordering::SeqCst);
+        *h = std::thread::Builder::new()
             .name("manuk-js-watchdog".to_string())
-            .spawn(watchdog_loop);
-    });
+            .spawn(watchdog_loop)
+            .ok();
+    }
+}
+
+/// Stop and join the watchdog thread before a `fork()`. Returns whether one had been started.
+/// Must be called between drains (no deadline armed).
+pub fn quiesce() -> bool {
+    let h = HANDLE.lock().ok().and_then(|mut h| h.take());
+    let had = h.is_some();
+    if let Some(h) = h {
+        STOP.store(true, Ordering::SeqCst);
+        let _ = h.join();
+    }
+    EVER.load(Ordering::SeqCst) && had
+}
+
+/// Undo [`quiesce`]: start the watchdog again (in the parent and in every forked child — the child
+/// would otherwise believe the thread exists and run scripts with no deadline).
+pub fn resume(had: bool) {
+    if had {
+        spawn_once();
+    }
 }
 
 fn watchdog_loop() {
     loop {
         std::thread::sleep(Duration::from_millis(POLL_MS));
+        if STOP.load(Ordering::SeqCst) {
+            return;
+        }
         let deadline = DEADLINE.load(Ordering::SeqCst);
         if deadline == 0 || now_ms() < deadline {
             continue;

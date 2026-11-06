@@ -2072,6 +2072,10 @@ pub mod stencil_cache;
 #[cfg(feature = "_sm")]
 pub mod watchdog;
 
+/// R3.4 — embedder-owned SpiderMonkey helper pool that can be quiesced for a post-load `fork()`.
+#[cfg(feature = "_sm")]
+pub mod forkpool;
+
 #[cfg(test)]
 mod tests {
     use super::*;

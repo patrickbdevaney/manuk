@@ -170,6 +170,10 @@
   - L32 · Four details that are easy to get subtly wrong
   - L53 · The gate that predicted this tick
 
+## A loaded page can be forked, if the process has one thread when it forks
+`docs/wiki/a-loaded-page-can-be-forked-if-it-has-one-thread.md`
+
+
 ## A page load has nine phases, and `MANUK_NET_TRACE` makes them add up
 `docs/wiki/a-load-has-nine-phases-and-a-trace-that-adds-up.md`
 
@@ -3777,4 +3781,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3084 sections across 172 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3084 sections across 173 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -15144,6 +15144,7 @@ impl PageContext {
         let raw_cx = unsafe { runtime.cx().raw_cx() };
         rooted!(&in(runtime.cx()) let global = self.global.get());
         let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
+        crate::forkpool::reseed_if_pending(runtime, global.handle());
         // A runtime-fetched script sees the document as it is NOW, including whatever the page has
         // built since load — so `window.<id>` is refreshed here too (HTML §7.3.3, tick 677).
         publish_named_globals(runtime, global.handle());
@@ -15270,6 +15271,7 @@ impl PageContext {
         let raw_cx = unsafe { runtime.cx().raw_cx() };
         rooted!(&in(runtime.cx()) let global = self.global.get());
         let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
+        crate::forkpool::reseed_if_pending(runtime, global.handle());
         // Reflect the target node (idempotent) so it is registered in `__nodes` and
         // `__dispatchEvent` can resolve it and walk its ancestor chain for delegation.
         unsafe {

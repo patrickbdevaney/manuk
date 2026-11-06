@@ -208,6 +208,7 @@ pub(crate) fn engine_handle() -> Result<JSEngineHandle, JsError> {
         let engine = JSEngine::init().map_err(|_| JsError {
             message: "SpiderMonkey JSEngine::init() failed".to_string(),
         })?;
+        crate::forkpool::install();
         if det {
             crate::determinism::reset_js_time_zone();
         }
