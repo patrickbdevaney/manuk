@@ -13,28 +13,46 @@
 //! `ptrace`, signals. Unsupported kernel => a loud warning, not a failure: the process still has the
 //! no-optimizing-JIT engine, and refusing to start would make the browser unusable on old kernels.
 
+#[cfg(target_os = "linux")]
 use std::ffi::CString;
+#[cfg(target_os = "linux")]
 use std::os::unix::ffi::OsStrExt;
-use std::path::{Path, PathBuf};
+#[cfg(target_os = "linux")]
+use std::path::Path;
+use std::path::PathBuf;
 
+#[cfg(target_os = "linux")]
 const SYS_CREATE_RULESET: libc::c_long = 444;
+#[cfg(target_os = "linux")]
 const SYS_ADD_RULE: libc::c_long = 445;
+#[cfg(target_os = "linux")]
 const SYS_RESTRICT_SELF: libc::c_long = 446;
 
+#[cfg(target_os = "linux")]
 const EXECUTE: u64 = 1 << 0;
+#[cfg(target_os = "linux")]
 const WRITE_FILE: u64 = 1 << 1;
+#[cfg(target_os = "linux")]
 const READ_FILE: u64 = 1 << 2;
+#[cfg(target_os = "linux")]
 const READ_DIR: u64 = 1 << 3;
+#[cfg(target_os = "linux")]
 const REMOVE_DIR: u64 = 1 << 4;
+#[cfg(target_os = "linux")]
 const REMOVE_FILE: u64 = 1 << 5;
+#[cfg(target_os = "linux")]
 const HANDLED: u64 = 0x1FFF;
+#[cfg(target_os = "linux")]
 const READ: u64 = READ_FILE | READ_DIR;
+#[cfg(target_os = "linux")]
 const WRITE: u64 = HANDLED & !EXECUTE;
 
+#[cfg(target_os = "linux")]
 #[repr(C)]
 struct RulesetAttr {
     handled_access_fs: u64,
 }
+#[cfg(target_os = "linux")]
 #[repr(C, packed)]
 struct PathBeneath {
     allowed_access: u64,
@@ -66,6 +84,7 @@ pub enum Outcome {
     Unsupported(String),
 }
 
+#[cfg(target_os = "linux")]
 fn add(ruleset: i32, path: &Path, access: u64) -> bool {
     let Ok(c) = CString::new(path.as_os_str().as_bytes()) else {
         return false;
@@ -93,6 +112,7 @@ fn add(ruleset: i32, path: &Path, access: u64) -> bool {
 }
 
 /// Apply the ruleset to the calling thread (and every thread it creates from now on).
+#[cfg(target_os = "linux")]
 pub fn confine(g: &Grants) -> Outcome {
     let attr = RulesetAttr {
         handled_access_fs: HANDLED,
@@ -148,6 +168,12 @@ pub fn set_jit_mode(args: &mut Vec<String>) {
     } else {
         manuk_js::hardening::enable_baseline_only();
     }
+}
+
+/// Landlock is Linux-only; elsewhere the process runs unconfined (a loud warning, same as an old kernel).
+#[cfg(not(target_os = "linux"))]
+pub fn confine(_g: &Grants) -> Outcome {
+    Outcome::Unsupported("landlock is linux-only".into())
 }
 
 /// Baseline-JIT engine (or jitless with `--jitless`) + landlock for a headless agent binary (R1.6.a). Call first thing in a plain
