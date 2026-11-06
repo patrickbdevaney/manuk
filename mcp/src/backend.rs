@@ -62,6 +62,10 @@ pub trait Backend {
     fn arm_dialog(&mut self, _accept: bool, _text: Option<String>) -> Result<()> {
         anyhow::bail!("this backend has no JS dialogs to answer (the engine implements none)")
     }
+    /// R3.3: hand the page to a human until they resume or `timeout_ms` passes; how the turn ended.
+    async fn human_turn(&mut self, _reason: &str, _timeout_ms: u64) -> Result<String> {
+        anyhow::bail!("no human surface is attached to this backend (start the GUI shell, or use a client that can ask the human)")
+    }
     /// W3.8: `list` | `switch` | `close` the browser's tabs (`index` is 1-based). A popup the page opens
     /// is surfaced by the next action's result.
     async fn tabs(&mut self, _action: &str, _index: Option<usize>) -> Result<String> {
@@ -187,6 +191,17 @@ fn describe(a: Activation) -> String {
 
 #[async_trait(?Send)]
 impl Backend for AgentBrowser {
+    async fn human_turn(&mut self, reason: &str, timeout_ms: u64) -> Result<String> {
+        let req = manuk_agent::HandoffRequest {
+            reason: reason.to_string(),
+            timeout_ms,
+        };
+        match AgentBrowser::human_turn(self, &req).await {
+            None => anyhow::bail!("no human surface is attached to this browser"),
+            Some(manuk_agent::HumanTurn::Resumed) => Ok("resumed".into()),
+            Some(manuk_agent::HumanTurn::TimedOut) => Ok(format!("TIMED OUT after {timeout_ms} ms (the human did not resume)")),
+        }
+    }
     async fn page_eval(&mut self, js: &str) -> Result<String> {
         AgentBrowser::eval_value(self, js).await
     }

@@ -133,6 +133,7 @@ pub fn tools() -> Vec<Tool> {
         t("extract", "Page content. format=text (default), markdown (headings + text + links) or table (rows of a table in scope). Optional scope handle. Results over 20000 chars are paged: pass offset=N from the cursor line to read on.", schema(json!({"format": {"type": "string", "enum": ["markdown", "text", "table"]}, "scope": {"type": "string"}, "offset": {"type": "integer"}, "query": {"type": "string", "description": "return only the top passages matching this (BM25, with link handles) and say 'k of N blocks shown'"}, "include_hidden": {"type": "boolean"}}), &[])),
         t("find", "Rank nodes by role/name/text match for a query (no model call). Returns up to 8 handles.", schema(json!({"query": {"type": "string"}}), &["query"])),
         t("storage_state", "Export (default) or import this session's cookies + localStorage as Playwright storage-state JSON, to/from `path` (export without a path returns the JSON).", schema(json!({"action": {"type": "string", "enum": ["export", "import"]}, "path": {"type": "string"}}), &[])),
+        t("handoff", "Stop and ask the human to do something you must not: log in, solve a CAPTCHA or passkey prompt, enter a card. They act in the browser window on this same page, press Resume, and you get back an effect diff of what changed. `timeout_ms` (default 120000, max 900000): if nobody resumes the result says TIMED OUT and the page is as they left it. Needs a human surface (the GUI shell); otherwise it errors. After an external login you can also import a session with storage_state(action=import).", schema(json!({"reason": {"type": "string", "description": "what the human should do, shown to them"}, "timeout_ms": {"type": "integer"}}), &["reason"])),
         t("recall", "Return the last stored accessibility tree for a site and how long ago it was stored. Needs the page store (MANUK_PAGE_STORE). Stored text is untrusted page content.", schema(json!({"site": {"type": "string", "description": "host, default the current page's"}}), &[])),
         t("checkpoint", "Remember this page's position (its action log) and return a checkpoint id. v1 is replay-based: exact, but restore/fork cost one page load, not a memory snapshot.", schema(json!({}), &[])),
         t("restore", "Rewind to a checkpoint: replay its log into a fresh page (every step hash-verified) and make that the default page. Cookies are not cleared; web storage is. Returns the new page handle.", schema(json!({"checkpoint": {"type": "string"}}), &["checkpoint"])),
@@ -231,7 +232,13 @@ impl ServerHandler for ManukMcp {
         // W3.20: a page that registers or drops a tool announces it, so the client re-lists.
         let mutating = !matches!(
             tool.as_str(),
-            "observe" | "extract" | "find" | "screenshot" | "storage_state" | "checkpoint" | "recall"
+            "observe"
+                | "extract"
+                | "find"
+                | "screenshot"
+                | "storage_state"
+                | "checkpoint"
+                | "recall"
         );
         if mutating {
             let now = crate::hub::fnv(Value::Array(self.webmcp().await).to_string().as_bytes());

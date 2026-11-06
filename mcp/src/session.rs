@@ -535,7 +535,9 @@ impl<B: Backend> Session<B> {
     /// visits and server restarts. Runs once per document, on the first tree built after it.
     /// `MANUK_PAGESTORE_SEED_MUTATE` skips it (test-only mutation).
     fn seed(&mut self, tree: &A11yNode) -> Result<()> {
-        if !std::mem::take(&mut self.seed_due) || std::env::var_os("MANUK_PAGESTORE_SEED_MUTATE").is_some() {
+        if !std::mem::take(&mut self.seed_due)
+            || std::env::var_os("MANUK_PAGESTORE_SEED_MUTATE").is_some()
+        {
             return Ok(());
         }
         let Some(ps) = &self.pages else { return Ok(()) };
@@ -909,6 +911,7 @@ impl<B: Backend> Session<B> {
                 .map(Output::Text),
             "act" if a.get("steps").is_some() => self.batch(a).await.map(Output::Text),
             "fill_form" => self.fill_form(a).await.map(Output::Text),
+            "handoff" => self.handoff(a).await.map(Output::Text),
             "recall" => self.recall(arg_str(a, "site")).map(Output::Text),
             "back" => self.back().await.map(Output::Text),
             "wait_for" => self.wait_for(a).await.map(Output::Text),
@@ -1292,13 +1295,45 @@ impl<B: Backend> Session<B> {
 
     /// R2.3: the site key of the current page (its host).
     fn site_of(url: &str) -> String {
-        url.split("://").nth(1).unwrap_or(url).split(['/', '?', '#']).next().unwrap_or("").to_string()
+        url.split("://")
+            .nth(1)
+            .unwrap_or(url)
+            .split(['/', '?', '#'])
+            .next()
+            .unwrap_or("")
+            .to_string()
+    }
+
+    /// R3.3: `handoff(reason, timeout_ms)`: the agent stops, a human acts on the same page (log in, solve a
+    /// CAPTCHA, a passkey prompt), and the agent resumes with an effect diff of what the human changed.
+    /// Handles seen before stay valid on the same document. The human's typed values never reach the agent
+    /// except as page state it can already observe (password fields are masked by the observation).
+    async fn handoff(&mut self, a: &Map<String, Value>) -> Result<String> {
+        let reason = arg_str(a, "reason").ok_or_else(|| anyhow!("handoff needs `reason`"))?;
+        let timeout_ms = a
+            .get("timeout_ms")
+            .and_then(Value::as_u64)
+            .unwrap_or(120_000)
+            .min(900_000);
+        let tree = self.tree()?;
+        self.seed(&tree)?;
+        let before = self.snapshot(&tree);
+        self.doc = self.b.document_id();
+        let url_before = self.b.url();
+        let outcome = self.b.human_turn(reason, timeout_ms).await?;
+        self.b.settle().await;
+        let evidence = format!("handoff({reason:?}): {outcome}");
+        self.effect(before, &url_before, &evidence)
     }
 
     /// R2.3: `recall(site)`: the last stored tree for `site` (default: this page's host) and its age.
     fn recall(&self, site: Option<&str>) -> Result<String> {
-        let ps = self.pages.as_ref().ok_or_else(|| anyhow!("no page store: start the server with MANUK_PAGE_STORE=<file>"))?;
-        let site = site.map(str::to_string).unwrap_or_else(|| Self::site_of(&self.b.url()));
+        let ps = self.pages.as_ref().ok_or_else(|| {
+            anyhow!("no page store: start the server with MANUK_PAGE_STORE=<file>")
+        })?;
+        let site = site
+            .map(str::to_string)
+            .unwrap_or_else(|| Self::site_of(&self.b.url()));
         match ps.recall(&site)? {
             None => Ok(format!("{UNTRUSTED}\nnothing stored for {site}")),
             Some(r) => Ok(format!(
@@ -1315,7 +1350,10 @@ impl<B: Backend> Session<B> {
         let tree = self.tree()?;
         self.seed(&tree)?;
         if let Some(ps) = &self.pages {
-            if let Ok(st) = ps.put(&Self::site_of(&self.b.url()), &manuk_pagestore::PNode::from_a11y(&tree)) {
+            if let Ok(st) = ps.put(
+                &Self::site_of(&self.b.url()),
+                &manuk_pagestore::PNode::from_a11y(&tree),
+            ) {
                 // R2.3.a: the act that led here made a transition from the last stored root.
                 if let Some((from, action)) = self.pending.take() {
                     let _ = ps.record_edge(&from, &action, &st.root);

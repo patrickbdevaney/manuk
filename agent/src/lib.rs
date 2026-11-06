@@ -190,6 +190,32 @@ pub struct AgentBrowser {
     act_err_mark: usize,
     /// W4.A4: where the page's own `pushState` put the URL; cleared by every load.
     routed_url: Option<String>,
+    /// R3.3: whoever acts when the agent calls `handoff` (the GUI shell's human, or a scripted one).
+    human: Option<Box<dyn HumanSurface>>,
+}
+
+/// R3.3: why the agent stopped, and how long it will wait.
+#[derive(Clone, Debug)]
+pub struct HandoffRequest {
+    pub reason: String,
+    pub timeout_ms: u64,
+}
+
+/// R3.3: how a human turn ended.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum HumanTurn {
+    /// The human acted and pressed Resume.
+    Resumed,
+    /// Nobody resumed within `timeout_ms`; the agent continues with whatever state the page is in.
+    TimedOut,
+}
+
+/// R3.3: the seam between the agent's `handoff` tool and a human. The GUI shell implements it (show the
+/// prompt, let the human act on the SAME page, return on Resume); a test implements it with a script.
+/// It gets the live browser, so everything the human does is in the page the agent resumes on.
+#[async_trait::async_trait(?Send)]
+pub trait HumanSurface {
+    async fn turn(&mut self, b: &mut AgentBrowser, req: &HandoffRequest) -> HumanTurn;
 }
 
 /// A synchronous readiness snapshot (see [`AgentBrowser::readiness`]).
@@ -488,6 +514,7 @@ impl AgentBrowser {
             ws_gen: 0,
             act_err_mark: 0,
             routed_url: None,
+            human: None,
         }
     }
 
@@ -1026,6 +1053,18 @@ impl AgentBrowser {
     /// **Consent (E6):** the caller must construct a [`Handoff`] explicitly, which is
     /// the seam where the shell obtains the user's consent. This type cannot be created
     /// by accident from a stray `Page`.
+    pub fn set_human(&mut self, h: Box<dyn HumanSurface>) {
+        self.human = Some(h);
+    }
+
+    /// R3.3: give the human the page. `None` when no human surface is attached.
+    pub async fn human_turn(&mut self, req: &HandoffRequest) -> Option<HumanTurn> {
+        let mut h = self.human.take()?;
+        let t = h.turn(self, req).await;
+        self.human = Some(h);
+        Some(t)
+    }
+
     pub fn adopt(&mut self, handoff: Handoff) {
         let Handoff {
             page,
