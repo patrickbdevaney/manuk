@@ -94,14 +94,13 @@ accesskit = "0.24"
 
 # --- text (Reuse) ---
 fontdb = "0.24"
-fontdue = "0.9"
 
 # --- paint / raster ---
 tiny-skia = "0.12"
 
 # --- GPU / windowing (Reuse) ---
 wgpu = "27"
-winit = "0.30"
+winit = { version = "0.30", default-features = false, features = ["rwh_06", "x11", "wayland", "wayland-dlopen"] }
 pollster = "0.4"
 bytemuck = { version = "1", features = ["derive"] }
 raw-window-handle = "0.6"

@@ -7,5 +7,4 @@ ignore = [
   # R1.5.b dropped RUSTSEC-2026-0194/0195 (quick-xml) and RUSTSEC-2026-0206 (rustybuzz) by moving resvg 0.44->0.49,
   # fontdb 0.23->0.24 and wayland-scanner 0.31.11. What remains is unmaintained-only (not vulnerable):
   { id = "RUSTSEC-2024-0436", reason = "paste: proc-macro only, no runtime code; only via re_rav1d (AV1), whose alternatives (rav1d-safe) also pull paste and are AGPL" },
-  { id = "RUSTSEC-2026-0192", reason = "ttf-parser: 0.21 via fontdue (layout metrics, replacement changes advance widths = parity risk) and 0.25 via winit->sctk-adwaita->ab_glyph; see GRAPH R1.5.b.a" },
 ]

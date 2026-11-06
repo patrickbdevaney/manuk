@@ -291,20 +291,53 @@ pub struct ScaledLineMetrics {
 
 impl FaceMetrics {
     fn read(data: &[u8], index: u32) -> Option<Self> {
-        if std::env::var_os("MANUK_EAGER_FONT_PARSE").is_some() {
-            // Mutant for the PERF.1.3.b gate: pay the old eager outline parse.
-            let settings = fontdue::FontSettings {
-                collection_index: index,
-                ..fontdue::FontSettings::default()
-            };
-            let _ = fontdue::Font::from_bytes(data, settings).ok()?;
+        let font = swash::FontRef::from_index(data, index as usize)?;
+        let hhea = font.table(swash::tag_from_bytes(b"hhea"))?;
+        let head = font.table(swash::tag_from_bytes(b"head"))?;
+        let i16_at = |t: &[u8], o: usize| t.get(o..o + 2).map(|b| i16::from_be_bytes([b[0], b[1]]));
+        let u16_at = |t: &[u8], o: usize| t.get(o..o + 2).map(|b| u16::from_be_bytes([b[0], b[1]]));
+        let units_per_em = u16_at(head, 18)?;
+        if units_per_em == 0 {
+            return None;
         }
-        let face = ttf_parser::Face::parse(data, index).ok()?;
+        let (h_asc, h_desc, h_gap) = (i16_at(hhea, 4)?, i16_at(hhea, 6)?, i16_at(hhea, 8)?);
+        // OS/2 selection rules (USE_TYPO_METRICS, zero-hhea fallback) match ttf-parser 0.21's
+        // `ascender`/`descender`/`line_gap`, so layout metrics are unchanged by dropping it.
+        let os2 = font.table(swash::tag_from_bytes(b"OS/2")).and_then(|t| {
+            let need = match u16_at(t, 0)? {
+                0 => 78,
+                1 => 86,
+                2..=4 => 96,
+                5 => 100,
+                _ => return None,
+            };
+            (t.len() >= need).then_some(t)
+        });
+        let (mut ascent, mut descent, mut line_gap) = (h_asc, h_desc, h_gap);
+        if let Some(t) = os2 {
+            let g = |o| i16_at(t, o).unwrap_or(0);
+            let (t_asc, t_desc, t_gap) = (g(68), g(70), g(72));
+            let use_typo =
+                u16_at(t, 0).unwrap_or(0) >= 4 && u16_at(t, 62).unwrap_or(0) & (1 << 7) != 0;
+            if use_typo {
+                (ascent, descent, line_gap) = (t_asc, t_desc, t_gap);
+            } else {
+                if h_asc == 0 {
+                    ascent = if t_asc != 0 { t_asc } else { g(74) };
+                }
+                if h_desc == 0 {
+                    descent = if t_desc != 0 { t_desc } else { -g(76) };
+                }
+                if h_asc == 0 || h_desc == 0 {
+                    line_gap = if t_asc != 0 || t_desc != 0 { t_gap } else { 0 };
+                }
+            }
+        }
         Some(Self {
-            ascent: face.ascender() as f32,
-            descent: face.descender() as f32,
-            line_gap: face.line_gap() as f32,
-            units_per_em: face.units_per_em() as f32,
+            ascent: ascent as f32,
+            descent: descent as f32,
+            line_gap: line_gap as f32,
+            units_per_em: units_per_em as f32,
         })
     }
 
