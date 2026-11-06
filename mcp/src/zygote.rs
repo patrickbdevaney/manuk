@@ -32,7 +32,11 @@ fn forkable() -> bool {
     match thread_count() {
         1 => true,
         2 => {
+            #[cfg(target_os = "linux")]
             let me = unsafe { libc::syscall(libc::SYS_gettid) } as u32;
+            // no SYS_gettid off linux (and no /proc): never claim forkable there
+            #[cfg(not(target_os = "linux"))]
+            let me = std::process::id();
             let pid = std::process::id();
             me != pid
                 && std::fs::read_to_string(format!("/proc/self/task/{pid}/stat"))
