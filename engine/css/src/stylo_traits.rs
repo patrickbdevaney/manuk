@@ -475,7 +475,7 @@ impl<'a> TElement for StyloElement<'a> {
     fn namespace(
         &self,
     ) -> &<stylo::selector_parser::SelectorImpl as selectors::parser::SelectorImpl>::BorrowedNamespaceUrl
-    {
+{
         unimplemented!("TElement::namespace (interned) is not used by the None-cascade path")
     }
 
