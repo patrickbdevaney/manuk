@@ -10,3 +10,10 @@ flipped to pass on manuk+rollback.v2 = 0 []
 M (flipped AND a passing run called restore) = 0 []
 M/N = 0/44 = 0.0% (needs >= 15%); band manuk+rollback.v2 2-3 vs manuk 3-3: overlapping
 GATE 2 RED
+
+suite real-judge-gptoss120b  chrome_ver=145.0.7632.116  tasks=102 (non-omnizon, llm_boolean graded by openai/gpt-oss-120b, temp 0)
+(separate suite; never mixed with real-v1-det above; source: docs/sprint/w318/real-judge-runs.tsv, report: real-judge-report.tsv)
+arm	task_pass_2of3	per-run pass	band	full_runs	judge model
+playwright	52/102	46/49/52	46-52	102	openai/gpt-oss-120b
+cdp-layer	35/102	35/36/40	35-40	102	openai/gpt-oss-120b
+manuk	32/102	35/31/30	30-35	102	openai/gpt-oss-120b
