@@ -266,6 +266,45 @@ impl ServerHandler for ManukMcp {
     }
 }
 
+/// R3.3.a: the scripted human (test-only), read once at startup, before OS confinement closes the
+/// filesystem. Its text is JS run in the live page when the agent calls `handoff`; a first line of
+/// `//timeout` makes the human never press Resume. Without the env var there is no surface and
+/// `handoff` errors.
+static HANDOFF_SCRIPT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+pub fn load_handoff_script() -> Result<()> {
+    if let Some(p) = std::env::var_os("MANUK_HANDOFF_SCRIPT") {
+        let s = std::fs::read_to_string(&p)
+            .map_err(|e| anyhow::anyhow!("MANUK_HANDOFF_SCRIPT {p:?}: {e}"))?;
+        let _ = HANDOFF_SCRIPT.set(s);
+    }
+    Ok(())
+}
+
+struct ScriptedHuman(String);
+
+#[async_trait::async_trait(?Send)]
+impl manuk_agent::HumanSurface for ScriptedHuman {
+    async fn turn(
+        &mut self,
+        b: &mut AgentBrowser,
+        _req: &manuk_agent::HandoffRequest,
+    ) -> manuk_agent::HumanTurn {
+        let (timeout, js) = match self.0.strip_prefix("//timeout") {
+            Some(rest) => (true, rest),
+            None => (false, self.0.as_str()),
+        };
+        if !js.trim().is_empty() {
+            let _ = b.eval_value(js).await;
+        }
+        if timeout {
+            manuk_agent::HumanTurn::TimedOut
+        } else {
+            manuk_agent::HumanTurn::Resumed
+        }
+    }
+}
+
 pub fn run_stdio(width: u32, height: u32, grants: crate::policy::Grants) -> Result<()> {
     let log_dir = std::env::var_os("MANUK_ACTLOG_DIR").map(std::path::PathBuf::from);
     let tx = spawn_session(
@@ -273,6 +312,9 @@ pub fn run_stdio(width: u32, height: u32, grants: crate::policy::Grants) -> Resu
             let mut b = AgentBrowser::new(width, height);
             // W3.20.a: the WebMCP bridge runs before page script, as on the chrome backend.
             b.set_init_script(crate::cdp::webmcp_bridge());
+            if let Some(js) = HANDOFF_SCRIPT.get() {
+                b.set_human(Box::new(ScriptedHuman(js.clone())));
+            }
             b
         },
         log_dir,

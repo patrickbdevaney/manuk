@@ -129,6 +129,7 @@ fn main() -> anyhow::Result<()> {
     }
     // Agent mode runs untrusted pages: baseline JIT tiers only, Ion/wasm-JIT off; `--jitless` = none.
     manuk_mcp::confine::set_jit_mode(&mut args);
+    manuk_mcp::server::load_handoff_script()?;
     let opts = manuk_mcp::isolation::Options::parse(args)?;
     let _held = manuk_mcp::isolation::apply(&opts)?;
     if confine {
