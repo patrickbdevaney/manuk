@@ -36,7 +36,11 @@ fn serve(skip_first: bool) -> String {
                 let body = if req.starts_with("GET /x ") {
                     OTHER
                 } else if req.starts_with("GET / ") {
-                    if skip_first && hits.fetch_add(1, Ordering::SeqCst) == 0 { PAGE_FIRST } else { PAGE }
+                    if skip_first && hits.fetch_add(1, Ordering::SeqCst) == 0 {
+                        PAGE_FIRST
+                    } else {
+                        PAGE
+                    }
                 } else {
                     ""
                 };
@@ -76,7 +80,12 @@ impl Client {
             .expect("spawn manuk-mcp");
         let tx = child.stdin.take().unwrap();
         let rx = BufReader::new(child.stdout.take().unwrap());
-        let mut c = Client { child, tx, rx, id: 0 };
+        let mut c = Client {
+            child,
+            tx,
+            rx,
+            id: 0,
+        };
         c.rpc("initialize", json!({"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}));
         c.send(json!({"jsonrpc": "2.0", "method": "notifications/initialized"}));
         c
@@ -91,7 +100,10 @@ impl Client {
         self.send(json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}));
         loop {
             let mut line = String::new();
-            assert!(self.rx.read_line(&mut line).unwrap() > 0, "server closed stdout");
+            assert!(
+                self.rx.read_line(&mut line).unwrap() > 0,
+                "server closed stdout"
+            );
             let v: Value = serde_json::from_str(&line).unwrap();
             if v["id"] == json!(id) {
                 return v;
@@ -137,7 +149,9 @@ fn handle_of(text: &str, needle: &str) -> String {
 }
 
 fn host_of(url: &str) -> String {
-    url.trim_start_matches("http://").trim_end_matches('/').to_string()
+    url.trim_start_matches("http://")
+        .trim_end_matches('/')
+        .to_string()
 }
 
 #[test]
@@ -157,7 +171,10 @@ fn seeded_handles_survive_restart() {
         let nav = c.tool("navigate", json!({"url": url}));
         handle_of(&nav, "button \"Add to cart\"")
     };
-    assert_eq!(first, second, "the same button must keep its handle across visits");
+    assert_eq!(
+        first, second,
+        "the same button must keep its handle across visits"
+    );
     let _ = std::fs::remove_file(&store);
 }
 
@@ -173,12 +190,20 @@ fn observe_after_act_records_an_edge() {
         c.tool("observe", json!({}));
     }
     // the server process holds the store's lock until it exits
-    let root_a = manuk_pagestore::PageStore::open(&store).unwrap().recall(&site).unwrap().expect("observe stores the page").root;
+    let root_a = manuk_pagestore::PageStore::open(&store)
+        .unwrap()
+        .recall(&site)
+        .unwrap()
+        .expect("observe stores the page")
+        .root;
     {
         let mut c = Client::start(&store, "edge-b");
         let nav = c.tool("navigate", json!({"url": url}));
         c.tool("observe", json!({}));
-        c.tool("act", json!({"handle": handle_of(&nav, "link \"Footer link\""), "action": "click"}));
+        c.tool(
+            "act",
+            json!({"handle": handle_of(&nav, "link \"Footer link\""), "action": "click"}),
+        );
         c.tool("observe", json!({}));
     }
     let s = manuk_pagestore::PageStore::open(&store).unwrap();

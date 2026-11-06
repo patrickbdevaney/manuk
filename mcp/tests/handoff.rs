@@ -65,10 +65,7 @@ async fn text(s: &mut Session<AgentBrowser>, tool: &str, a: Value) -> anyhow::Re
     }
 }
 
-async fn session(
-    url: &str,
-    human: Option<Human>,
-) -> Session<AgentBrowser> {
+async fn session(url: &str, human: Option<Human>) -> Session<AgentBrowser> {
     let mut b = AgentBrowser::new(800, 600);
     if let Some(h) = human {
         b.set_human(Box::new(h));
@@ -89,38 +86,69 @@ async fn handoff_round_trips() {
 
 async fn human_logs_in_and_agent_resumes_with_the_diff(url: &str) {
     let seen = Default::default();
-    let human = Human { js: "signin()", ends: HumanTurn::Resumed, seen: std::rc::Rc::clone(&seen) };
+    let human = Human {
+        js: "signin()",
+        ends: HumanTurn::Resumed,
+        seen: std::rc::Rc::clone(&seen),
+    };
     let mut s = session(url, Some(human)).await;
-    let r = text(&mut s, "handoff", json!({"reason": "log in to Gate", "timeout_ms": 5000}))
-        .await
-        .unwrap();
+    let r = text(
+        &mut s,
+        "handoff",
+        json!({"reason": "log in to Gate", "timeout_ms": 5000}),
+    )
+    .await
+    .unwrap();
     assert!(r.contains("handoff(\"log in to Gate\"): resumed"), "{r}");
-    assert!(r.contains("Welcome back, Pat"), "diff must show what the human did: {r}");
-    assert!(r.contains("-") && r.contains("Sign in required"), "and what went away: {r}");
+    assert!(
+        r.contains("Welcome back, Pat"),
+        "diff must show what the human did: {r}"
+    );
+    assert!(
+        r.contains("-") && r.contains("Sign in required"),
+        "and what went away: {r}"
+    );
     let seen = seen.borrow();
     assert_eq!(seen.len(), 1);
-    assert_eq!((seen[0].reason.as_str(), seen[0].timeout_ms), ("log in to Gate", 5000));
+    assert_eq!(
+        (seen[0].reason.as_str(), seen[0].timeout_ms),
+        ("log in to Gate", 5000)
+    );
     // the agent's next observation is of the human's page state
     let o = text(&mut s, "observe", json!({})).await.unwrap();
     assert!(o.contains("Account settings"), "{o}");
 }
 
 async fn idle_human_is_no_change_and_timeout_is_reported(url: &str) {
-    let idle = Human { js: "", ends: HumanTurn::Resumed, seen: Default::default() };
+    let idle = Human {
+        js: "",
+        ends: HumanTurn::Resumed,
+        seen: Default::default(),
+    };
     let mut s = session(url, Some(idle)).await;
-    let r = text(&mut s, "handoff", json!({"reason": "x"})).await.unwrap();
+    let r = text(&mut s, "handoff", json!({"reason": "x"}))
+        .await
+        .unwrap();
     assert!(r.contains("no change"), "{r}");
     assert!(!r.contains("Welcome"), "{r}");
 
-    let slow = Human { js: "signin()", ends: HumanTurn::TimedOut, seen: Default::default() };
+    let slow = Human {
+        js: "signin()",
+        ends: HumanTurn::TimedOut,
+        seen: Default::default(),
+    };
     let mut s = session(url, Some(slow)).await;
-    let r = text(&mut s, "handoff", json!({"reason": "x", "timeout_ms": 50})).await.unwrap();
+    let r = text(&mut s, "handoff", json!({"reason": "x", "timeout_ms": 50}))
+        .await
+        .unwrap();
     assert!(r.contains("TIMED OUT after 50 ms"), "{r}");
 }
 
 async fn no_human_surface_errors(url: &str) {
     let mut s = session(url, None).await;
-    let e = text(&mut s, "handoff", json!({"reason": "x"})).await.unwrap_err();
+    let e = text(&mut s, "handoff", json!({"reason": "x"}))
+        .await
+        .unwrap_err();
     assert!(e.to_string().contains("no human surface"), "{e}");
     let e = text(&mut s, "handoff", json!({})).await.unwrap_err();
     assert!(e.to_string().contains("needs `reason`"), "{e}");

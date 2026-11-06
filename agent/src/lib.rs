@@ -2524,7 +2524,12 @@ pub struct TaskRun {
 }
 
 impl TaskRun {
-    pub fn new(task: &str, config: &AgentConfig, backend_name: String, mut log: replay::EventLog) -> Self {
+    pub fn new(
+        task: &str,
+        config: &AgentConfig,
+        backend_name: String,
+        mut log: replay::EventLog,
+    ) -> Self {
         log.push(replay::Event::Start {
             task: task.to_string(),
             backend: backend_name,
@@ -2632,7 +2637,11 @@ impl TaskRun {
             messages.push(Message::text(Role::User, past_obs.clone()));
             messages.push(Message::text(Role::Assistant, past_act.clone()));
         }
-        let note = self.note.take().map(|n| format!("{n}\n")).unwrap_or_default();
+        let note = self
+            .note
+            .take()
+            .map(|n| format!("{n}\n"))
+            .unwrap_or_default();
         let mut current = vec![Content::Text(format!(
             "{note}OBSERVATION (step {}):\n{obs_text}\nRespond with the next action as JSON.",
             step + 1
@@ -2647,7 +2656,12 @@ impl TaskRun {
             content: current,
         });
 
-        Ok(Begun::Infer(PendingStep { step, obs, obs_text, messages }))
+        Ok(Begun::Infer(PendingStep {
+            step,
+            obs,
+            obs_text,
+            messages,
+        }))
     }
 
     /// Second half of a step: act on the model's `reply` (or its error).
@@ -2658,7 +2672,12 @@ impl TaskRun {
         reply: Result<String>,
         tabs: &mut Option<&mut dyn TabController>,
     ) -> Result<StepStatus> {
-        let PendingStep { step, obs, obs_text, .. } = pending;
+        let PendingStep {
+            step,
+            obs,
+            obs_text,
+            ..
+        } = pending;
         let reply = reply.with_context(|| format!("inference failed at step {}", step + 1))?;
         // G-d: the model is the non-reproducible part, so its reply is stored verbatim.
         self.log.push(replay::Event::Model {
@@ -2689,7 +2708,8 @@ impl TaskRun {
         // N5 — the single enforcement point: authority (was this ever granted?) then the
         // E6 risk heuristic (does this target look dangerous?). Both must pass.
         {
-            let caps = self.config
+            let caps = self
+                .config
                 .capabilities
                 .clone()
                 .allow_sensitive(self.config.allow_sensitive_actions);
@@ -2701,7 +2721,8 @@ impl TaskRun {
                     step,
                     reason: reason.clone(),
                 });
-                self.history.push((obs_text, format!("{action_json}\n{note}")));
+                self.history
+                    .push((obs_text, format!("{action_json}\n{note}")));
                 return Ok(StepStatus::Running);
             }
         }
@@ -2723,7 +2744,9 @@ impl TaskRun {
             }
             Action::Navigate { url } => {
                 if let Err(e) = browser.navigate(&url).await {
-                    self.outcome.transcript.push(format!("  navigate error: {e:#}"));
+                    self.outcome
+                        .transcript
+                        .push(format!("  navigate error: {e:#}"));
                 }
             }
             Action::Click { index } => {
@@ -2731,10 +2754,13 @@ impl TaskRun {
                 match href {
                     Some(h) => {
                         if let Err(e) = browser.navigate(&h).await {
-                            self.outcome.transcript.push(format!("  click error: {e:#}"));
+                            self.outcome
+                                .transcript
+                                .push(format!("  click error: {e:#}"));
                         }
                     }
-                    None => self.outcome
+                    None => self
+                        .outcome
                         .transcript
                         .push(format!("  no link at index {index}")),
                 }
@@ -2743,27 +2769,43 @@ impl TaskRun {
 
             // ---- §4b ----
             Action::Type { field, text } => match browser.type_into(&field, &text) {
-                Ok(()) => self.outcome.transcript.push(format!("  typed into {field:?}")),
+                Ok(()) => self
+                    .outcome
+                    .transcript
+                    .push(format!("  typed into {field:?}")),
                 Err(e) => self.outcome.transcript.push(format!("  type error: {e:#}")),
             },
             Action::ClickText { role, name } => {
                 let r = parse_role(&role);
                 match browser.click_by_name(&r, &name).await {
-                    Ok(act) => self.outcome.transcript.push(format!("  click_text -> {act:?}")),
-                    Err(e) => self.outcome
+                    Ok(act) => self
+                        .outcome
+                        .transcript
+                        .push(format!("  click_text -> {act:?}")),
+                    Err(e) => self
+                        .outcome
                         .transcript
                         .push(format!("  click_text error: {e:#}")),
                 }
             }
             Action::ClickAt { x, y } => match browser.click_at(x, y).await {
-                Ok(act) => self.outcome.transcript.push(format!("  click_at -> {act:?}")),
-                Err(e) => self.outcome.transcript.push(format!("  click_at error: {e:#}")),
+                Ok(act) => self
+                    .outcome
+                    .transcript
+                    .push(format!("  click_at -> {act:?}")),
+                Err(e) => self
+                    .outcome
+                    .transcript
+                    .push(format!("  click_at error: {e:#}")),
             },
             Action::Submit { field } => {
                 let target = field.as_deref().map(|f| (&manuk_a11y::Role::TextBox, f));
                 match browser.submit(target).await {
                     Ok(act) => self.outcome.transcript.push(format!("  submit -> {act:?}")),
-                    Err(e) => self.outcome.transcript.push(format!("  submit error: {e:#}")),
+                    Err(e) => self
+                        .outcome
+                        .transcript
+                        .push(format!("  submit error: {e:#}")),
                 }
             }
             Action::Back => {
@@ -2773,13 +2815,17 @@ impl TaskRun {
             }
             Action::Forward => {
                 if let Err(e) = browser.forward().await {
-                    self.outcome.transcript.push(format!("  forward error: {e:#}"));
+                    self.outcome
+                        .transcript
+                        .push(format!("  forward error: {e:#}"));
                 }
             }
             Action::ScrollTo { role, name } => {
                 let r = parse_role(&role);
                 if let Err(e) = browser.scroll_to(&r, &name) {
-                    self.outcome.transcript.push(format!("  scroll_to error: {e:#}"));
+                    self.outcome
+                        .transcript
+                        .push(format!("  scroll_to error: {e:#}"));
                 }
             }
 
@@ -2793,10 +2839,12 @@ impl TaskRun {
                             .transcript
                             .push(format!("  close_tabs {sel:?} -> closed {n}"));
                     }
-                    (Some(_), None) => self.outcome
+                    (Some(_), None) => self
+                        .outcome
                         .transcript
                         .push("  close_tabs: no domain/title/indices given".to_string()),
-                    (None, _) => self.outcome
+                    (None, _) => self
+                        .outcome
                         .transcript
                         .push("  close_tabs: no tab context in this run".to_string()),
                 }
@@ -2810,7 +2858,8 @@ impl TaskRun {
                         format!("  open_tab: {url} is not in history (refused)")
                     });
                 }
-                None => self.outcome
+                None => self
+                    .outcome
                     .transcript
                     .push("  open_tab: no tab context in this run".to_string()),
             },
@@ -2821,7 +2870,8 @@ impl TaskRun {
                         .transcript
                         .push(format!("  search_tab {query:?} -> {url}"));
                 }
-                None => self.outcome
+                None => self
+                    .outcome
                     .transcript
                     .push("  search_tab: no tab context in this run".to_string()),
             },

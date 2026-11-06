@@ -123,7 +123,10 @@ pub enum Change {
     Added(String),
     Removed(String),
     /// same position, same role, a field differs
-    Changed { before: String, after: String },
+    Changed {
+        before: String,
+        after: String,
+    },
 }
 
 pub struct PageStore {
@@ -217,7 +220,10 @@ impl PageStore {
         // First snapshot of a site with enough records trains its dictionary.
         let mut dict = self.dict(site)?;
         if dict.is_none() && recs.len() >= DICT_MIN_SAMPLES {
-            let samples: Vec<Vec<u8>> = recs.iter().map(|(_, r)| serde_json::to_vec(r).unwrap()).collect();
+            let samples: Vec<Vec<u8>> = recs
+                .iter()
+                .map(|(_, r)| serde_json::to_vec(r).unwrap())
+                .collect();
             if let Ok(d) = zstd::dict::from_samples(&samples, 4096) {
                 dict = Some(d);
             }
@@ -242,7 +248,9 @@ impl PageStore {
                     reused_nodes += 1;
                     continue;
                 }
-                let z = c.compress(&serde_json::to_vec(r).map_err(nm)?).map_err(nm)?;
+                let z = c
+                    .compress(&serde_json::to_vec(r).map_err(nm)?)
+                    .map_err(nm)?;
                 nt.insert(h.as_bytes(), z.as_slice()).map_err(nm)?;
                 new_nodes += 1;
             }
@@ -255,22 +263,36 @@ impl PageStore {
                 .transpose()
                 .map_err(nm)?
                 .unwrap_or(1);
-            let s = serde_json::to_vec(&Snap { root: root.clone(), ts: now() }).map_err(nm)?;
+            let s = serde_json::to_vec(&Snap {
+                root: root.clone(),
+                ts: now(),
+            })
+            .map_err(nm)?;
             st.insert((site, seq), s.as_slice()).map_err(nm)?;
         }
         w.commit().map_err(nm)?;
-        Ok(Stored { seq, root, new_nodes, reused_nodes })
+        Ok(Stored {
+            seq,
+            root,
+            new_nodes,
+            reused_nodes,
+        })
     }
 
     fn load(&self, site: &str, h: &str) -> Result<Rec> {
         let r = self.db.begin_read().map_err(nm)?;
         let t = r.open_table(NODES).map_err(nm)?;
-        let z = t.get(h.as_bytes()).map_err(nm)?.ok_or_else(|| anyhow!("missing node {h}"))?;
+        let z = t
+            .get(h.as_bytes())
+            .map_err(nm)?
+            .ok_or_else(|| anyhow!("missing node {h}"))?;
         let raw = match self.dict(site)? {
             Some(d) => zstd::bulk::Decompressor::with_dictionary(&d)
                 .map_err(nm)?
                 .decompress(z.value(), 1 << 22),
-            None => zstd::bulk::Decompressor::new().map_err(nm)?.decompress(z.value(), 1 << 22),
+            None => zstd::bulk::Decompressor::new()
+                .map_err(nm)?
+                .decompress(z.value(), 1 << 22),
         }
         .map_err(nm)?;
         serde_json::from_slice(&raw).map_err(nm)
@@ -280,7 +302,11 @@ impl PageStore {
     pub fn tree(&self, site: &str, root: &str) -> Result<PNode> {
         let r = self.load(site, root)?;
         Ok(PNode {
-            children: r.kids.iter().map(|k| self.tree(site, k)).collect::<Result<_>>()?,
+            children: r
+                .kids
+                .iter()
+                .map(|k| self.tree(site, k))
+                .collect::<Result<_>>()?,
             role: r.role,
             name: r.name,
             state: r.state,
@@ -294,12 +320,18 @@ impl PageStore {
         let (seq, s) = {
             let r = self.db.begin_read().map_err(nm)?;
             let t = r.open_table(SNAPS).map_err(nm)?;
-            let last = t.range((site, 0u64)..=(site, u64::MAX)).map_err(nm)?.next_back();
+            let last = t
+                .range((site, 0u64)..=(site, u64::MAX))
+                .map_err(nm)?
+                .next_back();
             match last {
                 None => return Ok(None),
                 Some(x) => {
                     let (k, v) = x.map_err(nm)?;
-                    (k.value().1, serde_json::from_slice::<Snap>(v.value()).map_err(nm)?)
+                    (
+                        k.value().1,
+                        serde_json::from_slice::<Snap>(v.value()).map_err(nm)?,
+                    )
                 }
             }
         };
@@ -321,7 +353,14 @@ impl PageStore {
         Ok((out, reads))
     }
 
-    fn all(&self, site: &str, h: &str, f: &dyn Fn(String) -> Change, out: &mut Vec<Change>, reads: &mut usize) -> Result<()> {
+    fn all(
+        &self,
+        site: &str,
+        h: &str,
+        f: &dyn Fn(String) -> Change,
+        out: &mut Vec<Change>,
+        reads: &mut usize,
+    ) -> Result<()> {
         let r = self.load(site, h)?;
         *reads += 1;
         out.push(f(line(&r)));
@@ -331,7 +370,14 @@ impl PageStore {
         Ok(())
     }
 
-    fn diff_in(&self, site: &str, a: Option<&str>, b: Option<&str>, out: &mut Vec<Change>, reads: &mut usize) -> Result<()> {
+    fn diff_in(
+        &self,
+        site: &str,
+        a: Option<&str>,
+        b: Option<&str>,
+        out: &mut Vec<Change>,
+        reads: &mut usize,
+    ) -> Result<()> {
         match (a, b) {
             (None, None) => {}
             (Some(x), Some(y)) if x == y => {}
@@ -340,12 +386,23 @@ impl PageStore {
             (Some(x), Some(y)) => {
                 let (ra, rb) = (self.load(site, x)?, self.load(site, y)?);
                 *reads += 2;
-                if (&ra.role, &ra.name, &ra.state, &ra.value, ra.rect) != (&rb.role, &rb.name, &rb.state, &rb.value, rb.rect) {
-                    out.push(Change::Changed { before: line(&ra), after: line(&rb) });
+                if (&ra.role, &ra.name, &ra.state, &ra.value, ra.rect)
+                    != (&rb.role, &rb.name, &rb.state, &rb.value, rb.rect)
+                {
+                    out.push(Change::Changed {
+                        before: line(&ra),
+                        after: line(&rb),
+                    });
                 }
                 // Children are matched by position; a hash match skips the whole subtree.
                 for i in 0..ra.kids.len().max(rb.kids.len()) {
-                    self.diff_in(site, ra.kids.get(i).map(|s| s.as_str()), rb.kids.get(i).map(|s| s.as_str()), out, reads)?;
+                    self.diff_in(
+                        site,
+                        ra.kids.get(i).map(|s| s.as_str()),
+                        rb.kids.get(i).map(|s| s.as_str()),
+                        out,
+                        reads,
+                    )?;
                 }
             }
         }
@@ -363,7 +420,11 @@ impl PageStore {
             let k = seen.entry(base.clone()).or_insert(0);
             *k += 1;
             keys.push(format!("{base}#{k}"));
-            let nctx = if n.name.is_empty() { ctx.to_string() } else { format!("{}:{}", n.role, n.name) };
+            let nctx = if n.name.is_empty() {
+                ctx.to_string()
+            } else {
+                format!("{}:{}", n.role, n.name)
+            };
             for c in &n.children {
                 walk(c, &nctx, seen, keys);
             }
@@ -405,7 +466,10 @@ impl PageStore {
     /// Record that `action` taken on the page with root `from` led to root `to`.
     pub fn record_edge(&self, from: &str, action: &str, to: &str) -> Result<()> {
         let w = self.db.begin_write().map_err(nm)?;
-        w.open_table(EDGES).map_err(nm)?.insert((from, action), to).map_err(nm)?;
+        w.open_table(EDGES)
+            .map_err(nm)?
+            .insert((from, action), to)
+            .map_err(nm)?;
         w.commit().map_err(nm)?;
         Ok(())
     }

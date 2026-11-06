@@ -87,7 +87,8 @@ impl manuk_agent::InferenceBackend for FixtureBackend {
         if left == 0 {
             return Ok(r#"{"action":"finish","answer":"fixture done"}"#.into());
         }
-        self.left.store(left - 1, std::sync::atomic::Ordering::SeqCst);
+        self.left
+            .store(left - 1, std::sync::atomic::Ordering::SeqCst);
         Ok(r#"{"action":"scroll","dy":120}"#.into())
     }
     fn name(&self) -> String {
@@ -148,7 +149,9 @@ impl AgentRun {
     }
 
     pub fn steps(&self) -> usize {
-        self.run.as_ref().map_or(self.steps_done, TaskRun::steps_taken)
+        self.run
+            .as_ref()
+            .map_or(self.steps_done, TaskRun::steps_taken)
     }
 
     pub fn log_lines(&self) -> &[String] {
@@ -201,7 +204,8 @@ impl AgentRun {
                 Ok(r) => r,
                 Err(e) => Err(anyhow::anyhow!("inference task failed: {e}")),
             };
-            let res = rt.block_on(run.finish_step(&mut self.browser, inf.pending, reply, &mut tabs));
+            let res =
+                rt.block_on(run.finish_step(&mut self.browser, inf.pending, reply, &mut tabs));
             (inf.before_len, res)
         } else {
             let before_len = run.outcome().transcript.len();
@@ -213,14 +217,20 @@ impl AgentRun {
                     let call = rt.spawn(async move {
                         manuk_agent::complete_messages(&*backend, &messages, &cfg).await
                     });
-                    self.inflight = Some(Inflight { pending, call, before_len });
+                    self.inflight = Some(Inflight {
+                        pending,
+                        call,
+                        before_len,
+                    });
                     return false;
                 }
                 Ok(Begun::Status(s)) => (before_len, Ok(s)),
                 Err(e) => (before_len, Err(e)),
             }
         };
-        let Some(run) = self.run.as_mut() else { return true };
+        let Some(run) = self.run.as_mut() else {
+            return true;
+        };
         let new: Vec<String> = run.outcome().transcript[before_len..].to_vec();
         let answer = run.outcome().answer.clone();
         for l in new {
@@ -229,7 +239,9 @@ impl AgentRun {
         match res {
             Ok(StepStatus::Running) => {}
             Ok(_) => {
-                self.finish_run(Phase::Done(answer.unwrap_or_else(|| "(no answer)".to_string())));
+                self.finish_run(Phase::Done(
+                    answer.unwrap_or_else(|| "(no answer)".to_string()),
+                ));
             }
             Err(e) => self.finish_run(Phase::Failed(format!("{e:#}"))),
         }
@@ -338,8 +350,16 @@ impl AgentRun {
 /// A line-set diff of two observation texts: what the human added and removed.
 pub fn effect_diff(before: &str, after: &str) -> String {
     use std::collections::HashSet;
-    let b: HashSet<&str> = before.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
-    let a: HashSet<&str> = after.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
+    let b: HashSet<&str> = before
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .collect();
+    let a: HashSet<&str> = after
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .collect();
     let mut out = Vec::new();
     for l in after.lines().map(str::trim) {
         if !l.is_empty() && !b.contains(l) {
@@ -388,7 +408,11 @@ mod tests {
 
     fn handoff(fonts: &FontContext) -> Handoff {
         let page = Page::load(FIXTURE, "https://fixture.example/", fonts, 1024.0);
-        Handoff { page, scroll_y: 0.0, history: vec!["https://fixture.example/".into()] }
+        Handoff {
+            page,
+            scroll_y: 0.0,
+            history: vec!["https://fixture.example/".into()],
+        }
     }
 
     fn scripted(n_scrolls: usize) -> Box<dyn InferenceBackend> {
@@ -411,11 +435,18 @@ mod tests {
     }
 
     fn cfg(max: usize) -> AgentConfig {
-        AgentConfig { max_steps: max, ..AgentConfig::default() }
+        AgentConfig {
+            max_steps: max,
+            ..AgentConfig::default()
+        }
     }
 
     fn rt() -> tokio::runtime::Runtime {
-        tokio::runtime::Builder::new_multi_thread().worker_threads(2).enable_all().build().unwrap()
+        tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .enable_all()
+            .build()
+            .unwrap()
     }
 
     /// Gate 1: a 10-step task, one step per turn, with a paint each turn: the frames stay
@@ -424,7 +455,14 @@ mod tests {
     fn ten_step_task_keeps_frames_inside_budget() {
         let fonts = FontContext::new();
         let rt = rt();
-        let mut run = AgentRun::start("scroll down", handoff(&fonts), test_mint::consent(), cfg(10), scripted(9), (1024, 768));
+        let mut run = AgentRun::start(
+            "scroll down",
+            handoff(&fonts),
+            test_mint::consent(),
+            cfg(10),
+            scripted(9),
+            (1024, 768),
+        );
         let mut ft = manuk_compositor::FrameTimer::new(64);
         let mut max_gap = Duration::ZERO;
         let mut last = Instant::now();
@@ -436,7 +474,7 @@ mod tests {
             ft.begin();
             run.pump(&rt, None);
             std::thread::sleep(Duration::from_millis(1)); // the real loop's vsync/poll gap
-            // The human view repaints between steps (a stand-in for `RedrawRequested`).
+                                                          // The human view repaints between steps (a stand-in for `RedrawRequested`).
             let canvas = manuk_paint::Canvas::new(1024, 768, manuk_css::Rgba::WHITE);
             std::hint::black_box(canvas.rgba_bytes().len());
             ft.end();
@@ -453,7 +491,10 @@ mod tests {
             assert!(p95 < Duration::from_millis(50), "p95 {p95:?}");
             assert!(max_gap < Duration::from_millis(500), "gap {max_gap:?}");
         }
-        assert!(run.release_to_human().is_some(), "the page goes back to the human");
+        assert!(
+            run.release_to_human().is_some(),
+            "the page goes back to the human"
+        );
     }
 
     /// Gate 2: an Esc that arrives after step k halts the run before step k+1.
@@ -461,7 +502,14 @@ mod tests {
     fn esc_halts_within_one_step() {
         let fonts = FontContext::new();
         let rt = rt();
-        let mut run = AgentRun::start("t", handoff(&fonts), test_mint::consent(), cfg(10), scripted(9), (1024, 768));
+        let mut run = AgentRun::start(
+            "t",
+            handoff(&fonts),
+            test_mint::consent(),
+            cfg(10),
+            scripted(9),
+            (1024, 768),
+        );
         for _ in 0..3 {
             one_step(&mut run, &rt);
         }
@@ -480,7 +528,14 @@ mod tests {
         let fonts = FontContext::new();
         let rt = rt();
         let slow = FixtureBackend::from_spec("5:3000").unwrap();
-        let mut run = AgentRun::start("t", handoff(&fonts), test_mint::consent(), cfg(10), Box::new(slow), (1024, 768));
+        let mut run = AgentRun::start(
+            "t",
+            handoff(&fonts),
+            test_mint::consent(),
+            cfg(10),
+            Box::new(slow),
+            (1024, 768),
+        );
         let started = Instant::now();
         let mut max_turn = Duration::ZERO;
         while started.elapsed() < Duration::from_millis(1200) {
@@ -498,9 +553,15 @@ mod tests {
         eprintln!("slow model: max turn {max_turn:?}, esc latency {esc:?}");
         assert_eq!(run.phase(), &Phase::Stopped);
         if !cfg!(debug_assertions) {
-            assert!(max_turn < Duration::from_millis(500), "turn blocked {max_turn:?}");
+            assert!(
+                max_turn < Duration::from_millis(500),
+                "turn blocked {max_turn:?}"
+            );
         }
-        assert!(max_turn < Duration::from_millis(1500), "a turn waited on the 3 s model call: {max_turn:?}");
+        assert!(
+            max_turn < Duration::from_millis(1500),
+            "a turn waited on the 3 s model call: {max_turn:?}"
+        );
         assert!(esc < Duration::from_millis(500), "esc took {esc:?}");
     }
 
@@ -510,12 +571,24 @@ mod tests {
     fn take_over_human_types_resume_gives_effect_diff() {
         let fonts = FontContext::new();
         let rt = rt();
-        let mut run = AgentRun::start("t", handoff(&fonts), test_mint::consent(), cfg(10), scripted(5), (1024, 768));
+        let mut run = AgentRun::start(
+            "t",
+            handoff(&fonts),
+            test_mint::consent(),
+            cfg(10),
+            scripted(5),
+            (1024, 768),
+        );
         one_step(&mut run, &rt);
-        let mut h = run.take_over(test_mint::consent()).expect("running run can be taken over");
+        let mut h = run
+            .take_over(test_mint::consent())
+            .expect("running run can be taken over");
         assert_eq!(run.phase(), &Phase::HumanTurn);
         assert!(!run.agent_has_page());
-        assert!(!run.pump(&rt, None), "the agent does not step while the human holds the page");
+        assert!(
+            !run.pump(&rt, None),
+            "the agent does not step while the human holds the page"
+        );
         // The human types into the field (through the engine, as the shell's input path does).
         let mut probe = AgentBrowser::new(1024, 768);
         probe.adopt(h);
@@ -523,7 +596,10 @@ mod tests {
         h = probe.release().unwrap();
         run.resume(h, test_mint::consent());
         let effect = run.last_effect().expect("an effect diff");
-        assert!(effect.contains("HUMAN-TYPED-482913"), "diff must show what the human typed: {effect}");
+        assert!(
+            effect.contains("HUMAN-TYPED-482913"),
+            "diff must show what the human typed: {effect}"
+        );
         assert_eq!(run.phase(), &Phase::Running);
         one_step(&mut run, &rt);
         assert!(run.steps() >= 2);
@@ -534,6 +610,9 @@ mod tests {
     #[test]
     fn effect_diff_reports_additions_and_removals() {
         let d = effect_diff("x\nold", "x\nnew");
-        assert!(d.contains("+ new") && d.contains("- old") && !d.contains("+ x"), "{d}");
+        assert!(
+            d.contains("+ new") && d.contains("- old") && !d.contains("+ x"),
+            "{d}"
+        );
     }
 }

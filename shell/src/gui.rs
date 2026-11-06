@@ -21,16 +21,16 @@ use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::keyboard::{Key, ModifiersState, NamedKey};
 use winit::window::{Window, WindowId};
 
+use crate::agent_run::{AgentRun, Phase};
 use crate::chrome::{self, Bookmarks, History, Settings};
 use crate::find::{self, FindSession};
-use crate::agent_run::{AgentRun, Phase};
 use crate::panel::{self, PanelScope};
-use manuk_consent::{HandoffConsent, HumanActivation};
 use crate::prerender;
 use crate::session::{self, SessionStore};
 use crate::tab::Browser;
 use manuk_agent::Handoff;
 use manuk_compositor::TabId;
+use manuk_consent::{HandoffConsent, HumanActivation};
 use manuk_page::Page;
 
 /// A hamburger-menu action. The menu is a fixed list of these; [`App::run_menu_action`] maps
@@ -2221,8 +2221,25 @@ impl App {
             ); // × close
             if is_active {
                 if let Some(badge) = self.agent.as_ref().and_then(AgentRun::badge) {
-                    canvas.fill_rect(x + tw - 62.0, 7.0, 42.0, TAB_STRIP_H - 14.0, Rgba { r: 26, g: 115, b: 232, a: 255 });
-                    canvas.draw_text(&self.fonts, x + tw - 58.0, tab_base - 1.0, badge, &font(10.0, Rgba::WHITE));
+                    canvas.fill_rect(
+                        x + tw - 62.0,
+                        7.0,
+                        42.0,
+                        TAB_STRIP_H - 14.0,
+                        Rgba {
+                            r: 26,
+                            g: 115,
+                            b: 232,
+                            a: 255,
+                        },
+                    );
+                    canvas.draw_text(
+                        &self.fonts,
+                        x + tw - 58.0,
+                        tab_base - 1.0,
+                        badge,
+                        &font(10.0, Rgba::WHITE),
+                    );
                 }
             }
         }
@@ -2920,7 +2937,10 @@ impl App {
             let n = raw.len();
             let ok = manuk_consent::admit_clipboard(raw, self.activation.as_ref());
             if ok.len() < n {
-                tracing::warn!(dropped = n - ok.len(), "clipboard: dropped writes made outside a human gesture");
+                tracing::warn!(
+                    dropped = n - ok.len(),
+                    "clipboard: dropped writes made outside a human gesture"
+                );
             }
             ok
         } {
@@ -3856,9 +3876,24 @@ impl App {
         }
         let (w, h) = (w as f32, h as f32);
         let top = h - AGENT_STRIP_H;
-        let bg = Rgba { r: 32, g: 34, b: 40, a: 255 };
-        let ink = Rgba { r: 235, g: 236, b: 240, a: 255 };
-        let accent = Rgba { r: 138, g: 180, b: 248, a: 255 };
+        let bg = Rgba {
+            r: 32,
+            g: 34,
+            b: 40,
+            a: 255,
+        };
+        let ink = Rgba {
+            r: 235,
+            g: 236,
+            b: 240,
+            a: 255,
+        };
+        let accent = Rgba {
+            r: 138,
+            g: 180,
+            b: 248,
+            a: 255,
+        };
         let style = |size: f32, color: Rgba| TextStyle {
             rtl: false,
             sideways: false,
@@ -3880,8 +3915,17 @@ impl App {
         canvas.fill_rect(0.0, top, w, AGENT_STRIP_H, bg);
         let base = top + AGENT_STRIP_H / 2.0 + 5.0;
         if self.agent_open {
-            let t = format!("Agent task: {}\u{2502}   (Enter to run, Esc to cancel)", self.agent_input);
-            canvas.draw_text(&self.fonts, 12.0, base, &clip_text(&t, w - 24.0), &style(13.0, ink));
+            let t = format!(
+                "Agent task: {}\u{2502}   (Enter to run, Esc to cancel)",
+                self.agent_input
+            );
+            canvas.draw_text(
+                &self.fonts,
+                12.0,
+                base,
+                &clip_text(&t, w - 24.0),
+                &style(13.0, ink),
+            );
             return;
         }
         let Some(run) = &self.agent else { return };
@@ -3896,9 +3940,26 @@ impl App {
         let buttons = self.agent_strip_buttons(w);
         let log_right = buttons.first().map_or(w - 12.0, |(_, x, _)| *x - 10.0);
         let line = run.strip_tail().last().cloned().unwrap_or_default();
-        canvas.draw_text(&self.fonts, 130.0, base, &clip_text(&line, log_right - 130.0), &style(13.0, ink));
+        canvas.draw_text(
+            &self.fonts,
+            130.0,
+            base,
+            &clip_text(&line, log_right - 130.0),
+            &style(13.0, ink),
+        );
         for (label, x, bw) in buttons {
-            canvas.fill_rect(x, top + 4.0, bw, AGENT_STRIP_H - 8.0, Rgba { r: 60, g: 64, b: 72, a: 255 });
+            canvas.fill_rect(
+                x,
+                top + 4.0,
+                bw,
+                AGENT_STRIP_H - 8.0,
+                Rgba {
+                    r: 60,
+                    g: 64,
+                    b: 72,
+                    a: 255,
+                },
+            );
             canvas.draw_text(&self.fonts, x + 7.0, base, label, &style(13.0, ink));
         }
     }
@@ -3930,7 +3991,14 @@ impl App {
             cfg.max_steps = 40;
             cfg.send_screenshots = false;
             self.live = Some(LiveMetrics::default());
-            self.agent = Some(AgentRun::start(task, handoff, consent, cfg, Box::new(fx), (w, h)));
+            self.agent = Some(AgentRun::start(
+                task,
+                handoff,
+                consent,
+                cfg,
+                Box::new(fx),
+                (w, h),
+            ));
             self.request_redraw();
             return;
         }
@@ -3986,7 +4054,9 @@ impl App {
     fn pump_agent(&mut self) {
         let known = self.known_history();
         let settings = self.settings.clone();
-        let Some(run) = self.agent.as_mut() else { return };
+        let Some(run) = self.agent.as_mut() else {
+            return;
+        };
         let changed = {
             let mut tabs = crate::session::BrowserTabs::new(&mut self.browser, known, settings);
             run.pump(&self.rt, Some(&mut tabs))
@@ -4014,7 +4084,9 @@ impl App {
 
     /// The run ended: the page goes back to the human view.
     fn agent_return_page(&mut self) {
-        let Some(run) = self.agent.as_mut() else { return };
+        let Some(run) = self.agent.as_mut() else {
+            return;
+        };
         if let Some(h) = run.release_to_human() {
             let w = self.gpu.as_ref().map_or(self.width, |g| g.config.width);
             self.scroll_y = h.scroll_y;
@@ -4029,7 +4101,9 @@ impl App {
 
     /// "Take over" (strip button / Ctrl+Shift+T): the human gets the page mid-run.
     fn agent_take_over(&mut self, consent: HandoffConsent) {
-        let Some(run) = self.agent.as_mut() else { return };
+        let Some(run) = self.agent.as_mut() else {
+            return;
+        };
         if let Some(h) = run.take_over(consent) {
             let w = self.gpu.as_ref().map_or(self.width, |g| g.config.width);
             self.scroll_y = h.scroll_y;
@@ -4044,7 +4118,10 @@ impl App {
 
     /// "Resume": back to the agent, with an effect diff of what the human changed.
     fn agent_resume(&mut self, consent: HandoffConsent) {
-        let phase_ok = self.agent.as_ref().is_some_and(|r| r.phase() == &Phase::HumanTurn);
+        let phase_ok = self
+            .agent
+            .as_ref()
+            .is_some_and(|r| r.phase() == &Phase::HumanTurn);
         if !phase_ok {
             return;
         }
@@ -4654,7 +4731,11 @@ impl ApplicationHandler<NavEvent> for App {
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
-        if self.agent.as_ref().is_some_and(|r| r.phase() == &Phase::Running) {
+        if self
+            .agent
+            .as_ref()
+            .is_some_and(|r| r.phase() == &Phase::Running)
+        {
             // One agent step per turn; Poll keeps turns coming while the run is live.
             event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
             self.pump_agent();
@@ -4665,14 +4746,23 @@ impl ApplicationHandler<NavEvent> for App {
 }
 
 impl App {
-    fn window_event_inner(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
+    fn window_event_inner(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        _id: WindowId,
+        event: WindowEvent,
+    ) {
         match event {
             WindowEvent::CloseRequested => {
                 self.save_session();
                 event_loop.exit();
             }
             WindowEvent::ModifiersChanged(m) => self.modifiers = m.state(),
-            WindowEvent::KeyboardInput { event, is_synthetic, .. } => match event.state {
+            WindowEvent::KeyboardInput {
+                event,
+                is_synthetic,
+                ..
+            } => match event.state {
                 ElementState::Pressed => {
                     manuk_net::downloads::note_user_gesture();
                     // W3.17: the only place consent and clipboard activation are minted for keys.
@@ -4919,7 +5009,10 @@ impl LiveMetrics {
     fn report(&self, steps: usize) -> String {
         let mut c = self.costs_ms.clone();
         c.sort_by(|a, b| a.total_cmp(b));
-        let p95 = c.get((c.len() * 95 / 100).min(c.len().saturating_sub(1))).copied().unwrap_or(0.0);
+        let p95 = c
+            .get((c.len() * 95 / 100).min(c.len().saturating_sub(1)))
+            .copied()
+            .unwrap_or(0.0);
         let after = self.esc_at_step.map_or(-1, |e| steps as i64 - e as i64);
         format!(
             "[live-frames] frames={} p95_ms={p95:.2} max_gap_ms={:.1} steps={steps} steps_after_esc={after}",

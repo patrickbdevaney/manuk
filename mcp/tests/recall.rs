@@ -128,7 +128,6 @@ fn handle_of(text: &str, needle: &str) -> String {
     line[s + 1..e].to_string()
 }
 
-
 #[test]
 fn recall_returns_last_tree_and_age() {
     let url = serve();
@@ -143,10 +142,18 @@ fn recall_returns_last_tree_and_age() {
     }
     // a fresh server process recalls what the first one stored
     let mut c = Client::start_env(false, None, &store);
-    let host = url.trim_start_matches("http://").trim_end_matches('/').to_string();
+    let host = url
+        .trim_start_matches("http://")
+        .trim_end_matches('/')
+        .to_string();
     let r = c.tool("recall", json!({"site": host}));
-    assert!(r.contains("Add to cart") && r.contains("Recall fixture"), "{r}");
+    assert!(
+        r.contains("Add to cart") && r.contains("Recall fixture"),
+        "{r}"
+    );
     assert!(r.contains("stored ") && r.contains("s ago"), "{r}");
-    assert!(c.tool("recall", json!({"site": "never.test"})).contains("nothing stored"));
+    assert!(c
+        .tool("recall", json!({"site": "never.test"}))
+        .contains("nothing stored"));
     let _ = std::fs::remove_file(&store);
 }

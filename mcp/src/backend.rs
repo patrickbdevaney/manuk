@@ -199,7 +199,9 @@ impl Backend for AgentBrowser {
         match AgentBrowser::human_turn(self, &req).await {
             None => anyhow::bail!("no human surface is attached to this browser"),
             Some(manuk_agent::HumanTurn::Resumed) => Ok("resumed".into()),
-            Some(manuk_agent::HumanTurn::TimedOut) => Ok(format!("TIMED OUT after {timeout_ms} ms (the human did not resume)")),
+            Some(manuk_agent::HumanTurn::TimedOut) => Ok(format!(
+                "TIMED OUT after {timeout_ms} ms (the human did not resume)"
+            )),
         }
     }
     async fn page_eval(&mut self, js: &str) -> Result<String> {

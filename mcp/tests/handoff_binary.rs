@@ -17,7 +17,9 @@ struct Client {
 impl Client {
     fn start(script: Option<&std::path::Path>) -> Client {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_manuk-mcp"));
-        cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
+        cmd.stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null());
         match script {
             Some(p) => cmd.env("MANUK_HANDOFF_SCRIPT", p),
             None => cmd.env_remove("MANUK_HANDOFF_SCRIPT"),
@@ -25,7 +27,12 @@ impl Client {
         let mut child = cmd.spawn().expect("spawn manuk-mcp");
         let tx = child.stdin.take().unwrap();
         let rx = BufReader::new(child.stdout.take().unwrap());
-        let mut c = Client { child, tx, rx, id: 0 };
+        let mut c = Client {
+            child,
+            tx,
+            rx,
+            id: 0,
+        };
         c.rpc("initialize", json!({"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}));
         c.send(json!({"jsonrpc": "2.0", "method": "notifications/initialized"}));
         c
@@ -40,7 +47,10 @@ impl Client {
         self.send(json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}));
         loop {
             let mut line = String::new();
-            assert!(self.rx.read_line(&mut line).unwrap() > 0, "server closed stdout");
+            assert!(
+                self.rx.read_line(&mut line).unwrap() > 0,
+                "server closed stdout"
+            );
             let v: Value = serde_json::from_str(&line).unwrap();
             if v["id"] == json!(id) {
                 return v;
@@ -52,7 +62,12 @@ impl Client {
         let r = self.rpc("tools/call", json!({"name": name, "arguments": args}));
         let text = r["result"]["content"]
             .as_array()
-            .map(|c| c.iter().filter_map(|b| b["text"].as_str()).collect::<Vec<_>>().join("\n"))
+            .map(|c| {
+                c.iter()
+                    .filter_map(|b| b["text"].as_str())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            })
             .unwrap_or_default();
         (r["result"]["isError"] == json!(true), text)
     }
@@ -64,7 +79,10 @@ impl Drop for Client {
 }
 
 fn url() -> String {
-    format!("file://{}/tests/fixtures/handoff_gate.html", env!("CARGO_MANIFEST_DIR"))
+    format!(
+        "file://{}/tests/fixtures/handoff_gate.html",
+        env!("CARGO_MANIFEST_DIR")
+    )
 }
 
 fn script(name: &str, body: &str) -> std::path::PathBuf {
@@ -81,7 +99,10 @@ fn handoff_works_over_stdio_with_a_scripted_human() {
     let (err, r) = c.tool("handoff", json!({"reason": "log in", "timeout_ms": 5000}));
     assert!(!err, "{r}");
     assert!(r.contains("resumed"), "{r}");
-    assert!(r.contains("Welcome back, Pat"), "diff must carry the human's change: {r}");
+    assert!(
+        r.contains("Welcome back, Pat"),
+        "diff must carry the human's change: {r}"
+    );
     let (_, o) = c.tool("observe", json!({}));
     assert!(o.contains("Account settings"), "{o}");
 
