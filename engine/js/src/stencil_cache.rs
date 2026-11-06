@@ -54,12 +54,24 @@ impl RawVec {
 extern "C" {
     fn malloc(n: usize) -> *mut u8;
     fn free(p: *mut u8);
+    #[cfg(unix)]
     #[link_name = "_ZN2JS13EncodeStencilEP9JSContextPN2js8frontend32InitialStencilAndDelazificationsERN7mozilla6VectorIhLm0ENS6_17MallocAllocPolicyEEE"]
     fn encode_stencil(
         cx: *mut mozjs::jsapi::JSContext,
         st: *mut std::ffi::c_void,
         buf: *mut RawVec,
     ) -> u8;
+}
+
+// `JS::EncodeStencil` is linked by its Itanium-mangled name; MSVC cannot resolve it, so a non-unix
+// build never stores (every script is a cache miss and runs uncached).
+#[cfg(not(unix))]
+unsafe fn encode_stencil(
+    _cx: *mut mozjs::jsapi::JSContext,
+    _st: *mut std::ffi::c_void,
+    _buf: *mut RawVec,
+) -> u8 {
+    0
 }
 
 /// The build id: changes whenever the running binary does.

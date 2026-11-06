@@ -128,10 +128,27 @@ pub fn prelude_js() -> String {
     )
 }
 
+#[cfg(unix)]
 extern "C" {
     fn setenv(name: *const std::ffi::c_char, value: *const std::ffi::c_char, overwrite: i32)
         -> i32;
     fn tzset();
+}
+// The MSVC CRT has no `setenv`/`tzset`; these are its spellings.
+#[cfg(not(unix))]
+extern "C" {
+    #[link_name = "_putenv_s"]
+    fn putenv_s(name: *const std::ffi::c_char, value: *const std::ffi::c_char) -> i32;
+    #[link_name = "_tzset"]
+    fn tzset();
+}
+#[cfg(not(unix))]
+unsafe fn setenv(
+    name: *const std::ffi::c_char,
+    value: *const std::ffi::c_char,
+    _overwrite: i32,
+) -> i32 {
+    putenv_s(name, value)
 }
 
 /// Pin the process environment SpiderMonkey/ICU read for the default time zone and locale. Must run
@@ -153,9 +170,13 @@ pub fn pin_host_environment() {
 
 /// `JS::ResetTimeZone()`: drop SpiderMonkey's cached zone so the next Date use re-reads `TZ`.
 pub fn reset_js_time_zone() {
-    extern "C" {
-        #[link_name = "_ZN2JS13ResetTimeZoneEv"]
-        fn js_reset_time_zone();
+    // Itanium-mangled; no MSVC equivalent is linked, so non-unix keeps whatever zone it cached.
+    #[cfg(unix)]
+    {
+        extern "C" {
+            #[link_name = "_ZN2JS13ResetTimeZoneEv"]
+            fn js_reset_time_zone();
+        }
+        unsafe { js_reset_time_zone() }
     }
-    unsafe { js_reset_time_zone() }
 }

@@ -25,12 +25,20 @@ pub struct HelperThreadTask {
 
 type Callback = unsafe extern "C" fn(*mut HelperThreadTask);
 
+// The symbols are Itanium-mangled C++ names; MSVC mangles differently, so on non-unix targets the
+// pool is never wired in (the fork zygote that needs it is unix-only too) and these are inert.
+#[cfg(unix)]
 extern "C" {
     #[link_name = "_ZN2JS27SetHelperThreadTaskCallbackEPFvPNS_16HelperThreadTaskEEmm"]
     fn set_helper_thread_task_callback(cb: Callback, thread_count: usize, stack_size: usize);
     #[link_name = "_ZN2JS19RunHelperThreadTaskEPNS_16HelperThreadTaskE"]
     fn run_helper_thread_task(task: *mut HelperThreadTask);
 }
+#[cfg(not(unix))]
+unsafe fn set_helper_thread_task_callback(_cb: Callback, _thread_count: usize, _stack_size: usize) {
+}
+#[cfg(not(unix))]
+unsafe fn run_helper_thread_task(_task: *mut HelperThreadTask) {}
 
 const THREADS: usize = 4;
 const STACK: usize = 2 * 1024 * 1024;
