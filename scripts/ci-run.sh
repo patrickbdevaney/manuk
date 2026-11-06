@@ -24,6 +24,12 @@ _CI_LOG="$(mktemp)"
 "$@" 2>&1 | tee "$_CI_LOG"
 STATUS=${PIPESTATUS[0]}
 
+# Keep the whole log too: a workflow artifact is listable on the public API even when job logs are 403.
+if [ -n "${CI_LOG_DIR:-}" ]; then
+  mkdir -p "$CI_LOG_DIR"
+  cp "$_CI_LOG" "$CI_LOG_DIR/$(printf '%s' "$LABEL" | tr -c 'A-Za-z0-9._-' '_').log"
+fi
+
 if [ "$STATUS" -ne 0 ]; then
   echo "::group::${LABEL} FAILED (exit ${STATUS}) — the real error"
   # Prefer the compiler's own error lines; fall back to the tail if there are none (a build-script panic,

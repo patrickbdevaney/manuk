@@ -176,9 +176,20 @@ jobs:
         shell: bash
         run: ./scripts/mozjs-fetch.sh
       - name: build (headless, no default features)
+        env:
+          CI_LOG_DIR: ci-logs
         run: bash scripts/ci-run.sh "headless build (${{ matrix.os }})" cargo build --workspace --no-default-features
       - name: build (default features — pulls mozjs; the cross-OS gap)
+        env:
+          CI_LOG_DIR: ci-logs
         run: bash scripts/ci-run.sh "default build (${{ matrix.os }})" cargo build --workspace
+      - name: upload build logs (public API lists artifacts even when job logs are 403)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs-${{ matrix.os }}
+          path: ci-logs/
+          if-no-files-found: warn
 
   # Static release binaries per target. Also tracked known-gap until the cross-OS mozjs build is proven.
   static-binary:
