@@ -2480,6 +2480,36 @@ pub enum StepStatus {
 /// W3.17: the agent loop as a state machine. [`run_task`] drives it to completion; the GUI shell
 /// drives it one [`step`](Self::step) per winit turn so the window stays live and Esc can halt it
 /// between steps (the `Page` is `!Send`, so it cannot move to a worker thread).
+/// A step that has observed and is waiting on the model.
+pub struct PendingStep {
+    step: usize,
+    obs: Observation,
+    obs_text: String,
+    messages: Vec<Message>,
+}
+
+impl PendingStep {
+    pub fn messages(&self) -> &[Message] {
+        &self.messages
+    }
+}
+
+/// What [`TaskRun::begin_step`] decided.
+pub enum Begun {
+    /// Nothing to ask the model (already finished / out of steps).
+    Status(StepStatus),
+    Infer(PendingStep),
+}
+
+/// Retrying model call, exposed so a caller can run it on its own executor.
+pub async fn complete_messages(
+    backend: &dyn InferenceBackend,
+    messages: &[Message],
+    config: &AgentConfig,
+) -> Result<String> {
+    complete_with_retry(backend, messages, config).await
+}
+
 pub struct TaskRun {
     task: String,
     config: AgentConfig,
@@ -2544,11 +2574,27 @@ impl TaskRun {
         backend: &dyn InferenceBackend,
         tabs: &mut Option<&mut dyn TabController>,
     ) -> Result<StepStatus> {
+        let pending = match self.begin_step(browser, backend.supports_images()).await? {
+            Begun::Status(s) => return Ok(s),
+            Begun::Infer(p) => p,
+        };
+        let reply = complete_with_retry(backend, &pending.messages, &self.config).await;
+        self.finish_step(browser, pending, reply, tabs).await
+    }
+
+    /// First half of a step: observe and build the prompt. The only slow part of a step (the model
+    /// call) happens between this and [`finish_step`], so a UI thread that owns the `!Send` page can
+    /// run the call elsewhere and keep painting.
+    pub async fn begin_step(
+        &mut self,
+        browser: &mut AgentBrowser,
+        supports_images: bool,
+    ) -> Result<Begun> {
         if self.done {
-            return Ok(StepStatus::Finished);
+            return Ok(Begun::Status(StepStatus::Finished));
         }
         if self.step >= self.config.max_steps {
-            return Ok(StepStatus::Exhausted);
+            return Ok(Begun::Status(StepStatus::Exhausted));
         }
         let step = self.step;
         self.step += 1;
@@ -2563,7 +2609,7 @@ impl TaskRun {
         };
         let obs_text = obs.to_prompt_with(&policy);
         // G-d: record what the agent perceived, before it decides anything.
-        let shot = if policy.include_screenshot && backend.supports_images() {
+        let shot = if policy.include_screenshot && supports_images {
             browser.load_visuals().await;
             browser.screenshot_png().ok()
         } else {
@@ -2601,9 +2647,19 @@ impl TaskRun {
             content: current,
         });
 
-        let reply = complete_with_retry(backend, &messages, &self.config)
-            .await
-            .with_context(|| format!("inference failed at step {}", step + 1))?;
+        Ok(Begun::Infer(PendingStep { step, obs, obs_text, messages }))
+    }
+
+    /// Second half of a step: act on the model's `reply` (or its error).
+    pub async fn finish_step(
+        &mut self,
+        browser: &mut AgentBrowser,
+        pending: PendingStep,
+        reply: Result<String>,
+        tabs: &mut Option<&mut dyn TabController>,
+    ) -> Result<StepStatus> {
+        let PendingStep { step, obs, obs_text, .. } = pending;
+        let reply = reply.with_context(|| format!("inference failed at step {}", step + 1))?;
         // G-d: the model is the non-reproducible part, so its reply is stored verbatim.
         self.log.push(replay::Event::Model {
             step,

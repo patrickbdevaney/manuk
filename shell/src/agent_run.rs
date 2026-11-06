@@ -12,7 +12,8 @@
 //! effect diff of what the human changed, fenced as untrusted, before its next observation.
 
 use manuk_agent::{
-    AgentBrowser, AgentConfig, Handoff, InferenceBackend, StepStatus, TabController, TaskRun,
+    AgentBrowser, AgentConfig, Begun, Handoff, InferenceBackend, PendingStep, StepStatus,
+    TabController, TaskRun,
 };
 use manuk_consent::HandoffConsent;
 
@@ -29,13 +30,22 @@ pub enum Phase {
     Failed(String),
 }
 
+struct Inflight {
+    pending: PendingStep,
+    call: tokio::task::JoinHandle<anyhow::Result<String>>,
+    before_len: usize,
+}
+
 pub struct AgentRun {
     phase: Phase,
     browser: AgentBrowser,
     run: Option<TaskRun>,
-    backend: Box<dyn InferenceBackend>,
+    backend: std::sync::Arc<dyn InferenceBackend>,
     config: AgentConfig,
     task: String,
+    /// A step whose model call runs on the tokio pool; polled (never awaited) each winit turn so a
+    /// slow model cannot stall the window. The `!Send` page stays here; only the prompt crosses.
+    inflight: Option<Inflight>,
     log: Vec<String>,
     /// What the agent last saw, taken when the human takes over (for the effect diff).
     before: Option<String>,
@@ -105,9 +115,10 @@ impl AgentRun {
             phase: Phase::Running,
             browser,
             run: Some(run),
-            backend,
+            backend: backend.into(),
             config,
             task: task.to_string(),
+            inflight: None,
             log: vec![format!("task: {}", clip(task, 60))],
             before: None,
             human_page: None,
@@ -170,18 +181,46 @@ impl AgentRun {
         tabs: Option<&mut dyn TabController>,
     ) -> bool {
         if self.stop_requested && matches!(self.phase, Phase::Running | Phase::HumanTurn) {
+            self.abort_inflight();
             self.finish_run(Phase::Stopped);
             return true;
         }
         if self.phase != Phase::Running {
             return false;
         }
+        let mut tabs = tabs;
         let Some(run) = self.run.as_mut() else {
             return false;
         };
-        let mut tabs = tabs;
-        let before_len = run.outcome().transcript.len();
-        let res = rt.block_on(run.step(&mut self.browser, &*self.backend, &mut tabs));
+        let (before_len, res) = if let Some(inf) = self.inflight.take() {
+            if !inf.call.is_finished() {
+                self.inflight = Some(inf);
+                return false;
+            }
+            let reply = match rt.block_on(inf.call) {
+                Ok(r) => r,
+                Err(e) => Err(anyhow::anyhow!("inference task failed: {e}")),
+            };
+            let res = rt.block_on(run.finish_step(&mut self.browser, inf.pending, reply, &mut tabs));
+            (inf.before_len, res)
+        } else {
+            let before_len = run.outcome().transcript.len();
+            match rt.block_on(run.begin_step(&mut self.browser, self.backend.supports_images())) {
+                Ok(Begun::Infer(pending)) => {
+                    let messages = pending.messages().to_vec();
+                    let backend = self.backend.clone();
+                    let cfg = self.config.clone();
+                    let call = rt.spawn(async move {
+                        manuk_agent::complete_messages(&*backend, &messages, &cfg).await
+                    });
+                    self.inflight = Some(Inflight { pending, call, before_len });
+                    return false;
+                }
+                Ok(Begun::Status(s)) => (before_len, Ok(s)),
+                Err(e) => (before_len, Err(e)),
+            }
+        };
+        let Some(run) = self.run.as_mut() else { return true };
         let new: Vec<String> = run.outcome().transcript[before_len..].to_vec();
         let answer = run.outcome().answer.clone();
         for l in new {
@@ -202,6 +241,7 @@ impl AgentRun {
         if self.phase != Phase::Running {
             return None;
         }
+        self.abort_inflight();
         self.before = self.observe_text();
         let h = self.browser.release()?;
         self.held = Some(consent);
@@ -246,6 +286,12 @@ impl AgentRun {
 
     pub fn config(&self) -> &AgentConfig {
         &self.config
+    }
+
+    fn abort_inflight(&mut self) {
+        if let Some(inf) = self.inflight.take() {
+            inf.call.abort();
+        }
     }
 
     fn finish_run(&mut self, phase: Phase) {
@@ -353,12 +399,23 @@ mod tests {
         Box::new(ReplayBackend::new(replies))
     }
 
+    /// Pump until the step in flight completes (the model call is polled, not awaited).
+    fn one_step(run: &mut AgentRun, rt: &tokio::runtime::Runtime) {
+        for _ in 0..5000 {
+            if run.pump(rt, None) {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        panic!("step never completed");
+    }
+
     fn cfg(max: usize) -> AgentConfig {
         AgentConfig { max_steps: max, ..AgentConfig::default() }
     }
 
     fn rt() -> tokio::runtime::Runtime {
-        tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap()
+        tokio::runtime::Builder::new_multi_thread().worker_threads(2).enable_all().build().unwrap()
     }
 
     /// Gate 1: a 10-step task, one step per turn, with a paint each turn: the frames stay
@@ -378,12 +435,13 @@ mod tests {
             last = now;
             ft.begin();
             run.pump(&rt, None);
+            std::thread::sleep(Duration::from_millis(1)); // the real loop's vsync/poll gap
             // The human view repaints between steps (a stand-in for `RedrawRequested`).
             let canvas = manuk_paint::Canvas::new(1024, 768, manuk_css::Rgba::WHITE);
             std::hint::black_box(canvas.rgba_bytes().len());
             ft.end();
             turns += 1;
-            assert!(turns < 50, "run did not terminate");
+            assert!(turns < 5000, "run did not terminate");
         }
         assert_eq!(run.steps(), 10, "log: {:?}", run.log_lines());
         assert_eq!(run.phase(), &Phase::Done("ok".into()));
@@ -405,7 +463,7 @@ mod tests {
         let rt = rt();
         let mut run = AgentRun::start("t", handoff(&fonts), test_mint::consent(), cfg(10), scripted(9), (1024, 768));
         for _ in 0..3 {
-            run.pump(&rt, None);
+            one_step(&mut run, &rt);
         }
         assert_eq!(run.steps(), 3);
         run.request_stop(); // Esc between turns
@@ -415,6 +473,37 @@ mod tests {
         assert!(!run.pump(&rt, None), "no further step after Stop");
     }
 
+    /// Gate 4 (W3.17.b): a model that takes 3 s per call must not stall the window. Every `pump`
+    /// returns promptly while the call is in flight, and an Esc mid-call lands on the next turn.
+    #[test]
+    fn slow_model_never_blocks_a_turn_and_esc_lands_mid_step() {
+        let fonts = FontContext::new();
+        let rt = rt();
+        let slow = FixtureBackend::from_spec("5:3000").unwrap();
+        let mut run = AgentRun::start("t", handoff(&fonts), test_mint::consent(), cfg(10), Box::new(slow), (1024, 768));
+        let started = Instant::now();
+        let mut max_turn = Duration::ZERO;
+        while started.elapsed() < Duration::from_millis(1200) {
+            let t = Instant::now();
+            run.pump(&rt, None);
+            max_turn = max_turn.max(t.elapsed());
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(run.steps(), 1, "step 1 is still waiting on the model");
+        assert!(run.is_active());
+        run.request_stop();
+        let t = Instant::now();
+        run.pump(&rt, None);
+        let esc = t.elapsed();
+        eprintln!("slow model: max turn {max_turn:?}, esc latency {esc:?}");
+        assert_eq!(run.phase(), &Phase::Stopped);
+        if !cfg!(debug_assertions) {
+            assert!(max_turn < Duration::from_millis(500), "turn blocked {max_turn:?}");
+        }
+        assert!(max_turn < Duration::from_millis(1500), "a turn waited on the 3 s model call: {max_turn:?}");
+        assert!(esc < Duration::from_millis(500), "esc took {esc:?}");
+    }
+
     /// Gate 3: take over -> the human types -> resume returns an effect diff, and the agent is
     /// told about it on its next step.
     #[test]
@@ -422,7 +511,7 @@ mod tests {
         let fonts = FontContext::new();
         let rt = rt();
         let mut run = AgentRun::start("t", handoff(&fonts), test_mint::consent(), cfg(10), scripted(5), (1024, 768));
-        run.pump(&rt, None);
+        one_step(&mut run, &rt);
         let mut h = run.take_over(test_mint::consent()).expect("running run can be taken over");
         assert_eq!(run.phase(), &Phase::HumanTurn);
         assert!(!run.agent_has_page());
@@ -436,7 +525,7 @@ mod tests {
         let effect = run.last_effect().expect("an effect diff");
         assert!(effect.contains("HUMAN-TYPED-482913"), "diff must show what the human typed: {effect}");
         assert_eq!(run.phase(), &Phase::Running);
-        run.pump(&rt, None);
+        one_step(&mut run, &rt);
         assert!(run.steps() >= 2);
         // Unchanged page => "no change" (the diff can say nothing happened).
         assert_eq!(effect_diff("a\nb", "b\na"), "no change");
