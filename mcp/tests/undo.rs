@@ -131,7 +131,10 @@ fn handle_of(text: &str, needle: &str) -> String {
 }
 
 fn undo_label(t: &str) -> String {
-    let a = t.find("undo: restore(\"").unwrap_or_else(|| panic!("no undo line in:\n{t}")) + 15;
+    let a = t
+        .find("undo: restore(\"")
+        .unwrap_or_else(|| panic!("no undo line in:\n{t}"))
+        + 15;
     let b = t[a..].find('"').unwrap() + a;
     t[a..b].to_string()
 }
@@ -150,7 +153,10 @@ fn failed_act_carries_undo_and_restore_works() {
     let obs = c.tool("observe", json!({}));
     assert!(obs.contains("Broken save"), "{obs}");
     // A successful act carries no undo line.
-    let ok = c.tool("type", json!({"handle": handle_of(&obs, "Name"), "text": "x"}));
+    let ok = c.tool(
+        "type",
+        json!({"handle": handle_of(&obs, "Name"), "text": "x"}),
+    );
     assert!(!ok.contains("undo:"), "{ok}");
 }
 

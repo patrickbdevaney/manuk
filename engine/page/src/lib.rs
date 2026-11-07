@@ -2721,6 +2721,19 @@ impl Drop for ReflowScope {
     }
 }
 
+/// W5.L3: one JSON response the page fetched. `body` is `None` when it was over [`DATA_LOG_BODY_MAX`].
+#[derive(Debug, Clone)]
+pub struct DataResponse {
+    pub url: String,
+    pub method: String,
+    pub status: u16,
+    pub content_type: String,
+    pub len: usize,
+    pub body: Option<String>,
+}
+const DATA_LOG_MAX: usize = 64;
+const DATA_LOG_BODY_MAX: usize = 1 << 20;
+
 /// A loaded, styled, laid-out page. Retains the DOM + computed styles so it can be
 /// re-laid-out at a new width (window resize / different agent viewport) and
 /// queried for links/text without re-fetching.
@@ -2779,6 +2792,9 @@ pub struct Page {
     /// [`take_form_submits`](Page::take_form_submits). `RefCell` because that getter takes `&self`
     /// (it is a drain, and every other `take_*` on `Page` has the same shape).
     pending_submits: std::cell::RefCell<Vec<(manuk_dom::NodeId, Option<manuk_dom::NodeId>)>>,
+    /// W5.L3: JSON-looking responses the page's own `fetch`/XHR received, in arrival order, for
+    /// `page_data`. Bodies over [`DATA_LOG_BODY_MAX`] keep only their length.
+    data_log: std::cell::RefCell<Vec<DataResponse>>,
     /// Whether any element uses `position:sticky` — gates the per-frame sticky paint pass so
     /// non-sticky pages pay nothing.
     has_sticky: bool,
@@ -5457,6 +5473,13 @@ impl Page {
             // how a five-request page becomes a five-deadline page.
             let base = self.final_url.clone();
             let left = budget.saturating_sub(started.elapsed());
+            let id_meta: std::collections::HashMap<u32, (String, String)> = reqs
+                .iter()
+                .map(|(id, raw, m, _, _)| {
+                    let m = if m.is_empty() { "GET" } else { m.as_str() };
+                    (*id, (resolve_url(&base, raw), m.to_ascii_uppercase()))
+                })
+                .collect();
             let all = futures_util::future::join_all(reqs.into_iter().map(
                 |(id, raw, method, headers, body)| {
                     let url = resolve_url(&base, &raw);
@@ -5572,6 +5595,9 @@ impl Page {
                          settled. Each settle runs the page's own JS, and this page is not converging."
                     );
                     return;
+                }
+                if let Some((url, method)) = id_meta.get(&id) {
+                    self.record_data(url, method, status, &body, &headers);
                 }
                 self.resolve_fetch(id, status, &body, &headers, fonts, viewport_width);
             }
@@ -9244,6 +9270,7 @@ impl Page {
         );
         let mut page = Page {
             pending_submits: std::cell::RefCell::new(Vec::new()),
+            data_log: std::cell::RefCell::new(Vec::new()),
             final_url: final_url.to_string(),
             title,
             content_height,
@@ -10318,6 +10345,51 @@ impl Page {
         self.eval_for_test(&format!("__timeBudget = (__now || 0) + {ms};"));
         #[cfg(not(feature = "spidermonkey"))]
         let _ = ms;
+    }
+
+    /// W5.L3: remember a JSON-looking response the page itself fetched (see `data_log`).
+    fn record_data(
+        &self,
+        url: &str,
+        method: &str,
+        status: u16,
+        body: &str,
+        headers: &[(String, String)],
+    ) {
+        let ctype = headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case("content-type"))
+            .map(|(_, v)| v.clone())
+            .unwrap_or_default();
+        let t = body.trim_start();
+        if status == 0
+            || !(ctype.to_ascii_lowercase().contains("json")
+                || t.starts_with('{')
+                || t.starts_with('['))
+        {
+            return;
+        }
+        let mut log = self.data_log.borrow_mut();
+        if log.len() >= DATA_LOG_MAX {
+            log.remove(0);
+        }
+        log.push(DataResponse {
+            url: url.to_string(),
+            method: method.to_string(),
+            status,
+            content_type: ctype,
+            len: body.len(),
+            body: if body.len() <= DATA_LOG_BODY_MAX {
+                Some(body.to_string())
+            } else {
+                None
+            },
+        });
+    }
+
+    /// W5.L3: the JSON responses the page's own `fetch`/XHR received, oldest first.
+    pub fn data_responses(&self) -> Vec<DataResponse> {
+        self.data_log.borrow().clone()
     }
 
     /// W3.12: the page's own queues, read in-process: `(timer delays in virtual ms ascending, urls of

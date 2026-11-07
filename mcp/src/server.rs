@@ -101,12 +101,21 @@ pub fn tools() -> Vec<Tool> {
     let t = |n: &'static str, d: &'static str, mut s: Map<String, Value>| {
         if let Some(Value::Object(p)) = s.get_mut("properties") {
             if matches!(n, "act" | "type" | "fill_form") {
-                p.insert("detail".into(), json!({"type": "boolean", "description": "full effect diff"}));
+                p.insert(
+                    "detail".into(),
+                    json!({"type": "boolean", "description": "full effect diff"}),
+                );
             }
             if matches!(n, "navigate" | "act" | "type" | "fill_form") {
-                p.insert("confirm".into(), json!({"type": "boolean", "description": "user approved CONFIRM REQUIRED"}));
+                p.insert(
+                    "confirm".into(),
+                    json!({"type": "boolean", "description": "user approved CONFIRM REQUIRED"}),
+                );
             }
-            p.insert("page".into(), json!({"type": "string", "description": "page handle (or \"new\")"}));
+            p.insert(
+                "page".into(),
+                json!({"type": "string", "description": "page handle (or \"new\")"}),
+            );
         }
         let (ro, destructive) = crate::policy::annotations(n);
         let mut ann = rmcp::model::ToolAnnotations::new().read_only(ro);
@@ -117,7 +126,10 @@ pub fn tools() -> Vec<Tool> {
         ));
         let tool = Tool::new(n, d, Arc::new(s)).annotate(ann);
         // R-B1/W5.T3: the six core tools load upfront (Claude Code otherwise defers every MCP tool behind a ToolSearch turn).
-        if matches!(n, "navigate" | "observe" | "act" | "fill_form" | "extract" | "type") {
+        if matches!(
+            n,
+            "navigate" | "observe" | "act" | "fill_form" | "extract" | "type"
+        ) {
             let Value::Object(m) = json!({"anthropic/alwaysLoad": true}) else {
                 unreachable!()
             };
@@ -142,6 +154,7 @@ pub fn tools() -> Vec<Tool> {
         t("download", "Click `handle`, wait for its download (needs --download-dir).", schema(json!({"handle": {"type": "string"}}), &[])),
         t("scroll", "Scroll to handle `to` or by `dy` px; returns new nodes.", schema(json!({"to": {"type": "string"}, "dy": {"type": "number"}}), &[])),
         t("extract", "Read page content: format text (default), markdown or table; `query` keeps top passages; long output pages by offset. E.g. extract(format=\"table\", scope=\"h12\")", schema(json!({"format": {"type": "string", "enum": ["markdown", "text", "table"]}, "scope": {"type": "string"}, "offset": {"type": "integer"}, "query": {"type": "string"}, "include_hidden": {"type": "boolean"}}), &[])),
+        t("page_data", "JSON the page itself fetched (XHR/fetch, same-origin, <=64 KB) with request URLs; cheaper than parsing the DOM.", schema(json!({}), &[])),
         t("find", "Rank nodes for a query; up to 8 handles.", schema(json!({"query": {"type": "string"}}), &["query"])),
         t("storage_state", "Export (default) or import cookies + localStorage JSON.", schema(json!({"action": {"type": "string", "enum": ["export", "import"]}, "path": {"type": "string"}}), &[])),
         t("handoff", "Ask the human to act for you (log in, CAPTCHA, card); returns the effect diff after Resume. Needs the GUI shell.", schema(json!({"reason": {"type": "string", "description": "shown to the human"}, "timeout_ms": {"type": "integer"}}), &["reason"])),
@@ -208,7 +221,12 @@ impl ServerHandler for ManukMcp {
     ) -> Result<ListToolsResult, McpError> {
         let mut r = ListToolsResult::default();
         // W5.L2: manual checkpoint is not in the default set (the hub checkpoints before state changes); still callable.
-        r.tools = self.tools.iter().filter(|t| t.name != "checkpoint").cloned().collect();
+        r.tools = self
+            .tools
+            .iter()
+            .filter(|t| t.name != "checkpoint")
+            .cloned()
+            .collect();
         let dynamic = self.webmcp().await;
         self.webmcp_sig.store(
             crate::hub::fnv(Value::Array(dynamic.clone()).to_string().as_bytes()),
@@ -247,6 +265,7 @@ impl ServerHandler for ManukMcp {
             tool.as_str(),
             "observe"
                 | "extract"
+                | "page_data"
                 | "find"
                 | "screenshot"
                 | "storage_state"

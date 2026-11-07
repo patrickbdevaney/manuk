@@ -608,6 +608,14 @@ impl AgentBrowser {
         }
     }
 
+    /// W5.L3: JSON responses the page's own fetch/XHR received (see `Page::data_responses`).
+    pub fn data_responses(&self) -> Vec<manuk_page::DataResponse> {
+        self.page
+            .as_ref()
+            .map(|p| p.data_responses())
+            .unwrap_or_default()
+    }
+
     /// W3.12: the page's pending fetches and timers, read from the engine's own queues.
     pub fn pending(&self) -> Pending {
         let (timers, fetches) = self

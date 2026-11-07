@@ -30,7 +30,7 @@ use manuk_dom::NodeId;
 use serde_json::{json, Value};
 use tungstenite::{Message, WebSocket};
 
-use crate::backend::Backend;
+use crate::backend::{Backend, DataEntry};
 
 // ───────────────────────────── CDP transport ─────────────────────────────
 
@@ -354,11 +354,12 @@ fn ws_secret_guard() -> String {
     WS_SECRET_GUARD.replace("__WG__", &json!(WORKER_SECRET_GUARD).to_string())
 }
 
-const SETTLE_PROBE: &str = r#"(function(){if(window.__mk)return;var S=window.__mk={u:{},t:{},n:0};
-var of=window.fetch;if(of){window.fetch=function(a){var k=++S.n;S.u[k]=String((a&&a.url)||a);var d=function(){delete S.u[k];};var p=of.apply(this,arguments);p.then(d,d);return p;};}
+const SETTLE_PROBE: &str = r#"(function(){if(window.__mk)return;var S=window.__mk={u:{},t:{},n:0,d:[]};
+var rec=function(u,m,st,ct,t){try{t=String(t||'');var h=t.replace(/^\s+/,'').charAt(0);if(!st||!(/json/i.test(ct||'')||h==='{'||h==='['))return;if(S.d.length>=64)S.d.shift();S.d.push({url:new URL(u,location.href).href,method:String(m||'GET').toUpperCase(),status:st,len:t.length,body:t.length<=1048576?t:null});}catch(e){}};
+var of=window.fetch;if(of){window.fetch=function(a,o){var k=++S.n;S.u[k]=String((a&&a.url)||a);var d=function(){delete S.u[k];};var p=of.apply(this,arguments);var m=(o&&o.method)||(a&&a.method)||'GET';p.then(function(r){d();try{r.clone().text().then(function(t){rec(r.url||S.u[k],m,r.status,r.headers.get('content-type'),t)},function(){})}catch(e){}},d);return p;};}
 var xs=XMLHttpRequest.prototype.send,xo=XMLHttpRequest.prototype.open;
-XMLHttpRequest.prototype.open=function(m,u){this.__mku=String(u);return xo.apply(this,arguments);};
-XMLHttpRequest.prototype.send=function(){var k=++S.n;S.u[k]=this.__mku||'?';this.addEventListener('loadend',function(){delete S.u[k];});return xs.apply(this,arguments);};
+XMLHttpRequest.prototype.open=function(m,u){this.__mku=String(u);this.__mkm=m;return xo.apply(this,arguments);};
+XMLHttpRequest.prototype.send=function(){var k=++S.n;S.u[k]=this.__mku||'?';var x=this;this.addEventListener('loadend',function(){delete S.u[k];try{if(x.responseType===''||x.responseType==='text')rec(x.__mku,x.__mkm,x.status,x.getResponseHeader('content-type'),x.responseText)}catch(e){}});return xs.apply(this,arguments);};
 var st=window.setTimeout,ct=window.clearTimeout;
 window.setTimeout=function(cb,ms){var a=[].slice.call(arguments),id;if(typeof cb==='function'){a[0]=function(){delete S.t[id];return cb.apply(this,arguments);};}
 id=st.apply(window,a);S.t[id]=performance.now()+(+ms||0);return id;};
@@ -2555,6 +2556,26 @@ impl Backend for CdpBackend {
                 "a pointer drag (no dragstart)"
             }
         ))
+    }
+    async fn page_data(&mut self) -> Result<Vec<DataEntry>> {
+        // A beat for response bodies still being read (the settle probe clears a request on headers).
+        if mutated("no-data") {
+            return Ok(Vec::new());
+        }
+        let v = self
+            .page_eval("new Promise(function(r){setTimeout(function(){r(JSON.stringify((window.__mk&&window.__mk.d)||[]))},60)})")
+            .await?;
+        let rows: Vec<Value> = serde_json::from_str(&v).unwrap_or_default();
+        Ok(rows
+            .into_iter()
+            .map(|r| DataEntry {
+                url: r["url"].as_str().unwrap_or("").to_string(),
+                method: r["method"].as_str().unwrap_or("GET").to_string(),
+                status: r["status"].as_u64().unwrap_or(0) as u16,
+                len: r["len"].as_u64().unwrap_or(0) as usize,
+                body: r["body"].as_str().map(str::to_string),
+            })
+            .collect())
     }
     async fn page_eval(&mut self, js: &str) -> Result<String> {
         let r = self.cdp.call(

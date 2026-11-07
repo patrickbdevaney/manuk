@@ -7,6 +7,16 @@ use manuk_a11y::{A11yNode, Rect};
 use manuk_agent::{Activation, AgentBrowser, NodeFacts};
 use manuk_dom::NodeId;
 
+/// W5.L3: one JSON response a page fetched. `body` is `None` when the backend dropped it as huge.
+#[derive(Debug, Clone)]
+pub struct DataEntry {
+    pub url: String,
+    pub method: String,
+    pub status: u16,
+    pub len: usize,
+    pub body: Option<String>,
+}
+
 /// Not `Send`: the engine's page state is single-threaded, so the server pins a backend to one
 /// thread (see `server`) instead of forcing `Send` onto every implementation.
 #[async_trait(?Send)]
@@ -78,6 +88,11 @@ pub trait Backend {
     /// W3.8: wait up to `secs` for a download to finish; its result lines.
     async fn wait_download(&mut self, _secs: u64) -> Vec<String> {
         Vec::new()
+    }
+    /// W5.L3: JSON responses the page's own fetch/XHR received, oldest first (unfiltered: the session
+    /// applies the origin and size rules).
+    async fn page_data(&mut self) -> Result<Vec<DataEntry>> {
+        anyhow::bail!("this backend cannot see the page's own network traffic")
     }
     /// W3.20: evaluate `js` in the page (awaiting a returned promise) and return its string result. Only a
     /// backend that can read a script's value back has it; the engine's embedder discards results.
@@ -203,6 +218,19 @@ impl Backend for AgentBrowser {
                 "TIMED OUT after {timeout_ms} ms (the human did not resume)"
             )),
         }
+    }
+    async fn page_data(&mut self) -> Result<Vec<DataEntry>> {
+        Ok(self
+            .data_responses()
+            .into_iter()
+            .map(|r| DataEntry {
+                url: r.url,
+                method: r.method,
+                status: r.status,
+                len: r.len,
+                body: r.body,
+            })
+            .collect())
     }
     async fn page_eval(&mut self, js: &str) -> Result<String> {
         AgentBrowser::eval_value(self, js).await

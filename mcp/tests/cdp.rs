@@ -204,7 +204,10 @@ fn remount(mutate: Option<&str>) -> (bool, String) {
     assert!(!err, "{nav}");
     let save = handle_of(&nav, "button \"Save\"");
     std::thread::sleep(std::time::Duration::from_millis(4000));
-    c.tool("act", json!({"handle": save, "action": "click", "detail": true}))
+    c.tool(
+        "act",
+        json!({"handle": save, "action": "click", "detail": true}),
+    )
 }
 
 #[test]

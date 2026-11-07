@@ -28,7 +28,11 @@ fn page(i: usize) -> String {
         1 => {
             b.push_str("<table><tr><th>Name</th><th>Qty</th><th>Price</th><th>Status</th></tr>");
             for r in 0..25 {
-                b.push_str(&format!("<tr><td>Item {r}</td><td>{}</td><td>${}.99</td><td>in stock</td></tr>", r + 1, r * 3 + 2));
+                b.push_str(&format!(
+                    "<tr><td>Item {r}</td><td>{}</td><td>${}.99</td><td>in stock</td></tr>",
+                    r + 1,
+                    r * 3 + 2
+                ));
             }
             b.push_str("</table><button>Export</button>");
         }
@@ -108,7 +112,12 @@ impl Client {
             .expect("spawn manuk-mcp");
         let tx = child.stdin.take().unwrap();
         let rx = BufReader::new(child.stdout.take().unwrap());
-        let mut c = Client { child, tx, rx, id: 0 };
+        let mut c = Client {
+            child,
+            tx,
+            rx,
+            id: 0,
+        };
         c.rpc("initialize", json!({"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}));
         c.send(json!({"jsonrpc": "2.0", "method": "notifications/initialized"}));
         c
@@ -123,7 +132,10 @@ impl Client {
         self.send(json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}));
         loop {
             let mut line = String::new();
-            assert!(self.rx.read_line(&mut line).unwrap() > 0, "server closed stdout");
+            assert!(
+                self.rx.read_line(&mut line).unwrap() > 0,
+                "server closed stdout"
+            );
             let v: Value = serde_json::from_str(&line).unwrap();
             if v["id"] == json!(id) {
                 return v;
@@ -141,7 +153,10 @@ impl Client {
             .filter_map(|b| b["text"].as_str())
             .collect::<Vec<_>>()
             .join("\n");
-        assert!(!res["isError"].as_bool().unwrap_or(false), "{name} failed: {text}");
+        assert!(
+            !res["isError"].as_bool().unwrap_or(false),
+            "{name} failed: {text}"
+        );
         text
     }
 }
@@ -190,7 +205,10 @@ fn cuts(chrome: bool) -> (f64, f64) {
         old.iter().sum::<usize>(),
         new.iter().sum::<usize>()
     );
-    (m, 1.0 - new.iter().sum::<usize>() as f64 / old.iter().sum::<usize>() as f64)
+    (
+        m,
+        1.0 - new.iter().sum::<usize>() as f64 / old.iter().sum::<usize>() as f64,
+    )
 }
 
 fn chrome_present() -> bool {
@@ -237,26 +255,44 @@ fn handles_mark_operable_elements_only_and_stay_stable() {
     let full = c.tool("observe", json!({"budget_tokens": 100000}));
     for l in full.lines().filter(|l| l.contains("[h")) {
         assert!(
-            ["link", "button", "textbox", "checkbox"].iter().any(|r| l.contains(&format!("] {r}"))),
+            ["link", "button", "textbox", "checkbox"]
+                .iter()
+                .any(|r| l.contains(&format!("] {r}"))),
             "handle on a non-operable line: {l}"
         );
     }
     // a table row is one line carrying its cells
     assert!(
-        full.lines().any(|l| l.starts_with("- row") && l.contains("Item 3 | 4 |")),
+        full.lines()
+            .any(|l| l.starts_with("- row") && l.contains("Item 3 | 4 |")),
         "no one-line row in:\n{full}"
     );
-    assert!(!full.contains("- cell"), "cells not folded into rows:\n{full}");
+    assert!(
+        !full.contains("- cell"),
+        "cells not folded into rows:\n{full}"
+    );
     let h = full
         .lines()
         .find(|l| l.contains("button \"Export\""))
         .map(|l| l[l.find("[h").unwrap()..l.find(']').unwrap() + 1].to_string())
         .unwrap();
-    let inter = c.tool("observe", json!({"mode": "interactive", "budget_tokens": 100000}));
+    let inter = c.tool(
+        "observe",
+        json!({"mode": "interactive", "budget_tokens": 100000}),
+    );
     assert!(inter.contains(&format!("{h} button \"Export\"")), "{inter}");
     assert!(!inter.contains("- row"), "{inter}");
-    let content = c.tool("observe", json!({"mode": "content", "budget_tokens": 100000}));
-    assert!(content.contains("- row") && !content.contains("[h"), "{content}");
+    let content = c.tool(
+        "observe",
+        json!({"mode": "content", "budget_tokens": 100000}),
+    );
+    assert!(
+        content.contains("- row") && !content.contains("[h"),
+        "{content}"
+    );
     // the handle still resolves after the other modes
-    c.tool("act", json!({"handle": h.trim_matches(|ch| ch == '[' || ch == ']'), "action": "click"}));
+    c.tool(
+        "act",
+        json!({"handle": h.trim_matches(|ch| ch == '[' || ch == ']'), "action": "click"}),
+    );
 }

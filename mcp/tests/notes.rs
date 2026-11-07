@@ -84,7 +84,10 @@ impl Drop for Client {
 }
 
 fn fixture(name: &str) -> String {
-    format!("file://{}/tests/fixtures/{name}", env!("CARGO_MANIFEST_DIR"))
+    format!(
+        "file://{}/tests/fixtures/{name}",
+        env!("CARGO_MANIFEST_DIR")
+    )
 }
 
 fn tmp(tag: &str) -> std::path::PathBuf {
@@ -95,11 +98,19 @@ fn tmp(tag: &str) -> std::path::PathBuf {
 }
 
 fn page_of(text: &str) -> String {
-    text.lines().rev().find_map(|l| l.strip_prefix("page: ")).unwrap_or_else(|| panic!("no page in:\n{text}")).to_string()
+    text.lines()
+        .rev()
+        .find_map(|l| l.strip_prefix("page: "))
+        .unwrap_or_else(|| panic!("no page in:\n{text}"))
+        .to_string()
 }
 
 fn ckpt_of(t: &str) -> String {
-    t.split_whitespace().skip_while(|w| *w != "checkpoint").nth(1).unwrap().to_string()
+    t.split_whitespace()
+        .skip_while(|w| *w != "checkpoint")
+        .nth(1)
+        .unwrap()
+        .to_string()
 }
 
 fn header(t: &str) -> &str {
@@ -110,25 +121,41 @@ fn header(t: &str) -> &str {
 fn notes_survive_navigate_restore_fork() {
     let dir = tmp("a");
     let mut c = Client::start(&dir);
-    let (e, r) = c.tool("note", json!({"key": "goal", "value": "buy the red mug under $20"}));
+    let (e, r) = c.tool(
+        "note",
+        json!({"key": "goal", "value": "buy the red mug under $20"}),
+    );
     assert!(!e, "{r}");
     c.tool("note", json!({"key": "seen", "value": "shop A: $24"}));
     let (_, nav) = c.tool("navigate", json!({"url": fixture("shop.html")}));
     let (_, ck) = c.tool("checkpoint", json!({"page": page_of(&nav)}));
     let cid = ckpt_of(&ck);
     let (_, obs) = c.tool("observe", json!({"mode": "full"}));
-    assert!(header(&obs).starts_with("notes(2): goal=buy the red mug"), "{obs}");
-    assert!(header(&obs).len() <= 240, "header too long: {}", header(&obs));
+    assert!(
+        header(&obs).starts_with("notes(2): goal=buy the red mug"),
+        "{obs}"
+    );
+    assert!(
+        header(&obs).len() <= 240,
+        "header too long: {}",
+        header(&obs)
+    );
     // a note added after the checkpoint, then restore: nothing dropped
     c.tool("note", json!({"key": "later", "value": "x"}));
     let (e, r) = c.tool("restore", json!({"checkpoint": cid}));
     assert!(!e, "{r}");
     let (_, obs) = c.tool("observe", json!({"mode": "full", "page": page_of(&r)}));
-    assert!(header(&obs).starts_with("notes(3):") && obs.contains("later=x"), "{obs}");
+    assert!(
+        header(&obs).starts_with("notes(3):") && obs.contains("later=x"),
+        "{obs}"
+    );
     let (e, f) = c.tool("fork", json!({"checkpoint": cid}));
     assert!(!e, "{f}");
     let (_, obs) = c.tool("observe", json!({"mode": "full", "page": page_of(&f)}));
-    assert!(header(&obs).contains("goal=buy the red mug"), "fork dropped notes:\n{obs}");
+    assert!(
+        header(&obs).contains("goal=buy the red mug"),
+        "fork dropped notes:\n{obs}"
+    );
     let (_, all) = c.tool("note", json!({}));
     assert!(all.contains("seen: shop A: $24"), "{all}");
     // delete + no-notes => no header
@@ -159,11 +186,21 @@ fn long_notes_header_is_capped() {
     let dir = tmp("c");
     let mut c = Client::start(&dir);
     for i in 0..6 {
-        c.tool("note", json!({"key": format!("k{i}"), "value": "v".repeat(300)}));
+        c.tool(
+            "note",
+            json!({"key": format!("k{i}"), "value": "v".repeat(300)}),
+        );
     }
     let (_, nav) = c.tool("navigate", json!({"url": fixture("shop.html")}));
     let (_, obs) = c.tool("observe", json!({"mode": "full", "page": page_of(&nav)}));
-    assert!(header(&obs).chars().count() <= 200 && header(&obs).ends_with('…'), "{}", header(&obs));
+    assert!(
+        header(&obs).chars().count() <= 200 && header(&obs).ends_with('…'),
+        "{}",
+        header(&obs)
+    );
     let (_, all) = c.tool("note", json!({}));
-    assert!(all.lines().count() == 6 && all.len() > 1800, "full list must be untruncated");
+    assert!(
+        all.lines().count() == 6 && all.len() > 1800,
+        "full list must be untruncated"
+    );
 }

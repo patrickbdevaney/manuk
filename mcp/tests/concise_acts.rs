@@ -50,7 +50,11 @@ impl Client {
         }
         cmd.env(
             "MANUK_ACTLOG_DIR",
-            std::env::temp_dir().join(format!("w5t2-log-{}-{}", std::process::id(), mutate.unwrap_or("none"))),
+            std::env::temp_dir().join(format!(
+                "w5t2-log-{}-{}",
+                std::process::id(),
+                mutate.unwrap_or("none")
+            )),
         );
         let mut child = cmd
             .stdin(Stdio::piped())
@@ -60,7 +64,12 @@ impl Client {
             .expect("spawn manuk-mcp");
         let tx = child.stdin.take().unwrap();
         let rx = BufReader::new(child.stdout.take().unwrap());
-        let mut c = Client { child, tx, rx, id: 0 };
+        let mut c = Client {
+            child,
+            tx,
+            rx,
+            id: 0,
+        };
         c.rpc("initialize", json!({"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}));
         c.send(json!({"jsonrpc": "2.0", "method": "notifications/initialized"}));
         c
@@ -75,7 +84,10 @@ impl Client {
         self.send(json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}));
         loop {
             let mut line = String::new();
-            assert!(self.rx.read_line(&mut line).unwrap() > 0, "server closed stdout");
+            assert!(
+                self.rx.read_line(&mut line).unwrap() > 0,
+                "server closed stdout"
+            );
             let v: Value = serde_json::from_str(&line).unwrap();
             if v["id"] == json!(id) {
                 return v;
@@ -93,7 +105,10 @@ impl Client {
             .filter_map(|b| b["text"].as_str())
             .collect::<Vec<_>>()
             .join("\n");
-        assert!(!res["isError"].as_bool().unwrap_or(false), "{name} failed: {text}");
+        assert!(
+            !res["isError"].as_bool().unwrap_or(false),
+            "{name} failed: {text}"
+        );
         text
     }
 }
@@ -109,7 +124,10 @@ fn tokens(s: &str) -> usize {
 }
 
 fn handle_of(obs: &str, needle: &str) -> String {
-    let l = obs.lines().find(|l| l.contains(needle)).unwrap_or_else(|| panic!("no {needle} in\n{obs}"));
+    let l = obs
+        .lines()
+        .find(|l| l.contains(needle))
+        .unwrap_or_else(|| panic!("no {needle} in\n{obs}"));
     let a = l.find("[h").unwrap();
     l[a + 1..l[a..].find(']').unwrap() + a].to_string()
 }
@@ -120,7 +138,11 @@ fn run(mutate: Option<&str>) -> (Vec<String>, String) {
     let mut c = Client::start(mutate);
     c.tool("navigate", json!({"url": format!("{base}/")}));
     let obs = c.tool("observe", json!({}));
-    let (name, email, gift) = (handle_of(&obs, "Name"), handle_of(&obs, "Email"), handle_of(&obs, "Gift"));
+    let (name, email, gift) = (
+        handle_of(&obs, "Name"),
+        handle_of(&obs, "Email"),
+        handle_of(&obs, "Gift"),
+    );
     let (add, dead) = (handle_of(&obs, "Add row"), handle_of(&obs, "Inert"));
     let mut ok = vec![
         c.tool("type", json!({"handle": name, "text": "Ada Lovelace"})),
@@ -131,8 +153,14 @@ fn run(mutate: Option<&str>) -> (Vec<String>, String) {
         ok.push(c.tool("act", json!({"handle": add, "action": "click"})));
     }
     let noeff = c.tool("act", json!({"handle": dead, "action": "click"}));
-    let detail = c.tool("act", json!({"handle": add, "action": "click", "detail": true}));
-    assert!(detail.contains("url: unchanged") && detail.contains("verified:"), "detail=true is full: {detail}");
+    let detail = c.tool(
+        "act",
+        json!({"handle": add, "action": "click", "detail": true}),
+    );
+    assert!(
+        detail.contains("url: unchanged") && detail.contains("verified:"),
+        "detail=true is full: {detail}"
+    );
     (ok, noeff)
 }
 
@@ -148,15 +176,26 @@ fn concise_acts_cut_median_tokens_and_failures_stay_full() {
     let mut f: Vec<usize> = full_ok.iter().map(|t| tokens(t)).collect();
     let mut l: Vec<usize> = lean_ok.iter().map(|t| tokens(t)).collect();
     let (mf, ml) = (median(&mut f), median(&mut l));
-    eprintln!("W5T2 median_full={mf} median_concise={ml} cut={:.3}", 1.0 - ml as f64 / mf as f64);
+    eprintln!(
+        "W5T2 median_full={mf} median_concise={ml} cut={:.3}",
+        1.0 - ml as f64 / mf as f64
+    );
     eprintln!("W5T2 sample concise: {}", lean_ok[3]);
     for t in &lean_ok {
         let body = t.split("\npage: ").next().unwrap();
         assert!(!body.contains('\n'), "concise result is one line: {t}");
     }
-    assert!(ml as f64 <= 0.5 * mf as f64, "median tokens {ml} must be <= 50% of {mf}");
+    assert!(
+        ml as f64 <= 0.5 * mf as f64,
+        "median tokens {ml} must be <= 50% of {mf}"
+    );
     // The no-effect act carries the full diff in both forms, identical in kind.
-    assert!(lean_noeff.contains("NO EFFECT") && lean_noeff.contains("no change") && lean_noeff.contains("url: unchanged"), "no-effect act must stay full: {lean_noeff}");
+    assert!(
+        lean_noeff.contains("NO EFFECT")
+            && lean_noeff.contains("no change")
+            && lean_noeff.contains("url: unchanged"),
+        "no-effect act must stay full: {lean_noeff}"
+    );
     assert!(full_noeff.contains("NO EFFECT"));
 }
 
@@ -169,5 +208,8 @@ fn removing_auto_detail_is_red() {
         !(noeff.contains("NO EFFECT") && noeff.contains("url: unchanged")),
         "mutant should have lost the failure detail: {noeff}"
     );
-    assert!(noeff.starts_with("ok:"), "the lie the main test catches: {noeff}");
+    assert!(
+        noeff.starts_with("ok:"),
+        "the lie the main test catches: {noeff}"
+    );
 }

@@ -31,19 +31,37 @@ impl Client {
             .expect("spawn manuk-mcp");
         let tx = child.stdin.take().unwrap();
         let rx = BufReader::new(child.stdout.take().unwrap());
-        let mut c = Client { child, tx, rx, id: 0 };
+        let mut c = Client {
+            child,
+            tx,
+            rx,
+            id: 0,
+        };
         c.rpc("initialize", json!({"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}));
-        writeln!(c.tx, "{}", json!({"jsonrpc": "2.0", "method": "notifications/initialized"})).unwrap();
+        writeln!(
+            c.tx,
+            "{}",
+            json!({"jsonrpc": "2.0", "method": "notifications/initialized"})
+        )
+        .unwrap();
         c
     }
     fn rpc(&mut self, method: &str, params: Value) -> Value {
         self.id += 1;
         let id = self.id;
-        writeln!(self.tx, "{}", json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params})).unwrap();
+        writeln!(
+            self.tx,
+            "{}",
+            json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params})
+        )
+        .unwrap();
         self.tx.flush().unwrap();
         loop {
             let mut line = String::new();
-            assert!(self.rx.read_line(&mut line).unwrap() > 0, "server closed stdout");
+            assert!(
+                self.rx.read_line(&mut line).unwrap() > 0,
+                "server closed stdout"
+            );
             let v: Value = serde_json::from_str(&line).unwrap();
             if v["id"] == json!(id) {
                 return v;
@@ -51,7 +69,10 @@ impl Client {
         }
     }
     fn list(&mut self) -> Vec<Value> {
-        self.rpc("tools/list", json!({}))["result"]["tools"].as_array().unwrap().clone()
+        self.rpc("tools/list", json!({}))["result"]["tools"]
+            .as_array()
+            .unwrap()
+            .clone()
     }
 }
 impl Drop for Client {
@@ -68,10 +89,20 @@ fn size(t: &Value) -> usize {
 fn surface_is_40_percent_smaller() {
     let tools = Client::start().list();
     let total: usize = tools.iter().map(size).sum();
-    let core: usize = tools.iter().filter(|t| CORE.contains(&t["name"].as_str().unwrap())).map(size).sum();
+    let core: usize = tools
+        .iter()
+        .filter(|t| CORE.contains(&t["name"].as_str().unwrap()))
+        .map(size)
+        .sum();
     println!("surface total={total} (base {BASE_TOTAL}) core={core} (base {BASE_CORE})");
-    assert!(total * 100 <= BASE_TOTAL * 60, "total {total} B is not >= 40% below {BASE_TOTAL}");
-    assert!(core * 100 <= BASE_CORE * 60, "core {core} B is not >= 40% below {BASE_CORE}");
+    assert!(
+        total * 100 <= BASE_TOTAL * 60,
+        "total {total} B is not >= 40% below {BASE_TOTAL}"
+    );
+    assert!(
+        core * 100 <= BASE_CORE * 60,
+        "core {core} B is not >= 40% below {BASE_CORE}"
+    );
 }
 
 #[test]
@@ -79,7 +110,11 @@ fn six_core_tools_always_load() {
     for t in Client::start().list() {
         let name = t["name"].as_str().unwrap();
         let always = t["_meta"]["anthropic/alwaysLoad"] == json!(true);
-        assert_eq!(always, CORE.contains(&name), "alwaysLoad mismatch for {name}");
+        assert_eq!(
+            always,
+            CORE.contains(&name),
+            "alwaysLoad mismatch for {name}"
+        );
     }
 }
 
@@ -89,8 +124,16 @@ fn list_is_byte_identical() {
     let mut c = Client::start();
     let b = c.list();
     let again = c.list();
-    assert_eq!(Value::Array(a).to_string(), Value::Array(b.clone()).to_string(), "differs across sessions");
-    assert_eq!(Value::Array(b).to_string(), Value::Array(again).to_string(), "differs across calls");
+    assert_eq!(
+        Value::Array(a).to_string(),
+        Value::Array(b.clone()).to_string(),
+        "differs across sessions"
+    );
+    assert_eq!(
+        Value::Array(b).to_string(),
+        Value::Array(again).to_string(),
+        "differs across calls"
+    );
 }
 
 /// Deferred (not always-loaded) tools are still listed and callable.
@@ -98,10 +141,22 @@ fn list_is_byte_identical() {
 fn deferred_tools_are_callable() {
     let mut c = Client::start();
     let tools = c.list();
-    for n in ["drag", "upload", "dialog", "download", "restore", "fork", "handoff", "storage_state"] {
+    for n in [
+        "drag",
+        "upload",
+        "dialog",
+        "download",
+        "restore",
+        "fork",
+        "handoff",
+        "storage_state",
+    ] {
         assert!(tools.iter().any(|t| t["name"] == n), "{n} not listed");
     }
-    let r = c.rpc("tools/call", json!({"name": "storage_state", "arguments": {}}));
+    let r = c.rpc(
+        "tools/call",
+        json!({"name": "storage_state", "arguments": {}}),
+    );
     assert!(r["result"]["isError"] != json!(true), "{r}");
     let r = c.rpc("tools/call", json!({"name": "checkpoint", "arguments": {}}));
     let text = r["result"]["content"][0]["text"].as_str().unwrap_or("");

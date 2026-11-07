@@ -9,7 +9,6 @@ engine/page/tests/g_webauthn_surface.rs	autofill	comment: isConditionalMediation
 engine/net/src/secrets.rs	keyring	operator-side secret provider (W3.16); page JS cannot read it, error text only
 engine/net/src/secrets.rs	libsecret	operator-side secret provider reads the OS keyring via secret-tool; not reachable from page content
 engine/net/src/secrets.rs	secret-tool	operator-side secret provider reads the OS keyring via secret-tool; not reachable from page content
-mcp/src/server.rs	keyring	type tool 'secret' arg names an operator-held credential; page text cannot name the store
 mcp/tests/secrets.rs	keyring	integration gate for the operator keyring backend (W3.16); test only
 mcp/tests/secrets.rs	secret-tool	integration gate for the operator keyring backend (W3.16); test only
 mcp/tests/secrets.rs	secret service	integration gate for the operator keyring backend (W3.16); test only

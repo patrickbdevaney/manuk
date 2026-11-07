@@ -350,8 +350,7 @@ impl<B: Backend> Hub<B> {
         );
         self.next += 1;
         if let Some(p) = self.ckpt_path(&cid) {
-            let head =
-                json!({"url": c.url, "tag": c.tag, "pos": c.pos, "pid": c.pid, "snap": c.snap, "notes": c.notes});
+            let head = json!({"url": c.url, "tag": c.tag, "pos": c.pos, "pid": c.pid, "snap": c.snap, "notes": c.notes});
             let mut out = format!("{head}\n");
             for e in &c.log {
                 out.push_str(&format!("{}\n", e.to_json(id)));
@@ -491,11 +490,17 @@ impl<B: Backend> Hub<B> {
         let val = args.get("value").and_then(Value::as_str).unwrap_or("");
         if val.is_empty() {
             self.notes.remove(key);
-            return Ok(Output::Text(format!("note {key} cleared ({} left)", self.notes.len())));
+            return Ok(Output::Text(format!(
+                "note {key} cleared ({} left)",
+                self.notes.len()
+            )));
         }
         let v: String = val.chars().take(NOTE_VALUE_MAX).collect();
         self.notes.insert(key.to_string(), v);
-        Ok(Output::Text(format!("noted {key} ({} total)", self.notes.len())))
+        Ok(Output::Text(format!(
+            "noted {key} ({} total)",
+            self.notes.len()
+        )))
     }
 
     /// 1-line summary prepended to observe output; none when there are no notes.
@@ -582,7 +587,11 @@ impl<B: Backend> Hub<B> {
             "navigate" => !self.pages[&id].log.is_empty(),
             _ => false,
         };
-        let undo = if changing { Some(self.auto_checkpoint(&id)) } else { None };
+        let undo = if changing {
+            Some(self.auto_checkpoint(&id))
+        } else {
+            None
+        };
         let page = self.pages.get_mut(&id).unwrap();
         // Take-since around the call: ids issued before it belong to someone else.
         let _ = manuk_net::take_request_ids();
@@ -625,7 +634,11 @@ impl<B: Backend> Hub<B> {
             Some(h) => format!("{h}\n{handle}"),
             None => handle,
         };
-        let header = if tool == "observe" { self.notes_header() } else { None };
+        let header = if tool == "observe" {
+            self.notes_header()
+        } else {
+            None
+        };
         let r = match (r, undo) {
             (Ok(Output::Text(t)), Some(l)) if is_failure(&t) => {
                 let loop_w = if t.contains("identical act") {

@@ -39,6 +39,9 @@ struct Entry {
     ctx: String,
 }
 
+/// W5.L3: largest response body `page_data` returns.
+const PAGE_DATA_CAP: usize = 65_536;
+
 impl PartialEq for Entry {
     fn eq(&self, o: &Entry) -> bool {
         self.role == o.role
@@ -260,9 +263,16 @@ fn is_container(r: &Role) -> bool {
 /// W5.T1: the nearest named container only, and only when it says something the element's own name
 /// does not (a story link inside a list item named after that link needs no suffix).
 fn lean_ctx(name: &str, ctx: &str) -> String {
-    let first = ctx.strip_prefix(" in ").map(|r| r.split(" in ").next().unwrap_or(r));
-    let Some(first) = first else { return String::new() };
-    let label = first.split_once(' ').map(|(_, l)| l.trim_matches('"')).unwrap_or("");
+    let first = ctx
+        .strip_prefix(" in ")
+        .map(|r| r.split(" in ").next().unwrap_or(r));
+    let Some(first) = first else {
+        return String::new();
+    };
+    let label = first
+        .split_once(' ')
+        .map(|(_, l)| l.trim_matches('"'))
+        .unwrap_or("");
     let label = label.trim_end_matches('…');
     if label.is_empty() || name.contains(label) || label.contains(name) {
         return String::new();
@@ -682,9 +692,7 @@ impl<B: Backend> Session<B> {
                 let cells: Vec<String> = r
                     .iter()
                     .skip(1)
-                    .filter(|k| {
-                        matches!(k.role, Role::Cell | Role::ColumnHeader | Role::RowHeader)
-                    })
+                    .filter(|k| matches!(k.role, Role::Cell | Role::ColumnHeader | Role::RowHeader))
                     .map(|k| text_under(k))
                     .filter(|t| !t.is_empty())
                     .collect();
@@ -699,7 +707,10 @@ impl<B: Backend> Session<B> {
                 }
             }
         }
-        for n in tree.iter().filter(|n| worth(n) || row_text.contains_key(&n.node.0)) {
+        for n in tree
+            .iter()
+            .filter(|n| worth(n) || row_text.contains_key(&n.node.0))
+        {
             if folded.contains(&n.node.0) {
                 continue;
             }
@@ -966,7 +977,14 @@ impl<B: Backend> Session<B> {
             Err(e) => Err(anyhow!("{}", manuk_net::secrets::redact(&format!("{e:#}")))),
             other => other,
         };
-        if matches!(tool, "navigate" | "observe" | "extract" | "find") {
+        let mute = tool == "page_data"
+            && std::env::var("MANUK_PAGEDATA_MUTATE").is_ok_and(|v| v == "no-taint");
+        if !mute
+            && matches!(
+                tool,
+                "navigate" | "observe" | "extract" | "find" | "page_data"
+            )
+        {
             if let Ok(Output::Text(t)) = &r {
                 let url = self.b.url();
                 self.taint.record(&url, t);
@@ -1084,6 +1102,7 @@ impl<B: Backend> Session<B> {
                     honour_query(arg_str(a, "query")),
                 )
                 .map(Output::Text),
+            "page_data" => self.page_data().await.map(Output::Text),
             "webmcp_list" => self.webmcp_list().await.map(Output::Text),
             "webmcp_call" => self
                 .webmcp_call(
@@ -1492,7 +1511,9 @@ impl<B: Backend> Session<B> {
                     format!("{UNTRUSTED}\n{}\n{body}", self.header())
                 }
             },
-            m => bail!("unknown observe mode {m:?}: use full, diff, viewport, interactive or content"),
+            m => bail!(
+                "unknown observe mode {m:?}: use full, diff, viewport, interactive or content"
+            ),
         };
         self.snap = Some(now);
         Ok(out)
@@ -2222,6 +2243,44 @@ impl<B: Backend> Session<B> {
         Ok(out)
     }
 
+    /// W5.L3: the JSON the page itself fetched, as `METHOD url status bytes` + the compact body. Only
+    /// same-origin responses under `PAGE_DATA_CAP` bytes are returned; every other one is listed as
+    /// refused with its reason, never silently dropped.
+    async fn page_data(&mut self) -> Result<String> {
+        self.b.settle().await;
+        let rows = self.b.page_data().await?;
+        let page = url::Url::parse(&self.b.url()).ok();
+        let origin = |u: &url::Url| u.origin().ascii_serialization();
+        let (mut ok, mut refused) = (Vec::new(), Vec::new());
+        for r in rows {
+            let line = format!("{} {} {} {}B", r.method, r.url, r.status, r.len);
+            let same = match (&page, url::Url::parse(&r.url)) {
+                (Some(p), Ok(u)) => origin(p) == origin(&u),
+                _ => false,
+            } || std::env::var("MANUK_PAGEDATA_MUTATE").is_ok_and(|v| v == "no-origin");
+            if !same {
+                refused.push(format!("refused {line}: cross-origin"));
+                continue;
+            }
+            match r.body {
+                Some(b) if b.len() <= PAGE_DATA_CAP => {
+                    let compact = serde_json::from_str::<Value>(&b)
+                        .map(|v| v.to_string())
+                        .unwrap_or(b);
+                    ok.push(format!("{line}\n{compact}"));
+                }
+                _ => refused.push(format!("refused {line}: over {PAGE_DATA_CAP} B cap")),
+            }
+        }
+        if ok.is_empty() && refused.is_empty() {
+            return Ok("page_data: no JSON responses fetched by this page".into());
+        }
+        let mut out = vec![format!("page_data: {} response(s)", ok.len())];
+        out.extend(ok);
+        out.extend(refused);
+        Ok(out.join("\n"))
+    }
+
     fn extract(
         &mut self,
         format: &str,
@@ -2412,7 +2471,9 @@ fn concise(full: &str) -> Option<String> {
         "OCCLUDED",
     ];
     let always = std::env::var("MANUK_CONCISE_MUTATE").is_ok_and(|v| v == "always");
-    if !always && (loud.iter().any(|k| full.contains(k)) || full.contains("\nno change\nurl: unchanged")) {
+    if !always
+        && (loud.iter().any(|k| full.contains(k)) || full.contains("\nno change\nurl: unchanged"))
+    {
         return None;
     }
     let (mut add, mut chg, mut del, mut text) = (0, 0, 0, 0);
@@ -2440,7 +2501,9 @@ fn concise(full: &str) -> Option<String> {
         } else if l.starts_with("-[h") {
             del += 1;
         } else if let Some((_, ev)) = l.split_once("url: unchanged   ") {
-            outcome = ev.strip_prefix("verified: target was topmost at dispatch; ").unwrap_or(ev);
+            outcome = ev
+                .strip_prefix("verified: target was topmost at dispatch; ")
+                .unwrap_or(ev);
         }
     }
     let outcome = outcome.split_once(" (").map_or(outcome, |(a, _)| a);
@@ -2449,7 +2512,10 @@ fn concise(full: &str) -> Option<String> {
         o.push_str(" text changed");
     }
     if !new_ops.is_empty() {
-        o.push_str(&format!("; new (names are page content): {}", new_ops.join(", ")));
+        o.push_str(&format!(
+            "; new (names are page content): {}",
+            new_ops.join(", ")
+        ));
     }
     o.push_str(&format!("; url unchanged; writes {writes}"));
     Some(o)
