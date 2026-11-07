@@ -1,0 +1,412 @@
+- generic [ref=f2e1]:
+  - main [ref=f2e216]:
+    - navigation [ref=f2e4569]:
+      - link [ref=f2e4570] [cursor=pointer]:
+        - /url: /
+      - generic [ref=f2e223]:
+        - list [ref=f2e224]:
+          - listitem [ref=f2e225]: Buy
+          - listitem [ref=f2e226]: Rent
+          - listitem [ref=f2e227]: Sell
+          - listitem [ref=f2e228]: Home Loans
+          - listitem [ref=f2e229]: Find an Agent
+        - list [ref=f2e230]:
+          - listitem [ref=f2e231]: Manage Rentals
+          - listitem [ref=f2e232]: Advertise
+        - list [ref=f2e233]:
+          - listitem [ref=f2e234]: Help
+        - list [ref=f2e235]:
+          - listitem [ref=f2e236]: Sign In
+    - region [ref=f2e4572]:
+      - generic [ref=f2e244]:
+        - textbox [ref=f2e4574]:
+          - /placeholder: Address, neighborhood, city or ZIP code
+          - text: San Francisco, CA
+        - generic [ref=f2e246]:
+          - button [ref=f2e423] [cursor=pointer]
+          - button [ref=f2e247] [cursor=pointer]
+        - group [aria-hidden]
+      - generic [ref=f2e251]:
+        - button [ref=f2e4575] [cursor=pointer]: For Sale
+        - button [ref=f2e4576] [cursor=pointer]: Up to $300K
+        - button [ref=f2e4577] [cursor=pointer]: Beds & Baths
+        - button [ref=f2e4578] [cursor=pointer]: Home Type (1)
+      - button [ref=f2e4579] [cursor=pointer]: Save search
+    - main [ref=f2e4580]:
+      - main [ref=f2e4581]:
+        - main [ref=f2e4305]:
+          - generic [ref=f2e4306]:
+            - heading [level=1] [ref=f2e4582]: San Francisco, CA Real Estate & Homes For Sale
+            - generic [ref=f2e4308]:
+              - generic [ref=f2e4309]: 4 results
+              - generic [ref=f2e4310]: "Sort: Homes for you"
+          - list [ref=f2e4583]:
+            - listitem [ref=f2e4313]:
+              - article [ref=f2e4316]:
+                - generic [ref=f2e4317] [cursor=pointer]:
+                  - generic [ref=f2e4318]:
+                    - link [ref=f2e4584]:
+                      - /url: /homes
+                      - generic [ref=f2e4320]: 655 12th St APT 113, Oakland, CA 94607
+                    - generic [ref=f2e4321]: $288,000
+                    - list [ref=f2e4325]:
+                      - listitem [ref=f2e4326]: 2 bds |
+                      - listitem [ref=f2e4327]: 2 ba |
+                      - listitem [ref=f2e4328]: 979 sqft
+                      - text: "- Condo for sale"
+                    - button [ref=f2e4330]
+                  - generic [ref=f2e4334]:
+                    - generic [ref=f2e4335]: 13 days on Zilloft
+                    - button [ref=f2e4585]
+                    - generic [ref=f2e4343]:
+                      - button [ref=f2e4588]
+                      - button [ref=f2e4589]
+            - listitem [ref=f2e4351]:
+              - article [ref=f2e4354]:
+                - generic [ref=f2e4355] [cursor=pointer]:
+                  - generic [ref=f2e4356]:
+                    - link [ref=f2e4590]:
+                      - /url: /homes
+                      - generic [ref=f2e4358]: 2626 Cleo Ct UNIT 29, Bakersfield, CA 93306
+                    - generic [ref=f2e4359]: $209,000
+                    - list [ref=f2e4363]:
+                      - listitem [ref=f2e4364]: 2 bds |
+                      - listitem [ref=f2e4365]: 2 ba |
+                      - listitem [ref=f2e4366]: 1,392 sqft
+                      - text: "- Condo for sale"
+                    - button [ref=f2e4368]
+                  - generic [ref=f2e4372]:
+                    - generic [ref=f2e4373]: 18 hours ago
+                    - button [ref=f2e4591]
+                    - generic [ref=f2e4381]:
+                      - button [ref=f2e4594]
+                      - button [ref=f2e4595]
+            - listitem [ref=f2e4389]:
+              - article [ref=f2e4392]:
+                - generic [ref=f2e4393] [cursor=pointer]:
+                  - generic [ref=f2e4394]:
+                    - link [ref=f2e4596]:
+                      - /url: /homes
+                      - generic [ref=f2e4396]: 3427 Capalina Rd APT 22, San Marcos, CA 92069
+                    - generic [ref=f2e4397]: EXCEL PREFERRED REALTY, undefined
+                    - generic [ref=f2e4398]: $299,000
+                    - list [ref=f2e4402]:
+                      - listitem [ref=f2e4403]: 2 bds |
+                      - listitem [ref=f2e4404]: 1 ba |
+                      - listitem [ref=f2e4405]: 762 sqft
+                      - text: "- Condo for sale"
+                    - button [ref=f2e4407]
+                  - generic [ref=f2e4411]:
+                    - generic [ref=f2e4412]: Private patio
+                    - button [ref=f2e4597]
+                    - generic [ref=f2e4420]:
+                      - button [ref=f2e4600]
+                      - button [ref=f2e4601]
+            - listitem [ref=f2e4428]:
+              - article [ref=f2e4431]:
+                - generic [ref=f2e4432] [cursor=pointer]:
+                  - generic [ref=f2e4433]:
+                    - link [ref=f2e4602]:
+                      - /url: /homes
+                      - generic [ref=f2e4435]: 2626 Cleo Ct UNIT 4, Bakersfield, CA 93306
+                    - generic [ref=f2e4436]: $220,000
+                    - list [ref=f2e4440]:
+                      - listitem [ref=f2e4441]: 2 bds |
+                      - listitem [ref=f2e4442]: 2 ba |
+                      - listitem [ref=f2e4443]: 1,361 sqft
+                      - text: "- Condo for sale"
+                    - button [ref=f2e4445]
+                  - generic [ref=f2e4449]:
+                    - generic [ref=f2e4450]: Second balcony
+                    - button [ref=f2e4603]
+                    - generic [ref=f2e4458]:
+                      - button [ref=f2e4606]
+                      - button [ref=f2e4607]
+          - generic [ref=f2e4466]:
+            - generic [ref=f2e4467]:
+              - button [ref=f2e4608] [cursor=pointer]: Save this search
+              - text: to get email alerts when listings hit the market.
+            - list [ref=f2e4470]:
+              - listitem [ref=f2e4471]:
+                - paragraph [ref=f2e4473]: IDX information is provided exclusively for personal, non-commercial use, and may not be used for any purpose other than to identify prospective properties consumers may be interested in purchasing. Information is deemed reliable but not guaranteed.
+              - listitem [ref=f2e4474]:
+                - paragraph [ref=f2e4476]: Bay East 2024. CCAR 2024. bridgeMLS 2024. Information Deemed Reliable But Not Guaranteed. This information is being provided by the Bay East MLS, or CCAR MLS, or bridgeMLS. The listings presented here may or may not be listed by the Broker/Agent operating this website. This information is intended for the personal use of consumers and may not be used for any purpose other than to identify prospective properties consumers may be interested in purchasing. Data last updated at 2024-09-25 12:31:39 PDT.
+              - listitem [ref=f2e4477]:
+                - paragraph [ref=f2e4479]: Based on information from the MLSListings MLS as of 2024-09-25 12:38:21 PDT. All data, including all measurements and calculations of area, is obtained from various sources and has not been, and will not be, verified by broker or MLS. All information should be independently reviewed and verified for accuracy. Properties may or may not be listed by the office/agent presenting the information.
+            - separator [ref=f2e4480]
+        - contentinfo [ref=f2e4483]:
+          - navigation [ref=f2e4484]:
+            - list [ref=f2e4485]:
+              - listitem [ref=f2e4486]:
+                - paragraph [ref=f2e4487] [cursor=pointer]: About
+              - listitem [ref=f2e4488]:
+                - paragraph [ref=f2e4489] [cursor=pointer]: Zestimates
+              - listitem [ref=f2e4490]:
+                - paragraph [ref=f2e4491] [cursor=pointer]: Research
+              - listitem [ref=f2e4492]:
+                - paragraph [ref=f2e4493] [cursor=pointer]: Careers
+              - listitem [ref=f2e4494]:
+                - paragraph [ref=f2e4495] [cursor=pointer]: Careers - U.S. Privacy Notice
+              - listitem [ref=f2e4496]:
+                - paragraph [ref=f2e4497] [cursor=pointer]: Careers - Mexico Privacy Notice
+              - listitem [ref=f2e4498]:
+                - paragraph [ref=f2e4499] [cursor=pointer]: Help
+              - listitem [ref=f2e4500]:
+                - paragraph [ref=f2e4501] [cursor=pointer]: Advertise
+              - listitem [ref=f2e4502]:
+                - paragraph [ref=f2e4503] [cursor=pointer]: Fair Housing Guide
+              - listitem [ref=f2e4504]:
+                - paragraph [ref=f2e4505] [cursor=pointer]: Advocacy
+              - listitem [ref=f2e4506]:
+                - paragraph [ref=f2e4507] [cursor=pointer]: Terms of use
+              - listitem [ref=f2e4508]:
+                - paragraph [ref=f2e4509] [cursor=pointer]: Privacy Portal
+              - listitem [ref=f2e4510]:
+                - paragraph [ref=f2e4511] [cursor=pointer]: Cookie Preference
+              - listitem [ref=f2e4512]:
+                - paragraph [ref=f2e4513] [cursor=pointer]: Learn
+              - listitem [ref=f2e4514]:
+                - paragraph [ref=f2e4515] [cursor=pointer]: AI
+              - listitem [ref=f2e4516]:
+                - paragraph [ref=f2e4517] [cursor=pointer]: Mobile Apps
+            - list [ref=f2e4518]:
+              - listitem [ref=f2e4519]:
+                - paragraph [ref=f2e4520] [cursor=pointer]: Trulia
+              - listitem [ref=f2e4521]:
+                - paragraph [ref=f2e4522] [cursor=pointer]: StreetEasy
+              - listitem [ref=f2e4523]:
+                - paragraph [ref=f2e4524] [cursor=pointer]: HotPads
+              - listitem [ref=f2e4525]:
+                - paragraph [ref=f2e4526] [cursor=pointer]: Out East
+              - listitem [ref=f2e4527]:
+                - paragraph [ref=f2e4528] [cursor=pointer]: Showing Time+
+            - link [ref=f2e4611] [cursor=pointer]:
+              - /url: "#"
+              - text: Do Not Sell or Share My Personal Information
+          - generic [ref=f2e4533]:
+            - paragraph [ref=f2e4534]:
+              - text: Zilloft Group is committed to ensuring digital accessibility for individuals with disabilities. We are continuously working to improve the accessibility of our web experience for everyone, and we welcome feedback and accommodation requests. If you wish to report an issue or seek an accommodation, please
+              - link [ref=f2e4612] [cursor=pointer]:
+                - /url: "#"
+                - text: let us know.
+            - paragraph [ref=f2e4536]:
+              - text: Zilloft, Inc. holds real estate brokerage
+              - link [ref=f2e4613] [cursor=pointer]:
+                - /url: "#"
+                - text: licenses
+              - text: in multiple states. Zilloft (Canada), Inc. holds real estate brokerage
+              - link [ref=f2e4614] [cursor=pointer]:
+                - /url: "#"
+                - text: licenses
+              - text: in multiple provinces.
+              - link [ref=f2e4615] [cursor=pointer]:
+                - /url: "#"
+                - text: § 442-H New York Standard Operating Procedures
+              - link [ref=f2e4616] [cursor=pointer]:
+                - /url: "#"
+                - text: § New York Fair Housing Notice
+              - link [ref=f2e4617] [cursor=pointer]:
+                - /url: "#"
+                - text: "TREC: Information about brokerage services, Consumer protection notice"
+              - text: "California DRE #1522444"
+              - link [ref=f2e4618] [cursor=pointer]:
+                - /url: "#"
+                - text: Contact Zilloft, Inc. Brokerage
+            - paragraph [ref=f2e4543]: For listings in Canada, the trademarks REALTOR®, REALTORS®, and the REALTOR® logo are controlled by The Canadian Real Estate Association (CREA) and identify real estate professionals who are members of CREA. The trademarks MLS®, Multiple Listing Service® and the associated logos are owned by CREA and identify the quality of services provided by real estate professionals who are members of CREA. Used under license.
+            - generic [ref=f2e4544]:
+              - figure [ref=f2e4545] [cursor=pointer]
+              - figure [ref=f2e4547] [cursor=pointer]
+            - list [ref=f2e4549]:
+              - listitem [ref=f2e4550]:
+                - figure [ref=f2e4552] [cursor=pointer]
+              - listitem [ref=f2e4554]:
+                - generic [ref=f2e4555]:
+                  - generic [ref=f2e4556]: "Follow us:"
+                  - button [ref=f2e4622] [cursor=pointer]
+                  - button [ref=f2e4624] [cursor=pointer]
+                  - button [ref=f2e4626] [cursor=pointer]
+              - listitem [ref=f2e4563]:
+                - generic [ref=f2e4564]:
+                  - generic [ref=f2e4565]: © 2006-2024 Zilloft
+                  - figure [ref=f2e4566] [cursor=pointer]
+      - region [ref=f2e4630]
+  - alert [ref=f2e215]: "Zilloft: Real Estate, Apartments, Mortgages & Home Values"
+  - generic [ref=f2e4633]:
+    - navigation [ref=f2e4636]:
+      - button [ref=f2e5058] [cursor=pointer]:
+        - generic [ref=f2e4643]: Back to search
+      - generic [ref=f2e4646]:
+        - generic [ref=f2e4647]: Save
+        - generic [ref=f2e4653]: Share
+        - generic [ref=f2e4661]: Hide
+    - generic [ref=f2e4677]:
+      - generic [ref=f2e4678]: For Sale
+      - button [ref=f2e5060] [cursor=pointer]:
+        - generic [ref=f2e4686]: See all 55 photos
+      - generic [ref=f2e4687]:
+        - listitem [ref=f2e4688]:
+          - figure [ref=f2e4689]
+        - listitem [ref=f2e4691]:
+          - figure [ref=f2e4692]
+        - listitem [ref=f2e4694]:
+          - figure [ref=f2e4695]
+        - listitem [ref=f2e4697]:
+          - figure [ref=f2e4698]
+        - listitem [ref=f2e4700]:
+          - figure [ref=f2e4701]
+    - generic [ref=f2e4704]:
+      - generic [ref=f2e4707]:
+        - generic [ref=f2e4711]:
+          - generic [ref=f2e4712]:
+            - generic [ref=f2e4713]: $288,000
+            - heading [level=1] [ref=f2e5061]: 655 12th St APT 113, Oakland, CA 94607
+          - generic [ref=f2e4719]:
+            - generic [ref=f2e4720]:
+              - generic [ref=f2e4721]: "2"
+              - generic [ref=f2e4722]: beds
+            - generic [ref=f2e4723]:
+              - generic [ref=f2e4724]: "2"
+              - generic [ref=f2e4725]: baths
+            - generic [ref=f2e4726]:
+              - generic [ref=f2e4727]: "979"
+              - generic [ref=f2e4728]: sqft
+        - generic [ref=f2e4730]:
+          - generic [ref=f2e4732]:
+            - strong [ref=f2e4733]: Est.
+            - text: $2,393/mo
+          - generic [ref=f2e4734]: Get pre-qualified
+        - generic [ref=f2e4736]:
+          - generic [ref=f2e4737]: Single Family Residence
+          - generic [ref=f2e4744]: Built in 1957
+          - generic [ref=f2e4751]: 19.51 Acres lot
+          - generic [ref=f2e4756]: $368,100 Zestimate
+          - generic [ref=f2e4763]: $341/sqft
+          - generic [ref=f2e4770]: $-- HOA
+      - list [ref=f2e4782]:
+        - listitem [ref=f2e4783]:
+          - button [ref=f2e5062] [cursor=pointer]:
+            - generic [ref=f2e4785]:
+              - text: Request a tour
+              - paragraph [ref=f2e4786]: as early as today at 9:00 am
+        - listitem [ref=f2e4787]:
+          - button [ref=f2e5063] [cursor=pointer]:
+            - generic [ref=f2e4789]: Contact an agent
+    - contentinfo [ref=f2e4792]:
+      - navigation [ref=f2e4793]:
+        - list [ref=f2e4794]:
+          - listitem [ref=f2e4795]:
+            - paragraph [ref=f2e4796] [cursor=pointer]: About
+          - listitem [ref=f2e4797]:
+            - paragraph [ref=f2e4798] [cursor=pointer]: Zestimates
+          - listitem [ref=f2e4799]:
+            - paragraph [ref=f2e4800] [cursor=pointer]: Research
+          - listitem [ref=f2e4801]:
+            - paragraph [ref=f2e4802] [cursor=pointer]: Careers
+          - listitem [ref=f2e4803]:
+            - paragraph [ref=f2e4804] [cursor=pointer]: Careers - U.S. Privacy Notice
+          - listitem [ref=f2e4805]:
+            - paragraph [ref=f2e4806] [cursor=pointer]: Careers - Mexico Privacy Notice
+          - listitem [ref=f2e4807]:
+            - paragraph [ref=f2e4808] [cursor=pointer]: Help
+          - listitem [ref=f2e4809]:
+            - paragraph [ref=f2e4810] [cursor=pointer]: Advertise
+          - listitem [ref=f2e4811]:
+            - paragraph [ref=f2e4812] [cursor=pointer]: Fair Housing Guide
+          - listitem [ref=f2e4813]:
+            - paragraph [ref=f2e4814] [cursor=pointer]: Advocacy
+          - listitem [ref=f2e4815]:
+            - paragraph [ref=f2e4816] [cursor=pointer]: Terms of use
+          - listitem [ref=f2e4817]:
+            - paragraph [ref=f2e4818] [cursor=pointer]: Privacy Portal
+          - listitem [ref=f2e4819]:
+            - paragraph [ref=f2e4820] [cursor=pointer]: Cookie Preference
+          - listitem [ref=f2e4821]:
+            - paragraph [ref=f2e4822] [cursor=pointer]: Learn
+          - listitem [ref=f2e4823]:
+            - paragraph [ref=f2e4824] [cursor=pointer]: AI
+          - listitem [ref=f2e4825]:
+            - paragraph [ref=f2e4826] [cursor=pointer]: Mobile Apps
+        - list [ref=f2e4827]:
+          - listitem [ref=f2e4828]:
+            - paragraph [ref=f2e4829] [cursor=pointer]: Trulia
+          - listitem [ref=f2e4830]:
+            - paragraph [ref=f2e4831] [cursor=pointer]: StreetEasy
+          - listitem [ref=f2e4832]:
+            - paragraph [ref=f2e4833] [cursor=pointer]: HotPads
+          - listitem [ref=f2e4834]:
+            - paragraph [ref=f2e4835] [cursor=pointer]: Out East
+          - listitem [ref=f2e4836]:
+            - paragraph [ref=f2e4837] [cursor=pointer]: Showing Time+
+        - link [ref=f2e5064] [cursor=pointer]:
+          - /url: "#"
+          - text: Do Not Sell or Share My Personal Information
+      - generic [ref=f2e4842]:
+        - paragraph [ref=f2e4843]:
+          - text: Zilloft Group is committed to ensuring digital accessibility for individuals with disabilities. We are continuously working to improve the accessibility of our web experience for everyone, and we welcome feedback and accommodation requests. If you wish to report an issue or seek an accommodation, please
+          - link [ref=f2e5065] [cursor=pointer]:
+            - /url: "#"
+            - text: let us know.
+        - paragraph [ref=f2e4845]:
+          - text: Zilloft, Inc. holds real estate brokerage
+          - link [ref=f2e5066] [cursor=pointer]:
+            - /url: "#"
+            - text: licenses
+          - text: in multiple states. Zilloft (Canada), Inc. holds real estate brokerage
+          - link [ref=f2e5067] [cursor=pointer]:
+            - /url: "#"
+            - text: licenses
+          - text: in multiple provinces.
+          - link [ref=f2e5068] [cursor=pointer]:
+            - /url: "#"
+            - text: § 442-H New York Standard Operating Procedures
+          - link [ref=f2e5069] [cursor=pointer]:
+            - /url: "#"
+            - text: § New York Fair Housing Notice
+          - link [ref=f2e5070] [cursor=pointer]:
+            - /url: "#"
+            - text: "TREC: Information about brokerage services, Consumer protection notice"
+          - text: "California DRE #1522444"
+          - link [ref=f2e5071] [cursor=pointer]:
+            - /url: "#"
+            - text: Contact Zilloft, Inc. Brokerage
+        - paragraph [ref=f2e4852]: For listings in Canada, the trademarks REALTOR®, REALTORS®, and the REALTOR® logo are controlled by The Canadian Real Estate Association (CREA) and identify real estate professionals who are members of CREA. The trademarks MLS®, Multiple Listing Service® and the associated logos are owned by CREA and identify the quality of services provided by real estate professionals who are members of CREA. Used under license.
+        - generic [ref=f2e4853]:
+          - figure [ref=f2e4854] [cursor=pointer]
+          - figure [ref=f2e4856] [cursor=pointer]
+        - list [ref=f2e4858]:
+          - listitem [ref=f2e4859]:
+            - figure [ref=f2e4861] [cursor=pointer]
+          - listitem [ref=f2e4863]:
+            - generic [ref=f2e4864]:
+              - generic [ref=f2e4865]: "Follow us:"
+              - button [ref=f2e5075] [cursor=pointer]
+              - button [ref=f2e5077] [cursor=pointer]
+              - button [ref=f2e5079] [cursor=pointer]
+          - listitem [ref=f2e4872]:
+            - generic [ref=f2e4873]:
+              - generic [ref=f2e4874]: © 2006-2024 Zilloft
+              - figure [ref=f2e4875] [cursor=pointer]
+  - generic [active] [ref=f2e5084]:
+    - banner [ref=f2e5085]:
+      - heading "Confirm your tour" [level=4] [ref=f2e5143]
+      - button [ref=f2e5087] [cursor=pointer]
+    - generic [ref=f2e5147]:
+      - heading "How can we reach out to confirm the tour?" [level=5] [ref=f2e5179]
+      - generic [ref=f2e5181]:
+        - generic [ref=f2e5182]:
+          - generic [ref=f2e5183]: Name *
+          - textbox [ref=f2e5186]
+        - generic [ref=f2e5187]:
+          - generic [ref=f2e5188]: Email *
+          - textbox [ref=f2e5191]
+        - generic [ref=f2e5192]:
+          - generic [ref=f2e5193]: Phone *
+          - textbox [ref=f2e5196]
+        - generic [ref=f2e5197]:
+          - generic [ref=f2e5198]: Message
+          - textbox [ref=f2e5201]: I am interested in 655 12th St APT 113, Oakland, CA 94607.
+      - button "Request Tour" [ref=f2e5203] [cursor=pointer]
+      - generic [ref=f2e5205] [cursor=pointer]:
+        - checkbox "I want financing information" [checked] [ref=f2e5207]
+        - paragraph [ref=f2e5210]: I want financing information
+      - paragraph [ref=f2e5211]: By pressing Request tour, you are contacting a buyer's agent, you agree that Zilloft Group and its affiliates, and real estate professionals may call/text you about your inquiry, which may involve use of automated means and prerecorded/artificial voices. You don’t need to consent as a condition of buying any property, goods or services. Message/data rates may apply. You also agree to our Terms of Use. Zilloft does not endorse any real estate professionals. We may share information about your recent and future site activity with your agent to help them understand what you’re looking for in a home.

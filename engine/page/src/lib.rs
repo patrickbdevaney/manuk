@@ -1357,6 +1357,33 @@ async fn lean_image_dims_uncached(url: &str) -> Option<(u32, u32)> {
     Some((img.width, img.height))
 }
 
+/// URLs a speculative warm fetch found failing (4xx/5xx/transport), with when. An error response is
+/// not stored by the HTTP cache, so the apply step's own request would go out a second time for the
+/// same answer; it consults this instead and treats the URL as the failure it already is. Stale after
+/// 30 s so a later navigation retries.
+static WARM_FAILED: std::sync::Mutex<Option<HashMap<String, std::time::Instant>>> =
+    std::sync::Mutex::new(None);
+
+fn warm_failed_recently(url: &str) -> bool {
+    let g = WARM_FAILED.lock().unwrap_or_else(|e| e.into_inner());
+    g.as_ref()
+        .and_then(|m| m.get(url))
+        .is_some_and(|t| t.elapsed() < std::time::Duration::from_secs(30))
+}
+
+/// A warming fetch: same request as the apply step's, plus the failure note above.
+async fn warm_fetch(url: &str) {
+    let failed = match manuk_net::fetch(url).await {
+        Ok(r) => r.status >= 400,
+        Err(_) => true,
+    };
+    if failed {
+        let mut g = WARM_FAILED.lock().unwrap_or_else(|e| e.into_inner());
+        g.get_or_insert_with(HashMap::new)
+            .insert(url.to_string(), std::time::Instant::now());
+    }
+}
+
 /// Fetch the raw bytes of an image URL: `data:` (base64 or literal), `http(s)://`, or a
 /// local `file://`/path (for the render CLI on local pages).
 async fn fetch_image_bytes(url: &str) -> Option<Vec<u8>> {
@@ -1364,6 +1391,9 @@ async fn fetch_image_bytes(url: &str) -> Option<Vec<u8>> {
         return data_url_image_bytes(url);
     }
     if url.starts_with("http://") || url.starts_with("https://") {
+        if warm_failed_recently(url) {
+            return None;
+        }
         let resp = manuk_net::fetch(url).await.ok()?;
         if resp.status >= 400 {
             return None;
@@ -2163,7 +2193,7 @@ fn warm_images(dom: &Dom, base: &str) {
         .take(48)
     {
         handle.spawn(async move {
-            let _ = manuk_net::fetch(&sub.url).await;
+            warm_fetch(&sub.url).await;
         });
     }
 }
@@ -2184,7 +2214,12 @@ fn warm_font_faces(css: &str, sheet_url: &str) {
         if ff.unicode_range.is_some() {
             continue;
         }
-        let Some(first) = ff.srcs.first() else {
+        // The first src the apply-side ladder will actually ask for: it steps over `.eot` (undecodable)
+        // to the next, so `font-awesome.css`'s `eot, woff2, woff` ladder warms the woff2, not nothing.
+        let Some(first) = ff.srcs.iter().find(|s| {
+            let path = s.split(['?', '#']).next().unwrap_or(s);
+            !path.to_ascii_lowercase().ends_with(".eot")
+        }) else {
             continue;
         };
         let url = resolve_url(sheet_url, first);
@@ -2197,9 +2232,15 @@ fn warm_font_faces(css: &str, sheet_url: &str) {
             continue;
         }
         handle.spawn(async move {
-            let _ = manuk_net::fetch(&url).await;
+            warm_fetch(&url).await;
         });
     }
+}
+
+/// PERF.1.1.a.a: the DOM's images, warmed again once scripts have run (a script that injects `<img>`
+/// or swaps a `src` names URLs the parse-time scan never saw). Same single-flight contract.
+fn warm_dom_images(dom: &Dom, base: &str) {
+    warm_images(dom, base);
 }
 
 fn collect_subresources(dom: &Dom, base: &str) -> Vec<Subresource> {
@@ -5307,10 +5348,13 @@ impl Page {
         if phase("external CSS") {
             self.fetch_and_apply_stylesheets(fonts, viewport_width)
                 .await;
+            self.warm_style_images();
         }
         if phase("dynamic scripts") {
             self.fetch_and_run_dynamic_scripts(fonts, viewport_width, 4)
                 .await;
+            warm_dom_images(&self.dom, &self.final_url);
+            self.warm_style_images();
         }
         // **Subframes — BEFORE `load` fires, because `load` waits for them and because that is where
         // pages reach into their frames.** `<body onload="showNodes(...)">` reading
@@ -8619,6 +8663,43 @@ impl Page {
             .map(|(u, i)| (u, std::rc::Rc::new(i)))
             .collect();
         self.apply_masks(&rc)
+    }
+
+    /// **Start the CSS `url()` backgrounds and `mask-image`s the moment the cascade names them**, instead
+    /// of at the last phase (mobile.bg's icon sprites went out 10 s in, ~9 s after their sheet landed).
+    /// Only WARMS, same contract as [`warm_images`]: the later `fetch_and_apply_*` asks for the same URL
+    /// and joins the single-flight / HTTP cache. Distinct URLs only, first `url()` layer per node
+    /// (what the apply step binds).
+    fn warm_style_images(&self) {
+        if !early_scan_enabled() || manuk_net::lean::images_deferred() {
+            return;
+        }
+        let Ok(handle) = tokio::runtime::Handle::try_current() else {
+            return;
+        };
+        let mut seen = std::collections::HashSet::new();
+        let mut urls: Vec<String> = Vec::new();
+        for s in self.styles.values() {
+            if let Some(u) = s.background_images.iter().find_map(|i| match i {
+                manuk_css::BackgroundImage::Url(u) => Some(u.clone()),
+                _ => None,
+            }) {
+                urls.push(resolve_url(&self.final_url, &u));
+            }
+            if let Some(m) = &s.mask_image {
+                urls.push(resolve_url(&self.final_url, m));
+            }
+        }
+        for url in urls
+            .into_iter()
+            .filter(|u| u.starts_with("http://") || u.starts_with("https://"))
+            .filter(|u| seen.insert(u.clone()))
+            .take(64)
+        {
+            handle.spawn(async move {
+                warm_fetch(&url).await;
+            });
+        }
     }
 
     /// Fetch this page's **`background-image: url(...)`** bitmaps and bind them to their nodes.

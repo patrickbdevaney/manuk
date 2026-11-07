@@ -32,3 +32,14 @@ nothing is requested twice and nothing is applied early. `MANUK_NO_EARLY_SCAN=1`
 mutant arm). Measured paired (`scripts/perf1-ab.py`, interleaved per URL/run): Σ subres_fetch 19.90 vs
 23.09 s and 22.56 vs 26.55 s (ratio 0.862, 0.850; the node's 0.8x bar was NOT met).
 Gotcha: `resolve_url` percent-encodes the `?` of `x.eot?v=1` so an `ends_with(".eot")` test misses it.
+
+PERF.1.1.a.a extends the scan to what the first pass left serial (traces: mobile.bg's CSS-icon SVGs went out at
+10.3 s, ebanking's `font-awesome` woff2 at 6.25 s): (c) `warm_font_faces` now warms the first src the apply
+ladder will really ask for (it steps over `.eot`, so an `eot, woff2` face used to warm nothing and fetch late);
+(d) `Page::warm_style_images` warms the first `background-image: url()` per node and each `mask-image` right
+after external CSS and again after dynamic scripts (a 64-URL cap); (e) `warm_dom_images` re-scans the DOM
+after dynamic scripts for `<img>` they injected. Gotcha: an error response (403/404) is not stored by the HTTP
+cache, so a warm fetch + the apply fetch put the same failing URL on the wire twice (zoomph.com glyphicons,
+403); `warm_fetch` records failures in `WARM_FAILED` (30 s) and `fetch_image_bytes` returns None for them
+without a second request. Paired A/B, 20 URLs x 3 runs, chrome_ver=145.0.7632.116: Σ subres_fetch 17.06 vs
+22.57 s (0.756; per-run 0.757/0.818/0.651), dupes 0.
