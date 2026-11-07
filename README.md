@@ -54,7 +54,28 @@ uses more than the best Playwright arm (727 vs 517 in+out per task, W4.B4); the 
 (0 of 44 failed tasks on the REAL deterministic subset). The Chrome backend therefore ships as the product, and the
 in-process engine as the deterministic, forkable research backend. On the REAL deterministic subset (47 tasks) the
 in-process engine passes 10-11 tasks, the Chrome backend 15-18 and Playwright 23-25 (W4.A6); the engine cannot yet
-drive those forms.
+drive those forms. On all 102 REAL tasks, with the LLM-judged evals scored by an owner-provided judge
+(`openai/gpt-oss-120b`, validated against positive, negative and agreement controls, W3.18.a.a.b), the tasks passed in
+at least 2 of 3 runs are: Playwright 52, the Chrome backend 35, the in-process engine 32 (runs 46/49/52, 35/36/40 and
+35/31/30; [`docs/sprint/w318/real-judge-report.tsv`](docs/sprint/w318/real-judge-report.tsv)).
+
+## Footprint
+
+Measured against the pinned Chrome for Testing (chrome_ver=145.0.7632.116), 3 runs per row, local fixture pages so the
+numbers are not shared-cache artefacts. Method, raw rows and what is not claimed:
+[`docs/sprint/FOOTPRINT.md`](docs/sprint/FOOTPRINT.md).
+
+| axis | in-process engine | Chrome | reading |
+|---|---|---|---|
+| memory, 1 page (PSS) | 31 MB | 399-407 MB | 0.08× |
+| memory per page, 50 pages | 12.4 MB (one process each), 4.9 MB (forks of one checkpoint) | 20.1 MB (tabs in one browser) | 0.62×, 0.24× |
+| new page from a checkpoint | 36-43 ms (`fork`, replay-based) | 65-70 ms (new context and navigate) | — |
+| cold start to first observation | 55-57 ms | 305-314 ms | 0.18× |
+| real sites, per page (5 paired URLs) | — | — | PSS 0.30-0.31×; wall clock slower (1.66-1.96× this run, not settled) |
+
+The memory gap narrows as pages accumulate, because Chrome tabs share most of their cost. On live sites the engine is
+smaller, but its single-page load time is behind Chrome's, mostly in subresource fetch
+([`docs/sprint/PERF.md`](docs/sprint/PERF.md)).
 
 ## Purpose
 
@@ -172,6 +193,26 @@ cargo run -p manuk-wpt
 - **Agent surface:** accessibility tree (role, accessible name, state, focus, geometry) computed without page
   JavaScript; occlusion-aware hit testing; actions that dispatch real DOM events; a provider-neutral inference
   interface; page text delivered to models only inside an untrusted-content boundary.
+- **MCP tools:** `navigate`, `observe` (full, viewport or diff; a tree-shaped snapshot with list, row, card and dialog
+  context and frame-merged handles), `extract(query)` returning only matching passages, `find`, `act` with an effect
+  diff and a dispatch-time hit-test check, `type` with real key events, `scroll`, composite `fill_form(fields[])` and
+  `act(steps[])` that stop at the first dialog or navigation, `upload`, `key`, `drag`, `dialog`, gated downloads,
+  `screenshot`, `storage_state`, and `handoff` (the agent pauses, a person acts, the agent resumes with a diff of what
+  changed). Per-backend behaviour is in [`docs/sprint/BACKENDS.md`](docs/sprint/BACKENDS.md).
+- **Engine-only agent features:** every act and navigate reports when the page has settled, read from the engine's own
+  fetch and timer queues rather than a network-idle guess; `checkpoint`, `restore` and `fork` (replay-based, including
+  a cookie and storage snapshot); action receipts listing the storage writes each act made; `--zygote-after-load`
+  forks sessions from an already-loaded page (64-way fork verified on a page with a 3.9 MB DOM); `--deterministic`
+  runs with a logical clock and seeded randomness. Retry-from-checkpoint and best-of-3 forking help on flaky forms,
+  but the same layer over Chrome matches them (W4.C2, W4.C3).
+- **Security defaults (agent mode):** an ephemeral in-memory cookie and storage partition unless `--profile` is
+  given; no `file:` loads from a web document; loopback, RFC 1918 and link-local addresses refused after DNS
+  resolution, on fetch, WebSocket and proxy dials; a per-task origin allowlist enforced on every network channel; values
+  read on one origin refused toward another (including encoded copies); secrets typed from the OS keyring through
+  named handles and redacted from results; text a person cannot see is withheld from the model; SpiderMonkey's
+  optimizing JIT tiers off (baseline tiers kept) and a Landlock filesystem ruleset on the headless binaries. The Chrome
+  backend runs with Chrome's sandbox on; `--unsafe-no-sandbox` is the only way to turn it off. Each layer is pinned
+  by a gate shown to fail without it ([`SECURITY.md`](SECURITY.md)).
 - **Agent grants:** `manuk-mcp` takes `--read-origins` and `--write-origins` (origin sets for navigation, reads, typing
   and POSTs), and `--confirm=submit,download,navigate-new-origin` (actions that need `confirm=true`). Credential and
   payment fields are never typed by the agent (HANDOFF), and out-of-set origins are REFUSED on both the in-process and
