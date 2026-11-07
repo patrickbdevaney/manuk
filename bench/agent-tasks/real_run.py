@@ -237,7 +237,10 @@ def proxy(a, child):
 
 # ---------------------------------------------------------------- driver
 COLS = ["ts", "arm", "suite", "chrome_ver", "task", "site", "run", "model", "pass", "evals_ok", "evals_n", "state_ok",
-        "checkpoints", "restores", "forks", "input_tokens", "output_tokens", "cost_usd", "seconds", "turns", "is_error", "answer"]
+        "checkpoints", "restores", "forks", "input_tokens", "output_tokens", "cache_read_tokens", "cache_create_tokens",
+        "cost_usd", "seconds", "turns", "is_error", "answer"]
+# W5.T0.b: every run's stream-json is kept here, outside the repo, so w5t0_attrib.py can bucket REAL runs
+TRANSCRIPTS = os.path.expanduser("~/.cache/manuk-real/transcripts")
 SUITE = "real-v1-det"
 JUDGE_SUITE = "real-judge-gptoss120b"  # W3.18.a.a.b: llm_boolean evals graded by the owner-provided judge (real_judge.py)
 JUDGE_COLS = COLS + ["llm_ok", "llm_n", "judge_model"]
@@ -282,7 +285,7 @@ def pin_chrome(arm, srv, tdir):
         srv["env"] = dict(srv.get("env", {}), MANUK_CHROME=chrome_wrapper(tdir))
 
 
-def one(arm, task, run, pin, tdir, timeout, judge_env=None):
+def one(arm, task, run, pin, tdir, timeout, judge_env=None, trdir=TRANSCRIPTS):
     sys.path.insert(0, HERE)
     import run_arm
     tmp = os.path.join(tdir, f"{arm}_{task['id']}_r{run}")
@@ -302,6 +305,8 @@ def one(arm, task, run, pin, tdir, timeout, judge_env=None):
     prompt = run_arm.PROMPT.format(url=site, goal=task["goal"])
     out, err, secs, _ = run_arm.run_claude(prompt, cfg_path, allowed, timeout, sys_hint=run_arm.HINTS.get(arm))
     open(os.path.join(tmp, "transcript.jsonl"), "w").write(out)
+    os.makedirs(trdir, exist_ok=True)
+    open(os.path.join(trdir, f"{arm}_{task['id']}_r{run}.jsonl"), "w").write(out)
     j = run_arm.parse(out) or {}
     u = j.get("usage", {})
     st = None
@@ -328,6 +333,7 @@ def one(arm, task, run, pin, tdir, timeout, judge_env=None):
             "site": task["website"]["id"], "run": run, "model": "haiku", "pass": int(ok and llm_ok == len(llm) and not j.get("is_error")), "evals_ok": k,
             "evals_n": n, "state_ok": int(bool(st and st["ok"])), "checkpoints": tc["checkpoint"], "restores": tc["restore"],
             "forks": tc["fork"], "input_tokens": u.get("input_tokens", 0), "output_tokens": u.get("output_tokens", 0),
+            "cache_read_tokens": u.get("cache_read_input_tokens", 0), "cache_create_tokens": u.get("cache_creation_input_tokens", 0),
             "cost_usd": j.get("total_cost_usd", 0), "seconds": f"{secs:.1f}", "turns": j.get("num_turns", ""),
             "is_error": int(bool(j.get("is_error")) or "result" not in j),
             "answer": final, "llm_ok": llm_ok, "llm_n": len(llm), "judge_model": judge_env["REAL_JUDGE_MODEL"] if judge_env else ""}
@@ -347,6 +353,7 @@ def main():
     ap.add_argument("--out", default=None, help="default: w318/real-runs.tsv, or w318/real-judge-runs.tsv with --judge")
     ap.add_argument("--judge", action="store_true", help="W3.18.a.a.b: score llm_boolean evals with the owner judge (suite real-judge-gptoss120b)")
     ap.add_argument("--timeout", type=int, default=420); ap.add_argument("--run-base", type=int, default=0, help="first run number - 1 (to interleave arms per run)")
+    ap.add_argument("--transcripts", default=TRANSCRIPTS, help="W5.T0.b: per-run stream-json, one <arm>_<task>_r<run>.jsonl each (outside the repo)")
     ap.add_argument("--site"); ap.add_argument("--task"); ap.add_argument("--state")
     a, extra = ap.parse_known_args()
     if a.cmd == "proxy":
@@ -382,6 +389,8 @@ def main():
     cols = JUDGE_COLS if a.judge else COLS
     suite = JUDGE_SUITE if a.judge else SUITE
     new = not os.path.exists(out)
+    if not new and open(out).readline().rstrip("\n").split("\t") != cols:
+        sys.exit(f"refusing: {out} has another header (older COLS); append would misalign columns, use a new --out")
     have = set()  # resume: (arm, task, run) rows already in the TSV are not re-run
     if not new:
         for l in open(out).read().splitlines()[1:]:
@@ -395,7 +404,7 @@ def main():
 
         def job(rt):
             run, t = rt
-            r = one(a.arm, t, run, pin, tdir, a.timeout, judge_env)
+            r = one(a.arm, t, run, pin, tdir, a.timeout, judge_env, a.transcripts)
             with lock:
                 f.write("\t".join(str(r.get(c, "")) for c in cols) + "\n"); f.flush()
                 print(f"{a.arm} {t['id']} r{run}: {'PASS' if r['pass'] else 'FAIL'} {r['evals_ok']}/{r['evals_n']} state_ok={r['state_ok']} restores={r['restores']}", flush=True)
