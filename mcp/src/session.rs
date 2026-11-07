@@ -75,6 +75,10 @@ pub struct Session<B: Backend> {
     rev: HashMap<u32, NodeId>,
     next: u32,
     snap: Option<Snap>,
+    /// W5.T4: the URL the stored snapshot was taken at (a diff across a URL change is never offered).
+    snap_url: String,
+    /// W5.T4: the labelled full view that replaces the effect diff body `.0` when an act result shows its diff.
+    view_alt: Option<(String, String)>,
     /// W4.D2: values read per origin; a payload carrying one toward another origin is refused.
     taint: crate::taint::Taint,
     /// Per-call opt-out of the injection shield (`include_hidden=true`).
@@ -396,6 +400,8 @@ impl<B: Backend> Session<B> {
             rev: HashMap::new(),
             next: 1,
             snap: None,
+            snap_url: String::new(),
+            view_alt: None,
             include_hidden: false,
             taint: Default::default(),
             grants: Default::default(),
@@ -901,6 +907,40 @@ impl<B: Backend> Session<B> {
         out
     }
 
+    /// W5.T4: the diff body, or a labelled compact full view when the diff is not the cheaper read: it
+    /// exceeds 40% of the full view, or the URL changed since the snapshot it diffs against.
+    /// `MANUK_DIFFVIEW_MUTATE=off` removes the rule (the gate's mutant).
+    fn diff_or_view(&mut self, d: Vec<String>, tree: &A11yNode, url_changed: bool, budget: usize, defer: bool) -> String {
+        if d.is_empty() && !url_changed {
+            return "no change".to_string();
+        }
+        let diff_len: usize = d.iter().map(|l| l.len() + 1).sum();
+        if std::env::var("MANUK_DIFFVIEW_MUTATE").is_ok_and(|v| v == "off") {
+            return d.join("\n");
+        }
+        let lines = self.lines(tree, false, "all");
+        let full_len: usize = lines.iter().map(|(_, l)| l.len() + 1).sum();
+        if !url_changed && diff_len * 10 <= full_len * 4 {
+            return d.join("\n");
+        }
+        let why = if url_changed {
+            "the URL changed".to_string()
+        } else {
+            format!("the diff is {diff_len} chars, over 40% of the {full_len}-char full view")
+        };
+        let view = format!(
+            "(full view instead of a diff: {why})\n{}",
+            Self::fit(lines, budget, "use find(query) or observe(mode=viewport)")
+        );
+        if defer {
+            // An act's one-line result needs no diff at all; the swap happens only where the diff is shown.
+            let raw = if d.is_empty() { "no change".to_string() } else { d.join("\n") };
+            self.view_alt = Some((raw.clone(), view));
+            return raw;
+        }
+        view
+    }
+
     fn diff_lines(&mut self, before: &Snap, after: &Snap) -> Vec<String> {
         let mut out = Vec::new();
         for id in &after.order {
@@ -1021,6 +1061,7 @@ impl<B: Backend> Session<B> {
         if matches!(tool, "observe" | "extract" | "find" | "screenshot") {
             self.b.settle().await;
         }
+        self.view_alt = None;
         let r = self.call_inner(tool, a).await;
         // W3.16: no secret byte leaves in any result, observation or error (and the action-log diff
         // hash is taken over the redacted text, so the log is the same with or without the secret).
@@ -1028,10 +1069,16 @@ impl<B: Backend> Session<B> {
         let r = match r {
             Ok(Output::Text(t)) => {
                 let t = manuk_net::secrets::redact(&t);
+                let alt = self.view_alt.take();
                 let t = if matches!(tool, "act" | "type") && !a.contains_key("steps") && !detail {
                     concise(&t).unwrap_or(t)
                 } else {
                     t
+                };
+                // W5.T4: an act that shows its diff shows the labelled full view when that is the cheaper read.
+                let t = match alt {
+                    Some((raw, view)) if matches!(tool, "act" | "type") && t.contains(&raw) => t.replacen(&raw, &view, 1),
+                    _ => t,
                 };
                 Ok(Output::Text(t))
             }
@@ -1444,6 +1491,7 @@ impl<B: Backend> Session<B> {
         let tree = self.tree()?;
         self.seed(&tree)?;
         self.snap = Some(self.snapshot(&tree));
+        self.snap_url = self.b.url();
         if let Some(q) = query.filter(|q| !q.trim().is_empty()) {
             let ans = self.answer(q)?;
             return Ok(format!(
@@ -1566,11 +1614,8 @@ impl<B: Backend> Session<B> {
                 }
                 Some(prev) => {
                     let d = self.diff_lines(&prev, &now);
-                    let body = if d.is_empty() {
-                        "no change".to_string()
-                    } else {
-                        d.join("\n")
-                    };
+                    let moved = self.snap_url != self.b.url();
+                    let body = self.diff_or_view(d, &tree, moved, budget, false);
                     format!("{UNTRUSTED}\n{}\n{body}", self.header())
                 }
             },
@@ -1579,6 +1624,7 @@ impl<B: Backend> Session<B> {
             ),
         };
         self.snap = Some(now);
+        self.snap_url = self.b.url();
         Ok(out)
     }
 
@@ -1636,11 +1682,8 @@ impl<B: Backend> Session<B> {
             let after = self.snapshot(&tree);
             let d = self.diff_lines(&before, &after);
             self.snap = Some(after);
-            let body = if d.is_empty() {
-                "no change".to_string()
-            } else {
-                d.join("\n")
-            };
+            self.snap_url = url_now.clone();
+            let body = self.diff_or_view(d, &tree, true, DEFAULT_BUDGET_TOKENS / 2, true);
             return Ok(format!(
                 "{UNTRUSTED}\nrouted (same document, handles still valid): {url_before} → {url_now}\n{body}   {evidence}"
             ));
@@ -1650,6 +1693,7 @@ impl<B: Backend> Session<B> {
             let tree = self.tree()?;
             self.seed(&tree)?;
             self.snap = Some(self.snapshot(&tree));
+            self.snap_url = url_now.clone();
             let body = Self::fit(
                 self.lines(&tree, false, "all"),
                 DEFAULT_BUDGET_TOKENS / 2,
@@ -1664,11 +1708,8 @@ impl<B: Backend> Session<B> {
         let after = self.snapshot(&tree);
         let d = self.diff_lines(&before, &after);
         self.snap = Some(after);
-        let body = if d.is_empty() {
-            "no change".to_string()
-        } else {
-            d.join("\n")
-        };
+        self.snap_url = url_now.clone();
+        let body = self.diff_or_view(d, &tree, false, DEFAULT_BUDGET_TOKENS / 2, true);
         Ok(format!("{UNTRUSTED}\n{body}\nurl: unchanged   {evidence}"))
     }
 
@@ -1823,6 +1864,7 @@ impl<B: Backend> Session<B> {
             let t = self.tree()?;
             self.seed(&t)?;
             self.snap = Some(self.snapshot(&t));
+            self.snap_url = self.b.url();
         }
         if action == "click" && Self::retry_on() && (landed_on_error || Self::is_noop(&r)) {
             if let Some(done) = self.retry_noop(h, node, &url_before).await? {
@@ -1981,6 +2023,7 @@ impl<B: Backend> Session<B> {
                 let t = self.tree()?;
                 self.seed(&t)?;
                 self.snap = Some(self.snapshot(&t));
+                self.snap_url = self.b.url();
                 continue;
             }
             if !Self::is_noop(&r) {

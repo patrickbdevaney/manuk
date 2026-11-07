@@ -237,7 +237,10 @@ fn a_fresh_client_with_only_the_handle_continues_the_diff_from_the_same_state() 
         "type",
         json!({"handle": qty, "text": "7", "detail": true, "page": page_of(&full)}),
     );
-    assert!(!err && eff.contains("~[h") && eff.contains("=2→7"), "{eff}");
+    // W5.T4: on this tiny page the diff can exceed 40% of the view, so the effect is the labelled view.
+    let took = eff.contains("~[h") && eff.contains("=2→7")
+        || eff.contains("full view instead of a diff") && eff.contains("textbox \"Qty\" =7");
+    assert!(!err && took, "{eff}");
 }
 
 #[test]
