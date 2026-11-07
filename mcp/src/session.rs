@@ -257,6 +257,19 @@ fn is_container(r: &Role) -> bool {
     )
 }
 
+/// W5.T1: the nearest named container only, and only when it says something the element's own name
+/// does not (a story link inside a list item named after that link needs no suffix).
+fn lean_ctx(name: &str, ctx: &str) -> String {
+    let first = ctx.strip_prefix(" in ").map(|r| r.split(" in ").next().unwrap_or(r));
+    let Some(first) = first else { return String::new() };
+    let label = first.split_once(' ').map(|(_, l)| l.trim_matches('"')).unwrap_or("");
+    let label = label.trim_end_matches('…');
+    if label.is_empty() || name.contains(label) || label.contains(name) {
+        return String::new();
+    }
+    format!(" in {first}")
+}
+
 fn is_chrome(r: &Role) -> bool {
     matches!(
         r,
@@ -653,10 +666,43 @@ impl<B: Backend> Session<B> {
         }
     }
 
-    fn lines(&mut self, tree: &A11yNode, viewport_only: bool) -> Vec<(u8, String)> {
+    /// W5.T1: the lean format. Handles only on what an agent can operate (or a clickable `div`);
+    /// content lines are `- role "name"` with no handle and no container suffix; a table row is one
+    /// line, `- row "cell | cell"`. `kind` filters: `all`, `interactive` or `content`.
+    /// `MANUK_OBSERVE_MUTATE=legacy` restores the old format (the gate's mutant and the baseline).
+    fn lines(&mut self, tree: &A11yNode, viewport_only: bool, kind: &str) -> Vec<(u8, String)> {
+        let legacy = std::env::var("MANUK_OBSERVE_MUTATE").is_ok_and(|v| v == "legacy");
         let vp = self.b.viewport();
         let mut out = Vec::new();
-        for n in tree.iter().filter(|n| worth(n)) {
+        // Cells folded into their row's line: every non-interactive descendant of a row that has cells.
+        let mut folded: std::collections::HashSet<u64> = std::collections::HashSet::new();
+        let mut row_text: HashMap<u64, String> = HashMap::new();
+        if !legacy {
+            for r in tree.iter().filter(|n| matches!(n.role, Role::Row)) {
+                let cells: Vec<String> = r
+                    .iter()
+                    .skip(1)
+                    .filter(|k| {
+                        matches!(k.role, Role::Cell | Role::ColumnHeader | Role::RowHeader)
+                    })
+                    .map(|k| text_under(k))
+                    .filter(|t| !t.is_empty())
+                    .collect();
+                if cells.is_empty() {
+                    continue;
+                }
+                row_text.insert(r.node.0, clip(&cells.join(" | ")));
+                for k in r.iter().skip(1) {
+                    if !k.role.is_interactive() {
+                        folded.insert(k.node.0);
+                    }
+                }
+            }
+        }
+        for n in tree.iter().filter(|n| worth(n) || row_text.contains_key(&n.node.0)) {
+            if folded.contains(&n.node.0) {
+                continue;
+            }
             let off = Self::offscreen(n, &vp);
             if viewport_only && (n.bbox.is_none() || !off.is_empty()) {
                 continue;
@@ -664,8 +710,15 @@ impl<B: Backend> Session<B> {
             if !viewport_only && n.bbox.is_none() && !n.role.is_interactive() {
                 continue;
             }
-            let e = self.ent(n);
-            let h = self.bind(n.node, &e);
+            let mut e = self.ent(n);
+            let operable = n.role.is_interactive() || e.click;
+            if !legacy {
+                match kind {
+                    "interactive" if !operable => continue,
+                    "content" if operable => continue,
+                    _ => {}
+                }
+            }
             // Budget tier: 0 = operable or structural (always kept), 1 = content text, 2 = chrome text.
             let tier = if n.role.is_interactive()
                 || matches!(
@@ -678,7 +731,34 @@ impl<B: Backend> Session<B> {
             } else {
                 1
             };
-            out.push((tier, Self::fmt_entry(h, &e, off)));
+            if legacy || operable {
+                let h = self.bind(n.node, &e);
+                if !legacy {
+                    e.ctx = lean_ctx(&e.name, &e.ctx);
+                }
+                out.push((tier, Self::fmt_entry(h, &e, off)));
+            } else {
+                if let Some(t) = row_text.get(&n.node.0) {
+                    e.name = t.clone();
+                }
+                let mut l = format!("- {}", e.role);
+                if !e.name.is_empty() {
+                    let _ = write!(l, " {:?}", e.name);
+                }
+                if !e.state.is_empty() {
+                    let _ = write!(l, " {}", e.state);
+                }
+                // A content line only names a boundary it sits in (frame, dialog, form), not a card or list.
+                let c = lean_ctx(&e.name, &e.ctx);
+                if ["region", "dialog", "alertdialog", "form"]
+                    .iter()
+                    .any(|r| c.starts_with(&format!(" in {r} ")))
+                {
+                    l.push_str(&c);
+                }
+                l.push_str(off);
+                out.push((tier, l));
+            }
         }
         out
     }
@@ -1277,7 +1357,7 @@ impl<B: Backend> Session<B> {
             ));
         }
         let body = Self::fit(
-            self.lines(&tree, false),
+            self.lines(&tree, false, "all"),
             DEFAULT_BUDGET_TOKENS,
             "use find(query) or observe(mode=viewport)",
         );
@@ -1362,8 +1442,8 @@ impl<B: Backend> Session<B> {
         let budget = budget.unwrap_or(DEFAULT_BUDGET_TOKENS);
         let now = self.snapshot(&tree);
         let out = match mode {
-            "full" | "viewport" => {
-                let lines = self.lines(&tree, mode == "viewport");
+            "full" | "viewport" | "interactive" | "content" => {
+                let lines = self.lines(&tree, mode == "viewport", mode);
                 let hint = if mode == "full" {
                     "use find(query) or observe(mode=viewport)"
                 } else {
@@ -1378,7 +1458,7 @@ impl<B: Backend> Session<B> {
             }
             "diff" => match self.snap.take() {
                 None => {
-                    let lines = self.lines(&tree, false);
+                    let lines = self.lines(&tree, false, "all");
                     format!(
                         "{UNTRUSTED}{}\n{}\n(no earlier observation: full)\n{}",
                         self.warn(),
@@ -1396,7 +1476,7 @@ impl<B: Backend> Session<B> {
                     format!("{UNTRUSTED}\n{}\n{body}", self.header())
                 }
             },
-            m => bail!("unknown observe mode {m:?}: use full, diff or viewport"),
+            m => bail!("unknown observe mode {m:?}: use full, diff, viewport, interactive or content"),
         };
         self.snap = Some(now);
         Ok(out)
@@ -1471,7 +1551,7 @@ impl<B: Backend> Session<B> {
             self.seed(&tree)?;
             self.snap = Some(self.snapshot(&tree));
             let body = Self::fit(
-                self.lines(&tree, false),
+                self.lines(&tree, false, "all"),
                 DEFAULT_BUDGET_TOKENS / 2,
                 "use find(query) or observe(mode=viewport)",
             );

@@ -1,3 +1,4 @@
+//! W5.T1: the "no listeners" case uses a role=button div, because the lean observation hands out handles to operable elements only (a plain heading no longer has one).
 //! W3.6 gate: a click that changes nothing returns its CAUSE (handler threw X / 0 listeners) and a repeat
 //! counter, on both backends. `MANUK_NOEFF_MUTATE=1` freezes the counter (red).
 
@@ -10,7 +11,7 @@ use serde_json::{json, Value};
 const PAGE: &str = r#"<!doctype html><html><head><title>Lab</title></head><body>
 <h1>Lab</h1>
 <button onclick="callAnUnimplementedApi()">Broken save</button>
-<h2 id="plain">Just a label</h2>
+<div id="plain" role="button">Just a label</div>
 <div style="height:3000px">tall</div>
 </body></html>"#;
 
