@@ -89,7 +89,7 @@ def arm_config(arm, tmp):
             return None, None
         cfg = {"mcpServers": {"browser": {"command": exe, "args": [], "env": {"MANUK_NO_RETRY": "1"}}}}
         allowed = "mcp__browser"
-    elif arm in ("manuk", "manuk+rollback", "manuk+rollback.v2", "manuk-prealwaysload", "manuk-lean", "manuk-noquery"):  # W4.B1 before-arm: MANUK_MCP_BIN
+    elif arm in ("manuk", "manuk+rollback", "manuk+rollback.v2", "manuk-prealwaysload", "manuk-lean", "manuk-noquery", "manuk-legacy-observe"):  # W4.B1 before-arm: MANUK_MCP_BIN
         exe = mcp_bin()
         if not os.path.exists(exe):
             return None, None
@@ -98,6 +98,8 @@ def arm_config(arm, tmp):
             cfg["mcpServers"]["browser"]["env"] = {"MANUK_QUERY_MUTATE": "ignore"}
         if arm == "manuk-lean":  # W4.E2.a: same binary, lean agent profile (deferred image bodies, tracker hosts refused)
             cfg["mcpServers"]["browser"]["env"] = {"MANUK_AGENT_PROFILE": "lean"}
+        if arm == "manuk-legacy-observe":  # W5.T1.b before-arm: same binary, pre-W5.T1 observe format (session.rs MANUK_OBSERVE_MUTATE)
+            cfg["mcpServers"]["browser"]["env"] = {"MANUK_OBSERVE_MUTATE": "legacy"}
         allowed = "mcp__browser"
     elif arm in ("cdp-layer", "cdp-layer+pwfmt"):  # R4.1 (K1 arm 3): the manuk tool surface and disciplines over Chrome via CDP
         exe = mcp_bin()

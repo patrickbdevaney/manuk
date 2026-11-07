@@ -1,0 +1,478 @@
+chrome_ver	arm	task	run	turn	tool	result_bytes	output_tokens
+145.0.7632.116	manuk-legacy-observe	L01	1	1	mcp__browser__navigate	20568	66
+145.0.7632.116	manuk-legacy-observe	L01	1	2		0	123
+145.0.7632.116	manuk-legacy-observe	L02	1	1	mcp__browser__navigate	2352	67
+145.0.7632.116	manuk-legacy-observe	L02	1	2	mcp__browser__act	3129	115
+145.0.7632.116	manuk-legacy-observe	L02	1	3		0	155
+145.0.7632.116	manuk-legacy-observe	L03	1	1	mcp__browser__navigate	20568	93
+145.0.7632.116	manuk-legacy-observe	L03	1	2	mcp__browser__act	16402	80
+145.0.7632.116	manuk-legacy-observe	L03	1	3	mcp__browser__act	15157	261
+145.0.7632.116	manuk-legacy-observe	L03	1	4		0	370
+145.0.7632.116	manuk-legacy-observe	L04	1	1	mcp__browser__navigate	2788	80
+145.0.7632.116	manuk-legacy-observe	L04	1	2	mcp__browser__find	1096	78
+145.0.7632.116	manuk-legacy-observe	L04	1	3	mcp__browser__act	65	63
+145.0.7632.116	manuk-legacy-observe	L04	1	4	mcp__browser__act	2300	63
+145.0.7632.116	manuk-legacy-observe	L04	1	5		0	228
+145.0.7632.116	manuk-legacy-observe	L05	1	1	mcp__browser__navigate	2788	75
+145.0.7632.116	manuk-legacy-observe	L05	1	2	mcp__browser__navigate	1738	118
+145.0.7632.116	manuk-legacy-observe	L05	1	3		0	229
+145.0.7632.116	manuk-legacy-observe	L06	1	1	mcp__browser__navigate	21113	79
+145.0.7632.116	manuk-legacy-observe	L06	1	2		0	174
+145.0.7632.116	manuk-legacy-observe	L07	1	1	mcp__browser__navigate	20568	87
+145.0.7632.116	manuk-legacy-observe	L07	1	2		0	105
+145.0.7632.116	manuk-legacy-observe	L08	1	1	mcp__browser__navigate	1886	41
+145.0.7632.116	manuk-legacy-observe	L08	1	2	mcp__browser__extract	159	100
+145.0.7632.116	manuk-legacy-observe	L08	1	3	mcp__browser__extract	1788	26
+145.0.7632.116	manuk-legacy-observe	L08	1	4		0	184
+145.0.7632.116	manuk-legacy-observe	L09	1	1	mcp__browser__navigate	1886	106
+145.0.7632.116	manuk-legacy-observe	L09	1	2	mcp__browser__act	2363	92
+145.0.7632.116	manuk-legacy-observe	L09	1	3		0	404
+145.0.7632.116	manuk-legacy-observe	L10	1	1	mcp__browser__navigate	1163	149
+145.0.7632.116	manuk-legacy-observe	L10	1	2	mcp__browser__observe	1973	68
+145.0.7632.116	manuk-legacy-observe	L10	1	3	mcp__browser__act	836	82
+145.0.7632.116	manuk-legacy-observe	L10	1	4		0	598
+145.0.7632.116	manuk-legacy-observe	L11	1	1	mcp__browser__navigate	514	45
+145.0.7632.116	manuk-legacy-observe	L11	1	2	mcp__browser__extract	159	50
+145.0.7632.116	manuk-legacy-observe	L11	1	3	mcp__browser__extract	1619	28
+145.0.7632.116	manuk-legacy-observe	L11	1	4		0	218
+145.0.7632.116	manuk-legacy-observe	L12	1	1	mcp__browser__navigate	453	108
+145.0.7632.116	manuk-legacy-observe	L12	1	2	mcp__browser__scroll+mcp__browser__extract	117	163
+145.0.7632.116	manuk-legacy-observe	L12	1	3	mcp__browser__scroll	116	85
+145.0.7632.116	manuk-legacy-observe	L12	1	4	mcp__browser__scroll	117	85
+145.0.7632.116	manuk-legacy-observe	L12	1	5	mcp__browser__extract	6472	97
+145.0.7632.116	manuk-legacy-observe	L12	1	6		0	477
+145.0.7632.116	manuk-legacy-observe	L13	1	1	mcp__browser__navigate	2352	57
+145.0.7632.116	manuk-legacy-observe	L13	1	2	mcp__browser__extract	903	136
+145.0.7632.116	manuk-legacy-observe	L13	1	3		0	269
+145.0.7632.116	manuk-legacy-observe	L14	1	1	mcp__browser__navigate	972	59
+145.0.7632.116	manuk-legacy-observe	L14	1	2	mcp__browser__extract	279	82
+145.0.7632.116	manuk-legacy-observe	L14	1	3		0	560
+145.0.7632.116	manuk-legacy-observe	L15	1	1	mcp__browser__navigate	317	56
+145.0.7632.116	manuk-legacy-observe	L15	1	2		0	107
+145.0.7632.116	manuk-legacy-observe	L16	1	1	mcp__browser__navigate	2457	76
+145.0.7632.116	manuk-legacy-observe	L16	1	2		0	108
+145.0.7632.116	manuk-legacy-observe	L17	1	1	mcp__browser__navigate	4109	93
+145.0.7632.116	manuk-legacy-observe	L17	1	2	mcp__browser__extract	4832	151
+145.0.7632.116	manuk-legacy-observe	L17	1	3	mcp__browser__find	1176	112
+145.0.7632.116	manuk-legacy-observe	L17	1	4	mcp__browser__extract	223	121
+145.0.7632.116	manuk-legacy-observe	L17	1	5	mcp__browser__observe	3213	30
+145.0.7632.116	manuk-legacy-observe	L17	1	6	mcp__browser__observe	32377	160
+145.0.7632.116	manuk-legacy-observe	L17	1	7	mcp__browser__extract	1435	183
+145.0.7632.116	manuk-legacy-observe	L17	1	8	Agent	1709	468
+145.0.7632.116	manuk-legacy-observe	L17	1	9	WebFetch	731	259
+145.0.7632.116	manuk-legacy-observe	L17	1	10		0	543
+145.0.7632.116	manuk-legacy-observe	L18	1	1	mcp__browser__navigate	32270	75
+145.0.7632.116	manuk-legacy-observe	L18	1	2	mcp__browser__extract	2603	65
+145.0.7632.116	manuk-legacy-observe	L18	1	3		0	294
+145.0.7632.116	manuk-legacy-observe	L19	1	1	mcp__browser__navigate	1834	135
+145.0.7632.116	manuk-legacy-observe	L19	1	2		0	265
+145.0.7632.116	manuk-legacy-observe	L20	1	1	mcp__browser__navigate	2539	129
+145.0.7632.116	manuk-legacy-observe	L20	1	2	mcp__browser__extract	2230	106
+145.0.7632.116	manuk-legacy-observe	L20	1	3	mcp__browser__observe	65	97
+145.0.7632.116	manuk-legacy-observe	L20	1	4	mcp__browser__observe	12274	97
+145.0.7632.116	manuk-legacy-observe	L20	1	5		0	471
+145.0.7632.116	manuk-legacy-observe	L21	1	1	mcp__browser__navigate	31017	64
+145.0.7632.116	manuk-legacy-observe	L21	1	2	mcp__browser__type	16310	65
+145.0.7632.116	manuk-legacy-observe	L21	1	3	mcp__browser__find	1034	149
+145.0.7632.116	manuk-legacy-observe	L21	1	4		0	248
+145.0.7632.116	manuk-legacy-observe	L22	1	1	mcp__browser__navigate	11258	60
+145.0.7632.116	manuk-legacy-observe	L22	1	2	mcp__browser__act	461	101
+145.0.7632.116	manuk-legacy-observe	L22	1	3	mcp__browser__extract	2957	131
+145.0.7632.116	manuk-legacy-observe	L22	1	4		0	157
+145.0.7632.116	manuk-legacy-observe	L23	1	1	mcp__browser__navigate	20568	72
+145.0.7632.116	manuk-legacy-observe	L23	1	2	mcp__browser__act	14074	62
+145.0.7632.116	manuk-legacy-observe	L23	1	3		0	494
+145.0.7632.116	manuk-legacy-observe	L24	1	1	mcp__browser__navigate	11258	48
+145.0.7632.116	manuk-legacy-observe	L24	1	2	mcp__browser__extract	2970	113
+145.0.7632.116	manuk-legacy-observe	L24	1	3		0	162
+145.0.7632.116	manuk-legacy-observe	L25	1	1	mcp__browser__navigate	21113	98
+145.0.7632.116	manuk-legacy-observe	L25	1	2		0	121
+145.0.7632.116	manuk-legacy-observe	F01	1	1	mcp__browser__navigate	249	40
+145.0.7632.116	manuk-legacy-observe	F01	1	2	mcp__browser__fill_form	624	85
+145.0.7632.116	manuk-legacy-observe	F01	1	3		0	137
+145.0.7632.116	manuk-legacy-observe	F02	1	1	mcp__browser__navigate	249	49
+145.0.7632.116	manuk-legacy-observe	F02	1	2	mcp__browser__fill_form	624	103
+145.0.7632.116	manuk-legacy-observe	F02	1	3	mcp__browser__act	446	42
+145.0.7632.116	manuk-legacy-observe	F02	1	4	mcp__browser__fill_form	622	103
+145.0.7632.116	manuk-legacy-observe	F02	1	5		0	161
+145.0.7632.116	manuk-legacy-observe	F03	1	1	mcp__browser__navigate	270	52
+145.0.7632.116	manuk-legacy-observe	F03	1	2	mcp__browser__fill_form	641	119
+145.0.7632.116	manuk-legacy-observe	F03	1	3	mcp__browser__act+mcp__browser__act	557	88
+145.0.7632.116	manuk-legacy-observe	F03	1	4	mcp__browser__act	438	111
+145.0.7632.116	manuk-legacy-observe	F03	1	5		0	185
+145.0.7632.116	manuk-legacy-observe	F04	1	1	mcp__browser__navigate	570	76
+145.0.7632.116	manuk-legacy-observe	F04	1	2	mcp__browser__extract	186	49
+145.0.7632.116	manuk-legacy-observe	F04	1	3	mcp__browser__type	81	59
+145.0.7632.116	manuk-legacy-observe	F04	1	4	mcp__browser__act	449	66
+145.0.7632.116	manuk-legacy-observe	F04	1	5	mcp__browser__extract	112	49
+145.0.7632.116	manuk-legacy-observe	F04	1	6	mcp__browser__navigate	579	173
+145.0.7632.116	manuk-legacy-observe	F04	1	7	mcp__browser__act	449	67
+145.0.7632.116	manuk-legacy-observe	F04	1	8	mcp__browser__extract	126	49
+145.0.7632.116	manuk-legacy-observe	F04	1	9	mcp__browser__act	456	156
+145.0.7632.116	manuk-legacy-observe	F04	1	10		0	222
+145.0.7632.116	manuk-legacy-observe	F05	1	1	mcp__browser__navigate	694	66
+145.0.7632.116	manuk-legacy-observe	F05	1	2	mcp__browser__extract	212	42
+145.0.7632.116	manuk-legacy-observe	F05	1	3	mcp__browser__act	450	163
+145.0.7632.116	manuk-legacy-observe	F05	1	4	mcp__browser__extract	113	42
+145.0.7632.116	manuk-legacy-observe	F05	1	5	mcp__browser__act	456	122
+145.0.7632.116	manuk-legacy-observe	F05	1	6		0	164
+145.0.7632.116	manuk-legacy-observe	F06	1	1	mcp__browser__navigate	203	53
+145.0.7632.116	manuk-legacy-observe	F06	1	2	mcp__browser__act	159	45
+145.0.7632.116	manuk-legacy-observe	F06	1	3	mcp__browser__type	82	55
+145.0.7632.116	manuk-legacy-observe	F06	1	4	mcp__browser__act	143	45
+145.0.7632.116	manuk-legacy-observe	F06	1	5		0	217
+145.0.7632.116	manuk-legacy-observe	F07	1	1	mcp__browser__navigate	320	53
+145.0.7632.116	manuk-legacy-observe	F07	1	2	mcp__browser__act	84	45
+145.0.7632.116	manuk-legacy-observe	F07	1	3	mcp__browser__observe	192	32
+145.0.7632.116	manuk-legacy-observe	F07	1	4		0	128
+145.0.7632.116	manuk-legacy-observe	F08	1	1	mcp__browser__navigate	162	78
+145.0.7632.116	manuk-legacy-observe	F08	1	2	mcp__browser__observe	131	52
+145.0.7632.116	manuk-legacy-observe	F08	1	3	mcp__browser__scroll	52	53
+145.0.7632.116	manuk-legacy-observe	F08	1	4	mcp__browser__scroll	65	69
+145.0.7632.116	manuk-legacy-observe	F08	1	5	mcp__browser__scroll	116	69
+145.0.7632.116	manuk-legacy-observe	F08	1	6	mcp__browser__scroll+mcp__browser__observe	181	149
+145.0.7632.116	manuk-legacy-observe	F08	1	7	mcp__browser__extract	1566	78
+145.0.7632.116	manuk-legacy-observe	F08	1	8		0	322
+145.0.7632.116	manuk-legacy-observe	F09	1	1	mcp__browser__navigate	378	97
+145.0.7632.116	manuk-legacy-observe	F09	1	2	mcp__browser__act	522	62
+145.0.7632.116	manuk-legacy-observe	F09	1	3	mcp__browser__navigate	391	112
+145.0.7632.116	manuk-legacy-observe	F09	1	4		0	307
+145.0.7632.116	manuk-legacy-observe	F10	1	1	mcp__browser__navigate	346	95
+145.0.7632.116	manuk-legacy-observe	F10	1	2	mcp__browser__act	84	48
+145.0.7632.116	manuk-legacy-observe	F10	1	3	mcp__browser__observe	212	37
+145.0.7632.116	manuk-legacy-observe	F10	1	4	mcp__browser__extract	139	59
+145.0.7632.116	manuk-legacy-observe	F10	1	5		0	229
+145.0.7632.116	manuk-legacy-observe	F11	1	1	mcp__browser__navigate	350	66
+145.0.7632.116	manuk-legacy-observe	F11	1	2	mcp__browser__act	207	118
+145.0.7632.116	manuk-legacy-observe	F11	1	3	mcp__browser__act+mcp__browser__act	716	125
+145.0.7632.116	manuk-legacy-observe	F11	1	4		0	220
+145.0.7632.116	manuk-legacy-observe	F12	1	1	mcp__browser__navigate	289	89
+145.0.7632.116	manuk-legacy-observe	F12	1	2		0	192
+145.0.7632.116	manuk-legacy-observe	F13	1	1	mcp__browser__navigate	405	82
+145.0.7632.116	manuk-legacy-observe	F13	1	2		0	230
+145.0.7632.116	manuk-legacy-observe	F14	1	1	mcp__browser__navigate	403	53
+145.0.7632.116	manuk-legacy-observe	F14	1	2		0	210
+145.0.7632.116	manuk-legacy-observe	F15	1	1	mcp__browser__navigate	374	70
+145.0.7632.116	manuk-legacy-observe	F15	1	2		0	245
+145.0.7632.116	manuk-legacy-observe	L01	2	1	mcp__browser__navigate	20568	46
+145.0.7632.116	manuk-legacy-observe	L01	2	2		0	178
+145.0.7632.116	manuk-legacy-observe	L02	2	1	mcp__browser__navigate	2352	65
+145.0.7632.116	manuk-legacy-observe	L02	2	2	mcp__browser__act	3129	93
+145.0.7632.116	manuk-legacy-observe	L02	2	3		0	181
+145.0.7632.116	manuk-legacy-observe	L03	2	1	mcp__browser__navigate	20568	65
+145.0.7632.116	manuk-legacy-observe	L03	2	2	mcp__browser__act	16402	57
+145.0.7632.116	manuk-legacy-observe	L03	2	3	mcp__browser__extract	2492	187
+145.0.7632.116	manuk-legacy-observe	L03	2	4		0	245
+145.0.7632.116	manuk-legacy-observe	L04	2	1	mcp__browser__navigate	2788	76
+145.0.7632.116	manuk-legacy-observe	L04	2	2	mcp__browser__observe	20789	36
+145.0.7632.116	manuk-legacy-observe	L04	2	3	mcp__browser__act	2323	43
+145.0.7632.116	manuk-legacy-observe	L04	2	4		0	196
+145.0.7632.116	manuk-legacy-observe	L05	2	1	mcp__browser__navigate	2788	74
+145.0.7632.116	manuk-legacy-observe	L05	2	2	mcp__browser__navigate	1738	117
+145.0.7632.116	manuk-legacy-observe	L05	2	3		0	229
+145.0.7632.116	manuk-legacy-observe	L06	2	1	mcp__browser__navigate	21113	95
+145.0.7632.116	manuk-legacy-observe	L06	2	2		0	172
+145.0.7632.116	manuk-legacy-observe	L07	2	1	mcp__browser__navigate	20568	61
+145.0.7632.116	manuk-legacy-observe	L07	2	2		0	161
+145.0.7632.116	manuk-legacy-observe	L08	2	1	mcp__browser__navigate	1886	37
+145.0.7632.116	manuk-legacy-observe	L08	2	2	mcp__browser__extract	2010	100
+145.0.7632.116	manuk-legacy-observe	L08	2	3		0	134
+145.0.7632.116	manuk-legacy-observe	L09	2	1	mcp__browser__navigate	1886	107
+145.0.7632.116	manuk-legacy-observe	L09	2	2	mcp__browser__act	2363	93
+145.0.7632.116	manuk-legacy-observe	L09	2	3		0	509
+145.0.7632.116	manuk-legacy-observe	L10	2	1	mcp__browser__navigate	1163	151
+145.0.7632.116	manuk-legacy-observe	L10	2	2	mcp__browser__find	300	113
+145.0.7632.116	manuk-legacy-observe	L10	2	3	mcp__browser__act	893	81
+145.0.7632.116	manuk-legacy-observe	L10	2	4	mcp__browser__back+mcp__browser__find	2249	162
+145.0.7632.116	manuk-legacy-observe	L10	2	5	mcp__browser__act	836	82
+145.0.7632.116	manuk-legacy-observe	L10	2	6		0	564
+145.0.7632.116	manuk-legacy-observe	L11	2	1	mcp__browser__navigate	514	42
+145.0.7632.116	manuk-legacy-observe	L11	2	2	mcp__browser__observe	601	90
+145.0.7632.116	manuk-legacy-observe	L11	2	3	mcp__browser__extract	1619	130
+145.0.7632.116	manuk-legacy-observe	L11	2	4		0	235
+145.0.7632.116	manuk-legacy-observe	L12	2	1	mcp__browser__navigate	453	76
+145.0.7632.116	manuk-legacy-observe	L12	2	2	mcp__browser__scroll+mcp__browser__extract	117	115
+145.0.7632.116	manuk-legacy-observe	L12	2	3	mcp__browser__scroll	116	61
+145.0.7632.116	manuk-legacy-observe	L12	2	4	mcp__browser__scroll	117	61
+145.0.7632.116	manuk-legacy-observe	L12	2	5	mcp__browser__extract	6472	69
+145.0.7632.116	manuk-legacy-observe	L12	2	6		0	403
+145.0.7632.116	manuk-legacy-observe	L13	2	1	mcp__browser__navigate	2352	46
+145.0.7632.116	manuk-legacy-observe	L13	2	2	mcp__browser__extract	3587	105
+145.0.7632.116	manuk-legacy-observe	L13	2	3		0	125
+145.0.7632.116	manuk-legacy-observe	L14	2	1	mcp__browser__navigate	972	56
+145.0.7632.116	manuk-legacy-observe	L14	2	2	mcp__browser__extract	282	85
+145.0.7632.116	manuk-legacy-observe	L14	2	3		0	534
+145.0.7632.116	manuk-legacy-observe	L15	2	1	mcp__browser__navigate	317	54
+145.0.7632.116	manuk-legacy-observe	L15	2	2		0	105
+145.0.7632.116	manuk-legacy-observe	L16	2	1	mcp__browser__navigate	2440	89
+145.0.7632.116	manuk-legacy-observe	L16	2	2		0	120
+145.0.7632.116	manuk-legacy-observe	L17	2	1	mcp__browser__navigate	4109	126
+145.0.7632.116	manuk-legacy-observe	L17	2	2	mcp__browser__extract	3948	169
+145.0.7632.116	manuk-legacy-observe	L17	2	3	mcp__browser__extract	6557	40
+145.0.7632.116	manuk-legacy-observe	L17	2	4		0	139
+145.0.7632.116	manuk-legacy-observe	L18	2	1	mcp__browser__navigate	32270	113
+145.0.7632.116	manuk-legacy-observe	L18	2	2	mcp__browser__extract	1689	120
+145.0.7632.116	manuk-legacy-observe	L18	2	3	mcp__browser__find	65	126
+145.0.7632.116	manuk-legacy-observe	L18	2	4	mcp__browser__find	1329	126
+145.0.7632.116	manuk-legacy-observe	L18	2	5	mcp__browser__extract	1257	74
+145.0.7632.116	manuk-legacy-observe	L18	2	6	mcp__browser__extract	686	74
+145.0.7632.116	manuk-legacy-observe	L18	2	7		0	418
+145.0.7632.116	manuk-legacy-observe	L19	2	1	mcp__browser__navigate	1834	130
+145.0.7632.116	manuk-legacy-observe	L19	2	2		0	166
+145.0.7632.116	manuk-legacy-observe	L20	2	1	mcp__browser__navigate	2539	108
+145.0.7632.116	manuk-legacy-observe	L20	2	2	mcp__browser__extract	3214	217
+145.0.7632.116	manuk-legacy-observe	L20	2	3		0	230
+145.0.7632.116	manuk-legacy-observe	L21	2	1	mcp__browser__navigate	31017	75
+145.0.7632.116	manuk-legacy-observe	L21	2	2	mcp__browser__type	16310	77
+145.0.7632.116	manuk-legacy-observe	L21	2	3	mcp__browser__extract	3215	65
+145.0.7632.116	manuk-legacy-observe	L21	2	4		0	294
+145.0.7632.116	manuk-legacy-observe	L22	2	1	mcp__browser__navigate	11258	55
+145.0.7632.116	manuk-legacy-observe	L22	2	2	mcp__browser__extract	2957	141
+145.0.7632.116	manuk-legacy-observe	L22	2	3		0	165
+145.0.7632.116	manuk-legacy-observe	L23	2	1	mcp__browser__navigate	20568	64
+145.0.7632.116	manuk-legacy-observe	L23	2	2	mcp__browser__act	14074	55
+145.0.7632.116	manuk-legacy-observe	L23	2	3		0	577
+145.0.7632.116	manuk-legacy-observe	L24	2	1	mcp__browser__navigate	11258	55
+145.0.7632.116	manuk-legacy-observe	L24	2	2	mcp__browser__extract	2970	150
+145.0.7632.116	manuk-legacy-observe	L24	2	3		0	115
+145.0.7632.116	manuk-legacy-observe	L25	2	1	mcp__browser__navigate	21113	123
+145.0.7632.116	manuk-legacy-observe	L25	2	2		0	109
+145.0.7632.116	manuk-legacy-observe	F01	2	1	mcp__browser__navigate	249	40
+145.0.7632.116	manuk-legacy-observe	F01	2	2	mcp__browser__fill_form	624	85
+145.0.7632.116	manuk-legacy-observe	F01	2	3		0	139
+145.0.7632.116	manuk-legacy-observe	F02	2	1	mcp__browser__navigate	249	51
+145.0.7632.116	manuk-legacy-observe	F02	2	2	mcp__browser__fill_form	624	107
+145.0.7632.116	manuk-legacy-observe	F02	2	3	mcp__browser__act	446	44
+145.0.7632.116	manuk-legacy-observe	F02	2	4	mcp__browser__fill_form	622	107
+145.0.7632.116	manuk-legacy-observe	F02	2	5		0	144
+145.0.7632.116	manuk-legacy-observe	F03	2	1	mcp__browser__navigate	270	44
+145.0.7632.116	manuk-legacy-observe	F03	2	2	mcp__browser__fill_form	641	101
+145.0.7632.116	manuk-legacy-observe	F03	2	3	mcp__browser__fill_form	596	75
+145.0.7632.116	manuk-legacy-observe	F03	2	4	mcp__browser__act	438	80
+145.0.7632.116	manuk-legacy-observe	F03	2	5		0	174
+145.0.7632.116	manuk-legacy-observe	F04	2	1	mcp__browser__navigate	570	62
+145.0.7632.116	manuk-legacy-observe	F04	2	2	mcp__browser__extract	186	41
+145.0.7632.116	manuk-legacy-observe	F04	2	3	mcp__browser__type+mcp__browser__act	530	103
+145.0.7632.116	manuk-legacy-observe	F04	2	4	mcp__browser__extract	112	41
+145.0.7632.116	manuk-legacy-observe	F04	2	5	mcp__browser__navigate	579	141
+145.0.7632.116	manuk-legacy-observe	F04	2	6	mcp__browser__act	449	55
+145.0.7632.116	manuk-legacy-observe	F04	2	7	mcp__browser__extract	126	40
+145.0.7632.116	manuk-legacy-observe	F04	2	8	mcp__browser__act	456	120
+145.0.7632.116	manuk-legacy-observe	F04	2	9		0	411
+145.0.7632.116	manuk-legacy-observe	F05	2	1	mcp__browser__navigate	694	60
+145.0.7632.116	manuk-legacy-observe	F05	2	2	mcp__browser__extract	212	39
+145.0.7632.116	manuk-legacy-observe	F05	2	3	mcp__browser__act	450	140
+145.0.7632.116	manuk-legacy-observe	F05	2	4	mcp__browser__extract	113	39
+145.0.7632.116	manuk-legacy-observe	F05	2	5	mcp__browser__act	456	110
+145.0.7632.116	manuk-legacy-observe	F05	2	6		0	156
+145.0.7632.116	manuk-legacy-observe	F06	2	1	mcp__browser__navigate	203	51
+145.0.7632.116	manuk-legacy-observe	F06	2	2	mcp__browser__act	159	43
+145.0.7632.116	manuk-legacy-observe	F06	2	3	mcp__browser__type	82	53
+145.0.7632.116	manuk-legacy-observe	F06	2	4	mcp__browser__act	143	43
+145.0.7632.116	manuk-legacy-observe	F06	2	5		0	199
+145.0.7632.116	manuk-legacy-observe	F07	2	1	mcp__browser__navigate	320	60
+145.0.7632.116	manuk-legacy-observe	F07	2	2	mcp__browser__act	84	70
+145.0.7632.116	manuk-legacy-observe	F07	2	3	mcp__browser__observe	192	56
+145.0.7632.116	manuk-legacy-observe	F07	2	4		0	115
+145.0.7632.116	manuk-legacy-observe	F08	2	1	mcp__browser__navigate	162	74
+145.0.7632.116	manuk-legacy-observe	F08	2	2	mcp__browser__observe	131	50
+145.0.7632.116	manuk-legacy-observe	F08	2	3	mcp__browser__scroll+mcp__browser__wait_for	154	99
+145.0.7632.116	manuk-legacy-observe	F08	2	4	mcp__browser__scroll+mcp__browser__wait_for	117	104
+145.0.7632.116	manuk-legacy-observe	F08	2	5	mcp__browser__scroll	116	66
+145.0.7632.116	manuk-legacy-observe	F08	2	6	mcp__browser__observe	144	76
+145.0.7632.116	manuk-legacy-observe	F08	2	7	mcp__browser__scroll	116	66
+145.0.7632.116	manuk-legacy-observe	F08	2	8	mcp__browser__scroll	145	66
+145.0.7632.116	manuk-legacy-observe	F08	2	9	mcp__browser__observe	144	76
+145.0.7632.116	manuk-legacy-observe	F08	2	10	mcp__browser__extract	1566	104
+145.0.7632.116	manuk-legacy-observe	F08	2	11		0	397
+145.0.7632.116	manuk-legacy-observe	F09	2	1	mcp__browser__navigate	384	92
+145.0.7632.116	manuk-legacy-observe	F09	2	2	mcp__browser__act+mcp__browser__extract	752	97
+145.0.7632.116	manuk-legacy-observe	F09	2	3	mcp__browser__navigate	391	100
+145.0.7632.116	manuk-legacy-observe	F09	2	4		0	273
+145.0.7632.116	manuk-legacy-observe	F10	2	1	mcp__browser__navigate	346	101
+145.0.7632.116	manuk-legacy-observe	F10	2	2	mcp__browser__act	84	72
+145.0.7632.116	manuk-legacy-observe	F10	2	3	mcp__browser__observe	212	60
+145.0.7632.116	manuk-legacy-observe	F10	2	4	mcp__browser__extract	139	59
+145.0.7632.116	manuk-legacy-observe	F10	2	5		0	192
+145.0.7632.116	manuk-legacy-observe	F11	2	1	mcp__browser__navigate	350	59
+145.0.7632.116	manuk-legacy-observe	F11	2	2	mcp__browser__act	207	106
+145.0.7632.116	manuk-legacy-observe	F11	2	3	mcp__browser__act+mcp__browser__act	716	111
+145.0.7632.116	manuk-legacy-observe	F11	2	4		0	276
+145.0.7632.116	manuk-legacy-observe	F12	2	1	mcp__browser__navigate	289	107
+145.0.7632.116	manuk-legacy-observe	F12	2	2		0	183
+145.0.7632.116	manuk-legacy-observe	F13	2	1	mcp__browser__navigate	405	91
+145.0.7632.116	manuk-legacy-observe	F13	2	2		0	247
+145.0.7632.116	manuk-legacy-observe	F14	2	1	mcp__browser__navigate	403	56
+145.0.7632.116	manuk-legacy-observe	F14	2	2		0	187
+145.0.7632.116	manuk-legacy-observe	F15	2	1	mcp__browser__navigate	374	68
+145.0.7632.116	manuk-legacy-observe	F15	2	2		0	202
+145.0.7632.116	manuk-legacy-observe	L01	3	1	mcp__browser__navigate	20568	47
+145.0.7632.116	manuk-legacy-observe	L01	3	2		0	162
+145.0.7632.116	manuk-legacy-observe	L02	3	1	mcp__browser__navigate	2352	68
+145.0.7632.116	manuk-legacy-observe	L02	3	2	mcp__browser__act	3129	107
+145.0.7632.116	manuk-legacy-observe	L02	3	3		0	179
+145.0.7632.116	manuk-legacy-observe	L03	3	1	mcp__browser__navigate	20568	96
+145.0.7632.116	manuk-legacy-observe	L03	3	2	mcp__browser__act	16402	117
+145.0.7632.116	manuk-legacy-observe	L03	3	3	mcp__browser__find	1240	145
+145.0.7632.116	manuk-legacy-observe	L03	3	4	mcp__browser__act	15157	120
+145.0.7632.116	manuk-legacy-observe	L03	3	5		0	488
+145.0.7632.116	manuk-legacy-observe	L04	3	1	mcp__browser__navigate	2788	78
+145.0.7632.116	manuk-legacy-observe	L04	3	2	mcp__browser__find	1066	65
+145.0.7632.116	manuk-legacy-observe	L04	3	3	mcp__browser__act	2300	62
+145.0.7632.116	manuk-legacy-observe	L04	3	4		0	205
+145.0.7632.116	manuk-legacy-observe	L05	3	1	mcp__browser__navigate	2788	87
+145.0.7632.116	manuk-legacy-observe	L05	3	2	mcp__browser__find	1096	85
+145.0.7632.116	manuk-legacy-observe	L05	3	3	mcp__browser__act	65	69
+145.0.7632.116	manuk-legacy-observe	L05	3	4	mcp__browser__act	2300	69
+145.0.7632.116	manuk-legacy-observe	L05	3	5		0	205
+145.0.7632.116	manuk-legacy-observe	L06	3	1	mcp__browser__navigate	21113	103
+145.0.7632.116	manuk-legacy-observe	L06	3	2		0	164
+145.0.7632.116	manuk-legacy-observe	L07	3	1	mcp__browser__navigate	20568	80
+145.0.7632.116	manuk-legacy-observe	L07	3	2		0	210
+145.0.7632.116	manuk-legacy-observe	L08	3	1	mcp__browser__navigate	1886	41
+145.0.7632.116	manuk-legacy-observe	L08	3	2	mcp__browser__extract	159	113
+145.0.7632.116	manuk-legacy-observe	L08	3	3	mcp__browser__extract	1788	27
+145.0.7632.116	manuk-legacy-observe	L08	3	4		0	144
+145.0.7632.116	manuk-legacy-observe	L09	3	1	mcp__browser__navigate	1886	126
+145.0.7632.116	manuk-legacy-observe	L09	3	2	mcp__browser__act	2363	110
+145.0.7632.116	manuk-legacy-observe	L09	3	3		0	602
+145.0.7632.116	manuk-legacy-observe	L10	3	1	mcp__browser__navigate	1163	90
+145.0.7632.116	manuk-legacy-observe	L10	3	2	mcp__browser__observe	1973	41
+145.0.7632.116	manuk-legacy-observe	L10	3	3	mcp__browser__act	836	49
+145.0.7632.116	manuk-legacy-observe	L10	3	4		0	236
+145.0.7632.116	manuk-legacy-observe	L11	3	1	mcp__browser__navigate	514	47
+145.0.7632.116	manuk-legacy-observe	L11	3	2	mcp__browser__observe	601	119
+145.0.7632.116	manuk-legacy-observe	L11	3	3	mcp__browser__extract	1619	164
+145.0.7632.116	manuk-legacy-observe	L11	3	4		0	254
+145.0.7632.116	manuk-legacy-observe	L12	3	1	mcp__browser__navigate	453	121
+145.0.7632.116	manuk-legacy-observe	L12	3	2	mcp__browser__scroll+mcp__browser__extract	117	182
+145.0.7632.116	manuk-legacy-observe	L12	3	3	mcp__browser__scroll+mcp__browser__extract	181	204
+145.0.7632.116	manuk-legacy-observe	L12	3	4	mcp__browser__scroll	117	96
+145.0.7632.116	manuk-legacy-observe	L12	3	5	mcp__browser__observe	591	110
+145.0.7632.116	manuk-legacy-observe	L12	3	6	mcp__browser__observe	591	105
+145.0.7632.116	manuk-legacy-observe	L12	3	7	mcp__browser__act	151	136
+145.0.7632.116	manuk-legacy-observe	L12	3	8	mcp__browser__extract	6472	152
+145.0.7632.116	manuk-legacy-observe	L12	3	9		0	860
+145.0.7632.116	manuk-legacy-observe	L13	3	1	mcp__browser__navigate	2352	38
+145.0.7632.116	manuk-legacy-observe	L13	3	2	mcp__browser__extract	903	95
+145.0.7632.116	manuk-legacy-observe	L13	3	3		0	208
+145.0.7632.116	manuk-legacy-observe	L14	3	1	mcp__browser__navigate	972	59
+145.0.7632.116	manuk-legacy-observe	L14	3	2	mcp__browser__extract	1348	43
+145.0.7632.116	manuk-legacy-observe	L14	3	3		0	536
+145.0.7632.116	manuk-legacy-observe	L15	3	1	mcp__browser__navigate	317	56
+145.0.7632.116	manuk-legacy-observe	L15	3	2		0	108
+145.0.7632.116	manuk-legacy-observe	L16	3	1	mcp__browser__navigate	2440	89
+145.0.7632.116	manuk-legacy-observe	L16	3	2		0	135
+145.0.7632.116	manuk-legacy-observe	L17	3	1	mcp__browser__navigate	4109	120
+145.0.7632.116	manuk-legacy-observe	L17	3	2	mcp__browser__extract	3965	146
+145.0.7632.116	manuk-legacy-observe	L17	3	3	mcp__browser__observe	32385	116
+145.0.7632.116	manuk-legacy-observe	L17	3	4	mcp__browser__extract	211	156
+145.0.7632.116	manuk-legacy-observe	L17	3	5	mcp__browser__extract	38	53
+145.0.7632.116	manuk-legacy-observe	L17	3	6	mcp__browser__act+mcp__browser__observe	3479	89
+145.0.7632.116	manuk-legacy-observe	L17	3	7	mcp__browser__navigate	4129	228
+145.0.7632.116	manuk-legacy-observe	L17	3	8	mcp__browser__extract	4217	200
+145.0.7632.116	manuk-legacy-observe	L17	3	9	mcp__browser__navigate	5482	245
+145.0.7632.116	manuk-legacy-observe	L17	3	10	Agent	1639	475
+145.0.7632.116	manuk-legacy-observe	L17	3	11	WebFetch	731	252
+145.0.7632.116	manuk-legacy-observe	L17	3	12	mcp__browser__navigate	32285	265
+145.0.7632.116	manuk-legacy-observe	L17	3	13	ToolSearch	0	203
+145.0.7632.116	manuk-legacy-observe	L17	3	14	mcp__browser__find	1660	61
+145.0.7632.116	manuk-legacy-observe	L17	3	15	mcp__browser__extract	87	77
+145.0.7632.116	manuk-legacy-observe	L17	3	16	mcp__browser__find	1371	83
+145.0.7632.116	manuk-legacy-observe	L17	3	17		0	405
+145.0.7632.116	manuk-legacy-observe	L18	3	1	mcp__browser__navigate	1824	162
+145.0.7632.116	manuk-legacy-observe	L18	3	2	mcp__browser__observe	32339	197
+145.0.7632.116	manuk-legacy-observe	L18	3	3	mcp__browser__extract	3045	202
+145.0.7632.116	manuk-legacy-observe	L18	3	4		0	475
+145.0.7632.116	manuk-legacy-observe	L19	3	1	mcp__browser__navigate	1834	134
+145.0.7632.116	manuk-legacy-observe	L19	3	2		0	231
+145.0.7632.116	manuk-legacy-observe	L20	3	1	mcp__browser__navigate	2539	113
+145.0.7632.116	manuk-legacy-observe	L20	3	2	mcp__browser__extract	2344	250
+145.0.7632.116	manuk-legacy-observe	L20	3	3	mcp__browser__observe	12270	180
+145.0.7632.116	manuk-legacy-observe	L20	3	4		0	444
+145.0.7632.116	manuk-legacy-observe	L21	3	1	mcp__browser__navigate	31017	76
+145.0.7632.116	manuk-legacy-observe	L21	3	2	mcp__browser__type	16310	78
+145.0.7632.116	manuk-legacy-observe	L21	3	3	mcp__browser__extract	3748	69
+145.0.7632.116	manuk-legacy-observe	L21	3	4		0	285
+145.0.7632.116	manuk-legacy-observe	L22	3	1	mcp__browser__navigate	11258	55
+145.0.7632.116	manuk-legacy-observe	L22	3	2	mcp__browser__extract	2957	120
+145.0.7632.116	manuk-legacy-observe	L22	3	3		0	134
+145.0.7632.116	manuk-legacy-observe	L23	3	1	mcp__browser__navigate	20568	99
+145.0.7632.116	manuk-legacy-observe	L23	3	2	mcp__browser__act	14074	85
+145.0.7632.116	manuk-legacy-observe	L23	3	3	mcp__browser__extract	1400	182
+145.0.7632.116	manuk-legacy-observe	L23	3	4		0	250
+145.0.7632.116	manuk-legacy-observe	L24	3	1	mcp__browser__navigate	11258	76
+145.0.7632.116	manuk-legacy-observe	L24	3	2	mcp__browser__extract	2970	163
+145.0.7632.116	manuk-legacy-observe	L24	3	3		0	170
+145.0.7632.116	manuk-legacy-observe	L25	3	1	mcp__browser__navigate	21113	115
+145.0.7632.116	manuk-legacy-observe	L25	3	2		0	114
+145.0.7632.116	manuk-legacy-observe	F01	3	1	mcp__browser__navigate	249	39
+145.0.7632.116	manuk-legacy-observe	F01	3	2	mcp__browser__fill_form	624	82
+145.0.7632.116	manuk-legacy-observe	F01	3	3		0	162
+145.0.7632.116	manuk-legacy-observe	F02	3	1	mcp__browser__navigate	249	54
+145.0.7632.116	manuk-legacy-observe	F02	3	2	mcp__browser__fill_form	624	112
+145.0.7632.116	manuk-legacy-observe	F02	3	3	mcp__browser__act	446	46
+145.0.7632.116	manuk-legacy-observe	F02	3	4	mcp__browser__fill_form	622	112
+145.0.7632.116	manuk-legacy-observe	F02	3	5		0	151
+145.0.7632.116	manuk-legacy-observe	F03	3	1	mcp__browser__navigate	270	62
+145.0.7632.116	manuk-legacy-observe	F03	3	2	mcp__browser__fill_form	641	159
+145.0.7632.116	manuk-legacy-observe	F03	3	3	mcp__browser__act+mcp__browser__act	130	144
+145.0.7632.116	manuk-legacy-observe	F03	3	4	mcp__browser__observe	272	64
+145.0.7632.116	manuk-legacy-observe	F03	3	5	mcp__browser__act	492	72
+145.0.7632.116	manuk-legacy-observe	F03	3	6	mcp__browser__act	438	168
+145.0.7632.116	manuk-legacy-observe	F03	3	7		0	243
+145.0.7632.116	manuk-legacy-observe	F04	3	1	mcp__browser__navigate	570	66
+145.0.7632.116	manuk-legacy-observe	F04	3	2	mcp__browser__extract	186	43
+145.0.7632.116	manuk-legacy-observe	F04	3	3	mcp__browser__act	229	121
+145.0.7632.116	manuk-legacy-observe	F04	3	4	mcp__browser__act	449	58
+145.0.7632.116	manuk-legacy-observe	F04	3	5	mcp__browser__extract	112	43
+145.0.7632.116	manuk-legacy-observe	F04	3	6	mcp__browser__navigate	579	128
+145.0.7632.116	manuk-legacy-observe	F04	3	7	mcp__browser__act	449	59
+145.0.7632.116	manuk-legacy-observe	F04	3	8	mcp__browser__extract	126	43
+145.0.7632.116	manuk-legacy-observe	F04	3	9	mcp__browser__act	456	130
+145.0.7632.116	manuk-legacy-observe	F04	3	10		0	185
+145.0.7632.116	manuk-legacy-observe	F05	3	1	mcp__browser__navigate	694	70
+145.0.7632.116	manuk-legacy-observe	F05	3	2	mcp__browser__extract	212	45
+145.0.7632.116	manuk-legacy-observe	F05	3	3	mcp__browser__act	450	138
+145.0.7632.116	manuk-legacy-observe	F05	3	4	mcp__browser__extract	113	44
+145.0.7632.116	manuk-legacy-observe	F05	3	5	mcp__browser__act	456	132
+145.0.7632.116	manuk-legacy-observe	F05	3	6		0	175
+145.0.7632.116	manuk-legacy-observe	F06	3	1	mcp__browser__navigate	203	53
+145.0.7632.116	manuk-legacy-observe	F06	3	2	mcp__browser__act	159	46
+145.0.7632.116	manuk-legacy-observe	F06	3	3	mcp__browser__type	82	56
+145.0.7632.116	manuk-legacy-observe	F06	3	4	mcp__browser__act	143	45
+145.0.7632.116	manuk-legacy-observe	F06	3	5		0	205
+145.0.7632.116	manuk-legacy-observe	F07	3	1	mcp__browser__navigate	320	54
+145.0.7632.116	manuk-legacy-observe	F07	3	2	mcp__browser__act	84	46
+145.0.7632.116	manuk-legacy-observe	F07	3	3	mcp__browser__observe	192	32
+145.0.7632.116	manuk-legacy-observe	F07	3	4		0	119
+145.0.7632.116	manuk-legacy-observe	F08	3	1	mcp__browser__navigate	162	73
+145.0.7632.116	manuk-legacy-observe	F08	3	2	mcp__browser__observe	131	49
+145.0.7632.116	manuk-legacy-observe	F08	3	3	mcp__browser__scroll+mcp__browser__wait_for	117	102
+145.0.7632.116	manuk-legacy-observe	F08	3	4	mcp__browser__scroll	116	65
+145.0.7632.116	manuk-legacy-observe	F08	3	5	mcp__browser__scroll	116	65
+145.0.7632.116	manuk-legacy-observe	F08	3	6	mcp__browser__scroll	145	65
+145.0.7632.116	manuk-legacy-observe	F08	3	7	mcp__browser__extract	1566	73
+145.0.7632.116	manuk-legacy-observe	F08	3	8		0	297
+145.0.7632.116	manuk-legacy-observe	F09	3	1	mcp__browser__navigate	384	113
+145.0.7632.116	manuk-legacy-observe	F09	3	2	mcp__browser__act	522	234
+145.0.7632.116	manuk-legacy-observe	F09	3	3	mcp__browser__navigate	385	115
+145.0.7632.116	manuk-legacy-observe	F09	3	4		0	192
+145.0.7632.116	manuk-legacy-observe	F10	3	1	mcp__browser__navigate	346	96
+145.0.7632.116	manuk-legacy-observe	F10	3	2	mcp__browser__act	77	67
+145.0.7632.116	manuk-legacy-observe	F10	3	3	mcp__browser__act	84	69
+145.0.7632.116	manuk-legacy-observe	F10	3	4	mcp__browser__extract	255	77
+145.0.7632.116	manuk-legacy-observe	F10	3	5		0	145
+145.0.7632.116	manuk-legacy-observe	F11	3	1	mcp__browser__navigate	350	57
+145.0.7632.116	manuk-legacy-observe	F11	3	2	mcp__browser__act	207	103
+145.0.7632.116	manuk-legacy-observe	F11	3	3	mcp__browser__act	91	62
+145.0.7632.116	manuk-legacy-observe	F11	3	4	mcp__browser__act	625	46
+145.0.7632.116	manuk-legacy-observe	F11	3	5		0	177
+145.0.7632.116	manuk-legacy-observe	F12	3	1	mcp__browser__navigate	269	119
+145.0.7632.116	manuk-legacy-observe	F12	3	2		0	132
+145.0.7632.116	manuk-legacy-observe	F13	3	1	mcp__browser__navigate	405	100
+145.0.7632.116	manuk-legacy-observe	F13	3	2		0	243
+145.0.7632.116	manuk-legacy-observe	F14	3	1	mcp__browser__navigate	403	68
+145.0.7632.116	manuk-legacy-observe	F14	3	2		0	238
+145.0.7632.116	manuk-legacy-observe	F15	3	1	mcp__browser__navigate	374	50
+145.0.7632.116	manuk-legacy-observe	F15	3	2		0	214
