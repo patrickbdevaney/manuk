@@ -257,7 +257,7 @@ fn budget(chrome: bool) {
     let url = serve();
     let mut c = Client::start(chrome);
     c.tool("navigate", json!({"url": format!("{url}budget")}));
-    let o = c.tool("observe", json!({"budget_tokens": 150}));
+    let o = c.tool("observe", json!({"budget_tokens": 100}));
     assert!(o.contains("cut "), "budget did not bite:\n{o}");
     assert!(
         o.contains("PRICE-MARKER"),

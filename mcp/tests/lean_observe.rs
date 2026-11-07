@@ -197,6 +197,7 @@ fn cuts(chrome: bool) -> (f64, f64) {
         .zip(&new)
         .map(|(o, n)| 1.0 - *n as f64 / *o as f64)
         .collect();
+    eprintln!("W5T1 per-page old={old:?} new={new:?}");
     let m = median(&mut cuts);
     eprintln!(
         "W5T1 backend={} median_cut={:.3} old_total={} new_total={}",
@@ -218,12 +219,10 @@ fn chrome_present() -> bool {
             .any(|b| Command::new(b).arg("--version").output().is_ok())
 }
 
-// The pre-registered gate is the MEDIAN per-page cut >= 40%. Measured 2026-11-06 (chrome_ver
-// 145.0.7632.116): manuk 0.226, chrome 0.284 -- NOT met, because prose/form/card pages are mostly
-// irreducible content. Kept #[ignore]d at its original threshold (W5.T1.a owns closing it); the
-// total-token tests below are the regression guard for what did land (51% / 58% fewer tokens overall).
+// The pre-registered gate: the MEDIAN per-page cut >= 40% on both backends. W5.T1 measured 0.226 /
+// 0.284; W5.T1.a closed it (bare paragraphs, `#` headings, article context dropped under its own
+// heading): 0.412 manuk / 0.421 chrome on the unchanged page set.
 #[test]
-#[ignore = "W5.T1 gate not met: median cut 0.226 (manuk) / 0.284 (chrome) < 0.40; see W5.T1.a"]
 fn gate_median_cut_is_40_percent_on_both_backends() {
     assert!(cuts(false).0 >= 0.40, "manuk median cut < 0.40");
     if chrome_present() {

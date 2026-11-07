@@ -684,6 +684,7 @@ impl<B: Backend> Session<B> {
         let legacy = std::env::var("MANUK_OBSERVE_MUTATE").is_ok_and(|v| v == "legacy");
         let vp = self.b.viewport();
         let mut out = Vec::new();
+        let mut last_heading = String::new();
         // Cells folded into their row's line: every non-interactive descendant of a row that has cells.
         let mut folded: std::collections::HashSet<u64> = std::collections::HashSet::new();
         let mut row_text: HashMap<u64, String> = HashMap::new();
@@ -746,16 +747,34 @@ impl<B: Backend> Session<B> {
                 let h = self.bind(n.node, &e);
                 if !legacy {
                     e.ctx = lean_ctx(&e.name, &e.ctx);
+                    // The heading line just above already names the article this control sits in.
+                    if !last_heading.is_empty()
+                        && e.ctx.starts_with(" in article ")
+                        && e.ctx.ends_with(&format!(" {last_heading:?}"))
+                    {
+                        e.ctx.clear();
+                    }
                 }
                 out.push((tier, Self::fmt_entry(h, &e, off)));
             } else {
                 if let Some(t) = row_text.get(&n.node.0) {
                     e.name = t.clone();
                 }
-                let mut l = format!("- {}", e.role);
-                if !e.name.is_empty() {
-                    let _ = write!(l, " {:?}", e.name);
-                }
+                // A paragraph is the default content line: no role word, no quotes.
+                let mut l = if e.role == "paragraph" && !e.name.is_empty() && e.state.is_empty() {
+                    format!("- {}", e.name)
+                } else if let (Some(lv), false) =
+                    (e.role.strip_prefix("heading"), e.name.is_empty())
+                {
+                    last_heading = e.name.clone();
+                    format!("{} {}", "#".repeat(lv.parse().unwrap_or(1)), e.name)
+                } else {
+                    let mut l = format!("- {}", e.role);
+                    if !e.name.is_empty() {
+                        let _ = write!(l, " {:?}", e.name);
+                    }
+                    l
+                };
                 if !e.state.is_empty() {
                     let _ = write!(l, " {}", e.state);
                 }
@@ -786,7 +805,11 @@ impl<B: Backend> Session<B> {
         for o in crate::overlay::find(tree, &vp) {
             let h = self.handle(o.node.node);
             let name = clip(&o.node.name);
-            let what = if o.kind == Kind::Consent { "CONSENT" } else { "MODAL" };
+            let what = if o.kind == Kind::Consent {
+                "CONSENT"
+            } else {
+                "MODAL"
+            };
             let line = match (o.kind, o.control) {
                 (Kind::BotWall, _) => "BOT-WALL: the page asks to prove you are human. Never attempt it: call handoff(reason)".to_string(),
                 (_, Some(c)) => {
@@ -846,7 +869,18 @@ impl<B: Backend> Session<B> {
                 out.push_str(l);
                 out.push('\n');
             } else {
-                let role = l.split_whitespace().nth(1).unwrap_or("node").to_string();
+                let role = if l.starts_with('#') {
+                    "heading".to_string()
+                } else if l.starts_with("- ")
+                    && !l
+                        .split_whitespace()
+                        .nth(2)
+                        .is_some_and(|w| w.starts_with('"'))
+                {
+                    "text".to_string() // a bare paragraph line has no role word
+                } else {
+                    l.split_whitespace().nth(1).unwrap_or("node").to_string()
+                };
                 *cut.entry(role).or_default() += 1;
                 cut_n += 1;
             }
