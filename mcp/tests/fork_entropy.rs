@@ -172,7 +172,7 @@ fn roll_in_forks(chrome: bool, det: bool, n: usize, tag: &str) -> Vec<(String, S
             let h = handle_of(&obs, "Roll");
             let (e, act) = c.tool(
                 "act",
-                json!({"handle": h, "action": "click", "page": page_of(&obs)}),
+                json!({"handle": h, "action": "click", "detail": true, "page": page_of(&obs)}),
             );
             assert!(!e, "fork {i} click: {act}");
             roll_of(&act)

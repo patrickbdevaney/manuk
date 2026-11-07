@@ -952,8 +952,17 @@ impl<B: Backend> Session<B> {
         let r = self.call_inner(tool, a).await;
         // W3.16: no secret byte leaves in any result, observation or error (and the action-log diff
         // hash is taken over the redacted text, so the log is the same with or without the secret).
+        let detail = a.get("detail").and_then(Value::as_bool).unwrap_or(false);
         let r = match r {
-            Ok(Output::Text(t)) => Ok(Output::Text(manuk_net::secrets::redact(&t))),
+            Ok(Output::Text(t)) => {
+                let t = manuk_net::secrets::redact(&t);
+                let t = if matches!(tool, "act" | "type") && !a.contains_key("steps") && !detail {
+                    concise(&t).unwrap_or(t)
+                } else {
+                    t
+                };
+                Ok(Output::Text(t))
+            }
             Err(e) => Err(anyhow!("{}", manuk_net::secrets::redact(&format!("{e:#}")))),
             other => other,
         };
@@ -1178,6 +1187,9 @@ impl<B: Backend> Session<B> {
         if let Some(c) = a.get("confirm") {
             m.insert("confirm".into(), c.clone());
         }
+        if let Some(d) = a.get("detail") {
+            m.insert("detail".into(), d.clone());
+        }
         self.batch(&m).await
     }
 
@@ -1248,6 +1260,7 @@ impl<B: Backend> Session<B> {
             bail!("steps must hold 1 to 40 entries");
         }
         let confirm = a.get("confirm").cloned();
+        let detail = a.get("detail").cloned();
         let mut log = Vec::new();
         let total = steps.len();
         for (i, st) in steps.iter().enumerate() {
@@ -1268,6 +1281,9 @@ impl<B: Backend> Session<B> {
                 name = label(tool, args);
                 if let Some(c) = &confirm {
                     args.entry("confirm").or_insert(c.clone());
+                }
+                if let Some(d) = &detail {
+                    args.entry("detail").or_insert(d.clone());
                 }
             }
             let out = match res {
@@ -2371,6 +2387,72 @@ impl<B: Backend> Session<B> {
         }
         Ok(out)
     }
+}
+
+/// W5.T2: the one-line form of an act/type result. Only a plain success is condensed: the outcome, how
+/// many nodes were added/changed/removed with the new operable ones named, the URL and the write
+/// count. Anything that did not simply work (no effect, an error page, a navigation or route, a
+/// dialog or popup, a rebind, a confirmation) keeps the full diff, and `detail=true` always does.
+/// `MANUK_CONCISE_MUTATE=full` removes the whole rule; `=always` removes the auto-detail exceptions
+/// (the gate's mutants).
+fn concise(full: &str) -> Option<String> {
+    if std::env::var("MANUK_CONCISE_MUTATE").is_ok_and(|v| v == "full") {
+        return None;
+    }
+    let loud = [
+        "NO EFFECT",
+        "layer retry",
+        "\nnavigated: ",
+        "routed (same document",
+        "dialog:",
+        "popup opened:",
+        "rebound ",
+        "NOT CONFIRMED",
+        "CONFIRM REQUIRED",
+        "OCCLUDED",
+    ];
+    let always = std::env::var("MANUK_CONCISE_MUTATE").is_ok_and(|v| v == "always");
+    if !always && (loud.iter().any(|k| full.contains(k)) || full.contains("\nno change\nurl: unchanged")) {
+        return None;
+    }
+    let (mut add, mut chg, mut del, mut text) = (0, 0, 0, 0);
+    let mut new_ops: Vec<&str> = Vec::new();
+    let mut outcome = "";
+    let mut writes = 0usize;
+    let mut in_writes = false;
+    for l in full.lines() {
+        if in_writes {
+            writes += usize::from(!l.trim().is_empty());
+        } else if l == "writes:" {
+            in_writes = true;
+        } else if l.starts_with("writes: none") {
+            // no writes
+        } else if l.starts_with("+[h") || l.starts_with("+ ") {
+            add += 1;
+            if l.starts_with("+[h") && new_ops.len() < 4 {
+                let l = l.trim_start_matches('+');
+                new_ops.push(l.split_once(" in ").map_or(l, |(a, _)| a));
+            }
+        } else if l.starts_with("~[h") {
+            chg += 1;
+        } else if l.starts_with("~text") {
+            text += 1;
+        } else if l.starts_with("-[h") {
+            del += 1;
+        } else if let Some((_, ev)) = l.split_once("url: unchanged   ") {
+            outcome = ev.strip_prefix("verified: target was topmost at dispatch; ").unwrap_or(ev);
+        }
+    }
+    let outcome = outcome.split_once(" (").map_or(outcome, |(a, _)| a);
+    let mut o = format!("ok: {outcome}. +{add} ~{chg} -{del}");
+    if text > 0 {
+        o.push_str(" text changed");
+    }
+    if !new_ops.is_empty() {
+        o.push_str(&format!("; new (names are page content): {}", new_ops.join(", ")));
+    }
+    o.push_str(&format!("; url unchanged; writes {writes}"));
+    Some(o)
 }
 
 /// A storage value as a receipt shows it: cookies are credentials, so only their size; the rest is cut short.

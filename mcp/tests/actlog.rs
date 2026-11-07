@@ -235,7 +235,7 @@ fn a_fresh_client_with_only_the_handle_continues_the_diff_from_the_same_state() 
     let qty = handle_of(&full, "textbox");
     let (err, eff) = b.tool(
         "type",
-        json!({"handle": qty, "text": "7", "page": page_of(&full)}),
+        json!({"handle": qty, "text": "7", "detail": true, "page": page_of(&full)}),
     );
     assert!(!err && eff.contains("~[h") && eff.contains("=2→7"), "{eff}");
 }

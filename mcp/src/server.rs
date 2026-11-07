@@ -100,6 +100,9 @@ fn schema(props: Value, required: &[&str]) -> Map<String, Value> {
 pub fn tools() -> Vec<Tool> {
     let t = |n: &'static str, d: &'static str, mut s: Map<String, Value>| {
         if let Some(Value::Object(p)) = s.get_mut("properties") {
+            if matches!(n, "act" | "type" | "fill_form") {
+                p.insert("detail".into(), json!({"type": "boolean", "description": "return the full effect diff, hit-test evidence and write receipts; default is one line, with the full form automatic when the act failed, had no effect or landed on an error page"}));
+            }
             if matches!(n, "navigate" | "act" | "type" | "fill_form") {
                 p.insert("confirm".into(), json!({"type": "boolean", "description": "set true only when the user approved an action the server answered with CONFIRM REQUIRED"}));
             }

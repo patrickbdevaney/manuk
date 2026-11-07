@@ -135,7 +135,7 @@ fn sessions_forked_from_a_loaded_page_start_on_it_and_roll_distinct_dice() {
         let h = handle_of(&obs, "Roll");
         let (e, act) = c.tool(
             "act",
-            json!({"handle": h, "action": "click", "page": page_id}),
+            json!({"handle": h, "action": "click", "detail": true, "page": page_id}),
         );
         assert!(!e, "session {i} click: {act}");
         plain.push(roll(&act));
@@ -157,7 +157,7 @@ fn sessions_forked_from_a_loaded_page_start_on_it_and_roll_distinct_dice() {
             .to_string();
         let (e, act) = c.tool(
             "act",
-            json!({"handle": h, "action": "click", "page": page_id}),
+            json!({"handle": h, "action": "click", "detail": true, "page": page_id}),
         );
         assert!(!e, "session {i} cached click: {act}");
         cached.push(roll(&act));

@@ -62,6 +62,11 @@ impl Client {
     }
     /// (is_error, text)
     fn tool(&mut self, name: &str, args: Value) -> (bool, String) {
+        // W5.T2: act/type are one line by default; these tests read the full diff.
+        let mut args = args;
+        if matches!(name, "act" | "type") && args.get("detail").is_none() {
+            args["detail"] = json!(true);
+        }
         let r = self.rpc("tools/call", json!({"name": name, "arguments": args}));
         let res = &r["result"];
         let text = res["content"]
