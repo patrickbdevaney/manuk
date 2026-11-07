@@ -125,9 +125,7 @@ jobs:
       - name: build
         shell: bash
         run: |
-          case "${{ matrix.target }}" in
-            *msvc) export RUSTFLAGS="-C target-feature=+crt-static" ;;
-          esac
+          # no +crt-static on msvc: prebuilt mozjs links the dynamic CRT (LNK4286/LNK1120 otherwise)
           bash scripts/ci-run.sh "release ${{ matrix.target }}" \
             cargo build --release --workspace --no-default-features --target ${{ matrix.target }}
       - name: stage the artifact

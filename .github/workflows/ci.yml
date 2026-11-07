@@ -218,14 +218,12 @@ jobs:
       - name: fetch pinned SpiderMonkey (sha256 pin; exports MOZJS_ARCHIVE)
         shell: bash
         run: MOZJS_TRIPLE=${{ matrix.target }} ./scripts/mozjs-fetch.sh
-      # The static CRT is requested HERE, by the one job that wants a static binary — not imposed on
-      # every Windows build by a committed .cargo/config.toml (which broke the ordinary link).
+      # Windows MSVC: NOT +crt-static. The prebuilt mozjs archive is linked against the dynamic CRT (/MD);
+      # forcing /MT gave LNK4286/LNK4098/LNK1120 (run 42310815631). So this lane's Windows binary is
+      # dynamic-CRT (needs the VC++ redistributable) and must not be described as CRT-static.
       - name: build release (headless, static)
         shell: bash
         run: |
-          case "${{ matrix.target }}" in
-            *windows-msvc) export RUSTFLAGS="-C target-feature=+crt-static" ;;
-          esac
           bash scripts/ci-run.sh "static ${{ matrix.target }}" \
             cargo build --release --workspace --no-default-features --target ${{ matrix.target }}
       - name: smoke — the binary actually runs and renders a PNG
