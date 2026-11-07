@@ -208,3 +208,9 @@ opt-level = 0
 # the line tables for EVERY linked crate, not just the leaf). No capability is traded for the space.
 debug = "line-tables-only"
 split-debuginfo = "unpacked"
+
+# R1.5.b.a.a: both users of the unmaintained `paste` (RUSTSEC-2024-0436) are vendored with the single
+# change `paste` -> `pastey` (maintained drop-in fork, same `paste!` macro) in their Cargo.toml.
+[patch.crates-io]
+re_rav1d = { path = "third_party/re_rav1d" }
+metal = { path = "third_party/metal" }
