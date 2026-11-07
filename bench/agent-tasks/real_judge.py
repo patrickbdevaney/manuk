@@ -4,17 +4,20 @@
   real_judge.py controls [--out TSV]     validity controls (a) negative, (b) positive, (c) two-pass agreement
   real_judge.py verdict RUBRIC ANSWER    one verdict (debug; prints JSON)
   real_judge.py agree                    (c) two fresh passes vs the committed controls TSV -> judge-agreement.tsv
+  real_judge.py fallback                 W5.J1: Claude Haiku via `claude -p` (concurrency 1) on the same controls -> docs/sprint/w5/J1-fallback.tsv
 MANUK_JUDGE_MUTATE=1 makes every verdict true (the gate must then go red).
 
 The judge is read from ~/manuk/.env (REAL_JUDGE_BASE_URL, REAL_JUDGE_API_KEY, REAL_JUDGE_MODEL) inside this process
 only. The key is never printed, logged or written to a row. Temperature 0. The judge sees the rubric, the expected
 boolean, the agent's final answer and the final clone state, and nothing else. Run with `python3 -I`.
 """
-import argparse, glob, json, os, re, sys, time, urllib.error, urllib.request
+import argparse, glob, json, os, re, subprocess, sys, tempfile, time, urllib.error, urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 TASKS = os.path.join(HERE, "real", "tasks")
+RETRY_CAP = 300  # seconds: longest single back-off sleep, whatever Retry-After says
+FALLBACK_MODEL = "claude-haiku (claude -p)"
 STATE_CAP = 8000  # chars of the final clone state passed to the judge
 PROMPT = (
     "You are grading an AI agent's run on a web task. You are given a rubric (a yes/no question about the outcome), "
@@ -38,6 +41,30 @@ def load_env():
     return env
 
 
+def retry_wait(retry_after, i, cap=RETRY_CAP):
+    """Seconds to sleep before retry i: the server's Retry-After if given else 2**i (max 60), never more than `cap`.
+    Logs to stderr whenever the server asked for longer than the cap."""
+    try:
+        ra = float(retry_after or 0)
+    except ValueError:
+        ra = 0.0
+    wait = ra or min(60, 2 ** i)
+    if wait > cap:
+        print(f"judge: retry-after {wait:.0f}s capped to {cap}s (attempt {i + 1})", file=sys.stderr, flush=True)
+        wait = cap
+    return wait
+
+
+def _claude_verdict_text(prompt):
+    """One `claude -p` call, concurrency 1 (callers are sequential). Runs from an empty temp dir, no tools, no session."""
+    with tempfile.TemporaryDirectory() as d:
+        r = subprocess.run([os.path.expanduser("~/.local/bin/claude"), "-p", "--model", "haiku", "--tools", "",
+                            "--no-session-persistence"], input=prompt, capture_output=True, text=True, cwd=d, timeout=300)
+    if r.returncode != 0:
+        raise RuntimeError(f"claude -p rc={r.returncode}: {r.stderr[:120]}")
+    return r.stdout
+
+
 def _post(env, body, tries=8):
     data = json.dumps(body).encode()
     url = env["REAL_JUDGE_BASE_URL"].rstrip("/") + "/chat/completions"
@@ -50,7 +77,7 @@ def _post(env, body, tries=8):
         except urllib.error.HTTPError as e:
             if e.code not in (408, 429, 500, 502, 503, 504):
                 raise RuntimeError(f"judge HTTP {e.code}")
-            wait = float(e.headers.get("retry-after") or 0) or min(60, 2 ** i)
+            wait = retry_wait(e.headers.get("retry-after"), i)
         except (urllib.error.URLError, TimeoutError):
             wait = min(60, 2 ** i)
         time.sleep(wait)
@@ -62,9 +89,12 @@ def verdict(env, rubric, answer, state=None):
     if os.environ.get("MANUK_JUDGE_MUTATE"):  # mutant: a judge that always says yes; the controls must then fail
         return True, "mutant: always true"
     st = json.dumps(state or {}, ensure_ascii=False)[:STATE_CAP]
-    body = {"model": env["REAL_JUDGE_MODEL"], "temperature": 0,
-            "messages": [{"role": "user", "content": PROMPT.format(rubric=rubric, answer=answer or "(empty)", state=st)}]}
-    txt = _post(env, body)["choices"][0]["message"]["content"]
+    prompt = PROMPT.format(rubric=rubric, answer=answer or "(empty)", state=st)
+    if env.get("backend") == "claude":
+        txt = _claude_verdict_text(prompt)
+    else:
+        body = {"model": env["REAL_JUDGE_MODEL"], "temperature": 0, "messages": [{"role": "user", "content": prompt}]}
+        txt = _post(env, body)["choices"][0]["message"]["content"]
     m = re.search(r"\{.*\}", txt, re.S)
     try:
         j = json.loads(m.group(0))
@@ -178,12 +208,49 @@ def agreement(env, committed, out):
     print(json.dumps(res))
     return res["agree_pass"]
 
+def fallback(out, committed):
+    """W5.J1: the Claude Haiku fallback on the existing controls. Resumable via out + '.partial'. Whole-tasks-only use is
+    the caller's rule; this only validates it. Passes iff pos all true, neg >= 56/59 false, agreement with the committed
+    primary verdict >= 68/71."""
+    env = {"backend": "claude", "REAL_JUDGE_MODEL": FALLBACK_MODEL}
+    rows = [l.rstrip("\n").split("\t") for l in open(committed)][1:]
+    part = out + ".partial"
+    done = [l.rstrip("\n").split("\t") for l in open(part)] if os.path.exists(part) else []
+    fh = open(part, "a")
+    if not done:
+        fh.write("judge_model\tcontrol\ttask\trubric\tprimary\tfallback\tagree\treason\n"); fh.flush()
+    for k, (_m, control, task, rubric, primary, _r) in enumerate(rows):
+        if k < len(done) - 1:
+            continue
+        ans = WRONG if control == "neg" else POSITIVE[rubric]
+        v, why = verdict(env, rubric, ans)
+        fh.write(f"{FALLBACK_MODEL}\t{control}\t{task}\t{rubric}\t{primary}\t{v}\t{int(str(v) == primary)}\t{why}\n"); fh.flush()
+        print(f"{k + 1}/{len(rows)} {control} {task} primary={primary} fallback={v}", file=sys.stderr, flush=True)
+    fh.close()
+    body = [l.rstrip("\n").split("\t") for l in open(part)][1:]
+    open(out, "w").write("\n".join("\t".join(r) for r in [["judge_model", "control", "task", "rubric", "primary", "fallback", "agree", "reason"]] + body) + "\n")
+    os.remove(part)
+    neg = [r for r in body if r[1] == "neg"]
+    pos = [r for r in body if r[1] == "pos"]
+    n_ok = sum(r[5] == "False" for r in neg)
+    p_ok = sum(r[5] == "True" for r in pos)
+    agree = sum(r[6] == "1" for r in body)
+    res = {"n": len(body), "neg_false": f"{n_ok}/{len(neg)}", "neg_pass": n_ok >= 56,
+           "pos_true": f"{p_ok}/{len(pos)}", "pos_pass": p_ok == len(pos),
+           "agree_primary": f"{agree}/{len(body)}", "agree_pass": agree >= 68}
+    print(json.dumps(res))
+    return all(res[k] for k in ("neg_pass", "pos_pass", "agree_pass"))
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["controls", "verdict", "agree"])
+    ap.add_argument("cmd", choices=["controls", "verdict", "agree", "fallback"])
     ap.add_argument("rest", nargs="*")
     ap.add_argument("--out", default=os.path.join(ROOT, "docs/sprint/w318/judge-controls.tsv"))
     a = ap.parse_args()
+    if a.cmd == "fallback":
+        sys.exit(0 if fallback(os.path.join(ROOT, "docs/sprint/w5/J1-fallback.tsv"),
+                               os.path.join(ROOT, "docs/sprint/w318/judge-controls.tsv")) else 1)
     env = load_env()
     if a.cmd == "verdict":
         print(json.dumps(verdict(env, a.rest[0], a.rest[1])))
