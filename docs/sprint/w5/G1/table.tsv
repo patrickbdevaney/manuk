@@ -1,0 +1,11 @@
+task	cdp-layer (runs pass / 3)	cdp-layer+pwfmt (runs pass / 3)
+dashdish-10	3/3	2/3
+dashdish-7	0/3	0/3
+fly-unified-6	0/3	0/3
+gomail-3	0/3	0/3
+gomail-5	0/3	0/3
+gomail-8	0/3	3/3
+opendining-10	0/3	0/3
+opendining-4	0/3	2/3
+staynb-2	3/3	2/3
+staynb-4	3/3	1/3

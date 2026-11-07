@@ -16,7 +16,7 @@ arm's own tools (/config?run_id=0&task_id=..., then /finish for s0, then the sta
 claude closes stdin / sends SIGTERM it reads /finish once more and writes the JSON to --state. The same two calls are
 made on every arm, so the arms differ only in the browser. Run with `python3 -I`. Requires MANUK_CHROME_PIN.
 """
-import argparse, glob, json, os, queue, signal, subprocess, sys, threading, time, concurrent.futures as cf
+import argparse, glob, json, os, queue, re, signal, subprocess, sys, threading, time, concurrent.futures as cf
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
@@ -82,6 +82,30 @@ def config_task(cfg):
     return next((v["task_id"] for v in cfg.values() if isinstance(v, dict) and "task_id" in v), None)
 
 
+PW_LINE = re.compile(r'^(\+?)\[h(\d+)\] (\S+) (.*)$')
+
+
+def pw_snapshot(text):
+    """W5.G1 (b): re-lay manuk's observation lines in Playwright MCP's snapshot shape, `- role "name" [states] [ref=hN]`.
+    Layout only: the handle is still manuk's (hN) so act/type resolve it unchanged; the `in <container>` suffixes are
+    dropped (Playwright nests by indentation, which this adapter does not reproduce). Header and page-content lines pass."""
+    out = []
+    for line in text.split("\n"):
+        m = PW_LINE.match(line)
+        if not m:
+            out.append(line)
+            continue
+        new, h, role, rest = m.groups()
+        lv = re.match(r"heading(\d)$", role)
+        name = re.match(r'"((?:[^"\\]|\\.)*)"', rest)
+        states = re.findall(r"\[[a-z=0-9 ]+\]", rest)
+        off = " ↓offscreen" if "↓offscreen" in rest else (" ↑offscreen" if "↑offscreen" in rest else "")
+        out.append(f'{new}- {"heading" if lv else role}' + (f' "{name.group(1)}"' if name else "")
+                   + (f" [level={lv.group(1)}]" if lv else "") + "".join(f" {st}" for st in states)
+                   + f" [ref=h{h}]{off}")
+    return "\n".join(out)
+
+
 def proxy(a, child):
     sys.stderr = open(a.state + ".err", "a", buffering=1)
     nav, navargs, rd, rdargs = TOOLS[surface(a.arm)]
@@ -89,6 +113,15 @@ def proxy(a, child):
     resp, out_lock, n = queue.Queue(), threading.Lock(), [0]
 
     def emit(line):
+        if a.arm == "cdp-layer+pwfmt":  # W5.G1 (b): the agent sees the Playwright-shaped observation
+            try:
+                j = json.loads(line)
+                for c in (j.get("result") or {}).get("content", []):
+                    if c.get("type") == "text":
+                        c["text"] = pw_snapshot(c["text"])
+                line = json.dumps(j)
+            except ValueError:
+                pass
         with out_lock:
             sys.stdout.write(line if line.endswith("\n") else line + "\n"); sys.stdout.flush()
 
@@ -245,7 +278,7 @@ def pin_chrome(arm, srv, tdir):
         args = [x for x in srv["args"] if x != "--no-sandbox"]
         args[args.index("--executable-path") + 1] = chrome_wrapper(tdir)
         srv["args"] = args
-    elif arm in ("cdp-layer", "cdp-layer-no-receipts"):
+    elif arm in ("cdp-layer", "cdp-layer-no-receipts", "cdp-layer+pwfmt"):
         srv["env"] = dict(srv.get("env", {}), MANUK_CHROME=chrome_wrapper(tdir))
 
 

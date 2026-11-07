@@ -99,7 +99,7 @@ def arm_config(arm, tmp):
         if arm == "manuk-lean":  # W4.E2.a: same binary, lean agent profile (deferred image bodies, tracker hosts refused)
             cfg["mcpServers"]["browser"]["env"] = {"MANUK_AGENT_PROFILE": "lean"}
         allowed = "mcp__browser"
-    elif arm == "cdp-layer":  # R4.1 (K1 arm 3): the manuk tool surface and disciplines over Chrome via CDP
+    elif arm in ("cdp-layer", "cdp-layer+pwfmt"):  # R4.1 (K1 arm 3): the manuk tool surface and disciplines over Chrome via CDP
         exe = mcp_bin()
         if not os.path.exists(exe):
             return None, None
