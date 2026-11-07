@@ -47,7 +47,9 @@ struct Client {
 impl Client {
     fn start(mutate: bool) -> Client {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_manuk-mcp"));
-        cmd.args(["--backend", "chrome"]);
+        if std::env::var("FRAMES_BACKEND").as_deref() != Ok("manuk") {
+            cmd.args(["--backend", "chrome"]);
+        }
         if mutate {
             cmd.env("MANUK_CDP_MUTATE", "no-frames");
         }
