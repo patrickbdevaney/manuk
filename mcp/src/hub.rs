@@ -103,6 +103,11 @@ impl<B: Backend> Page<B> {
     }
 }
 
+/// A result the agent should be able to undo: no effect, or the act landed on an error page.
+fn is_failure(t: &str) -> bool {
+    t.contains("NO EFFECT") || t.contains("error page")
+}
+
 fn held_line(held: &[manuk_net::ledger::Held]) -> String {
     let v: Vec<String> = held.iter().map(|h| h.what.short()).collect();
     format!("held=[{}]", v.join(", "))
@@ -113,6 +118,9 @@ pub struct Hub<B: Backend> {
     dir: Option<PathBuf>,
     pages: HashMap<String, Page<B>>,
     ckpts: HashMap<String, Ckpt>,
+    /// W5.L2: labels of the automatic pre-act checkpoints, oldest first (bounded).
+    autos: std::collections::VecDeque<String>,
+    auto_n: u64,
     /// W5.L1: the agent's per-session task ledger. Hub-level, so navigation, new pages, restore and
     /// fork cannot drop it; it is not part of any page's replay log.
     notes: BTreeMap<String, String>,
@@ -151,6 +159,8 @@ impl<B: Backend> Hub<B> {
             dir,
             pages: HashMap::new(),
             ckpts: HashMap::new(),
+            autos: Default::default(),
+            auto_n: 0,
             notes: BTreeMap::new(),
             default: None,
             next: 0,
@@ -296,7 +306,7 @@ impl<B: Backend> Hub<B> {
     }
 
     /// `checkpoint`: remember the current position of page `id`.
-    fn checkpoint(&mut self, id: &str) -> String {
+    fn snap_ckpt(&self, id: &str) -> Ckpt {
         let page = &self.pages[id];
         let pos = manuk_net::ledger::position();
         let c = Ckpt {
@@ -314,6 +324,26 @@ impl<B: Backend> Hub<B> {
             pid: std::process::id(),
             notes: self.notes.clone(),
         };
+        c
+    }
+
+    /// W5.L2: snapshot the page before a state-changing call; returns the label `restore` takes.
+    fn auto_checkpoint(&mut self, id: &str) -> String {
+        let c = self.snap_ckpt(id);
+        self.auto_n += 1;
+        let label = format!("auto{}", self.auto_n);
+        self.ckpts.insert(label.clone(), c);
+        self.autos.push_back(label.clone());
+        while self.autos.len() > 16 {
+            if let Some(old) = self.autos.pop_front() {
+                self.ckpts.remove(&old);
+            }
+        }
+        label
+    }
+
+    fn checkpoint(&mut self, id: &str) -> String {
+        let c = self.snap_ckpt(id);
         let cid = format!(
             "c{:06x}",
             fnv(format!("{}:{}:{}", self.salt, self.next, self.ckpts.len()).as_bytes()) & 0xff_ffff
@@ -545,6 +575,14 @@ impl<B: Backend> Hub<B> {
         }
         let logged = !UNLOGGED.contains(&tool);
         let a = strip_page(args);
+        // W5.L2: take the rollback decision away from the acting model.
+        let changing = match tool {
+            "act" | "fill_form" | "key" | "upload" | "drag" => true,
+            "type" => a.get("submit").and_then(Value::as_bool) == Some(true),
+            "navigate" => !self.pages[&id].log.is_empty(),
+            _ => false,
+        };
+        let undo = if changing { Some(self.auto_checkpoint(&id)) } else { None };
         let page = self.pages.get_mut(&id).unwrap();
         // Take-since around the call: ids issued before it belong to someone else.
         let _ = manuk_net::take_request_ids();
@@ -588,6 +626,18 @@ impl<B: Backend> Hub<B> {
             None => handle,
         };
         let header = if tool == "observe" { self.notes_header() } else { None };
+        let r = match (r, undo) {
+            (Ok(Output::Text(t)), Some(l)) if is_failure(&t) => {
+                let loop_w = if t.contains("identical act") {
+                    "LOOP: this act already failed identically; do not repeat it.\n"
+                } else {
+                    ""
+                };
+                Ok(Output::Text(format!("{t}\n{loop_w}undo: restore(\"{l}\")")))
+            }
+            (Err(e), Some(l)) => Err(format!("{e}\nundo: restore(\"{l}\")")),
+            (r, _) => r,
+        };
         match r {
             Ok(Output::Text(t)) => Ok(Output::Text(match header {
                 Some(h) => format!("{h}\n{t}\n{handle}"),

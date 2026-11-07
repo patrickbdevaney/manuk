@@ -98,7 +98,7 @@ fn list_is_byte_identical() {
 fn deferred_tools_are_callable() {
     let mut c = Client::start();
     let tools = c.list();
-    for n in ["drag", "upload", "dialog", "download", "checkpoint", "fork", "handoff", "storage_state"] {
+    for n in ["drag", "upload", "dialog", "download", "restore", "fork", "handoff", "storage_state"] {
         assert!(tools.iter().any(|t| t["name"] == n), "{n} not listed");
     }
     let r = c.rpc("tools/call", json!({"name": "storage_state", "arguments": {}}));
@@ -106,4 +106,11 @@ fn deferred_tools_are_callable() {
     let r = c.rpc("tools/call", json!({"name": "checkpoint", "arguments": {}}));
     let text = r["result"]["content"][0]["text"].as_str().unwrap_or("");
     assert!(!text.is_empty(), "{r}");
+}
+
+/// W5.L2: the manual checkpoint is not in the default tool set (the hub checkpoints for the model).
+#[test]
+fn manual_checkpoint_is_not_listed() {
+    let mut c = Client::start();
+    assert!(!c.list().iter().any(|t| t["name"] == "checkpoint"));
 }

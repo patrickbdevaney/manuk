@@ -207,7 +207,8 @@ impl ServerHandler for ManukMcp {
         _c: RequestContext<RoleServer>,
     ) -> Result<ListToolsResult, McpError> {
         let mut r = ListToolsResult::default();
-        r.tools = (*self.tools).clone();
+        // W5.L2: manual checkpoint is not in the default set (the hub checkpoints before state changes); still callable.
+        r.tools = self.tools.iter().filter(|t| t.name != "checkpoint").cloned().collect();
         let dynamic = self.webmcp().await;
         self.webmcp_sig.store(
             crate::hub::fnv(Value::Array(dynamic.clone()).to_string().as_bytes()),
