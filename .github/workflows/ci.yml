@@ -46,6 +46,9 @@ jobs:
   verify-linux:
     name: verify (linux, shipping config)
     runs-on: ubuntu-latest
+    # Bounds the job: run 42315174419 sat in_progress for 30+ min at the apt step with no timeout set
+    # (R1.5.a.b.a.c.b). A bounded hang concludes as a failure instead of blocking the badge indefinitely.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -63,12 +66,19 @@ jobs:
       # winit/wgpu (the GUI) need the X11/Wayland dev libs — a bare CI runner has no display, which is
       # why the default `--workspace` build (with `gui`) failed here: it was the WINDOW deps, not mozjs.
       - name: system deps (clang for mozjs + GUI libs for winit/wgpu)
+        # Step-level bound plus a retry: the apt mirror hang on run 42315174419 was never root-caused
+        # (runner logs are admin-only), so a stalled apt is retried and then fails instead of hanging.
+        timeout-minutes: 15
         run: |
-          sudo apt-get update
-          sudo apt-get install -y clang libclang-dev llvm-dev \
-            libxkbcommon-dev libwayland-dev libxcb1-dev libx11-dev \
-            libasound2-dev pkg-config \
-            fonts-dejavu-core fonts-noto-cjk
+          for attempt in 1 2 3; do
+            sudo apt-get update && sudo apt-get install -y clang libclang-dev llvm-dev \
+              libxkbcommon-dev libwayland-dev libxcb1-dev libx11-dev \
+              libasound2-dev pkg-config \
+              fonts-dejavu-core fonts-noto-cjk && break
+            if [ "$attempt" = 3 ]; then echo "::error::apt-get failed after 3 attempts"; exit 1; fi
+            echo "apt-get attempt $attempt failed; retrying in 20s"
+            sleep 20
+          done
           # ⚠⚠⚠ THE FONTS ARE A CORRECTNESS DEPENDENCY, NOT A COSMETIC ONE, AND LEAVING THEM OUT
           # HELD THIS BADGE RED FOR SEVEN CONSECUTIVE TICKS. Text gates measure LINE BOXES, and a
           # line box is a property of the FACE — so a gate that proves "a CJK line takes the
