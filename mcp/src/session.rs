@@ -774,6 +774,33 @@ impl<B: Backend> Session<B> {
         out
     }
 
+    /// W5.L4: one line per modal/consent overlay or bot wall, naming its handle and what `dismiss` would
+    /// click. Empty (no bytes) when the page has none. `MANUK_OVERLAY_MUTATE=off` disables it.
+    fn overlay_flags(&mut self, tree: &A11yNode) -> String {
+        if std::env::var("MANUK_OVERLAY_MUTATE").is_ok_and(|v| v == "off") {
+            return String::new();
+        }
+        use crate::overlay::Kind;
+        let vp = self.b.viewport();
+        let mut out = String::new();
+        for o in crate::overlay::find(tree, &vp) {
+            let h = self.handle(o.node.node);
+            let name = clip(&o.node.name);
+            let what = if o.kind == Kind::Consent { "CONSENT" } else { "MODAL" };
+            let line = match (o.kind, o.control) {
+                (Kind::BotWall, _) => "BOT-WALL: the page asks to prove you are human. Never attempt it: call handoff(reason)".to_string(),
+                (_, Some(c)) => {
+                    let ch = self.handle(c.node);
+                    format!("{what} OVERLAY [h{h}] {name:?} blocks the page behind it; act(handle=\"h{h}\", action=\"dismiss\") clicks [h{ch}] {:?}", clip(&c.name))
+                }
+                (_, None) => format!("{what} OVERLAY [h{h}] {name:?} blocks the page behind it and has no reject/close control: handoff(reason) (accept is never clicked for you)"),
+            };
+            out.push_str(&line);
+            out.push('\n');
+        }
+        out
+    }
+
     fn header(&self) -> String {
         format!("{} — {:?}", self.b.url(), clip(&self.b.title()))
     }
@@ -1484,9 +1511,11 @@ impl<B: Backend> Session<B> {
                 } else {
                     "scroll, then observe again"
                 };
+                let flags = self.overlay_flags(&tree);
                 format!(
-                    "{UNTRUSTED}{}\n{}\n{}",
+                    "{UNTRUSTED}{}\n{}{}\n{}",
                     self.warn(),
+                    flags,
                     self.header(),
                     Self::fit(lines, budget, hint)
                 )
@@ -1614,6 +1643,25 @@ impl<B: Backend> Session<B> {
     /// is the state change a task grader checks, so the agent need not re-read the page to learn that a
     /// click really added to the cart. `MANUK_NO_RECEIPTS=1` turns it off (the baseline arm).
     async fn act(&mut self, hs: &str, action: &str, value: Option<&str>) -> Result<String> {
+        if action == "dismiss" {
+            let tree = self.tree()?;
+            let (_, n) = self.resolve(&tree, hs)?;
+            let target = n.node;
+            let vp = self.b.viewport();
+            let ovs = crate::overlay::find(&tree, &vp);
+            let ov = ovs
+                .iter()
+                .find(|o| o.node.iter().any(|k| k.node == target))
+                .or_else(|| ovs.first())
+                .ok_or_else(|| anyhow!("no overlay on the page to dismiss"))?;
+            let ctl = match (ov.kind, ov.control) {
+                (crate::overlay::Kind::BotWall, _) => bail!("BOT-WALL: not dismissed and never attempted; call handoff(reason) so the human proves it"),
+                (_, None) => bail!("overlay has no reject/close control; nothing was clicked (accept is never clicked for you); call handoff(reason)"),
+                (_, Some(c)) => c.node,
+            };
+            let ch = format!("h{}", self.handle(ctl));
+            return Box::pin(self.act(&ch, "click", None)).await;
+        }
         if let Some(from) = self.root.clone() {
             self.pending = Some((from, format!("{action} {}", hs.trim())));
         }

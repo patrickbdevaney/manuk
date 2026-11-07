@@ -141,7 +141,7 @@ pub fn tools() -> Vec<Tool> {
     vec![
         t("navigate", "Load a URL; returns one line per node: `[hN] role \"name\" [state]`. `query` keeps matching passages. E.g. navigate(url=\"https://a.com\", query=\"shipping cost\")", schema(json!({"url": {"type": "string"}, "query": {"type": "string"}}), &["url"])),
         t("observe", "Re-read the page; mode: full (default), diff (changes only), viewport, interactive, content (text). E.g. observe(mode=\"diff\")", schema(json!({"mode": {"type": "string", "enum": ["full", "diff", "viewport", "interactive", "content"]}, "budget_tokens": {"type": "integer"}, "include_hidden": {"type": "boolean", "description": "include invisible text"}}), &[])),
-        t("act", "Click, check, select, focus or hover a handle, or run `steps` in one call (stops at first failure). E.g. act(handle=\"h5\", action=\"click\")", schema(json!({"handle": {"type": "string"}, "action": {"type": "string", "enum": ["click", "check", "select", "focus", "hover"]}, "value": {"type": "string", "description": "option; false unchecks"}, "steps": {"type": "array", "description": "instead of handle: [{\"tool\":\"type\",\"handle\":\"h3\",\"text\":\"x\"}]", "items": {"type": "object"}}}), &[])),
+        t("act", "Click, check, select, focus or hover a handle, or run `steps` in one call (stops at first failure). E.g. act(handle=\"h5\", action=\"click\")", schema(json!({"handle": {"type": "string"}, "action": {"type": "string", "enum": ["click", "check", "select", "focus", "hover", "dismiss"]}, "value": {"type": "string", "description": "option; false unchecks"}, "steps": {"type": "array", "description": "instead of handle: [{\"tool\":\"type\",\"handle\":\"h3\",\"text\":\"x\"}]", "items": {"type": "object"}}}), &[])),
         t("fill_form", "Fill several fields, optionally submit, in one call. E.g. fill_form(fields=[{\"handle\":\"h3\",\"value\":\"A\"}], submit=\"h9\")", schema(json!({"fields": {"type": "array", "items": {"type": "object", "properties": {"handle": {"type": "string"}, "value": {}, "action": {"type": "string", "enum": ["type", "check", "select"]}}, "required": ["handle", "value"]}}, "submit": {"type": "string", "description": "handle clicked last"}}), &["fields"])),
         t("back", "Go back one history entry.", schema(json!({}), &[])),
         t("wait_for", "Wait for `text` or `handle` (`timeout` s, default 10).", schema(json!({"text": {"type": "string"}, "handle": {"type": "string"}, "timeout": {"type": "number"}}), &[])),
@@ -154,7 +154,7 @@ pub fn tools() -> Vec<Tool> {
         t("download", "Click `handle`, wait for its download (needs --download-dir).", schema(json!({"handle": {"type": "string"}}), &[])),
         t("scroll", "Scroll to handle `to` or by `dy` px; returns new nodes.", schema(json!({"to": {"type": "string"}, "dy": {"type": "number"}}), &[])),
         t("extract", "Read page content: format text (default), markdown or table; `query` keeps top passages; long output pages by offset. E.g. extract(format=\"table\", scope=\"h12\")", schema(json!({"format": {"type": "string", "enum": ["markdown", "text", "table"]}, "scope": {"type": "string"}, "offset": {"type": "integer"}, "query": {"type": "string"}, "include_hidden": {"type": "boolean"}}), &[])),
-        t("page_data", "JSON the page itself fetched (XHR/fetch, same-origin, <=64 KB) with request URLs; cheaper than parsing the DOM.", schema(json!({}), &[])),
+        t("page_data", "JSON the page itself fetched (same-origin, <=64 KB) with URLs.", schema(json!({}), &[])),
         t("find", "Rank nodes for a query; up to 8 handles.", schema(json!({"query": {"type": "string"}}), &["query"])),
         t("storage_state", "Export (default) or import cookies + localStorage JSON.", schema(json!({"action": {"type": "string", "enum": ["export", "import"]}, "path": {"type": "string"}}), &[])),
         t("handoff", "Ask the human to act for you (log in, CAPTCHA, card); returns the effect diff after Resume. Needs the GUI shell.", schema(json!({"reason": {"type": "string", "description": "shown to the human"}, "timeout_ms": {"type": "integer"}}), &["reason"])),
@@ -162,7 +162,7 @@ pub fn tools() -> Vec<Tool> {
         t("checkpoint", "Save this page's position; returns an id.", schema(json!({}), &[])),
         t("restore", "Rewind to a checkpoint in a fresh default page.", schema(json!({"checkpoint": {"type": "string"}}), &["checkpoint"])),
         t("fork", "Like restore, but a new page; the current one stays.", schema(json!({"checkpoint": {"type": "string"}}), &["checkpoint"])),
-        t("note", "Task note, kept across navigation/restore/fork; summary heads observe. No key lists; empty value deletes.", schema(json!({"key": {"type": "string"}, "value": {"type": "string"}}), &[])),
+        t("note", "Task note kept across navigate/restore/fork. No key lists; empty value deletes.", schema(json!({"key": {"type": "string"}, "value": {"type": "string"}}), &[])),
         t("commit", "Send this fork's held POST/PUT/DELETE requests.", schema(json!({}), &[])),
         t("screenshot", "PNG of the viewport (opt-in; expensive).", schema(json!({"handle": {"type": "string"}}), &[])),
     ]

@@ -7,6 +7,7 @@ pub mod downloads;
 pub use manuk_agent::confine;
 pub mod hub;
 pub mod isolation;
+pub mod overlay;
 pub mod policy;
 pub mod server;
 pub mod session;

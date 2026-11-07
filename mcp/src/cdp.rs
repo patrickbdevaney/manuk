@@ -664,6 +664,7 @@ fn role_of(r: &Raw, i: usize, body_child: bool) -> Role {
             "option" => Some(Role::Option),
             "listbox" => Some(Role::ListBox),
             "dialog" => Some(Role::Dialog),
+            "alertdialog" => Some(Role::AlertDialog),
             "alert" => Some(Role::Alert),
             "navigation" => Some(Role::Navigation),
             "main" => Some(Role::Main),
