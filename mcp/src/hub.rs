@@ -4,7 +4,7 @@
 //! because the server rebuilds the page by replaying the persisted log (and refuses to continue if
 //! a replayed step's hash no longer matches what was recorded). No `Mcp-Session-Id` is involved.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 
 use serde_json::{json, Map, Value};
@@ -14,6 +14,10 @@ use crate::Backend;
 
 /// Calls that do not touch page state and are never logged.
 const UNLOGGED: &[&str] = &["screenshot", "storage_state", "webmcp_list"];
+
+/// W5.L1: the observe header is at most this many chars (~50 tokens at 4 chars/token; gate: <= 60).
+const NOTES_HEADER_MAX: usize = 200;
+const NOTE_VALUE_MAX: usize = 500;
 
 /// FNV-1a 64: stable across builds and platforms (unlike `DefaultHasher`).
 pub fn fnv(bytes: &[u8]) -> u64 {
@@ -76,6 +80,8 @@ struct Ckpt {
     /// Position in this process's non-safe request ledger, and the process it is valid in.
     pos: usize,
     pid: u32,
+    /// W5.L1: the session's task notes at checkpoint time.
+    notes: BTreeMap<String, String>,
 }
 
 struct Page<B: Backend> {
@@ -107,6 +113,9 @@ pub struct Hub<B: Backend> {
     dir: Option<PathBuf>,
     pages: HashMap<String, Page<B>>,
     ckpts: HashMap<String, Ckpt>,
+    /// W5.L1: the agent's per-session task ledger. Hub-level, so navigation, new pages, restore and
+    /// fork cannot drop it; it is not part of any page's replay log.
+    notes: BTreeMap<String, String>,
     default: Option<String>,
     next: u64,
     salt: u64,
@@ -142,6 +151,7 @@ impl<B: Backend> Hub<B> {
             dir,
             pages: HashMap::new(),
             ckpts: HashMap::new(),
+            notes: BTreeMap::new(),
             default: None,
             next: 0,
             salt,
@@ -272,6 +282,14 @@ impl<B: Backend> Hub<B> {
             },
             pos: head["pos"].as_u64().unwrap_or(0) as usize,
             pid: head["pid"].as_u64().unwrap_or(0) as u32,
+            notes: head["notes"]
+                .as_object()
+                .map(|m| {
+                    m.iter()
+                        .filter_map(|(k, v)| Some((k.clone(), v.as_str()?.to_string())))
+                        .collect()
+                })
+                .unwrap_or_default(),
         };
         self.ckpts.insert(id.to_string(), c.clone());
         Ok(c)
@@ -294,6 +312,7 @@ impl<B: Backend> Hub<B> {
             },
             pos,
             pid: std::process::id(),
+            notes: self.notes.clone(),
         };
         let cid = format!(
             "c{:06x}",
@@ -302,7 +321,7 @@ impl<B: Backend> Hub<B> {
         self.next += 1;
         if let Some(p) = self.ckpt_path(&cid) {
             let head =
-                json!({"url": c.url, "tag": c.tag, "pos": c.pos, "pid": c.pid, "snap": c.snap});
+                json!({"url": c.url, "tag": c.tag, "pos": c.pos, "pid": c.pid, "snap": c.snap, "notes": c.notes});
             let mut out = format!("{head}\n");
             for e in &c.log {
                 out.push_str(&format!("{}\n", e.to_json(id)));
@@ -367,6 +386,10 @@ impl<B: Backend> Hub<B> {
         } else {
             None
         };
+        // Notes are the agent's own memory: keep every current note, add the checkpoint's missing ones.
+        for (k, v) in &c.notes {
+            self.notes.entry(k.clone()).or_insert_with(|| v.clone());
+        }
         let id = self.fresh_id();
         let mut s = self.new_session();
         s.backend_mut().reset_storage();
@@ -417,6 +440,52 @@ impl<B: Backend> Hub<B> {
         )))
     }
 
+    /// `note`: the session ledger. `note(key, value)` sets (empty value deletes); no key lists all.
+    fn notes_tool(&mut self, tool: &str, args: &Map<String, Value>) -> Result<Output, String> {
+        if args.get("key").is_none() {
+            return Ok(Output::Text(if self.notes.is_empty() {
+                "no notes".to_string()
+            } else {
+                self.notes
+                    .iter()
+                    .map(|(k, v)| format!("{k}: {v}"))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            }));
+        }
+        let key = args
+            .get("key")
+            .and_then(Value::as_str)
+            .filter(|k| !k.is_empty() && k.len() <= 40)
+            .ok_or("note `key` must be 1-40 chars")?;
+        let val = args.get("value").and_then(Value::as_str).unwrap_or("");
+        if val.is_empty() {
+            self.notes.remove(key);
+            return Ok(Output::Text(format!("note {key} cleared ({} left)", self.notes.len())));
+        }
+        let v: String = val.chars().take(NOTE_VALUE_MAX).collect();
+        self.notes.insert(key.to_string(), v);
+        Ok(Output::Text(format!("noted {key} ({} total)", self.notes.len())))
+    }
+
+    /// 1-line summary prepended to observe output; none when there are no notes.
+    fn notes_header(&self) -> Option<String> {
+        if self.notes.is_empty() {
+            return None;
+        }
+        let body = self
+            .notes
+            .iter()
+            .map(|(k, v)| format!("{k}={}", v.replace('\n', " ")))
+            .collect::<Vec<_>>()
+            .join("; ");
+        let mut line = format!("notes({}): {body}", self.notes.len());
+        if line.chars().count() > NOTES_HEADER_MAX {
+            line = line.chars().take(NOTES_HEADER_MAX - 1).collect::<String>() + "…";
+        }
+        Some(line)
+    }
+
     /// `args.page`: absent = the default page; `"new"` = a fresh page; `"<id>:<seq>"` = resume/verify.
     pub async fn call(&mut self, tool: &str, args: &Map<String, Value>) -> Result<Output, String> {
         if matches!(tool, "restore" | "fork") {
@@ -428,6 +497,9 @@ impl<B: Backend> Hub<B> {
                 })?
                 .to_string();
             return self.from_ckpt(&cid, tool == "restore").await;
+        }
+        if tool == "note" {
+            return self.notes_tool(tool, args);
         }
         if tool == "webmcp_list" && self.default.is_none() && args.get("page").is_none() {
             // Listing must not launch a browser: no page yet means no tools.
@@ -515,8 +587,12 @@ impl<B: Backend> Hub<B> {
             Some(h) => format!("{h}\n{handle}"),
             None => handle,
         };
+        let header = if tool == "observe" { self.notes_header() } else { None };
         match r {
-            Ok(Output::Text(t)) => Ok(Output::Text(format!("{t}\n{handle}"))),
+            Ok(Output::Text(t)) => Ok(Output::Text(match header {
+                Some(h) => format!("{h}\n{t}\n{handle}"),
+                None => format!("{t}\n{handle}"),
+            })),
             Ok(Output::Image { png, note }) => Ok(Output::Image {
                 png,
                 note: format!("{note}\n{handle}"),
