@@ -274,6 +274,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--arm", required=True); ap.add_argument("--suite", default="own", choices=["own", "full"])
     ap.add_argument("--runs", type=int, default=3); ap.add_argument("--tasks"); ap.add_argument("--timeout", type=int, default=300)
+    ap.add_argument("--run-base", type=int, default=0, help="W5.B1: first run number - 1 (to interleave arms per run)")
     ap.add_argument("--out", default=os.path.join(ROOT, "docs/sprint/SCOREBOARD.tsv")); ap.add_argument("--dry", action="store_true")
     ap.add_argument("--break-verifier", action="store_true", help="gate red-check: demand an impossible answer, every row must FAIL")
     ap.add_argument("--injection", action="store_true", help="W3.3: only the injection tasks (own + external); rows tagged slice=injection")
@@ -318,7 +319,7 @@ def main():
                 f.write("\t".join(COLS) + "\n")
             if new_turns:
                 tf.write("\t".join(TURN_COLS) + "\n")
-            for run in range(1, a.runs + 1):
+            for run in range(a.run_base + 1, a.run_base + a.runs + 1):
                 for t in tasks:
                     row = one(t, a.arm, run, base, cfg, allowed, ver, a.timeout, a.transcripts, tf)
                     f.write("\t".join(str(row.get(c, "")) for c in COLS) + "\n"); f.flush()

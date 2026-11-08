@@ -1,0 +1,22 @@
+
+## slice real
+| arm | tasks | pass>=2of3 | rate | pass/run | in+out tok/task (run band) | total tok/task | USD/run |
+|---|---|---|---|---|---|---|---|
+| manuk | 102 | 29 | 28.4% | [28, 28, 29] | 4050 [3829, 4290] | 965338 | 0.0252 |
+| cdp-layer | 102 | 27 | 26.5% | [31, 31, 29] | 4034 [3983, 4131] | 975437 | 0.0262 |
+| playwright | 102 | 47 | 46.1% | [48, 44, 50] | 4690 [4492, 5001] | 1070781 | 0.0311 |
+
+## slice full
+| arm | tasks | pass>=2of3 | rate | pass/run | in+out tok/task (run band) | total tok/task | USD/run |
+|---|---|---|---|---|---|---|---|
+| manuk | 54 | 52 | 96.3% | [52, 51, 52] | 594 [555, 631] | 105655 | 0.0035 |
+| cdp-layer | 54 | 50 | 92.6% | [50, 50, 49] | 512 [471, 540] | 87749 | 0.0027 |
+| playwright | 54 | 51 | 94.4% | [49, 52, 52] | 682 [662, 705] | 124826 | 0.0041 |
+
+REAL judge rows: {'claude-haiku (claude -p)': 918}; tasks judged by more than one judge: 0 []
+
+Bar 2.1 (full slice): manuk 96.3% vs playwright 94.4% -> diff +1.9 pts, bands overlap=True -> MET
+REAL slice (not a Bar 2 input by itself): manuk 28.4% vs playwright 46.1%
+Bar 2.2 tokens (full slice, in+out per task): manuk 594 vs playwright 682 -> 12.9% fewer (need >=30% fewer at equal-or-better success) -> NOT MET
+  (K1 arm 3, cdp-layer: 512 in+out per task; manuk uses 16.0% more)
+  (total incl. cache, manuk vs playwright: 15.4% fewer)

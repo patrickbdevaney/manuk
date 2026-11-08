@@ -1,0 +1,19 @@
+metric	slice	arm	value	band_lo	band_hi
+tokens_io_per_task	real	manuk	4050.38	3829.22	4290.18
+tokens_total_per_task	real	manuk	965338.39		
+pass2of3_rate	real	manuk	28.43	28	29
+tokens_io_per_task	real	cdp-layer	4034.19	3983.22	4131.06
+tokens_total_per_task	real	cdp-layer	975437.43		
+pass2of3_rate	real	cdp-layer	26.47	29	31
+tokens_io_per_task	real	playwright	4689.77	4492.01	5000.53
+tokens_total_per_task	real	playwright	1070781.16		
+pass2of3_rate	real	playwright	46.08	44	50
+tokens_io_per_task	full	manuk	594.11	554.69	631.06
+tokens_total_per_task	full	manuk	105655.16		
+pass2of3_rate	full	manuk	96.30	51	52
+tokens_io_per_task	full	cdp-layer	512.06	471.46	539.83
+tokens_total_per_task	full	cdp-layer	87749.01		
+pass2of3_rate	full	cdp-layer	92.59	49	50
+tokens_io_per_task	full	playwright	682.01	662.33	705.02
+tokens_total_per_task	full	playwright	124826.01		
+pass2of3_rate	full	playwright	94.44	49	52

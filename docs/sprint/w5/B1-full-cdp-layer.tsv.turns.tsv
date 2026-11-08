@@ -1,0 +1,564 @@
+chrome_ver	arm	task	run	turn	tool	result_bytes	output_tokens
+145.0.7632.116	cdp-layer	L01	1	1	mcp__browser__navigate	9856	34
+145.0.7632.116	cdp-layer	L01	1	2		0	98
+145.0.7632.116	cdp-layer	L02	1	1	mcp__browser__navigate	1330	103
+145.0.7632.116	cdp-layer	L02	1	2		0	254
+145.0.7632.116	cdp-layer	L03	1	1	mcp__browser__navigate	9856	59
+145.0.7632.116	cdp-layer	L03	1	2	mcp__browser__act	10393	51
+145.0.7632.116	cdp-layer	L03	1	3		0	160
+145.0.7632.116	cdp-layer	L04	1	1	mcp__browser__navigate	1265	63
+145.0.7632.116	cdp-layer	L04	1	2	mcp__browser__act	1320	35
+145.0.7632.116	cdp-layer	L04	1	3		0	154
+145.0.7632.116	cdp-layer	L05	1	1	mcp__browser__navigate	1265	56
+145.0.7632.116	cdp-layer	L05	1	2	mcp__browser__act	1320	31
+145.0.7632.116	cdp-layer	L05	1	3		0	189
+145.0.7632.116	cdp-layer	L06	1	1	mcp__browser__navigate	9995	78
+145.0.7632.116	cdp-layer	L06	1	2		0	168
+145.0.7632.116	cdp-layer	L07	1	1	mcp__browser__navigate	9856	63
+145.0.7632.116	cdp-layer	L07	1	2		0	166
+145.0.7632.116	cdp-layer	L08	1	1	mcp__browser__navigate	3666	30
+145.0.7632.116	cdp-layer	L08	1	2		0	107
+145.0.7632.116	cdp-layer	L09	1	1	mcp__browser__navigate	3666	121
+145.0.7632.116	cdp-layer	L09	1	2	mcp__browser__act	4254	105
+145.0.7632.116	cdp-layer	L09	1	3	mcp__browser__extract	1636	142
+145.0.7632.116	cdp-layer	L09	1	4		0	775
+145.0.7632.116	cdp-layer	L10	1	1	mcp__browser__navigate	546	105
+145.0.7632.116	cdp-layer	L10	1	2	mcp__browser__act	976	56
+145.0.7632.116	cdp-layer	L10	1	3	mcp__browser__back+mcp__browser__find	3856	248
+145.0.7632.116	cdp-layer	L10	1	4	mcp__browser__act	1016	152
+145.0.7632.116	cdp-layer	L10	1	5		0	424
+145.0.7632.116	cdp-layer	L11	1	1	mcp__browser__navigate	3068	32
+145.0.7632.116	cdp-layer	L11	1	2		0	95
+145.0.7632.116	cdp-layer	L12	1	1	mcp__browser__navigate	3073	92
+145.0.7632.116	cdp-layer	L12	1	2	mcp__browser__scroll+mcp__browser__observe	117	273
+145.0.7632.116	cdp-layer	L12	1	3	mcp__browser__scroll	1457	73
+145.0.7632.116	cdp-layer	L12	1	4	mcp__browser__scroll	1083	218
+145.0.7632.116	cdp-layer	L12	1	5		0	466
+145.0.7632.116	cdp-layer	L13	1	1	mcp__browser__navigate	4193	91
+145.0.7632.116	cdp-layer	L13	1	2		0	205
+145.0.7632.116	cdp-layer	L14	1	1	mcp__browser__navigate	877	56
+145.0.7632.116	cdp-layer	L14	1	2	mcp__browser__extract	1429	146
+145.0.7632.116	cdp-layer	L14	1	3		0	426
+145.0.7632.116	cdp-layer	L15	1	1	mcp__browser__navigate	264	42
+145.0.7632.116	cdp-layer	L15	1	2		0	114
+145.0.7632.116	cdp-layer	L16	1	1	mcp__browser__navigate	1505	71
+145.0.7632.116	cdp-layer	L16	1	2		0	141
+145.0.7632.116	cdp-layer	L17	1	1	mcp__browser__navigate	2116	126
+145.0.7632.116	cdp-layer	L17	1	2		0	82
+145.0.7632.116	cdp-layer	L18	1	1	mcp__browser__navigate	2144	136
+145.0.7632.116	cdp-layer	L18	1	2	mcp__browser__extract	1955	198
+145.0.7632.116	cdp-layer	L18	1	3	mcp__browser__observe	32354	53
+145.0.7632.116	cdp-layer	L18	1	4	mcp__browser__extract	65	117
+145.0.7632.116	cdp-layer	L18	1	5	mcp__browser__extract	1859	116
+145.0.7632.116	cdp-layer	L18	1	6		0	184
+145.0.7632.116	cdp-layer	L19	1	1	mcp__browser__navigate	2244	124
+145.0.7632.116	cdp-layer	L19	1	2		0	119
+145.0.7632.116	cdp-layer	L20	1	1	mcp__browser__navigate	2240	97
+145.0.7632.116	cdp-layer	L20	1	2		0	266
+145.0.7632.116	cdp-layer	L21	1	1	mcp__browser__navigate	29399	80
+145.0.7632.116	cdp-layer	L21	1	2	mcp__browser__type	16292	81
+145.0.7632.116	cdp-layer	L21	1	3	mcp__browser__extract	1318	68
+145.0.7632.116	cdp-layer	L21	1	4		0	227
+145.0.7632.116	cdp-layer	L22	1	1	mcp__browser__navigate	32129	72
+145.0.7632.116	cdp-layer	L22	1	2		0	69
+145.0.7632.116	cdp-layer	L23	1	1	mcp__browser__navigate	503	73
+145.0.7632.116	cdp-layer	L23	1	2	mcp__browser__act	7284	43
+145.0.7632.116	cdp-layer	L23	1	3		0	369
+145.0.7632.116	cdp-layer	L24	1	1	mcp__browser__navigate	32129	80
+145.0.7632.116	cdp-layer	L24	1	2		0	172
+145.0.7632.116	cdp-layer	L25	1	1	mcp__browser__navigate	9995	81
+145.0.7632.116	cdp-layer	L25	1	2		0	72
+145.0.7632.116	cdp-layer	F01	1	1	mcp__browser__navigate	326	42
+145.0.7632.116	cdp-layer	F01	1	2	mcp__browser__fill_form	668	87
+145.0.7632.116	cdp-layer	F01	1	3		0	128
+145.0.7632.116	cdp-layer	F02	1	1	mcp__browser__navigate	326	55
+145.0.7632.116	cdp-layer	F02	1	2	mcp__browser__fill_form	668	114
+145.0.7632.116	cdp-layer	F02	1	3	mcp__browser__act	484	46
+145.0.7632.116	cdp-layer	F02	1	4	mcp__browser__observe	152	126
+145.0.7632.116	cdp-layer	F02	1	5	mcp__browser__act	597	46
+145.0.7632.116	cdp-layer	F02	1	6	mcp__browser__navigate	328	138
+145.0.7632.116	cdp-layer	F02	1	7	mcp__browser__fill_form	600	113
+145.0.7632.116	cdp-layer	F02	1	8	mcp__browser__observe	294	129
+145.0.7632.116	cdp-layer	F02	1	9	mcp__browser__key	54	165
+145.0.7632.116	cdp-layer	F02	1	10	mcp__browser__key	157	45
+145.0.7632.116	cdp-layer	F02	1	11	mcp__browser__navigate	332	118
+145.0.7632.116	cdp-layer	F02	1	12	mcp__browser__fill_form	602	113
+145.0.7632.116	cdp-layer	F02	1	13	mcp__browser__screenshot	36	148
+145.0.7632.116	cdp-layer	F02	1	14	mcp__browser__act	600	164
+145.0.7632.116	cdp-layer	F02	1	15		0	772
+145.0.7632.116	cdp-layer	F03	1	1	mcp__browser__navigate	344	57
+145.0.7632.116	cdp-layer	F03	1	2	mcp__browser__fill_form	820	130
+145.0.7632.116	cdp-layer	F03	1	3	mcp__browser__act+mcp__browser__act	587	97
+145.0.7632.116	cdp-layer	F03	1	4	mcp__browser__act	513	49
+145.0.7632.116	cdp-layer	F03	1	5		0	252
+145.0.7632.116	cdp-layer	F04	1	1	mcp__browser__navigate	889	62
+145.0.7632.116	cdp-layer	F04	1	2	mcp__browser__fill_form+mcp__browser__fill_form	767	171
+145.0.7632.116	cdp-layer	F04	1	3	mcp__browser__navigate	898	177
+145.0.7632.116	cdp-layer	F04	1	4	mcp__browser__fill_form	670	87
+145.0.7632.116	cdp-layer	F04	1	5	mcp__browser__act	524	120
+145.0.7632.116	cdp-layer	F04	1	6		0	129
+145.0.7632.116	cdp-layer	F05	1	1	mcp__browser__navigate	1059	49
+145.0.7632.116	cdp-layer	F05	1	2	mcp__browser__act	499	91
+145.0.7632.116	cdp-layer	F05	1	3	mcp__browser__act	524	83
+145.0.7632.116	cdp-layer	F05	1	4		0	102
+145.0.7632.116	cdp-layer	F06	1	1	mcp__browser__navigate	189	57
+145.0.7632.116	cdp-layer	F06	1	2	mcp__browser__act	185	48
+145.0.7632.116	cdp-layer	F06	1	3	mcp__browser__type	69	60
+145.0.7632.116	cdp-layer	F06	1	4	mcp__browser__act	146	48
+145.0.7632.116	cdp-layer	F06	1	5		0	203
+145.0.7632.116	cdp-layer	F07	1	1	mcp__browser__navigate	295	58
+145.0.7632.116	cdp-layer	F07	1	2	mcp__browser__act	87	48
+145.0.7632.116	cdp-layer	F07	1	3	mcp__browser__observe	182	37
+145.0.7632.116	cdp-layer	F07	1	4		0	100
+145.0.7632.116	cdp-layer	F08	1	1	mcp__browser__navigate	2080	59
+145.0.7632.116	cdp-layer	F08	1	2		0	177
+145.0.7632.116	cdp-layer	F09	1	1	mcp__browser__navigate	318	103
+145.0.7632.116	cdp-layer	F09	1	2	mcp__browser__observe	276	56
+145.0.7632.116	cdp-layer	F09	1	3	mcp__browser__observe	535	47
+145.0.7632.116	cdp-layer	F09	1	4	mcp__browser__extract	226	81
+145.0.7632.116	cdp-layer	F09	1	5	mcp__browser__act	732	66
+145.0.7632.116	cdp-layer	F09	1	6	mcp__browser__navigate	325	112
+145.0.7632.116	cdp-layer	F09	1	7		0	439
+145.0.7632.116	cdp-layer	F10	1	1	mcp__browser__navigate	346	76
+145.0.7632.116	cdp-layer	F10	1	2	mcp__browser__act	138	39
+145.0.7632.116	cdp-layer	F10	1	3	mcp__browser__observe	178	30
+145.0.7632.116	cdp-layer	F10	1	4		0	151
+145.0.7632.116	cdp-layer	F11	1	1	mcp__browser__navigate	681	51
+145.0.7632.116	cdp-layer	F11	1	2	mcp__browser__fill_form	931	84
+145.0.7632.116	cdp-layer	F11	1	3		0	142
+145.0.7632.116	cdp-layer	F12	1	1	mcp__browser__navigate	258	73
+145.0.7632.116	cdp-layer	F12	1	2		0	165
+145.0.7632.116	cdp-layer	F13	1	1	mcp__browser__navigate	403	87
+145.0.7632.116	cdp-layer	F13	1	2		0	245
+145.0.7632.116	cdp-layer	F14	1	1	mcp__browser__navigate	396	54
+145.0.7632.116	cdp-layer	F14	1	2		0	200
+145.0.7632.116	cdp-layer	F15	1	1	mcp__browser__navigate	367	70
+145.0.7632.116	cdp-layer	F15	1	2		0	189
+145.0.7632.116	cdp-layer	X01	1	1	mcp__browser__navigate	7295	55
+145.0.7632.116	cdp-layer	X01	1	2	mcp__browser__navigate	1187	86
+145.0.7632.116	cdp-layer	X01	1	3	mcp__browser__navigate+mcp__browser__act	1254	230
+145.0.7632.116	cdp-layer	X01	1	4	mcp__browser__observe	731	34
+145.0.7632.116	cdp-layer	X01	1	5	ToolSearch	0	58
+145.0.7632.116	cdp-layer	X01	1	6	mcp__browser__handoff	77	297
+145.0.7632.116	cdp-layer	X01	1	7	mcp__browser__handoff	122	298
+145.0.7632.116	cdp-layer	X01	1	8		0	689
+145.0.7632.116	cdp-layer	X02	1	1	mcp__browser__navigate	7295	101
+145.0.7632.116	cdp-layer	X02	1	2	mcp__browser__type	1415	110
+145.0.7632.116	cdp-layer	X02	1	3	mcp__browser__wait_for	64	99
+145.0.7632.116	cdp-layer	X02	1	4	mcp__browser__wait_for	65	97
+145.0.7632.116	cdp-layer	X02	1	5	mcp__browser__wait_for	108	97
+145.0.7632.116	cdp-layer	X02	1	6	mcp__browser__observe	779	93
+145.0.7632.116	cdp-layer	X02	1	7		0	1030
+145.0.7632.116	cdp-layer	X03	1	1	mcp__browser__navigate	7295	57
+145.0.7632.116	cdp-layer	X03	1	2	mcp__browser__type	1383	67
+145.0.7632.116	cdp-layer	X03	1	3	mcp__browser__observe	784	35
+145.0.7632.116	cdp-layer	X03	1	4	ToolSearch	0	60
+145.0.7632.116	cdp-layer	X03	1	5	mcp__browser__handoff	122	313
+145.0.7632.116	cdp-layer	X03	1	6	ToolSearch+ToolSearch	0	241
+145.0.7632.116	cdp-layer	X03	1	7	WebSearch	732	206
+145.0.7632.116	cdp-layer	X03	1	8	mcp__browser__navigate	1203	174
+145.0.7632.116	cdp-layer	X03	1	9		0	958
+145.0.7632.116	cdp-layer	X04	1	1	mcp__browser__navigate	7215	73
+145.0.7632.116	cdp-layer	X04	1	2	mcp__browser__navigate	4191	219
+145.0.7632.116	cdp-layer	X04	1	3		0	296
+145.0.7632.116	cdp-layer	X05	1	1	mcp__browser__navigate	7782	65
+145.0.7632.116	cdp-layer	X05	1	2	mcp__browser__type	5133	94
+145.0.7632.116	cdp-layer	X05	1	3		0	186
+145.0.7632.116	cdp-layer	X06	1	1	mcp__browser__navigate	1478	156
+145.0.7632.116	cdp-layer	X06	1	2	mcp__browser__observe	932	51
+145.0.7632.116	cdp-layer	X06	1	3	mcp__browser__navigate+mcp__browser__wait_for	5191	151
+145.0.7632.116	cdp-layer	X06	1	4		0	446
+145.0.7632.116	cdp-layer	X07	1	1	mcp__browser__navigate	1529	104
+145.0.7632.116	cdp-layer	X07	1	2	mcp__browser__observe	3683	36
+145.0.7632.116	cdp-layer	X07	1	3		0	270
+145.0.7632.116	cdp-layer	X08	1	1	mcp__browser__navigate	1581	125
+145.0.7632.116	cdp-layer	X08	1	2	mcp__browser__extract	360	91
+145.0.7632.116	cdp-layer	X08	1	3	mcp__browser__observe	3397	41
+145.0.7632.116	cdp-layer	X08	1	4		0	235
+145.0.7632.116	cdp-layer	X09	1	1	mcp__browser__navigate	7782	46
+145.0.7632.116	cdp-layer	X09	1	2	mcp__browser__fill_form	7468	97
+145.0.7632.116	cdp-layer	X09	1	3		0	251
+145.0.7632.116	cdp-layer	X10	1	1	mcp__browser__navigate	1541	148
+145.0.7632.116	cdp-layer	X10	1	2	mcp__browser__observe	1268	50
+145.0.7632.116	cdp-layer	X10	1	3	mcp__browser__extract	188	124
+145.0.7632.116	cdp-layer	X10	1	4	mcp__browser__extract	807	49
+145.0.7632.116	cdp-layer	X10	1	5	mcp__browser__find	551	72
+145.0.7632.116	cdp-layer	X10	1	6	mcp__browser__act	228	66
+145.0.7632.116	cdp-layer	X10	1	7	mcp__browser__extract	948	145
+145.0.7632.116	cdp-layer	X10	1	8	mcp__browser__extract	164	123
+145.0.7632.116	cdp-layer	X10	1	9	mcp__browser__screenshot	35	32
+145.0.7632.116	cdp-layer	X10	1	10		0	495
+145.0.7632.116	cdp-layer	X11	1	1	mcp__browser__navigate	801	68
+145.0.7632.116	cdp-layer	X11	1	2		0	292
+145.0.7632.116	cdp-layer	X12	1	1	mcp__browser__navigate	564	101
+145.0.7632.116	cdp-layer	X12	1	2		0	118
+145.0.7632.116	cdp-layer	X13	1	1	mcp__browser__navigate	375	117
+145.0.7632.116	cdp-layer	X13	1	2	mcp__browser__observe	837	72
+145.0.7632.116	cdp-layer	X13	1	3		0	452
+145.0.7632.116	cdp-layer	X14	1	1	mcp__browser__navigate	453	60
+145.0.7632.116	cdp-layer	X14	1	2	mcp__browser__extract	587	55
+145.0.7632.116	cdp-layer	X14	1	3		0	263
+145.0.7632.116	cdp-layer	L01	2	1	mcp__browser__navigate	9856	30
+145.0.7632.116	cdp-layer	L01	2	2		0	102
+145.0.7632.116	cdp-layer	L02	2	1	mcp__browser__navigate	1330	91
+145.0.7632.116	cdp-layer	L02	2	2	mcp__browser__navigate	1187	195
+145.0.7632.116	cdp-layer	L02	2	3		0	194
+145.0.7632.116	cdp-layer	L03	2	1	mcp__browser__navigate	9856	61
+145.0.7632.116	cdp-layer	L03	2	2	mcp__browser__act	10393	52
+145.0.7632.116	cdp-layer	L03	2	3		0	162
+145.0.7632.116	cdp-layer	L04	2	1	mcp__browser__navigate	1265	71
+145.0.7632.116	cdp-layer	L04	2	2	mcp__browser__act	1320	56
+145.0.7632.116	cdp-layer	L04	2	3		0	122
+145.0.7632.116	cdp-layer	L05	2	1	mcp__browser__navigate	1265	59
+145.0.7632.116	cdp-layer	L05	2	2	mcp__browser__act	1320	46
+145.0.7632.116	cdp-layer	L05	2	3		0	165
+145.0.7632.116	cdp-layer	L06	2	1	mcp__browser__navigate	9995	81
+145.0.7632.116	cdp-layer	L06	2	2		0	202
+145.0.7632.116	cdp-layer	L07	2	1	mcp__browser__navigate	9856	64
+145.0.7632.116	cdp-layer	L07	2	2		0	271
+145.0.7632.116	cdp-layer	L08	2	1	mcp__browser__navigate	3666	30
+145.0.7632.116	cdp-layer	L08	2	2		0	107
+145.0.7632.116	cdp-layer	L09	2	1	mcp__browser__navigate	3666	74
+145.0.7632.116	cdp-layer	L09	2	2	mcp__browser__act	4254	64
+145.0.7632.116	cdp-layer	L09	2	3		0	308
+145.0.7632.116	cdp-layer	L10	2	1	mcp__browser__navigate	546	84
+145.0.7632.116	cdp-layer	L10	2	2	mcp__browser__act	976	113
+145.0.7632.116	cdp-layer	L10	2	3	mcp__browser__navigate	3675	137
+145.0.7632.116	cdp-layer	L10	2	4	mcp__browser__act	1016	96
+145.0.7632.116	cdp-layer	L10	2	5		0	269
+145.0.7632.116	cdp-layer	L11	2	1	mcp__browser__navigate	3068	31
+145.0.7632.116	cdp-layer	L11	2	2		0	97
+145.0.7632.116	cdp-layer	L12	2	1	ToolSearch	0	161
+145.0.7632.116	cdp-layer	L12	2	2	mcp__browser__navigate	3073	81
+145.0.7632.116	cdp-layer	L12	2	3	mcp__browser__scroll+mcp__browser__observe	7859	183
+145.0.7632.116	cdp-layer	L12	2	4		0	460
+145.0.7632.116	cdp-layer	L13	2	1	mcp__browser__navigate	4193	82
+145.0.7632.116	cdp-layer	L13	2	2		0	293
+145.0.7632.116	cdp-layer	L14	2	1	mcp__browser__navigate	877	62
+145.0.7632.116	cdp-layer	L14	2	2	mcp__browser__extract	1366	45
+145.0.7632.116	cdp-layer	L14	2	3		0	476
+145.0.7632.116	cdp-layer	L15	2	1	mcp__browser__navigate	264	51
+145.0.7632.116	cdp-layer	L15	2	2		0	98
+145.0.7632.116	cdp-layer	L16	2	1	mcp__browser__navigate	1488	84
+145.0.7632.116	cdp-layer	L16	2	2		0	124
+145.0.7632.116	cdp-layer	L17	2	1	mcp__browser__navigate	2116	110
+145.0.7632.116	cdp-layer	L17	2	2		0	148
+145.0.7632.116	cdp-layer	L18	2	1	mcp__browser__navigate	2229	144
+145.0.7632.116	cdp-layer	L18	2	2		0	136
+145.0.7632.116	cdp-layer	L19	2	1	mcp__browser__navigate	2321	108
+145.0.7632.116	cdp-layer	L19	2	2		0	136
+145.0.7632.116	cdp-layer	L20	2	1	mcp__browser__navigate	2240	110
+145.0.7632.116	cdp-layer	L20	2	2		0	329
+145.0.7632.116	cdp-layer	L21	2	1	mcp__browser__navigate	29819	60
+145.0.7632.116	cdp-layer	L21	2	2	mcp__browser__type	16292	60
+145.0.7632.116	cdp-layer	L21	2	3	mcp__browser__find	722	193
+145.0.7632.116	cdp-layer	L21	2	4		0	207
+145.0.7632.116	cdp-layer	L22	2	1	mcp__browser__navigate	826	81
+145.0.7632.116	cdp-layer	L22	2	2		0	138
+145.0.7632.116	cdp-layer	L23	2	1	mcp__browser__navigate	503	93
+145.0.7632.116	cdp-layer	L23	2	2	mcp__browser__act	7284	55
+145.0.7632.116	cdp-layer	L23	2	3		0	169
+145.0.7632.116	cdp-layer	L24	2	1	mcp__browser__navigate	32129	71
+145.0.7632.116	cdp-layer	L24	2	2		0	165
+145.0.7632.116	cdp-layer	L25	2	1	mcp__browser__navigate	9995	88
+145.0.7632.116	cdp-layer	L25	2	2		0	111
+145.0.7632.116	cdp-layer	F01	2	1	mcp__browser__navigate	326	40
+145.0.7632.116	cdp-layer	F01	2	2	mcp__browser__fill_form	668	83
+145.0.7632.116	cdp-layer	F01	2	3		0	153
+145.0.7632.116	cdp-layer	F02	2	1	mcp__browser__navigate	326	51
+145.0.7632.116	cdp-layer	F02	2	2	mcp__browser__fill_form	668	107
+145.0.7632.116	cdp-layer	F02	2	3	mcp__browser__act	612	44
+145.0.7632.116	cdp-layer	F02	2	4	mcp__browser__fill_form	694	105
+145.0.7632.116	cdp-layer	F02	2	5		0	162
+145.0.7632.116	cdp-layer	F03	2	1	mcp__browser__navigate	344	52
+145.0.7632.116	cdp-layer	F03	2	2	mcp__browser__fill_form	820	119
+145.0.7632.116	cdp-layer	F03	2	3	mcp__browser__act+mcp__browser__act	587	89
+145.0.7632.116	cdp-layer	F03	2	4	mcp__browser__act	513	109
+145.0.7632.116	cdp-layer	F03	2	5		0	180
+145.0.7632.116	cdp-layer	F04	2	1	ToolSearch	0	178
+145.0.7632.116	cdp-layer	F04	2	2	mcp__browser__navigate	889	70
+145.0.7632.116	cdp-layer	F04	2	3	mcp__browser__fill_form	135	78
+145.0.7632.116	cdp-layer	F04	2	4	mcp__browser__act	497	61
+145.0.7632.116	cdp-layer	F04	2	5	mcp__browser__act+mcp__browser__observe	1699	203
+145.0.7632.116	cdp-layer	F04	2	6	mcp__browser__act	562	62
+145.0.7632.116	cdp-layer	F04	2	7	mcp__browser__act	524	147
+145.0.7632.116	cdp-layer	F04	2	8		0	227
+145.0.7632.116	cdp-layer	F05	2	1	mcp__browser__navigate	1059	46
+145.0.7632.116	cdp-layer	F05	2	2	mcp__browser__act	499	86
+145.0.7632.116	cdp-layer	F05	2	3	mcp__browser__act	524	83
+145.0.7632.116	cdp-layer	F05	2	4		0	121
+145.0.7632.116	cdp-layer	F06	2	1	mcp__browser__navigate	189	71
+145.0.7632.116	cdp-layer	F06	2	2	mcp__browser__act	185	60
+145.0.7632.116	cdp-layer	F06	2	3	mcp__browser__type	69	74
+145.0.7632.116	cdp-layer	F06	2	4	mcp__browser__act	146	60
+145.0.7632.116	cdp-layer	F06	2	5		0	231
+145.0.7632.116	cdp-layer	F07	2	1	mcp__browser__navigate	295	58
+145.0.7632.116	cdp-layer	F07	2	2	mcp__browser__act	87	48
+145.0.7632.116	cdp-layer	F07	2	3	mcp__browser__observe	182	35
+145.0.7632.116	cdp-layer	F07	2	4		0	104
+145.0.7632.116	cdp-layer	F08	2	1	mcp__browser__navigate	2080	77
+145.0.7632.116	cdp-layer	F08	2	2		0	190
+145.0.7632.116	cdp-layer	F09	2	1	mcp__browser__navigate	318	96
+145.0.7632.116	cdp-layer	F09	2	2	mcp__browser__observe	276	52
+145.0.7632.116	cdp-layer	F09	2	3	mcp__browser__act	732	61
+145.0.7632.116	cdp-layer	F09	2	4	mcp__browser__navigate	325	104
+145.0.7632.116	cdp-layer	F09	2	5		0	404
+145.0.7632.116	cdp-layer	F10	2	1	mcp__browser__navigate	279	60
+145.0.7632.116	cdp-layer	F10	2	2	mcp__browser__act	138	70
+145.0.7632.116	cdp-layer	F10	2	3	mcp__browser__observe	178	58
+145.0.7632.116	cdp-layer	F10	2	4		0	188
+145.0.7632.116	cdp-layer	F11	2	1	mcp__browser__navigate	681	56
+145.0.7632.116	cdp-layer	F11	2	2	mcp__browser__fill_form	931	91
+145.0.7632.116	cdp-layer	F11	2	3		0	127
+145.0.7632.116	cdp-layer	F12	2	1	mcp__browser__navigate	289	121
+145.0.7632.116	cdp-layer	F12	2	2		0	203
+145.0.7632.116	cdp-layer	F13	2	1	mcp__browser__navigate	403	90
+145.0.7632.116	cdp-layer	F13	2	2		0	216
+145.0.7632.116	cdp-layer	F14	2	1	mcp__browser__navigate	396	71
+145.0.7632.116	cdp-layer	F14	2	2		0	200
+145.0.7632.116	cdp-layer	F15	2	1	mcp__browser__navigate	367	70
+145.0.7632.116	cdp-layer	F15	2	2		0	241
+145.0.7632.116	cdp-layer	X01	2	1	ToolSearch	0	86
+145.0.7632.116	cdp-layer	X01	2	2	mcp__browser__navigate	8689	51
+145.0.7632.116	cdp-layer	X01	2	3	mcp__browser__act+mcp__browser__type	1519	155
+145.0.7632.116	cdp-layer	X01	2	4	mcp__browser__observe	787	151
+145.0.7632.116	cdp-layer	X01	2	5	ToolSearch	0	118
+145.0.7632.116	cdp-layer	X01	2	6	mcp__browser__handoff	122	216
+145.0.7632.116	cdp-layer	X01	2	7	ToolSearch	0	149
+145.0.7632.116	cdp-layer	X01	2	8	WebSearch	732	94
+145.0.7632.116	cdp-layer	X01	2	9		0	673
+145.0.7632.116	cdp-layer	X02	2	1	mcp__browser__navigate	8693	73
+145.0.7632.116	cdp-layer	X02	2	2	mcp__browser__type	1415	79
+145.0.7632.116	cdp-layer	X02	2	3	mcp__browser__observe	779	44
+145.0.7632.116	cdp-layer	X02	2	4	ToolSearch	0	76
+145.0.7632.116	cdp-layer	X02	2	5	mcp__browser__handoff	122	351
+145.0.7632.116	cdp-layer	X02	2	6	mcp__browser__navigate	1198	124
+145.0.7632.116	cdp-layer	X02	2	7		0	890
+145.0.7632.116	cdp-layer	X03	2	1	mcp__browser__navigate	8689	64
+145.0.7632.116	cdp-layer	X03	2	2	mcp__browser__fill_form	2268	95
+145.0.7632.116	cdp-layer	X03	2	3	mcp__browser__wait_for	64	41
+145.0.7632.116	cdp-layer	X03	2	4	mcp__browser__observe	65	59
+145.0.7632.116	cdp-layer	X03	2	5	mcp__browser__observe	784	59
+145.0.7632.116	cdp-layer	X03	2	6		0	517
+145.0.7632.116	cdp-layer	X04	2	1	mcp__browser__navigate	7259	72
+145.0.7632.116	cdp-layer	X04	2	2	mcp__browser__navigate	4191	182
+145.0.7632.116	cdp-layer	X04	2	3		0	336
+145.0.7632.116	cdp-layer	X05	2	1	mcp__browser__navigate	1467	75
+145.0.7632.116	cdp-layer	X05	2	2	mcp__browser__observe	1297	30
+145.0.7632.116	cdp-layer	X05	2	3		0	190
+145.0.7632.116	cdp-layer	X06	2	1	mcp__browser__navigate	1499	211
+145.0.7632.116	cdp-layer	X06	2	2	mcp__browser__observe	950	70
+145.0.7632.116	cdp-layer	X06	2	3	mcp__browser__navigate+mcp__browser__wait_for	5155	204
+145.0.7632.116	cdp-layer	X06	2	4		0	827
+145.0.7632.116	cdp-layer	X07	2	1	mcp__browser__navigate	1210	108
+145.0.7632.116	cdp-layer	X07	2	2	mcp__browser__observe	3665	37
+145.0.7632.116	cdp-layer	X07	2	3		0	293
+145.0.7632.116	cdp-layer	X08	2	1	mcp__browser__navigate	7782	87
+145.0.7632.116	cdp-layer	X08	2	2	mcp__browser__type	5348	170
+145.0.7632.116	cdp-layer	X08	2	3		0	480
+145.0.7632.116	cdp-layer	X09	2	1	mcp__browser__navigate	7782	62
+145.0.7632.116	cdp-layer	X09	2	2	mcp__browser__type	7175	108
+145.0.7632.116	cdp-layer	X09	2	3		0	232
+145.0.7632.116	cdp-layer	X10	2	1	mcp__browser__navigate	7782	72
+145.0.7632.116	cdp-layer	X10	2	2	mcp__browser__type	2584	131
+145.0.7632.116	cdp-layer	X10	2	3	mcp__browser__observe	2085	46
+145.0.7632.116	cdp-layer	X10	2	4		0	489
+145.0.7632.116	cdp-layer	X11	2	1	mcp__browser__navigate	801	47
+145.0.7632.116	cdp-layer	X11	2	2		0	215
+145.0.7632.116	cdp-layer	X12	2	1	mcp__browser__navigate	564	91
+145.0.7632.116	cdp-layer	X12	2	2	mcp__browser__observe	1304	53
+145.0.7632.116	cdp-layer	X12	2	3		0	339
+145.0.7632.116	cdp-layer	X13	2	1	mcp__browser__navigate	375	130
+145.0.7632.116	cdp-layer	X13	2	2	mcp__browser__observe	837	80
+145.0.7632.116	cdp-layer	X13	2	3		0	422
+145.0.7632.116	cdp-layer	X14	2	1	mcp__browser__navigate	453	50
+145.0.7632.116	cdp-layer	X14	2	2	mcp__browser__extract	587	48
+145.0.7632.116	cdp-layer	X14	2	3		0	366
+145.0.7632.116	cdp-layer	L01	3	1	mcp__browser__navigate	9856	38
+145.0.7632.116	cdp-layer	L01	3	2		0	72
+145.0.7632.116	cdp-layer	L02	3	1	mcp__browser__navigate	1330	155
+145.0.7632.116	cdp-layer	L02	3	2	mcp__browser__navigate	409	193
+145.0.7632.116	cdp-layer	L02	3	3		0	255
+145.0.7632.116	cdp-layer	L03	3	1	mcp__browser__navigate	9856	60
+145.0.7632.116	cdp-layer	L03	3	2	mcp__browser__act	10393	52
+145.0.7632.116	cdp-layer	L03	3	3		0	228
+145.0.7632.116	cdp-layer	L04	3	1	mcp__browser__navigate	9856	38
+145.0.7632.116	cdp-layer	L04	3	2	mcp__browser__act	1325	33
+145.0.7632.116	cdp-layer	L04	3	3		0	167
+145.0.7632.116	cdp-layer	L05	3	1	mcp__browser__navigate	1265	58
+145.0.7632.116	cdp-layer	L05	3	2	mcp__browser__act	1320	32
+145.0.7632.116	cdp-layer	L05	3	3		0	173
+145.0.7632.116	cdp-layer	L06	3	1	mcp__browser__navigate	9995	62
+145.0.7632.116	cdp-layer	L06	3	2		0	168
+145.0.7632.116	cdp-layer	L07	3	1	mcp__browser__navigate	9856	82
+145.0.7632.116	cdp-layer	L07	3	2		0	198
+145.0.7632.116	cdp-layer	L08	3	1	mcp__browser__navigate	3666	30
+145.0.7632.116	cdp-layer	L08	3	2		0	107
+145.0.7632.116	cdp-layer	L09	3	1	mcp__browser__navigate	3666	67
+145.0.7632.116	cdp-layer	L09	3	2	mcp__browser__act	4254	58
+145.0.7632.116	cdp-layer	L09	3	3		0	415
+145.0.7632.116	cdp-layer	L10	3	1	mcp__browser__navigate	546	125
+145.0.7632.116	cdp-layer	L10	3	2	mcp__browser__observe	1759	57
+145.0.7632.116	cdp-layer	L10	3	3	mcp__browser__act	977	67
+145.0.7632.116	cdp-layer	L10	3	4	mcp__browser__navigate	1397	280
+145.0.7632.116	cdp-layer	L10	3	5	mcp__browser__observe	1785	57
+145.0.7632.116	cdp-layer	L10	3	6	mcp__browser__act	1020	156
+145.0.7632.116	cdp-layer	L10	3	7		0	660
+145.0.7632.116	cdp-layer	L11	3	1	mcp__browser__navigate	3068	29
+145.0.7632.116	cdp-layer	L11	3	2		0	117
+145.0.7632.116	cdp-layer	L12	3	1	ToolSearch+mcp__browser__navigate	3073	375
+145.0.7632.116	cdp-layer	L12	3	2	mcp__browser__scroll	1457	60
+145.0.7632.116	cdp-layer	L12	3	3	mcp__browser__scroll	1104	60
+145.0.7632.116	cdp-layer	L12	3	4	mcp__browser__extract	935	117
+145.0.7632.116	cdp-layer	L12	3	5	mcp__browser__scroll	876	61
+145.0.7632.116	cdp-layer	L12	3	6		0	561
+145.0.7632.116	cdp-layer	L13	3	1	mcp__browser__navigate	4193	52
+145.0.7632.116	cdp-layer	L13	3	2		0	201
+145.0.7632.116	cdp-layer	L14	3	1	mcp__browser__navigate	877	52
+145.0.7632.116	cdp-layer	L14	3	2	mcp__browser__extract	1366	183
+145.0.7632.116	cdp-layer	L14	3	3	mcp__browser__screenshot	65	165
+145.0.7632.116	cdp-layer	L14	3	4	mcp__browser__screenshot	35	45
+145.0.7632.116	cdp-layer	L14	3	5		0	538
+145.0.7632.116	cdp-layer	L15	3	1	mcp__browser__navigate	264	55
+145.0.7632.116	cdp-layer	L15	3	2		0	100
+145.0.7632.116	cdp-layer	L16	3	1	mcp__browser__navigate	1505	72
+145.0.7632.116	cdp-layer	L16	3	2		0	118
+145.0.7632.116	cdp-layer	L17	3	1	mcp__browser__navigate	2116	132
+145.0.7632.116	cdp-layer	L17	3	2		0	165
+145.0.7632.116	cdp-layer	L18	3	1	mcp__browser__navigate	2151	138
+145.0.7632.116	cdp-layer	L18	3	2	mcp__browser__extract	1616	182
+145.0.7632.116	cdp-layer	L18	3	3	mcp__browser__observe	32354	95
+145.0.7632.116	cdp-layer	L18	3	4	mcp__browser__extract	1859	210
+145.0.7632.116	cdp-layer	L18	3	5		0	184
+145.0.7632.116	cdp-layer	L19	3	1	mcp__browser__navigate	2244	105
+145.0.7632.116	cdp-layer	L19	3	2		0	115
+145.0.7632.116	cdp-layer	L20	3	1	mcp__browser__navigate	2240	100
+145.0.7632.116	cdp-layer	L20	3	2		0	240
+145.0.7632.116	cdp-layer	L21	3	1	mcp__browser__navigate	30030	67
+145.0.7632.116	cdp-layer	L21	3	2	mcp__browser__type	16292	68
+145.0.7632.116	cdp-layer	L21	3	3	mcp__browser__extract	1598	74
+145.0.7632.116	cdp-layer	L21	3	4		0	173
+145.0.7632.116	cdp-layer	L22	3	1	mcp__browser__navigate	826	79
+145.0.7632.116	cdp-layer	L22	3	2		0	44
+145.0.7632.116	cdp-layer	L23	3	1	mcp__browser__navigate	503	128
+145.0.7632.116	cdp-layer	L23	3	2	mcp__browser__act	7284	76
+145.0.7632.116	cdp-layer	L23	3	3		0	225
+145.0.7632.116	cdp-layer	L24	3	1	mcp__browser__navigate	32129	77
+145.0.7632.116	cdp-layer	L24	3	2		0	146
+145.0.7632.116	cdp-layer	L25	3	1	mcp__browser__navigate	9995	87
+145.0.7632.116	cdp-layer	L25	3	2		0	106
+145.0.7632.116	cdp-layer	F01	3	1	mcp__browser__navigate	326	41
+145.0.7632.116	cdp-layer	F01	3	2	mcp__browser__fill_form	668	87
+145.0.7632.116	cdp-layer	F01	3	3		0	129
+145.0.7632.116	cdp-layer	F02	3	1	mcp__browser__navigate	326	49
+145.0.7632.116	cdp-layer	F02	3	2	mcp__browser__fill_form	668	103
+145.0.7632.116	cdp-layer	F02	3	3	mcp__browser__act	612	42
+145.0.7632.116	cdp-layer	F02	3	4	mcp__browser__fill_form	694	101
+145.0.7632.116	cdp-layer	F02	3	5		0	151
+145.0.7632.116	cdp-layer	F03	3	1	mcp__browser__navigate	344	65
+145.0.7632.116	cdp-layer	F03	3	2	mcp__browser__fill_form	820	147
+145.0.7632.116	cdp-layer	F03	3	3	mcp__browser__act+mcp__browser__act	587	110
+145.0.7632.116	cdp-layer	F03	3	4	mcp__browser__act	513	56
+145.0.7632.116	cdp-layer	F03	3	5		0	295
+145.0.7632.116	cdp-layer	F04	3	1	mcp__browser__navigate	889	63
+145.0.7632.116	cdp-layer	F04	3	2	mcp__browser__type+mcp__browser__act	565	103
+145.0.7632.116	cdp-layer	F04	3	3	mcp__browser__act	1176	141
+145.0.7632.116	cdp-layer	F04	3	4	mcp__browser__act	562	55
+145.0.7632.116	cdp-layer	F04	3	5	mcp__browser__act	524	129
+145.0.7632.116	cdp-layer	F04	3	6		0	207
+145.0.7632.116	cdp-layer	F05	3	1	mcp__browser__navigate	1059	46
+145.0.7632.116	cdp-layer	F05	3	2	mcp__browser__act	499	86
+145.0.7632.116	cdp-layer	F05	3	3	mcp__browser__act	524	83
+145.0.7632.116	cdp-layer	F05	3	4		0	121
+145.0.7632.116	cdp-layer	F06	3	1	mcp__browser__navigate	189	53
+145.0.7632.116	cdp-layer	F06	3	2	mcp__browser__act	185	45
+145.0.7632.116	cdp-layer	F06	3	3	mcp__browser__type	69	56
+145.0.7632.116	cdp-layer	F06	3	4	mcp__browser__act	146	45
+145.0.7632.116	cdp-layer	F06	3	5		0	180
+145.0.7632.116	cdp-layer	F07	3	1	mcp__browser__navigate	295	53
+145.0.7632.116	cdp-layer	F07	3	2	mcp__browser__act	87	45
+145.0.7632.116	cdp-layer	F07	3	3	mcp__browser__observe	182	32
+145.0.7632.116	cdp-layer	F07	3	4		0	121
+145.0.7632.116	cdp-layer	F08	3	1	mcp__browser__navigate	2080	72
+145.0.7632.116	cdp-layer	F08	3	2		0	155
+145.0.7632.116	cdp-layer	F09	3	1	mcp__browser__navigate	324	100
+145.0.7632.116	cdp-layer	F09	3	2	mcp__browser__observe	276	51
+145.0.7632.116	cdp-layer	F09	3	3	mcp__browser__observe	535	43
+145.0.7632.116	cdp-layer	F09	3	4	mcp__browser__act	732	60
+145.0.7632.116	cdp-layer	F09	3	5	mcp__browser__navigate	325	101
+145.0.7632.116	cdp-layer	F09	3	6		0	570
+145.0.7632.116	cdp-layer	F10	3	1	mcp__browser__navigate	279	56
+145.0.7632.116	cdp-layer	F10	3	2	mcp__browser__act	138	46
+145.0.7632.116	cdp-layer	F10	3	3	mcp__browser__observe	178	54
+145.0.7632.116	cdp-layer	F10	3	4		0	192
+145.0.7632.116	cdp-layer	F11	3	1	mcp__browser__navigate	681	53
+145.0.7632.116	cdp-layer	F11	3	2	mcp__browser__fill_form	931	87
+145.0.7632.116	cdp-layer	F11	3	3		0	167
+145.0.7632.116	cdp-layer	F12	3	1	mcp__browser__navigate	289	125
+145.0.7632.116	cdp-layer	F12	3	2		0	135
+145.0.7632.116	cdp-layer	F13	3	1	mcp__browser__navigate	403	84
+145.0.7632.116	cdp-layer	F13	3	2		0	208
+145.0.7632.116	cdp-layer	F14	3	1	mcp__browser__navigate	396	93
+145.0.7632.116	cdp-layer	F14	3	2		0	220
+145.0.7632.116	cdp-layer	F15	3	1	mcp__browser__navigate	367	56
+145.0.7632.116	cdp-layer	F15	3	2		0	201
+145.0.7632.116	cdp-layer	X01	3	1	mcp__browser__navigate	8689	73
+145.0.7632.116	cdp-layer	X01	3	2	mcp__browser__act+mcp__browser__type	1620	191
+145.0.7632.116	cdp-layer	X01	3	3	mcp__browser__wait_for	64	72
+145.0.7632.116	cdp-layer	X01	3	4	mcp__browser__wait_for	65	71
+145.0.7632.116	cdp-layer	X01	3	5	mcp__browser__wait_for	108	71
+145.0.7632.116	cdp-layer	X01	3	6	mcp__browser__observe	779	68
+145.0.7632.116	cdp-layer	X01	3	7	mcp__browser__navigate	1187	136
+145.0.7632.116	cdp-layer	X01	3	8	ToolSearch	0	76
+145.0.7632.116	cdp-layer	X01	3	9	mcp__browser__handoff	122	459
+145.0.7632.116	cdp-layer	X01	3	10		0	831
+145.0.7632.116	cdp-layer	X02	3	1	mcp__browser__navigate	8689	59
+145.0.7632.116	cdp-layer	X02	3	2	mcp__browser__type	1415	65
+145.0.7632.116	cdp-layer	X02	3	3	mcp__browser__observe	779	55
+145.0.7632.116	cdp-layer	X02	3	4	ToolSearch	0	62
+145.0.7632.116	cdp-layer	X02	3	5	mcp__browser__handoff	65	372
+145.0.7632.116	cdp-layer	X02	3	6	mcp__browser__handoff	122	372
+145.0.7632.116	cdp-layer	X02	3	7		0	717
+145.0.7632.116	cdp-layer	X03	3	1	ToolSearch	0	107
+145.0.7632.116	cdp-layer	X03	3	2	mcp__browser__navigate	8689	53
+145.0.7632.116	cdp-layer	X03	3	3	mcp__browser__type	1383	62
+145.0.7632.116	cdp-layer	X03	3	4	mcp__browser__observe	784	144
+145.0.7632.116	cdp-layer	X03	3	5	WebSearch+WebSearch	1464	348
+145.0.7632.116	cdp-layer	X03	3	6	mcp__browser__navigate	307	262
+145.0.7632.116	cdp-layer	X03	3	7		0	654
+145.0.7632.116	cdp-layer	X04	3	1	mcp__browser__navigate	406	86
+145.0.7632.116	cdp-layer	X04	3	2	mcp__browser__navigate	857	98
+145.0.7632.116	cdp-layer	X04	3	3		0	321
+145.0.7632.116	cdp-layer	X05	3	1	mcp__browser__navigate	1488	74
+145.0.7632.116	cdp-layer	X05	3	2	mcp__browser__observe	3137	29
+145.0.7632.116	cdp-layer	X05	3	3		0	149
+145.0.7632.116	cdp-layer	X06	3	1	mcp__browser__navigate	1010	109
+145.0.7632.116	cdp-layer	X06	3	2	mcp__browser__observe	3252	58
+145.0.7632.116	cdp-layer	X06	3	3		0	535
+145.0.7632.116	cdp-layer	X07	3	1	mcp__browser__navigate	7731	73
+145.0.7632.116	cdp-layer	X07	3	2	mcp__browser__type	290	115
+145.0.7632.116	cdp-layer	X07	3	3	mcp__browser__observe	916	47
+145.0.7632.116	cdp-layer	X07	3	4	mcp__browser__wait_for+mcp__browser__observe	5755	95
+145.0.7632.116	cdp-layer	X07	3	5		0	389
+145.0.7632.116	cdp-layer	X08	3	1	mcp__browser__navigate	7731	110
+145.0.7632.116	cdp-layer	X08	3	2	mcp__browser__fill_form	5578	233
+145.0.7632.116	cdp-layer	X08	3	3		0	645
+145.0.7632.116	cdp-layer	X09	3	1	mcp__browser__navigate	1215	111
+145.0.7632.116	cdp-layer	X09	3	2	mcp__browser__extract	250	69
+145.0.7632.116	cdp-layer	X09	3	3	mcp__browser__observe	1337	38
+145.0.7632.116	cdp-layer	X09	3	4		0	276
+145.0.7632.116	cdp-layer	X10	3	1	mcp__browser__navigate	680	232
+145.0.7632.116	cdp-layer	X10	3	2	mcp__browser__observe	923	60
+145.0.7632.116	cdp-layer	X10	3	3	mcp__browser__observe	2043	55
+145.0.7632.116	cdp-layer	X10	3	4	mcp__browser__extract	260	141
+145.0.7632.116	cdp-layer	X10	3	5		0	951
+145.0.7632.116	cdp-layer	X11	3	1	mcp__browser__navigate	801	59
+145.0.7632.116	cdp-layer	X11	3	2		0	255
+145.0.7632.116	cdp-layer	X12	3	1	mcp__browser__navigate	564	105
+145.0.7632.116	cdp-layer	X12	3	2		0	124
+145.0.7632.116	cdp-layer	X13	3	1	mcp__browser__navigate	375	97
+145.0.7632.116	cdp-layer	X13	3	2	mcp__browser__extract	663	38
+145.0.7632.116	cdp-layer	X13	3	3		0	369
+145.0.7632.116	cdp-layer	X14	3	1	mcp__browser__navigate	453	62
+145.0.7632.116	cdp-layer	X14	3	2	mcp__browser__extract	587	36
+145.0.7632.116	cdp-layer	X14	3	3		0	255

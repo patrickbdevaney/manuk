@@ -342,6 +342,8 @@ def one(arm, task, run, pin, tdir, timeout, judge_env=None, trdir=TRANSCRIPTS):
 def real_judge_env():
     sys.path.insert(0, HERE)
     import real_judge
+    if os.environ.get("MANUK_REAL_JUDGE") == "claude":  # W5.B1: the W5.J1 fallback, Haiku via `claude -p`
+        return {"backend": "claude", "REAL_JUDGE_MODEL": real_judge.FALLBACK_MODEL}
     return real_judge.load_env()  # read inside this process only; never printed
 
 
