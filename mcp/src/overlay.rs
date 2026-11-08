@@ -94,13 +94,33 @@ fn covers(n: &A11yNode, vp: &Rect) -> bool {
         .is_some_and(|b| n.z > 0 && b.width * b.height >= 0.3 * vp.width * vp.height)
 }
 
+/// Is some control OUTSIDE `n`, on a lower layer, under `n`'s box? That is what makes a covering box a
+/// modal: it blocks something. An app's own positioned wrapper holds every control, so it blocks none.
+fn blocks_something(n: &A11yNode, all: &[&A11yNode]) -> bool {
+    let (Some(b), inside) = (n.bbox, n.iter().map(|k| k.node).collect::<Vec<_>>()) else {
+        return false;
+    };
+    all.iter().any(|k| {
+        k.role.is_interactive()
+            && k.z < n.z
+            && !inside.contains(&k.node)
+            && k.bbox.is_some_and(|r| {
+                let (cx, cy) = (r.x + r.width / 2.0, r.y + r.height / 2.0);
+                cx >= b.x && cx <= b.x + b.width && cy >= b.y && cy <= b.y + b.height
+            })
+    })
+}
+
 /// Overlays on the page, topmost-looking first. A bot wall anywhere reports once, on its container if
 /// it has one, else on the document.
 pub fn find<'t>(tree: &'t A11yNode, vp: &Rect) -> Vec<Overlay<'t>> {
     let mut out: Vec<Overlay> = Vec::new();
-    for n in tree.iter() {
+    let all: Vec<&A11yNode> = tree.iter().collect();
+    for &n in &all {
         let dialog = matches!(n.role, Role::Dialog | Role::AlertDialog);
-        let boxy = covers(n, vp) && n.iter().skip(1).any(|k| k.role.is_interactive());
+        let boxy = covers(n, vp)
+            && n.iter().skip(1).any(|k| k.role.is_interactive())
+            && blocks_something(n, &all);
         if !(dialog || boxy) || out.iter().any(|o| o.node.iter().any(|k| k.node == n.node)) {
             continue;
         }

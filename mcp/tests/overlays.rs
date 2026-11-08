@@ -59,6 +59,15 @@ fn page(path: &str) -> String {
         "/bot" => shell(r#"<div role="dialog" aria-label="Security check"><p>Please verify you are human.</p>
 <button onclick="document.getElementById('st').textContent='captcha-clicked'">I'm not a robot</button>
 <button onclick="document.getElementById('st').textContent='captcha-clicked'">Close</button></div>"#),
+        // 6: an app shell: one positioned, z-indexed, viewport-sized wrapper around ALL the content (every
+        // React/MUI app has one). Nothing sits behind it, so it is not a modal.
+        "/wrap" => format!(r#"<!doctype html><html><head><title>App</title></head><body style="margin:0">
+<div style="position:relative;z-index:1;width:100%;height:100vh"><h1>Calendar</h1>
+<button id="a" onclick="document.getElementById('st').textContent='a-clicked'">Event A</button>
+<button>Event B</button><p id="st">idle</p></div></body></html>"#),
+        // 7: a real trap with no dialog role: a fixed, z-indexed full-page layer over page controls.
+        "/fixed" => shell(r#"<div style="position:fixed;left:0;top:0;width:100%;height:100%;z-index:50;background:#fff">
+<p>Sign in to continue</p><button>Continue</button></div>"#),
         _ => "<html><body>x</body></html>".into(),
     }
 }
@@ -191,6 +200,27 @@ fn run(chrome: bool, env: &[(&str, &str)]) {
     assert!(err && txt.contains("BOT-WALL"), "dismiss on a CAPTCHA must be refused: {err} {txt}");
     let after = c.ok("observe", json!({}));
     assert!(after.contains("idle") && !after.contains("captcha-clicked"), "CAPTCHA fixture was clicked:\n{after}");
+}
+
+/// RG.E1: the box heuristic named the app's own wrapper a MODAL OVERLAY ("no reject/close control: handoff"),
+/// so gocalendar-3, staynb-2, fly-unified-* and zilloft-5 ended in a handoff on a page Chrome showed no
+/// overlay on. A wrapper holds ALL the controls: nothing is behind it. A fixed layer over the page still is.
+fn wrapper_run(env: &[(&str, &str)]) {
+    let base = serve();
+    let mut c = Client::start(false, env);
+    c.ok("navigate", json!({"url": format!("{base}/wrap")}));
+    for mode in ["viewport", "interactive", "full"] {
+        let obs = c.ok("observe", json!({"mode": mode}));
+        assert!(!obs.contains("OVERLAY [h"), "wrapper flagged as an overlay in {mode}:\n{obs}");
+    }
+    c.ok("navigate", json!({"url": format!("{base}/fixed")}));
+    let obs = c.ok("observe", json!({}));
+    assert!(obs.contains("MODAL OVERLAY [h"), "fixed full-page layer over page controls not flagged:\n{obs}");
+}
+
+#[test]
+fn an_app_wrapper_is_not_a_modal_overlay() {
+    wrapper_run(&[]);
 }
 
 #[test]
