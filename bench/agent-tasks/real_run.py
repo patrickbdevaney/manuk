@@ -323,20 +323,25 @@ def one(arm, task, run, pin, tdir, timeout, judge_env=None, trdir=TRANSCRIPTS):
         ok, k, n = grade(jm, st["state"])
     llm = [e for e in task["evals"] if e["type"] == "llm_boolean"]
     llm_ok = 0
+    judged_by = ""
     if judge_env is not None:  # judge mode: each llm_boolean rubric is one verdict, from the answer and the final state
         import real_judge
-        for e in llm:
-            v, _ = real_judge.verdict(judge_env, e["rubric"], j.get("result") or err or "", st["state"] if st and st["ok"] else None)
-            llm_ok += (v == e["expected_value"])
+        items = [(e["rubric"], j.get("result") or err or "", st["state"] if st and st["ok"] else None) for e in llm]
+        try:  # W5.B1.f: one judge per task; primary exhaustion -> the whole task goes to the fallback
+            vs, judged_by = real_judge.judge_task(judge_env, items) if items else ([], judge_env["REAL_JUDGE_MODEL"])
+            llm_ok = sum(v == e["expected_value"] for v, e in zip(vs, llm))
+        except real_judge.JudgeUnavailable:
+            judged_by = "judge_unavailable"
     tc = tool_counts(out)
+    unavailable = judge_env is not None and judged_by == "judge_unavailable"
     return {"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "arm": arm, "suite": JUDGE_SUITE if judge_env is not None else SUITE, "chrome_ver": pin, "task": task["id"],
-            "site": task["website"]["id"], "run": run, "model": "haiku", "pass": int(ok and llm_ok == len(llm) and not j.get("is_error")), "evals_ok": k,
+            "site": task["website"]["id"], "run": run, "model": "haiku", "pass": "judge_unavailable" if unavailable else int(ok and llm_ok == len(llm) and not j.get("is_error")), "evals_ok": k,
             "evals_n": n, "state_ok": int(bool(st and st["ok"])), "checkpoints": tc["checkpoint"], "restores": tc["restore"],
             "forks": tc["fork"], "input_tokens": u.get("input_tokens", 0), "output_tokens": u.get("output_tokens", 0),
             "cache_read_tokens": u.get("cache_read_input_tokens", 0), "cache_create_tokens": u.get("cache_creation_input_tokens", 0),
             "cost_usd": j.get("total_cost_usd", 0), "seconds": f"{secs:.1f}", "turns": j.get("num_turns", ""),
             "is_error": int(bool(j.get("is_error")) or "result" not in j),
-            "answer": final, "llm_ok": llm_ok, "llm_n": len(llm), "judge_model": judge_env["REAL_JUDGE_MODEL"] if judge_env else ""}
+            "answer": final, "llm_ok": llm_ok, "llm_n": len(llm), "judge_model": judged_by if judge_env else ""}
 
 
 def real_judge_env():
@@ -397,7 +402,7 @@ def main():
     if not new:
         for l in open(out).read().splitlines()[1:]:
             c = l.split("\t")
-            if len(c) > 6:
+            if len(c) > 6 and "judge_unavailable" not in c:  # unjudged rows are refilled on the next invocation
                 have.add((c[1], c[4], c[6]))
     lock = threading.Lock()
     with open(out, "a") as f:
@@ -409,7 +414,7 @@ def main():
             r = one(a.arm, t, run, pin, tdir, a.timeout, judge_env, a.transcripts)
             with lock:
                 f.write("\t".join(str(r.get(c, "")) for c in cols) + "\n"); f.flush()
-                print(f"{a.arm} {t['id']} r{run}: {'PASS' if r['pass'] else 'FAIL'} {r['evals_ok']}/{r['evals_n']} state_ok={r['state_ok']} restores={r['restores']}", flush=True)
+                print(f"{a.arm} {t['id']} r{run}: {r['pass'] if r['pass'] == 'judge_unavailable' else 'PASS' if r['pass'] else 'FAIL'} {r['evals_ok']}/{r['evals_n']} state_ok={r['state_ok']} restores={r['restores']}", flush=True)
                 os.utime(os.path.join(ROOT, ".git/sprint-working"), None)
         with cf.ThreadPoolExecutor(a.jobs) as ex:
             list(ex.map(job, [(a.run_base + r, t) for r in range(1, a.runs + 1) for t in tasks if (a.arm, t['id'], str(a.run_base + r)) not in have]))

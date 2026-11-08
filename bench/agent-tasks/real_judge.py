@@ -104,6 +104,26 @@ def verdict(env, rubric, answer, state=None):
         return None, "unparsed: " + txt[:120].replace("\t", " ").replace("\n", " ")
 
 
+class JudgeUnavailable(RuntimeError):
+    """Neither the primary judge nor the fallback could grade a task."""
+
+
+def judge_task(env, items, fallback=None):
+    """W5.B1.f: grade every (rubric, answer, state) of ONE task with ONE judge. -> (verdicts, judge_model).
+    If the primary raises (quota exhaustion, HTTP error), the WHOLE task is re-judged with the Haiku fallback so a
+    task never mixes judges. If the fallback also fails -> JudgeUnavailable (the caller writes judge_unavailable)."""
+    fb = (fallback or (lambda: {"backend": "claude", "REAL_JUDGE_MODEL": FALLBACK_MODEL}))()
+    for e in (env, fb):
+        try:
+            return [verdict(e, r, a, s)[0] for r, a, s in items], e["REAL_JUDGE_MODEL"]
+        except (RuntimeError, subprocess.TimeoutExpired, OSError) as x:
+            print(f"judge: {e['REAL_JUDGE_MODEL']} failed ({x}); " + ("falling back" if e is env else "unavailable"),
+                  file=sys.stderr, flush=True)
+            if e["REAL_JUDGE_MODEL"] == FALLBACK_MODEL:
+                break
+    raise JudgeUnavailable("primary and fallback judges failed")
+
+
 def llm_rubrics():
     """Every llm_boolean eval of every non-omnizon task: (task_id, rubric, expected)."""
     out = []

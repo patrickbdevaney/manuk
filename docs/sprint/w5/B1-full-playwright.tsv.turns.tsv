@@ -227,66 +227,6 @@ chrome_ver	arm	task	run	turn	tool	result_bytes	output_tokens
 145.0.7632.116	playwright	X03	1	6	mcp__browser__browser_wait_for+mcp__browser__browser_find	432	69
 145.0.7632.116	playwright	X03	1	7	mcp__browser__browser_navigate	498	93
 145.0.7632.116	playwright	X03	1	8		0	657
-145.0.7632.116	playwright	X04	1	1	ToolSearch	0	200
-145.0.7632.116	playwright	X04	1	2	mcp__browser__browser_navigate+mcp__browser__browser_find	21905	92
-145.0.7632.116	playwright	X04	1	3	mcp__browser__browser_navigate+mcp__browser__browser_find	1978	213
-145.0.7632.116	playwright	X04	1	4	mcp__browser__browser_find	2078	74
-145.0.7632.116	playwright	X04	1	5	mcp__browser__browser_navigate+mcp__browser__browser_find	1144	232
-145.0.7632.116	playwright	X04	1	6	mcp__browser__browser_find	48	50
-145.0.7632.116	playwright	X04	1	7	mcp__browser__browser_find	47	45
-145.0.7632.116	playwright	X04	1	8	mcp__browser__browser_find	526	54
-145.0.7632.116	playwright	X04	1	9		0	345
-145.0.7632.116	playwright	X05	1	1	ToolSearch	0	185
-145.0.7632.116	playwright	X05	1	2	mcp__browser__browser_navigate	267	65
-145.0.7632.116	playwright	X05	1	3	mcp__browser__browser_snapshot	12572	30
-145.0.7632.116	playwright	X05	1	4	mcp__browser__browser_type	454	92
-145.0.7632.116	playwright	X05	1	5	mcp__browser__browser_wait_for+mcp__browser__browser_snapshot	7611	68
-145.0.7632.116	playwright	X05	1	6		0	240
-145.0.7632.116	playwright	X06	1	1	ToolSearch	0	226
-145.0.7632.116	playwright	X06	1	2	mcp__browser__browser_navigate	360	79
-145.0.7632.116	playwright	X06	1	3	mcp__browser__browser_snapshot	12584	36
-145.0.7632.116	playwright	X06	1	4	mcp__browser__browser_type	620	142
-145.0.7632.116	playwright	X06	1	5	mcp__browser__browser_wait_for+mcp__browser__browser_snapshot	3083	83
-145.0.7632.116	playwright	X06	1	6	mcp__browser__browser_navigate+mcp__browser__browser_wait_for+mcp__browser__browser_snapshot	2564	320
-145.0.7632.116	playwright	X06	1	7	mcp__browser__browser_click+mcp__browser__browser_wait_for+mcp__browser__browser_snapshot	8258	265
-145.0.7632.116	playwright	X06	1	8		0	441
-145.0.7632.116	playwright	X07	1	1	ToolSearch	0	211
-145.0.7632.116	playwright	X07	1	2	mcp__browser__browser_navigate	360	74
-145.0.7632.116	playwright	X07	1	3	mcp__browser__browser_snapshot	12584	34
-145.0.7632.116	playwright	X07	1	4	mcp__browser__browser_type	571	154
-145.0.7632.116	playwright	X07	1	5	mcp__browser__browser_wait_for+mcp__browser__browser_snapshot	8333	78
-145.0.7632.116	playwright	X07	1	6		0	312
-145.0.7632.116	playwright	X08	1	1	ToolSearch	0	230
-145.0.7632.116	playwright	X08	1	2	mcp__browser__browser_navigate	267	81
-145.0.7632.116	playwright	X08	1	3	mcp__browser__browser_snapshot	12584	37
-145.0.7632.116	playwright	X08	1	4	mcp__browser__browser_type	517	138
-145.0.7632.116	playwright	X08	1	5	mcp__browser__browser_wait_for+mcp__browser__browser_snapshot	7729	84
-145.0.7632.116	playwright	X08	1	6		0	612
-145.0.7632.116	playwright	X09	1	1	ToolSearch	0	209
-145.0.7632.116	playwright	X09	1	2	mcp__browser__browser_navigate	267	59
-145.0.7632.116	playwright	X09	1	3	mcp__browser__browser_snapshot	12584	27
-145.0.7632.116	playwright	X09	1	4	mcp__browser__browser_type	507	99
-145.0.7632.116	playwright	X09	1	5	mcp__browser__browser_wait_for+mcp__browser__browser_snapshot	5910	61
-145.0.7632.116	playwright	X09	1	6		0	267
-145.0.7632.116	playwright	X10	1	1	ToolSearch	0	218
-145.0.7632.116	playwright	X10	1	2	mcp__browser__browser_navigate	267	77
-145.0.7632.116	playwright	X10	1	3	mcp__browser__browser_snapshot	12584	35
-145.0.7632.116	playwright	X10	1	4	mcp__browser__browser_type	465	153
-145.0.7632.116	playwright	X10	1	5	mcp__browser__browser_wait_for+mcp__browser__browser_snapshot	3773	80
-145.0.7632.116	playwright	X10	1	6		0	557
-145.0.7632.116	playwright	X11	1	1	mcp__browser__browser_navigate	339	60
-145.0.7632.116	playwright	X11	1	2	Read	1263	74
-145.0.7632.116	playwright	X11	1	3		0	238
-145.0.7632.116	playwright	X12	1	1	ToolSearch	0	193
-145.0.7632.116	playwright	X12	1	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1954	186
-145.0.7632.116	playwright	X12	1	3		0	204
-145.0.7632.116	playwright	X13	1	1	ToolSearch+mcp__browser__browser_navigate	341	169
-145.0.7632.116	playwright	X13	1	2	mcp__browser__browser_snapshot	1342	29
-145.0.7632.116	playwright	X13	1	3		0	294
-145.0.7632.116	playwright	X14	1	1	ToolSearch	0	67
-145.0.7632.116	playwright	X14	1	2	mcp__browser__browser_navigate	341	45
-145.0.7632.116	playwright	X14	1	3	mcp__browser__browser_snapshot	971	20
-145.0.7632.116	playwright	X14	1	4		0	182
 145.0.7632.116	playwright	L01	2	1	ToolSearch	0	83
 145.0.7632.116	playwright	L01	2	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	32421	76
 145.0.7632.116	playwright	L01	2	3		0	170
@@ -831,3 +771,65 @@ chrome_ver	arm	task	run	turn	tool	result_bytes	output_tokens
 145.0.7632.116	playwright	X14	3	1	ToolSearch	0	93
 145.0.7632.116	playwright	X14	3	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1312	90
 145.0.7632.116	playwright	X14	3	3		0	223
+145.0.7632.116	playwright	X04	1	1	ToolSearch	0	178
+145.0.7632.116	playwright	X04	1	2	mcp__browser__browser_navigate	229	54
+145.0.7632.116	playwright	X04	1	3	mcp__browser__browser_find	21676	40
+145.0.7632.116	playwright	X04	1	4	mcp__browser__browser_navigate+mcp__browser__browser_find	1147	278
+145.0.7632.116	playwright	X04	1	5	mcp__browser__browser_find	1416	49
+145.0.7632.116	playwright	X04	1	6		0	316
+145.0.7632.116	playwright	X05	1	1	ToolSearch	0	189
+145.0.7632.116	playwright	X05	1	2	mcp__browser__browser_navigate	267	66
+145.0.7632.116	playwright	X05	1	3	mcp__browser__browser_snapshot	12584	30
+145.0.7632.116	playwright	X05	1	4	mcp__browser__browser_type	454	131
+145.0.7632.116	playwright	X05	1	5	mcp__browser__browser_wait_for+mcp__browser__browser_snapshot	7611	69
+145.0.7632.116	playwright	X05	1	6		0	186
+145.0.7632.116	playwright	X06	1	1	ToolSearch	0	221
+145.0.7632.116	playwright	X06	1	2	mcp__browser__browser_navigate	267	78
+145.0.7632.116	playwright	X06	1	3	mcp__browser__browser_snapshot	12584	36
+145.0.7632.116	playwright	X06	1	4	mcp__browser__browser_type	530	139
+145.0.7632.116	playwright	X06	1	5	mcp__browser__browser_wait_for+mcp__browser__browser_snapshot	3083	81
+145.0.7632.116	playwright	X06	1	6	mcp__browser__browser_navigate+mcp__browser__browser_wait_for+mcp__browser__browser_snapshot	2564	175
+145.0.7632.116	playwright	X06	1	7	mcp__browser__browser_wait_for+mcp__browser__browser_evaluate	1085	146
+145.0.7632.116	playwright	X06	1	8	mcp__browser__browser_evaluate	773	348
+145.0.7632.116	playwright	X06	1	9	ToolSearch	0	94
+145.0.7632.116	playwright	X06	1	10	mcp__browser__browser_take_screenshot	256	114
+145.0.7632.116	playwright	X06	1	11	Read	0	64
+145.0.7632.116	playwright	X06	1	12	Bash	727	138
+145.0.7632.116	playwright	X06	1	13		0	565
+145.0.7632.116	playwright	X07	1	1	ToolSearch	0	173
+145.0.7632.116	playwright	X07	1	2	mcp__browser__browser_navigate	360	61
+145.0.7632.116	playwright	X07	1	3	mcp__browser__browser_snapshot	12584	28
+145.0.7632.116	playwright	X07	1	4	mcp__browser__browser_type	571	92
+145.0.7632.116	playwright	X07	1	5	mcp__browser__browser_wait_for+mcp__browser__browser_snapshot	8297	64
+145.0.7632.116	playwright	X07	1	6		0	245
+145.0.7632.116	playwright	X08	1	1	ToolSearch+Bash	727	424
+145.0.7632.116	playwright	X08	1	2	mcp__browser__browser_navigate	267	83
+145.0.7632.116	playwright	X08	1	3	mcp__browser__browser_snapshot	12572	38
+145.0.7632.116	playwright	X08	1	4	mcp__browser__browser_type	547	154
+145.0.7632.116	playwright	X08	1	5	mcp__browser__browser_wait_for+mcp__browser__browser_snapshot	7788	87
+145.0.7632.116	playwright	X08	1	6		0	529
+145.0.7632.116	playwright	X09	1	1	ToolSearch	0	191
+145.0.7632.116	playwright	X09	1	2	mcp__browser__browser_navigate	267	67
+145.0.7632.116	playwright	X09	1	3	mcp__browser__browser_snapshot	12584	31
+145.0.7632.116	playwright	X09	1	4	mcp__browser__browser_type	507	151
+145.0.7632.116	playwright	X09	1	5	mcp__browser__browser_wait_for+mcp__browser__browser_snapshot	3484	70
+145.0.7632.116	playwright	X09	1	6	mcp__browser__browser_wait_for+mcp__browser__browser_evaluate	2205	279
+145.0.7632.116	playwright	X09	1	7		0	285
+145.0.7632.116	playwright	X10	1	1	ToolSearch	0	218
+145.0.7632.116	playwright	X10	1	2	mcp__browser__browser_navigate	385	134
+145.0.7632.116	playwright	X10	1	3	mcp__browser__browser_wait_for+mcp__browser__browser_snapshot	2932	80
+145.0.7632.116	playwright	X10	1	4	mcp__browser__browser_wait_for+mcp__browser__browser_find	412	125
+145.0.7632.116	playwright	X10	1	5	mcp__browser__browser_snapshot	8147	35
+145.0.7632.116	playwright	X10	1	6		0	764
+145.0.7632.116	playwright	X11	1	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1677	82
+145.0.7632.116	playwright	X11	1	2		0	256
+145.0.7632.116	playwright	X12	1	1	mcp__browser__browser_navigate	124	81
+145.0.7632.116	playwright	X12	1	2	mcp__browser__browser_navigate	339	186
+145.0.7632.116	playwright	X12	1	3	mcp__browser__browser_snapshot	1615	81
+145.0.7632.116	playwright	X12	1	4		0	293
+145.0.7632.116	playwright	X13	1	1	ToolSearch+mcp__browser__browser_navigate	341	304
+145.0.7632.116	playwright	X13	1	2	mcp__browser__browser_snapshot	1342	53
+145.0.7632.116	playwright	X13	1	3		0	353
+145.0.7632.116	playwright	X14	1	1	ToolSearch	0	93
+145.0.7632.116	playwright	X14	1	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1312	91
+145.0.7632.116	playwright	X14	1	3		0	231
