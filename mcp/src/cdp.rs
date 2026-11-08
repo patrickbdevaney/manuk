@@ -1579,6 +1579,96 @@ fn init_page_session(cdp: &mut Cdp, width: u32, height: u32) -> Result<()> {
     Ok(())
 }
 
+/// CB.TMP: every Chrome this process started (process-group id, profile dir). Signal handlers and Drop
+/// both clean from here, so no exit path leaves a profile dir on the RAM-backed /tmp or a Chrome running.
+static LIVE_CHROME: std::sync::Mutex<Vec<(i32, std::path::PathBuf)>> =
+    std::sync::Mutex::new(Vec::new());
+static SIGNAL_PIPE_W: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(-1);
+
+fn reap_chrome(pgid: i32, dir: &std::path::Path) {
+    if mutated("no-reap") {
+        return;
+    }
+    unsafe { libc::kill(-pgid, libc::SIGKILL) };
+    let _ = std::fs::remove_dir_all(dir);
+    if let Ok(mut l) = LIVE_CHROME.lock() {
+        l.retain(|(g, _)| *g != pgid);
+    }
+}
+
+/// Reap every Chrome this process started (normal end of the server).
+pub fn reap_all() {
+    let live: Vec<_> = LIVE_CHROME.lock().map(|l| l.clone()).unwrap_or_default();
+    for (g, d) in live {
+        reap_chrome(g, &d);
+    }
+}
+
+extern "C" fn on_term_signal(sig: libc::c_int) {
+    let fd = SIGNAL_PIPE_W.load(std::sync::atomic::Ordering::SeqCst);
+    let b = sig as u8;
+    unsafe { libc::write(fd, &b as *const u8 as *const libc::c_void, 1) };
+}
+
+/// SIGTERM/SIGINT/SIGHUP: a handler (async-signal-safe: one write) wakes a thread that does the cleanup, then exits.
+fn install_signal_cleanup() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| unsafe {
+        let mut fds = [0i32; 2];
+        if libc::pipe(fds.as_mut_ptr()) != 0 {
+            return;
+        }
+        SIGNAL_PIPE_W.store(fds[1], std::sync::atomic::Ordering::SeqCst);
+        let rfd = fds[0];
+        let _ = std::thread::Builder::new()
+            .name("manuk-chrome-reaper".into())
+            .spawn(move || {
+                let mut b = 0u8;
+                let n = unsafe { libc::read(rfd, &mut b as *mut u8 as *mut libc::c_void, 1) };
+                if n == 1 {
+                    reap_all();
+                    unsafe { libc::_exit(128 + b as i32) };
+                }
+            });
+        for sig in [libc::SIGTERM, libc::SIGINT, libc::SIGHUP] {
+            libc::signal(sig, on_term_signal as extern "C" fn(libc::c_int) as usize);
+        }
+    });
+}
+
+/// A server killed with SIGKILL cannot clean up; the next launch removes profile dirs whose owner is gone.
+fn sweep_stale_profiles() {
+    let Ok(rd) = std::fs::read_dir(std::env::temp_dir()) else {
+        return;
+    };
+    for e in rd.flatten() {
+        let name = e.file_name().to_string_lossy().to_string();
+        let Some(rest) = name.strip_prefix("manuk-cdp-") else {
+            continue;
+        };
+        let Some(pid) = rest.split('-').next().and_then(|p| p.parse::<u32>().ok()) else {
+            continue;
+        };
+        if !std::path::Path::new(&format!("/proc/{pid}")).exists() {
+            let _ = std::fs::remove_dir_all(e.path());
+        }
+    }
+}
+
+/// Armed from spawn until `launch` succeeds: any early `?` or bail reaps Chrome and its profile dir.
+struct LaunchGuard {
+    pgid: i32,
+    dir: std::path::PathBuf,
+    armed: bool,
+}
+impl Drop for LaunchGuard {
+    fn drop(&mut self) {
+        if self.armed {
+            reap_chrome(self.pgid, &self.dir);
+        }
+    }
+}
+
 impl CdpBackend {
     pub fn launch(width: u32, height: u32) -> Result<Self> {
         let dir = std::env::temp_dir().join(format!(
@@ -1588,8 +1678,16 @@ impl CdpBackend {
                 .duration_since(std::time::UNIX_EPOCH)?
                 .as_nanos()
         ));
+        sweep_stale_profiles();
+        install_signal_cleanup();
         std::fs::create_dir_all(&dir)?;
-        let exe = chrome_exe()?;
+        let exe = match chrome_exe() {
+            Ok(e) => e,
+            Err(e) => {
+                let _ = std::fs::remove_dir_all(&dir);
+                return Err(e);
+            }
+        };
         let no_sandbox =
             UNSAFE_NO_SANDBOX.load(std::sync::atomic::Ordering::SeqCst) || mutated("sandbox");
         if no_sandbox {
@@ -1602,10 +1700,12 @@ impl CdpBackend {
             use std::os::unix::process::CommandExt;
             cmd.pre_exec(|| {
                 libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL);
+                // Own process group, so one killpg takes the zygote, GPU and renderers with the browser.
+                libc::setpgid(0, 0);
                 Ok(())
             });
         }
-        let child = cmd
+        let child = match cmd
             .args(chrome_args(no_sandbox))
             .arg(format!("--user-data-dir={}", dir.display()))
             .arg(format!("--window-size={width},{height}"))
@@ -1613,7 +1713,22 @@ impl CdpBackend {
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
-            .with_context(|| format!("launching {exe}"))?;
+        {
+            Ok(c) => c,
+            Err(e) => {
+                let _ = std::fs::remove_dir_all(&dir);
+                return Err(anyhow::Error::from(e).context(format!("launching {exe}")));
+            }
+        };
+        let pgid = child.id() as i32;
+        if let Ok(mut l) = LIVE_CHROME.lock() {
+            l.push((pgid, dir.clone()));
+        }
+        let mut guard = LaunchGuard {
+            pgid,
+            dir: dir.clone(),
+            armed: !mutated("no-reap"),
+        };
         let port_file = dir.join("DevToolsActivePort");
         let t0 = Instant::now();
         let (port, path) = loop {
@@ -1683,6 +1798,7 @@ impl CdpBackend {
         cdp.call("Browser.setDownloadBehavior", dl)?;
         init_page_session(&mut cdp, width, height)?;
         cdp.call("Target.getTargets", json!({}))?;
+        guard.armed = false;
         Ok(CdpBackend {
             cdp,
             egress_armed: false,
@@ -2231,8 +2347,8 @@ fn find(n: &A11yNode, id: NodeId) -> Option<&A11yNode> {
 impl Drop for CdpBackend {
     fn drop(&mut self) {
         let _ = self.child.kill();
+        reap_chrome(self.child.id() as i32, &self.dir);
         let _ = self.child.wait();
-        let _ = std::fs::remove_dir_all(&self.dir);
     }
 }
 

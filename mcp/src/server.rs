@@ -396,7 +396,11 @@ pub fn run_stdio_chrome(width: u32, height: u32, grants: crate::policy::Grants) 
         log_dir,
         grants,
     );
-    serve(tx)
+    // CB.TMP: the session thread owns the backend and is not joined at exit, so its Drop never runs on
+    // a normal end (stdin EOF); reap Chrome and its profile dir here.
+    let r = serve(tx);
+    crate::cdp::reap_all();
+    r
 }
 
 fn serve(tx: mpsc::UnboundedSender<Job>) -> Result<()> {
@@ -404,11 +408,14 @@ fn serve(tx: mpsc::UnboundedSender<Job>) -> Result<()> {
         .worker_threads(2)
         .enable_all()
         .build()?;
-    rt.block_on(async move {
+    let r = rt.block_on(async move {
         let svc = ManukMcp::new(tx).serve(rmcp::transport::stdio()).await?;
         svc.waiting().await?;
         Ok(())
-    })
+    });
+    // The stdin reader is a blocking task; do not wait for it.
+    rt.shutdown_background();
+    r
 }
 
 #[cfg(test)]

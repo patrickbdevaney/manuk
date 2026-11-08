@@ -11,7 +11,7 @@ use serde_json::{json, Value};
 
 struct Client {
     child: Child,
-    tx: ChildStdin,
+    tx: Option<ChildStdin>,
     rx: BufReader<ChildStdout>,
     id: u64,
 }
@@ -44,7 +44,7 @@ impl Client {
         let rx = BufReader::new(child.stdout.take().unwrap());
         let mut c = Client {
             child,
-            tx,
+            tx: Some(tx),
             rx,
             id: 0,
         };
@@ -53,8 +53,9 @@ impl Client {
         c
     }
     fn send(&mut self, v: Value) {
-        writeln!(self.tx, "{v}").unwrap();
-        self.tx.flush().unwrap();
+        let tx = self.tx.as_mut().unwrap();
+        writeln!(tx, "{v}").unwrap();
+        tx.flush().unwrap();
     }
     fn rpc(&mut self, method: &str, params: Value) -> Value {
         self.id += 1;
@@ -555,4 +556,80 @@ fn webmcp_hidden(backend: &str, mutate: Option<&str>) -> (String, (bool, String)
     let desc = helper["description"].as_str().unwrap().to_string();
     let r = c.tool("webmcp_helper", json!({}));
     (desc, r)
+}
+
+/// CB.TMP: pids whose command line carries `marker` (the server's `--user-data-dir=.../manuk-cdp-<pid>-`).
+fn procs_with(marker: &str) -> Vec<String> {
+    let mut out = vec![];
+    for e in std::fs::read_dir("/proc").unwrap().flatten() {
+        let pid = e.file_name().to_string_lossy().to_string();
+        if !pid.chars().all(|c| c.is_ascii_digit()) {
+            continue;
+        }
+        if let Ok(raw) = std::fs::read(format!("/proc/{pid}/cmdline")) {
+            if String::from_utf8_lossy(&raw).contains(marker) {
+                out.push(pid);
+            }
+        }
+    }
+    out
+}
+
+fn dirs_for(server_pid: u32) -> Vec<String> {
+    let pre = format!("manuk-cdp-{server_pid}-");
+    std::fs::read_dir(std::env::temp_dir())
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .filter(|n| n.starts_with(&pre))
+        .collect()
+}
+
+/// CB.TMP gate: 20 start/stop cycles (normal end, SIGTERM, Chrome killed under the server) leave no
+/// profile dir and no Chrome process. Red under `MANUK_CDP_MUTATE=no-reap`.
+#[test]
+fn chrome_backend_leaves_no_profile_dir_or_process() {
+    if std::env::var("MANUK_CDP_MUTATE").is_ok_and(|v| v != "no-reap") {
+        return;
+    }
+    let mutate = std::env::var("MANUK_CDP_MUTATE").ok();
+    let mut leaks = vec![];
+    for i in 0..20 {
+        let mut c = Client::start(mutate.as_deref());
+        let (err, nav) = c.tool("navigate", json!({"url": fixture("injection.html")}));
+        assert!(!err, "{nav}");
+        let pid = c.child.id();
+        let marker = format!("manuk-cdp-{pid}-");
+        assert!(!dirs_for(pid).is_empty(), "no profile dir while running");
+        match i % 3 {
+            0 => drop(c.tx.take()),
+            1 => unsafe {
+                libc::kill(pid as i32, libc::SIGTERM);
+            },
+            _ => {
+                for p in procs_with(&marker) {
+                    unsafe { libc::kill(p.parse().unwrap(), libc::SIGKILL) };
+                }
+                drop(c.tx.take());
+            }
+        }
+        let t0 = std::time::Instant::now();
+        while c.child.try_wait().unwrap().is_none() && t0.elapsed().as_secs() < 15 {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        let _ = c.child.kill();
+        let _ = c.child.wait();
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        let (d, p) = (dirs_for(pid), procs_with(&marker));
+        if !d.is_empty() || !p.is_empty() {
+            leaks.push(format!("cycle {i} mode {}: dirs {d:?} procs {p:?}", i % 3));
+        }
+        for p in p {
+            unsafe { libc::kill(p.parse().unwrap(), libc::SIGKILL) };
+        }
+        for d in d {
+            let _ = std::fs::remove_dir_all(std::env::temp_dir().join(d));
+        }
+    }
+    assert!(leaks.is_empty(), "leaked:\n{}", leaks.join("\n"));
 }
