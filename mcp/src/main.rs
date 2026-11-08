@@ -7,7 +7,20 @@ fn main() -> anyhow::Result<()> {
         let h = std::thread::Builder::new()
             .name("manuk-main".into())
             .stack_size(256 * 1024 * 1024)
-            .spawn(move || real_main(args))?;
+            .spawn(move || -> anyhow::Result<()> {
+                // A forked session (zygote child) runs this thread alone; its leader was never copied, and the
+                // SpiderMonkey helper threads it restarted never exit. Returning here leaves a defunct leader
+                // that init cannot reap (96 `manuk-main` zombies on the bench box), so the process exits here.
+                let r = real_main(args);
+                let _ = std::io::Write::flush(&mut std::io::stdout());
+                std::process::exit(match r {
+                    Ok(()) => 0,
+                    Err(e) => {
+                        eprintln!("Error: {e:?}");
+                        1
+                    }
+                })
+            })?;
         return h
             .join()
             .map_err(|_| anyhow::anyhow!("main thread panicked"))?;
