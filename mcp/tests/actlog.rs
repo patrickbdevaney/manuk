@@ -252,7 +252,13 @@ fn stale_or_malformed_handles_are_refused() {
     let (id, _) = p.split_once(':').unwrap();
     let (_, o) = c.tool("observe", json!({"page": p}));
     assert!(!o.is_empty());
+    // RG.S1: a behind or seq-less handle for a live page is served from the live page, with a note
     let (err, t) = c.tool("observe", json!({"page": format!("{id}:1")}));
+    assert!(!err && t.contains("was behind") && t.contains("page: "), "{t}");
+    let (err, t) = c.tool("observe", json!({"page": id}));
+    assert!(!err && t.contains("had no seq"), "{t}");
+    // a seq from the future is still a lie
+    let (err, t) = c.tool("observe", json!({"page": format!("{id}:999")}));
     assert!(err && t.contains("STALE"), "{t}");
     let (err, t) = c.tool("observe", json!({"page": "garbage"}));
     assert!(err && t.contains("bad page handle"), "{t}");

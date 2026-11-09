@@ -541,6 +541,7 @@ impl<B: Backend> Hub<B> {
             return Ok(Output::Text("[]".into()));
         }
         let want = args.get("page").and_then(Value::as_str).map(str::to_string);
+        let mut lenient: Option<String> = None;
         let id = match want.as_deref() {
             None => match &self.default {
                 Some(d) => d.clone(),
@@ -551,6 +552,11 @@ impl<B: Backend> Hub<B> {
                 }
             },
             Some("new") => self.fresh_id(),
+            Some(h) if !h.contains(':') && self.pages.contains_key(h) => {
+                // A bare page id from this process: the live page is unambiguous.
+                lenient = Some(format!("note: page handle {h:?} had no seq; used the live page"));
+                h.to_string()
+            }
             Some(h) => {
                 let (id, seq) = h
                     .rsplit_once(':')
@@ -558,6 +564,14 @@ impl<B: Backend> Hub<B> {
                     .ok_or_else(|| format!("bad page handle {h:?}: expected \"<id>:<seq>\" as returned by the last call"))?;
                 match self.pages.get(id).map(|p| p.log.len() as u64) {
                     Some(n) if n == seq => {}
+                    // The page is live in this process, so the only reader of an old seq is a
+                    // client holding an earlier reply: act on the live page and say so, instead
+                    // of spending the agent's step on a refusal (W5.G1: STALE handles).
+                    Some(n) if n > seq && std::env::var_os("MANUK_STALE_STRICT").is_none() => {
+                        lenient = Some(format!(
+                            "note: page handle {h} was behind (page is at seq {n}); used the live page"
+                        ));
+                    }
                     Some(n) => {
                         return Err(format!(
                             "STALE page handle {h}: that page is at seq {n}; use {id}:{n}"
@@ -630,6 +644,10 @@ impl<B: Backend> Hub<B> {
             self.pages.get_mut(&id).unwrap().log.push(e);
         }
         let handle = format!("page: {id}:{seq}");
+        let handle = match lenient {
+            Some(n) => format!("{n}\n{handle}"),
+            None => handle,
+        };
         let handle = match held {
             Some(h) => format!("{h}\n{handle}"),
             None => handle,
