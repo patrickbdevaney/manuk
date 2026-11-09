@@ -2751,6 +2751,21 @@ fn element_sibling_position(dom: &Dom, node: NodeId) -> (usize, usize) {
 /// implementations can reach is how they drift apart in the first place.
 pub const TOP_LAYER_Z: i32 = 1_000_000_000;
 
+fn auto_layer(parent_layer: i32) -> i32 {
+    // Layers are `n * 1024 + 1` for an explicit z-index (a context base); the root band is 0. Anything
+    // above that inside one context is the base plus a small offset, which an auto box must not extend.
+    // The top layer sits far above every explicit z and keeps stacking on its parent as before.
+    if parent_layer >= TOP_LAYER_Z || parent_layer == 0 {
+        return parent_layer.saturating_add(1);
+    }
+    // Layer 1 is both an auto box at the root and an explicit `z-index: 0` base: its auto children stay at 1.
+    if parent_layer == 1 {
+        return 1;
+    }
+    let base = parent_layer - (parent_layer - 1).rem_euclid(1024);
+    base.saturating_add(1)
+}
+
 /// **The painting layer one node adds to its parent's, from CSS 2.1 Appendix E.**
 ///
 /// ⭐⭐⭐ **THIS RULE HAD TWO IMPLEMENTATIONS AND THEY DISAGREED.** `Page::z_index_map` (which feeds
@@ -2768,10 +2783,17 @@ pub const TOP_LAYER_Z: i32 = 1_000_000_000;
 /// |---|---|
 /// | not positioned | its parent's — it paints in the same in-flow band |
 /// | positioned, explicit `z-index: n` | `n * 1024 + 1` |
-/// | positioned, `z-index: auto` | `parent + 1` — above in-flow content, below any explicit z |
+/// | positioned, `z-index: auto` | the enclosing stacking context's base `+ 1` — above in-flow content, below any explicit z |
 ///
-/// The `1024` scale means 1023 levels of nested `auto` positioning still sit below `z-index: 1`,
-/// and the `+ 1` means an explicit `z-index: 0` — also step 8 — still clears in-flow content.
+/// The `1024` scale keeps `auto` positioning below `z-index: 1`, and the `+ 1` means an explicit
+/// `z-index: 0` — also step 8 — still clears in-flow content.
+///
+/// ⭐ **`auto` is FLAT, not cumulative (RG.E2).** A positioned `z-index: auto` box creates no
+/// stacking context, so its positioned descendants join the SAME step-8 layer as their ancestors'
+/// later siblings, in tree order. `parent + 1` stacked one level per nested `position: relative`
+/// wrapper, so a MUI `<TextField>` (two relative wrappers deep) outranked the absolutely positioned
+/// Search button that follows it, and staynb's Search stays refused as `OCCLUDED by textbox "Who"`
+/// where Chrome's `elementFromPoint` returns the button.
 ///
 /// ⚠ Callers own the **top layer** (`showModal()`, an open popover): that is a DOM-attribute fact,
 /// not a style one, and it overrides whatever this returns.
@@ -2779,7 +2801,10 @@ pub fn stacking_layer(style: Option<&ComputedStyle>, parent_layer: i32) -> i32 {
     match style {
         Some(s) if s.position != Position::Static => match s.z_index {
             Some(n) => n.saturating_mul(1024).saturating_add(1),
-            None => parent_layer.saturating_add(1),
+            None if std::env::var_os("MANUK_STACK_MUTATE").is_some() => {
+                parent_layer.saturating_add(1)
+            }
+            None => auto_layer(parent_layer),
         },
         _ => parent_layer,
     }
@@ -11012,4 +11037,28 @@ pub fn tag_has_native_appearance(tag: &str) -> bool {
         tag,
         "button" | "input" | "select" | "textarea" | "meter" | "progress"
     )
+}
+
+#[cfg(test)]
+mod stacking_flat_tests {
+    use super::*;
+    fn pos(z: Option<i32>) -> ComputedStyle {
+        ComputedStyle {
+            position: Position::Relative,
+            z_index: z,
+            ..ComputedStyle::initial()
+        }
+    }
+    #[test]
+    fn nested_auto_positioning_does_not_stack() {
+        let a = stacking_layer(Some(&pos(None)), 0);
+        let b = stacking_layer(Some(&pos(None)), a);
+        let c = stacking_layer(Some(&pos(None)), b);
+        assert_eq!((a, b, c), (1, 1, 1));
+        let z2 = stacking_layer(Some(&pos(Some(2))), c);
+        let n = stacking_layer(Some(&pos(None)), z2);
+        assert_eq!((z2, n), (2049, 2050));
+        let neg = stacking_layer(Some(&pos(Some(-1))), 1);
+        assert_eq!(stacking_layer(Some(&pos(None)), neg), neg + 1);
+    }
 }

@@ -68,7 +68,12 @@ impl Client {
         let res = &r["result"];
         let text = res["content"]
             .as_array()
-            .map(|c| c.iter().filter_map(|b| b["text"].as_str()).collect::<Vec<_>>().join("\n"))
+            .map(|c| {
+                c.iter()
+                    .filter_map(|b| b["text"].as_str())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            })
             .unwrap_or_default();
         (res["isError"].as_bool().unwrap_or(false), text)
     }
@@ -91,7 +96,10 @@ fn handle_of(text: &str, needle: &str) -> String {
 
 fn run(mutate: bool) -> (bool, String) {
     let mut c = Client::start(mutate);
-    let url = format!("file://{}/tests/fixtures/rebind_ctx.html", env!("CARGO_MANIFEST_DIR"));
+    let url = format!(
+        "file://{}/tests/fixtures/rebind_ctx.html",
+        env!("CARGO_MANIFEST_DIR")
+    );
     let (err, nav) = c.tool("navigate", json!({"url": url}));
     assert!(!err, "{nav}");
     let slot = handle_of(&nav, "Book a slot at 2:00 PM");
@@ -115,5 +123,8 @@ fn a_handle_follows_its_element_when_the_container_label_changed() {
 #[test]
 fn rebind_mutant_goes_stale() {
     let (err, t) = run(true);
-    assert!(err && t.contains("STALE"), "mutant should be stale, got err={err}: {t}");
+    assert!(
+        err && t.contains("STALE"),
+        "mutant should be stale, got err={err}: {t}"
+    );
 }

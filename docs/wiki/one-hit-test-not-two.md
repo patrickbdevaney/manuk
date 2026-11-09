@@ -70,3 +70,7 @@ Playwright does, so it is judged unclipped. The first cut refused it and opendin
 UNREACHABLE refusals per run. Known remaining gap: nested
 `z-index:auto` positioning still inflates the layer by depth (`parent + 1`) where Chrome paints
 those in tree order within one stacking context.
+
+## RG.S2: `z-index: auto` is flat, and "positioned" is a fact the hit-test needs
+
+`stacking_layer` used to give a nested `position: relative; z-index: auto` box `parent + 1`, one layer per wrapper. A carousel track two wrappers deep then outranked its own later, absolutely positioned arrow (Chrome's `elementFromPoint` returns the arrow), so the agent saw `OCCLUDED by list` and a modal overlay with no close control. `auto` now stays on its stacking context's base layer. A flat layer needs a tie-break, and ranking *every* later box on a layer made G6 clickability 84.2% (60 Wikipedia links) because in-flow content inherits its positioned ancestor's layer. So `A11yNode.positioned` marks boxes that paint in the positioned pass: a positioned candidate beats an in-flow one on the same layer, two positioned ones paint in tree order, two in-flow ones keep smaller-box-wins. A target wholly outside its own overflow clip is `Clear` without a hit-test, since scrolling it into view moves it.

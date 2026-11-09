@@ -571,6 +571,10 @@ pub struct A11yNode {
     /// a decorative overlay. Default `true`; only the live builder that holds the computed styles can
     /// set it, since `pointer-events` is a style, not a DOM attribute.
     pub hittable: bool,
+    /// The box is `position`ed (not `static`). With a flat `z-index: auto` layer (RG.S2) this is what
+    /// separates a box painted in the positioned pass, in tree order, from in-flow content that
+    /// merely inherited its ancestor's layer: [`A11yNode::hit_test`] ranks the first above the second.
+    pub positioned: bool,
     /// The intersection of every clipping ancestor's padding box (`overflow` other than `visible`),
     /// when there is one. Content outside it is not painted, so a pointer cannot land on it: a
     /// carousel's off-screen slides must not occlude the header they overflow into. `None` = unclipped.
@@ -1033,17 +1037,31 @@ impl A11yNode {
         fn area(n: &A11yNode) -> f32 {
             n.bbox.map_or(f32::MAX, |r| r.width * r.height)
         }
-        // Two candidates from DIFFERENT subtrees: higher layer wins, then the smaller box. `<=`
-        // keeps the later (document-order) node on an exact tie, which is what the flat scan did.
-        fn across<'a>(a: &'a A11yNode, b: &'a A11yNode) -> &'a A11yNode {
-            if b.z > a.z || (b.z == a.z && area(b) <= area(a)) {
+        // A candidate and whether a `position`ed box sits on its path from the subtree root down to it.
+        type Hit<'a> = (&'a A11yNode, bool);
+        // Two candidates from DIFFERENT subtrees: higher layer wins. On the SAME layer, `z-index: auto`
+        // is flat (no stacking context, RG.S2): a candidate painted by a positioned box beats in-flow
+        // content, and two positioned ones paint in tree order, the later on top, as in Chrome. Two
+        // in-flow candidates have no such order here, so the smaller box wins; `<=` keeps the later
+        // (document-order) node on an exact tie, which is what the flat scan did.
+        fn across<'a>(a: Hit<'a>, b: Hit<'a>) -> Hit<'a> {
+            let later = if a.0.z != b.0.z {
+                b.0.z > a.0.z
+            } else if a.0.z > 0 && a.1 != b.1 {
+                b.1
+            } else if a.0.z > 0 && a.1 {
+                true
+            } else {
+                area(b.0) <= area(a.0)
+            };
+            if later {
                 b
             } else {
                 a
             }
         }
-        fn go<'a>(n: &'a A11yNode, x: f32, y: f32, clipped: bool) -> Option<&'a A11yNode> {
-            let mut best: Option<&A11yNode> = None;
+        fn go<'a>(n: &'a A11yNode, x: f32, y: f32, clipped: bool) -> Option<Hit<'a>> {
+            let mut best: Option<Hit> = None;
             for c in &n.children {
                 if let Some(cand) = go(c, x, y, clipped) {
                     best = Some(match best {
@@ -1060,13 +1078,13 @@ impl A11yNode {
             match (best, hits) {
                 // The descendant wins unless this node is on a HIGHER layer — a positioned ancestor
                 // painted above its own overflowing content is the one case where it should not.
-                (Some(b), true) => Some(if n.z > b.z { n } else { b }),
-                (Some(b), false) => Some(b),
-                (None, true) => Some(n),
+                (Some((b, p)), true) => Some((if n.z > b.z { n } else { b }, p || n.positioned)),
+                (Some((b, p)), false) => Some((b, p || n.positioned)),
+                (None, true) => Some((n, n.positioned)),
                 (None, false) => None,
             }
         }
-        go(self, x, y, clipped)
+        go(self, x, y, clipped).map(|h| h.0)
     }
 
     /// **Verify a click point against the hit-test before an agent acts on it.** Called on the
@@ -1095,10 +1113,10 @@ impl A11yNode {
         // its container to it first (Playwright's scrollIntoViewIfNeeded), so it is judged on its
         // own box against the unclipped page, as before clipping existed. RG.S1.a measured the
         // refusal: opendining-4's time slots and dashdish's carousel tiles read UNREACHABLE.
-        let (bbox, clipped) = match node.clip.map(|c| bbox.intersection(&c)) {
-            Some(Some(r)) => (r, true),
-            Some(None) => (bbox, false),
-            None => (bbox, true),
+        let (bbox, clipped, wholly_clipped) = match node.clip.map(|c| bbox.intersection(&c)) {
+            Some(Some(r)) => (r, true, false),
+            Some(None) => (bbox, false, true),
+            None => (bbox, true, false),
         };
         let aim = match viewport {
             Some(v) => match bbox.intersection(&v) {
@@ -1115,6 +1133,15 @@ impl A11yNode {
         };
         if aim.width <= 0.0 || aim.height <= 0.0 {
             return Landing::Unreachable;
+        }
+
+        // Scrolled into view its box moves, so what covers its CURRENT coordinates is no longer the
+        // question (RG.S2: with tree-order stacking a later button over the scrolled-out box would
+        // otherwise read as covering it). Nothing is hit-tested; the click scrolls first.
+        if wholly_clipped {
+            return Landing::Clear {
+                point: aim.center(),
+            };
         }
 
         // A hit on the target itself or anywhere in its subtree activates the target. Collected
@@ -1916,6 +1943,8 @@ pub struct NameStyle {
     pub display: manuk_css::Display,
     pub text_transform: manuk_css::TextTransform,
     pub visibility: manuk_css::Visibility,
+    /// `position` other than `static`: the box paints in the positioned (step 8) pass, in tree order.
+    pub positioned: bool,
 }
 
 /// The ALT half of `content` per owner — `(::before, ::after)`, each `None` when that pseudo's
@@ -1991,6 +2020,7 @@ pub fn name_styles(dom: &Dom, styles: &HashMap<NodeId, manuk_css::ComputedStyle>
                         display: s.display,
                         text_transform: s.text_transform,
                         visibility: s.visibility,
+                        positioned: s.position != manuk_css::Position::Static,
                         has_border: s.border_width.top > 0.0
                             || s.border_width.right > 0.0
                             || s.border_width.bottom > 0.0
@@ -3089,6 +3119,7 @@ pub fn build_tree_generated(
         bbox: None,
         z: 0,
         hittable: true,
+        positioned: false,
         clip: None,
         state: A11yState::default(),
         children,
@@ -3303,6 +3334,7 @@ fn build_children(
                     z: z_index.get(&child).copied().unwrap_or(0),
                     // `pointer-events: none` — the node is announced but is not a hit target.
                     hittable: !non_hittable.contains(&child),
+                    positioned: ctx.styles.get(&child).is_some_and(|s| s.positioned),
                     clip: None,
                     state,
                     children: build_children(
@@ -3345,6 +3377,7 @@ mod tests {
             bbox: None,
             z: 0,
             hittable: true,
+            positioned: false,
             clip: None,
             state: A11yState::default(),
             children: vec![],
@@ -3380,6 +3413,7 @@ mod tests {
             }),
             z: 0,
             hittable: true,
+            positioned: false,
             clip: None,
             state: A11yState::default(),
             children: vec![],
@@ -3396,6 +3430,7 @@ mod tests {
             }),
             z: 0,
             hittable: true,
+            positioned: false,
             clip: None,
             state: A11yState::default(),
             children: vec![link],
@@ -3407,6 +3442,7 @@ mod tests {
             bbox: None,
             z: 0,
             hittable: true,
+            positioned: false,
             clip: None,
             state: A11yState::default(),
             children: vec![li],
@@ -3436,6 +3472,7 @@ mod tests {
             }),
             z: 0,
             hittable: true,
+            positioned: false,
             clip: None,
             state: A11yState::default(),
             children: vec![],
@@ -3452,6 +3489,7 @@ mod tests {
             }),
             z: 10,
             hittable: true,
+            positioned: false,
             clip: None,
             state: A11yState::default(),
             children: vec![],
@@ -3463,6 +3501,7 @@ mod tests {
             bbox: None,
             z: 0,
             hittable: true,
+            positioned: false,
             clip: None,
             state: A11yState::default(),
             children: vec![button, overlay],
@@ -3488,6 +3527,7 @@ mod tests {
             }),
             z: 0,
             hittable: true,
+            positioned: false,
             clip: None,
             state: A11yState::default(),
             children: vec![],
@@ -3504,6 +3544,7 @@ mod tests {
             }),
             z: 10,
             hittable: false, // pointer-events: none
+            positioned: false,
             clip: None,
             state: A11yState::default(),
             children: vec![],
@@ -3515,6 +3556,7 @@ mod tests {
             bbox: None,
             z: 0,
             hittable: true,
+            positioned: false,
             clip: None,
             state: A11yState::default(),
             children: vec![button, ghost],
@@ -3532,6 +3574,7 @@ mod tests {
             bbox: None,
             z: 0,
             hittable: true,
+            positioned: false,
             clip: None,
             state: A11yState::default(),
             children: vec![leaf(Role::Link, "Sign in"), leaf(Role::Button, "Menu")],
@@ -3543,6 +3586,7 @@ mod tests {
             bbox: None,
             z: 0,
             hittable: true,
+            positioned: false,
             clip: None,
             state: A11yState::default(),
             children: vec![leaf(Role::Button, "Menu"), leaf(Role::Button, "Sign out")],
@@ -3824,6 +3868,7 @@ mod tests {
             }),
             z: 0,
             hittable: true,
+            positioned: false,
             clip: None,
             state: Default::default(),
             children: vec![],
@@ -3835,6 +3880,7 @@ mod tests {
             bbox: None,
             z: 0,
             hittable: true,
+            positioned: false,
             clip: None,
             state: Default::default(),
             children: vec![target],
@@ -4118,6 +4164,7 @@ mod tests {
                 n,
                 NameStyle {
                     has_border: false,
+                    positioned: false,
                     display: manuk_css::Display::Inline,
                     text_transform: manuk_css::TextTransform::None,
                     visibility: manuk_css::Visibility::Visible,

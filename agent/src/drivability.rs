@@ -368,6 +368,7 @@ mod tests {
             bbox,
             z: 0,
             hittable: true,
+            positioned: false,
             clip: None,
             state: Default::default(),
             children,

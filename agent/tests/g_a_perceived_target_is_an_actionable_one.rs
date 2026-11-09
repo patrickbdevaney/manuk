@@ -135,29 +135,15 @@ fn a_covered_control_is_a_mishit() {
 }
 
 #[test]
-fn a_fixed_overlay_with_no_z_index_does_not_yet_win_the_click() {
-    // ── ⚠⚠⚠ **THIS ROW ASSERTS A DEFECT, AND IT IS THE FIRST THING drive-probe FOUND.**
-    //    `#ghost` is `position: fixed` with `z-index: auto`. CSS painting order puts every
-    //    positioned element above non-positioned in-flow content, so Chrome's `elementFromPoint`
-    //    returns the ghost. Ours returns the LINK, because `A11yNode::z` models only an explicit
-    //    `z-index` — it is `0` for "not positioned" and `0` for "positioned, auto" alike — and the
-    //    tie-break between unrelated subtrees then falls through to SMALLER AREA, which the 200x30
-    //    link wins against the 400x300 banner.
-    //
-    //    ⭐ A cookie banner is exactly this markup. An agent would click the link underneath one and
-    //    report success.
-    //
-    //    It is asserted rather than fixed because `z` is set where the computed styles live and the
-    //    change reaches every coordinate click in the engine; a gate that NAMES what it cannot yet
-    //    catch beats one that pretends. The row above it (`Underneath`, `z-index: 10`) proves the
-    //    MisHit machinery works, so this is a missing INPUT and not a broken classifier.
+fn a_fixed_overlay_with_no_z_index_wins_the_click() {
+    // `#ghost` is `position: fixed` with `z-index: auto`. CSS painting order puts every positioned
+    // element above non-positioned in-flow content, so Chrome's `elementFromPoint` returns the
+    // ghost, and the link under it is a MisHit. This row used to assert the opposite (a known
+    // defect: `z` was 0 for "positioned, auto" and "not positioned" alike, so the smaller link
+    // won); RG.S2's `A11yNode::positioned` ranks the positioned box above in-flow content on the
+    // same layer. A cookie banner is exactly this markup.
     let root = tree();
-    assert_eq!(
-        verdict_of(&root, "Under the ghost"),
-        Verdict::Drivable,
-        "if this now reads MisHit the z model has been fixed — DELETE this row and fold it into \
-         the one above, which is the outcome this gate wants"
-    );
+    assert_eq!(verdict_of(&root, "Under the ghost"), Verdict::MisHit);
 }
 
 #[test]

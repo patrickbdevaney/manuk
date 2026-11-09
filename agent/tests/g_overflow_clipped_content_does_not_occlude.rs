@@ -32,6 +32,10 @@ html, body { margin: 0; overflow: hidden; height: 100% }
 .track { position: relative; width: 300px; height: 1px }
 .free { position: relative; width: 300px; height: 1px }
 .free .slide { position: absolute }
+.nest { position: relative; width: 300px; height: 40px; margin-top: 200px }
+.nestwrap { position: relative; width: 300px; height: 40px; overflow: hidden }
+.track2 { position: relative; width: 1200px; height: 40px }
+.nest button { position: absolute; right: 4px; top: 4px; width: 80px; height: 30px }
 .clipbox { position: relative; width: 100px; height: 20px; overflow: hidden }
 .clipbox button { position: absolute; left: 0; top: 40px; width: 90px; height: 20px }
 </style></head><body>
@@ -42,6 +46,7 @@ html, body { margin: 0; overflow: hidden; height: 100% }
 <div class="row"><button id="body_scroll">Body</button></div>
 <div class="row"><button id="under">Under</button></div>
 <div class="free"><div class="slide" style="top:-40px"></div></div>
+<div class="nest"><div class="nestwrap"><div class="track2"></div></div><button id="arrow">Next slide</button></div>
 </body></html>"##;
 
 fn landing_of(name: &str) -> Landing {
@@ -96,5 +101,19 @@ fn unclipped_overflow_still_occludes() {
         matches!(landing_of("Under"), Landing::Obstructed { .. }),
         "got {:?}",
         landing_of("Under")
+    );
+}
+
+#[test]
+fn an_arrow_after_a_nested_auto_track_is_clear() {
+    // RG.S2. A carousel's arrow is absolutely positioned AFTER the track, which sits two `position:
+    // relative` wrappers deep. `z-index: auto` adds no stacking context, so the arrow paints over the
+    // track in tree order and Chrome's elementFromPoint at its centre returns the arrow. The engine
+    // stacked one layer per nested wrapper, so the track outranked the arrow: opendining's "Next
+    // slide" read OCCLUDED by a `list` and its carousel was reported as a modal overlay.
+    assert!(
+        matches!(landing_of("Next slide"), Landing::Clear { .. }),
+        "got {:?}",
+        landing_of("Next slide")
     );
 }
