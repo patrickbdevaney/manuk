@@ -44,6 +44,7 @@ fn node(role: Role, w: f32, h: f32, kids: Vec<A11yNode>) -> A11yNode {
         },
         z: 0,
         hittable: true,
+        clip: None,
         state: A11yState::default(),
         children: kids,
     }

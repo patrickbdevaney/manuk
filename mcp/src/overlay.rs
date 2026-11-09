@@ -29,7 +29,13 @@ const BOT: [&str; 8] = [
     "checking your browser",
     "are you a robot",
 ];
-const CONSENT: [&str; 5] = ["cookie", "consent", "gdpr", "your privacy", "privacy choices"];
+const CONSENT: [&str; 5] = [
+    "cookie",
+    "consent",
+    "gdpr",
+    "your privacy",
+    "privacy choices",
+];
 const REJECT: [&str; 9] = [
     "reject",
     "decline",
@@ -41,8 +47,26 @@ const REJECT: [&str; 9] = [
     "only essential",
     "without accepting",
 ];
-const CLOSE: [&str; 8] = ["close", "dismiss", "no thanks", "no, thanks", "not now", "maybe later", "skip", "cancel"];
-const ACCEPT: [&str; 8] = ["accept", "agree", "allow", "yes", "subscribe", "sign up", "got it", "ok"];
+const CLOSE: [&str; 8] = [
+    "close",
+    "dismiss",
+    "no thanks",
+    "no, thanks",
+    "not now",
+    "maybe later",
+    "skip",
+    "cancel",
+];
+const ACCEPT: [&str; 8] = [
+    "accept",
+    "agree",
+    "allow",
+    "yes",
+    "subscribe",
+    "sign up",
+    "got it",
+    "ok",
+];
 
 fn lower(s: &str) -> String {
     s.to_lowercase()
@@ -69,7 +93,10 @@ pub fn bot_wall(tree: &A11yNode) -> bool {
 }
 
 fn text_of(n: &A11yNode) -> String {
-    n.iter().map(|k| k.name.as_str()).collect::<Vec<_>>().join(" ")
+    n.iter()
+        .map(|k| k.name.as_str())
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn pick_control<'t>(n: &'t A11yNode, kind: Kind) -> Option<&'t A11yNode> {
@@ -85,7 +112,9 @@ fn pick_control<'t>(n: &'t A11yNode, kind: Kind) -> Option<&'t A11yNode> {
     }
     ctl.iter()
         .filter(ok)
-        .find(|k| word_hit(&k.name, &CLOSE) || is_close_glyph(&k.name) || word_hit(&k.name, &REJECT))
+        .find(|k| {
+            word_hit(&k.name, &CLOSE) || is_close_glyph(&k.name) || word_hit(&k.name, &REJECT)
+        })
         .copied()
 }
 
@@ -132,11 +161,23 @@ pub fn find<'t>(tree: &'t A11yNode, vp: &Rect) -> Vec<Overlay<'t>> {
         } else {
             Kind::Modal
         };
-        let control = if kind == Kind::BotWall { None } else { pick_control(n, kind) };
-        out.push(Overlay { node: n, kind, control });
+        let control = if kind == Kind::BotWall {
+            None
+        } else {
+            pick_control(n, kind)
+        };
+        out.push(Overlay {
+            node: n,
+            kind,
+            control,
+        });
     }
     if !out.iter().any(|o| o.kind == Kind::BotWall) && bot_wall(tree) {
-        out.push(Overlay { node: tree, kind: Kind::BotWall, control: None });
+        out.push(Overlay {
+            node: tree,
+            kind: Kind::BotWall,
+            control: None,
+        });
     }
     out
 }

@@ -910,7 +910,14 @@ impl<B: Backend> Session<B> {
     /// W5.T4: the diff body, or a labelled compact full view when the diff is not the cheaper read: it
     /// exceeds 40% of the full view, or the URL changed since the snapshot it diffs against.
     /// `MANUK_DIFFVIEW_MUTATE=off` removes the rule (the gate's mutant).
-    fn diff_or_view(&mut self, d: Vec<String>, tree: &A11yNode, url_changed: bool, budget: usize, defer: bool) -> String {
+    fn diff_or_view(
+        &mut self,
+        d: Vec<String>,
+        tree: &A11yNode,
+        url_changed: bool,
+        budget: usize,
+        defer: bool,
+    ) -> String {
         if d.is_empty() && !url_changed {
             return "no change".to_string();
         }
@@ -934,7 +941,11 @@ impl<B: Backend> Session<B> {
         );
         if defer {
             // An act's one-line result needs no diff at all; the swap happens only where the diff is shown.
-            let raw = if d.is_empty() { "no change".to_string() } else { d.join("\n") };
+            let raw = if d.is_empty() {
+                "no change".to_string()
+            } else {
+                d.join("\n")
+            };
             self.view_alt = Some((raw.clone(), view));
             return raw;
         }
@@ -1077,7 +1088,9 @@ impl<B: Backend> Session<B> {
                 };
                 // W5.T4: an act that shows its diff shows the labelled full view when that is the cheaper read.
                 let t = match alt {
-                    Some((raw, view)) if matches!(tool, "act" | "type") && t.contains(&raw) => t.replacen(&raw, &view, 1),
+                    Some((raw, view)) if matches!(tool, "act" | "type") && t.contains(&raw) => {
+                        t.replacen(&raw, &view, 1)
+                    }
                     _ => t,
                 };
                 Ok(Output::Text(t))

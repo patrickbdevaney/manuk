@@ -56,11 +56,24 @@ impl Client {
         if mutate {
             cmd.env("MANUK_DIFFVIEW_MUTATE", "off");
         }
-        cmd.env("MANUK_ACTLOG_DIR", std::env::temp_dir().join(format!("w5t4-log-{}-{mutate}", std::process::id())));
-        let mut child = cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().expect("spawn manuk-mcp");
+        cmd.env(
+            "MANUK_ACTLOG_DIR",
+            std::env::temp_dir().join(format!("w5t4-log-{}-{mutate}", std::process::id())),
+        );
+        let mut child = cmd
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawn manuk-mcp");
         let tx = child.stdin.take().unwrap();
         let rx = BufReader::new(child.stdout.take().unwrap());
-        let mut c = Client { child, tx, rx, id: 0 };
+        let mut c = Client {
+            child,
+            tx,
+            rx,
+            id: 0,
+        };
         c.rpc("initialize", json!({"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}));
         c.send(json!({"jsonrpc": "2.0", "method": "notifications/initialized"}));
         c
@@ -75,7 +88,10 @@ impl Client {
         self.send(json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}));
         loop {
             let mut line = String::new();
-            assert!(self.rx.read_line(&mut line).unwrap() > 0, "server closed stdout");
+            assert!(
+                self.rx.read_line(&mut line).unwrap() > 0,
+                "server closed stdout"
+            );
             let v: Value = serde_json::from_str(&line).unwrap();
             if v["id"] == json!(id) {
                 return v;
@@ -85,7 +101,15 @@ impl Client {
     fn tool(&mut self, name: &str, args: Value) -> String {
         let r = self.rpc("tools/call", json!({"name": name, "arguments": args}));
         let res = &r["result"];
-        let text = res["content"].as_array().map(|c| c.iter().filter_map(|b| b["text"].as_str()).collect::<Vec<_>>().join("\n")).unwrap_or_default();
+        let text = res["content"]
+            .as_array()
+            .map(|c| {
+                c.iter()
+                    .filter_map(|b| b["text"].as_str())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            })
+            .unwrap_or_default();
         assert!(!res["isError"].as_bool().unwrap_or(false), "{name}: {text}");
         text
     }
@@ -97,14 +121,20 @@ impl Drop for Client {
 }
 
 fn handle_of(text: &str, needle: &str) -> String {
-    let line = text.lines().find(|l| l.contains("[h") && l.contains(needle)).unwrap_or_else(|| panic!("no line with {needle:?} in:\n{text}"));
+    let line = text
+        .lines()
+        .find(|l| l.contains("[h") && l.contains(needle))
+        .unwrap_or_else(|| panic!("no line with {needle:?} in:\n{text}"));
     let a = line.find("[h").unwrap();
     let b = line[a..].find(']').unwrap() + a;
     line[a + 1..b].to_string()
 }
 
 fn click(c: &mut Client, nav: &str, label: &str) -> String {
-    c.tool("act", json!({"handle": handle_of(nav, label), "action": "click", "detail": true}))
+    c.tool(
+        "act",
+        json!({"handle": handle_of(nav, label), "action": "click", "detail": true}),
+    )
 }
 
 #[test]
@@ -112,7 +142,10 @@ fn small_observe_diff_stays_a_diff() {
     let mut c = Client::start(false);
     let nav = c.tool("navigate", json!({"url": serve()}));
     c.tool("observe", json!({"mode": "full"}));
-    c.tool("act", json!({"handle": handle_of(&nav, "checkbox"), "action": "click"}));
+    c.tool(
+        "act",
+        json!({"handle": handle_of(&nav, "checkbox"), "action": "click"}),
+    );
     let d = c.tool("observe", json!({"mode": "diff"}));
     assert!(!d.contains(LABEL), "{d}");
 }
@@ -123,11 +156,23 @@ fn large_observe_diff_becomes_a_labelled_full_view() {
     let nav = c.tool("navigate", json!({"url": serve()}));
     c.tool("observe", json!({"mode": "full"}));
     // the rewrite fires 9s after the act returned, so only observe(diff) sees it
-    c.tool("act", json!({"handle": handle_of(&nav, "Later"), "action": "click"}));
-    c.tool("wait_for", json!({"text": "Brand new item 29", "timeout": 20}));
+    c.tool(
+        "act",
+        json!({"handle": handle_of(&nav, "Later"), "action": "click"}),
+    );
+    c.tool(
+        "wait_for",
+        json!({"text": "Brand new item 29", "timeout": 20}),
+    );
     let d = c.tool("observe", json!({"mode": "diff"}));
-    assert!(d.contains(LABEL) && d.contains("over 40%"), "observe diff: {d}");
-    assert!(d.contains("Brand new item 29"), "full view carries the content: {d}");
+    assert!(
+        d.contains(LABEL) && d.contains("over 40%"),
+        "observe diff: {d}"
+    );
+    assert!(
+        d.contains("Brand new item 29"),
+        "full view carries the content: {d}"
+    );
 }
 
 #[test]
@@ -135,7 +180,10 @@ fn large_act_effect_becomes_a_labelled_full_view() {
     let mut c = Client::start(false);
     let nav = c.tool("navigate", json!({"url": serve()}));
     let r = click(&mut c, &nav, "Rewrite");
-    assert!(r.contains(LABEL) && r.contains("over 40%"), "act effect: {r}");
+    assert!(
+        r.contains(LABEL) && r.contains("over 40%"),
+        "act effect: {r}"
+    );
 }
 
 #[test]
@@ -152,7 +200,10 @@ fn a_same_document_route_change_is_a_labelled_full_view() {
     let mut c = Client::start(false);
     let nav = c.tool("navigate", json!({"url": serve()}));
     let r = click(&mut c, &nav, "Route");
-    assert!(r.contains("routed (same document") && r.contains(LABEL) && r.contains("the URL changed"), "{r}");
+    assert!(
+        r.contains("routed (same document") && r.contains(LABEL) && r.contains("the URL changed"),
+        "{r}"
+    );
 }
 
 #[test]

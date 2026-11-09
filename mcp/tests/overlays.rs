@@ -18,7 +18,11 @@ fn serve() -> String {
             std::thread::spawn(move || {
                 let mut buf = [0u8; 8192];
                 let n = s.read(&mut buf).unwrap_or(0);
-                let first = String::from_utf8_lossy(&buf[..n]).lines().next().unwrap_or("").to_string();
+                let first = String::from_utf8_lossy(&buf[..n])
+                    .lines()
+                    .next()
+                    .unwrap_or("")
+                    .to_string();
                 let path = first.split(' ').nth(1).unwrap_or("/").to_string();
                 let body = page(&path);
                 let _ = write!(s, "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
@@ -40,34 +44,48 @@ fn page(path: &str) -> String {
     let hide = "this.closest('[role]').style.display='none'";
     match path {
         // 1: banner with an explicit Reject all next to Accept all
-        "/c1" => shell(&format!(r#"<div role="dialog" aria-label="Cookie banner"><p>We use cookies to improve your experience.</p>
+        "/c1" => shell(&format!(
+            r#"<div role="dialog" aria-label="Cookie banner"><p>We use cookies to improve your experience.</p>
 <button onclick="document.getElementById('st').textContent='accepted';{hide}">Accept all</button>
-<button onclick="{hide}">Reject all</button></div>"#)),
+<button onclick="{hide}">Reject all</button></div>"#
+        )),
         // 2: preference dialog: Manage / Accept / Necessary only
-        "/c2" => shell(&format!(r#"<div role="alertdialog" aria-label="Privacy choices"><p>Your privacy matters. We ask for consent to use cookies.</p>
+        "/c2" => shell(&format!(
+            r#"<div role="alertdialog" aria-label="Privacy choices"><p>Your privacy matters. We ask for consent to use cookies.</p>
 <button>Manage preferences</button><button onclick="document.getElementById('st').textContent='accepted';{hide}">I agree</button>
-<button onclick="{hide}">Use necessary only</button></div>"#)),
+<button onclick="{hide}">Use necessary only</button></div>"#
+        )),
         // 3: GDPR notice whose only exit is a link "Continue without accepting"
-        "/c3" => shell(&format!(r##"<div role="dialog" aria-label="GDPR notice"><p>GDPR consent: we would like to set cookies.</p>
+        "/c3" => shell(&format!(
+            r##"<div role="dialog" aria-label="GDPR notice"><p>GDPR consent: we would like to set cookies.</p>
 <button onclick="document.getElementById('st').textContent='accepted';{hide}">Accept</button>
-<a href="#" onclick="{hide};return false">Continue without accepting</a></div>"##)),
+<a href="#" onclick="{hide};return false">Continue without accepting</a></div>"##
+        )),
         // 4: modal trap: a big subscribe button, a tiny close glyph
-        "/m1" => shell(&format!(r#"<div role="dialog" aria-label="Join our newsletter"><p>Get 10% off your first order!</p>
+        "/m1" => shell(&format!(
+            r#"<div role="dialog" aria-label="Join our newsletter"><p>Get 10% off your first order!</p>
 <input aria-label="Email"><button onclick="document.getElementById('st').textContent='subscribed';{hide}">Subscribe and save</button>
-<button aria-label="x" onclick="{hide}">×</button></div>"#)),
+<button aria-label="x" onclick="{hide}">×</button></div>"#
+        )),
         // 5: CAPTCHA: must go to handoff, never clicked
-        "/bot" => shell(r#"<div role="dialog" aria-label="Security check"><p>Please verify you are human.</p>
+        "/bot" => shell(
+            r#"<div role="dialog" aria-label="Security check"><p>Please verify you are human.</p>
 <button onclick="document.getElementById('st').textContent='captcha-clicked'">I'm not a robot</button>
-<button onclick="document.getElementById('st').textContent='captcha-clicked'">Close</button></div>"#),
+<button onclick="document.getElementById('st').textContent='captcha-clicked'">Close</button></div>"#,
+        ),
         // 6: an app shell: one positioned, z-indexed, viewport-sized wrapper around ALL the content (every
         // React/MUI app has one). Nothing sits behind it, so it is not a modal.
-        "/wrap" => format!(r#"<!doctype html><html><head><title>App</title></head><body style="margin:0">
+        "/wrap" => format!(
+            r#"<!doctype html><html><head><title>App</title></head><body style="margin:0">
 <div style="position:relative;z-index:1;width:100%;height:100vh"><h1>Calendar</h1>
 <button id="a" onclick="document.getElementById('st').textContent='a-clicked'">Event A</button>
-<button>Event B</button><p id="st">idle</p></div></body></html>"#),
+<button>Event B</button><p id="st">idle</p></div></body></html>"#
+        ),
         // 7: a real trap with no dialog role: a fixed, z-indexed full-page layer over page controls.
-        "/fixed" => shell(r#"<div style="position:fixed;left:0;top:0;width:100%;height:100%;z-index:50;background:#fff">
-<p>Sign in to continue</p><button>Continue</button></div>"#),
+        "/fixed" => shell(
+            r#"<div style="position:fixed;left:0;top:0;width:100%;height:100%;z-index:50;background:#fff">
+<p>Sign in to continue</p><button>Continue</button></div>"#,
+        ),
         _ => "<html><body>x</body></html>".into(),
     }
 }
@@ -156,16 +174,21 @@ impl Drop for Client {
     }
 }
 
-
 fn handle_of(text: &str, needle: &str) -> String {
-    let line = text.lines().find(|l| l.contains(needle) && l.contains("[h")).unwrap_or_else(|| panic!("no {needle:?} in:\n{text}"));
+    let line = text
+        .lines()
+        .find(|l| l.contains(needle) && l.contains("[h"))
+        .unwrap_or_else(|| panic!("no {needle:?} in:\n{text}"));
     let s = line.find("[h").unwrap();
     let e = line[s..].find(']').unwrap() + s;
     line[s + 1..e].to_string()
 }
 
 fn overlay_handle(obs: &str) -> String {
-    let line = obs.lines().find(|l| l.contains("OVERLAY [h")).unwrap_or_else(|| panic!("no overlay flag in:\n{obs}"));
+    let line = obs
+        .lines()
+        .find(|l| l.contains("OVERLAY [h"))
+        .unwrap_or_else(|| panic!("no overlay flag in:\n{obs}"));
     let s = line.find("[h").unwrap();
     let e = line[s..].find(']').unwrap() + s;
     line[s + 1..e].to_string()
@@ -183,23 +206,47 @@ fn run(chrome: bool, env: &[(&str, &str)]) {
     ] {
         c.ok("navigate", json!({"url": format!("{base}{path}")}));
         let obs = c.ok("observe", json!({}));
-        assert!(obs.contains(&format!("{kind} OVERLAY [h")), "{path}: not flagged as {kind}:\n{obs}");
-        assert!(obs.contains(&format!("{control:?}")), "{path}: wrong dismiss control (want {control}):\n{obs}");
+        assert!(
+            obs.contains(&format!("{kind} OVERLAY [h")),
+            "{path}: not flagged as {kind}:\n{obs}"
+        );
+        assert!(
+            obs.contains(&format!("{control:?}")),
+            "{path}: wrong dismiss control (want {control}):\n{obs}"
+        );
         let h = overlay_handle(&obs);
         c.ok("act", json!({"handle": h, "action": "dismiss"}));
         let after = c.ok("observe", json!({}));
-        assert!(!after.contains("OVERLAY [h"), "{path}: still flagged after dismiss:\n{after}");
-        assert!(after.contains("idle"), "{path}: accept/subscribe was clicked instead:\n{after}");
+        assert!(
+            !after.contains("OVERLAY [h"),
+            "{path}: still flagged after dismiss:\n{after}"
+        );
+        assert!(
+            after.contains("idle"),
+            "{path}: accept/subscribe was clicked instead:\n{after}"
+        );
         eprintln!("L4 chrome={chrome} {path} ok");
     }
     // A CAPTCHA: flagged, dismiss refused, nothing clicked.
     c.ok("navigate", json!({"url": format!("{base}/bot")}));
     let obs = c.ok("observe", json!({}));
-    assert!(obs.contains("BOT-WALL") && obs.contains("handoff"), "bot wall not routed to handoff:\n{obs}");
-    let (err, txt) = c.call("act", json!({"handle": handle_of(&obs, "Close"), "action": "dismiss"}));
-    assert!(err && txt.contains("BOT-WALL"), "dismiss on a CAPTCHA must be refused: {err} {txt}");
+    assert!(
+        obs.contains("BOT-WALL") && obs.contains("handoff"),
+        "bot wall not routed to handoff:\n{obs}"
+    );
+    let (err, txt) = c.call(
+        "act",
+        json!({"handle": handle_of(&obs, "Close"), "action": "dismiss"}),
+    );
+    assert!(
+        err && txt.contains("BOT-WALL"),
+        "dismiss on a CAPTCHA must be refused: {err} {txt}"
+    );
     let after = c.ok("observe", json!({}));
-    assert!(after.contains("idle") && !after.contains("captcha-clicked"), "CAPTCHA fixture was clicked:\n{after}");
+    assert!(
+        after.contains("idle") && !after.contains("captcha-clicked"),
+        "CAPTCHA fixture was clicked:\n{after}"
+    );
 }
 
 /// RG.E1: the box heuristic named the app's own wrapper a MODAL OVERLAY ("no reject/close control: handoff"),
@@ -211,11 +258,17 @@ fn wrapper_run(env: &[(&str, &str)]) {
     c.ok("navigate", json!({"url": format!("{base}/wrap")}));
     for mode in ["viewport", "interactive", "full"] {
         let obs = c.ok("observe", json!({"mode": mode}));
-        assert!(!obs.contains("OVERLAY [h"), "wrapper flagged as an overlay in {mode}:\n{obs}");
+        assert!(
+            !obs.contains("OVERLAY [h"),
+            "wrapper flagged as an overlay in {mode}:\n{obs}"
+        );
     }
     c.ok("navigate", json!({"url": format!("{base}/fixed")}));
     let obs = c.ok("observe", json!({}));
-    assert!(obs.contains("MODAL OVERLAY [h"), "fixed full-page layer over page controls not flagged:\n{obs}");
+    assert!(
+        obs.contains("MODAL OVERLAY [h"),
+        "fixed full-page layer over page controls not flagged:\n{obs}"
+    );
 }
 
 #[test]

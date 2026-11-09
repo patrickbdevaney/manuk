@@ -1162,6 +1162,7 @@ impl Builder<'_> {
                     bbox: None,
                     z: 0,
                     hittable: true,
+                    clip: None,
                     state: state_of(r, o, &Role::Option),
                     children: vec![],
                 });
@@ -1201,6 +1202,7 @@ impl Builder<'_> {
             bbox,
             z,
             hittable,
+            clip: None,
             state,
             children,
         })

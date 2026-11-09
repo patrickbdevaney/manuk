@@ -571,6 +571,10 @@ pub struct A11yNode {
     /// a decorative overlay. Default `true`; only the live builder that holds the computed styles can
     /// set it, since `pointer-events` is a style, not a DOM attribute.
     pub hittable: bool,
+    /// The intersection of every clipping ancestor's padding box (`overflow` other than `visible`),
+    /// when there is one. Content outside it is not painted, so a pointer cannot land on it: a
+    /// carousel's off-screen slides must not occlude the header they overflow into. `None` = unclipped.
+    pub clip: Option<Rect>,
     /// Interaction state — checked, expanded, selected, disabled, value. **This is what lets an
     /// agent confirm its own action.** See [`A11yState`].
     pub state: A11yState,
@@ -983,6 +987,14 @@ impl A11yNode {
             .find(|n| n.role.matches(role) && n.name.to_ascii_lowercase().contains(needle.as_str()))
     }
 
+    /// Record each node's overflow clip (see [`A11yNode::clip`]) so hit-testing ignores clipped-away area.
+    pub fn set_clips(&mut self, clips: &HashMap<NodeId, Rect>) {
+        self.clip = clips.get(&self.node).copied();
+        for c in &mut self.children {
+            c.set_clips(clips);
+        }
+    }
+
     /// The deepest node whose `bbox` contains `(x, y)` — hit-testing for click-by-
     /// coordinate. Deepest wins, since a button inside a `main` should beat the `main`.
     ///
@@ -1012,6 +1024,12 @@ impl A11yNode {
     /// descendant on the same layer. Area only ever compares *siblings' subtrees*, which is the
     /// only place it was ever the right question.
     pub fn hit_test(&self, x: f32, y: f32) -> Option<&A11yNode> {
+        self.hit_test_clipped(x, y, true)
+    }
+
+    /// [`A11yNode::hit_test`], with `clipped = false` ignoring every overflow clip: the page as it
+    /// would be once a scroll container brings a clipped target into view.
+    fn hit_test_clipped(&self, x: f32, y: f32, clipped: bool) -> Option<&A11yNode> {
         fn area(n: &A11yNode) -> f32 {
             n.bbox.map_or(f32::MAX, |r| r.width * r.height)
         }
@@ -1024,10 +1042,10 @@ impl A11yNode {
                 a
             }
         }
-        fn go<'a>(n: &'a A11yNode, x: f32, y: f32) -> Option<&'a A11yNode> {
+        fn go<'a>(n: &'a A11yNode, x: f32, y: f32, clipped: bool) -> Option<&'a A11yNode> {
             let mut best: Option<&A11yNode> = None;
             for c in &n.children {
-                if let Some(cand) = go(c, x, y) {
+                if let Some(cand) = go(c, x, y, clipped) {
                     best = Some(match best {
                         None => cand,
                         Some(b) => across(b, cand),
@@ -1036,9 +1054,9 @@ impl A11yNode {
             }
             // `pointer-events: none` — transparent to hit-testing; the point passes through to the
             // element behind, so a decorative overlay never steals an agent's coordinate click.
-            let hits = n.hittable
-                && n.bbox
-                    .is_some_and(|b| x >= b.x && x < b.right() && y >= b.y && y < b.bottom());
+            let inside = |b: Rect| x >= b.x && x < b.right() && y >= b.y && y < b.bottom();
+            let hits =
+                n.hittable && n.bbox.is_some_and(inside) && (!clipped || n.clip.is_none_or(inside));
             match (best, hits) {
                 // The descendant wins unless this node is on a HIGHER layer — a positioned ancestor
                 // painted above its own overflowing content is the one case where it should not.
@@ -1048,7 +1066,7 @@ impl A11yNode {
                 (None, false) => None,
             }
         }
-        go(self, x, y)
+        go(self, x, y, clipped)
     }
 
     /// **Verify a click point against the hit-test before an agent acts on it.** Called on the
@@ -1071,6 +1089,16 @@ impl A11yNode {
         };
         let Some(bbox) = node.bbox else {
             return Landing::Unreachable;
+        };
+        // What a pointer can reach is the box clipped by its overflow ancestors. A target WHOLLY
+        // clipped away (a listbox option scrolled out of its list) is not refused: a click scrolls
+        // its container to it first (Playwright's scrollIntoViewIfNeeded), so it is judged on its
+        // own box against the unclipped page, as before clipping existed. RG.S1.a measured the
+        // refusal: opendining-4's time slots and dashdish's carousel tiles read UNREACHABLE.
+        let (bbox, clipped) = match node.clip.map(|c| bbox.intersection(&c)) {
+            Some(Some(r)) => (r, true),
+            Some(None) => (bbox, false),
+            None => (bbox, true),
         };
         let aim = match viewport {
             Some(v) => match bbox.intersection(&v) {
@@ -1095,7 +1123,7 @@ impl A11yNode {
         let mut subtree = Vec::new();
         collect_ids(node, &mut subtree);
         let try_point = |p: (f32, f32)| {
-            self.hit_test(p.0, p.1)
+            self.hit_test_clipped(p.0, p.1, clipped)
                 .is_some_and(|h| subtree.contains(&h.node))
         };
 
@@ -1127,7 +1155,7 @@ impl A11yNode {
                 return Landing::Clear { point: p };
             }
         }
-        match self.hit_test(centre.0, centre.1) {
+        match self.hit_test_clipped(centre.0, centre.1, clipped) {
             Some(h) => Landing::Obstructed {
                 by: h.node,
                 point: centre,
@@ -3061,6 +3089,7 @@ pub fn build_tree_generated(
         bbox: None,
         z: 0,
         hittable: true,
+        clip: None,
         state: A11yState::default(),
         children,
     }
@@ -3274,6 +3303,7 @@ fn build_children(
                     z: z_index.get(&child).copied().unwrap_or(0),
                     // `pointer-events: none` — the node is announced but is not a hit target.
                     hittable: !non_hittable.contains(&child),
+                    clip: None,
                     state,
                     children: build_children(
                         dom,
@@ -3315,6 +3345,7 @@ mod tests {
             bbox: None,
             z: 0,
             hittable: true,
+            clip: None,
             state: A11yState::default(),
             children: vec![],
         }
@@ -3349,6 +3380,7 @@ mod tests {
             }),
             z: 0,
             hittable: true,
+            clip: None,
             state: A11yState::default(),
             children: vec![],
         };
@@ -3364,6 +3396,7 @@ mod tests {
             }),
             z: 0,
             hittable: true,
+            clip: None,
             state: A11yState::default(),
             children: vec![link],
         };
@@ -3374,6 +3407,7 @@ mod tests {
             bbox: None,
             z: 0,
             hittable: true,
+            clip: None,
             state: A11yState::default(),
             children: vec![li],
         };
@@ -3402,6 +3436,7 @@ mod tests {
             }),
             z: 0,
             hittable: true,
+            clip: None,
             state: A11yState::default(),
             children: vec![],
         };
@@ -3417,6 +3452,7 @@ mod tests {
             }),
             z: 10,
             hittable: true,
+            clip: None,
             state: A11yState::default(),
             children: vec![],
         };
@@ -3427,6 +3463,7 @@ mod tests {
             bbox: None,
             z: 0,
             hittable: true,
+            clip: None,
             state: A11yState::default(),
             children: vec![button, overlay],
         };
@@ -3451,6 +3488,7 @@ mod tests {
             }),
             z: 0,
             hittable: true,
+            clip: None,
             state: A11yState::default(),
             children: vec![],
         };
@@ -3466,6 +3504,7 @@ mod tests {
             }),
             z: 10,
             hittable: false, // pointer-events: none
+            clip: None,
             state: A11yState::default(),
             children: vec![],
         };
@@ -3476,6 +3515,7 @@ mod tests {
             bbox: None,
             z: 0,
             hittable: true,
+            clip: None,
             state: A11yState::default(),
             children: vec![button, ghost],
         };
@@ -3492,6 +3532,7 @@ mod tests {
             bbox: None,
             z: 0,
             hittable: true,
+            clip: None,
             state: A11yState::default(),
             children: vec![leaf(Role::Link, "Sign in"), leaf(Role::Button, "Menu")],
         };
@@ -3502,6 +3543,7 @@ mod tests {
             bbox: None,
             z: 0,
             hittable: true,
+            clip: None,
             state: A11yState::default(),
             children: vec![leaf(Role::Button, "Menu"), leaf(Role::Button, "Sign out")],
         };
@@ -3782,6 +3824,7 @@ mod tests {
             }),
             z: 0,
             hittable: true,
+            clip: None,
             state: Default::default(),
             children: vec![],
         };
@@ -3792,6 +3835,7 @@ mod tests {
             bbox: None,
             z: 0,
             hittable: true,
+            clip: None,
             state: Default::default(),
             children: vec![target],
         };

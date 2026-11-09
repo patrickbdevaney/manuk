@@ -188,6 +188,7 @@ mod tests {
             }),
             z: 0,
             hittable: true,
+            clip: None,
             state: Default::default(),
             children,
         }

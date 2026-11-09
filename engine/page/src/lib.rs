@@ -11209,7 +11209,7 @@ impl Page {
         // not see it by any path, and every pseudo was missing from `accessible_name`. Every other
         // renderer subsystem gets its semantic exposure free from the shared `node_rects` producer,
         // but that producer carries GEOMETRY: a fix that adds TEXT has to be threaded deliberately.
-        manuk_a11y::build_tree_generated(
+        let mut tree = manuk_a11y::build_tree_generated(
             &self.dom,
             &rects,
             &self.z_index_map(),
@@ -11225,7 +11225,25 @@ impl Page {
                 &manuk_layout::generated_alt_text(&self.dom, &self.styles),
                 &manuk_a11y::name_styles(&self.dom, &self.styles),
             ),
-        )
+        );
+        tree.set_clips(
+            &self
+                .clip_map_for(true)
+                .into_iter()
+                .map(|(n, r)| {
+                    (
+                        n,
+                        manuk_a11y::Rect {
+                            x: r.x,
+                            y: r.y,
+                            width: r.width,
+                            height: r.height,
+                        },
+                    )
+                })
+                .collect(),
+        );
+        tree
     }
 
     /// The accessibility tree with `state.focused` filled in for `focused`.
@@ -11251,7 +11269,7 @@ impl Page {
                 )
             })
             .collect();
-        manuk_a11y::build_tree_generated_with_focus(
+        let mut tree = manuk_a11y::build_tree_generated_with_focus(
             &self.dom,
             &rects,
             &self.z_index_map(),
@@ -11268,7 +11286,25 @@ impl Page {
                 &manuk_layout::generated_alt_text(&self.dom, &self.styles),
                 &manuk_a11y::name_styles(&self.dom, &self.styles),
             ),
-        )
+        );
+        tree.set_clips(
+            &self
+                .clip_map_for(true)
+                .into_iter()
+                .map(|(n, r)| {
+                    (
+                        n,
+                        manuk_a11y::Rect {
+                            x: r.x,
+                            y: r.y,
+                            width: r.width,
+                            height: r.height,
+                        },
+                    )
+                })
+                .collect(),
+        );
+        tree
     }
 
     /// Mutable access to the DOM (so a caller/JS binding can mutate the tree, then
@@ -12117,6 +12153,12 @@ impl Page {
     /// absent (unclipped). An element's own box is clipped by its ancestors, not itself; its
     /// descendants additionally get its padding box.
     fn clip_map(&self) -> HashMap<manuk_dom::NodeId, manuk_layout::Rect> {
+        self.clip_map_for(false)
+    }
+
+    /// `for_hit`: `html`/`body` overflow propagates to the viewport (it scrolls, it does not clip), so
+    /// the pointer clip skips them.
+    fn clip_map_for(&self, for_hit: bool) -> HashMap<manuk_dom::NodeId, manuk_layout::Rect> {
         use manuk_css::Overflow;
         let rects = self.root_box.node_rects(&self.dom);
         let mut map = HashMap::new();
@@ -12128,22 +12170,31 @@ impl Page {
             }
             // If this node clips, its descendants are additionally bounded by its padding box.
             let child_clip = match self.styles.get(&node) {
-                Some(s) if s.overflow != Overflow::Visible => rects
-                    .get(&node)
-                    .map(|br| {
-                        let bw = s.border_width;
-                        let pad = manuk_layout::Rect {
-                            x: br.x + bw.left,
-                            y: br.y + bw.top,
-                            width: (br.width - bw.left - bw.right).max(0.0),
-                            height: (br.height - bw.top - bw.bottom).max(0.0),
-                        };
-                        match clip {
-                            Some(c) => c.intersect(&pad),
-                            None => pad,
-                        }
-                    })
-                    .or(clip),
+                Some(s)
+                    if s.overflow != Overflow::Visible
+                        && !(for_hit
+                            && self
+                                .dom
+                                .element(node)
+                                .is_some_and(|e| e.name == "html" || e.name == "body")) =>
+                {
+                    rects
+                        .get(&node)
+                        .map(|br| {
+                            let bw = s.border_width;
+                            let pad = manuk_layout::Rect {
+                                x: br.x + bw.left,
+                                y: br.y + bw.top,
+                                width: (br.width - bw.left - bw.right).max(0.0),
+                                height: (br.height - bw.top - bw.bottom).max(0.0),
+                            };
+                            match clip {
+                                Some(c) => c.intersect(&pad),
+                                None => pad,
+                            }
+                        })
+                        .or(clip)
+                }
                 _ => clip,
             };
             for c in self.dom.children(node) {

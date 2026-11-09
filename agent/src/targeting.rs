@@ -71,6 +71,7 @@ fn prune_node(node: &A11yNode, kw: &[String]) -> Option<A11yNode> {
             bbox: node.bbox,
             z: node.z,
             hittable: node.hittable,
+            clip: node.clip,
             state: Default::default(),
             children: pruned_children,
         })
@@ -492,6 +493,7 @@ mod tests {
             bbox,
             z: 0,
             hittable: true,
+            clip: None,
             state: Default::default(),
             children,
         }

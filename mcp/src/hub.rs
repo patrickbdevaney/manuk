@@ -554,7 +554,9 @@ impl<B: Backend> Hub<B> {
             Some("new") => self.fresh_id(),
             Some(h) if !h.contains(':') && self.pages.contains_key(h) => {
                 // A bare page id from this process: the live page is unambiguous.
-                lenient = Some(format!("note: page handle {h:?} had no seq; used the live page"));
+                lenient = Some(format!(
+                    "note: page handle {h:?} had no seq; used the live page"
+                ));
                 h.to_string()
             }
             Some(h) => {

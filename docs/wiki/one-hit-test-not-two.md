@@ -56,3 +56,17 @@ t1457 and t1465 both recorded "not measurable" on that basis, and the agent's ow
 prefix. **A zero from an instrument is a claim about the instrument until the spelling is checked.**
 
 See also [[a-banner-wins-the-click]], [[two-implementations-of-one-rule]].
+
+## Overflow clipping (RG.S1.a)
+
+`A11yNode::hit_test`/`landing` take a per-node `clip` (the intersection of every `overflow != visible`
+ancestor's padding box, `Page::clip_map_for(true)`, which skips `html`/`body` because their overflow
+is the viewport's). Content a clip removes is not painted, so it cannot occlude: a carousel's
+positioned `overflow:hidden` track whose slides overflow it no longer reads OCCLUDED over the header
+buttons above it (Dashdish: 6 filter pills and every "See all"). Gate:
+`agent/tests/g_overflow_clipped_content_does_not_occlude.rs`. A target WHOLLY outside its own clip
+(an option scrolled out of its listbox) is not refused: a click scrolls the container to it first, as
+Playwright does, so it is judged unclipped. The first cut refused it and opendining-4 went 0 -> 6-16
+UNREACHABLE refusals per run. Known remaining gap: nested
+`z-index:auto` positioning still inflates the layer by depth (`parent + 1`) where Chrome paints
+those in tree order within one stacking context.
