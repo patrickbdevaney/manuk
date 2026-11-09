@@ -1,0 +1,132 @@
+diff --git a/engine/css/src/lib.rs b/engine/css/src/lib.rs
+index 52979bee..bc4458a4 100644
+--- a/engine/css/src/lib.rs
++++ b/engine/css/src/lib.rs
+@@ -2751,6 +2751,21 @@ fn element_sibling_position(dom: &Dom, node: NodeId) -> (usize, usize) {
+ /// implementations can reach is how they drift apart in the first place.
+ pub const TOP_LAYER_Z: i32 = 1_000_000_000;
+ 
++fn auto_layer(parent_layer: i32) -> i32 {
++    // Layers are `n * 1024 + 1` for an explicit z-index (a context base); the root band is 0. Anything
++    // above that inside one context is the base plus a small offset, which an auto box must not extend.
++    // The top layer sits far above every explicit z and keeps stacking on its parent as before.
++    if parent_layer >= TOP_LAYER_Z || parent_layer == 0 {
++        return parent_layer.saturating_add(1);
++    }
++    // Layer 1 is both an auto box at the root and an explicit `z-index: 0` base: its auto children stay at 1.
++    if parent_layer == 1 {
++        return 1;
++    }
++    let base = parent_layer - (parent_layer - 1).rem_euclid(1024);
++    base.saturating_add(1)
++}
++
+ /// **The painting layer one node adds to its parent's, from CSS 2.1 Appendix E.**
+ ///
+ /// ⭐⭐⭐ **THIS RULE HAD TWO IMPLEMENTATIONS AND THEY DISAGREED.** `Page::z_index_map` (which feeds
+@@ -2768,10 +2783,17 @@ pub const TOP_LAYER_Z: i32 = 1_000_000_000;
+ /// |---|---|
+ /// | not positioned | its parent's — it paints in the same in-flow band |
+ /// | positioned, explicit `z-index: n` | `n * 1024 + 1` |
+-/// | positioned, `z-index: auto` | `parent + 1` — above in-flow content, below any explicit z |
++/// | positioned, `z-index: auto` | the enclosing stacking context's base `+ 1` — above in-flow content, below any explicit z |
+ ///
+-/// The `1024` scale means 1023 levels of nested `auto` positioning still sit below `z-index: 1`,
+-/// and the `+ 1` means an explicit `z-index: 0` — also step 8 — still clears in-flow content.
++/// The `1024` scale keeps `auto` positioning below `z-index: 1`, and the `+ 1` means an explicit
++/// `z-index: 0` — also step 8 — still clears in-flow content.
++///
++/// ⭐ **`auto` is FLAT, not cumulative (RG.E2).** A positioned `z-index: auto` box creates no
++/// stacking context, so its positioned descendants join the SAME step-8 layer as their ancestors'
++/// later siblings, in tree order. `parent + 1` stacked one level per nested `position: relative`
++/// wrapper, so a MUI `<TextField>` (two relative wrappers deep) outranked the absolutely positioned
++/// Search button that follows it, and staynb's Search stays refused as `OCCLUDED by textbox "Who"`
++/// where Chrome's `elementFromPoint` returns the button.
+ ///
+ /// ⚠ Callers own the **top layer** (`showModal()`, an open popover): that is a DOM-attribute fact,
+ /// not a style one, and it overrides whatever this returns.
+@@ -2779,7 +2801,10 @@ pub fn stacking_layer(style: Option<&ComputedStyle>, parent_layer: i32) -> i32 {
+     match style {
+         Some(s) if s.position != Position::Static => match s.z_index {
+             Some(n) => n.saturating_mul(1024).saturating_add(1),
+-            None => parent_layer.saturating_add(1),
++            None if std::env::var_os("MANUK_STACK_MUTATE").is_some() => {
++                parent_layer.saturating_add(1)
++            }
++            None => auto_layer(parent_layer),
+         },
+         _ => parent_layer,
+     }
+@@ -11013,3 +11038,27 @@ pub fn tag_has_native_appearance(tag: &str) -> bool {
+         "button" | "input" | "select" | "textarea" | "meter" | "progress"
+     )
+ }
++
++#[cfg(test)]
++mod stacking_flat_tests {
++    use super::*;
++    fn pos(z: Option<i32>) -> ComputedStyle {
++        ComputedStyle {
++            position: Position::Relative,
++            z_index: z,
++            ..ComputedStyle::initial()
++        }
++    }
++    #[test]
++    fn nested_auto_positioning_does_not_stack() {
++        let a = stacking_layer(Some(&pos(None)), 0);
++        let b = stacking_layer(Some(&pos(None)), a);
++        let c = stacking_layer(Some(&pos(None)), b);
++        assert_eq!((a, b, c), (1, 1, 1));
++        let z2 = stacking_layer(Some(&pos(Some(2))), c);
++        let n = stacking_layer(Some(&pos(None)), z2);
++        assert_eq!((z2, n), (2049, 2050));
++        let neg = stacking_layer(Some(&pos(Some(-1))), 1);
++        assert_eq!(stacking_layer(Some(&pos(None)), neg), neg + 1);
++    }
++}
+diff --git a/engine/page/tests/g_rg_e2_flat_auto_stacking.rs b/engine/page/tests/g_rg_e2_flat_auto_stacking.rs
+new file mode 100644
+index 00000000..1db1d882
+--- /dev/null
++++ b/engine/page/tests/g_rg_e2_flat_auto_stacking.rs
+@@ -0,0 +1,39 @@
++//! RG.E2 gate (chrome_ver=145.0.7632.116): `z-index: auto` positioning is FLAT (not parent+1 per nested
++//! relative wrapper). staynb's Search button (absolute, after a MUI field two relative
++//! wrappers deep) was refused `OCCLUDED by textbox "Who"`; Chrome's elementFromPoint returns the button.
++//! RED under `MANUK_STACK_MUTATE=1` (the old cumulative `parent + 1`). Its own file: one SpiderMonkey
++//! runtime per test process.
++
++use manuk_text::FontContext;
++
++/// RG.E2: a MUI search bar. The Who field is two `position:relative` wrappers deep and the Search
++/// button is `position:absolute`, z-index auto, AFTER it, smaller. Chrome: the button is on top.
++/// With `parent + 1` stacking the nested field outranked it and staynb's Search was `OCCLUDED`.
++const SEARCHBAR: &str = r##"<!doctype html><html><head><style>
++body{margin:0}
++.box{position:relative;width:300px;height:60px}
++.tf{position:relative;width:300px;height:60px;overflow:hidden}
++.base{position:relative;width:300px;height:60px}
++.inp{display:block;width:268px;height:50px}
++.go{position:absolute;right:0;top:5px;width:50px;height:50px}
++</style></head><body>
++<div class="box"><div class="tf"><div class="base"><input class="inp" id="who"></div></div><button class="go" id="go">S</button></div>
++<div id="out">-</div>
++<script>
++var r=document.getElementById('go').getBoundingClientRect();
++var e=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);
++document.getElementById('out').textContent=e?(e.id||e.tagName.toLowerCase()):'null';
++</script></body></html>"##;
++
++#[test]
++fn a_later_positioned_sibling_beats_a_nested_positioned_field() {
++    let fonts = FontContext::new();
++    let page = manuk_page::Page::load(SEARCHBAR, "https://searchbar.test/", &fonts, 800.0);
++    let root = page.dom().root();
++    let out = manuk_css::query_selector_all(page.dom(), root, "#out")[0];
++    assert_eq!(
++        page.dom().text_content(out),
++        "go",
++        "the Search button must be topmost, as in Chrome 145"
++    );
++}
