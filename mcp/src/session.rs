@@ -222,6 +222,77 @@ fn top_passages(text: &str, query: &str) -> Option<(String, usize, usize)> {
     Some((out, hits, blocks.len()))
 }
 
+/// RG.E1.b: text a reader sees that lives only in an accessible name (a star widget's
+/// `aria-label="Rating: 3.74"` on an empty box), which the painted-text extraction cannot carry. A
+/// childless `generic` whose name is not in `text` is woven back in at its document position: after the
+/// text its nearest named ancestor shows before it (the ancestor's name embeds the label in reading
+/// order), else after the last named node found before it. `MANUK_EXTRACT_MUTATE=off` skips it (the
+/// gate's mutant).
+fn weave_label_only(text: &str, tree: &A11yNode) -> String {
+    if std::env::var("MANUK_EXTRACT_MUTATE").is_ok_and(|v| v == "off") {
+        return text.to_string();
+    }
+    fn walk<'a>(
+        n: &'a A11yNode,
+        anc: Option<&'a str>,
+        text: &str,
+        cursor: &mut usize,
+        ins: &mut Vec<(usize, &'a str)>,
+    ) {
+        let name = n.name.trim();
+        let mut next_anc = anc;
+        if !name.is_empty() {
+            if let Some(i) = text[*cursor..].find(name) {
+                *cursor += i + name.len();
+            } else if matches!(n.role, Role::Generic) && n.children.is_empty() {
+                if let Some(a) = anc.filter(|a| a.contains(name)) {
+                    let i = a.find(name).unwrap_or(0);
+                    let pre = a[..i].trim();
+                    let post = a[i + name.len()..].trim();
+                    if let Some(k) = (!pre.is_empty())
+                        .then(|| text[*cursor..].find(pre))
+                        .flatten()
+                    {
+                        *cursor += k + pre.len();
+                    } else if let Some(k) = (!post.is_empty())
+                        .then(|| {
+                            let head: String = post.chars().take(24).collect();
+                            text[*cursor..].find(head.as_str())
+                        })
+                        .flatten()
+                    {
+                        *cursor += k;
+                    }
+                }
+                ins.push((*cursor, name));
+            } else {
+                next_anc = Some(name);
+            }
+        }
+        for c in &n.children {
+            walk(c, next_anc, text, cursor, ins);
+        }
+    }
+    let mut cursor = 0;
+    let mut ins: Vec<(usize, &str)> = Vec::new();
+    walk(tree, None, text, &mut cursor, &mut ins);
+    let mut out = String::with_capacity(text.len());
+    let mut at = 0;
+    for (pos, name) in ins {
+        out.push_str(&text[at..pos]);
+        at = pos;
+        if !out.is_empty() && !out.ends_with(char::is_whitespace) {
+            out.push(' ');
+        }
+        out.push_str(name);
+        if !text[at..].starts_with(char::is_whitespace) {
+            out.push(' ');
+        }
+    }
+    out.push_str(&text[at..]);
+    out
+}
+
 fn clip(s: &str) -> String {
     let s = s.split_whitespace().collect::<Vec<_>>().join(" ");
     if s.chars().count() > NAME_CLIP {
@@ -2453,7 +2524,7 @@ impl<B: Backend> Session<B> {
         let root = scoped.unwrap_or(&tree);
         let out = match format {
             "text" => match scoped {
-                None => self.page_text()?,
+                None => weave_label_only(&self.page_text()?, &tree),
                 Some(s) => s
                     .iter()
                     .filter(|n| !n.name.is_empty())
@@ -2477,7 +2548,7 @@ impl<B: Backend> Session<B> {
                 }
                 match scoped {
                     None => {
-                        md.push_str(&self.page_text()?);
+                        md.push_str(&weave_label_only(&self.page_text()?, &tree));
                         let links = self.links()?;
                         if !links.is_empty() {
                             md.push_str("\n\nLinks:\n");
