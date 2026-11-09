@@ -624,6 +624,20 @@ impl<B: Backend> Session<B> {
                 .collect(),
             _ => Vec::new(),
         };
+        // Nothing has the full key: the container's label moved (a list retitled "for 2 people" ->
+        // "for 3 people"). Fall back to role and name alone, and bind only when exactly one node has them.
+        let loose: Vec<&A11yNode> = match &key {
+            Some(k) if hits.is_empty() && std::env::var_os("MANUK_REMOUNT_MUTATE").is_none() => tree
+                .iter()
+                .filter(|n| worth(n))
+                .filter(|n| {
+                    let e = self.ent(n);
+                    k.starts_with(&format!("{}|{}|", e.role, e.name))
+                })
+                .collect(),
+            _ => Vec::new(),
+        };
+        let hits = if hits.is_empty() { loose } else { hits };
         match hits.as_slice() {
             [n] => {
                 self.rev.insert(h, n.node);

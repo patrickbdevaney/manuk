@@ -1,0 +1,17 @@
+<!doctype html><html><head><title>Rebind</title></head><body>
+<button id="more">3 people</button>
+<div id="app"></div>
+<h2 id="out">idle</h2>
+<script>
+function render(n) {
+  var html = '<ul aria-label="Slots for ' + n + ' people">';
+  ['1:00 PM','2:00 PM','3:00 PM'].forEach(function (t) { html += '<li><a href="#" data-t="' + t + '">Book a slot at ' + t + '</a></li>'; });
+  document.getElementById('app').innerHTML = html + '</ul>';
+}
+render(2);
+document.getElementById('app').addEventListener('click', function (e) {
+  var t = e.target.getAttribute && e.target.getAttribute('data-t');
+  if (t) { e.preventDefault(); document.getElementById('out').textContent = 'booked ' + t; }
+});
+document.getElementById('more').addEventListener('click', function () { render(3); });
+</script></body></html>
