@@ -1125,7 +1125,17 @@ impl A11yNode {
                 // the horizontal band** — a box parked off to the side comes no closer for any
                 // `dy`, and saying otherwise would send an agent scrolling forever.
                 None if bbox.x < v.right() && v.x < bbox.right() => {
-                    return Landing::OffScreen { dy: bbox.y - v.y }
+                    // Centre a target that fits the viewport (Playwright's scrollIntoViewIfNeeded
+                    // does): top-aligned, it lands
+                    // under a sticky header, which is how staynb's Reserve stay read OCCLUDED or
+                    // clicked the header's guest picker instead (RG.E2.b). A box taller than the
+                    // viewport keeps the top edge.
+                    let dy = if bbox.height < v.height {
+                        (bbox.y + bbox.height / 2.0) - (v.y + v.height / 2.0)
+                    } else {
+                        bbox.y - v.y
+                    };
+                    return Landing::OffScreen { dy };
                 }
                 None => return Landing::Unreachable,
             },

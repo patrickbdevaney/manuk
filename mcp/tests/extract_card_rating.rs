@@ -9,7 +9,6 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
 use serde_json::{json, Value};
 
-
 const NAMES: [(&str, &str, &str); 4] = [
     ("Alpha Grill", "4.51", "20"),
     ("Beta Bistro", "3.74", "22"),
@@ -43,7 +42,6 @@ fn serve() -> String {
     });
     format!("http://{addr}")
 }
-
 
 struct Client {
     child: Child,
@@ -128,7 +126,6 @@ impl Drop for Client {
         let _ = self.child.kill();
     }
 }
-
 
 fn run(env: &[(&str, &str)]) -> Vec<String> {
     let base = serve();

@@ -9,12 +9,13 @@
 //! `AgentBrowser::activate` — the engine arm of manuk-mcp — never does, so the tab stays on the
 //! home page and the act reports `Inert` / "url: unchanged".
 //!
-//! This gate pins both halves on a hermetic React-style page (one delegated listener on `document`,
-//! the card is a plain `<div>`, the target an inner `<img>`):
-//!   1. the handler is called with the inner element as `target`           (the part that works)
-//!   2. the navigation it requested is pending on the page after the click  (the part nobody follows)
-//! Mutant: the same page with the handler never attached must turn (1) red, so a click that skips the
-//! handler cannot pass.
+//! RG.E2.b closed the second half: `AgentBrowser::activate` now performs the script navigation (staynb's
+//! Reserve stay read NO EFFECT for the same reason). This gate pins both halves on a hermetic React-style
+//! page (one delegated listener on `document`, the card is a plain `<div>`, the target an inner `<img>`):
+//!   1. the handler is called with the inner element as `target`  (the handler names its target page after `e.target`: `..._IMG.html`)
+//!   2. the navigation it requested is performed by the click      (the browser is on the target page)
+//! Mutant: the same page with the handler never attached must stay on the card page, so a click that
+//! skips the handler cannot pass.
 
 use manuk_agent::AgentBrowser;
 
@@ -24,23 +25,29 @@ fn page(attach: bool) -> String {
         r##"<!doctype html><html><head><meta charset=utf-8><title>Shop</title><style>
 body {{ margin: 0 }} .card {{ width: 200px; height: 120px }} img {{ width: 200px; height: 120px; display: block }}
 </style></head><body>
-<div class="card" data-href="/store/42"><img alt="Image Papa Johns Pizza" width="200" height="120"></div>
+<div class="card" data-href="g_p0a_card_target_"><img alt="Image Papa Johns Pizza" width="200" height="120"></div>
 <pre id="log"></pre>
 <script>
 if ({attach}) document.addEventListener('click', function (e) {{
   var c = e.target.closest ? e.target.closest('[data-href]') : null;
   document.getElementById('log').textContent = 'handled target=' + e.target.tagName;
-  if (c) location.href = c.getAttribute('data-href');
+  if (c) location.href = c.getAttribute('data-href') + e.target.tagName + '.html';
 }});
 </script></body></html>"##
     )
 }
 
-/// (handler log text, script navigation pending after the click)
-fn click_card(attach: bool) -> (String, Option<String>) {
+/// The URL the browser is on after clicking the card.
+fn click_card(attach: bool) -> String {
     let rt = tokio::runtime::Runtime::new().unwrap();
-    let path = std::env::temp_dir().join(format!("g_p0a_card_{attach}.html"));
+    let dir = std::env::temp_dir();
+    let path = dir.join(format!("g_p0a_card_{attach}.html"));
     std::fs::write(&path, page(attach)).unwrap();
+    std::fs::write(
+        dir.join("g_p0a_card_target_IMG.html"),
+        "<html><body><h1>Store</h1></body></html>",
+    )
+    .unwrap();
     let mut b = AgentBrowser::new(1024, 768);
     rt.block_on(async {
         b.navigate(&format!("file://{}", path.display()))
@@ -51,30 +58,22 @@ fn click_card(attach: bool) -> (String, Option<String>) {
             .expect("the card image resolves");
         b.activate(node).await.expect("click");
     });
-    let (log, _) = b.probe_eval(
-        "(function(){var p=document.createElement('pre');p.id='__probe';document.body.appendChild(p);p.textContent=document.getElementById('log').textContent;})()",
-    );
-    (log, b.probe_take_script_navigation())
+    b.current_url().unwrap().to_string()
 }
 
 // One #[test]: SpiderMonkey is one runtime per process thread; two parallel tests segfault.
 #[test]
-fn a_click_on_a_card_image_reaches_the_pages_handler_and_leaves_its_navigation_pending() {
-    let (log, nav) = click_card(true);
-    assert_eq!(
-        log, "handled target=IMG",
-        "the page's own listener must run with the inner element as target"
-    );
+fn a_click_on_a_card_image_reaches_the_pages_handler_and_follows_its_navigation() {
+    let url = click_card(true);
     assert!(
-        nav.as_deref().is_some_and(|u| u.ends_with("/store/42")),
-        "the handler asked for /store/42; got {nav:?}"
+        url.ends_with("g_p0a_card_target_IMG.html"),
+        "the handler (target=IMG) asked for the target page and the click must go there; on {url}"
     );
 
-    // MUTANT: the handler never attached (a click that skips it) must read as red.
-    let (log, nav) = click_card(false);
-    assert_ne!(
-        log, "handled target=IMG",
-        "no handler attached: the probe must NOT see a call"
+    // MUTANT: the handler never attached (a click that skips it) must stay on the card page.
+    let url = click_card(false);
+    assert!(
+        url.ends_with("g_p0a_card_false.html"),
+        "no handler attached: the click must not navigate; on {url}"
     );
-    assert_eq!(nav, None);
 }

@@ -1562,6 +1562,15 @@ impl AgentBrowser {
             return self.submit_form(form).await;
         }
 
+        // A handler that ends in `location.href = url` (Next's router falls back to it when it
+        // cannot apply the RSC payload in place) is a navigation the engine records and the host
+        // must perform; only the GUI shell did, so staynb's "Reserve stay" read NO EFFECT here
+        // while Chrome opened /book (RG.E2.b). The engine already refuses same-document targets.
+        if let Some(url) = self.page.as_ref().and_then(|p| p.take_script_navigation()) {
+            self.navigate(&url).await?;
+            return Ok(Activation::Navigated(url));
+        }
+
         if proceed {
             if let Some(h) = href {
                 let page = self.page.as_ref().expect("checked above");

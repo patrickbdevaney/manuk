@@ -2955,6 +2955,7 @@
   - L51 · ⚠ The area name was wrong for two ticks
   - L60 · Overflow clipping (RG.S1.a)
   - L74 · RG.S2: z-index: auto is flat, and "positioned" is a fact the hit-test needs
+  - L78 · RG.E2.b: an act scrolls a target to the middle of the viewport, not under the sticky header
 
 ## One phase short, and the price of the next one
 `docs/wiki/one-phase-short-and-the-price-of-the-next-one.md`
@@ -3783,4 +3784,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3086 sections across 173 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3087 sections across 173 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

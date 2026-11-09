@@ -63,11 +63,13 @@ use manuk_text::FontContext;
 /// - `#bur` (y 1600) is below the fold *and* completely covered once you get there.
 /// - `#aside` is parked off to the right of the viewport: no `dy` brings it closer, and claiming
 ///   otherwise would send an agent scrolling forever.
+// RG.E2.b: the scroll now CENTRES a target that fits, so a 140px header no longer lands on the target's
+// centre; the header is 400px so the centred viewport still has it over the centre (the arm's premise).
 const HTML: &str = r#"<!doctype html><html><head><style>
   body { margin: 0; height: 2400px; }
-  #hdr { position: sticky; top: 0; height: 140px; background: #ccc; z-index: 50; }
+  #hdr { position: sticky; top: 0; height: 400px; background: #ccc; z-index: 50; }
   input[type=checkbox] { position: absolute; left: 40px; width: 200px; margin: 0; }
-  #near  { top: 200px;  height: 60px; }
+  #near  { top: 500px;  height: 60px; }
   #far   { top: 1000px; height: 200px; }
   #bur   { top: 1600px; height: 60px; }
   #naive { top: 1900px; height: 200px; }
@@ -126,7 +128,7 @@ fn header_box(page: &manuk_page::Page) -> Rect {
     page.a11y_tree()
         .iter()
         .filter_map(|n| n.bbox)
-        .find(|b| b.height == 140.0 && b.width == VW)
+        .find(|b| b.height == 400.0 && b.width == VW)
         .expect("VACUOUS: the sticky header has no box in the a11y tree")
 }
 
