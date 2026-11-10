@@ -90,6 +90,9 @@ pub struct Session<B: Backend> {
     /// W4.A4: filled by every `tree()`: clickable non-semantic nodes, and each node's container context.
     click: RefCell<HashSet<NodeId>>,
     wh: RefCell<HashMap<NodeId, Where>>,
+    /// Nodes the shield withheld from a default observation but an `include_hidden` call listed (and
+    /// so handed a handle): a later act on that handle still finds them.
+    exposed: RefCell<HashSet<NodeId>>,
     /// W4.A4: handle → `role|name|context` it was issued for, to re-find it after a re-mount.
     keys: HashMap<u32, String>,
     /// W4.A4: handles re-bound since the last action result, to be reported by it.
@@ -479,6 +482,7 @@ impl<B: Backend> Session<B> {
             confirmed: false,
             click: Default::default(),
             wh: Default::default(),
+            exposed: Default::default(),
             keys: HashMap::new(),
             rebound: Vec::new(),
             doc: 0,
@@ -544,9 +548,20 @@ impl<B: Backend> Session<B> {
     /// The a11y tree with everything a human cannot see pruned (R1.4), unless the call opted out.
     fn tree(&self) -> Result<A11yNode> {
         let mut tree = self.b.tree()?;
-        if !self.include_hidden {
-            if let Some(sh) = self.b.shield()?.filter(|sh| !sh.nodes.is_empty()) {
-                tree = prune(&tree, &sh.nodes).unwrap_or(tree);
+        if let Some(sh) = self.b.shield()?.filter(|sh| !sh.nodes.is_empty()) {
+            if self.include_hidden {
+                if std::env::var_os("MANUK_EXPOSED_MUTATE").is_none() {
+                    self.exposed.borrow_mut().extend(sh.nodes.keys().copied());
+                }
+            } else {
+                let exposed = self.exposed.borrow();
+                let hide: HashMap<NodeId, &'static str> = sh
+                    .nodes
+                    .iter()
+                    .filter(|(k, _)| !exposed.contains(k))
+                    .map(|(k, v)| (*k, *v))
+                    .collect();
+                tree = prune(&tree, &hide).unwrap_or(tree);
             }
         }
         // A `div` with a click listener is a button to the page: say so, and name it from its text.
@@ -657,6 +672,7 @@ impl<B: Backend> Session<B> {
         self.ids.clear();
         self.rev.clear();
         self.keys.clear();
+        self.exposed.borrow_mut().clear();
         self.doc = self.b.document_id();
         self.seed_due = self.pages.is_some();
         // `next` is NOT reset: a stale `h2` from the old page must be "unknown", never silently
