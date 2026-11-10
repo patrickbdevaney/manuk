@@ -1,0 +1,11 @@
+<!doctype html><html><head><title>Popover</title></head><body>
+<div id="bg"><h1>Listings</h1><button id="price">Price</button><button id="open">Filters</button></div>
+<script>
+document.getElementById('open').addEventListener('click', function () {
+  document.getElementById('bg').setAttribute('aria-hidden', 'true');
+  var d = document.createElement('div');
+  d.setAttribute('role', 'dialog'); d.setAttribute('aria-label', 'Filters popover');
+  d.innerHTML = '<button id="x">Close filters</button><button>Apply</button>';
+  document.body.appendChild(d);
+});
+</script></body></html>

@@ -736,9 +736,26 @@ impl<B: Backend> Session<B> {
                 ));
                 Ok((h, n))
             }
-            [] => Err(anyhow!(
-                "STALE: h{h} is no longer on the page (call observe)"
-            )),
+            [] => {
+                if std::env::var_os("MANUK_POPOVER_MUTATE").is_none() {
+                    if let Some((layer, close)) = crate::overlay::open_layer(tree) {
+                        let lname = clip(&layer.name);
+                        let lh = self.handle(layer.node);
+                        let how = match close {
+                            Some(c) => {
+                                let ch = self.handle(c.node);
+                                format!("close it with [h{ch}] {:?} (act dismiss on h{lh})", clip(&c.name))
+                            }
+                            None => "close it (press Escape) or pick one of its options".to_string(),
+                        };
+                        return Err(anyhow!(
+                            "STALE: h{h} is hidden behind an open {} [h{lh}] {lname:?}; {how}, then observe",
+                            layer.role.as_str()
+                        ));
+                    }
+                }
+                Err(anyhow!("STALE: h{h} is no longer on the page (call observe)"))
+            }
             many => Err(anyhow!(
                 "STALE: h{h} is gone and {} elements now match what it was (call observe)",
                 many.len()

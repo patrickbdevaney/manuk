@@ -140,6 +140,17 @@ fn blocks_something(n: &A11yNode, all: &[&A11yNode]) -> bool {
     })
 }
 
+/// An open popover, menu or dialog in the tree and the control that closes it. When a page hides its
+/// background (`aria-hidden` on the siblings) a handle behind the layer leaves the tree; this names
+/// the layer so the refusal says why, not just "gone".
+pub fn open_layer(tree: &A11yNode) -> Option<(&A11yNode, Option<&A11yNode>)> {
+    let n = tree
+        .iter()
+        .skip(1)
+        .find(|n| matches!(n.role, Role::Dialog | Role::AlertDialog | Role::Menu))?;
+    Some((n, pick_control(n, Kind::Modal)))
+}
+
 /// Overlays on the page, topmost-looking first. A bot wall anywhere reports once, on its container if
 /// it has one, else on the document.
 pub fn find<'t>(tree: &'t A11yNode, vp: &Rect) -> Vec<Overlay<'t>> {
