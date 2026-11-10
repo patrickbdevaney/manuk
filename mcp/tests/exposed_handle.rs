@@ -101,7 +101,10 @@ fn run(mutate: bool) -> (bool, String) {
     );
     let (err, nav) = c.tool("navigate", json!({"url": url}));
     assert!(!err, "{nav}");
-    let (err, obs) = c.tool("observe", json!({"mode": "interactive", "include_hidden": true}));
+    let (err, obs) = c.tool(
+        "observe",
+        json!({"mode": "interactive", "include_hidden": true}),
+    );
     assert!(!err, "{obs}");
     let more = handle_of(&obs, "Show more trips");
     let (err, t) = c.tool("act", json!({"handle": more, "action": "click"}));

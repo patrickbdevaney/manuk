@@ -744,9 +744,14 @@ impl<B: Backend> Session<B> {
                         let how = match close {
                             Some(c) => {
                                 let ch = self.handle(c.node);
-                                format!("close it with [h{ch}] {:?} (act dismiss on h{lh})", clip(&c.name))
+                                format!(
+                                    "close it with [h{ch}] {:?} (act dismiss on h{lh})",
+                                    clip(&c.name)
+                                )
                             }
-                            None => "close it (press Escape) or pick one of its options".to_string(),
+                            None => {
+                                "close it (press Escape) or pick one of its options".to_string()
+                            }
                         };
                         return Err(anyhow!(
                             "STALE: h{h} is hidden behind an open {} [h{lh}] {lname:?}; {how}, then observe",
@@ -754,7 +759,9 @@ impl<B: Backend> Session<B> {
                         ));
                     }
                 }
-                Err(anyhow!("STALE: h{h} is no longer on the page (call observe)"))
+                Err(anyhow!(
+                    "STALE: h{h} is no longer on the page (call observe)"
+                ))
             }
             many => Err(anyhow!(
                 "STALE: h{h} is gone and {} elements now match what it was (call observe)",

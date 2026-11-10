@@ -2800,6 +2800,19 @@ fn auto_layer(parent_layer: i32) -> i32 {
 pub fn stacking_layer(style: Option<&ComputedStyle>, parent_layer: i32) -> i32 {
     match style {
         Some(s) if s.position != Position::Static => match s.z_index {
+            // ⭐ RG.2.E1: an explicit z-index INSIDE an enclosing stacking context is relative to it. The
+            // absolute `n * 1024 + 1` put a MUI radio's `z-index: 1` input (opacity 0, over its icon) at
+            // 1025, under the icon span that is an auto-positioned child of a `z-index: 1300` dialog
+            // (1331202), so dashdish/zilloft reported `OCCLUDED ... covered by generic ""` where Chrome's
+            // elementFromPoint returns the input. Nested, the layer sits that many steps above the
+            // parent's own, clamped under the next sibling context's 1024 spacing.
+            Some(n)
+                if n >= 0
+                    && parent_layer > 1024
+                    && std::env::var_os("MANUK_NESTED_Z_MUTATE").is_none() =>
+            {
+                parent_layer.saturating_add(1).saturating_add(n.min(1000))
+            }
             Some(n) => n.saturating_mul(1024).saturating_add(1),
             None if std::env::var_os("MANUK_STACK_MUTATE").is_some() => {
                 parent_layer.saturating_add(1)

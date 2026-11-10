@@ -115,12 +115,18 @@ fn a_page_submit_handler_takes_over_the_click() {
     let t = click(&mut c, "Find flights");
     assert!(!t.contains("submitted form"), "native submit ran: {t}");
     let (_, out) = c.tool("extract", json!({"format": "text"}));
-    assert!(out.contains("Please enter a valid origin."), "handler did not run: {out}");
+    assert!(
+        out.contains("Please enter a valid origin."),
+        "handler did not run: {out}"
+    );
 }
 
 #[test]
 fn a_form_without_a_handler_still_submits_natively() {
     let mut c = open();
     let t = click(&mut c, "Plain search");
-    assert!(t.contains("submit_handler.html?q=y"), "no native submit: {t}");
+    assert!(
+        t.contains("submit_handler.html?q=y"),
+        "no native submit: {t}"
+    );
 }

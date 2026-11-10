@@ -27,7 +27,12 @@ impl Client {
             .expect("spawn manuk-mcp");
         let tx = child.stdin.take().unwrap();
         let rx = BufReader::new(child.stdout.take().unwrap());
-        let mut c = Client { child, tx, rx, id: 0 };
+        let mut c = Client {
+            child,
+            tx,
+            rx,
+            id: 0,
+        };
         c.rpc("initialize", json!({"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}));
         c.send(json!({"jsonrpc": "2.0", "method": "notifications/initialized"}));
         c
@@ -42,7 +47,10 @@ impl Client {
         self.send(json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}));
         loop {
             let mut line = String::new();
-            assert!(self.rx.read_line(&mut line).unwrap() > 0, "server closed stdout");
+            assert!(
+                self.rx.read_line(&mut line).unwrap() > 0,
+                "server closed stdout"
+            );
             let v: Value = serde_json::from_str(&line).unwrap();
             if v["id"] == json!(id) {
                 return v;
@@ -54,7 +62,12 @@ impl Client {
         let res = &r["result"];
         let text = res["content"]
             .as_array()
-            .map(|c| c.iter().filter_map(|b| b["text"].as_str()).collect::<Vec<_>>().join("\n"))
+            .map(|c| {
+                c.iter()
+                    .filter_map(|b| b["text"].as_str())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            })
             .unwrap_or_default();
         (res["isError"].as_bool().unwrap_or(false), text)
     }
@@ -77,7 +90,10 @@ fn handle_of(text: &str, needle: &str) -> String {
 
 fn run(mutate: bool) -> (bool, String) {
     let mut c = Client::start(mutate);
-    let url = format!("file://{}/tests/fixtures/popover_behind.html", env!("CARGO_MANIFEST_DIR"));
+    let url = format!(
+        "file://{}/tests/fixtures/popover_behind.html",
+        env!("CARGO_MANIFEST_DIR")
+    );
     let (err, nav) = c.tool("navigate", json!({"url": url}));
     assert!(!err, "{nav}");
     let (_, obs) = c.tool("observe", json!({"mode": "interactive"}));
@@ -95,11 +111,17 @@ fn background_handle_names_the_popover_and_its_close_control() {
     }
     let (err, t) = run(false);
     assert!(err, "act on a hidden background handle should refuse: {t}");
-    assert!(t.contains("STALE") && t.contains("Filters popover") && t.contains("Close filters"), "{t}");
+    assert!(
+        t.contains("STALE") && t.contains("Filters popover") && t.contains("Close filters"),
+        "{t}"
+    );
 }
 
 #[test]
 fn popover_mutant_gives_the_bare_refusal() {
     let (err, t) = run(true);
-    assert!(err && t.contains("STALE") && !t.contains("Filters popover"), "{t}");
+    assert!(
+        err && t.contains("STALE") && !t.contains("Filters popover"),
+        "{t}"
+    );
 }
