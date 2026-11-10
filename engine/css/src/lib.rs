@@ -2767,8 +2767,11 @@ fn auto_layer(parent_layer: i32) -> i32 {
     if parent_layer == 1 {
         return 1;
     }
-    let base = parent_layer - (parent_layer - 1).rem_euclid(1024);
-    base.saturating_add(1)
+    // ⭐ RG.2.E1.a: a context root is `base` (top-level explicit z) or `base + 32k` (nested explicit z, see
+    // `stacking_layer`); an auto box inside it sits at that root + 1, so a z-indexed MUI Paper's own
+    // `position: relative` buttons paint over the Paper instead of under it.
+    let r = (parent_layer - 1).rem_euclid(1024);
+    (parent_layer - r % 32).saturating_add(1)
 }
 
 /// **The painting layer one node adds to its parent's, from CSS 2.1 Appendix E.**
@@ -2816,7 +2819,16 @@ pub fn stacking_layer(style: Option<&ComputedStyle>, parent_layer: i32) -> i32 {
                     && parent_layer > 1024
                     && std::env::var_os("MANUK_NESTED_Z_MUTATE").is_none() =>
             {
-                parent_layer.saturating_add(1).saturating_add(n.min(1000))
+                // Nested roots sit on a 32-step sub-grid so their auto descendants (root + 1) stay below
+                // the next nested sibling context and above the Paper's own background. One level deeper
+                // (a MUI radio's z-index:1 input inside a z-indexed Paper) the slice's own 30 steps order it.
+                let r = (parent_layer - 1).rem_euclid(1024);
+                let root = parent_layer - r % 32;
+                if r < 32 {
+                    root.saturating_add(32 * (1 + n.min(30)))
+                } else {
+                    root.saturating_add(2 + n.min(29))
+                }
             }
             Some(n) => n.saturating_mul(1024).saturating_add(1),
             None if std::env::var_os("MANUK_STACK_MUTATE").is_some() => {
