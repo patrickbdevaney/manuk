@@ -1559,7 +1559,18 @@ impl AgentBrowser {
             page.take_form_submits().1.into_iter().next()
         };
         if let Some((form, _submitter)) = queued {
-            return self.submit_form(form).await;
+            // ⭐ The `submit` event fires FIRST (RG.2.0.a.a). Without it a React/Vue form's
+            // `onSubmit` never ran: every "Find flights"-style button fell through to the native
+            // GET the page had cancelled, reloading the home form instead of routing.
+            let proceed = {
+                let page = self.page.as_mut().expect("checked above");
+                page.dispatch_submit(form, &self.fonts, self.width as f32)
+            };
+            // The handler may have started a fetch (its own submit request): perform it.
+            self.settle().await;
+            if proceed {
+                return self.submit_form(form).await;
+            }
         }
 
         // A handler that ends in `location.href = url` (Next's router falls back to it when it

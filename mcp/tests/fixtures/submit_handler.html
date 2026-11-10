@@ -1,0 +1,14 @@
+<!doctype html><html><head><title>Submit handler</title></head><body>
+<div id="root">
+<form id="f" action="submit_handler.html" method="get"><input name="from" value="x"><button id="go" type="submit">Find flights</button></form>
+<form id="g" action="submit_handler.html" method="get"><input name="q" value="y"><button id="plain" type="submit">Plain search</button></form>
+<p id="out">idle</p>
+</div>
+<script>
+// React-style: one delegated listener on the root; the form's own handler preventDefaults and sets state.
+document.getElementById('root').addEventListener('submit', function (e) {
+  if (e.target.id !== 'f') return;
+  e.preventDefault();
+  document.getElementById('out').textContent = 'Please enter a valid origin.';
+});
+</script></body></html>
