@@ -1,0 +1,11 @@
+<!doctype html>
+<title>contenteditable host</title>
+<div class="ql-container"><div class="ql-editor" contenteditable="true"><p><br></p></div></div>
+<div contenteditable="false">not editable</div>
+<button>Send</button>
+<p id="seen">nothing</p>
+<script>
+  document.querySelector('.ql-editor').addEventListener('input', function (e) {
+    document.getElementById('seen').textContent = 'input:' + e.target.textContent;
+  });
+</script>

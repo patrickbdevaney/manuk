@@ -121,3 +121,33 @@ fn aria_hidden_root_without_focus_inside_stays_hidden() {
         "{obs}"
     );
 }
+
+#[test]
+fn contenteditable_host_without_a_role_is_a_textbox() {
+    // the fixture's body editor carries role=textbox; a bare `<div contenteditable>` (Quill) must too
+    let mut c = Client::start();
+    let url = format!(
+        "file://{}/tests/fixtures/contenteditable_host.html",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let (err, nav) = c.tool("navigate", json!({"url": url}));
+    assert!(!err, "{nav}");
+    let (_, obs) = c.tool("observe", json!({"mode": "interactive"}));
+    assert!(
+        obs.lines().filter(|l| l.contains("textbox")).count() == 1,
+        "exactly the editing host is a textbox:\n{obs}"
+    );
+    let h = obs
+        .lines()
+        .find(|l| l.contains("textbox"))
+        .and_then(|l| l.split(']').next())
+        .map(|l| l.trim_start_matches('[').to_string())
+        .unwrap();
+    let (err, typed) = c.tool("type", json!({"handle": h, "text": "hello world"}));
+    assert!(!err, "{typed}");
+    let (_, seen) = c.tool("extract", json!({}));
+    assert!(
+        seen.contains("input:hello world"),
+        "page saw no input: {seen}"
+    );
+}

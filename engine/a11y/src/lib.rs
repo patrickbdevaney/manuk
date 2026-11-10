@@ -1598,6 +1598,25 @@ pub fn role_of(dom: &Dom, node: NodeId) -> Option<Role> {
         }
     }
 
+    // ⚠⚠⚠ **A `contenteditable` EDITING HOST IS A `textbox`, AND IT WAS A BOX THAT SAID NOTHING.**
+    // Chrome exposes the root of an editable region as `textbox`; a rich-text editor (Quill's
+    // `.ql-editor`, gomail's message body) is a `<div contenteditable>` with no role, so it fell to
+    // `generic`, was dropped from the interactive tree, and the agent could not find or type into it.
+    // Only the host is a textbox: an editable child inherits editability and stays what it is.
+    if el
+        .attr("contenteditable")
+        .is_some_and(|v| !v.eq_ignore_ascii_case("false"))
+        && !matches!(el.name.as_str(), "input" | "textarea" | "select" | "button")
+        && !dom.parent(node).is_some_and(|p| {
+            dom.element(p).is_some_and(|pe| {
+                pe.attr("contenteditable")
+                    .is_some_and(|v| !v.eq_ignore_ascii_case("false"))
+            })
+        })
+    {
+        return Some(Role::TextBox);
+    }
+
     Some(match el.name.as_str() {
         "a" | "area" => {
             if el.attr("href").is_some() {

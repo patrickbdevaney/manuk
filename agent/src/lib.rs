@@ -1326,6 +1326,7 @@ impl AgentBrowser {
             .dom()
             .tag_name(node)
             .is_some_and(|t| matches!(t, "input" | "textarea"))
+            && !page.is_editing_host(node)
         {
             return Err(anyhow!("node {} is not a text field", node.0));
         }

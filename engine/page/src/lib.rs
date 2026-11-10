@@ -8070,6 +8070,15 @@ impl Page {
     /// keeps its own state, updated only from `input` events, and re-renders that state back into the
     /// field — so a silent write was reverted and the typed text vanished. `scroll_y` is the host's
     /// current scroll offset, republished with the new `activeElement`.
+    /// Is `node` the root of a `contenteditable` region (and not a form control)?
+    pub fn is_editing_host(&self, node: manuk_dom::NodeId) -> bool {
+        self.dom.element(node).is_some_and(|e| {
+            !matches!(e.name.as_str(), "input" | "textarea")
+                && e.attr("contenteditable")
+                    .is_some_and(|v| !v.eq_ignore_ascii_case("false"))
+        })
+    }
+
     pub fn type_text(
         &mut self,
         node: manuk_dom::NodeId,
@@ -8086,6 +8095,29 @@ impl Page {
         }
         // `document.activeElement` reads the published view state, which only the shell refreshed.
         self.publish_view_state(0.0, scroll_y, Some(node));
+        // An editing host (Quill's `.ql-editor`, gomail's message body) has no `value`: typing inserts
+        // text into its first block, as Chrome does into the caret's block, and announces it with `input`.
+        if self.is_editing_host(node) {
+            self.fire_plain_event(node, "beforeinput", fonts, viewport_width);
+            let block = self
+                .dom
+                .children(node)
+                .find(|&c| self.dom.is_element(c))
+                .unwrap_or(node);
+            let brs: Vec<_> = self
+                .dom
+                .children(block)
+                .filter(|&c| self.dom.tag_name(c) == Some("br"))
+                .collect();
+            for br in brs {
+                self.dom.detach(br);
+            }
+            let t = self.dom.create_text(text);
+            self.dom.append_child(block, t);
+            self.fire_plain_event(node, "input", fonts, viewport_width);
+            self.relayout(fonts, viewport_width);
+            return true;
+        }
         let before = self
             .dom
             .element(node)
