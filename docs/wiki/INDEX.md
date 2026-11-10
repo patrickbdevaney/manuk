@@ -1567,6 +1567,7 @@
   - L121 · HTMLElement.prototype is not __protoHTMLElement
   - L135 · Known gaps, deliberately not in this tick
   - L149 · An unrelated bug this tick surfaced
+  - L155 · RG.2.S1.a: aria-hidden on an element that holds focus is ignored, and the agent never drained focus
 
 ## `document.domain` — a missing property that pages read as a string is a THROW, not a gap
 `docs/wiki/document-domain.md`
@@ -3787,4 +3788,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3090 sections across 173 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3091 sections across 173 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

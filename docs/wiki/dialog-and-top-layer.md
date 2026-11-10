@@ -151,3 +151,7 @@ custom-element gates as the thing that must stay green.
 A `position: absolute` element with no background emits **no display item at all** — its text never
 reaches the display list (probed while building the stacking fixture, which is why that fixture uses
 `position: relative`). Not caused by this tick and not fixed by it; logged for a future tick.
+
+## RG.2.S1.a: `aria-hidden` on an element that holds focus is ignored, and the agent never drained focus
+
+gomail's New Message window is a MUI `Dialog` with `disablePortal`: the Modal manager sets `aria-hidden="true"` on the `<body>` child that CONTAINS the dialog (the app root) and focuses the dialog. Chrome ignores `aria-hidden` on an element that holds the focused node, so Minimize/Close/Send and the fields stay in its tree. manuk dropped the whole subtree: after the click `observe(interactive)` listed nothing. Two causes: (1) `build_children` honoured the attribute unconditionally; it now keeps an `aria-hidden` ancestor-or-self of `dom.focused()` (`focus_retained`); (2) `el.focus()` only queues a request that the shell drains, and the agent/MCP path never drained it, so `dom.focused()` was empty. `AgentBrowser::settle` now applies the last request. An `aria-hidden` root with focus left outside it is still pruned (fixture `dialog_in_hidden_root_nofocus`).

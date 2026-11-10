@@ -3110,6 +3110,42 @@ pub fn build_tree_generated(
     non_hittable: &HashSet<NodeId>,
     ctx: &NameCtx<'_>,
 ) -> A11yNode {
+    build_tree_inner(
+        dom,
+        rects,
+        z_index,
+        invisible,
+        non_hittable,
+        ctx,
+        &HashSet::new(),
+    )
+}
+
+/// [`build_tree_generated`] for a host that knows where focus is: an `aria-hidden` element holding the
+/// focused node stays in the tree ([`focus_retained`]). `state.focused` is NOT filled in.
+pub fn build_tree_generated_retaining(
+    dom: &Dom,
+    rects: &HashMap<NodeId, Rect>,
+    z_index: &ZIndex,
+    focused: Option<NodeId>,
+    invisible: &HashSet<NodeId>,
+    non_hittable: &HashSet<NodeId>,
+    ctx: &NameCtx<'_>,
+) -> A11yNode {
+    let retained = focused.map_or_else(HashSet::new, |f| focus_retained(dom, f));
+    build_tree_inner(dom, rects, z_index, invisible, non_hittable, ctx, &retained)
+}
+
+/// `retained`: the `aria-hidden` elements that hold the focused node (see [`focus_retained`]).
+fn build_tree_inner(
+    dom: &Dom,
+    rects: &HashMap<NodeId, Rect>,
+    z_index: &ZIndex,
+    invisible: &HashSet<NodeId>,
+    non_hittable: &HashSet<NodeId>,
+    ctx: &NameCtx<'_>,
+    retained: &HashSet<NodeId>,
+) -> A11yNode {
     let index = NameIndex::build(dom);
     let root = dom.root();
     let children = build_children(
@@ -3121,6 +3157,7 @@ pub fn build_tree_generated(
         invisible,
         non_hittable,
         ctx,
+        retained,
     );
     A11yNode {
         node: root,
@@ -3227,11 +3264,33 @@ pub fn build_tree_generated_with_focus(
     non_hittable: &HashSet<NodeId>,
     ctx: &NameCtx<'_>,
 ) -> A11yNode {
-    let mut tree = build_tree_generated(dom, rects, z_index, invisible, non_hittable, ctx);
+    let retained = focused.map_or_else(HashSet::new, |f| focus_retained(dom, f));
+    let mut tree = build_tree_inner(dom, rects, z_index, invisible, non_hittable, ctx, &retained);
     if let Some(f) = focused {
         mark_focused(&mut tree, f);
     }
     tree
+}
+
+/// **`aria-hidden="true"` on an element that holds the focused node is IGNORED** (Chrome: "Blocked
+/// aria-hidden on an element because its descendant retained focus"). MUI's `Modal` with
+/// `disablePortal` hides every `<body>` child that is not the modal root — which includes the app root
+/// the dialog sits INSIDE — and then focuses the dialog; Chrome keeps the dialog and the page around
+/// it in the tree, and a tree that honours the attribute is empty (gomail's New Message dialog).
+/// Returns the focused node's `aria-hidden` ancestors-or-self.
+fn focus_retained(dom: &Dom, focused: NodeId) -> HashSet<NodeId> {
+    let mut out = HashSet::new();
+    let mut cur = Some(focused);
+    while let Some(n) = cur {
+        if dom.element(n).is_some_and(|e| {
+            e.attr("aria-hidden")
+                .is_some_and(|v| v.eq_ignore_ascii_case("true"))
+        }) {
+            out.insert(n);
+        }
+        cur = dom.parent(n);
+    }
+    out
 }
 
 fn mark_focused(node: &mut A11yNode, focused: NodeId) {
@@ -3252,6 +3311,7 @@ fn build_children(
     invisible: &HashSet<NodeId>,
     non_hittable: &HashSet<NodeId>,
     ctx: &NameCtx<'_>,
+    retained: &HashSet<NodeId>,
 ) -> Vec<A11yNode> {
     let mut out = Vec::new();
     // N3/N4 — the FLAT tree: a shadow host exposes its shadow content, and a `<slot>`
@@ -3260,7 +3320,7 @@ fn build_children(
         if !dom.is_element(child) {
             continue; // text nodes contribute to names, not to tree nodes
         }
-        if is_hidden(dom, child) {
+        if is_hidden(dom, child) && !retained.contains(&child) {
             continue;
         }
         // ── ⚠⚠⚠ **`display: none` PRUNES THE SUBTREE, AND THIS TREE USED TO CONTAIN IT.** The
@@ -3314,6 +3374,7 @@ fn build_children(
                 invisible,
                 non_hittable,
                 ctx,
+                retained,
             ));
             continue;
         }
@@ -3329,6 +3390,7 @@ fn build_children(
                 invisible,
                 non_hittable,
                 ctx,
+                retained,
             ));
             continue;
         }
@@ -3356,6 +3418,7 @@ fn build_children(
                         invisible,
                         non_hittable,
                         ctx,
+                        retained,
                     ),
                 });
             }
@@ -3369,6 +3432,7 @@ fn build_children(
                 invisible,
                 non_hittable,
                 ctx,
+                retained,
             )),
         }
     }

@@ -1900,6 +1900,19 @@ impl AgentBrowser {
         }
         self.service_websockets(SETTLE_BUDGET).await;
         self.follow_history_ops();
+        self.apply_focus_requests();
+    }
+
+    /// The host owns focus (see `Page::a11y_tree_with_focus`): an `el.focus()`/`blur()` a script ran
+    /// only queued a request, and the shell drains it. This is the agent's drain; without it
+    /// `dom.focused()` stays empty and a modal that focuses itself (gomail's New Message dialog) is
+    /// not the focused subtree, so the `aria-hidden` root around it hides the whole page.
+    fn apply_focus_requests(&mut self) {
+        let (fonts, w) = (&self.fonts, self.width as f32);
+        let Some(p) = self.page.as_mut() else { return };
+        if let Some(&f) = p.take_focus_requests().last() {
+            p.set_focus(f, false, fonts, w);
+        }
     }
 
     /// W4.A4: a `pushState`/`replaceState` the page ran moves the URL without a load (the shell reflects

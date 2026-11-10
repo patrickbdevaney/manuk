@@ -11209,10 +11209,11 @@ impl Page {
         // not see it by any path, and every pseudo was missing from `accessible_name`. Every other
         // renderer subsystem gets its semantic exposure free from the shared `node_rects` producer,
         // but that producer carries GEOMETRY: a fix that adds TEXT has to be threaded deliberately.
-        let mut tree = manuk_a11y::build_tree_generated(
+        let mut tree = manuk_a11y::build_tree_generated_retaining(
             &self.dom,
             &rects,
             &self.z_index_map(),
+            self.dom.focused(),
             &self.invisible_nodes(),
             &self.non_hittable_nodes(),
             // ⚠ BOTH ENTRANCES. The bare `accessible_name` behind

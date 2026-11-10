@@ -1,0 +1,34 @@
+<!doctype html>
+<title>dialog inside an aria-hidden root</title>
+<style>
+  body { margin: 0; }
+  .btn { cursor: pointer; display: flex; height: 56px; min-width: 96px; background: #fff; }
+  .root { position: fixed; z-index: 1300; inset: 0; }
+  .paper { position: absolute; bottom: 0; right: 60px; width: 600px; height: 590px; background: #fff; display: flex; flex-direction: column; }
+  .editor { min-height: 80px; border: 1px solid #ccc; }
+</style>
+<div id="app">
+  <nav aria-label="Mailbox"><button class="btn" id="compose">Compose</button></nav>
+  <main><p id="out">idle</p></main>
+</div>
+<script>
+  // MUI <Dialog disablePortal>: the modal root is built INSIDE the app root; the Modal manager then
+  // sets aria-hidden on the <body> children that are not the modal root (the app root, which holds
+  // it) and focuses the dialog. The _nofocus copy leaves focus on the page.
+  var focusIt = true;
+  document.getElementById('compose').addEventListener('click', function () {
+    var root = document.createElement('div');
+    root.setAttribute('role', 'presentation');
+    root.className = 'root';
+    root.innerHTML =
+      '<div class="paper" role="dialog" aria-modal="true" aria-labelledby="t" tabindex="-1">' +
+      '<h2 id="t">New Message</h2>' +
+      '<button aria-label="Minimize">_</button><button aria-label="Close">x</button>' +
+      '<input aria-label="Recipients" type="text"><input aria-label="Subject" type="text">' +
+      '<div class="editor" contenteditable="true" role="textbox" aria-label="Message body"></div>' +
+      '<button id="send">Send</button></div>';
+    document.getElementById('app').appendChild(root);
+    document.getElementById('app').setAttribute('aria-hidden', 'true');
+    if (focusIt) root.querySelector('.paper').focus();
+  });
+</script>
