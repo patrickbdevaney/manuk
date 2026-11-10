@@ -12042,6 +12042,19 @@ impl Page {
             .collect()
     }
 
+    /// Elements the page marks clickable with `cursor: pointer` that start the pointer run: `cursor`
+    /// inherits, so every descendant of a pointer-cursor `div` computes `pointer` too, and only the
+    /// outermost element is the control. Frameworks that delegate events from the root (React) leave no
+    /// listener on the element, so this is the only signal a styled `div` "Compose" button gives.
+    pub fn cursor_pointer_roots(&self) -> std::collections::HashSet<manuk_dom::NodeId> {
+        let ptr = |n: manuk_dom::NodeId| self.styles.get(&n).is_some_and(|s| s.cursor_pointer);
+        self.styles
+            .iter()
+            .filter(|(n, s)| s.cursor_pointer && self.dom.parent(**n).is_none_or(|p| !ptr(p)))
+            .map(|(n, _)| *n)
+            .collect()
+    }
+
     /// Nodes dropped from coordinate hit-testing — an agent grounding a click does not land on them —
     /// while they stay in the a11y tree (a screen reader still announces them). Two sources:
     ///

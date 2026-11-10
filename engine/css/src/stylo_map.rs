@@ -718,6 +718,12 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
         _ => crate::PointerEvents::Auto,
     };
 
+    // `cursor: pointer` — inherited; read as the page's "this is clickable" signal (see `ComputedStyle::cursor_pointer`).
+    s.cursor_pointer = matches!(
+        cv.clone_cursor().keyword,
+        stylo::values::computed::ui::CursorKind::Pointer
+    );
+
     // `user-select` — Stylo's servo build parses it only with `layout.unimplemented` flipped on
     // (done in `cascade_via_stylo`); before that the property was dropped and every value read
     // `auto`. We resolve the COMPUTED keyword so `getComputedStyle(el).userSelect` reflects what the

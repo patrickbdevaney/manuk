@@ -1,0 +1,15 @@
+<!doctype html>
+<title>cursor clickable</title>
+<style>
+  .compose { cursor: pointer; display: flex; height: 56px; min-width: 96px; padding: 0 24px 0 0; background: #fff; }
+  .compose::before { content: ""; display: block; width: 24px; height: 24px; margin: 0 8px; }
+</style>
+<nav aria-label="Mailbox"><a href="#inbox">Inbox</a></nav>
+<div class="compose">Compose</div>
+<p id="out">idle</p>
+<script>
+  // delegated from the root, as React does: no listener on the div itself
+  document.addEventListener('click', function (e) {
+    if (e.target.closest && e.target.closest('.compose')) document.getElementById('out').textContent = 'composing';
+  });
+</script>

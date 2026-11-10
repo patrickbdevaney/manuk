@@ -544,7 +544,7 @@ impl AgentBrowser {
     }
 
     /// W4.A4: elements that are clickable without a semantic role: an inline `onclick`, a
-    /// `tabindex`, or `role=button|link`, on anything the a11y tree has not already made operable.
+    /// `tabindex`, `role=button|link`, or `cursor: pointer`, on anything the a11y tree has not already made operable.
     /// A click-class listener attached from script (`addEventListener`) counts too; the document,
     /// `<html>` and `<body>` (delegated roots) do not.
     pub fn clickable_nodes(&self) -> Vec<(manuk_dom::NodeId, String)> {
@@ -554,10 +554,16 @@ impl AgentBrowser {
         let dom = page.dom();
         let scripted: std::collections::HashSet<_> =
             manuk_js::click_listener_nodes().into_iter().collect();
+        let pointer = if std::env::var_os("MANUK_CURSOR_MUTATE").is_some() {
+            Default::default()
+        } else {
+            page.cursor_pointer_roots()
+        };
         tree.iter()
             .filter(|n| !n.role.is_interactive())
             .filter(|n| {
                 scripted.contains(&n.node)
+                    || pointer.contains(&n.node)
                     || dom.element(n.node).is_some_and(|e| {
                         e.attr("onclick").is_some()
                             || e.attr("tabindex").is_some_and(|t| t.trim() != "-1")

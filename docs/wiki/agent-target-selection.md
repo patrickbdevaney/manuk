@@ -60,3 +60,6 @@ too and the gate proves nothing.
 Proven red by two mutations, each hitting a different arm: restoring `find_containing` fails ARM 1
 and leaves ARM 2 green (because `find_containing` *does* filter by role — which is exactly why ARM 2
 needs its own mutation); dropping the role filter fails ARM 2 and leaves ARM 1 green.
+
+## A `cursor: pointer` div is a control (RG.2.S1)
+React-style pages delegate clicks from the root, so a styled `div` "Compose" button (gomail) has no listener, `onclick`, `tabindex` or role on it; the only signal is `cursor: pointer`. `Page::cursor_pointer_roots` returns the outermost pointer-cursor element (cursor inherits, so descendants are not separate controls) and `Agent::clickable_nodes` lists it, which gives observe/find a `[clickable]` handle (Chrome's backend already does this via `isClickable`). Mutant: `MANUK_CURSOR_MUTATE=1`; gate `mcp/tests/cursor_clickable.rs`.

@@ -1664,6 +1664,10 @@ pub struct ComputedStyle {
     /// `pointer-events` (inherited). `None` = transparent to hit-testing (`elementFromPoint`/click
     /// dispatch pass through). See [`PointerEvents`].
     pub pointer_events: PointerEvents,
+    /// `cursor: pointer` (inherited): the page's own signal that this element is clickable. Pages built on a
+    /// delegated-listener framework (React) put no listener on the element, so this is all that marks a
+    /// styled `div` as a control.
+    pub cursor_pointer: bool,
     /// `user-select` — the computed selectability keyword, resolved so `getComputedStyle` reflects
     /// it. See [`UserSelect`].
     pub user_select: UserSelect,
@@ -2145,6 +2149,7 @@ impl ComputedStyle {
             border_radius: 0.0,
             visibility: Visibility::Visible,
             pointer_events: PointerEvents::Auto,
+            cursor_pointer: false,
             user_select: UserSelect::Auto,
             color_scheme: ColorScheme::Normal,
             scrollbar_width: ScrollbarWidth::Auto,
@@ -7521,6 +7526,12 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
             } else {
                 PointerEvents::Auto
             }
+        }
+        "cursor" => {
+            s.cursor_pointer = v
+                .split(',')
+                .next_back()
+                .is_some_and(|k| k.trim().eq_ignore_ascii_case("pointer"))
         }
         "backdrop-filter" | "-webkit-backdrop-filter" => {
             s.backdrop_filter = parse_filters(v, s.font_size)

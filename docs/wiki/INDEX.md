@@ -138,6 +138,7 @@
   - L27 · ⚠ And the scorer never saw the ROLE either
   - L38 · ⚠ A low-confidence winner is returned, not refused
   - L48 · The gate
+  - L64 · A cursor: pointer div is a control (RG.2.S1)
 
 ## A graded `@font-face` set matches by weight
 `docs/wiki/a-graded-font-face-set-matches-by-weight.md`
@@ -3785,4 +3786,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3088 sections across 173 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3089 sections across 173 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
