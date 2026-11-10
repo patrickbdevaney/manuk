@@ -32,3 +32,13 @@ Manuk side: RG.B transcripts. Mechanism = class of the FIRST failure signal in a
 - First-failure-signal heuristic over transcripts, not a root-cause proof; `answer-reports-overlay` rests on the agent's own answer; `agent` = no tool-level signal fired.
 - fly-unified-1 and fly-unified-6 are labelled `agent` because no tool-level signal fired, but both final answers say the flight search never returned results while Playwright reached `/choose-flight`; that is likely an engine or navigation/settle cause, not a decision difference (follow-up RG.2.0.a).
 - Gate: `python3 -I bench/agent-tasks/rg2_ledger.py` exits 0; `--mutate swap-labels` exits 1 (label disagrees with its signal); `--mutate drop-task` exits 1.
+
+## RG.2.0.a: fly-unified-1 / fly-unified-6 first differing step (chrome_ver=145.0.7632.116)
+
+Verdict: NOT an agent-decision failure; the first differing step is the click on "Find flights" (a submit button). Reproduced by `python3 -I bench/agent-tasks/rg2a_replay.py` (full excerpts in `docs/sprint/rg/rg2a-replay.md`).
+
+- manuk, empty form: `act click` -> `verified: target was topmost at dispatch; submitted form to https://evals-fly-unified.vercel.app/?tripType=roundtrip&from=&to=&travelClass=Economy` (native GET form submission; page reloads to the home form, no results route).
+- Chrome, same click: `ok: dispatched click ... new: generic "Please enter a valid origin.", "...valid destination.", "...valid departure date."; url unchanged` (the page's own handler ran and handled the submit; with a filled form Playwright lands on `/choose-flight?search=%7B...`).
+- Same in the filled flow: manuk r2 step 11/23 (fly-unified-1) navigated to `/?tripType=oneway&from=Savannah+SAV&to=Albuquerque+ABQ&travelClass=Economy`; Playwright r1 step 23 landed on `/choose-flight?search=...`. fly-unified-6 shows the same final answer ("flight search doesn't return any results").
+- So the mechanism is engine-side: after a click on a form's submit button the page's JS handler does not take over (preventDefault / client-side route push is not honoured or the handler does not run), and manuk falls through to the native submission (`agent/src/lib.rs` `submit_form`). Form field input (onChange) works. Reclassify both tasks `engine-render` (submit activation), follow-up RG.2.0.a.a.
+- Gate: `rg2a_replay.py` exits 0 on DIFFERENT dumps; `--mutate identical` (chrome dump replaced by manuk's) exits 1.
