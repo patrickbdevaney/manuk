@@ -1,0 +1,4 @@
+chrome_ver	run	restore_calls	checkpoint_calls	toolsearch_restore	undo_lines	success	turns	cost_usd	prompt_changed
+145.0.7632.116	1	0	0	0	1	1	9	0.0043	0
+145.0.7632.116	2	0	0	0	2	0	8	0.0041	0
+145.0.7632.116	3	0	0	0	0	1	7	0.0036	0
