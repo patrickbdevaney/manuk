@@ -8,6 +8,7 @@ WIN / PARITY / GAP verdict against the Playwright band (W5.B1 3 runs + the RG.B 
   python3 -I bench/agent-tasks/rgb_tally.py                  # report
   python3 -I bench/agent-tasks/rgb_tally.py --mutate TASK    # flips TASK's rows to pass=1 (gate mutant)
   python3 -I bench/agent-tasks/rgb_tally.py --self-test      # the verdict must change under the mutant
+  python3 -I bench/agent-tasks/rgb_tally.py --round B2       # RG.2.B: reads docs/sprint/rg/B2-real-*.tsv
 """
 import argparse, collections, csv, glob, os, sys
 
@@ -15,6 +16,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 RG = os.path.join(ROOT, "docs/sprint/rg")
 W5 = os.path.join(ROOT, "docs/sprint/w5")
 JUDGE = "openai/gpt-oss-120b"
+PREFIX = "B"  # the round's TSV prefix: B-real-* (RG.B) or B2-real-* (RG.2.B); set by --round
 
 
 def load(paths):
@@ -66,8 +68,8 @@ def verdict(manuk_runs, pw_runs):
 
 
 def report(mutate=None, quiet=False):
-    manuk_rows = load(sorted(glob.glob(os.path.join(RG, "B-real-manuk*.tsv"))))
-    pw_rows = load(sorted(glob.glob(os.path.join(RG, "B-real-playwright*.tsv"))))
+    manuk_rows = load(sorted(glob.glob(os.path.join(RG, f"{PREFIX}-real-manuk*.tsv"))))
+    pw_rows = load(sorted(glob.glob(os.path.join(RG, f"{PREFIX}-real-playwright*.tsv"))))
     b1_pw = load([os.path.join(W5, "B1-real-playwright.tsv")])
     b1_m = load([os.path.join(W5, "B1-real-manuk.tsv")])
     for rows in (manuk_rows, pw_rows):
@@ -107,7 +109,7 @@ def report(mutate=None, quiet=False):
 def self_test():
     # mutant: force one manuk task that currently fails (<2 of 3) to pass in every run; the tally must move by 1
     base = report(quiet=True)
-    manuk_rows = load(sorted(glob.glob(os.path.join(RG, "B-real-manuk*.tsv"))))
+    manuk_rows = load(sorted(glob.glob(os.path.join(RG, f"{PREFIX}-real-manuk*.tsv"))))
     scored, _ = passes(manuk_rows)
     failing = sorted(t for t, ok in per_task(scored).items() if not ok)
     if not failing:
@@ -125,7 +127,9 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--mutate")
     ap.add_argument("--self-test", action="store_true")
+    ap.add_argument("--round", default="B", choices=["B", "B2"])
     a = ap.parse_args()
+    PREFIX = a.round
     if a.self_test:
         sys.exit(self_test())
     report(mutate=a.mutate)
