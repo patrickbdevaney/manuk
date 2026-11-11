@@ -407,3 +407,12 @@ fn navigate_with_query_answers_in_one_call() {
     let (_, none) = c.tool("extract", json!({"query": "xylophone"}));
     assert!(none.contains("no passage matches"), "{none}");
 }
+
+#[test]
+fn a_small_results_popup_over_a_field_does_not_refuse_typing_but_a_dialog_still_does() {
+    let mut c = Client::start();
+    let (_, nav) = c.tool("navigate", json!({"url": fixture("popup_over_field.html")}));
+    let drop = handle_of(&nav, "textbox \"Dropoff\"");
+    let (err, msg) = c.tool("type", json!({"handle": drop, "text": "Waterbar"}));
+    assert!(!err && msg.contains("typed 8 chars"), "{msg}");
+}

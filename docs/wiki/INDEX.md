@@ -2960,6 +2960,7 @@
   - L78 · RG.E2.b: an act scrolls a target to the middle of the viewport, not under the sticky header
   - L84 · RG.2.E1: an explicit z-index inside a stacking context is relative to it
   - L88 · RG.2.E1.a: a nested stacking context's auto descendants must outrank its own background
+  - L92 · RG.3.0.a: an auto descendant of a nested explicit z-index stays on its parent's layer, and type is not a pointer action
 
 ## One phase short, and the price of the next one
 `docs/wiki/one-phase-short-and-the-price-of-the-next-one.md`
@@ -3788,4 +3789,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3091 sections across 173 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3092 sections across 173 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

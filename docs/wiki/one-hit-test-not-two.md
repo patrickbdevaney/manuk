@@ -88,3 +88,9 @@ Same node, second cause: the Reserve click then reached the button but `AgentBro
 ## RG.2.E1.a: a nested stacking context's auto descendants must outrank its own background
 
 RG.2.E1 put a nested explicit `z-index` at `parent + 1 + n`, off the 1024 grid `auto_layer` rounds to. A MUI Menu is `fixed z-index:1300` > `absolute z-index:500` Paper > `position:relative` buttons (auto). The Paper became 1331702 while its auto buttons rounded down to the popover's base + 1 (1331202), so `elementFromPoint` returned the Paper over every control in zilloft's Beds & Baths menu (all `obstructed`). Nested roots now sit on a 32-step sub-grid inside the parent's 1024 slot (`root = base + 32*(1+min(n,30))`), auto descendants are `root + 1`, and one level deeper (a radio's `z-index:1` input in the Paper) takes `root + 2 + min(n,29)`. Gate: `engine/page/tests/g_rg_e1a_popover_paper_buttons.rs`.
+
+## RG.3.0.a: an auto descendant of a nested explicit z-index stays on its parent's layer, and `type` is not a pointer action
+
+A staynb guest popup is `z-index:100` three stacking contexts deep (`fixed z:10` > `relative z:1` > `absolute z:100`), so `stacking_layer` placed it in a 32-step slice at `root + 2 + n` (102400). `auto_layer` then rounded its auto-positioned "Add Adults guest" button DOWN to the slice root + 1 (102370), under the popup's own in-flow rows (102400): `OCCLUDED ... covered by generic ""` where Chrome's elementFromPoint returns the button. A slice offset of 2 or more now returns the parent's layer; `positioned` already ranks a positioned box above in-flow content on an equal layer. Red under `MANUK_AUTO_SLICE_MUTATE=1`.
+
+Separately, `type` focuses the node and moves no pointer, so a small element over the field (udriver's Dropoff under Pickup's open "No results" list) no longer refuses it; a dialog, anything inside one, or a cover of half the viewport or more still does. Red under `MANUK_TYPE_COVER_MUTATE=1`.

@@ -1770,6 +1770,15 @@ impl<B: Backend> Session<B> {
     /// Re-aim at `node` through the engine's occlusion-aware hit test. Scrolls once if it is
     /// off-screen. Err names what covers it, by handle.
     fn verify_landing(&mut self, h: u32, node: NodeId) -> Result<()> {
+        self.verify_reach(h, node, false)
+    }
+
+    /// [`Self::verify_landing`] for `type`, which focuses the node and never moves a pointer. A small
+    /// element over it (another combobox's open results list over the field below it: udriver's Dropoff
+    /// under Pickup's "No results") cannot misdirect the keystrokes, so Playwright's `fill` is not
+    /// refused by it. A dialog (or anything inside one) or a page-sized cover (half the viewport or more) still is.
+    /// `MANUK_TYPE_COVER_MUTATE=1` restores the pointer-style refusal for the red run.
+    fn verify_reach(&mut self, h: u32, node: NodeId, focus_only: bool) -> Result<()> {
         for _ in 0..2 {
             let tree = self.tree()?;
             let vp = self.b.viewport();
@@ -1780,6 +1789,15 @@ impl<B: Backend> Session<B> {
                 }
                 // Test-only (MANUK_LANDING_MUTATE): lets the backend's dispatch-time check be tested alone.
                 Landing::Obstructed { .. } if std::env::var_os("MANUK_LANDING_MUTATE").is_some() => return Ok(()),
+                Landing::Obstructed { by, .. } if focus_only
+                    && std::env::var_os("MANUK_TYPE_COVER_MUTATE").is_none()
+                    && !inside_dialog(&tree, by, false)
+                    && tree.iter().find(|n| n.node == by).and_then(|n| n.bbox).is_some_and(|b| {
+                        b.width * b.height < 0.5 * vp.width * vp.height
+                    }) =>
+                {
+                    return Ok(());
+                }
                 Landing::Obstructed { by, .. } => {
                     let who = tree.iter().find(|n| n.node == by).map(|n| (n.role.clone(), n.name.clone()));
                     let hb = self.handle(by);
@@ -2362,7 +2380,7 @@ impl<B: Backend> Session<B> {
                 }
             );
         }
-        self.verify_landing(h, node).map_err(|e| {
+        self.verify_reach(h, node, true).map_err(|e| {
             anyhow!(
                 "{}",
                 e.to_string()
@@ -2796,4 +2814,10 @@ fn preview(key: &str, v: &str) -> String {
     } else {
         format!("{t:?}")
     }
+}
+
+/// Whether `id` is a dialog or sits inside one: a modal that must be dealt with, not typed around.
+fn inside_dialog(n: &manuk_a11y::A11yNode, id: NodeId, in_dialog: bool) -> bool {
+    let d = in_dialog || matches!(n.role, Role::Dialog | Role::AlertDialog);
+    (n.node == id && d) || n.children.iter().any(|c| inside_dialog(c, id, d))
 }

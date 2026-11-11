@@ -2771,6 +2771,15 @@ fn auto_layer(parent_layer: i32) -> i32 {
     // `stacking_layer`); an auto box inside it sits at that root + 1, so a z-indexed MUI Paper's own
     // `position: relative` buttons paint over the Paper instead of under it.
     let r = (parent_layer - 1).rem_euclid(1024);
+    // ⭐ RG.3.0.a: a nested explicit z-index sits INSIDE a 32-step slice (`root + 2 + n`, offset >= 2). Its
+    // auto children must not fall back to the slice root: that put staynb's guest-count button (auto,
+    // positioned) at 102370, UNDER its own z-index:100 popup's in-flow rows at 102400, so "Add Adults guest"
+    // read `OCCLUDED ... covered by generic ""` where Chrome's elementFromPoint returns the button. They
+    // stay on the parent's layer instead; `positioned` already ranks them above in-flow content there.
+    // `MANUK_AUTO_SLICE_MUTATE=1` restores the fall-back for the red run.
+    if r % 32 >= 2 && std::env::var_os("MANUK_AUTO_SLICE_MUTATE").is_none() {
+        return parent_layer;
+    }
     (parent_layer - r % 32).saturating_add(1)
 }
 
