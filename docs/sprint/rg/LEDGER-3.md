@@ -1,0 +1,43 @@
+# RG.3.0 REAL gap ledger, round 3
+
+chrome_ver=145.0.7632.116. GAP = the 12 tasks in `docs/sprint/rg/B2.md` (Playwright passes >=2 of 3 in W5.B1, manuk does not in RG.2.B).
+Manuk side: RG.2.B transcripts. Mechanism = class of the FIRST failure signal in a failed manuk run (majority over failed runs); rules in `bench/agent-tasks/rg0_ledger.py`, driver `bench/agent-tasks/rg3_ledger.py`.
+
+## Mechanisms ranked by tasks explained
+
+| mechanism | tasks | which |
+|---|---|---|
+| agent | 7 | gocalendar-2, gomail-3, opendining-4, opendining-7, udriver-7, udriver-9, zilloft-2 |
+| action | 3 | gomail-5, opendining-10, zilloft-5 |
+| engine-render | 2 | staynb-4, udriver-10 |
+
+## Per task: first divergent step
+
+| task | mechanism | signal | manuk first failing step | Playwright, same step index |
+|---|---|---|---|---|
+| gocalendar-2 | agent | same-page-state-different-decision | manuk r1 step 36 (-): The view is now on **Month** and shows July 2024. All events in July 2024 fall on Monday 15 through Friday 19, 22 in total: - **Mon 15 (5):** Team Standup Meeting (10–11a (36 of 36 steps; pw passes in 9) | playwright r1 step 9 (browser_find): ### Result Found 4 matches for /Reading Time/Dinner with Friends/\+\d+ more/Dinner and Movie/: - generic [active] [ref=f2e1]: - generic [ref=f2e13]: - generic [ref=f2e131 |
+| gomail-3 | agent | same-page-state-different-decision | manuk r1 step 10 (-): The email was sent. I filled in the new message with To: jonathan.smith@example.com, Subject: "Meeting Notes", and body: "Please find the meeting notes attached.", checke (10 of 10 steps; pw passes in 25) | playwright r1 step 10 (browser_wait_for): ### Result Waited for 2 seconds ### Ran Playwright code ```js await new Promise(f => setTimeout(f, 2 * 1000)); ``` ### Page - Page URL: https://evals-gomail.vercel.app/ - |
+| gomail-5 | action | stale-handle | manuk r1 step 30 (act): h5 is unknown (handles are per-page; call observe to list them) undo: restore("auto19") page: p8b06e6:31 (30 of 36 steps; pw passes in 29) | playwright r1 step 29 (browser_take_screenshot): ### Result - [Screenshot of viewport](.playwright-mcp/page-2026-11-07T18-43-25-693Z.png) ### Ran Playwright code ```js // Screenshot viewport and save it as .playwright-m |
+| opendining-10 | action | stale-handle | manuk r1 step 7 (act): h186 is unknown (handles are per-page; call observe to list them) undo: restore("auto7") page: pf62894:9 (7 of 18 steps; pw passes in 107) | playwright r1 step 7 (browser_evaluate): ### Result [ "/r/e83c1c2b-9f5b-4a7c-bd54-b165a86a0f3d / The Royal Dine", "/r/72eabc38-0f6c-4f56-bf2f-09b9b8e04f7c / Vintage Bites", "/r/81c94d5b-47b1-4d3f-bc48-e2cbebbc2d |
+| opendining-4 | agent | same-page-state-different-decision | manuk r1 step 29 (-): I did not complete the reservation. The booking page is set to the wrong party size and date, and I didn't want to confirm a booking for the wrong details. **What I did:* (29 of 29 steps; pw passes in 40) | playwright r2 step 29 (browser_run_code_unsafe): ### Result "https://evals-opendining.vercel.app/s?date=Mon,%2002%20Sep%202024%2004:00:00%20GMT&guests=7%20people&time=4:30%20PM&query=Japanese" ### Ran Playwright code `` |
+| opendining-7 | agent | same-page-state-different-decision | manuk r1 step 10 (-): Booked a table at **Fancy Lights Bistro** for 1:30 PM, 2 people. The page shows "Booking Complete." **Why this one:** All five restaurants in "Available for Lunch Now" ar (10 of 10 steps; pw passes in 36) | playwright r1 step 10 (browser_navigate): ### Ran Playwright code ```js await page.goto('https://evals-opendining.vercel.app/r/e83c1c2b-9f5b-4a7c-bd54-b165a86a0f3d'); ``` ### Page - Page URL: https://evals-opendi |
+| staynb-4 | engine-render | occluded-hit-test | manuk r1 step 4 (act): OCCLUDED: h203 is covered by [h219] generic ""; deal with that first (nothing was clicked) undo: restore("auto5") page: pfd769a:6 (4 of 32 steps; pw passes in 47) | playwright r1 step 4 (Bash): 10: - button "close" [ref=f2e10] [cursor=pointer] 16: - button "Stays" [ref=f2e19] [cursor=pointer] 17: - button "Experiences" [ref=f2e20] [cursor=pointer] 22: - textbox  |
+| udriver-10 | engine-render | occluded-hit-test | manuk r1 step 4 (fill_form): STOPPED at step 2 of 2: it failed, so steps 3..2 did not run. step 1/2 (type h26) done step 2/2 (type h27) FAILED: OCCLUDED: h27 is covered by [h37] generic ""; deal with (4 of 40 steps; pw passes in 45) | playwright r1 step 4 (browser_click): ### Ran Playwright code ```js await page.getByRole('combobox', { name: 'Enter Location' }).click(); ``` ### Page - Page URL: https://evals-udriver.vercel.app/ - Page Titl |
+| udriver-7 | agent | same-page-state-different-decision | manuk r1 step 14 (-): You took **5 trips in June**, all in June 2024 on the My Trips page: The Landing San Francisco Apartments (6/13, 6/10), Avis Car Rental (6/13), Phat Thai (6/12), and a se (14 of 14 steps; pw passes in 10) | playwright r1 step 10 (browser_snapshot): ### Page - Page URL: https://evals-udriver.vercel.app/trips - Page Title: My Trips - Udriver Riders ### Snapshot ```yaml - generic [active] [ref=f3e1]: - generic [ref=f3e |
+| udriver-9 | agent | same-page-state-different-decision | manuk r1 step 38 (-): I booked a UdriverX from Phat Thai to 333 Fremont Apartments, set for 2:00 PM. The app confirmed it as reserved, with the driver waiting until 2:05 PM. - **Pickup:** Phat (38 of 38 steps; pw passes in 58) | playwright r1 step 38 (browser_snapshot): ### Page - Page URL: https://evals-udriver.vercel.app/ride/trip/pickupnow - Page Title: Plan your Udriver journey ### Snapshot ```yaml - generic [ref=f4e1]: - generic [re |
+| zilloft-2 | agent | same-page-state-different-decision | manuk r1 step 20 (-): I couldn't get the filter to apply, so I can't give you a reliable count of 3-bed, 2-bath San Francisco listings. - **Search:** Searching "San Francisco" returns 56 resul (20 of 20 steps; pw passes in 40) | playwright r1 step 20 (browser_find): ### Result Found 4 matches for /menu-beds/combobox/Apply/Bedrooms/Bathrooms/Min/Max/: - generic [ref=f2e1]: - main [ref=f2e216]: - main [ref=f2e2579]: - main [ref=f2e2580 |
+| zilloft-5 | action | stale-handle | manuk r1 step 7 (act): STALE: h77 is hidden behind an open menu [h569] ""; close it (press Escape) or pick one of its options, then observe undo: restore("auto6") page: p9f981a:9 (7 of 31 steps; pw passes in 45) | playwright r1 step 7 (browser_wait_for): ### Result Waited for 3 seconds ### Ran Playwright code ```js await new Promise(f => setTimeout(f, 3 * 1000)); ``` ### Page - Page URL: https://evals-zilloft.vercel.app/h |
+
+## Caveats
+- First-failure-signal heuristic over transcripts, not a root-cause proof; `answer-reports-overlay` rests on the agent's own answer; `agent` = no tool-level signal fired.
+- Gate: `python3 -I bench/agent-tasks/rg3_ledger.py` exits 0; `--mutate swap-labels` exits 1 (label disagrees with its signal); `--mutate drop-task` exits 1.
+
+## Reading the `agent` rows (7 of 12)
+`agent` means no tool-level failure signal fired in any failed manuk run; it does not say the agent is at fault. From the final answers in the excerpts above:
+- gomail-3, opendining-7, udriver-9 end with a confident success claim (email sent / "Booking Complete" / ride reserved) yet fail the judge in every failed run: the page state the agent saw differed from what the task wanted (wrong field, wrong item, or a send that did not take). No tool error to anchor on, so the first divergent step is the final state check, not an earlier step.
+- opendining-4 ends with "booking page is set to the wrong party size and date": date/party-size controls did not take the typed value (an input-commit or picker mechanism, not seen as a tool error).
+- zilloft-2 ends with "couldn't get the filter to apply": the bed/bath filter apply did not change results (silent no-op).
+- gocalendar-2, udriver-7 answer from a view the agent believes is right (month view / My Trips list); the answer was judged wrong, so the observation likely lacked or truncated items (Playwright used browser_find / snapshot at step 9-10).
+These are hypotheses from transcript text; each needs a replay under manuk vs Chrome (follow-ups RG.3.0.a / .b).
+- Round-2 mechanisms that persist in round 3: stale/unknown handle (gomail-5, opendining-10, zilloft-5), occlusion hit-test (staynb-4, udriver-10).
+- Data: `docs/sprint/rg/B2-real-manuk.tsv` (judge gpt-oss-120b only, no fallback rows), transcripts `~/.cache/manuk-rgb2/transcripts`, Playwright side W5.B1 transcripts. Gate: `python3 -I bench/agent-tasks/rg3_ledger.py` exits 0; `--mutate swap-labels` and `--mutate drop-task` exit 1.
