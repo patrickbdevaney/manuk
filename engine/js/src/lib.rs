@@ -1708,6 +1708,7 @@ pub fn dispatch_event(
     layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
     styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
 ) -> Result<bool, JsError> {
+    let _interaction = crate::event_loop::InteractionScope::enter();
     with_runtime(|rt| {
         ctx.dispatch(rt, dom, node, ty, layout, styles)
             .map_err(|message| JsError { message })
@@ -1805,6 +1806,7 @@ pub fn dispatch_key(
     layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
     styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
 ) -> Result<bool, JsError> {
+    let _interaction = crate::event_loop::InteractionScope::enter();
     with_runtime(|rt| {
         ctx.dispatch_key(rt, dom, node, ty, key, key_code, mods, layout, styles)
             .map_err(|message| JsError { message })
@@ -1839,6 +1841,7 @@ pub fn dispatch_drop(
     layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
     styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
 ) -> Result<bool, JsError> {
+    let _interaction = crate::event_loop::InteractionScope::enter();
     with_runtime(|rt| {
         ctx.dispatch_drop(rt, dom, node, files_json, layout, styles)
             .map_err(|message| JsError { message })
@@ -1870,6 +1873,7 @@ pub fn dispatch_drag(
     layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
     styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
 ) -> Result<bool, JsError> {
+    let _interaction = crate::event_loop::InteractionScope::enter();
     with_runtime(|rt| {
         ctx.dispatch_drag(rt, dom, source, target, layout, styles)
             .map_err(|message| JsError { message })
@@ -1900,6 +1904,7 @@ pub fn dispatch_composition(
     layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
     styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
 ) -> Result<bool, JsError> {
+    let _interaction = crate::event_loop::InteractionScope::enter();
     with_runtime(|rt| {
         ctx.dispatch_composition(rt, dom, node, data, layout, styles)
             .map_err(|message| JsError { message })
@@ -1932,6 +1937,7 @@ pub fn dispatch_mouse(
     layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
     styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
 ) -> Result<bool, JsError> {
+    let _interaction = crate::event_loop::InteractionScope::enter();
     with_runtime(|rt| {
         ctx.dispatch_mouse(rt, dom, node, ty, detail, button, layout, styles)
             .map_err(|message| JsError { message })
@@ -1967,6 +1973,7 @@ pub fn dispatch_mouse_buttons(
     layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
     styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
 ) -> Result<bool, JsError> {
+    let _interaction = crate::event_loop::InteractionScope::enter();
     with_runtime(|rt| {
         ctx.dispatch_mouse_buttons(rt, dom, node, ty, detail, button, buttons, layout, styles)
             .map_err(|message| JsError { message })

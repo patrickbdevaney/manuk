@@ -43,12 +43,39 @@ var p=document.createElement('pre');p.id='__probe';document.body.appendChild(p);
         // afterwards the selected element's React/DOM state is dumped.
         for st in &args[3..] {
             let (r, n) = st.split_once(':').unwrap_or(("button", st));
+            if r == "type" {
+                // `type:<textbox name>=<text>`
+                let (nm, text) = n.split_once('=').unwrap_or((n, ""));
+                let node = b.resolve_handle(&manuk_a11y::Role::TextBox, nm)?;
+                b.type_into_handle(node, text)?;
+                b.settle().await;
+                continue;
+            }
             let role = if r == "textbox" {
                 manuk_a11y::Role::TextBox
             } else {
                 manuk_a11y::Role::Button
             };
-            let act = b.click_by_name(&role, n).await;
+            if let Ok(pre) = std::env::var("PROBE_PRE_JS") {
+                b.probe_eval(&pre);
+            }
+            // `Name#K`: the K-th (0-based) match of that name in document order.
+            let act = match n
+                .rsplit_once('#')
+                .and_then(|(nm, k)| Some((nm, k.parse::<usize>().ok()?)))
+            {
+                Some((nm, k)) => {
+                    let tree = b.a11y_tree()?;
+                    let node = tree
+                        .iter()
+                        .filter(|x| x.role.matches(&role) && x.name == nm)
+                        .nth(k)
+                        .map(|x| x.node)
+                        .ok_or_else(|| anyhow::anyhow!("no {nm}#{k}"))?;
+                    b.activate(node).await
+                }
+                None => b.click_by_name(&role, n).await,
+            };
             b.settle().await;
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             println!(
@@ -57,12 +84,19 @@ var p=document.createElement('pre');p.id='__probe';document.body.appendChild(p);
                 b.probe_take_script_navigation()
             );
         }
-        b.probe_eval(&format!(
+        if let Ok(js) = std::env::var("PROBE_JS") {
+            // `PROBE_JS`: a function body returning the string to print, run after the clicks.
+            b.probe_eval(&format!(
+                "(function(){{var p=document.createElement('pre');p.id='__probe';document.body.appendChild(p);p.textContent=String((function(){{{js}}})());}})()"
+            ))
+        } else {
+            b.probe_eval(&format!(
             r#"(function(){{var el=document.querySelector('{sel}');var p=document.createElement('pre');p.id='__probe';document.body.appendChild(p);
 if(!el){{p.textContent='NOEL';return;}}var ks=Object.getOwnPropertyNames(el).filter(function(k){{return k.indexOf('__reactProps')==0;}});var pr=ks.length?el[ks[0]]:{{}};
 var r=el.getBoundingClientRect();var c=getComputedStyle(el);var top=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);
 p.textContent=JSON.stringify({{onClick:typeof pr.onClick,onclickAttr:typeof el.onclick,disabled:el.disabled,inert:el.hasAttribute('inert')||!!el.closest('[inert]'),pe:c.pointerEvents,vis:c.visibility,op:c.opacity,rect:[r.x,r.y,r.width,r.height],top:top===el?'SELF':(top&&top.tagName+':'+(top.getAttribute('aria-label')||top.className)),connected:el.isConnected,sy:window.scrollY,props:Object.keys(pr)}});}})()"#
         ))
+        }
     } else if args.get(2).map(String::as_str) == Some("at") {
         // `at` mode: scrollY=args[3], point (args[4], args[5]); lists elementsFromPoint with paint-relevant styles.
         let (dy, x, y) = (&args[3], &args[4], &args[5]);

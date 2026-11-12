@@ -162,10 +162,52 @@ pub fn max_drain_ms() -> u128 {
     } else {
         DEFAULT_MAX_DRAIN_MS
     };
-    std::env::var("MANUK_MAX_DRAIN_MS")
+    let base: u128 = std::env::var("MANUK_MAX_DRAIN_MS")
         .ok()
         .and_then(|v| v.parse().ok())
-        .unwrap_or(default)
+        .unwrap_or(default);
+    // `0` is the documented "no clock bound" and stays unbounded.
+    // Test-only (MANUK_INTERACTION_MUTATE): drop the interaction allowance, so the gate can go red.
+    if base > 0
+        && INTERACTION_DEPTH.with(|d| d.get()) > 0
+        && std::env::var_os("MANUK_INTERACTION_MUTATE").is_none()
+    {
+        return base.saturating_mul(INTERACTION_BUDGET_FACTOR);
+    }
+    base
+}
+
+/// How many times longer a drain started by a user input (click, key, pointer, drop) may run than a
+/// load-time drain. See [`InteractionScope`].
+pub const INTERACTION_BUDGET_FACTOR: u128 = 6;
+
+thread_local! {
+    static INTERACTION_DEPTH: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
+
+/// **A drain started by an input event gets [`INTERACTION_BUDGET_FACTOR`] times the load budget.**
+///
+/// The clock budget exists so a page that never converges cannot freeze the tab at LOAD. Applied to a
+/// click it does worse than cap: when the watchdog terminates a handler mid-flight, the framework that
+/// was inside its render or commit never runs its `finally`, so it believes it is still working
+/// ("Should not already be working", React #327) and every later update on that root is swallowed. The
+/// page then looks alive and ignores every click. Measured on a real MUI/React clone: one click on a
+/// 560-node page took 5-10 s, was cut at 5 s, and the filter panel's buttons never reacted again. A
+/// slow click that finishes is strictly better than a fast one that wedges the page, and a runaway
+/// handler is still stopped, only later.
+pub struct InteractionScope;
+
+impl InteractionScope {
+    pub fn enter() -> Self {
+        INTERACTION_DEPTH.with(|d| d.set(d.get() + 1));
+        InteractionScope
+    }
+}
+
+impl Drop for InteractionScope {
+    fn drop(&mut self) {
+        INTERACTION_DEPTH.with(|d| d.set(d.get().saturating_sub(1)));
+    }
 }
 
 /// See [`max_drain_ms`]. Chosen from the measured per-drain distribution across real sites.
