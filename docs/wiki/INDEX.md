@@ -274,6 +274,10 @@
   - L188 · ⚠ The instrument's own first reading was contaminated, and the second is the one above
   - L204 · ⚠ And the histogram key had a space in it
 
+## A percentage-width image contributes its natural width, not zero
+`docs/wiki/a-percent-width-image-contributes-its-natural-width.md`
+
+
 ## A public page could make the browser dial 127.0.0.1 — the guard lives where DNS is resolved
 `docs/wiki/a-public-page-cannot-dial-the-lan.md`
 
@@ -3790,4 +3794,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3093 sections across 173 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3093 sections across 174 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

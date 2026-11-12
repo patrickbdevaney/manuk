@@ -1488,6 +1488,10 @@ pub struct ComputedStyle {
     /// the page asked for, and no clamp on the other axis may overwrite it. Without this flag the
     /// two are one state and one of the rows above must be wrong.
     pub width_is_natural: bool,
+    /// A decoded bitmap's own pixel width, kept even when an author `width` (e.g. `100%`) overrides it:
+    /// a percentage width is cyclic in an intrinsic measure and falls back to this (CSS Sizing §5.2.2).
+    /// `0.0` = unknown.
+    pub natural_width: f32,
     /// The block-axis twin of `width_is_natural` — see there.
     pub height_is_natural: bool,
     pub background_repeat: BackgroundRepeat,
@@ -2168,6 +2172,7 @@ impl ComputedStyle {
             object_position: ObjectPosition::default(),
             aspect_ratio: None,
             width_is_natural: false,
+            natural_width: 0.0,
             height_is_natural: false,
             background_repeat: BackgroundRepeat::Repeat,
             text_decoration: TextDecoration::default(),
@@ -6187,6 +6192,7 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
 /// under `max-width:100%` in a 400px column is 400x200 in Chrome, and 400x400 if this fills the
 /// height.
 pub fn fill_natural_size(s: &mut ComputedStyle, nw: f32, nh: f32) {
+    s.natural_width = nw.max(0.0);
     if nw > 0.0 && nh > 0.0 {
         s.aspect_ratio = Some(nw / nh);
     }

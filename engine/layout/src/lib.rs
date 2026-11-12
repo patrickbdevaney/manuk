@@ -8662,6 +8662,15 @@ impl Ctx<'_> {
             return None;
         }
         let s = self.style_of(node);
+        // ⚠ **A PERCENTAGE-WIDTH REPLACED ELEMENT CONTRIBUTES ITS NATURAL WIDTH, NOT ZERO.** A
+        // percentage `width` is cyclic in an intrinsic measure, so it behaves as `auto` and the
+        // bitmap's own width is the max-content contribution (CSS Sizing §5.2.2). At the 1e6
+        // measuring width the box fills, is discarded by the FILL_SENTINEL rule, and contributed
+        // nothing: a `flex:0 1 auto` map pane holding `img{width:100%}` measured 0 wide against
+        // Chrome's 530. Same floor arithmetic as a declared `min-width`, hence the same hook.
+        if matches!(s.width, Dim::Percent(_)) && s.natural_width > 0.0 {
+            return Some(s.natural_width);
+        }
         let Dim::Px(m) = s.min_width else { return None };
         // `content_right_extent` measures BORDER boxes (`rect.width`), so a content-box `min-width`
         // has to gain the frame the used width would give it.
