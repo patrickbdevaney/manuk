@@ -92,6 +92,13 @@ fn page(path: &str) -> String {
             r#"<div style="position:relative;height:60px"><button>Beds &amp; Baths</button><button>Price</button></div>
 <main aria-label="Search results for homes" style="position:absolute;left:0;top:0;width:100%;height:100vh;z-index:5;pointer-events:none"><a href="/h1">Home one</a></main>"#,
         ),
+        // 9: zilloft-2 map pane: a control with a ZERO-width box sits exactly on the results landmark's left
+        // edge. A box with no area cannot be clicked (Chrome's own check skips it), so it is blocked by nothing.
+        "/sliver" => shell(
+            r#"<div style="display:flex;margin:0"><div style="width:200px"></div>
+<button aria-label="Map view" style="width:0;height:300px;padding:0;border:0;margin:0;flex:none"></button>
+<main aria-label="Search results for homes" style="position:relative;z-index:1;flex:1;height:100vh;overflow:auto"><a href="/h1">Home one</a><p>Cottage</p></main></div>"#,
+        ),
         _ => "<html><body>x</body></html>".into(),
     }
 }
@@ -294,6 +301,20 @@ fn a_pass_through_results_landmark_is_not_an_overlay() {
     assert!(
         obs.contains("MODAL OVERLAY [h"),
         "real layer not flagged:\n{obs}"
+    );
+}
+
+/// RG.2.E1.a.a.a.a: a zero-area control on the landmark's edge is not something the landmark blocks; the
+/// zilloft-2 results main was flagged CONSENT OVERLAY because of one (Chrome: non-modal).
+#[test]
+fn a_zero_width_control_on_the_edge_does_not_make_a_results_landmark_an_overlay() {
+    let base = serve();
+    let mut c = Client::start(false, &[]);
+    c.ok("navigate", json!({"url": format!("{base}/sliver")}));
+    let obs = c.ok("observe", json!({}));
+    assert!(
+        !obs.contains("OVERLAY [h"),
+        "results landmark flagged:\n{obs}"
     );
 }
 

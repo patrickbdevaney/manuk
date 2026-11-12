@@ -136,8 +136,11 @@ fn blocks_something(tree: &A11yNode, n: &A11yNode, all: &[&A11yNode]) -> bool {
             && k.z < n.z
             && !inside.contains(&k.node)
             && k.bbox.is_some_and(|r| {
+                // A box with no area cannot be clicked, so nothing is blocked (Chrome's check skips it too).
                 let (cx, cy) = (r.x + r.width / 2.0, r.y + r.height / 2.0);
-                cx >= b.x
+                r.width > 0.0
+                    && r.height > 0.0
+                    && cx >= b.x
                     && cx <= b.x + b.width
                     && cy >= b.y
                     && cy <= b.y + b.height
