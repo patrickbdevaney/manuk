@@ -285,10 +285,16 @@ fn a_pass_through_results_landmark_is_not_an_overlay() {
     let mut c = Client::start(false, &[]);
     c.ok("navigate", json!({"url": format!("{base}/results")}));
     let obs = c.ok("observe", json!({}));
-    assert!(!obs.contains("OVERLAY [h"), "results landmark flagged:\n{obs}");
+    assert!(
+        !obs.contains("OVERLAY [h"),
+        "results landmark flagged:\n{obs}"
+    );
     c.ok("navigate", json!({"url": format!("{base}/fixed")}));
     let obs = c.ok("observe", json!({}));
-    assert!(obs.contains("MODAL OVERLAY [h"), "real layer not flagged:\n{obs}");
+    assert!(
+        obs.contains("MODAL OVERLAY [h"),
+        "real layer not flagged:\n{obs}"
+    );
 }
 
 #[test]

@@ -22,7 +22,12 @@ impl Client {
             .expect("spawn manuk-mcp");
         let tx = child.stdin.take().unwrap();
         let rx = BufReader::new(child.stdout.take().unwrap());
-        let mut c = Client { child, tx, rx, id: 0 };
+        let mut c = Client {
+            child,
+            tx,
+            rx,
+            id: 0,
+        };
         c.rpc("initialize", json!({"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}));
         c.send(json!({"jsonrpc": "2.0", "method": "notifications/initialized"}));
         c
@@ -37,7 +42,10 @@ impl Client {
         self.send(json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}));
         loop {
             let mut line = String::new();
-            assert!(self.rx.read_line(&mut line).unwrap() > 0, "server closed stdout");
+            assert!(
+                self.rx.read_line(&mut line).unwrap() > 0,
+                "server closed stdout"
+            );
             let v: Value = serde_json::from_str(&line).unwrap();
             if v["id"] == json!(id) {
                 return v;
@@ -49,7 +57,12 @@ impl Client {
         let res = &r["result"];
         let text = res["content"]
             .as_array()
-            .map(|c| c.iter().filter_map(|b| b["text"].as_str()).collect::<Vec<_>>().join("\n"))
+            .map(|c| {
+                c.iter()
+                    .filter_map(|b| b["text"].as_str())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            })
             .unwrap_or_default();
         (res["isError"].as_bool().unwrap_or(false), text)
     }
@@ -71,7 +84,10 @@ impl Drop for Client {
 
 fn open(fixture: &str) -> Client {
     let mut c = Client::start();
-    let url = format!("file://{}/tests/fixtures/{fixture}", env!("CARGO_MANIFEST_DIR"));
+    let url = format!(
+        "file://{}/tests/fixtures/{fixture}",
+        env!("CARGO_MANIFEST_DIR")
+    );
     let (err, nav) = c.tool("navigate", json!({"url": url}));
     assert!(!err, "{nav}");
     for q in ["Compose", "Schedule send"] {
@@ -86,12 +102,18 @@ fn open(fixture: &str) -> Client {
 fn picker_field_takes_text_and_day_click_lands() {
     let mut c = open("nested_picker.html");
     let (_, obs) = c.tool("observe", json!({"mode": "interactive"}));
-    assert!(obs.contains("Date") && obs.contains("Save"), "picker not listed:\n{obs}");
+    assert!(
+        obs.contains("Date") && obs.contains("Save"),
+        "picker not listed:\n{obs}"
+    );
     let h = c.handle("Date");
     let (err, typed) = c.tool("type", json!({"handle": h, "text": "11/16/2026"}));
     assert!(!err, "type refused: {typed}");
     let (_, seen) = c.tool("extract", json!({}));
-    assert!(seen.contains("date:11/16/2026"), "typed date not seen: {seen}");
+    assert!(
+        seen.contains("date:11/16/2026"),
+        "typed date not seen: {seen}"
+    );
     let d = c.handle("16");
     let (err, click) = c.tool("act", json!({"handle": d, "action": "click"}));
     assert!(!err, "{click}");

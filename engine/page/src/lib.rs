@@ -11227,8 +11227,16 @@ impl Page {
                 return false;
             }
         }
+        let previous = self.dom.focused();
         if !self.dom.set_focused(node, from_keyboard) {
             return false;
+        }
+        // The field that had focus hears it leave (`blur`, then `focusout` — React's `onBlur` listens
+        // for the latter) before the new one hears it arrive. A MUI Autocomplete commits its typed
+        // recipient on that blur; without it gomail's scheduled mail was saved with `to: [""]`.
+        if let Some(prev) = previous.filter(|&p| Some(p) != node && self.dom.is_alive(p)) {
+            self.fire_plain_event(prev, "blur", fonts, viewport_width);
+            self.fire_plain_event(prev, "focusout", fonts, viewport_width);
         }
         // Same pair as the hover path, and for the same reason — see `dispatch_hover_at`, where the
         // two relayout traps are written out in full. `relayout` alone recascades only a GROWN tree

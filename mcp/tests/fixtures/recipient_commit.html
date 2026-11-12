@@ -1,0 +1,12 @@
+<!doctype html><html><body>
+<!-- gomail's Recipients box is a MUI Autocomplete: the typed address becomes the mail's `to` only when
+     the field is blurred (onBlur/focusout). This page commits on focusout, as that component does. -->
+<input id="to" aria-label="Recipients">
+<input id="subject" aria-label="Subject">
+<p id="committed">to:none</p>
+<script>
+  var to = document.getElementById('to');
+  to.addEventListener('focusout', function () {
+    document.getElementById('committed').textContent = 'to:' + (to.value || 'none');
+  });
+</script></body></html>

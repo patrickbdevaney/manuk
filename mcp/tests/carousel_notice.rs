@@ -17,7 +17,11 @@ fn serve() -> String {
             std::thread::spawn(move || {
                 let mut buf = [0u8; 8192];
                 let n = s.read(&mut buf).unwrap_or(0);
-                let first = String::from_utf8_lossy(&buf[..n]).lines().next().unwrap_or("").to_string();
+                let first = String::from_utf8_lossy(&buf[..n])
+                    .lines()
+                    .next()
+                    .unwrap_or("")
+                    .to_string();
                 let path = first.split(' ').nth(1).unwrap_or("/").to_string();
                 let body = page(&path);
                 let _ = write!(s, "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
@@ -30,10 +34,14 @@ fn serve() -> String {
 fn track(style: &str, hidden: usize, open: usize) -> String {
     let mut b = format!("<!doctype html><html><head><title>T</title></head><body><h1>Home</h1><div style=\"{style}\"><ul style=\"display:flex;width:3000px;margin:0;padding:0\">");
     for i in 0..open {
-        b.push_str(&format!("<li aria-hidden=\"false\" style=\"width:200px\"><a href=\"/r{i}\">Open {i}</a></li>"));
+        b.push_str(&format!(
+            "<li aria-hidden=\"false\" style=\"width:200px\"><a href=\"/r{i}\">Open {i}</a></li>"
+        ));
     }
     for i in 0..hidden {
-        b.push_str(&format!("<li aria-hidden=\"true\" style=\"width:200px\"><a href=\"/h{i}\">Away {i}</a></li>"));
+        b.push_str(&format!(
+            "<li aria-hidden=\"true\" style=\"width:200px\"><a href=\"/h{i}\">Away {i}</a></li>"
+        ));
     }
     b.push_str("</ul></div><button>Next</button></body></html>");
     b
@@ -142,8 +150,14 @@ fn observe_of(env: &[(&str, &str)], path: &str) -> String {
 #[test]
 fn a_clipped_track_with_aria_hidden_slides_gets_a_counted_notice() {
     let obs = observe_of(&[], "/clipped");
-    assert!(obs.contains("CAROUSEL: 5 slides"), "no notice with count 5:\n{obs}");
-    assert!(!obs.contains("Away 0"), "notice must not carry page text:\n{obs}");
+    assert!(
+        obs.contains("CAROUSEL: 5 slides"),
+        "no notice with count 5:\n{obs}"
+    );
+    assert!(
+        !obs.contains("Away 0"),
+        "notice must not carry page text:\n{obs}"
+    );
 }
 
 #[test]

@@ -1568,6 +1568,7 @@
   - L135 · Known gaps, deliberately not in this tick
   - L149 · An unrelated bug this tick surfaced
   - L155 · RG.2.S1.a: aria-hidden on an element that holds focus is ignored, and the agent never drained focus
+  - L161 · RG.2.S1.a.a.a: moving focus blurs the field that lost it
 
 ## `document.domain` — a missing property that pages read as a string is a THROW, not a gap
 `docs/wiki/document-domain.md`
@@ -3789,4 +3790,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3092 sections across 173 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3093 sections across 173 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

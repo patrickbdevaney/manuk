@@ -623,11 +623,14 @@ impl AgentBrowser {
         };
         let dom = page.dom();
         let hidden = |n: manuk_dom::NodeId| {
-            dom.element(n).and_then(|e| e.attr("aria-hidden")).is_some_and(|v| v.trim().eq_ignore_ascii_case("true"))
+            dom.element(n)
+                .and_then(|e| e.attr("aria-hidden"))
+                .is_some_and(|v| v.trim().eq_ignore_ascii_case("true"))
         };
         let clips = |n: manuk_dom::NodeId| {
             page.styles_of(n).is_some_and(|st| {
-                st.overflow_x != manuk_css::Overflow::Visible || st.overflow_y != manuk_css::Overflow::Visible
+                st.overflow_x != manuk_css::Overflow::Visible
+                    || st.overflow_y != manuk_css::Overflow::Visible
             })
         };
         let mut total = 0;
@@ -635,14 +638,17 @@ impl AgentBrowser {
             if dom.element(parent).is_none() {
                 continue;
             }
-            let kids: Vec<_> = dom.children(parent).filter(|&c| dom.element(c).is_some()).collect();
+            let kids: Vec<_> = dom
+                .children(parent)
+                .filter(|&c| dom.element(c).is_some())
+                .collect();
             let hid: Vec<_> = kids.iter().copied().filter(|&c| hidden(c)).collect();
             if hid.len() < 2 {
                 continue;
             }
-            let has_open_twin = kids.iter().any(|&c| {
-                !hidden(c) && hid.iter().any(|&h| dom.tag_name(c) == dom.tag_name(h))
-            });
+            let has_open_twin = kids
+                .iter()
+                .any(|&c| !hidden(c) && hid.iter().any(|&h| dom.tag_name(c) == dom.tag_name(h)));
             if !has_open_twin {
                 continue;
             }

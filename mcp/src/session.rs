@@ -1024,7 +1024,8 @@ impl<B: Backend> Session<B> {
     /// Chrome); say so, with the count only, so the agent does not take the visible window for the whole list.
     fn carousel_notice(&mut self) -> String {
         if std::env::var("MANUK_CAROUSEL_MUTATE").is_ok_and(|v| v == "always") {
-            return "CAROUSEL: 0 slides in a clipped scroller are aria-hidden and not listed\n".into();
+            return "CAROUSEL: 0 slides in a clipped scroller are aria-hidden and not listed\n"
+                .into();
         }
         let n = self.b.clipped_hidden_slides();
         if n == 0 {
