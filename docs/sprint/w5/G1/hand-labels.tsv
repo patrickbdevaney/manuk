@@ -1,0 +1,11 @@
+arm	task	run	hand_label	evidence
+cdp-layer	gomail-8	2	target	MODAL OVERLAY with no close control returned after search; handoff and reload did not clear it
+cdp-layer+pwfmt	gomail-5	2	target	Loading screen behind MODAL OVERLAY with no reject/close control; handoff failed
+cdp-layer+pwfmt	staynb-4	3	target	Guest picker MODAL OVERLAY never closed (h132, no close control); Who value not registered; no-change clicks sit behind it
+cdp-layer+pwfmt	dashdish-7	3	target	MODAL OVERLAY h292 with no reject/close control blocks the store page; burger never reachable
+cdp-layer	opendining-10	1	target	Country listbox options off-screen (UNREACHABLE/off-screen); phone field OCCLUDED by listbox generic
+cdp-layer	gomail-3	2	target	Body editor absent from tree; typed text lands in Subject (wrong target); overlay h138 with no close control
+cdp-layer+pwfmt	opendining-10	3	perceive	Run completes all actions (Booking Complete); wrong restaurant chosen from the menu survey, no unrecovered act or target block
+cdp-layer+pwfmt	fly-unified-6	3	target	Prev-month control UNREACHABLE and date field OCCLUDED by option list; MODAL OVERLAY with no close control
+cdp-layer+pwfmt	dashdish-7	1	act	Clipped Mushroom card: clicks verified topmost yet 'no change' (no effect); STALE page handles from stale seq
+cdp-layer	gomail-5	3	target	Version 2.0 MODAL OVERLAY with no close control; Escape did nothing; handoff failed
