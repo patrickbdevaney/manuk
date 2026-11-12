@@ -1114,8 +1114,15 @@ impl<B: Backend> Session<B> {
         } else {
             format!("the diff is {diff_len} chars, over 40% of the {full_len}-char full view")
         };
+        // The tree has no node for plain div/p text, so the view cannot show a text-only edit: keep the
+        // diff's `~text` line, which is the only place the new words appear.
+        let text_lines: String = d
+            .iter()
+            .filter(|l| l.starts_with("~text "))
+            .map(|l| format!("{l}\n"))
+            .collect();
         let view = format!(
-            "(full view instead of a diff: {why})\n{}",
+            "(full view instead of a diff: {why})\n{text_lines}{}",
             Self::fit(lines, budget, "use find(query) or observe(mode=viewport)")
         );
         if defer {
