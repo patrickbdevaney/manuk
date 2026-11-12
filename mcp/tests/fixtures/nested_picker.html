@@ -1,0 +1,57 @@
+<!doctype html>
+<title>picker dialog opened from inside a dialog</title>
+<style>
+  body { margin: 0; }
+  .btn { cursor: pointer; display: flex; height: 40px; min-width: 96px; background: #fff; }
+  .root { position: fixed; z-index: 1300; inset: 0; }
+  .backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: -1; }
+  .paper { position: absolute; bottom: 0; right: 60px; width: 600px; height: 400px; background: #fff; display: flex; flex-direction: column; }
+  .picker { position: absolute; top: 80px; left: 200px; width: 320px; height: 360px; background: #fff; display: flex; flex-direction: column; }
+  .day { cursor: pointer; display: inline-block; width: 40px; height: 32px; }
+</style>
+<div id="app">
+  <nav aria-label="Mailbox"><button class="btn" id="compose">Compose</button></nav>
+  <main><p id="out">idle</p></main>
+</div>
+<script>
+  // Outer: MUI <Dialog disablePortal> inside the aria-hidden app root (see dialog_in_hidden_root.html).
+  // Inner: the schedule-send picker, a second modal portalled to <body> from inside the first. MUI's
+  // ModalManager hides every other body child from AT (aria-hidden) and the inner FocusTrap focuses it.
+  var app = document.getElementById('app');
+  function openPicker() {
+    var root = document.createElement('div');
+    root.setAttribute('role', 'presentation');
+    root.className = 'root';
+    root.id = 'pickerroot';
+    root.innerHTML =
+      '<div class="backdrop" aria-hidden="true"></div>' +
+      '<div class="picker" role="dialog" aria-modal="true" aria-label="Pick date &amp; time" tabindex="-1">' +
+      '<h2>Pick date &amp; time</h2>' +
+      '<input aria-label="Date" type="text" id="date">' +
+      '<div role="grid" aria-label="November 2026"><div class="day" role="gridcell" tabindex="0" id="d16">16</div></div>' +
+      '<button id="save">Save</button></div>';
+    document.body.appendChild(root);
+    for (var i = 0; i < document.body.children.length; i++) {
+      var c = document.body.children[i];
+      if (c !== root && c.tagName !== 'SCRIPT') c.setAttribute('aria-hidden', 'true');
+    }
+    root.querySelector('.picker').focus();
+    document.getElementById('d16').addEventListener('click', function () { document.getElementById('out').textContent = 'day:16'; });
+    document.getElementById('date').addEventListener('input', function (e) { document.getElementById('out').textContent = 'date:' + e.target.value; });
+    document.getElementById('save').addEventListener('click', function () { root.remove(); app.removeAttribute('aria-hidden'); document.getElementById('out').textContent += ' saved'; });
+  }
+  document.getElementById('compose').addEventListener('click', function () {
+    var root = document.createElement('div');
+    root.setAttribute('role', 'presentation');
+    root.className = 'root';
+    root.innerHTML =
+      '<div class="paper" role="dialog" aria-modal="true" aria-labelledby="t" tabindex="-1">' +
+      '<h2 id="t">New Message</h2>' +
+      '<input aria-label="Recipients" type="text">' +
+      '<button id="sched">Schedule send</button><button id="send">Send</button></div>';
+    app.appendChild(root);
+    app.setAttribute('aria-hidden', 'true');
+    root.querySelector('.paper').focus();
+    document.getElementById('sched').addEventListener('click', openPicker);
+  });
+</script>

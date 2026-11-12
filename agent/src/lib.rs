@@ -1363,10 +1363,12 @@ impl AgentBrowser {
     }
 
     /// CB.1.a — move keyboard focus to `node` (`el.focus()`): `:focus`, `:focus-within` and the page's
-    /// focus handlers see it. `Ok(false)` when the engine refuses (inert or disabled control).
+    /// focus handlers see it. `Ok(false)` when the engine refuses (inert or disabled control); a node
+    /// that already holds focus is not a refusal (`set_focus` reports only whether focus MOVED).
     pub fn focus_handle(&mut self, node: manuk_dom::NodeId) -> Result<bool> {
         let page = self.page.as_mut().context("no page loaded")?;
-        Ok(page.set_focus(Some(node), false, &self.fonts, self.width as f32))
+        let moved = page.set_focus(Some(node), false, &self.fonts, self.width as f32);
+        Ok(moved || page.dom().focused() == Some(node))
     }
 
     /// W3.8 — press `key` (a `KeyboardEvent.key` value such as `Enter`, `Escape`, `ArrowDown`) on the
