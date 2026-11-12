@@ -140,8 +140,11 @@ fn scripted_session_navigates_clicks_and_reads_the_diff() {
     // click → the effect comes back with the call: a dialog appears, qty changes.
     let (err, eff) = c.tool("act", json!({"handle": add, "action": "click"}));
     assert!(!err, "{eff}");
+    // the concise act format swaps the diff for a full view when the diff is over 40% of it (W5.T4); the
+    // new dialog must be reported either way
     assert!(
-        eff.contains("+[h") && eff.contains("dialog \"Cart (1 item)\""),
+        (eff.contains("+[h") || eff.contains("(full view instead of a diff"))
+            && eff.contains("dialog \"Cart (1 item)\""),
         "no dialog in diff:\n{eff}"
     );
     assert!(eff.contains("verified: target was topmost"), "{eff}");
@@ -155,10 +158,15 @@ fn scripted_session_navigates_clicks_and_reads_the_diff() {
     let q = handle_of(&full, "textbox \"Qty\"");
     let (err, t) = c.tool("type", json!({"handle": q, "text": "7"}));
     assert!(!err, "{t}");
-    assert!(t.contains("=2→7") || t.contains("=1→7"), "{t}");
+    // over the 40% cut-over (W5.T4) the result is the full view, which shows the new value without the old
+    let view = t.contains("(full view instead of a diff");
+    assert!(
+        t.contains("=2→7") || t.contains("=1→7") || (view && t.contains("\"Qty\" =7")),
+        "{t}"
+    );
     // R1.2: the change is a `~` line carrying the SAME handle the agent typed into
     assert!(
-        t.lines()
+        view || t.lines()
             .any(|l| l.starts_with(&format!("~[{q}]")) && l.contains('→')),
         "no ~[{q}] line:\n{t}"
     );
