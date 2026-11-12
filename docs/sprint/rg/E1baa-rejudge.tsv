@@ -1,0 +1,10 @@
+arm	task	source_run	rejudge	recorded_llm_ok	verdict	reason	answer_sha256	state_sha256	chrome_ver	judge_model	rubric_sha256
+manuk	networkin-4	1	1	0	false	The answer lists the first five posts in feed order, not the five most recent posts as required.	191bad0932b9463b	e63751e0a56711d3	145.0.7632.116	openai/gpt-oss-120b	48f16799471da3e5
+manuk	networkin-4	1	2	0	false	The answer lists the first five posts in feed order, not the five most recent posts as required.	191bad0932b9463b	e63751e0a56711d3	145.0.7632.116	openai/gpt-oss-120b	48f16799471da3e5
+manuk	networkin-4	1	3	0	false	Answer lists first five posts but does not provide the 5 most recent posts as required.	191bad0932b9463b	e63751e0a56711d3	145.0.7632.116	openai/gpt-oss-120b	48f16799471da3e5
+manuk	networkin-4	2	1	0	false	The answer lists the top 5 posts by page order, not the 5 most recent posts as required.	0d253e7c31c4b82c	e63751e0a56711d3	145.0.7632.116	openai/gpt-oss-120b	48f16799471da3e5
+manuk	networkin-4	2	2	0	true	The answer lists five posts from the homepage feed as required.	0d253e7c31c4b82c	e63751e0a56711d3	145.0.7632.116	openai/gpt-oss-120b	48f16799471da3e5
+manuk	networkin-4	2	3	0	false	The answer lists the top 5 posts by page order, not the 5 most recent posts as required.	0d253e7c31c4b82c	e63751e0a56711d3	145.0.7632.116	openai/gpt-oss-120b	48f16799471da3e5
+manuk	networkin-4	3	1	1	true	The answer includes a list of five posts as required.	88a533239a2419ff	e63751e0a56711d3	145.0.7632.116	openai/gpt-oss-120b	48f16799471da3e5
+manuk	networkin-4	3	2	1	true	The answer includes a list of five posts as required.	88a533239a2419ff	e63751e0a56711d3	145.0.7632.116	openai/gpt-oss-120b	48f16799471da3e5
+manuk	networkin-4	3	3	1	true	The answer includes a list of five posts as required.	88a533239a2419ff	e63751e0a56711d3	145.0.7632.116	openai/gpt-oss-120b	48f16799471da3e5
