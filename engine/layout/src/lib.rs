@@ -8017,7 +8017,20 @@ impl Ctx<'_> {
                 None => ch.max((inner.lowest_bottom()).max(0.0)),
             },
             (Dim::Auto, _) => ch.max((inner.lowest_bottom()).max(0.0)),
-            (other, _) => (other.resolve(0.0, ch) - bs_extra_h).max(0.0),
+            // ── **A PERCENTAGE HEIGHT ON A FLOAT AGAINST AN INDEFINITE CONTAINING BLOCK IS `auto`**
+            // (CSS2 §10.5). It was resolved against 0, so `float:left; height:100%` inside an
+            // auto-height parent — the react-slick `.slick-slide` inside `.slick-track` — came out
+            // 0 (clamped to its `min-height:1px`) while its content overflowed it, and every
+            // carousel row on the page measured 1px tall with its buttons clipped to no area.
+            // A definite containing block resolves it as before.
+            (Dim::Percent(pct), _) => match pch {
+                Some(h) => (h * pct / 100.0 - bs_extra_h).max(0.0),
+                None => ch.max((inner.lowest_bottom()).max(0.0)),
+            },
+            (Dim::Calc { pct, .. }, _) if pct != 0.0 && pch.is_none() => {
+                ch.max((inner.lowest_bottom()).max(0.0))
+            }
+            (other, _) => (other.resolve(pch.unwrap_or(0.0), ch) - bs_extra_h).max(0.0),
         };
         // The same quantity the arm above resolves to, computed once so the min/max pair below
         // reads it rather than growing a second copy of the formula.
@@ -18372,6 +18385,41 @@ mod tests {
             y: x.y - c.y,
             width: x.width,
             height: x.height,
+        }
+    }
+
+    /// **A FLOAT'S PERCENTAGE HEIGHT — CSS2 §10.5 — the carousel-collapse mechanism.**
+    ///
+    /// react-slick lays slides out as `float:left; height:100%; min-height:1px` inside an
+    /// auto-height `.slick-track`; against an indefinite containing block the percentage is `auto`,
+    /// so the slide is its content tall. It resolved against 0 instead (1px, the `min-height`) and
+    /// every carousel row on the page measured 1px. Every expectation below is Chrome 145
+    /// `getBoundingClientRect().height` of the same markup.
+    #[test]
+    fn a_float_percentage_height_is_auto_against_an_indefinite_containing_block() {
+        let kid = r#"<div style="height:40px"></div>"#;
+        for (cb, style, want, why) in [
+            (
+                "width:400px",
+                "float:left;height:100%;min-height:1px;width:50px",
+                40.0,
+                "auto-height parent: 100% is auto (the slick-slide shape)",
+            ),
+            (
+                "width:400px;position:relative",
+                "float:left;height:100%;width:50px",
+                40.0,
+                "…and without the min-height",
+            ),
+            (
+                "width:400px;height:200px",
+                "float:left;height:50%;width:50px",
+                100.0,
+                "CONTROL: a definite parent still resolves the percentage",
+            ),
+        ] {
+            let r = t1059_row(cb, &format!(r#"<div id="x" style="{style}">{kid}</div>"#));
+            assert_eq!(r.height, want, "§10.5 on a float: {why}");
         }
     }
 

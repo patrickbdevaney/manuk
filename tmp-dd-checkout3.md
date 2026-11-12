@@ -1,0 +1,138 @@
+- generic [ref=f6e1]:
+  - generic [aria-hidden] [ref=f6e2]:
+    - banner [ref=f6e3]:
+      - generic [ref=f6e4]:
+        - button [ref=f6e5] [cursor=pointer]
+        - heading [level=6] [ref=f6e188]: Back to Store
+    - generic [ref=f6e12]:
+      - generic [ref=f6e14]:
+        - generic [ref=f6e16]:
+          - heading [level=5] [ref=f6e190]: 1. Account details
+          - heading [level=6] [ref=f6e191]: shaun.t.vanweelden@gmail.com
+        - generic [ref=f6e20]:
+          - heading [level=5] [ref=f6e192]: 2. Shipping details
+          - generic [ref=f6e23]:
+            - paragraph [ref=f6e25] [cursor=pointer]: Delivery
+            - paragraph [ref=f6e27] [cursor=pointer]: Pickup
+          - generic [ref=f6e28]:
+            - generic [ref=f6e29]:
+              - generic [ref=f6e30]:
+                - paragraph [ref=f6e35]: Delivery Time
+                - paragraph [ref=f6e36]: "? min"
+              - generic [ref=f6e37]:
+                - button [ref=f6e194] [cursor=pointer]:
+                  - radio [ref=f6e41]
+                  - generic [ref=f6e45]:
+                    - heading [level=6] [ref=f6e195]: Express
+                    - paragraph [ref=f6e47]: 40-55 min
+                    - generic [ref=f6e48]: Direct to you
+                    - generic [ref=f6e49]: + $2.99
+                - button [ref=f6e196] [cursor=pointer]:
+                  - radio [ref=f6e53]
+                  - generic [ref=f6e59]:
+                    - heading [level=6] [ref=f6e197]: Standard
+                    - paragraph [ref=f6e61]: 45-60 min
+                - button [ref=f6e198] [cursor=pointer]:
+                  - radio [checked] [ref=f6e65]
+                  - generic [ref=f6e69]:
+                    - heading [level=6] [ref=f6e199]: Schedule for later
+                    - paragraph [ref=f6e71]: Choose a time
+            - generic [ref=f6e73]:
+              - generic [ref=f6e76]:
+                - paragraph [ref=f6e77]: 710 Portofino Ln
+                - paragraph [ref=f6e78]: Foster City, CA 94404, USA
+              - button [ref=f6e79] [cursor=pointer]
+            - generic [ref=f6e83]:
+              - generic [ref=f6e86]:
+                - paragraph [ref=f6e87]: Leave it at my door
+                - paragraph [ref=f6e88]: Please ring the bell and drop off at the door, thank you. Its around the corner on the ground floor
+              - button [ref=f6e89] [cursor=pointer]
+            - generic [ref=f6e93]:
+              - paragraph [ref=f6e97]: (415) 861-2802
+              - button [ref=f6e98] [cursor=pointer]
+            - generic [ref=f6e102]:
+              - generic [ref=f6e105]:
+                - paragraph [ref=f6e106]: Send as a gift
+                - paragraph [ref=f6e107]: Learn more
+              - button [ref=f6e108] [cursor=pointer]
+        - generic [ref=f6e111]:
+          - generic [ref=f6e112]:
+            - heading [level=5] [ref=f6e200]: 3. Payment details
+            - generic [ref=f6e114]:
+              - generic [ref=f6e115]: VISA
+              - paragraph [ref=f6e116]: ....5097
+              - button [ref=f6e201] [cursor=pointer]: Edit
+          - generic [ref=f6e118]:
+            - generic [ref=f6e119]: VISA
+            - paragraph [ref=f6e120]: Visa....5097
+        - button [ref=f6e202] [cursor=pointer]:
+          - generic [ref=f6e122]:
+            - generic [ref=f6e123]: Place Order
+            - generic [ref=f6e124]: $20.73
+      - generic [ref=f6e126]:
+        - generic [ref=f6e130]:
+          - paragraph [ref=f6e131]: Your cart from
+          - heading [level=6] [ref=f6e204]: Taco Bell
+        - button [ref=f6e205] [cursor=pointer]:
+          - generic [ref=f6e134]:
+            - generic [ref=f6e135]: Place Order
+            - generic [ref=f6e136]: $20.73
+        - generic [ref=f6e137]:
+          - paragraph [ref=f6e138]: Promo codes, rewards & gift cards
+          - button [ref=f6e139] [cursor=pointer]
+        - separator [ref=f6e142]
+        - generic [ref=f6e143]:
+          - heading [level=6] [ref=f6e206]: Order Summary (1 Items)
+          - generic [ref=f6e145]:
+            - generic [ref=f6e146]:
+              - paragraph [ref=f6e147]: Subtotal
+              - paragraph [ref=f6e148]: $12.07
+            - generic [ref=f6e149]:
+              - paragraph [ref=f6e150]: Delivery Fee
+              - paragraph [ref=f6e151]: $2.99
+            - generic [ref=f6e152]:
+              - paragraph [ref=f6e153]: Service Fee
+              - paragraph [ref=f6e154]: $3.00
+            - generic [ref=f6e155]:
+              - paragraph [ref=f6e156]: Estimated Tax
+              - paragraph [ref=f6e157]: $0.67
+        - separator [ref=f6e158]
+        - generic [ref=f6e159]:
+          - heading [level=6] [ref=f6e207]: Dasher Tip
+          - generic [ref=f6e161]:
+            - paragraph [ref=f6e163] [cursor=pointer]: $1.00
+            - paragraph [ref=f6e165] [cursor=pointer]: $2.00
+            - paragraph [ref=f6e167] [cursor=pointer]: $3.00
+            - paragraph [ref=f6e169] [cursor=pointer]: $4.00
+          - paragraph [ref=f6e170]: The recommended Dasher tip is based on the delivery distance and effort. 100% of the tip goes to your Dasher.
+        - separator [ref=f6e171]
+        - generic [ref=f6e173]:
+          - generic [ref=f6e175]:
+            - heading [level=6] [ref=f6e209]: Classic Cheeseburger - Large
+            - paragraph [ref=f6e178]: $12.07
+          - generic [ref=f6e179]:
+            - button [ref=f6e180] [cursor=pointer]
+            - paragraph [ref=f6e183]: 1x
+            - button [ref=f6e210] [cursor=pointer]: +
+  - alert [ref=f6e185]
+  - generic [ref=f6e214]:
+    - button [ref=f6e215] [cursor=pointer]
+    - heading "710 Portofino Ln" [level=5] [ref=f6e218]
+    - img "Address image" [ref=f6e219]
+    - heading "710 Portofino Ln" [level=6] [ref=f6e220]
+    - paragraph [ref=f6e221]: Foster City, CA 94404, USA
+    - separator [ref=f6e222]
+    - paragraph [ref=f6e223]: Drop-off options
+    - radiogroup [ref=f6e224]:
+      - generic [ref=f6e225] [cursor=pointer]:
+        - radio "Hand it to me" [ref=f6e227]
+        - generic [ref=f6e231]: Hand it to me
+      - generic [ref=f6e232] [cursor=pointer]:
+        - radio "Leave it at my door" [checked] [ref=f6e234]
+        - generic [ref=f6e240]: Leave it at my door
+    - generic [ref=f6e242]:
+      - textbox "Instructions for your Dasher" [ref=f6e243]: Please ring the bell and drop off at the door, thank you. Its around the corner on the ground floor
+      - group [aria-hidden]
+    - generic [ref=f6e244]:
+      - button "Cancel" [ref=f6e245] [cursor=pointer]
+      - button "Save" [ref=f6e246] [cursor=pointer]

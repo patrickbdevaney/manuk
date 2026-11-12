@@ -1,0 +1,246 @@
+- generic [ref=f3e1]:
+  - generic [ref=f3e2]:
+    - banner [ref=f3e3]:
+      - generic [ref=f3e4]:
+        - img "Dashdish" [ref=f3e505]
+        - generic [ref=f3e7]:
+          - button [ref=f3e8] [cursor=pointer]
+          - textbox "Search Dashdish" [ref=f3e506]
+        - generic [ref=f3e13]:
+          - button [ref=f3e507] [cursor=pointer]
+          - generic [ref=f3e21]:
+            - paragraph [ref=f3e23] [cursor=pointer]: Delivery
+            - paragraph [ref=f3e25] [cursor=pointer]: Pickup
+          - button [ref=f3e508] [cursor=pointer]
+          - tooltip [ref=f3e509]:
+            - generic [ref=f3e510]:
+              - heading "Mashaallah Halal Food Pakistani Food" [level=6] [ref=f3e511]
+              - paragraph [ref=f3e512]: 1 items
+              - separator
+              - generic [ref=f3e513]:
+                - img "Chicken Biryani" [ref=f3e514]
+                - generic [ref=f3e515]:
+                  - heading "Chicken Biryani" [level=6] [ref=f3e516]
+                  - paragraph [ref=f3e517]: 1 x $18.01
+              - generic [ref=f3e518]:
+                - button "Go to Cart" [ref=f3e519] [cursor=pointer]
+                - button "Continue" [ref=f3e520] [cursor=pointer]
+                - paragraph [ref=f3e521]: $24.00 total before taxes
+    - generic [ref=f3e32]:
+      - list [ref=f3e34]:
+        - button [ref=f3e522] [cursor=pointer]:
+          - paragraph [ref=f3e40]: Home
+        - button [ref=f3e523] [cursor=pointer]:
+          - paragraph [ref=f3e48]: Grocery
+        - button [ref=f3e524] [cursor=pointer]:
+          - paragraph [ref=f3e54]: Retail
+        - button [ref=f3e525] [cursor=pointer]:
+          - paragraph [ref=f3e60]: Convenience
+        - button [ref=f3e526] [cursor=pointer]:
+          - paragraph [ref=f3e70]: Dash Mart
+        - button [ref=f3e527] [cursor=pointer]:
+          - paragraph [ref=f3e76]: Alcohol
+        - button [ref=f3e528] [cursor=pointer]:
+          - paragraph [ref=f3e82]: Gift Cards
+        - button [ref=f3e529] [cursor=pointer]:
+          - paragraph [ref=f3e92]: Health
+        - button [ref=f3e530] [cursor=pointer]:
+          - paragraph [ref=f3e98]: Browse All
+      - generic [ref=f3e99]:
+        - generic [ref=f3e100]:
+          - generic [ref=f3e101]:
+            - img "Store Header" [ref=f3e531]
+            - img "Store Avatar" [ref=f3e532]
+            - generic [ref=f3e106]:
+              - generic [ref=f3e107]:
+                - heading "Mashaallah Halal Food Pakistani Food" [level=3] [ref=f3e533]
+                - generic [ref=f3e109]:
+                  - heading "4" [level=6] [ref=f3e534]
+                  - paragraph [ref=f3e113]: (20+) ratings
+                  - separator [ref=f3e114]
+                  - paragraph [ref=f3e118]: DashPass
+                  - separator [ref=f3e119]
+                  - paragraph [ref=f3e120]: $0 delivery fee, first order
+                  - separator [ref=f3e121]
+                  - paragraph [ref=f3e122]: 1.0 mi
+                  - separator [ref=f3e123]
+                  - paragraph [ref=f3e124]: 32 min
+                - generic [ref=f3e125]:
+                  - paragraph [ref=f3e128]: Open now
+                  - paragraph [ref=f3e129]: • Closes at 10:00 PM
+                - paragraph [ref=f3e131]: Pricing & Fees
+                - generic [ref=f3e134]:
+                  - generic [ref=f3e135]:
+                    - generic [ref=f3e136]:
+                      - heading "4" [level=3] [ref=f3e535]
+                      - img "4 Stars"
+                      - generic [ref=f3e138]: (20+) ratings
+                    - generic [ref=f3e139]:
+                      - generic [ref=f3e140]:
+                        - generic [ref=f3e141]: "5"
+                        - progressbar [ref=f3e143]
+                      - generic [ref=f3e145]:
+                        - generic [ref=f3e146]: "4"
+                        - progressbar [ref=f3e148]
+                      - generic [ref=f3e150]:
+                        - generic [ref=f3e151]: "3"
+                        - progressbar [ref=f3e153]
+                      - generic [ref=f3e155]:
+                        - generic [ref=f3e156]: "2"
+                        - progressbar [ref=f3e158]
+                      - generic [ref=f3e160]:
+                        - generic [ref=f3e161]: "1"
+                        - progressbar [ref=f3e163]
+                  - separator
+                  - generic [ref=f3e165]:
+                    - generic [ref=f3e166]:
+                      - paragraph [ref=f3e167]: "\"Farmhouse bagel and Blackberry Lemonade were delicious! Will definitely order again!\""
+                      - generic [ref=f3e168]:
+                        - img "4.5 Stars"
+                        - generic [ref=f3e169]: Raquel T • 3/19/24
+                    - generic [ref=f3e170]:
+                      - paragraph [ref=f3e171]: "\"Really disappointed in the quality of the items. The ingredients were minimal and the taste was much more bland than expected. \""
+                      - generic [ref=f3e172]:
+                        - img "4.5 Stars"
+                        - generic [ref=f3e173]: Natalie A • 6/21/24
+                  - button [ref=f3e536] [cursor=pointer]
+              - generic [ref=f3e179]:
+                - generic [ref=f3e180]:
+                  - generic [ref=f3e181]:
+                    - paragraph [ref=f3e183] [cursor=pointer]:
+                      - generic [ref=f3e184]:
+                        - paragraph [ref=f3e185]: Delivery
+                        - generic [ref=f3e186]: 45-60 min
+                    - paragraph [ref=f3e188] [cursor=pointer]:
+                      - generic [ref=f3e189]:
+                        - paragraph [ref=f3e190]: Pickup
+                        - generic [ref=f3e191]: 20 min
+                  - button [ref=f3e537] [cursor=pointer]
+                - generic [ref=f3e200]:
+                  - generic [ref=f3e201]:
+                    - paragraph [ref=f3e202]: 0.8 mi away
+                    - paragraph [ref=f3e203]: distance
+                  - separator [ref=f3e204]
+                  - generic [ref=f3e205]:
+                    - paragraph [ref=f3e206]: 19 min
+                    - paragraph [ref=f3e207]: delivery time
+                - generic [ref=f3e208]:
+                  - generic [ref=f3e214]:
+                    - heading "1234 Main Street" [level=6] [ref=f3e538]
+                    - paragraph [ref=f3e216]: San Francisco, CA
+                  - separator [ref=f3e219]
+                  - generic [ref=f3e224]:
+                    - heading "Open" [level=6] [ref=f3e539]
+                    - generic [ref=f3e226]: Accepting Dashdish orders until 10:00 PM
+                  - separator [ref=f3e229]
+                  - heading "(415) 861-2802" [level=6] [ref=f3e540]
+          - generic [ref=f3e238]:
+            - heading "Most Liked Items From The Menu" [level=5] [ref=f3e541]
+            - generic [ref=f3e240]:
+              - generic [ref=f3e241]:
+                - img [ref=f3e242]:
+                  - button "Add" [active] [ref=f3e542] [cursor=pointer]
+                - generic [ref=f3e244]:
+                  - heading "Chicken Biryani" [level=6] [ref=f3e543]
+                  - generic [ref=f3e246]:
+                    - paragraph [ref=f3e247]: $17.11 •
+                    - paragraph [ref=f3e250]: 76% (28)
+                  - paragraph [ref=f3e252]: "#1 Most Liked"
+              - generic [ref=f3e253]:
+                - img [ref=f3e254]:
+                  - button "Add" [ref=f3e544] [cursor=pointer]
+                - generic [ref=f3e256]:
+                  - heading "Lamb Seekh Kebab" [level=6] [ref=f3e545]
+                  - generic [ref=f3e258]:
+                    - paragraph [ref=f3e259]: $15.28 •
+                    - paragraph [ref=f3e262]: 100% (40)
+                  - paragraph [ref=f3e264]: "#2 Most Liked"
+              - generic [ref=f3e265]:
+                - img [ref=f3e266]:
+                  - button "Add" [ref=f3e546] [cursor=pointer]
+                - generic [ref=f3e268]:
+                  - heading "Mutton Karahi" [level=6] [ref=f3e547]
+                  - generic [ref=f3e270]:
+                    - paragraph [ref=f3e271]: $18.85 •
+                    - paragraph [ref=f3e274]: 76% (28)
+                  - paragraph [ref=f3e276]: "#3 Most Liked"
+          - separator [ref=f3e277]
+          - generic [ref=f3e278]:
+            - heading "Ratings and reviews" [level=3] [ref=f3e548]
+            - generic [ref=f3e281]:
+              - generic [ref=f3e285]:
+                - heading "Raquel T" [level=6] [ref=f3e549]
+                - generic [ref=f3e287]:
+                  - img "4.5 Stars"
+                  - paragraph [ref=f3e288]: • 6/21/24
+                  - paragraph [ref=f3e289]: • DashDish Order
+                - paragraph [ref=f3e290]: Cheddar jalapeno gourmet bagel with chorizo sausage, avocado, cheddar, cage-free eggs, and jalapeño salsa shmear.
+              - generic [ref=f3e294]:
+                - heading "Raquel T" [level=6] [ref=f3e550]
+                - generic [ref=f3e296]:
+                  - img "4.5 Stars"
+                  - paragraph [ref=f3e297]: • 6/21/24
+                  - paragraph [ref=f3e298]: • DashDish Order
+                - paragraph [ref=f3e299]: Cheddar jalapeno gourmet bagel with chorizo sausage, avocado, cheddar, cage-free eggs, and jalapeño salsa shmear.
+              - generic [ref=f3e303]:
+                - heading "Raquel T" [level=6] [ref=f3e551]
+                - generic [ref=f3e305]:
+                  - img "4.5 Stars"
+                  - paragraph [ref=f3e306]: • 6/21/24
+                  - paragraph [ref=f3e307]: • DashDish Order
+                - paragraph [ref=f3e308]: Cheddar jalapeno gourmet bagel with chorizo sausage, avocado, cheddar, cage-free eggs, and jalapeño salsa shmear.
+              - generic [ref=f3e312]:
+                - heading "Raquel T" [level=6] [ref=f3e552]
+                - generic [ref=f3e314]:
+                  - img "4.5 Stars"
+                  - paragraph [ref=f3e315]: • 6/21/24
+                  - paragraph [ref=f3e316]: • DashDish Order
+                - paragraph [ref=f3e317]: Cheddar jalapeno gourmet bagel with chorizo sausage, avocado, cheddar, cage-free eggs, and jalapeño salsa shmear.
+          - generic [ref=f3e318]:
+            - heading "Frequently Asked Questions" [level=3] [ref=f3e553]
+            - button [ref=f3e554] [cursor=pointer]:
+              - heading "What are your store hours?" [level=6] [ref=f3e555]
+            - button [ref=f3e556] [cursor=pointer]:
+              - heading "Do you offer delivery?" [level=6] [ref=f3e557]
+            - button [ref=f3e558] [cursor=pointer]:
+              - heading "What is the most popular item on the menu?" [level=6] [ref=f3e559]
+            - button [ref=f3e560] [cursor=pointer]:
+              - heading "Do you have vegetarian options?" [level=6] [ref=f3e561]
+        - generic [ref=f3e349]:
+          - generic [ref=f3e350]:
+            - heading "Get to Know Us" [level=6] [ref=f3e562]
+            - list [ref=f3e352]:
+              - listitem [ref=f3e353]:
+                - paragraph [ref=f3e355]: About Us
+              - listitem [ref=f3e356]:
+                - paragraph [ref=f3e358]: Careers
+              - listitem [ref=f3e359]:
+                - paragraph [ref=f3e361]: Investors
+              - listitem [ref=f3e362]:
+                - paragraph [ref=f3e364]: Company Blog
+          - generic [ref=f3e365]:
+            - heading "Let Us Help You" [level=6] [ref=f3e563]
+            - list [ref=f3e367]:
+              - listitem [ref=f3e368]:
+                - paragraph [ref=f3e370]: Account Details
+              - listitem [ref=f3e371]:
+                - paragraph [ref=f3e373]: Order History
+              - listitem [ref=f3e374]:
+                - paragraph [ref=f3e376]: Help
+              - listitem [ref=f3e377]:
+                - paragraph [ref=f3e379]: Contact Us
+          - generic [ref=f3e380]:
+            - heading "Doing Business" [level=6] [ref=f3e564]
+            - list [ref=f3e382]:
+              - listitem [ref=f3e383]:
+                - paragraph [ref=f3e385]: Become a Partner
+              - listitem [ref=f3e386]:
+                - paragraph [ref=f3e388]: Become a Rider
+              - listitem [ref=f3e389]:
+                - paragraph [ref=f3e391]: Restaurants
+              - listitem [ref=f3e392]:
+                - paragraph [ref=f3e394]: Merchants
+          - generic [ref=f3e398]:
+            - img "App Store" [ref=f3e565]
+            - img "Google Play" [ref=f3e566]
+  - alert [ref=f3e401]: Dashdish

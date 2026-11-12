@@ -1,0 +1,337 @@
+- generic [active] [ref=f2e1]:
+  - generic [ref=f2e2]:
+    - alert [ref=f2e4]:
+      - generic [ref=f2e8]: 🚀 Version 2.0 launches soon! Stay tuned. This website is a non-commercial clone created solely for educational and testing purposes and is not affiliated with, endorsed by, or associated with any companies it may resemble.All trademarks, logos, and content are the property of their respective owners and are used here for academic purposes only, with no intent to infringe on intellectual property rights.
+      - button "close" [ref=f2e10] [cursor=pointer]
+    - generic [ref=f2e13]:
+      - generic [ref=f2e14]:
+        - button "Create event menu" [ref=f2e16] [cursor=pointer]:
+          - img "create event" [ref=f2e17]
+          - paragraph [ref=f2e18]: Create
+        - generic "Select date" [ref=f2e21]:
+          - generic [ref=f2e22]:
+            - generic [ref=f2e23] [cursor=pointer]: July 2024
+            - generic [ref=f2e26]:
+              - button "Previous month" [ref=f2e27] [cursor=pointer]
+              - button "Next month" [ref=f2e31] [cursor=pointer]
+          - grid "July 2024" [ref=f2e36]:
+            - row [ref=f2e37]:
+              - columnheader "Sunday" [ref=f2e38]: S
+              - columnheader "Monday" [ref=f2e39]: M
+              - columnheader "Tuesday" [ref=f2e40]: T
+              - columnheader "Wednesday" [ref=f2e41]: W
+              - columnheader "Thursday" [ref=f2e42]: T
+              - columnheader "Friday" [ref=f2e43]: F
+              - columnheader "Saturday" [ref=f2e44]: S
+            - rowgroup [ref=f2e45]:
+              - row [ref=f2e46]:
+                - gridcell
+                - gridcell "1" [ref=f2e47] [cursor=pointer]
+                - gridcell "2" [ref=f2e48] [cursor=pointer]
+                - gridcell "3" [ref=f2e49] [cursor=pointer]
+                - gridcell "4" [ref=f2e50] [cursor=pointer]
+                - gridcell "5" [ref=f2e51] [cursor=pointer]
+                - gridcell "6" [ref=f2e52] [cursor=pointer]
+              - row [ref=f2e53]:
+                - gridcell "7" [ref=f2e54] [cursor=pointer]
+                - gridcell "8" [ref=f2e55] [cursor=pointer]
+                - gridcell "9" [ref=f2e56] [cursor=pointer]
+                - gridcell "10" [ref=f2e57] [cursor=pointer]
+                - gridcell "11" [ref=f2e58] [cursor=pointer]
+                - gridcell "12" [ref=f2e59] [cursor=pointer]
+                - gridcell "13" [ref=f2e60] [cursor=pointer]
+              - row [ref=f2e61]:
+                - gridcell "14" [ref=f2e62] [cursor=pointer]
+                - gridcell "15" [ref=f2e63] [cursor=pointer]
+                - gridcell "16" [ref=f2e64] [cursor=pointer]
+                - gridcell "17" [ref=f2e65] [cursor=pointer]
+                - gridcell "18" [selected] [ref=f2e66] [cursor=pointer]
+                - gridcell "19" [ref=f2e67] [cursor=pointer]
+                - gridcell "20" [ref=f2e68] [cursor=pointer]
+              - row [ref=f2e69]:
+                - gridcell "21" [ref=f2e70] [cursor=pointer]
+                - gridcell "22" [ref=f2e71] [cursor=pointer]
+                - gridcell "23" [ref=f2e72] [cursor=pointer]
+                - gridcell "24" [ref=f2e73] [cursor=pointer]
+                - gridcell "25" [ref=f2e74] [cursor=pointer]
+                - gridcell "26" [ref=f2e75] [cursor=pointer]
+                - gridcell "27" [ref=f2e76] [cursor=pointer]
+              - row [ref=f2e77]:
+                - gridcell "28" [ref=f2e78] [cursor=pointer]
+                - gridcell "29" [ref=f2e79] [cursor=pointer]
+                - gridcell "30" [ref=f2e80] [cursor=pointer]
+                - gridcell "31" [ref=f2e81] [cursor=pointer]
+                - gridcell
+                - gridcell
+                - gridcell
+        - generic [ref=f2e82]:
+          - generic "My calendars" [ref=f2e83] [cursor=pointer]:
+            - paragraph [ref=f2e84]: My calendars
+          - generic "My calendar options" [ref=f2e87]:
+            - generic "Calendar options for Work" [ref=f2e88]:
+              - generic [ref=f2e89] [cursor=pointer]:
+                - generic "Select calendar Work" [ref=f2e90]:
+                  - checkbox "Select calendar Work Work" [checked] [ref=f2e91]
+                - paragraph [ref=f2e94]: Work
+            - generic "Calendar options for Family" [ref=f2e98]:
+              - generic [ref=f2e99] [cursor=pointer]:
+                - generic "Select calendar Family" [ref=f2e100]:
+                  - checkbox "Select calendar Family Family" [checked] [ref=f2e101]
+                - paragraph [ref=f2e104]: Family
+            - generic "Calendar options for Personal" [ref=f2e110]:
+              - generic [ref=f2e111] [cursor=pointer]:
+                - generic "Select calendar Personal" [ref=f2e112]:
+                  - checkbox "Select calendar Personal Personal" [checked] [ref=f2e113]
+                - paragraph [ref=f2e116]: Personal
+          - generic "Toggle other calendars visibility" [ref=f2e123] [cursor=pointer]:
+            - paragraph [ref=f2e124]: Other calendars
+      - generic [ref=f2e130]:
+        - generic [ref=f2e855]:
+          - generic [ref=f2e856]:
+            - button [ref=f2e857] [cursor=pointer]
+            - button "Close dialog" [ref=f2e860] [cursor=pointer]
+          - generic [ref=f2e863]:
+            - generic "Event title" [ref=f2e866]:
+              - textbox "Add title" [ref=f2e868]
+            - generic "Edit event time" [ref=f2e874]:
+              - generic [ref=f2e875]:
+                - paragraph [ref=f2e876]: Thursday, July 18
+                - paragraph [ref=f2e877]: 9:00 pm - 10:00 pm
+              - generic [ref=f2e878]:
+                - paragraph [ref=f2e879]: Timezone
+                - paragraph [ref=f2e881]: Does not repeat
+            - button "Find a time" [ref=f2e882] [cursor=pointer]
+            - generic "Add guests" [ref=f2e888]:
+              - textbox "Add guests" [ref=f2e890]
+          - generic [ref=f2e891]:
+            - img "google-meet" [ref=f2e893]
+            - button "Add Google Meet" [ref=f2e895] [cursor=pointer]: Add Google Meet video conferencing
+          - generic "Add location" [ref=f2e902]:
+            - textbox "Add location" [ref=f2e904]
+          - button "Add description or attachments" [ref=f2e909] [cursor=pointer]:
+            - paragraph [ref=f2e910]: Add
+            - paragraph [ref=f2e911]: description
+            - paragraph [ref=f2e912]: or
+            - paragraph [ref=f2e913]: attachments
+          - button "Edit calendar details" [ref=f2e918]:
+            - generic [ref=f2e919]:
+              - paragraph [ref=f2e920]: Tomas Abraham
+              - generic "Color for calendar rgb(3, 155, 229)" [ref=f2e921]
+            - generic [ref=f2e922]:
+              - paragraph [ref=f2e923]: Busy
+              - paragraph [ref=f2e925]: Default visibility
+              - paragraph [ref=f2e927]: Notify 30 minutes before
+          - generic [ref=f2e928]:
+            - button "More options" [ref=f2e929] [cursor=pointer]
+            - button "Save event" [ref=f2e930] [cursor=pointer]: Save
+        - generic [ref=f2e131]:
+          - generic [ref=f2e132]:
+            - generic [ref=f2e133]:
+              - generic [ref=f2e134]:
+                - button "Toogle sidebar" [ref=f2e135] [cursor=pointer]
+                - generic [ref=f2e138]:
+                  - img "logo" [ref=f2e139]
+                  - paragraph [ref=f2e141]: "18"
+                - paragraph [ref=f2e142]: GoCalendar
+              - button "Go to today" [ref=f2e144] [cursor=pointer]: Today
+              - generic [ref=f2e145]:
+                - button "previous" [ref=f2e146] [cursor=pointer]
+                - button "next" [ref=f2e149] [cursor=pointer]
+              - generic [ref=f2e152]: July 15 – 19
+            - generic [ref=f2e153]:
+              - generic "Select calendar view" [ref=f2e161]:
+                - combobox [ref=f2e162] [cursor=pointer]: 5 days
+                - textbox [aria-hidden]: 5 days
+                - group [aria-hidden]
+              - button [ref=f2e163] [cursor=pointer]:
+                - img "apps" [ref=f2e164]
+              - img "User" [ref=f2e167]
+          - generic [ref=f2e168]:
+            - generic [ref=f2e171]:
+              - generic [ref=f2e172]:
+                - button [ref=f2e174] [cursor=pointer]:
+                  - generic [ref=f2e175]:
+                    - paragraph [ref=f2e176]: Mon
+                    - paragraph [ref=f2e177]: "15"
+                - button [ref=f2e179] [cursor=pointer]:
+                  - generic [ref=f2e180]:
+                    - paragraph [ref=f2e181]: Tue
+                    - paragraph [ref=f2e182]: "16"
+                - button [ref=f2e184] [cursor=pointer]:
+                  - generic [ref=f2e185]:
+                    - paragraph [ref=f2e186]: Wed
+                    - paragraph [ref=f2e187]: "17"
+                - button [ref=f2e189] [cursor=pointer]:
+                  - generic [ref=f2e190]:
+                    - paragraph [ref=f2e191]: Thu
+                    - paragraph [ref=f2e192]: "18"
+                - button [ref=f2e194] [cursor=pointer]:
+                  - generic [ref=f2e195]:
+                    - paragraph [ref=f2e196]: Fri
+                    - paragraph [ref=f2e197]: "19"
+              - rowgroup [ref=f2e198]:
+                - row
+            - generic [ref=f2e205]:
+              - generic [ref=f2e206]:
+                - generic [ref=f2e207]: 12 AM
+                - generic [ref=f2e211]: 1 AM
+                - generic [ref=f2e215]: 2 AM
+                - generic [ref=f2e219]: 3 AM
+                - generic [ref=f2e223]: 4 AM
+                - generic [ref=f2e227]: 5 AM
+                - generic [ref=f2e231]: 6 AM
+                - generic [ref=f2e235]: 7 AM
+                - generic [ref=f2e239]: 8 AM
+                - generic [ref=f2e243]: 9 AM
+                - generic [ref=f2e247]: 10 AM
+                - generic [ref=f2e251]: 11 AM
+                - generic [ref=f2e255]: 12 PM
+                - generic [ref=f2e259]: 1 PM
+                - generic [ref=f2e263]: 2 PM
+                - generic [ref=f2e267]: 3 PM
+                - generic [ref=f2e271]: 4 PM
+                - generic [ref=f2e275]: 5 PM
+                - generic [ref=f2e279]: 6 PM
+                - generic [ref=f2e283]: 7 PM
+                - generic [ref=f2e287]: 8 PM
+                - generic [ref=f2e291]: 9 PM
+                - generic [ref=f2e295]: 10 PM
+                - generic [ref=f2e299]: 11 PM
+              - generic [ref=f2e376]:
+                - button "Event color indicator Team Standup Meeting 10am - 11am" [ref=f2e377] [cursor=pointer]:
+                  - generic [ref=f2e931]:
+                    - generic "Event color indicator" [ref=f2e932]
+                    - generic [ref=f2e933]:
+                      - paragraph [ref=f2e934]: Team Standup Meeting
+                      - paragraph [ref=f2e935]: 10am - 11am
+                - button "Event color indicator Client Call 12pm - 1pm" [ref=f2e385] [cursor=pointer]:
+                  - generic [ref=f2e936]:
+                    - generic "Event color indicator" [ref=f2e937]
+                    - generic [ref=f2e938]:
+                      - paragraph [ref=f2e939]: Client Call
+                      - paragraph [ref=f2e940]: 12pm - 1pm
+                - button "Event color indicator Team Brainstorming Session 3pm - 5pm" [ref=f2e393] [cursor=pointer]:
+                  - generic [ref=f2e941]:
+                    - generic "Event color indicator" [ref=f2e942]
+                    - generic [ref=f2e943]:
+                      - paragraph [ref=f2e944]: Team Brainstorming Session
+                      - paragraph [ref=f2e945]: 3pm - 5pm
+                - button "Event color indicator Coffee with Mentor 6pm - 7pm" [ref=f2e401] [cursor=pointer]:
+                  - generic [ref=f2e946]:
+                    - generic "Event color indicator" [ref=f2e947]
+                    - generic [ref=f2e948]:
+                      - paragraph [ref=f2e949]: Coffee with Mentor
+                      - paragraph [ref=f2e950]: 6pm - 7pm
+                - button "Event color indicator Dinner and Movie 9pm - 11pm" [ref=f2e409] [cursor=pointer]:
+                  - generic [ref=f2e951]:
+                    - generic "Event color indicator" [ref=f2e952]
+                    - generic [ref=f2e953]:
+                      - paragraph [ref=f2e954]: Dinner and Movie
+                      - paragraph [ref=f2e955]: 9pm - 11pm
+              - generic [ref=f2e490]:
+                - button "Event color indicator Morning Walk 9am - 10am" [ref=f2e491] [cursor=pointer]:
+                  - generic [ref=f2e956]:
+                    - generic "Event color indicator" [ref=f2e957]
+                    - generic [ref=f2e958]:
+                      - paragraph [ref=f2e959]: Morning Walk
+                      - paragraph [ref=f2e960]: 9am - 10am
+                - button "Event color indicator Team Workshop 11am - 12pm" [ref=f2e499] [cursor=pointer]:
+                  - generic [ref=f2e961]:
+                    - generic "Event color indicator" [ref=f2e962]
+                    - generic [ref=f2e963]:
+                      - paragraph [ref=f2e964]: Team Workshop
+                      - paragraph [ref=f2e965]: 11am - 12pm
+                - button "Event color indicator Lunch with Boss 2pm - 3pm" [ref=f2e507] [cursor=pointer]:
+                  - generic [ref=f2e966]:
+                    - generic "Event color indicator" [ref=f2e967]
+                    - generic [ref=f2e968]:
+                      - paragraph [ref=f2e969]: Lunch with Boss
+                      - paragraph [ref=f2e970]: 2pm - 3pm
+                - button "Event color indicator Creative Session 4pm - 6pm" [ref=f2e515] [cursor=pointer]:
+                  - generic [ref=f2e971]:
+                    - generic "Event color indicator" [ref=f2e972]
+                    - generic [ref=f2e973]:
+                      - paragraph [ref=f2e974]: Creative Session
+                      - paragraph [ref=f2e975]: 4pm - 6pm
+              - generic [ref=f2e596]:
+                - button "Event color indicator Project Sync 10am - 11am" [ref=f2e597] [cursor=pointer]:
+                  - generic [ref=f2e976]:
+                    - generic "Event color indicator" [ref=f2e977]
+                    - generic [ref=f2e978]:
+                      - paragraph [ref=f2e979]: Project Sync
+                      - paragraph [ref=f2e980]: 10am - 11am
+                - button "Event color indicator Customer Feedback Session 12pm - 1pm" [ref=f2e605] [cursor=pointer]:
+                  - generic [ref=f2e981]:
+                    - generic "Event color indicator" [ref=f2e982]
+                    - generic [ref=f2e983]:
+                      - paragraph [ref=f2e984]: Customer Feedback Session
+                      - paragraph [ref=f2e985]: 12pm - 1pm
+                - button "Event color indicator Team Collaboration Workshop 3pm - 4pm" [ref=f2e613] [cursor=pointer]:
+                  - generic [ref=f2e986]:
+                    - generic "Event color indicator" [ref=f2e987]
+                    - generic [ref=f2e988]:
+                      - paragraph [ref=f2e989]: Team Collaboration Workshop
+                      - paragraph [ref=f2e990]: 3pm - 4pm
+                - button "Event color indicator Follow-up Meeting 5pm - 6pm" [ref=f2e621] [cursor=pointer]:
+                  - generic [ref=f2e991]:
+                    - generic "Event color indicator" [ref=f2e992]
+                    - generic [ref=f2e993]:
+                      - paragraph [ref=f2e994]: Follow-up Meeting
+                      - paragraph [ref=f2e995]: 5pm - 6pm
+                - button "Event color indicator Dinner with Friends 7pm - 9pm" [ref=f2e629] [cursor=pointer]:
+                  - generic [ref=f2e996]:
+                    - generic "Event color indicator" [ref=f2e997]
+                    - generic [ref=f2e998]:
+                      - paragraph [ref=f2e999]: Dinner with Friends
+                      - paragraph [ref=f2e1000]: 7pm - 9pm
+                - button "Event color indicator Reading Time 10pm - 11pm" [ref=f2e637] [cursor=pointer]:
+                  - generic [ref=f2e1001]:
+                    - generic "Event color indicator" [ref=f2e1002]
+                    - generic [ref=f2e1003]:
+                      - paragraph [ref=f2e1004]: Reading Time
+                      - paragraph [ref=f2e1005]: 10pm - 11pm
+              - generic [ref=f2e718]:
+                - button "Event color indicator Morning Coffee with sister 9am - 10am" [ref=f2e719] [cursor=pointer]:
+                  - generic [ref=f2e1006]:
+                    - generic "Event color indicator" [ref=f2e1007]
+                    - generic [ref=f2e1008]:
+                      - paragraph [ref=f2e1009]: Morning Coffee with sister
+                      - paragraph [ref=f2e1010]: 9am - 10am
+                - button "Event color indicator Team Check-In 11am - 12pm" [ref=f2e727] [cursor=pointer]:
+                  - generic [ref=f2e1011]:
+                    - generic "Event color indicator" [ref=f2e1012]
+                    - generic [ref=f2e1013]:
+                      - paragraph [ref=f2e1014]: Team Check-In
+                      - paragraph [ref=f2e1015]: 11am - 12pm
+                - button "Event color indicator Lunch with Marketing Team 1pm - 3pm" [ref=f2e735] [cursor=pointer]:
+                  - generic [ref=f2e1016]:
+                    - generic "Event color indicator" [ref=f2e1017]
+                    - generic [ref=f2e1018]:
+                      - paragraph [ref=f2e1019]: Lunch with Marketing Team
+                      - paragraph [ref=f2e1020]: 1pm - 3pm
+                - button "Event color indicator Workout Session 5pm - 7pm" [ref=f2e743] [cursor=pointer]:
+                  - generic [ref=f2e1021]:
+                    - generic "Event color indicator" [ref=f2e1022]
+                    - generic [ref=f2e1023]:
+                      - paragraph [ref=f2e1024]: Workout Session
+                      - paragraph [ref=f2e1025]: 5pm - 7pm
+              - generic [ref=f2e824]:
+                - button "Event color indicator Breakfast Meeting with Client 10am - 11am" [ref=f2e825] [cursor=pointer]:
+                  - generic [ref=f2e1026]:
+                    - generic "Event color indicator" [ref=f2e1027]
+                    - generic [ref=f2e1028]:
+                      - paragraph [ref=f2e1029]: Breakfast Meeting with Client
+                      - paragraph [ref=f2e1030]: 10am - 11am
+                - button "Event color indicator Team Progress Check 12pm - 1pm" [ref=f2e833] [cursor=pointer]:
+                  - generic [ref=f2e1031]:
+                    - generic "Event color indicator" [ref=f2e1032]
+                    - generic [ref=f2e1033]:
+                      - paragraph [ref=f2e1034]: Team Progress Check
+                      - paragraph [ref=f2e1035]: 12pm - 1pm
+                - button "Event color indicator Client Presentation 3pm - 5pm" [ref=f2e841] [cursor=pointer]:
+                  - generic [ref=f2e1036]:
+                    - generic "Event color indicator" [ref=f2e1037]
+                    - generic [ref=f2e1038]:
+                      - paragraph [ref=f2e1039]: Client Presentation
+                      - paragraph [ref=f2e1040]: 3pm - 5pm
+  - alert [ref=f2e849]

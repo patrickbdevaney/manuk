@@ -1,0 +1,55 @@
+- generic [active] [ref=f5e1]:
+  - alert [ref=f5e2]
+  - generic [ref=f5e3]:
+    - alert [ref=f5e5]:
+      - generic [ref=f5e9]: 🚀 Version 2.0 launches soon! Stay tuned. This website is a non-commercial clone created solely for educational and testing purposes and is not affiliated with, endorsed by, or associated with any companies it may resemble.All trademarks, logos, and content are the property of their respective owners and are used here for academic purposes only, with no intent to infringe on intellectual property rights.
+      - button "close" [ref=f5e11] [cursor=pointer]
+    - generic [ref=f5e14]:
+      - generic [ref=f5e15]:
+        - paragraph [ref=f5e17]: Mobile
+        - paragraph [ref=f5e20]: For Businesses
+        - paragraph [ref=f5e21]: Get help
+        - paragraph [ref=f5e22]: FAQs
+        - paragraph [ref=f5e24]: EN
+      - generic [ref=f5e27]:
+        - generic [ref=f5e28]:
+          - button "Home" [ref=f5e29] [cursor=pointer]:
+            - img "logo" [ref=f5e30]
+          - separator [ref=f5e32]
+        - generic [ref=f5e39]:
+          - generic [ref=f5e40]: TA
+          - separator [ref=f5e45]
+    - generic [ref=f5e48]:
+      - paragraph [ref=f5e49]: You’re almost done!
+      - generic [ref=f5e50]:
+        - img "restaurant" [ref=f5e52]
+        - generic [ref=f5e53]:
+          - paragraph [ref=f5e54]: The Vegan Table
+          - generic [ref=f5e55]:
+            - paragraph [ref=f5e59]: Jul 18
+            - paragraph [ref=f5e63]: 1:30 PM
+            - paragraph [ref=f5e67]: 2 people
+      - paragraph [ref=f5e68]: Diner details
+      - generic [ref=f5e69]:
+        - generic [ref=f5e70]:
+          - generic "Phone number input" [ref=f5e71]:
+            - generic [ref=f5e72]:
+              - button "Select country" [ref=f5e74] [cursor=pointer]:
+                - generic:
+                  - img "United States"
+              - textbox [ref=f5e75]: "+1"
+              - group [aria-hidden]
+          - generic [ref=f5e77]:
+            - textbox "Email address, read-only" [ref=f5e78]: user_name@gmail.com
+            - group [aria-hidden]
+        - generic [ref=f5e79]:
+          - generic "Select an occasion, optional" [ref=f5e80]:
+            - combobox [ref=f5e81] [cursor=pointer]: Select an occasion (optional)
+            - textbox [aria-hidden]: placeholder
+            - group [aria-hidden]
+          - generic [ref=f5e83]:
+            - textbox "Special request input, optional" [ref=f5e84]:
+              - /placeholder: Add a special request (optional)
+            - group [aria-hidden]
+      - button "Complete reservation" [ref=f5e85] [cursor=pointer]
+      - paragraph [ref=f5e86]: By clicking “Complete reservation” you agree to the OpenDinning Terms of Use and Privacy Policy. Message & data rates may apply. You can opt out of receiving text messages at any time in your account settings or by replying STOP.

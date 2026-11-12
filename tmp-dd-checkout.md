@@ -1,0 +1,122 @@
+- generic [active] [ref=f6e1]:
+  - generic [ref=f6e2]:
+    - banner [ref=f6e3]:
+      - generic [ref=f6e4]:
+        - button [ref=f6e5] [cursor=pointer]
+        - heading "Back to Store" [level=6] [ref=f6e8]
+        - img "Dashdish" [ref=f6e11]
+    - generic [ref=f6e12]:
+      - generic [ref=f6e14]:
+        - generic [ref=f6e16]:
+          - heading "1. Account details" [level=5] [ref=f6e17]
+          - heading "shaun.t.vanweelden@gmail.com" [level=6] [ref=f6e18]
+        - generic [ref=f6e20]:
+          - heading "2. Shipping details" [level=5] [ref=f6e21]
+          - img "Address image" [ref=f6e22]
+          - generic [ref=f6e23]:
+            - paragraph [ref=f6e25] [cursor=pointer]: Delivery
+            - paragraph [ref=f6e27] [cursor=pointer]: Pickup
+          - generic [ref=f6e28]:
+            - generic [ref=f6e29]:
+              - generic [ref=f6e30]:
+                - paragraph [ref=f6e35]: Delivery Time
+                - paragraph [ref=f6e36]: 45-60 min
+              - generic [ref=f6e37]:
+                - button "Express 40-55 min Direct to you + $2.99" [ref=f6e38] [cursor=pointer]:
+                  - radio [ref=f6e41]
+                  - generic [ref=f6e45]:
+                    - heading "Express" [level=6] [ref=f6e46]
+                    - paragraph [ref=f6e47]: 40-55 min
+                    - generic [ref=f6e48]: Direct to you
+                    - generic [ref=f6e49]: + $2.99
+                - button [ref=f6e50] [cursor=pointer]:
+                  - radio [checked] [ref=f6e53]
+                  - generic [ref=f6e59]:
+                    - heading "Standard" [level=6] [ref=f6e60]
+                    - paragraph [ref=f6e61]: 45-60 min
+                - button [ref=f6e62] [cursor=pointer]:
+                  - radio [ref=f6e65]
+                  - generic [ref=f6e69]:
+                    - heading "Schedule for later" [level=6] [ref=f6e70]
+                    - paragraph [ref=f6e71]: Choose a time
+            - generic [ref=f6e73]:
+              - generic [ref=f6e76]:
+                - paragraph [ref=f6e77]: 710 Portofino Ln
+                - paragraph [ref=f6e78]: Foster City, CA 94404, USA
+              - button [ref=f6e79] [cursor=pointer]
+            - generic [ref=f6e83]:
+              - generic [ref=f6e86]:
+                - paragraph [ref=f6e87]: Leave it at my door
+                - paragraph [ref=f6e88]: Please ring the bell and drop off at the door, thank you. Its around the corner on the ground floor
+              - button [ref=f6e89] [cursor=pointer]
+            - generic [ref=f6e93]:
+              - paragraph [ref=f6e97]: (415) 861-2802
+              - button [ref=f6e98] [cursor=pointer]
+            - generic [ref=f6e102]:
+              - generic [ref=f6e105]:
+                - paragraph [ref=f6e106]: Send as a gift
+                - paragraph [ref=f6e107]: Learn more
+              - button [ref=f6e108] [cursor=pointer]
+        - generic [ref=f6e111]:
+          - generic [ref=f6e112]:
+            - heading "3. Payment details" [level=5] [ref=f6e113]
+            - generic [ref=f6e114]:
+              - generic [ref=f6e115]: VISA
+              - paragraph [ref=f6e116]: ....5097
+              - button "Edit" [ref=f6e117] [cursor=pointer]
+          - generic [ref=f6e118]:
+            - generic [ref=f6e119]: VISA
+            - paragraph [ref=f6e120]: Visa....5097
+        - button "Place Order $20.73" [ref=f6e121] [cursor=pointer]:
+          - generic [ref=f6e122]:
+            - generic [ref=f6e123]: Place Order
+            - generic [ref=f6e124]: $20.73
+      - generic [ref=f6e126]:
+        - generic [ref=f6e127]:
+          - img "Store Avatar" [ref=f6e129]
+          - generic [ref=f6e130]:
+            - paragraph [ref=f6e131]: Your cart from
+            - heading "Taco Bell" [level=6] [ref=f6e132]
+        - button "Place Order $20.73" [ref=f6e133] [cursor=pointer]:
+          - generic [ref=f6e134]:
+            - generic [ref=f6e135]: Place Order
+            - generic [ref=f6e136]: $20.73
+        - generic [ref=f6e137]:
+          - paragraph [ref=f6e138]: Promo codes, rewards & gift cards
+          - button [ref=f6e139] [cursor=pointer]
+        - separator [ref=f6e142]
+        - generic [ref=f6e143]:
+          - heading "Order Summary (1 Items)" [level=6] [ref=f6e144]
+          - generic [ref=f6e145]:
+            - generic [ref=f6e146]:
+              - paragraph [ref=f6e147]: Subtotal
+              - paragraph [ref=f6e148]: $12.07
+            - generic [ref=f6e149]:
+              - paragraph [ref=f6e150]: Delivery Fee
+              - paragraph [ref=f6e151]: $2.99
+            - generic [ref=f6e152]:
+              - paragraph [ref=f6e153]: Service Fee
+              - paragraph [ref=f6e154]: $3.00
+            - generic [ref=f6e155]:
+              - paragraph [ref=f6e156]: Estimated Tax
+              - paragraph [ref=f6e157]: $0.67
+        - separator [ref=f6e158]
+        - generic [ref=f6e159]:
+          - heading "Dasher Tip" [level=6] [ref=f6e160]
+          - generic [ref=f6e161]:
+            - paragraph [ref=f6e163] [cursor=pointer]: $1.00
+            - paragraph [ref=f6e165] [cursor=pointer]: $2.00
+            - paragraph [ref=f6e167] [cursor=pointer]: $3.00
+            - paragraph [ref=f6e169] [cursor=pointer]: $4.00
+          - paragraph [ref=f6e170]: The recommended Dasher tip is based on the delivery distance and effort. 100% of the tip goes to your Dasher.
+        - separator [ref=f6e171]
+        - generic [ref=f6e173]:
+          - img "Classic Cheeseburger" [ref=f6e174]
+          - generic [ref=f6e175]:
+            - heading "Classic Cheeseburger - Large" [level=6] [ref=f6e177]
+            - paragraph [ref=f6e178]: $12.07
+          - generic [ref=f6e179]:
+            - button [ref=f6e180] [cursor=pointer]
+            - paragraph [ref=f6e183]: 1x
+            - button "+" [ref=f6e184] [cursor=pointer]
+  - alert [ref=f6e185]

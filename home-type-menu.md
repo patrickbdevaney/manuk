@@ -1,0 +1,198 @@
+- generic [ref=f4e1]:
+  - main [ref=f4e216]:
+    - navigation [ref=f4e2584]:
+      - link [ref=f4e2585] [cursor=pointer]:
+        - /url: /
+      - generic [ref=f4e223]:
+        - list [ref=f4e224]:
+          - listitem [ref=f4e225]: Buy
+          - listitem [ref=f4e226]: Rent
+          - listitem [ref=f4e227]: Sell
+          - listitem [ref=f4e228]: Home Loans
+          - listitem [ref=f4e229]: Find an Agent
+        - list [ref=f4e230]:
+          - listitem [ref=f4e231]: Manage Rentals
+          - listitem [ref=f4e232]: Advertise
+        - list [ref=f4e233]:
+          - listitem [ref=f4e234]: Help
+        - list [ref=f4e235]:
+          - listitem [ref=f4e236]: Sign In
+    - region [ref=f4e2587]:
+      - generic [ref=f4e244]:
+        - textbox [ref=f4e2589]:
+          - /placeholder: Address, neighborhood, city or ZIP code
+          - text: San Jose
+        - generic [ref=f4e246]:
+          - button [ref=f4e423] [cursor=pointer]
+          - button [ref=f4e247] [cursor=pointer]
+        - group [aria-hidden]
+      - generic [ref=f4e251]:
+        - button [ref=f4e2590] [cursor=pointer]: For Sale
+        - button [ref=f4e2591] [cursor=pointer]: $750K - $1M
+        - button [ref=f4e2592] [cursor=pointer]: Beds & Baths
+        - button [expanded] [ref=f4e2593] [cursor=pointer]: Home Type
+      - button [ref=f4e2596] [cursor=pointer]: Save search
+    - main [ref=f4e2597]:
+      - main [ref=f4e2598]:
+        - main [ref=f4e2163]:
+          - generic [ref=f4e2164]:
+            - heading [level=1] [ref=f4e2599]: San Jose Real Estate & Homes For Sale
+            - generic [ref=f4e2166]:
+              - generic [ref=f4e2167]: 8 results
+              - generic [ref=f4e2168]: "Sort: Homes for you"
+          - list [ref=f4e2600]:
+            - listitem [ref=f4e2171]:
+              - article [ref=f4e2174]:
+                - generic [ref=f4e2175] [cursor=pointer]
+            - listitem [ref=f4e2210]:
+              - article [ref=f4e2213]:
+                - generic [ref=f4e2214] [cursor=pointer]
+            - listitem [ref=f4e2249]:
+              - article [ref=f4e2252]:
+                - generic [ref=f4e2253] [cursor=pointer]
+            - listitem [ref=f4e2287]:
+              - article [ref=f4e2290]:
+                - generic [ref=f4e2291] [cursor=pointer]
+            - listitem [ref=f4e2326]:
+              - article [ref=f4e2329]:
+                - generic [ref=f4e2330] [cursor=pointer]
+            - listitem [ref=f4e2364]:
+              - article [ref=f4e2367]:
+                - generic [ref=f4e2368] [cursor=pointer]
+            - listitem [ref=f4e2403]:
+              - article [ref=f4e2406]:
+                - generic [ref=f4e2407] [cursor=pointer]
+            - listitem [ref=f4e2442]:
+              - article [ref=f4e2445]:
+                - generic [ref=f4e2446] [cursor=pointer]
+          - generic [ref=f4e2481]:
+            - generic [ref=f4e2482]:
+              - button [ref=f4e2649] [cursor=pointer]: Save this search
+              - text: to get email alerts when listings hit the market.
+            - list [ref=f4e2485]:
+              - listitem [ref=f4e2486]:
+                - paragraph [ref=f4e2488]: IDX information is provided exclusively for personal, non-commercial use, and may not be used for any purpose other than to identify prospective properties consumers may be interested in purchasing. Information is deemed reliable but not guaranteed.
+              - listitem [ref=f4e2489]:
+                - paragraph [ref=f4e2491]: Bay East 2024. CCAR 2024. bridgeMLS 2024. Information Deemed Reliable But Not Guaranteed. This information is being provided by the Bay East MLS, or CCAR MLS, or bridgeMLS. The listings presented here may or may not be listed by the Broker/Agent operating this website. This information is intended for the personal use of consumers and may not be used for any purpose other than to identify prospective properties consumers may be interested in purchasing. Data last updated at 2024-09-25 12:31:39 PDT.
+              - listitem [ref=f4e2492]:
+                - paragraph [ref=f4e2494]: Based on information from the MLSListings MLS as of 2024-09-25 12:38:21 PDT. All data, including all measurements and calculations of area, is obtained from various sources and has not been, and will not be, verified by broker or MLS. All information should be independently reviewed and verified for accuracy. Properties may or may not be listed by the office/agent presenting the information.
+            - separator [ref=f4e2495]
+        - contentinfo [ref=f4e2498]:
+          - navigation [ref=f4e2499]:
+            - list [ref=f4e2500]:
+              - listitem [ref=f4e2501]:
+                - paragraph [ref=f4e2502] [cursor=pointer]: About
+              - listitem [ref=f4e2503]:
+                - paragraph [ref=f4e2504] [cursor=pointer]: Zestimates
+              - listitem [ref=f4e2505]:
+                - paragraph [ref=f4e2506] [cursor=pointer]: Research
+              - listitem [ref=f4e2507]:
+                - paragraph [ref=f4e2508] [cursor=pointer]: Careers
+              - listitem [ref=f4e2509]:
+                - paragraph [ref=f4e2510] [cursor=pointer]: Careers - U.S. Privacy Notice
+              - listitem [ref=f4e2511]:
+                - paragraph [ref=f4e2512] [cursor=pointer]: Careers - Mexico Privacy Notice
+              - listitem [ref=f4e2513]:
+                - paragraph [ref=f4e2514] [cursor=pointer]: Help
+              - listitem [ref=f4e2515]:
+                - paragraph [ref=f4e2516] [cursor=pointer]: Advertise
+              - listitem [ref=f4e2517]:
+                - paragraph [ref=f4e2518] [cursor=pointer]: Fair Housing Guide
+              - listitem [ref=f4e2519]:
+                - paragraph [ref=f4e2520] [cursor=pointer]: Advocacy
+              - listitem [ref=f4e2521]:
+                - paragraph [ref=f4e2522] [cursor=pointer]: Terms of use
+              - listitem [ref=f4e2523]:
+                - paragraph [ref=f4e2524] [cursor=pointer]: Privacy Portal
+              - listitem [ref=f4e2525]:
+                - paragraph [ref=f4e2526] [cursor=pointer]: Cookie Preference
+              - listitem [ref=f4e2527]:
+                - paragraph [ref=f4e2528] [cursor=pointer]: Learn
+              - listitem [ref=f4e2529]:
+                - paragraph [ref=f4e2530] [cursor=pointer]: AI
+              - listitem [ref=f4e2531]:
+                - paragraph [ref=f4e2532] [cursor=pointer]: Mobile Apps
+            - list [ref=f4e2533]:
+              - listitem [ref=f4e2534]:
+                - paragraph [ref=f4e2535] [cursor=pointer]: Trulia
+              - listitem [ref=f4e2536]:
+                - paragraph [ref=f4e2537] [cursor=pointer]: StreetEasy
+              - listitem [ref=f4e2538]:
+                - paragraph [ref=f4e2539] [cursor=pointer]: HotPads
+              - listitem [ref=f4e2540]:
+                - paragraph [ref=f4e2541] [cursor=pointer]: Out East
+              - listitem [ref=f4e2542]:
+                - paragraph [ref=f4e2543] [cursor=pointer]: Showing Time+
+            - link [ref=f4e2652] [cursor=pointer]:
+              - /url: "#"
+              - text: Do Not Sell or Share My Personal Information
+          - generic [ref=f4e2548]:
+            - paragraph [ref=f4e2549]:
+              - text: Zilloft Group is committed to ensuring digital accessibility for individuals with disabilities. We are continuously working to improve the accessibility of our web experience for everyone, and we welcome feedback and accommodation requests. If you wish to report an issue or seek an accommodation, please
+              - link [ref=f4e2653] [cursor=pointer]:
+                - /url: "#"
+                - text: let us know.
+            - paragraph [ref=f4e2551]:
+              - text: Zilloft, Inc. holds real estate brokerage
+              - link [ref=f4e2654] [cursor=pointer]:
+                - /url: "#"
+                - text: licenses
+              - text: in multiple states. Zilloft (Canada), Inc. holds real estate brokerage
+              - link [ref=f4e2655] [cursor=pointer]:
+                - /url: "#"
+                - text: licenses
+              - text: in multiple provinces.
+              - link [ref=f4e2656] [cursor=pointer]:
+                - /url: "#"
+                - text: § 442-H New York Standard Operating Procedures
+              - link [ref=f4e2657] [cursor=pointer]:
+                - /url: "#"
+                - text: § New York Fair Housing Notice
+              - link [ref=f4e2658] [cursor=pointer]:
+                - /url: "#"
+                - text: "TREC: Information about brokerage services, Consumer protection notice"
+              - text: "California DRE #1522444"
+              - link [ref=f4e2659] [cursor=pointer]:
+                - /url: "#"
+                - text: Contact Zilloft, Inc. Brokerage
+            - paragraph [ref=f4e2558]: For listings in Canada, the trademarks REALTOR®, REALTORS®, and the REALTOR® logo are controlled by The Canadian Real Estate Association (CREA) and identify real estate professionals who are members of CREA. The trademarks MLS®, Multiple Listing Service® and the associated logos are owned by CREA and identify the quality of services provided by real estate professionals who are members of CREA. Used under license.
+            - generic [ref=f4e2559]:
+              - figure [ref=f4e2560] [cursor=pointer]
+              - figure [ref=f4e2562] [cursor=pointer]
+            - list [ref=f4e2564]:
+              - listitem [ref=f4e2565]:
+                - figure [ref=f4e2567] [cursor=pointer]
+              - listitem [ref=f4e2569]:
+                - generic [ref=f4e2570]
+              - listitem [ref=f4e2578]:
+                - generic [ref=f4e2579]
+      - region [ref=f4e2671]
+  - alert [ref=f4e208]: "Zilloft: Real Estate, Apartments, Mortgages & Home Values"
+  - menu [ref=f4e2675]:
+    - generic [ref=f4e2676]:
+      - generic [ref=f4e2677]:
+        - generic [ref=f4e2678]: Home Type
+        - button [active] [ref=f4e2680] [cursor=pointer]: Deselect All
+        - generic [ref=f4e2681]:
+          - generic [ref=f4e2682] [cursor=pointer]:
+            - checkbox "Houses" [ref=f4e2684]
+            - generic [ref=f4e2687]: Houses
+          - generic [ref=f4e2688] [cursor=pointer]:
+            - checkbox "Townhomes" [ref=f4e2690]
+            - generic [ref=f4e2693]: Townhomes
+          - generic [ref=f4e2694] [cursor=pointer]:
+            - checkbox "Multi-family" [ref=f4e2696]
+            - generic [ref=f4e2699]: Multi-family
+          - generic [ref=f4e2700] [cursor=pointer]:
+            - checkbox "Condos/Co-ops" [ref=f4e2702]
+            - generic [ref=f4e2705]: Condos/Co-ops
+          - generic [ref=f4e2706] [cursor=pointer]:
+            - checkbox "Lots/Land" [ref=f4e2708]
+            - generic [ref=f4e2711]: Lots/Land
+          - generic [ref=f4e2712] [cursor=pointer]:
+            - checkbox "Apartments" [ref=f4e2714]
+            - generic [ref=f4e2717]: Apartments
+          - generic [ref=f4e2718] [cursor=pointer]:
+            - checkbox "Manufactured" [ref=f4e2720]
+            - generic [ref=f4e2723]: Manufactured
+      - button "Apply" [ref=f4e2724] [cursor=pointer]
