@@ -168,3 +168,13 @@ link "Udriver"
 - listitem "Ride"
 link "Ride"
 ```
+
+## RG.0.a.a: why the 'Version 2.0 launches soon' banner is in Chrome's tree and not manuk's
+
+chrome_ver=145.0.7632.116. **Verdict: not a style mis-computation; a clock difference. Neither engine's tree is wrong; the diff was taken at different page times.**
+
+- Banner element: MUI Alert `filled/info`, `background-color:#0288d1; color:#fff` (white on blue, contrast ~3.9 > MIN_CONTRAST 1.5, opacity 1, no animation). The page's own JS (gocalendar chunk, `useEffect`) arms `setTimeout(() => setOpen(false), 1e4)` — the banner is *designed* to auto-dismiss after 10 s.
+- Chrome (real time), same URL: banner present at t=3 s and t=8 s, absent at t=14 s (probe in this node).
+- manuk: after `load` the virtual clock may run ahead `__VCLOCK_HORIZON_MS = 60000` (engine/js/src/dom_bindings.rs, tick 680), so the 10 s dismissal has already fired at the first observe. Same banner, 60 virtual seconds later.
+- So rg0a's "load-time page" diff compared Chrome at ~6 s wall against manuk at +60 s virtual. The 6 tasks' "first differing node" is the dismissed banner, not an engine defect; it does not occlude targets in manuk (it is gone). Any Chrome-vs-manuk tree diff must treat page-armed timers < 60 s as a known skew.
+- Fixture (network-free, no site code): `bench/agent-tasks/rg0aa_banner_timer.py` — manuk: 10 s dismiss timer -> banner absent, 90 s timer (beyond horizon) -> present; Chrome: 10 s timer -> present at 2 s, absent at 13 s. GATE PASS; `--mutate` (expects the manuk 10 s case present) exits 1.
