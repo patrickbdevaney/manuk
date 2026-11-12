@@ -194,6 +194,8 @@ def proxy(a, child):
             # topwork/networkin-style clones return {xDiff: ...} with no config block; only check the id when one is present
             if not setup_done[0] or not isinstance(st, dict) or "jsonrpc" in st or ("config" in st and config_task(st["config"]) != a.task):
                 txt, st = f"invalid state (setup={setup_done[0]}): {txt}", None
+            if st is None:
+                open(a.state + ".full", "w").write(txt)  # parse failures: keep the whole read, state.json's raw is cut
             open(a.state, "w").write(json.dumps({"ok": st is not None, "state": st, "raw": None if st else txt[:500]}))
         except Exception as ex:
             open(a.state, "w").write(json.dumps({"ok": False, "state": None, "raw": f"shim: {ex}"}))

@@ -234,6 +234,10 @@ fn top_passages(text: &str, query: &str) -> Option<(String, usize, usize)> {
     Some((out, hits, blocks.len()))
 }
 
+fn squash(s: &str) -> String {
+    s.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 /// RG.E1.b: text a reader sees that lives only in an accessible name (a star widget's
 /// `aria-label="Rating: 3.74"` on an empty box), which the painted-text extraction cannot carry. A
 /// childless `generic` whose name is not in `text` is woven back in at its document position: after the
@@ -248,6 +252,7 @@ fn weave_label_only(text: &str, tree: &A11yNode) -> String {
         n: &'a A11yNode,
         anc: Option<&'a str>,
         text: &str,
+        squashed: &str,
         cursor: &mut usize,
         ins: &mut Vec<(usize, &'a str)>,
     ) {
@@ -256,7 +261,12 @@ fn weave_label_only(text: &str, tree: &A11yNode) -> String {
         if !name.is_empty() {
             if let Some(i) = text[*cursor..].find(name) {
                 *cursor += i + name.len();
-            } else if matches!(n.role, Role::Generic) && n.children.is_empty() {
+            } else if matches!(n.role, Role::Generic)
+                && n.children.is_empty()
+                && !squashed.contains(&squash(name))
+            {
+                // (A name that differs from the text only in whitespace, a `<pre>`'s indentation, is the
+                // text itself: weaving it in would duplicate it into the middle of the page.)
                 if let Some(a) = anc.filter(|a| a.contains(name)) {
                     let i = a.find(name).unwrap_or(0);
                     let pre = a[..i].trim();
@@ -282,12 +292,13 @@ fn weave_label_only(text: &str, tree: &A11yNode) -> String {
             }
         }
         for c in &n.children {
-            walk(c, next_anc, text, cursor, ins);
+            walk(c, next_anc, text, squashed, cursor, ins);
         }
     }
     let mut cursor = 0;
     let mut ins: Vec<(usize, &str)> = Vec::new();
-    walk(tree, None, text, &mut cursor, &mut ins);
+    let squashed = squash(text);
+    walk(tree, None, text, &squashed, &mut cursor, &mut ins);
     let mut out = String::with_capacity(text.len());
     let mut at = 0;
     for (pos, name) in ins {
