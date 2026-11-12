@@ -4,6 +4,7 @@ target, act, tool-choice, turn-limit), from the stream-json transcript; then the
 Playwright passes and cdp-layer fails.
 
   w5g1_report.py [--runs-dir target/real-runs] [--dir docs/sprint/w5/G1] [--mutate drop-act]
+(causes.tsv is derived only from rows whose transcript passes w5g1_transcript_check's answer match.)
 
 Inputs: DIR/<arm>.tsv for arm in cdp-layer (a: current observation) and cdp-layer+pwfmt (b: Playwright-shaped snapshot,
 real_run.pw_snapshot); transcripts RUNS/<arm>_<task>_r<run>/transcript.jsonl. Output: DIR/causes.tsv, DIR/table.tsv, and
@@ -15,11 +16,17 @@ import argparse, collections, csv, json, os, re, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import real_classify as rc  # parse() and features(): the W4.A0 reader, reused unchanged
+import real_classify as rc
+import w5g1_transcript_check as tc  # W5.G1.b.a: is this transcript the one that produced the row?  # parse() and features(): the W4.A0 reader, reused unchanged
 
 ROOT = os.path.join(HERE, "..", "..")
 ACTS = {"act", "type", "fill_form", "browser_click", "browser_type", "browser_fill_form", "browser_select_option",
-        "browser_press_key", "click", "press", "select"}
+        "browser_press_key", "click", "press", "select", "key", "scroll", "navigate", "handoff", "drag", "browser_navigate",
+        "browser_hover", "browser_navigate_back", "back"}
+# a result that is not a success: the same signals real_classify counts as act failures, plus plain errors
+FAIL = re.compile(r"^no change \| url: unchanged|STALE|no longer on the page|handles are per-page|is unknown \(handles|"
+                  r"bad page handle|not found in the current page snapshot|is not supported by this backend|"
+                  r"no enclosing <form>|TimeoutError|^\s*(Error|error)\b|### Error", re.M)
 ARMS = ["cdp-layer", "cdp-layer+pwfmt"]
 CLASSES = ["perceive", "target", "act", "tool-choice", "turn-limit"]
 
@@ -36,13 +43,29 @@ def action_calls(path):
     return n
 
 
+def unrecovered(path):
+    """Act-failure counts over the results after the LAST successful action result. A no-effect or refusal that a later
+    action recovered from is not what failed the run."""
+    results = rc.parse(path)[2]
+    last = max((i for i, (n, b) in enumerate(results) if n in ACTS and b.strip() and not FAIL.search(b)), default=-1)
+    c = collections.Counter()
+    for _, body in results[last + 1:]:
+        for k in ("stale", "unsup", "enter_gap", "timeout"):
+            if rc.RX[k].search(body):
+                c[k] += 1
+        if rc.RX["nochange"].search(body.lstrip()):
+            c["nochange"] += 1
+    return c
+
+
 def classify(path, mutate=None):
     f = rc.features(path)
     if f["is_error"]:
         return "turn-limit"
     if action_calls(path) == 0:
         return "tool-choice"
-    act = f["nochange"] >= 2 or f["stale"] >= 2 or f["unsup"] or f["enter_gap"] or (f["typed_fail_text"] and f["type_calls"]) or f["timeout"]
+    u = unrecovered(path)
+    act = u["nochange"] >= 2 or u["stale"] >= 2 or u["unsup"] or u["enter_gap"] or (f["typed_fail_text"] and f["type_calls"]) or u["timeout"]
     if act:
         return None if mutate == "drop-act" else "act"  # mutant: the act rule is gone, so its runs stay unclassified
     if f["strict"] or f["ambig_text"] or f["occl"] or f["dialog_text"]:
@@ -61,7 +84,7 @@ def main():
     ap.add_argument("--dir", default=os.path.join(ROOT, "docs/sprint/w5/G1"))
     ap.add_argument("--mutate", choices=["drop-act"])
     a = ap.parse_args()
-    bad, causes, rows = [], [], {}
+    bad, causes, rows, skipped = [], [], {}, []
     for arm in ARMS:
         rows[arm] = load(a.dir, arm)
         keys = collections.Counter(k[0] for k in rows[arm])
@@ -72,6 +95,10 @@ def main():
             p = os.path.join(a.runs_dir, f"{arm}_{task}_r{run}", "transcript.jsonl")
             if not os.path.exists(p):
                 bad.append(f"{arm} {task} r{run}: no transcript")
+                continue
+            res = tc.final_result(p)
+            if res is None or tc.flat(res)[:80] != r["answer"][:80]:
+                skipped.append(f"{arm} {task} r{run}")  # overwritten transcript: no cause is derived from it
                 continue
             if r["pass"] == "0":
                 c = classify(p, a.mutate)
@@ -97,6 +124,8 @@ def main():
         cnt = collections.Counter(c for (ar, _, _, c) in causes if ar == arm)
         print(f"{arm}: pass per run {per_run} (band {min(per_run)}-{max(per_run)}), tasks passing >=2/3: {task_2of3}/{len(tasks)}; "
               f"failed runs by class: " + ", ".join(f"{k} {cnt[k]}" for k in CLASSES))
+    if skipped:
+        print(f"{len(skipped)} rows have an overwritten transcript and are excluded from causes.tsv: " + ", ".join(skipped))
     if bad:
         print("GATE FAIL:\n  " + "\n  ".join(bad))
         sys.exit(1)
