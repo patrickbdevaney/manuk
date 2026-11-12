@@ -5641,6 +5641,13 @@ impl Page {
         if self.dom.is_dirty(root) || self.dom.has_dirty_descendants(root) {
             self.relayout(fonts, viewport_width);
         }
+        // An `<img>` a click or timer inserted (a results view, a map) has no pixels or size yet: the
+        // load pass ran before it existed. Images already tried are skipped, so a settle that added
+        // none costs a DOM walk. Without this such an image stays 0x0 and `naturalWidth` 0, and a
+        // flex pane sized by it collapses to nothing.
+        if started.elapsed() < budget {
+            self.fetch_and_apply_images(fonts, viewport_width).await;
+        }
     }
 
     #[cfg(not(feature = "spidermonkey"))]
