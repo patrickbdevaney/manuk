@@ -2273,7 +2273,15 @@ impl CdpBackend {
                 Err(_) if !mutated("cached-scroll") => self.page_hit(cx, cy).unwrap_or(0),
                 Err(e) => return Err(e),
             };
-            if hit == be || self.within(hit, be) || mutated("no-revalidate") {
+            // The compositor's hit-test can keep answering at its previous scroll offset after a
+            // scroll up in headless Chrome (a point reads what sat there before), while the page's
+            // own elementFromPoint is current: where the page says the target is under the point,
+            // that is the click's target. A real overlay shows in both.
+            let page_agrees = !mutated("cached-scroll")
+                && self
+                    .page_hit(cx, cy)
+                    .is_ok_and(|h| h == be || self.within(h, be));
+            if hit == be || self.within(hit, be) || page_agrees || mutated("no-revalidate") {
                 return Ok((cx, cy, be));
             }
             cover.get_or_insert(hit);
