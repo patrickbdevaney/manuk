@@ -1,0 +1,7 @@
+surface	chrome_ver	chrome_cards	manuk_cards	names
+extract-text	145.0.7632.116	20	6	The Royal Dine|Vintage Bites|Evening Delight|River View Café|Fancy Lights Bistro|Bar Central
+extract-text-hidden	145.0.7632.116	20	20	The Royal Dine|Vintage Bites|Evening Delight|River View Café|Fancy Lights Bistro|Bar Central|Spacious Eats|Yellowy Bistro|Crowded Corner|Expensive Taste|Ocean Breeze|Bistro Soleil|Sushi Zen|La Trattoria|Taco Loco|The Vegan Table|Steakhouse 101|Dim Sum Delight|Pizza Palace|BBQ Haven
+extract-markdown	145.0.7632.116	20	20	The Royal Dine|Vintage Bites|Evening Delight|River View Café|Fancy Lights Bistro|Bar Central|Spacious Eats|Yellowy Bistro|Crowded Corner|Expensive Taste|Ocean Breeze|Bistro Soleil|Sushi Zen|La Trattoria|Taco Loco|The Vegan Table|Steakhouse 101|Dim Sum Delight|Pizza Palace|BBQ Haven
+extract-markdown-hidden	145.0.7632.116	20	20	The Royal Dine|Vintage Bites|Evening Delight|River View Café|Fancy Lights Bistro|Bar Central|Spacious Eats|Yellowy Bistro|Crowded Corner|Expensive Taste|Ocean Breeze|Bistro Soleil|Sushi Zen|La Trattoria|Taco Loco|The Vegan Table|Steakhouse 101|Dim Sum Delight|Pizza Palace|BBQ Haven
+observe-full	145.0.7632.116	20	5	The Royal Dine|Vintage Bites|Evening Delight|River View Café|Fancy Lights Bistro
+observe-full-hidden	145.0.7632.116	20	5	The Royal Dine|Vintage Bites|Evening Delight|River View Café|Fancy Lights Bistro
