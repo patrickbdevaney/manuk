@@ -1184,19 +1184,34 @@ impl AgentBrowser {
     pub fn a11y_tree_with_text(&self) -> Result<manuk_a11y::A11yNode> {
         let page = self.page.as_ref().context("no page loaded")?;
         let mut t = page.a11y_tree();
-        fn fill(n: &mut manuk_a11y::A11yNode, dom: &manuk_dom::Dom) {
-            if n.name.is_empty() && matches!(n.role, manuk_a11y::Role::Paragraph) {
-                n.name = dom
-                    .text_content(n.node)
+        // A text-only `generic` (a `<span>` or `<div>` holding just text: a form's "Please enter a
+        // valid origin." line) is a content line in Chrome's tree and was absent here, so a
+        // validation message the page rendered never reached the agent. Skipped under a named
+        // ancestor, whose name already carries that text.
+        fn fill(n: &mut manuk_a11y::A11yNode, dom: &manuk_dom::Dom, under_named: bool) {
+            let text = || {
+                dom.text_content(n.node)
                     .split_whitespace()
                     .collect::<Vec<_>>()
-                    .join(" ");
+                    .join(" ")
+            };
+            if n.name.is_empty() && matches!(n.role, manuk_a11y::Role::Paragraph) {
+                n.name = text();
+            } else if n.name.is_empty()
+                && !under_named
+                && matches!(n.role, manuk_a11y::Role::Generic)
+                && n.children.is_empty()
+                && !dom.children(n.node).any(|c| dom.is_element(c))
+            {
+                n.name = text();
             }
+            let under = under_named
+                || (!n.name.is_empty() && !matches!(n.role, manuk_a11y::Role::Document));
             for k in &mut n.children {
-                fill(k, dom);
+                fill(k, dom, under);
             }
         }
-        fill(&mut t, page.dom());
+        fill(&mut t, page.dom(), false);
         Ok(t)
     }
 

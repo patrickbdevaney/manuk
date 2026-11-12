@@ -1,8 +1,8 @@
 chrome_ver=145.0.7632.116
 
 ### manuk
-- click Find flights: ok: dispatched click. +1 ~0 -1 text changed; new (names are page content): [h62] textbox "Departure - Return" [readonly]; url unchanged; writes 0
-page: pa08da4:4
+- click Find flights: ok: dispatched click. +4 ~0 -1 text changed; new (names are page content): [h63] generic "Please enter a valid origin.", [h64] generic "Please enter a valid destination.", [h65] textbox "Departure - Return" [readonly], [h66] generic "Please enter a valid departure date."; url unchanged; writes 0
+page: p39f1ce:4
 - page after: https://evals-fly-unified.vercel.app/
 ```
 - image "Airlines logo"
@@ -14,17 +14,23 @@ page: pa08da4:4
 - Book with miles
 - Flexible dates
 ###### From*
+- generic "Origin"
+- generic "Please enter a valid origin."
 ###### To*
+- generic "Destination"
+- generic "Please enter a valid destination."
 ###### Dates*
+- generic "Please enter a valid departure date."
 ###### Travelers
 - Advanced search >
 - (Certificates, multi-city and upgrades)
+- generic "and"
 - English - United States $ ↓offscreen
 - | Español ↓offscreen
 ```
 ### chrome
 - click Find flights: ok: dispatched click at. +3 ~0 -0 text changed; new (names are page content): [h50] generic "Please enter a valid origin.", [h51] generic "Please enter a valid destination.", [h52] generic "Please enter a valid departure date."; url unchanged; writes 0
-page: pee8004:4
+page: peb316a:4
 - page after: https://evals-fly-unified.vercel.app/
 ```
 - image "Image 2 of 5"

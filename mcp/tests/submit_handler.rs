@@ -130,3 +130,20 @@ fn a_form_without_a_handler_still_submits_natively() {
         "no native submit: {t}"
     );
 }
+
+/// RG.2.0.a.a.a: the message the handler rendered into a `<span>` is a content line in `observe` and in
+/// the click's change summary, as in Chrome's tree (`generic "Please enter a valid origin."`).
+#[test]
+fn a_rendered_validation_message_is_visible_to_observe() {
+    let mut c = open();
+    let t = click(&mut c, "Find flights");
+    assert!(
+        t.contains("Please enter a valid origin."),
+        "click summary omits the message: {t}"
+    );
+    let (_, obs) = c.tool("observe", json!({"mode": "content"}));
+    assert!(
+        obs.contains("generic \"Please enter a valid origin.\""),
+        "observe omits the message: {obs}"
+    );
+}
