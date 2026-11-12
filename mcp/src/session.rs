@@ -37,6 +37,9 @@ struct Entry {
     /// W4.A4: ` in listitem "Teal Kettle" in list "Products"`: the nearest named containers. Not part of
     /// identity: a re-render that moves a card does not make its button "changed".
     ctx: String,
+    /// The `class` attribute of an operable element: not part of identity, but a change in it alone
+    /// is reported, since a class-toggled segmented control has no other observable state.
+    cls: String,
 }
 
 /// W5.L3: largest response body `page_data` returns.
@@ -326,6 +329,7 @@ fn entry(n: &A11yNode) -> Entry {
         value,
         click: false,
         ctx: String::new(),
+        cls: String::new(),
     }
 }
 
@@ -815,11 +819,15 @@ impl<B: Backend> Session<B> {
         }
     }
 
-    fn snapshot(&self, tree: &A11yNode) -> Snap {
+    fn snapshot(&mut self, tree: &A11yNode) -> Snap {
         let mut s = Snap::default();
         for n in tree.iter().filter(|n| worth(n)) {
             s.order.push(n.node.0);
-            s.by_id.insert(n.node.0, self.ent(n));
+            let mut e = self.ent(n);
+            if n.role.is_interactive() {
+                e.cls = self.b.class_attr(n.node).unwrap_or_default();
+            }
+            s.by_id.insert(n.node.0, e);
         }
         s.text = self.page_text().unwrap_or_default();
         s
@@ -1158,6 +1166,19 @@ impl<B: Backend> Session<B> {
                             e.state.trim_matches(|c| c == '[' || c == ']')
                         );
                     }
+                    out.push(l);
+                }
+                Some(p)
+                    if p.cls != e.cls
+                        && !std::env::var("MANUK_CLASSDIFF_MUTATE").is_ok_and(|v| v == "off") =>
+                {
+                    let h = self.bind(NodeId(*id), e);
+                    let mut l = format!("~[h{h}] {}", e.role);
+                    if !e.name.is_empty() {
+                        let _ = write!(l, " {:?}", e.name);
+                    }
+                    l.push_str(&e.ctx);
+                    let _ = write!(l, " class {:?}→{:?}", clip(&p.cls), clip(&e.cls));
                     out.push(l);
                 }
                 _ => {}
@@ -2803,7 +2824,7 @@ fn concise(full: &str) -> Option<String> {
     {
         return None;
     }
-    let (mut add, mut chg, mut del, mut text) = (0, 0, 0, 0);
+    let (mut add, mut chg, mut del, mut text, mut classed) = (0, 0, 0, 0, 0);
     let mut new_ops: Vec<&str> = Vec::new();
     let mut outcome = "";
     let mut writes = 0usize;
@@ -2823,6 +2844,7 @@ fn concise(full: &str) -> Option<String> {
             }
         } else if l.starts_with("~[h") {
             chg += 1;
+            classed += usize::from(l.contains(" class \""));
         } else if l.starts_with("~text") {
             text += 1;
         } else if l.starts_with("-[h") {
@@ -2837,6 +2859,11 @@ fn concise(full: &str) -> Option<String> {
     let mut o = format!("ok: {outcome}. +{add} ~{chg} -{del}");
     if text > 0 {
         o.push_str(" text changed");
+    }
+    if classed > 0 {
+        o.push_str(&format!(
+            " (class changed on {classed}: a style-only state such as a selected option)"
+        ));
     }
     if !new_ops.is_empty() {
         o.push_str(&format!(

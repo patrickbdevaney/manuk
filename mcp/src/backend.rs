@@ -184,6 +184,10 @@ pub trait Backend {
     fn click_handlers(&mut self, _node: NodeId) -> Option<usize> {
         None
     }
+    /// The `class` attribute of `node`; `None` = absent, or this backend cannot say.
+    fn class_attr(&mut self, _node: NodeId) -> Option<String> {
+        None
+    }
     /// Whether this process's request ledger sees the backend's network traffic. A backend whose
     /// requests bypass it (Chrome over CDP) cannot tell CLIENT from WORLD, so checkpoints say UNKNOWN.
     fn sees_network(&self) -> bool {
@@ -301,6 +305,9 @@ impl Backend for AgentBrowser {
     }
     fn click_handlers(&mut self, node: NodeId) -> Option<usize> {
         Some(self.click_handlers_on_path(node))
+    }
+    fn class_attr(&mut self, node: NodeId) -> Option<String> {
+        AgentBrowser::class_attr(self, node)
     }
     async fn back(&mut self) -> Result<()> {
         AgentBrowser::back(self).await

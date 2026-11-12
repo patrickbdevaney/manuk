@@ -606,6 +606,14 @@ impl AgentBrowser {
         n
     }
 
+    /// The `class` attribute of `node`, whitespace-normalised: a segmented control often shows its
+    /// selected option only through it, which the accessibility state cannot see.
+    pub fn class_attr(&self, node: manuk_dom::NodeId) -> Option<String> {
+        let page = self.page.as_ref()?;
+        let c = page.dom().element(node)?.attr("class")?.to_string();
+        Some(c.split_whitespace().collect::<Vec<_>>().join(" "))
+    }
+
     /// W3.12: call before dispatching an action; timers armed by it beyond [`SOON_MS`] stay pending.
     pub fn begin_act(&mut self) {
         self.act_err_mark = manuk_js::script_error_count();
