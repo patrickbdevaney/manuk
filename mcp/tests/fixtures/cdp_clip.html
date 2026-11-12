@@ -1,0 +1,13 @@
+<!doctype html><html><head><title>Clip</title><style>
+body { margin: 0 }
+.car { position: relative; width: 300px; height: 1px; overflow: hidden; margin-top: 10px }
+.slide { position: absolute; left: 0; top: 0; width: 300px; height: 80px; background: #ccc }
+.free { position: relative; width: 300px; height: 1px }
+.free .slide { top: 0 }
+</style></head><body>
+<div class="car"><div class="slide"></div></div>
+<button id="link" onclick="document.getElementById('out').textContent='clicked-link'">Link</button>
+<div class="free"><div class="slide"></div></div>
+<button id="under" onclick="document.getElementById('out').textContent='clicked-under'">Under</button>
+<h2 id="out">idle</h2>
+</body></html>

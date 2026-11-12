@@ -401,7 +401,7 @@ fn rgba(c: Color) -> manuk_css::Rgba {
     manuk_css::Rgba::new(c.r, c.g, c.b, (c.a * 255.0) as u8)
 }
 
-const STYLES: [&str; 10] = [
+const STYLES: [&str; 14] = [
     "display",
     "visibility",
     "opacity",
@@ -412,6 +412,10 @@ const STYLES: [&str; 10] = [
     "overflow-x",
     "position",
     "overflow-y",
+    "border-top-width",
+    "border-right-width",
+    "border-bottom-width",
+    "border-left-width",
 ];
 
 #[derive(Default, Clone)]
@@ -423,6 +427,8 @@ struct Style {
     color: Option<Color>,
     bg: Option<Color>,
     clips: bool,
+    /// border widths (top, right, bottom, left): the clip is the padding box.
+    border: [f32; 4],
 }
 
 struct Raw {
@@ -545,6 +551,13 @@ fn parse_snapshot(snap: &Value, doc: usize, tag: u64) -> Result<(Raw, f32, f32)>
             color: parse_color(&g("color")),
             bg: parse_color(&g("background-color")),
             clips: (!ox.is_empty() && ox != "visible") || (!oy.is_empty() && oy != "visible"),
+            border: [
+                "border-top-width",
+                "border-right-width",
+                "border-bottom-width",
+                "border-left-width",
+            ]
+            .map(|n| g(n).trim_end_matches("px").parse().unwrap_or(0.0)),
         };
         layout
             .entry(i)
@@ -1054,6 +1067,41 @@ impl Builder<'_> {
         id
     }
 
+    /// The intersection of the padding boxes of `i`'s overflow-clipping ancestors (in this document,
+    /// shifted into page coordinates), as the in-process engine's `clip_map_for(true)` does:
+    /// `html`/`body` overflow scrolls the viewport rather than clipping. `None` = unclipped.
+    fn clip_of(&self, i: usize) -> Option<Rect> {
+        let r = self.r;
+        let mut clip: Option<Rect> = None;
+        let mut p = r.parent[i];
+        while p >= 0 {
+            let pu = p as usize;
+            if let Some((b, _, st)) = r.layout.get(&pu) {
+                if st.clips && r.kind[pu] == 1 && !matches!(r.tag(pu).as_str(), "html" | "body") {
+                    let [bt, br, bb, bl] = st.border;
+                    let pad = Rect {
+                        x: b[0] + bl + self.off.0,
+                        y: b[1] + bt + self.off.1,
+                        width: (b[2] - bl - br).max(0.0),
+                        height: (b[3] - bt - bb).max(0.0),
+                    };
+                    clip = match clip {
+                        // Disjoint clips leave nothing visible: an empty rect at the nearer clip.
+                        Some(c) => Some(c.intersection(&pad).unwrap_or(Rect {
+                            x: c.x,
+                            y: c.y,
+                            width: 0.0,
+                            height: 0.0,
+                        })),
+                        None => Some(pad),
+                    };
+                }
+            }
+            p = r.parent[pu];
+        }
+        clip
+    }
+
     fn node(
         &mut self,
         i: usize,
@@ -1135,6 +1183,11 @@ impl Builder<'_> {
             ),
             None => (None, 0, true),
         };
+        let clip = if std::env::var("MANUK_CDP_MUTATE").as_deref() == Ok("no-clip") {
+            None
+        } else {
+            self.clip_of(i)
+        };
         let state = state_of(r, i, &role);
         let mut children = vec![];
         if tag == "select" || tag == "datalist" {
@@ -1204,7 +1257,7 @@ impl Builder<'_> {
             z,
             hittable,
             positioned: false,
-            clip: None,
+            clip,
             state,
             children,
         })
