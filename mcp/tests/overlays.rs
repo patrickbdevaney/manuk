@@ -86,6 +86,12 @@ fn page(path: &str) -> String {
             r#"<div style="position:fixed;left:0;top:0;width:100%;height:100%;z-index:50;background:#fff">
 <p>Sign in to continue</p><button>Continue</button></div>"#,
         ),
+        // 8: zilloft-2 shape: a positioned results landmark whose box spans the filter bar, pointer-events
+        // none, so every filter control is still clickable. Not an overlay.
+        "/results" => shell(
+            r#"<div style="position:relative;height:60px"><button>Beds &amp; Baths</button><button>Price</button></div>
+<main aria-label="Search results for homes" style="position:absolute;left:0;top:0;width:100%;height:100vh;z-index:5;pointer-events:none"><a href="/h1">Home one</a></main>"#,
+        ),
         _ => "<html><body>x</body></html>".into(),
     }
 }
@@ -269,6 +275,20 @@ fn wrapper_run(env: &[(&str, &str)]) {
         obs.contains("MODAL OVERLAY [h"),
         "fixed full-page layer over page controls not flagged:\n{obs}"
     );
+}
+
+/// RG.2.E1.a.b: a positioned results main spanning the filter bar, with the bar's controls clickable
+/// through it, is not an overlay; the fixed layer above still is.
+#[test]
+fn a_pass_through_results_landmark_is_not_an_overlay() {
+    let base = serve();
+    let mut c = Client::start(false, &[]);
+    c.ok("navigate", json!({"url": format!("{base}/results")}));
+    let obs = c.ok("observe", json!({}));
+    assert!(!obs.contains("OVERLAY [h"), "results landmark flagged:\n{obs}");
+    c.ok("navigate", json!({"url": format!("{base}/fixed")}));
+    let obs = c.ok("observe", json!({}));
+    assert!(obs.contains("MODAL OVERLAY [h"), "real layer not flagged:\n{obs}");
 }
 
 #[test]
