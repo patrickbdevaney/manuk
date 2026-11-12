@@ -1,0 +1,12 @@
+commit	subject	L12_pass_of_runs	chrome_ver
+6f7ebed8	E1c baseline (rebuilt)	3/3,3/3,3/3	145.0.7632.116
+d4c6220c	R1.5.a.a	3/3	145.0.7632.116
+ca0b3b45	RG.S1.a.e	3/3	145.0.7632.116
+6fbab25f	RG.S1.c.b.a	3/3	145.0.7632.116
+69348c75	RG.S1.c.b.a.a (parent of 5b020bca)	3/3,3/3	145.0.7632.116
+5b020bca	RG.2.0.a.a.a text-only generic lines reach observe	2/3,1/3	145.0.7632.116
+8bb89605	RG.2.E1.a.b	3/3,2/3,0/3	145.0.7632.116
+5a855ade	docs only vs 8bb89605	2/3,0/3,0/3	145.0.7632.116
+5ad603fb	RG.2.S1.a.a	1/3,0/3,1/3	145.0.7632.116
+e9d13a4d	HEAD	1/3,0/3,0/3,0/3	145.0.7632.116
+# mechanism (transcripts /tmp/trc-69348c75-1 vs /tmp/trc-5b020bca-1): before 5b020bca observe lists no quote text, so the agent reads format=text and answers Marilyn Monroe. After it, quote text appears as generic lines, the agent scrolls dy=5000 twice, trusts the viewport-only scroll diff (y=765 then y=2634 of 4959; content grew mid-settle), never sees batch 2's first quotes (skipped between viewports), and names Douglas Adams.
