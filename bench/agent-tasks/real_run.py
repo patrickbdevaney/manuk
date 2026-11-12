@@ -31,7 +31,7 @@ TOOLS = {  # (navigate tool, read-the-<pre> call) per tool surface
 
 
 def surface(arm):
-    return "playwright" if arm == "playwright" else "manuk"
+    return "playwright" if arm in ("playwright", "playwright+preload") else "manuk"
 
 
 def load_tasks():
@@ -277,7 +277,7 @@ def chrome_wrapper(tdir):
 
 
 def pin_chrome(arm, srv, tdir):
-    if arm == "playwright":
+    if arm in ("playwright", "playwright+preload"):
         args = [x for x in srv["args"] if x != "--no-sandbox"]
         args[args.index("--executable-path") + 1] = chrome_wrapper(tdir)
         srv["args"] = args
@@ -303,7 +303,7 @@ def one(arm, task, run, pin, tdir, timeout, judge_env=None, trdir=TRANSCRIPTS):
     srv["command"] = sys.executable
     json.dump(cfg, open(cfg_path, "w"))
     prompt = run_arm.PROMPT.format(url=site, goal=task["goal"])
-    out, err, secs, _ = run_arm.run_claude(prompt, cfg_path, allowed, timeout, sys_hint=run_arm.HINTS.get(arm))
+    out, err, secs, _ = run_arm.run_claude(prompt, cfg_path, allowed, timeout, sys_hint=run_arm.HINTS.get(arm), env=run_arm.ARM_ENV.get(arm))
     open(os.path.join(tmp, "transcript.jsonl"), "w").write(out)
     os.makedirs(trdir, exist_ok=True)
     open(os.path.join(trdir, f"{arm}_{task['id']}_r{run}.jsonl"), "w").write(out)

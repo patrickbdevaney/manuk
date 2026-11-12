@@ -8,6 +8,9 @@ pass2of3_rate	real	cdp-layer	26.47	29	31
 tokens_io_per_task	real	playwright	4689.77	4492.01	5000.53
 tokens_total_per_task	real	playwright	1070781.16		
 pass2of3_rate	real	playwright	46.08	44	50
+tokens_io_per_task	real	playwright+preload	4124.00	3923.25	4233.15
+tokens_total_per_task	real	playwright+preload	1168114.89		
+pass2of3_rate	real	playwright+preload	47.06	44	50
 tokens_io_per_task	full	manuk	594.11	554.69	631.06
 tokens_total_per_task	full	manuk	105655.16		
 pass2of3_rate	full	manuk	96.30	51	52
@@ -17,3 +20,6 @@ pass2of3_rate	full	cdp-layer	92.59	49	50
 tokens_io_per_task	full	playwright	688.65	662.33	724.94
 tokens_total_per_task	full	playwright	125053.01		
 pass2of3_rate	full	playwright	94.44	50	52
+tokens_io_per_task	full	playwright+preload	528.03	516.69	544.31
+tokens_total_per_task	full	playwright+preload	170938.27		
+pass2of3_rate	full	playwright+preload	92.59	49	51

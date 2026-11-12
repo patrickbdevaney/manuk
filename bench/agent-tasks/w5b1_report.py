@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""W5.B1: wave-5 re-bench report. Three arms (manuk, cdp-layer, playwright), two slices, Haiku, 3 runs.
+"""W5.B1: wave-5 re-bench report. Four arms (manuk, cdp-layer, playwright, playwright+preload), two slices, Haiku, 3 runs.
 
   python3 -I bench/agent-tasks/w5b1_report.py [--root docs/sprint/w5] [--transcripts DIR] [--summary OUT.tsv]
   python3 -I bench/agent-tasks/w5b1_report.py --self-test
 
-Inputs (written by docs/sprint/w5/b1-run.sh):
+Inputs (written by docs/sprint/w5/b1-run.sh and docs/sprint/w5/b1a-run.sh):
   B1-real-<arm>.tsv   REAL judged slice: every non-omnizon task (102), real_run.py --judge
   B1-full-<arm>.tsv   own 40 + external 14 (the suite run_arm.py --suite full runs), run_arm.py
+  B1-preload-real.tsv / B1-preload-full.tsv   the playwright+preload arm (W5.B1.a), same two slices
 
 Integrity (exit 1 on any miss, the gate): each (arm, slice) has exactly one row per (task, run 1..3) for the expected
 task set; every row carries chrome_ver == docs/sprint/CHROME_PIN; one judge_model per REAL slice; every row's
@@ -22,9 +23,14 @@ import argparse, csv, glob, json, os, sys, tempfile, shutil
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
-ARMS = ["manuk", "cdp-layer", "playwright"]
+ARMS = ["manuk", "cdp-layer", "playwright", "playwright+preload"]
 SLICES = {"real": "B1-real-{arm}.tsv", "full": "B1-full-{arm}.tsv"}
+PRELOAD_FILES = {"real": "B1-preload-real.tsv", "full": "B1-preload-full.tsv"}  # W5.B1.a: playwright+preload
 RUNS = (1, 2, 3)
+
+
+def fname(slice_, arm):
+    return PRELOAD_FILES[slice_] if arm == "playwright+preload" else SLICES[slice_].format(arm=arm)
 
 
 def expected_tasks(slice_):
@@ -51,7 +57,7 @@ def norm(row, slice_):
 
 
 def load_slice(root, slice_, arm):
-    path = os.path.join(root, SLICES[slice_].format(arm=arm))
+    path = os.path.join(root, fname(slice_, arm))
     if not os.path.exists(path):
         return None, path
     rows = list(csv.DictReader(open(path), delimiter="\t"))
@@ -139,6 +145,9 @@ def report(data, summary_path):
         mixed = sorted(t for t, js in judges.items() if len(js) > 1)
         lines.append(f"\nREAL judge rows: {counts}; tasks judged by more than one judge: {len(mixed)} {mixed[:12]}")
     fm, fp = data.get(("full", "manuk", "stats")), data.get(("full", "playwright", "stats"))
+    fpp = data.get(("full", "playwright+preload", "stats"))
+    if fpp:
+        lines.append(f"Playwright+preload (full slice): {fpp['rate']:.1f}%, in+out {fpp['io_per_task']:.0f} per task")
     if fm and fp:
         d = fm["rate"] - fp["rate"]
         overlap = fm["run_pass_band"][0] <= fp["run_pass_band"][1] and fp["run_pass_band"][0] <= fm["run_pass_band"][1]
@@ -151,15 +160,18 @@ def report(data, summary_path):
     tm = data.get(("full", "manuk", "stats"))
     tp = data.get(("full", "playwright", "stats"))
     tc = data.get(("full", "cdp-layer", "stats"))
-    if tm and tp:
-        red = 100.0 * (1 - tm["io_per_task"] / tp["io_per_task"])
-        ok22 = red >= 30 and tm["rate"] >= tp["rate"]
-        lines.append(f"Bar 2.2 tokens (full slice, in+out per task): manuk {tm['io_per_task']:.0f} vs playwright {tp['io_per_task']:.0f} "
-                     f"-> {red:.1f}% fewer (need >=30% fewer at equal-or-better success) -> {'MET' if ok22 else 'NOT MET'}")
+    # W5.B1.a: the incumbent is the cheaper (in+out per task) of the two Playwright arms, as in W4.B4
+    inc = min((x for x in (tp, fpp) if x), key=lambda x: x["io_per_task"], default=None)
+    inc_name = "playwright+preload" if inc is fpp and fpp else "playwright"
+    if tm and inc:
+        red = 100.0 * (1 - tm["io_per_task"] / inc["io_per_task"])
+        ok22 = red >= 30 and tm["rate"] >= inc["rate"]
+        lines.append(f"Bar 2.2 tokens (full slice, in+out per task): manuk {tm['io_per_task']:.0f} vs {inc_name} {inc['io_per_task']:.0f} "
+                     f"-> {abs(red):.1f}% {'fewer' if red >= 0 else 'more'} (need >=30% fewer at equal-or-better success) -> {'MET' if ok22 else 'NOT MET'}")
         if tc:
             lines.append(f"  (K1 arm 3, cdp-layer: {tc['io_per_task']:.0f} in+out per task; manuk uses {abs(100.0 * (1 - tm['io_per_task'] / tc['io_per_task'])):.1f}% {'fewer' if tm['io_per_task'] < tc['io_per_task'] else 'more'})")
-        if tm["total_per_task"] and tp["total_per_task"]:
-            lines.append(f"  (total incl. cache, manuk vs playwright: {100.0 * (1 - tm['total_per_task'] / tp['total_per_task']):.1f}% fewer)")
+        if tm["total_per_task"] and inc["total_per_task"]:
+            lines.append(f"  (total incl. cache, manuk vs {inc_name}: {100.0 * (1 - tm['total_per_task'] / inc['total_per_task']):.1f}% fewer)")
     print("\n".join(lines))
     if summary_path:
         with open(summary_path, "w") as f:
@@ -183,9 +195,9 @@ def self_test(pin):
     """The gate must go red: a dropped row, a wrong chrome_ver and a deleted transcript each make the check fail.
     The unmutated copy must be clean (no integrity error and no missing row)."""
     src = os.path.join(ROOT, "docs/sprint/w5")
-    if not all(os.path.exists(os.path.join(src, SLICES[s].format(arm=a))) for s in SLICES for a in ARMS):
+    if not all(os.path.exists(os.path.join(src, fname(s, a))) for s in SLICES for a in ARMS):
         print("self-test: B1 rows not complete yet"); return 2
-    rows = {(s, a): [r for r in csv.DictReader(open(os.path.join(src, SLICES[s].format(arm=a))), delimiter="\t") if r.get("task")]
+    rows = {(s, a): [r for r in csv.DictReader(open(os.path.join(src, fname(s, a))), delimiter="\t") if r.get("task")]
             for s in SLICES for a in ARMS}
     results = []
     with tempfile.TemporaryDirectory(prefix="w5b1-") as tmp:
@@ -201,7 +213,7 @@ def self_test(pin):
             os.makedirs(d)
             for (s, a), rs in rows.items():
                 out = mutate(s, a, [dict(r) for r in rs]) if mutate else [dict(r) for r in rs]
-                with open(os.path.join(d, SLICES[s].format(arm=a)), "w", newline="") as f:
+                with open(os.path.join(d, fname(s, a)), "w", newline="") as f:
                     w = csv.DictWriter(f, fieldnames=list(rows[(s, a)][0].keys()), delimiter="\t")
                     w.writeheader(); w.writerows(out)
             if drop_transcript:
