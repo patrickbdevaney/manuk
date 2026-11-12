@@ -1808,6 +1808,9 @@ impl AgentBrowser {
     /// agent handed a silent success clicks nothing, sees nothing change, and cannot find out why.
     /// The error names the covering element.
     fn reach(&mut self, node: manuk_dom::NodeId, name: &str) -> Result<()> {
+        // A target scrolled out of its own scroll container (a listbox option) is brought into view
+        // there first; the window scroll below cannot reach it.
+        self.reveal(node);
         for _ in 0..2 {
             let viewport = manuk_a11y::Rect {
                 x: 0.0,
@@ -1854,6 +1857,13 @@ impl AgentBrowser {
             }
         }
         Ok(())
+    }
+
+    /// Scroll `node` into view inside any scroll container that clips it away entirely.
+    pub fn reveal(&mut self, node: manuk_dom::NodeId) -> bool {
+        self.page
+            .as_mut()
+            .is_some_and(|p| p.reveal_in_scrollers(node))
     }
 
     /// The deepest node a pointer aimed at `node`'s clear point would land on, if that is `node`'s

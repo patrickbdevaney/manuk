@@ -30,6 +30,8 @@ pub trait Backend {
     fn scroll_y(&self) -> f32;
     fn content_height(&self) -> f32;
     fn scroll_by(&mut self, dy: f32);
+    /// Bring `node` into view inside a scroll container that clips it away (default: nothing).
+    fn reveal(&mut self, _node: NodeId) {}
     /// Let the page's queued fetches/timers run (after a scroll, or while idle).
     async fn settle(&mut self) {}
     /// W3.12: called before an action is dispatched.
@@ -271,6 +273,9 @@ impl Backend for AgentBrowser {
     }
     fn scroll_by(&mut self, dy: f32) {
         AgentBrowser::scroll_by(self, dy)
+    }
+    fn reveal(&mut self, node: NodeId) {
+        AgentBrowser::reveal(self, node);
     }
     async fn settle(&mut self) {
         AgentBrowser::settle(self).await

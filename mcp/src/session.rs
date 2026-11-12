@@ -1852,6 +1852,7 @@ impl<B: Backend> Session<B> {
     /// refused by it. A dialog (or anything inside one) or a page-sized cover (half the viewport or more) still is.
     /// `MANUK_TYPE_COVER_MUTATE=1` restores the pointer-style refusal for the red run.
     fn verify_reach(&mut self, h: u32, node: NodeId, focus_only: bool) -> Result<()> {
+        self.b.reveal(node);
         for _ in 0..2 {
             let tree = self.tree()?;
             let vp = self.b.viewport();

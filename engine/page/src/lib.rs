@@ -6603,6 +6603,52 @@ impl Page {
         new
     }
 
+    /// **Bring `node` into view inside every scroll container that has clipped it away entirely** —
+    /// what a click on a listbox option scrolled out of its list does first (Playwright's
+    /// `scrollIntoViewIfNeeded`). The window scroll alone cannot reach it: the option lives in an
+    /// `overflow:auto` menu, and aiming at its unscrolled box lands on whatever is under that spot
+    /// (gocalendar's start-time list: "2:00pm" is the 33rd row of a ~10-row menu). Each container is
+    /// scrolled so the target's centre sits at the container's centre, clamped like any scroll.
+    /// Returns whether anything moved. `MANUK_REVEAL_MUTATE` disables it (gate mutant).
+    pub fn reveal_in_scrollers(&mut self, node: manuk_dom::NodeId) -> bool {
+        if std::env::var_os("MANUK_REVEAL_MUTATE").is_some() {
+            return false;
+        }
+        let mut moved = false;
+        let mut cur = self.dom.parent(node);
+        while let Some(anc) = cur {
+            cur = self.dom.parent(anc);
+            let scrollable = matches!(
+                self.styles.get(&anc).map(|s| s.overflow_y),
+                Some(manuk_css::Overflow::Auto) | Some(manuk_css::Overflow::Scroll)
+            );
+            if !scrollable {
+                continue;
+            }
+            let rects = self.node_rects();
+            let (Some(t), Some(c)) = (rects.get(&node).copied(), rects.get(&anc).copied()) else {
+                continue;
+            };
+            let Some(g) = self.scroll_geometry(anc) else {
+                continue;
+            };
+            // Only a target wholly outside the visible window moves the container.
+            let (top, bottom) = (c.y, c.y + g[4]);
+            if t.y + t.height > top && t.y < bottom {
+                continue;
+            }
+            let dy = (t.y + t.height / 2.0) - (top + g[4] / 2.0);
+            let before = self.scroll_offsets.get(&anc).copied().unwrap_or((0.0, 0.0));
+            let after = self.set_element_scroll(anc, before.0, before.1 + dy);
+            moved |= (after.1 - before.1).abs() > 0.01;
+        }
+        if moved {
+            // The page's own handler reads `scrollTop` next (the click this precedes).
+            manuk_js::set_scroll_geometry(self.scroll_geometry_map());
+        }
+        moved
+    }
+
     /// **Land a scroll on the nearest snap point** — `scroll-snap-type` on the container,
     /// `scroll-snap-align` on the children.
     ///
