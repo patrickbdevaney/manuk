@@ -7,7 +7,8 @@
 (b) Paired criterion on sites OK in both sets, per-site values averaged over the set's runs: mean paired delta >= -1.0 point,
     and every site moving >= 10 points (either direction) on a11y F1 (the metric the guards bind) needs a row in
     docs/sprint/guard-classes.tsv (INSTRUMENT/ORIGIN/ENGINE + evidence). An ENGINE mover with a negative delta is a REGRESSION.
-    Negative >=10-point movers on the other per-site metrics are printed as WATCH (not RED): file a node for each.
+    Negative >=10-point movers on the other per-site metrics are WATCH: each needs a class row (UNCLASSIFIED is RED), and an
+    ENGINE WATCH must be named in a node row of docs/sprint/GRAPH.tsv (unfiled is RED). INSTRUMENT/ORIGIN WATCH stay GREEN.
 A band BREACH is discharged only when its paired metric passes (b); a paired failure is always RED.
 Set-level metric -> per-site column: cov->cov, shape->shape, m2_*->m2_rate, ax_*->a11y_f1.
 No SUCCESS.md threshold is touched; this changes how noise is read, not what counts as a regression.
@@ -26,6 +27,7 @@ ap.add_argument("base"); ap.add_argument("cand")
 ap.add_argument("--guard", default=os.path.join(ROOT, "docs/sprint/GUARD.tsv"))
 ap.add_argument("--classes", default=os.path.join(ROOT, "docs/sprint/guard-classes.tsv"))
 ap.add_argument("--bench", default=os.path.join(ROOT, "docs/bench"))
+ap.add_argument("--graph", default=os.path.join(ROOT, "docs/sprint/GRAPH.tsv"))
 a = ap.parse_args()
 
 def runs(names):
@@ -84,7 +86,7 @@ for col in sorted(set(MET.values())):
             print(f"  mover {col} {x:+.1f} {u} {tag}" + (f" | {c[1][:90]}" if c else ""))
             if col != "a11y_f1":
                 if x < 0:
-                    watch.append(f"{col} {x:+.1f} {u}")
+                    watch.append((col, x, u, tag, c))
             elif not c:
                 msgs.append(f"unclassified mover {u} ({col} {x:+.1f})")
             elif c[0] == "ENGINE" and x < 0:
@@ -94,7 +96,12 @@ for col in sorted(set(MET.values())):
 for m, n in breach.items():
     st = "discharged by paired criterion" if not paired[MET[m]] else "NOT discharged"
     print(f"breach {m} x{n}: {st}")
-for w in watch:
-    print("WATCH", w)
+graph = open(a.graph, encoding="utf-8").read() if os.path.exists(a.graph) else ""
+for col, x, u, tag, c in watch:
+    print(f"WATCH {col} {x:+.1f} {u} {tag}" + (f" | {c[1][:90]}" if c else ""))
+    if tag == "UNCLASSIFIED":
+        red.append(f"unclassified WATCH {u} ({col} {x:+.1f})")
+    elif tag == "ENGINE" and u not in graph:
+        red.append(f"ENGINE WATCH not filed in GRAPH.tsv {u} ({col} {x:+.1f})")
 print("RED " + "; ".join(red) if red else "GREEN", f"breaches={len(breach)} paired_failures={len(red)}")
 sys.exit(1 if red else 0)
