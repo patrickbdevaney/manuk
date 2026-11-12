@@ -1009,6 +1009,19 @@ impl<B: Backend> Session<B> {
         out
     }
 
+    /// A clipped carousel whose off-window slides the page marks aria-hidden is absent from the tree (as in
+    /// Chrome); say so, with the count only, so the agent does not take the visible window for the whole list.
+    fn carousel_notice(&mut self) -> String {
+        if std::env::var("MANUK_CAROUSEL_MUTATE").is_ok_and(|v| v == "always") {
+            return "CAROUSEL: 0 slides in a clipped scroller are aria-hidden and not listed\n".into();
+        }
+        let n = self.b.clipped_hidden_slides();
+        if n == 0 {
+            return String::new();
+        }
+        format!("CAROUSEL: {n} slides in a clipped scroller are aria-hidden and not listed; reach them with the carousel's Next control, or extract(include_hidden=true)\n")
+    }
+
     fn header(&self) -> String {
         format!("{} — {:?}", self.b.url(), clip(&self.b.title()))
     }
@@ -1805,7 +1818,7 @@ impl<B: Backend> Session<B> {
                 } else {
                     "scroll, then observe again"
                 };
-                let flags = self.overlay_flags(&tree);
+                let flags = self.overlay_flags(&tree) + &self.carousel_notice();
                 format!(
                     "{UNTRUSTED}{}\n{}{}\n{}",
                     self.warn(),

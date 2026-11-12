@@ -190,6 +190,10 @@ pub trait Backend {
     fn class_attr(&mut self, _node: NodeId) -> Option<String> {
         None
     }
+    /// Slides of a clipped carousel the page marks `aria-hidden="true"`; 0 = none, or this backend cannot say.
+    fn clipped_hidden_slides(&mut self) -> usize {
+        0
+    }
     /// Whether this process's request ledger sees the backend's network traffic. A backend whose
     /// requests bypass it (Chrome over CDP) cannot tell CLIENT from WORLD, so checkpoints say UNKNOWN.
     fn sees_network(&self) -> bool {
@@ -313,6 +317,9 @@ impl Backend for AgentBrowser {
     }
     fn class_attr(&mut self, node: NodeId) -> Option<String> {
         AgentBrowser::class_attr(self, node)
+    }
+    fn clipped_hidden_slides(&mut self) -> usize {
+        AgentBrowser::clipped_hidden_slides(self)
     }
     async fn back(&mut self) -> Result<()> {
         AgentBrowser::back(self).await
