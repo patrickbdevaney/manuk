@@ -30,3 +30,16 @@ Run in an isolated copy with a clean target/, SIGSTORE=<venv>/bin/sigstore:
   last pin digit a1 -> a3                        -> "sha256 mismatch", exit 1 (sha check still runs first)
   no gh, no sigstore                             -> old warning, sha pin only, exit 0
 Note: the servo/mozjs bundle covers every release archive, so another triple's attestation URL is NOT a different subject.
+
+R1.5.a.a (2026-11-12): authenticated run. gh is at ~/.local/bin/gh (not on the default PATH here), logged in as
+patrickbdevaney (gh auth status ok). Ran scripts/mozjs-fetch.sh with the cached archive removed, so the download
+and the gh branch ran (`gh auth status` gate -> `gh attestation verify <archive> -R servo/mozjs`):
+  linux x86_64 (pin 69b2920f...a1)            -> "attestation ok: libmozjs-x86_64-unknown-linux-gnu.tar.gz", "fetch ok", exit 0
+  aarch64-apple-darwin (pin cc6c9d79...af)    -> "attestation ok: ...aarch64-apple-darwin.tar.gz", "fetch ok", exit 0
+  x86_64-pc-windows-msvc (pin 009c377a...69)  -> "attestation ok: ...x86_64-pc-windows-msvc.tar.gz", "fetch ok", exit 0
+Red mutations (scratch copy of the script in /tmp, not the repo):
+  a. last pin digit a1 -> a3 (wrong pin), good archive -> "sha256 mismatch ... refusing to link it", exit 1
+  b. pin rewritten to the sha of a 1-byte-flipped archive (3dfbb523...f8), served via MOZJS_FETCH_URL
+     -> "GitHub artifact attestation FAILED ... refusing to link it", exit 1
+So the gh-authenticated attestation check passes on all three pinned triples and goes red on a wrong pin and on a
+tampered archive whose pin matches. This closes the 'unauthenticated' caveat for the mac and windows pins too.
