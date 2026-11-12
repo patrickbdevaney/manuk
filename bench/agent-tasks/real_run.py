@@ -285,10 +285,30 @@ def pin_chrome(arm, srv, tdir):
         srv["env"] = dict(srv.get("env", {}), MANUK_CHROME=chrome_wrapper(tdir))
 
 
+def archive_prior(tmp, trdir, name):
+    """W5.G1.b.a: a re-run of an (arm, task, run) key must not overwrite the earlier run's transcript. The old run dir (and the
+    old copy under trdir) move to <name>.<mtime> before the new run starts, so a results row stays tied to its transcript."""
+    old = os.path.join(tmp, "transcript.jsonl")
+    if os.path.exists(old):
+        stamp = time.strftime("%Y%m%dT%H%M%S", time.localtime(os.path.getmtime(old)))
+        n = 0
+        while os.path.exists(f"{tmp}.{stamp}" + (f"-{n}" if n else "")):
+            n += 1
+        os.rename(tmp, f"{tmp}.{stamp}" + (f"-{n}" if n else ""))
+    cp = os.path.join(trdir, name + ".jsonl")
+    if os.path.exists(cp):
+        stamp = time.strftime("%Y%m%dT%H%M%S", time.localtime(os.path.getmtime(cp)))
+        n = 0
+        while os.path.exists(os.path.join(trdir, f"{name}.{stamp}" + (f"-{n}" if n else "") + ".jsonl")):
+            n += 1
+        os.rename(cp, os.path.join(trdir, f"{name}.{stamp}" + (f"-{n}" if n else "") + ".jsonl"))
+
+
 def one(arm, task, run, pin, tdir, timeout, judge_env=None, trdir=TRANSCRIPTS):
     sys.path.insert(0, HERE)
     import run_arm
     tmp = os.path.join(tdir, f"{arm}_{task['id']}_r{run}")
+    archive_prior(tmp, trdir, f"{arm}_{task['id']}_r{run}")
     os.makedirs(tmp, exist_ok=True)
     cfg_path, allowed = run_arm.arm_config(arm, tmp)
     cfg = json.load(open(cfg_path))
