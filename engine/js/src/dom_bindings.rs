@@ -15707,9 +15707,18 @@ impl PageContext {
         unsafe {
             let _ = new_reflector(raw_cx, dom as *mut Dom, node);
         }
+        let pointer = if ty.starts_with("pointer") {
+            "pointerType:'mouse', pointerId:1, isPrimary:true, "
+        } else {
+            ""
+        };
+        // Modifier flags are `false`, not absent: Radix's `onPointerDown` guard is
+        // `e.button === 0 && e.ctrlKey === false`, and `undefined` fails the strict compare.
+        let pointer =
+            format!("{pointer}ctrlKey:false, shiftKey:false, altKey:false, metaKey:false, ");
         let script = format!(
             "__dispatchEvent({}, {{type:{}, detail:{detail}, button:{button}, buttons:{buttons}, \
-             bubbles:true, cancelable:true, __actgesture:1}})",
+             {pointer}bubbles:true, cancelable:true, __actgesture:1}})",
             node.0,
             js_string_literal(ty),
         );

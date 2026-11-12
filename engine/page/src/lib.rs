@@ -9503,7 +9503,19 @@ impl Page {
                 self.has_sticky,
             );
             // (type, buttons-held-during-this-event)
-            for (ty, buttons) in [("mousedown", 1u32), ("mouseup", 0u32)] {
+            // Pointer Events come first in each pair (pointerdown, mousedown, pointerup, mouseup): Radix
+            // Select and most headless-UI triggers open on `pointerdown` and never hear a `click`.
+            // MANUK_POINTER_MUTATE=off drops the pointer pair (gate mutant).
+            let pointer = std::env::var("MANUK_POINTER_MUTATE").as_deref() != Ok("off");
+            for (ty, buttons) in [
+                ("pointerdown", 1u32),
+                ("mousedown", 1u32),
+                ("pointerup", 0u32),
+                ("mouseup", 0u32),
+            ] {
+                if !pointer && ty.starts_with("pointer") {
+                    continue;
+                }
                 if let Err(e) = manuk_js::dispatch_mouse_buttons(
                     ctx,
                     &mut self.dom,

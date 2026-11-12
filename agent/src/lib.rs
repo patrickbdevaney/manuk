@@ -1559,9 +1559,20 @@ impl AgentBrowser {
             (href, operated, page.summary_details_target(node), checked)
         };
 
+        // A pointer lands on the element UNDER it and the event bubbles up to `node`, so a handler on
+        // a descendant of the target fires too. opendining's MUI `Select time`: the combobox the agent
+        // names is the outer InputBase, and the `onMouseDown` that opens the list is on the inner
+        // select div, so dispatching at the outer node never opened it. Retarget to the hit element
+        // when it is inside `node` (an unrelated hit is an obstruction, refused earlier by `reach`).
+        // MANUK_RETARGET_MUTATE=off restores dispatching at `node` itself (gate mutant).
+        let hit = if std::env::var_os("MANUK_RETARGET_MUTATE").is_some() {
+            node
+        } else {
+            self.pointer_hit(node).unwrap_or(node)
+        };
         let proceed = {
             let page = self.page.as_mut().expect("checked above");
-            page.dispatch_click(node, &self.fonts, self.width as f32)
+            page.dispatch_click(hit, &self.fonts, self.width as f32)
         };
         // The handler may have started a fetch (a cookie banner's POST): perform it before the
         // outcome is read, or it sits in the queue forever.
@@ -1843,6 +1854,36 @@ impl AgentBrowser {
             }
         }
         Ok(())
+    }
+
+    /// The deepest node a pointer aimed at `node`'s clear point would land on, if that is `node`'s
+    /// own descendant. `None` when the target is hit directly or the landing is not clear.
+    fn pointer_hit(&mut self, node: manuk_dom::NodeId) -> Option<manuk_dom::NodeId> {
+        let viewport = manuk_a11y::Rect {
+            x: 0.0,
+            y: self.scroll_y,
+            width: self.width as f32,
+            height: self.height as f32,
+        };
+        let hit = {
+            let tree = self.a11y_tree().ok()?;
+            let manuk_a11y::Landing::Clear { point } = tree.landing(node, Some(viewport)) else {
+                return None;
+            };
+            tree.hit_test(point.0, point.1)?.node
+        };
+        if hit == node {
+            return None;
+        }
+        let dom = self.page.as_ref()?.dom();
+        let mut cur = dom.parent(hit);
+        while let Some(n) = cur {
+            if n == node {
+                return Some(hit);
+            }
+            cur = dom.parent(n);
+        }
+        None
     }
 
     /// §4b — click at an absolute document coordinate (the coordinates

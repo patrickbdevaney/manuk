@@ -166,7 +166,8 @@ fn scripted_session_navigates_clicks_and_reads_the_diff() {
     );
     // R1.2: the change is a `~` line carrying the SAME handle the agent typed into
     assert!(
-        view || t.lines()
+        view || t
+            .lines()
             .any(|l| l.starts_with(&format!("~[{q}]")) && l.contains('→')),
         "no ~[{q}] line:\n{t}"
     );
