@@ -152,7 +152,7 @@ pub fn tools() -> Vec<Tool> {
         t("dialog", "Answer the next alert/confirm/prompt; `text` for a prompt.", schema(json!({"action": {"type": "string", "enum": ["accept", "dismiss"]}, "text": {"type": "string"}}), &["action"])),
         t("tabs", "List (default), switch or close tabs (`index` 1-based).", schema(json!({"action": {"type": "string", "enum": ["list", "switch", "close"]}, "index": {"type": "integer"}}), &[])),
         t("download", "Click `handle`, wait for its download (needs --download-dir).", schema(json!({"handle": {"type": "string"}}), &[])),
-        t("scroll", "Scroll to handle `to` or by `dy` px; returns new nodes.", schema(json!({"to": {"type": "string"}, "dy": {"type": "number"}}), &[])),
+        t("scroll", "Scroll to handle `to` or by `dy` px (at most one screen per call); returns new nodes.", schema(json!({"to": {"type": "string"}, "dy": {"type": "number"}}), &[])),
         t("extract", "Read page content: format text (default), markdown or table; `query` keeps top passages; long output pages by offset. E.g. extract(format=\"table\", scope=\"h12\")", schema(json!({"format": {"type": "string", "enum": ["markdown", "text", "table"]}, "scope": {"type": "string"}, "offset": {"type": "integer"}, "query": {"type": "string"}, "include_hidden": {"type": "boolean"}}), &[])),
         t("page_data", "JSON the page itself fetched (same-origin, <=64 KB) with URLs.", schema(json!({}), &[])),
         t("find", "Rank nodes for a query; up to 8 handles.", schema(json!({"query": {"type": "string"}}), &["query"])),

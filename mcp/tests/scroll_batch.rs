@@ -91,3 +91,25 @@ fn scrolling_to_the_bottom_loads_the_next_batch() {
         "second batch never loaded.\nscroll: {last}\n{text}"
     );
 }
+
+#[test]
+fn a_jump_longer_than_the_screen_is_cut_to_one_screen_and_says_so() {
+    let mut c = Client::start();
+    let url = format!(
+        "file://{}/tests/fixtures/scroll_batch.html",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    c.tool("navigate", json!({"url": url}));
+    let out = c.tool("scroll", json!({"dy": 100000}));
+    assert!(
+        out.contains("was cut to one screen"),
+        "an over-long jump must be cut and named.\n{out}"
+    );
+    assert!(out.contains("Quote 7"), "no line skipped.\n{out}");
+    let mut last = out;
+    for _ in 0..6 {
+        last = c.tool("scroll", json!({"dy": 100000}));
+    }
+    assert!(last.contains("AT-END"), "{last}");
+    assert!(!last.contains("SKIPPED"), "{last}");
+}

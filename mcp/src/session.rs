@@ -2518,6 +2518,7 @@ impl<B: Backend> Session<B> {
 
     async fn scroll(&mut self, to: Option<&str>, dy: Option<f64>) -> Result<String> {
         let tree = self.tree()?;
+        let vp_before = self.b.viewport();
         let vis_before: std::collections::HashSet<u64> = {
             let vp = self.b.viewport();
             tree.iter()
@@ -2525,6 +2526,7 @@ impl<B: Backend> Session<B> {
                 .map(|n| n.node.0)
                 .collect()
         };
+        let mut clamped: Option<f32> = None;
         let delta = match (to, dy) {
             (Some(hs), _) => {
                 let (_, n) = self.resolve(&tree, hs)?;
@@ -2534,7 +2536,15 @@ impl<B: Backend> Session<B> {
                 let vp = self.b.viewport();
                 b.y - vp.height / 3.0 - vp.y
             }
-            (None, Some(d)) => d as f32,
+            (None, Some(d)) => {
+                // One screen per call: a longer jump would skip lines that no diff below shows.
+                let max = self.b.viewport().height.max(1.0);
+                let want = d as f32;
+                if want.abs() > max {
+                    clamped = Some(want);
+                }
+                want.clamp(-max, max)
+            }
             (None, None) => bail!("scroll needs `to` (a handle) or `dy`"),
         };
         self.b.scroll_by(delta);
@@ -2558,8 +2568,33 @@ impl<B: Backend> Session<B> {
             Self::fit(fresh, 2000, "use observe(mode=viewport)")
         };
         let at_end = self.b.scroll_y() + self.b.viewport().height >= self.b.content_height() - 1.0;
+        // A jump past the old viewport's bottom leaves content in between that no line above shows.
+        let (gap_from, gap_to) = (vp_before.y + vp_before.height, vp.y);
+        let clamp_note = clamped.map_or(String::new(), |w| {
+            format!(
+                "dy={w:.0} was cut to one screen ({:.0}px) so no lines are skipped; call scroll again to keep going\n",
+                delta.abs()
+            )
+        });
+        let skipped = if gap_to - gap_from >= 1.0 {
+            let lines = tree
+                .iter()
+                .filter(|n| {
+                    worth(n)
+                        && n.bbox
+                            .is_some_and(|b| b.y + b.height > gap_from && b.y < gap_to)
+                })
+                .count();
+            format!(
+                "SKIPPED y={gap_from:.0}..{gap_to:.0} ({:.0}px, {lines} lines) were jumped over and not listed; scroll with dy <= {:.0} or observe(mode=viewport) to read them\n",
+                gap_to - gap_from,
+                vp.height
+            )
+        } else {
+            String::new()
+        };
         Ok(format!(
-            "{UNTRUSTED}\nscrolled to y={:.0} of {:.0}{}\n{body}",
+            "{UNTRUSTED}\nscrolled to y={:.0} of {:.0}{}\n{clamp_note}{skipped}{body}",
             self.b.scroll_y(),
             self.b.content_height(),
             if at_end {

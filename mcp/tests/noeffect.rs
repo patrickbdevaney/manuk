@@ -184,8 +184,15 @@ fn scroll_to_the_bottom_says_at_end() {
     let url = serve(PAGE);
     let mut c = Client::start(false, false);
     c.tool("navigate", json!({"url": url}));
-    let r = c.tool("scroll", json!({"dy": 100000}));
+    // One call moves at most one screen, so a tall page takes a few.
+    let mut r = String::new();
+    for _ in 0..40 {
+        r = c.tool("scroll", json!({"dy": 100000}));
+        if r.contains("AT-END") {
+            break;
+        }
+    }
     assert!(r.contains("AT-END"), "{r}");
-    let r = c.tool("scroll", json!({"dy": -100000}));
+    let r = c.tool("scroll", json!({"dy": -100}));
     assert!(!r.contains("AT-END"), "{r}");
 }
