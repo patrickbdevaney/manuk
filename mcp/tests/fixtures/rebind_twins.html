@@ -1,0 +1,17 @@
+<!doctype html><html><head><title>Twins</title></head><body>
+<button id="re">Refresh menu</button>
+<div id="app"></div>
+<h2 id="out">idle</h2>
+<script>
+function render() {
+  var html = '';
+  ['Mushroom Swiss Burger','Mushroom Swiss Burger'].forEach(function (t, i) { html += '<div><button data-i="' + i + '">Add</button></div>'; });
+  document.getElementById('app').innerHTML = html;
+}
+render();
+document.getElementById('app').addEventListener('click', function (e) {
+  var i = e.target.getAttribute && e.target.getAttribute('data-i');
+  if (i !== null && i !== undefined) document.getElementById('out').textContent = 'added copy ' + i;
+});
+document.getElementById('re').addEventListener('click', render);
+</script></body></html>

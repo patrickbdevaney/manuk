@@ -128,3 +128,47 @@ fn rebind_mutant_goes_stale() {
         "mutant should be stale, got err={err}: {t}"
     );
 }
+
+/// W5.G1.a: two buttons with the same role, name and container are re-mounted by a click; the handle of
+/// the second one must reach the second one, not go STALE as "2 elements now match".
+fn run_twins(mutate: bool) -> (bool, String) {
+    let mut c = Client::start(mutate);
+    let url = format!(
+        "file://{}/tests/fixtures/rebind_twins.html",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let (err, nav) = c.tool("navigate", json!({"url": url}));
+    assert!(!err, "{nav}");
+    let adds: Vec<String> = nav
+        .lines()
+        .filter(|l| l.contains("button \"Add\""))
+        .map(|l| {
+            let s = l.find("[h").unwrap();
+            l[s + 1..l[s..].find(']').unwrap() + s].to_string()
+        })
+        .collect();
+    assert_eq!(adds.len(), 2, "{nav}");
+    let re = handle_of(&nav, "Refresh menu");
+    let (err, t) = c.tool("act", json!({"handle": re, "action": "click"}));
+    assert!(!err, "{t}");
+    c.tool("act", json!({"handle": adds[1], "action": "click"}))
+}
+
+#[test]
+fn a_twin_handle_follows_its_position_after_a_remount() {
+    if std::env::var("MANUK_REMOUNT_MUTATE").is_ok() {
+        return;
+    }
+    let (err, t) = run_twins(false);
+    assert!(!err, "{t}");
+    assert!(t.contains("added copy 1"), "wrong or no click: {t}");
+}
+
+#[test]
+fn twin_mutant_goes_stale() {
+    let (err, t) = run_twins(true);
+    assert!(
+        err && t.contains("STALE"),
+        "mutant should be stale, got err={err}: {t}"
+    );
+}

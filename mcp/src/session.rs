@@ -90,11 +90,17 @@ pub struct Session<B: Backend> {
     /// W4.A4: filled by every `tree()`: clickable non-semantic nodes, and each node's container context.
     click: RefCell<HashSet<NodeId>>,
     wh: RefCell<HashMap<NodeId, Where>>,
+    /// W5.G1.a: each node's place among the nodes sharing its `role|name|context` key, as
+    /// (position, group size), in document order. It breaks the tie when a re-mount leaves several
+    /// nodes with the same key (a duplicated FAQ heading).
+    grp: RefCell<HashMap<NodeId, (usize, usize)>>,
     /// Nodes the shield withheld from a default observation but an `include_hidden` call listed (and
     /// so handed a handle): a later act on that handle still finds them.
     exposed: RefCell<HashSet<NodeId>>,
     /// W4.A4: handle → `role|name|context` it was issued for, to re-find it after a re-mount.
     keys: HashMap<u32, String>,
+    /// W5.G1.a: handle → its (position, group size) at issue time, see `grp`.
+    grp_of: HashMap<u32, (usize, usize)>,
     /// W4.A4: handles re-bound since the last action result, to be reported by it.
     rebound: Vec<String>,
     /// W4.A4: `Backend::document_id` at the last observation (0 = unknown).
@@ -482,6 +488,8 @@ impl<B: Backend> Session<B> {
             confirmed: false,
             click: Default::default(),
             wh: Default::default(),
+            grp: Default::default(),
+            grp_of: HashMap::new(),
             exposed: Default::default(),
             keys: HashMap::new(),
             rebound: Vec::new(),
@@ -591,6 +599,21 @@ impl<B: Backend> Session<B> {
         let mut wh = HashMap::new();
         walk_where(&tree, &mut Vec::new(), false, &mut wh);
         *self.wh.borrow_mut() = wh;
+        let mut groups: HashMap<String, Vec<NodeId>> = HashMap::new();
+        for n in tree.iter().filter(|n| worth(n)) {
+            let e = self.ent(n);
+            groups
+                .entry(format!("{}|{}|{}", e.role, e.name, e.ctx))
+                .or_default()
+                .push(n.node);
+        }
+        let mut grp = HashMap::new();
+        for ids in groups.values() {
+            for (i, id) in ids.iter().enumerate() {
+                grp.insert(*id, (i, ids.len()));
+            }
+        }
+        *self.grp.borrow_mut() = grp;
         Ok(tree)
     }
 
@@ -643,6 +666,9 @@ impl<B: Backend> Session<B> {
         let h = self.handle(id);
         self.keys
             .insert(h, format!("{}|{}|{}", e.role, e.name, e.ctx));
+        if let Some(g) = self.grp.borrow().get(&id) {
+            self.grp_of.insert(h, *g);
+        }
         h
     }
 
@@ -672,6 +698,7 @@ impl<B: Backend> Session<B> {
         self.ids.clear();
         self.rev.clear();
         self.keys.clear();
+        self.grp_of.clear();
         self.exposed.borrow_mut().clear();
         self.doc = self.b.document_id();
         self.seed_due = self.pages.is_some();
@@ -762,6 +789,24 @@ impl<B: Backend> Session<B> {
                 Err(anyhow!(
                     "STALE: h{h} is no longer on the page (call observe)"
                 ))
+            }
+            // Several nodes carry the old key. If the group is the size it was when the handle was
+            // issued, the element is the one at the same position in it.
+            many if std::env::var_os("MANUK_REMOUNT_MUTATE").is_none()
+                && self
+                    .grp_of
+                    .get(&h)
+                    .is_some_and(|&(i, len)| len == many.len() && i < len) =>
+            {
+                let n = many[self.grp_of[&h].0];
+                self.rev.insert(h, n.node);
+                self.ids.entry(n.node.0).or_insert(h);
+                self.rebound.push(format!(
+                    "rebound h{h} to the re-rendered {} (one of {} alike, same position)",
+                    key.unwrap_or_default().replace('|', " "),
+                    many.len()
+                ));
+                Ok((h, n))
             }
             many => Err(anyhow!(
                 "STALE: h{h} is gone and {} elements now match what it was (call observe)",
