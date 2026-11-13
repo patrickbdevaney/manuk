@@ -25,6 +25,10 @@ name = "ag5-latency"
 path = "src/bin/ag5-latency.rs"
 
 [[bin]]
+name = "dom-eval"
+path = "src/bin/dom-eval.rs"
+
+[[bin]]
 name = "a11y-dump"
 path = "src/bin/a11y-dump.rs"
 
