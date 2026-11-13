@@ -1,0 +1,71 @@
+{
+ "chrome_ver": "145.0.7632.116",
+ "pin": "145.0.7632.116",
+ "mutant": false,
+ "before": {
+  "dropped_cell": {
+   "selector": ".rbc-month-view .rbc-button-link",
+   "attached": true,
+   "month_cells_in_dom": 36,
+   "mounted_views": [
+    "rbc-month-view"
+   ],
+   "dialogs": 0,
+   "hidden_ancestors": 0,
+   "chain_len": 12,
+   "ax": {
+    "in_ax": true,
+    "ignored": false,
+    "role": "button"
+   }
+  },
+  "kept_control": {
+   "selector": "button:not(.rbc-button-link):not([role=gridcell])",
+   "attached": true,
+   "month_cells_in_dom": 36,
+   "mounted_views": [
+    "rbc-month-view"
+   ],
+   "dialogs": 0,
+   "hidden_ancestors": 0,
+   "chain_len": 7,
+   "ax": {
+    "in_ax": true,
+    "ignored": false,
+    "role": "button"
+   }
+  }
+ },
+ "after": {
+  "dropped_cell": {
+   "selector": ".rbc-month-view .rbc-button-link",
+   "attached": false,
+   "month_cells_in_dom": 0,
+   "mounted_views": [
+    "rbc-time-view"
+   ],
+   "dialogs": 0,
+   "ax": {
+    "in_ax": false,
+    "reason": "node detached from DOM"
+   }
+  },
+  "kept_control": {
+   "selector": "button:not(.rbc-button-link):not([role=gridcell])",
+   "attached": true,
+   "month_cells_in_dom": 0,
+   "mounted_views": [
+    "rbc-time-view"
+   ],
+   "dialogs": 0,
+   "hidden_ancestors": 0,
+   "chain_len": 7,
+   "ax": {
+    "in_ax": true,
+    "ignored": false,
+    "role": "button"
+   }
+  }
+ },
+ "click_text": "+2 more"
+}
