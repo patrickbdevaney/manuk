@@ -68,7 +68,17 @@ def resolve(obs, rn, text=False, force=False):
     return None
 
 
-def replay(backend, seq, wait, force=False):
+def settled(m, secs, cap=10.0, step=0.5):
+    """Observe until the interactive observation (handle ids stripped) is unchanged for `secs`, at most `cap` s."""
+    t0 = time.time(); obs = m.call("observe", {"mode": "interactive"}); last, since = dd.norm(obs), time.time()
+    while time.time() - since < secs and time.time() - t0 < cap:
+        time.sleep(step); obs = m.call("observe", {"mode": "interactive"}); n = dd.norm(obs)
+        if n != last:
+            last, since = n, time.time()
+    return obs
+
+
+def replay(backend, seq, wait, force=False, settle=0.0):
     env, args = dict(os.environ), []
     if backend == "chrome":
         args = ["--backend", "chrome"]; env["MANUK_CHROME"] = os.path.expanduser("~/.local/chrome-cft/bin/google-chrome")
@@ -82,14 +92,14 @@ def replay(backend, seq, wait, force=False):
             else:
                 if "handle" in a:
                     text = t == "type"
-                    h = resolve(obs, rn, text, force) or resolve(m.call("observe", {"mode": "interactive"}), rn, text, force)
+                    h = resolve(obs, rn, text, force) or resolve(settled(m, settle) if settle else m.call("observe", {"mode": "interactive"}), rn, text, force)
                     if not h:
                         why = "handle unseen in transcript" if rn is None else f"unresolved: {rn[0]} \"{rn[1]}\""
                         log.append((i, t, why, None)); continue
                     a["handle"] = h
                 r = m.call("type" if t == "type" else "key" if t == "key" else "act" if t != "scroll" else "scroll", a)
             time.sleep(wait)
-            obs = m.call("observe", {"mode": "interactive"})
+            obs = settled(m, settle) if settle else m.call("observe", {"mode": "interactive"})
             log.append((i, f"{t} {rn[0] + ' ' + repr(rn[1]) if rn else ''}".strip(), r[:260].replace("\n", " "), dd.norm(obs)))
         return log
     finally:
@@ -142,21 +152,23 @@ def first_action_diff(ml, cl):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--tasks", default=",".join(TASKS)); ap.add_argument("--wait", type=float, default=2)
+    ap.add_argument("--settle", type=float, default=0, help="wait until the observation is unchanged this many s (max 10) before each step is observed; 0 = off")
     ap.add_argument("--mutate", choices=["identical", "force-resolve"]); ap.add_argument("--out", default=os.path.join(ROOT, "docs/sprint/rg/LEDGER-3.md"))
     a = ap.parse_args()
     pin = os.environ.get("MANUK_CHROME_PIN") or sys.exit("refusing: MANUK_CHROME_PIN unset")
     intro = [MARK, "", f"chrome_ver={pin}. Replay of each task's manuk r1 transcript (`~/.cache/manuk-rgb2/transcripts`) under manuk and Chrome (`bench/agent-tasks/rg3b_replay.py`); handles re-resolved by role+name. First differing step = first step after which the interactive observation differs (handle ids stripped).", ""]
-    verdicts, blocks = {}, {}
+    verdicts, blocks, counts = {}, {}, {}
     for t in a.tasks.split(","):
         seq = flatten(lg.steps(os.path.join(TR, f"manuk_{t}_r1.jsonl"))[0])
-        ml = replay("manuk", seq, a.wait, force=a.mutate == "force-resolve")
+        ml = replay("manuk", seq, a.wait, force=a.mutate == "force-resolve", settle=a.settle)
         if a.mutate == "identical":  # mutant: both sides identical and fully resolved, so no cutoff can apply
             ml = [(i, lab, r, o if o is not None else "") for i, lab, r, o in ml]; cl = ml
         else:
-            cl = replay("chrome", seq, a.wait, force=a.mutate == "force-resolve")  # force: on both backends
+            cl = replay("chrome", seq, a.wait, force=a.mutate == "force-resolve", settle=a.settle)  # force: on both backends
         skipped = [x for x in ml if x[3] is None]; cskipped = [x for x in cl if x[3] is None]
         verdict, c = compare(ml, cl)
         verdicts[t] = verdict
+        counts[t] = (len(seq), len(skipped), len(cskipped), c[0] if verdict == "not comparable" else None)
         md = [f"### {t}",f"- steps replayed: {len(seq)}; manuk skipped/unresolved {len(skipped)}, chrome {len(cskipped)}"]
         if verdict == "diff":
             i, lab, mr, cr, ln, cn, ratio, nm, nc = c
@@ -181,8 +193,11 @@ def main():
         print(t, verdict.upper(), c[:2] if verdict == "diff" else c[:1] if c else "", flush=True)
     # The gate: every task whose expected verdict is pinned must get it. Under --mutate identical or force-resolve
     # the pinned verdict must not hold, so the gate goes red.
-    ok = all(verdicts[t] == EXPECT.get(t, verdicts[t]) for t in verdicts)
-    if a.mutate is None:
+    tab = [f"| task | steps | manuk unresolved | chrome unresolved | first gap | verdict (settle={a.settle:g}) |", "|---|---|---|---|---|---|"]
+    tab += [f"| {t} | {n} | {mu} | {cu} | {'#%d' % g if g is not None else '-'} | {verdicts[t]} |" for t, (n, mu, cu, g) in counts.items()]
+    print("\n".join(tab))
+    ok = a.settle > 0  # --settle 0 is the unsettled baseline: reported, never a pass
+    if a.mutate is None and a.settle > 0:
         # replace only the task blocks that ran: keep the other tasks' blocks, everything before this section,
         # and the next "## " heading onwards
         try:
@@ -194,7 +209,7 @@ def main():
         sec, tail = (rest[:idx], rest[idx:]) if idx >= 0 else (rest, "")
         keep = {k: "### " + k + "\n" + v for k, v in re.findall(r"(?ms)^### (\S+)\n(.*?)(?=^### |\Z)", sec)}
         keep.update(blocks)
-        body = "\n".join(intro) + "\n" + "\n".join(v.rstrip("\n") + "\n" for v in keep.values())
+        body = "\n".join(intro) + "\n" + f"Unresolved steps per task and backend, settle={a.settle:g} (wait until the observation is unchanged {a.settle:g} s, max 10 s):\n\n" + "\n".join(tab) + "\n\n" + "\n".join(v.rstrip("\n") + "\n" for v in keep.values())
         open(a.out, "w").write(head.rstrip() + "\n\n" + body.rstrip() + "\n" + tail)
     sys.exit(0 if ok else 1)
 
