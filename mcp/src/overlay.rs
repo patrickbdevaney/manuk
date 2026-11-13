@@ -162,6 +162,22 @@ pub fn open_layer(tree: &A11yNode) -> Option<(&A11yNode, Option<&A11yNode>)> {
     Some((n, pick_control(n, Kind::Modal)))
 }
 
+/// A role-less open layer: a positioned box, mounted since the agent last looked (`known` says whether a
+/// node already has a handle), that holds controls. Popovers built from a bare `div` carry no
+/// dialog/menu role, so the role search above misses them. Outermost such box wins.
+pub fn new_layer<'t>(
+    tree: &'t A11yNode,
+    known: &dyn Fn(&A11yNode) -> bool,
+) -> Option<(&'t A11yNode, Option<&'t A11yNode>)> {
+    let n = tree.iter().skip(1).find(|n| {
+        n.positioned
+            && n.bbox.is_some_and(|b| b.width > 0.0 && b.height > 0.0)
+            && n.iter().any(|k| k.role.is_interactive())
+            && !n.iter().any(known)
+    })?;
+    Some((n, pick_control(n, Kind::Modal)))
+}
+
 /// Overlays on the page, topmost-looking first. A bot wall anywhere reports once, on its container if
 /// it has one, else on the document.
 pub fn find<'t>(tree: &'t A11yNode, vp: &Rect) -> Vec<Overlay<'t>> {

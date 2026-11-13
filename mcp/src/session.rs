@@ -780,7 +780,12 @@ impl<B: Backend> Session<B> {
             }
             [] => {
                 if std::env::var_os("MANUK_POPOVER_MUTATE").is_none() {
-                    if let Some((layer, close)) = crate::overlay::open_layer(tree) {
+                    let found = crate::overlay::open_layer(tree).or_else(|| {
+                        crate::overlay::new_layer(tree, &|n| {
+                            self.ids.get(&n.node.0).is_some_and(|&x| x <= h)
+                        })
+                    });
+                    if let Some((layer, close)) = found {
                         let lname = clip(&layer.name);
                         let lh = self.handle(layer.node);
                         let how = match close {
@@ -797,7 +802,11 @@ impl<B: Backend> Session<B> {
                         };
                         return Err(anyhow!(
                             "STALE: h{h} is hidden behind an open {} [h{lh}] {lname:?}; {how}, then observe",
-                            layer.role.as_str()
+                            if matches!(layer.role, Role::Dialog | Role::AlertDialog | Role::Menu) {
+                                layer.role.as_str()
+                            } else {
+                                "layer"
+                            }
                         ));
                     }
                 }

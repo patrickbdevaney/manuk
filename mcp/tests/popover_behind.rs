@@ -89,16 +89,20 @@ fn handle_of(text: &str, needle: &str) -> String {
 }
 
 fn run(mutate: bool) -> (bool, String) {
+    run_on("popover_behind", "Price", "Filters", mutate)
+}
+
+fn run_on(fix: &str, bg: &str, open: &str, mutate: bool) -> (bool, String) {
     let mut c = Client::start(mutate);
     let url = format!(
-        "file://{}/tests/fixtures/popover_behind.html",
+        "file://{}/tests/fixtures/{fix}.html",
         env!("CARGO_MANIFEST_DIR")
     );
     let (err, nav) = c.tool("navigate", json!({"url": url}));
     assert!(!err, "{nav}");
     let (_, obs) = c.tool("observe", json!({"mode": "interactive"}));
-    let price = handle_of(&obs, "Price");
-    let open = handle_of(&obs, "Filters");
+    let price = handle_of(&obs, bg);
+    let open = handle_of(&obs, open);
     let (err, t) = c.tool("act", json!({"handle": open, "action": "click"}));
     assert!(!err, "{t}");
     c.tool("act", json!({"handle": price, "action": "click"}))
@@ -122,6 +126,28 @@ fn popover_mutant_gives_the_bare_refusal() {
     let (err, t) = run(true);
     assert!(
         err && t.contains("STALE") && !t.contains("Filters popover"),
+        "{t}"
+    );
+}
+
+#[test]
+fn roleless_popover_is_named_as_a_layer() {
+    if std::env::var("MANUK_POPOVER_MUTATE").is_ok() {
+        return;
+    }
+    let (err, t) = run_on("popover_roleless", "+3 more", "Event", false);
+    assert!(err, "{t}");
+    assert!(
+        t.contains("STALE") && t.contains("hidden behind an open layer") && t.contains("\"Close\""),
+        "{t}"
+    );
+}
+
+#[test]
+fn roleless_popover_mutant_is_bare() {
+    let (err, t) = run_on("popover_roleless", "+3 more", "Event", true);
+    assert!(
+        err && t.contains("STALE") && !t.contains("open layer"),
         "{t}"
     );
 }
