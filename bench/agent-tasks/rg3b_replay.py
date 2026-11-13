@@ -118,21 +118,41 @@ def replay(backend, seq, wait, force=False, settle=0.0, raw=None):
         m.p.kill()
 
 
-def classify(rn, gap_obs, later):
-    """-> 'late' | 'renamed' | 'absent' for one unresolved step. `gap_obs` is the observation it failed against; `later`
-    the observations taken after it on the same backend. late: role+name is in a later observation. renamed: not late,
-    and gap_obs has a node with the same role whose name matches by prefix (case-insensitive), or the transcript name
-    occurs anywhere in gap_obs under another role or name. absent: neither."""
+def renamed_match(rn, gap_obs):
+    """-> (observed role, observed name, 'prefix' | 'substring') for the observation line a renamed step matched, else
+    None. prefix: a node with the same role whose name matches the transcript name by prefix (case-insensitive).
+    substring: the transcript name occurs in gap_obs under another role or name; the observed name is the node name
+    containing it, or the observation line containing it when no node name does."""
     role, name = rn
-    if any(o and resolve(o, rn, True) for o in later):
-        return "late"
     low = name.lower()
     for _, r, n in NODE.findall(gap_obs or ""):
         if r == role and n and (n.lower().startswith(low) or low.startswith(n.lower())):
-            return "renamed"
+            return (r, n, "prefix")
     if name and low in (gap_obs or "").lower():
-        return "renamed"
-    return "absent"
+        for _, r, n in NODE.findall(gap_obs or ""):
+            if low in n.lower():
+                return (r, n, "substring")
+        line = next(l for l in gap_obs.splitlines() if low in l.lower())
+        return ("", line.strip(), "substring")
+    return None
+
+
+def verify_row(row, gap_obs):
+    """True iff the observed name of a renamed row is present in the observation it was matched in (the row's observed
+    role must then be that node's role, or empty for a line match). A row whose observed name is not in gap_obs is red."""
+    role, name = row["obs_role"], row["obs_name"]
+    if not name or name not in (gap_obs or ""):
+        return False
+    return not role or any(r == role and n == name for _, r, n in NODE.findall(gap_obs))
+
+
+def classify(rn, gap_obs, later):
+    """-> 'late' | 'renamed' | 'absent' for one unresolved step. `gap_obs` is the observation it failed against; `later`
+    the observations taken after it on the same backend. late: role+name is in a later observation. renamed: not late,
+    and renamed_match finds the transcript name in gap_obs. absent: neither."""
+    if any(o and resolve(o, rn, True) for o in later):
+        return "late"
+    return "renamed" if renamed_match(rn, gap_obs) else "absent"
 
 
 def selftest(clf=None):
@@ -143,6 +163,12 @@ def selftest(clf=None):
              ((("button", "Search"), gap, ['[h3] link "Other"']), "renamed"),
              ((("link", "Search"), '[h1] button "Other"', ['[h1] button "Other"']), "absent")]
     bad = [(args[0], got, want) for args, want in cases if (got := clf(*args)) != want]
+    # a renamed row whose observed name is not in the observation it was matched in must be red
+    row = {"obs_role": "button", "obs_name": "Searching", "match": "prefix"}
+    if not verify_row(row, gap):
+        bad.append(("verify_row", "red on a name in the observation", "green"))
+    if verify_row({**row, "obs_name": "Search again"}, gap):
+        bad.append(("verify_row", "green on a name absent from the observation", "red"))
     for rn, got, want in bad:
         print(f"selftest FAIL: {rn} got {got}, want {want}")
     print(f"selftest {'PASS' if not bad else 'FAIL'}: {len(cases) - len(bad)}/{len(cases)} synthetic cases")
@@ -211,6 +237,7 @@ def classify_main(a, pin):
     named unresolved step may classify renamed or late, and the run exits 1 if one does."""
     settle = a.settle or 2.0
     rows, tot, shuffled = [], {}, a.mutate == "shuffle-names"
+    renamed, bad = [], []  # one row per renamed step: the transcript name and the observed name it matched
     for t in a.tasks.split(","):
         seq = flatten(lg.steps(os.path.join(TR, f"manuk_{t}_r1.jsonl"))[0])
         if shuffled:
@@ -221,6 +248,15 @@ def classify_main(a, pin):
         for side, raw in (("manuk", rawm), ("chrome", rawc)):
             n_gap = sum(1 for x in raw if x[3])
             cnt = classify_side(raw)
+            for k, (i, rn, obs, gap) in enumerate(raw):
+                if not gap or rn is None or classify(rn, obs, [o for (_, _, o, g) in raw[k + 1:] if not g]) != "renamed":
+                    continue
+                orole, oname, how = renamed_match(rn, obs)
+                row = {"chrome_ver": pin, "task": t, "backend": side, "step": i, "tr_role": rn[0], "tr_name": rn[1],
+                       "obs_role": orole, "obs_name": oname, "match": how}
+                renamed.append(row)
+                if not verify_row(row, obs):
+                    bad.append(row)
             first = next((x[0] for x in raw if x[3]), None)
             rows.append((t, side, len(seq), n_gap, cnt, first))
             for k, v in cnt.items():
@@ -233,6 +269,14 @@ def classify_main(a, pin):
         ok = tot.get("renamed", 0) == 0 and tot.get("late", 0) == 0  # no-name steps stay no-name: their handle was never named
         print(f"shuffle-names: {'every named unresolved step is absent' if ok else 'NOT all absent'}")
         sys.exit(0 if ok else 1)
+    cols = ["chrome_ver", "task", "backend", "step", "tr_role", "tr_name", "obs_role", "obs_name", "match"]
+    with open(a.renamed_tsv, "w") as f:
+        f.write("\t".join(cols) + "\n")
+        for row in renamed:
+            f.write("\t".join(str(row[c]).replace("\t", " ") for c in cols) + "\n")
+    print(f"renamed rows: {len(renamed)} -> {a.renamed_tsv}; rows without a matching observation line: {len(bad)}", flush=True)
+    if len(renamed) != tot.get("renamed", 0) or bad:
+        sys.exit(1)
     md = [MARK.replace("## RG.3.0.b", "## RG.3.0.b.a.a.a.a"), "",
           f"chrome_ver={pin}. Each unresolved step on the failing backend (replay at settle={settle:g}, wait {a.wait:g} s) is classified against the observation it failed to resolve in: "
           "**late** = role+name is in a later observation on the same backend; **renamed** = not late, and the observation has the same role with a prefix-matching name or the transcript name under another role/name; "
@@ -248,6 +292,7 @@ def main():
     ap.add_argument("--mutate", choices=["identical", "force-resolve", "shuffle-names"]); ap.add_argument("--out", default=os.path.join(ROOT, "docs/sprint/rg/LEDGER-3.md"))
     ap.add_argument("--classify", action="store_true", help="classify each unresolved step on the failing backend (absent | renamed | late)")
     ap.add_argument("--selftest", action="store_true", help="check classify() on synthetic late/renamed/absent cases and exit")
+    ap.add_argument("--renamed-tsv", default=os.path.join(ROOT, "docs/sprint/rg/RG3baaaac-renamed.tsv"), help="--classify: one row per renamed step")
     a = ap.parse_args()
     if a.selftest:
         sys.exit(0 if selftest() else 1)

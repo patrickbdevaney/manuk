@@ -1,0 +1,10 @@
+chrome_ver	task	backend	step	tr_role	tr_name	obs_role	obs_name	match
+145.0.7632.116	zilloft-2	chrome	8	radio	Use exact match	button	Use exact match Use exact match	substring
+145.0.7632.116	zilloft-2	chrome	11	radio	Use exact match	button	Use exact match Use exact match	substring
+145.0.7632.116	zilloft-2	chrome	12	radio	Use exact match	button	Use exact match Use exact match	substring
+145.0.7632.116	zilloft-2	chrome	14	button	APPLY	button	Apply	prefix
+145.0.7632.116	opendining-4	manuk	6	button	2	button	2:00 PM	prefix
+145.0.7632.116	gomail-3	chrome	3	button	Sent	menuitem	Sent menu item	substring
+145.0.7632.116	udriver-9	chrome	12	button	Choose date, selected date is Jul 18, 2024	textbox	Choose date, selected date is Jul 18, 2024	substring
+145.0.7632.116	udriver-9	chrome	14	radio	2024	textbox	Choose date, selected date is Jul 18, 2024	substring
+145.0.7632.116	udriver-9	chrome	15	button	18	textbox	Choose date, selected date is Jul 18, 2024	substring
