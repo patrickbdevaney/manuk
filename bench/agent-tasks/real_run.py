@@ -406,6 +406,8 @@ def main():
         t = next(t for t in tasks if t["id"] == a.rest[1])
         print(grade(t, json.load(open(a.rest[0]))))
         return
+    # RG.S1.b.b.b.a: every arm runs in PT (gocalendar evals: 21:00Z = 2pm PDT); an explicit TZ in the shell still wins
+    os.environ.setdefault("TZ", "America/Los_Angeles")
     pin = os.environ.get("MANUK_CHROME_PIN")
     if not pin:
         sys.exit("refusing: MANUK_CHROME_PIN unset")

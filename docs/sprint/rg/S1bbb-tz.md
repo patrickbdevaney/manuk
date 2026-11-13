@@ -20,3 +20,16 @@ as RG.S1.b.b.a. The zone is the variable that changes the result.
 
 **Caveat:** this is 3 runs per arm on one task at one pin. Under the 2-of-3 bar, gocalendar-1 passes for both arms.
 Other tasks were not re-measured under PT, so their numbers are not comparable across this change.
+
+## RG.S1.b.b.b.a: the runner pins TZ itself
+
+`bench/agent-tasks/real_run.py` now does `os.environ.setdefault("TZ", "America/Los_Angeles")` before it spawns anything, so
+every arm (and `claude -p`, the MCP server, Chrome) inherits PT without the invocation env. An explicit TZ in the shell wins.
+
+| arm | shell TZ | result | TSV |
+|---|---|---|---|
+| manuk | unset | 4/4 PASS | S1bbba-unset-manuk.tsv |
+| manuk | America/New_York | 0/4 FAIL (red control) | S1bbba-est-manuk.tsv |
+
+chrome_ver=145.0.7632.116, judge openai/gpt-oss-120b, 1 run each. Runs from before this change on other tasks were taken with the
+machine zone (America/New_York); do not diff them against runs after it.
