@@ -4,7 +4,9 @@
 Handles are per-page and per-backend, so each recorded handle is mapped to the role+"name" it had in the transcript
 and re-resolved from a fresh observe on each backend (first match; unresolved steps are skipped and logged).
   rg3b_replay.py [--tasks a,b] [--wait 2] [--mutate identical] [--out FILE]   exit 0 = GATE PASS, 1 = GATE FAIL
+  rg3b_replay.py --classify [--mutate shuffle-names]   per unresolved step on the failing backend: absent | renamed | late
 Writes the section '## RG.3.0.b' of docs/sprint/rg/LEDGER-3.md (replaced in place). Run with `python3 -I`; needs MANUK_CHROME_PIN.
+--classify writes docs/sprint/rg/RG3baaaa-classify.md instead and runs at settle 2 unless --settle is given.
 """
 import argparse, json, os, re, sys, time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -78,7 +80,9 @@ def settled(m, secs, cap=10.0, step=0.5):
     return obs
 
 
-def replay(backend, seq, wait, force=False, settle=0.0):
+def replay(backend, seq, wait, force=False, settle=0.0, raw=None):
+    """raw (optional list): one (step, rn, observation text, gap) per step; gap=True when the step was unresolved and
+    `observation text` is the fresh observation it failed against, else the observation after the step ran."""
     env, args = dict(os.environ), []
     if backend == "chrome":
         args = ["--backend", "chrome"]; env["MANUK_CHROME"] = os.path.expanduser("~/.local/chrome-cft/bin/google-chrome")
@@ -92,18 +96,70 @@ def replay(backend, seq, wait, force=False, settle=0.0):
             else:
                 if "handle" in a:
                     text = t == "type"
-                    h = resolve(obs, rn, text, force) or resolve(settled(m, settle) if settle else m.call("observe", {"mode": "interactive"}), rn, text, force)
+                    h, fresh = resolve(obs, rn, text, force), None
+                    if not h:
+                        fresh = settled(m, settle) if settle else m.call("observe", {"mode": "interactive"})
+                        h = resolve(fresh, rn, text, force)
                     if not h:
                         why = "handle unseen in transcript" if rn is None else f"unresolved: {rn[0]} \"{rn[1]}\""
-                        log.append((i, t, why, None)); continue
+                        log.append((i, t, why, None))
+                        if raw is not None:
+                            raw.append((i, rn, fresh, True))
+                        continue
                     a["handle"] = h
                 r = m.call("type" if t == "type" else "key" if t == "key" else "act" if t != "scroll" else "scroll", a)
             time.sleep(wait)
             obs = settled(m, settle) if settle else m.call("observe", {"mode": "interactive"})
+            if raw is not None:
+                raw.append((i, rn, obs, False))
             log.append((i, f"{t} {rn[0] + ' ' + repr(rn[1]) if rn else ''}".strip(), r[:260].replace("\n", " "), dd.norm(obs)))
         return log
     finally:
         m.p.kill()
+
+
+def classify(rn, gap_obs, later):
+    """-> 'late' | 'renamed' | 'absent' for one unresolved step. `gap_obs` is the observation it failed against; `later`
+    the observations taken after it on the same backend. late: role+name is in a later observation. renamed: not late,
+    and gap_obs has a node with the same role whose name matches by prefix (case-insensitive), or the transcript name
+    occurs anywhere in gap_obs under another role or name. absent: neither."""
+    role, name = rn
+    if any(o and resolve(o, rn, True) for o in later):
+        return "late"
+    low = name.lower()
+    for _, r, n in NODE.findall(gap_obs or ""):
+        if r == role and n and (n.lower().startswith(low) or low.startswith(n.lower())):
+            return "renamed"
+    if name and low in (gap_obs or "").lower():
+        return "renamed"
+    return "absent"
+
+
+def selftest(clf=None):
+    """Synthetic cases for classify(): one each of late, renamed, absent. `clf` lets the gate substitute a broken copy."""
+    clf = clf or classify
+    gap = '[h1] button "Searching" [h2] textbox "Address"'
+    cases = [((("button", "Search"), gap, ['[h3] button "Search"']), "late"),
+             ((("button", "Search"), gap, ['[h3] link "Other"']), "renamed"),
+             ((("link", "Search"), '[h1] button "Other"', ['[h1] button "Other"']), "absent")]
+    bad = [(args[0], got, want) for args, want in cases if (got := clf(*args)) != want]
+    for rn, got, want in bad:
+        print(f"selftest FAIL: {rn} got {got}, want {want}")
+    print(f"selftest {'PASS' if not bad else 'FAIL'}: {len(cases) - len(bad)}/{len(cases)} synthetic cases")
+    return not bad
+
+
+def classify_side(raw):
+    """-> {'absent': n, 'renamed': n, 'late': n, 'no-name': n} over the gap steps of one backend's raw trace."""
+    out = {"absent": 0, "renamed": 0, "late": 0, "no-name": 0}
+    for k, (i, rn, obs, gap) in enumerate(raw):
+        if not gap:
+            continue
+        if rn is None:
+            out["no-name"] += 1; continue
+        later = [o for (j, _, o, g) in raw[k + 1:] if not g]
+        out[classify(rn, obs, later)] += 1
+    return out
 
 
 def cutoff(ml, cl):
@@ -149,13 +205,55 @@ def first_action_diff(ml, cl):
     return None
 
 
+def classify_main(a, pin):
+    """--classify: replay both backends at settle 2 (unless --settle is set) and classify every unresolved step on each
+    backend. --mutate shuffle-names replaces every transcript name with a token that occurs in no observation; then no
+    named unresolved step may classify renamed or late, and the run exits 1 if one does."""
+    settle = a.settle or 2.0
+    rows, tot, shuffled = [], {}, a.mutate == "shuffle-names"
+    for t in a.tasks.split(","):
+        seq = flatten(lg.steps(os.path.join(TR, f"manuk_{t}_r1.jsonl"))[0])
+        if shuffled:
+            seq = [(k, v, (rn[0], f"ZQX{i}") if rn else None) for i, (k, v, rn) in enumerate(seq)]
+        rawm, rawc = [], []
+        replay("manuk", seq, a.wait, settle=settle, raw=rawm)
+        replay("chrome", seq, a.wait, settle=settle, raw=rawc)
+        for side, raw in (("manuk", rawm), ("chrome", rawc)):
+            n_gap = sum(1 for x in raw if x[3])
+            cnt = classify_side(raw)
+            first = next((x[0] for x in raw if x[3]), None)
+            rows.append((t, side, len(seq), n_gap, cnt, first))
+            for k, v in cnt.items():
+                tot[k] = tot.get(k, 0) + v
+    hdr = [f"| task | backend | steps | unresolved | absent | renamed | late | no-name | first gap |", "|---|---|---|---|---|---|---|---|---|"]
+    tab = hdr + [f"| {t} | {side} | {n} | {g} | {c['absent']} | {c['renamed']} | {c['late']} | {c['no-name']} | {'#%d' % f if f is not None else '-'} |" for t, side, n, g, c, f in rows]
+    tab.append(f"| all | | | {sum(r[3] for r in rows)} | {tot.get('absent', 0)} | {tot.get('renamed', 0)} | {tot.get('late', 0)} | {tot.get('no-name', 0)} | |")
+    print("\n".join(tab), flush=True)
+    if shuffled:
+        ok = tot.get("renamed", 0) == 0 and tot.get("late", 0) == 0  # no-name steps stay no-name: their handle was never named
+        print(f"shuffle-names: {'every named unresolved step is absent' if ok else 'NOT all absent'}")
+        sys.exit(0 if ok else 1)
+    md = [MARK.replace("## RG.3.0.b", "## RG.3.0.b.a.a.a.a"), "",
+          f"chrome_ver={pin}. Each unresolved step on the failing backend (replay at settle={settle:g}, wait {a.wait:g} s) is classified against the observation it failed to resolve in: "
+          "**late** = role+name is in a later observation on the same backend; **renamed** = not late, and the observation has the same role with a prefix-matching name or the transcript name under another role/name; "
+          "**absent** = neither. **no-name** = the handle never appeared in the transcript.", "", *tab, ""]
+    open(os.path.join(ROOT, "docs/sprint/rg/RG3baaaa-classify.md"), "w").write("\n".join(md) + "\n")
+    sys.exit(0)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--tasks", default=",".join(TASKS)); ap.add_argument("--wait", type=float, default=2)
     ap.add_argument("--settle", type=float, default=0, help="wait until the observation is unchanged this many s (max 10) before each step is observed; 0 = off")
-    ap.add_argument("--mutate", choices=["identical", "force-resolve"]); ap.add_argument("--out", default=os.path.join(ROOT, "docs/sprint/rg/LEDGER-3.md"))
+    ap.add_argument("--mutate", choices=["identical", "force-resolve", "shuffle-names"]); ap.add_argument("--out", default=os.path.join(ROOT, "docs/sprint/rg/LEDGER-3.md"))
+    ap.add_argument("--classify", action="store_true", help="classify each unresolved step on the failing backend (absent | renamed | late)")
+    ap.add_argument("--selftest", action="store_true", help="check classify() on synthetic late/renamed/absent cases and exit")
     a = ap.parse_args()
+    if a.selftest:
+        sys.exit(0 if selftest() else 1)
     pin = os.environ.get("MANUK_CHROME_PIN") or sys.exit("refusing: MANUK_CHROME_PIN unset")
+    if a.classify:
+        return classify_main(a, pin)
     intro = [MARK, "", f"chrome_ver={pin}. Replay of each task's manuk r1 transcript (`~/.cache/manuk-rgb2/transcripts`) under manuk and Chrome (`bench/agent-tasks/rg3b_replay.py`); handles re-resolved by role+name. First differing step = first step after which the interactive observation differs (handle ids stripped).", ""]
     verdicts, blocks, counts = {}, {}, {}
     for t in a.tasks.split(","):
