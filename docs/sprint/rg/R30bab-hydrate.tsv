@@ -1,0 +1,121 @@
+backend	wait_s	trial	outcome	chrome_ver	act_result
+manuk	0.3	1	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	0.3	2	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	0.3	3	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	0.3	4	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	0.3	5	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	0.3	6	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	0.3	7	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	0.3	8	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	0.3	9	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	0.3	10	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	0.3	11	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	0.3	12	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	0.3	13	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	0.3	14	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	0.3	15	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	0.3	16	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	0.3	17	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	0.3	18	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	0.3	19	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	0.3	20	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+chrome	0.3	1	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	0.3	2	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	0.3	3	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	0.3	4	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	0.3	5	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	0.3	6	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	0.3	7	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	0.3	8	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	0.3	9	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	0.3	10	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	0.3	11	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	0.3	12	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	0.3	13	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	0.3	14	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	0.3	15	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	0.3	16	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	0.3	17	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	0.3	18	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	0.3	19	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	0.3	20	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+manuk	1	1	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	1	2	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	1	3	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	1	4	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	1	5	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	1	6	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	1	7	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	1	8	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	1	9	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	1	10	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	1	11	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	1	12	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	1	13	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	1	14	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	1	15	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	1	16	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	1	17	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	1	18	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	1	19	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	1	20	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+chrome	1	1	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	1	2	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	1	3	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	1	4	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	1	5	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	1	6	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	1	7	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	1	8	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	1	9	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	1	10	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	1	11	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	1	12	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	1	13	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	1	14	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	1	15	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	1	16	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	1	17	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	1	18	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	1	19	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	1	20	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+manuk	2	1	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	2	2	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	2	3	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	2	4	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	2	5	no_handle	145.0.7632.116	
+manuk	2	6	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	2	7	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	2	8	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	2	9	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	2	10	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	2	11	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	2	12	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	2	13	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	2	14	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	2	15	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	2	16	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	2	17	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	2	18	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	2	19	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+manuk	2	20	opened	145.0.7632.116	ok: dispatched click. +50 ~0 -137 text changed; new (names are page content): [h138] button [clickable], [h139] option "12:00 AM", [h140] option "12:30 AM", [h1
+chrome	2	1	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	2	2	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	2	3	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	2	4	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	2	5	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	2	6	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	2	7	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	2	8	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	2	9	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	2	10	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	2	11	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	2	12	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	2	13	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	2	14	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	2	15	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	2	16	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	2	17	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	2	18	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	2	19	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
+chrome	2	20	opened	145.0.7632.116	ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h108] button [clickable], [h109] option "7:00 AM", [h110] option "7:30 AM", [h11
