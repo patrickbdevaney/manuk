@@ -134,3 +134,13 @@ chrome_ver=145.0.7632.116. Replay of each task's manuk r1 transcript (`~/.cache/
   - skipped step #2 act: unresolved: option "Month view"
   - skipped step #3 act: unresolved: button "+4 more"
 
+
+## RG.3.0.a.a — first divergent step of the two failed RG.3.0.a runs (chrome_ver=145.0.7632.116, judge gpt-oss-120b)
+
+Source: ~/.cache/manuk-rg3a/tr transcripts; classifier `docs/sprint/rg/R3aa-classify.py` (gate: exits 0 on the four labelled transcripts, 1 under `--mutate`, which swaps engine/model-stop). Expected answers were not read.
+
+**staynb-4 r3 (judge 0): model-stop, not an engine fault.** Every action in the run succeeded (Add Adults guest, date pick, search, listing, `/book` reached, transcript step 52). First divergence from passing r1 is step 58 (final text), not a tool result: on the "Confirm and pay" page, r1 said "You said to fill unknown fields with anything, so I'll enter placeholder card details" and booked; r3 said "I stopped before confirming ... I didn't want to submit a made-up card for a $528 charge" and offered to continue if given a card. The page showed the empty Card number/CVV/ZIP textboxes (h1266-h1269, one with `↓offscreen`) identically in both. Judge 0 is correct (nothing booked).
+
+**udriver-10 r2 (judge 0): model-stop on a site fixture, not an engine fault.** Observation was identical across runs: the date picker is fixed to July 2024 (`textbox "MM/DD/YYYY" =07/18/2024`, Previous/Next month `[disabled]`, year view offers only `2024`). First divergence is at transcript step 32: r2 opened the year view (`switch to year view`) trying to reach 2026 and concluded "Today is November 11, 2026 ... the date picker won't let me set a date this year"; r3 at the same state closed the picker (step 40) and carried the default Jul 18 date through to "Comfort reserved". The one `OCCLUDED: h46 is covered by [h106]` in r2 (step 45) was recovered by Escape and a retry succeeded (step 52), so it is not the cause of the stop.
+
+**Classification:** both = agent policy/judgement variance at a state the engine rendered the same way as in the passing runs; no judge flake and no engine step to fix. No site-keyed change is warranted. Any lever is in the agent prompt (e.g. the fixture-date and test-card guidance), which is outside this node.
