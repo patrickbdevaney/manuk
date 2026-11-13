@@ -70,13 +70,21 @@ def resolve(obs, rn, text=False, force=False):
     return None
 
 
-def settled(m, secs, cap=10.0, step=0.5):
+CAP = [10.0]  # settle cap in s; --cap sets it
+CAP_STATS = {"calls": 0, "hits": 0, "max": 0.0}
+
+
+def settled(m, secs, cap=None, step=0.5):
     """Observe until the interactive observation (handle ids stripped) is unchanged for `secs`, at most `cap` s."""
+    cap = CAP[0] if cap is None else cap
     t0 = time.time(); obs = m.call("observe", {"mode": "interactive"}); last, since = dd.norm(obs), time.time()
     while time.time() - since < secs and time.time() - t0 < cap:
         time.sleep(step); obs = m.call("observe", {"mode": "interactive"}); n = dd.norm(obs)
         if n != last:
             last, since = n, time.time()
+    CAP_STATS["calls"] += 1; CAP_STATS["max"] = max(CAP_STATS["max"], time.time() - t0)
+    if time.time() - since < secs:
+        CAP_STATS["hits"] += 1  # still changing when the cap ended the wait
     return obs
 
 
@@ -265,6 +273,23 @@ def classify_main(a, pin):
     tab = hdr + [f"| {t} | {side} | {n} | {g} | {c['absent']} | {c['renamed']} | {c['late']} | {c['no-name']} | {'#%d' % f if f is not None else '-'} |" for t, side, n, g, c, f in rows]
     tab.append(f"| all | | | {sum(r[3] for r in rows)} | {tot.get('absent', 0)} | {tot.get('renamed', 0)} | {tot.get('late', 0)} | {tot.get('no-name', 0)} | |")
     print("\n".join(tab), flush=True)
+    capped = a.cap != 10.0
+    if capped:
+        base = open(os.path.join(ROOT, "docs/sprint/rg/RG3baaaa-classify.md")).read().splitlines()
+        base = [l for l in base if l.startswith("| ") and "task" not in l.split("|")[1]]
+        same = base == tab[2:]
+        late = {}
+        for t, side, n, g, c, f in rows:
+            late[t] = late.get(t, 0) + c["late"]
+        st = CAP_STATS
+        md = [f"## RG.3.0.b.a.a.a.a.b", "",
+              f"chrome_ver={pin}. Same replay and classification as RG3baaaa-classify.md (settle {settle:g} s, wait {a.wait:g} s) with the settle cap {a.cap:g} s instead of 10 s. "
+              f"Settle waits: {st['calls']}; ended by the cap while the page was still changing: {st['hits']}; longest wait {st['max']:.1f} s.", "", *tab, "",
+              "late steps per task (both backends): " + ", ".join(f"{t} {v}" for t, v in late.items()), "",
+              f"table identical to cap 10: {'yes' if same else 'no'}", ""]
+        open(os.path.join(ROOT, f"docs/sprint/rg/RG3baaaab-cap{a.cap:g}.md"), "w").write("\n".join(md) + "\n")
+        print("\n".join(md[2:4]) + f"\nlate per task: {late}\nidentical to cap 10: {same}", flush=True)
+        sys.exit(0)  # an identical table is a finding (the cap never bound), not a failure; cap plumbing is checked in main()
     if shuffled:
         ok = tot.get("renamed", 0) == 0 and tot.get("late", 0) == 0  # no-name steps stay no-name: their handle was never named
         print(f"shuffle-names: {'every named unresolved step is absent' if ok else 'NOT all absent'}")
@@ -289,7 +314,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--tasks", default=",".join(TASKS)); ap.add_argument("--wait", type=float, default=2)
     ap.add_argument("--settle", type=float, default=0, help="wait until the observation is unchanged this many s (max 10) before each step is observed; 0 = off")
-    ap.add_argument("--mutate", choices=["identical", "force-resolve", "shuffle-names"]); ap.add_argument("--out", default=os.path.join(ROOT, "docs/sprint/rg/LEDGER-3.md"))
+    ap.add_argument("--mutate", choices=["identical", "force-resolve", "shuffle-names", "ignore-cap"]); ap.add_argument("--out", default=os.path.join(ROOT, "docs/sprint/rg/LEDGER-3.md"))
+    ap.add_argument("--cap", type=float, default=10.0, help="settle cap in s (default 10); with --classify and a cap other than 10 the table goes to RG3baaaab-cap<N>.md")
     ap.add_argument("--classify", action="store_true", help="classify each unresolved step on the failing backend (absent | renamed | late)")
     ap.add_argument("--selftest", action="store_true", help="check classify() on synthetic late/renamed/absent cases and exit")
     ap.add_argument("--renamed-tsv", default=os.path.join(ROOT, "docs/sprint/rg/RG3baaaac-renamed.tsv"), help="--classify: one row per renamed step")
@@ -297,6 +323,9 @@ def main():
     if a.selftest:
         sys.exit(0 if selftest() else 1)
     pin = os.environ.get("MANUK_CHROME_PIN") or sys.exit("refusing: MANUK_CHROME_PIN unset")
+    CAP[0] = 10.0 if a.mutate == "ignore-cap" else a.cap  # mutant: --cap is ignored
+    if CAP[0] != a.cap:
+        sys.exit(f"red: --cap {a.cap:g} did not reach settled() (cap in force {CAP[0]:g})")
     if a.classify:
         return classify_main(a, pin)
     intro = [MARK, "", f"chrome_ver={pin}. Replay of each task's manuk r1 transcript (`~/.cache/manuk-rgb2/transcripts`) under manuk and Chrome (`bench/agent-tasks/rg3b_replay.py`); handles re-resolved by role+name. First differing step = first step after which the interactive observation differs (handle ids stripped).", ""]
