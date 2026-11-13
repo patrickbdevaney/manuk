@@ -15676,10 +15676,14 @@ impl PageContext {
             "(function(){{\
                var nid={nid};\
                var target=(globalThis.__nodes && __nodes[nid])||null;\
-               if(target && typeof target.setSelectionRange==='function'){{\
-                 try{{var n=(target.value||'').length;target.setSelectionRange(n,n);}}catch(e){{}}\
-               }}\
                var ty={ty};\
+               if(ty==='input' && target && typeof target.setSelectionRange==='function'){{\
+                 try{{\
+                   var v=String(target.value||''),s=Math.min(target.selectionStart||0,v.length);\
+                   var e=Math.min(Math.max(target.selectionEnd||0,s),v.length),d={data};\
+                   target.setRangeText(d,s,e,'end');\
+                 }}catch(e){{}}\
+               }}\
                var ev=new InputEvent(ty,{{inputType:{it},data:{data},bubbles:true,composed:true,cancelable:ty==='beforeinput'}});\
                return __dispatchEvent(nid,ev);\
              }})()",

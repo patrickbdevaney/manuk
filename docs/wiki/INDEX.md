@@ -1575,6 +1575,7 @@
   - L161 · RG.2.S1.a.a.a: moving focus blurs the field that lost it
   - L165 · RG.2.S1.a.b: typed editor text reaches the editor's MutationObserver, and created blocks serialize lowercase
   - L169 · RG.2.S1.a.a.b: typed characters are real InputEvents with the caret at the end
+  - L173 · RG.2.S1.a.a.a.a: typing over existing text is select-all-then-type, not clear-then-type
 
 ## `document.domain` — a missing property that pages read as a string is a THROW, not a gap
 `docs/wiki/document-domain.md`
@@ -3796,4 +3797,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3095 sections across 174 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3096 sections across 174 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

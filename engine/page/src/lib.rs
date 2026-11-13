@@ -8046,7 +8046,11 @@ impl Page {
         fonts: &FontContext,
         viewport_width: f32,
     ) {
-        self.dom.set_attr(node, "value", value.to_string());
+        // A typed insertion replaces the field's selection inside the dispatch (see
+        // `dispatch_input_event`), so the value is rewritten there, not here.
+        if typed.is_none() {
+            self.dom.set_attr(node, "value", value.to_string());
+        }
         #[cfg(feature = "spidermonkey")]
         {
             let Some(ctx) = &self.js else {
@@ -8329,7 +8333,31 @@ impl Page {
             .to_string();
         let mut value = String::new();
         if !before.is_empty() {
-            self.dispatch_input(node, "", fonts, viewport_width);
+            // Replace-all as a person does it: Ctrl+A, then type. No `input` announces an empty value
+            // (a sectioned MUI date field reads that as a wipe to its placeholder and ignores the
+            // characters after it); the page hears the chord and selects all itself (MUI's
+            // `setSelectedSections("all")`), else the engine does, and the first character then
+            // replaces the selection.
+            let ctrl = KeyModifiers {
+                ctrl: true,
+                ..KeyModifiers::default()
+            };
+            if self.dispatch_key_mods(node, "keydown", "a", ctrl, fonts, viewport_width) {
+                let sel = "(function(){var e=document.activeElement;if(e&&e.setSelectionRange){try{e.setSelectionRange(0,String(e.value||'').length)}catch(x){}}})()";
+                let reflow = ReflowScope::install(
+                    &self.dom,
+                    fonts,
+                    viewport_width,
+                    &self.images,
+                    &self.final_url,
+                    &self.external_css,
+                    &self.scroll_offsets,
+                    self.sticky_scroll_y,
+                    self.has_sticky,
+                );
+                self.eval_in_scope(sel, &reflow);
+            }
+            self.dispatch_key_mods(node, "keyup", "a", ctrl, fonts, viewport_width);
         }
         for ch in text.chars() {
             let key = ch.to_string();
