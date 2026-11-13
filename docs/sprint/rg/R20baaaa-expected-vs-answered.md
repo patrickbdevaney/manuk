@@ -21,3 +21,6 @@ The task goal is "Switch to the Month view", so the likely failing clause is the
 
 ## Not done
 Re-judging with and without the closing sentence, and a fresh Chrome-arm x1 with transcripts, were attempted but the judge endpoint hung (no reply to a trivial prompt within 100 s; 12-call run killed at 10 min). Hypothesis untested.
+
+## Correction (RG.2.0.b.a.a.a.a.a)
+Run 3 does not end in Day view; it ends "I did not open each of those days individually to confirm the rest." The closing-sentence test is in docs/sprint/rg/R20baaaaa-verdict.md: not confirmed on the fallback judge, primary judge rate-limited. The rubric has no view clause.
