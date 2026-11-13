@@ -88,7 +88,7 @@ def settled(m, secs, cap=None, step=0.5):
     return obs
 
 
-def replay(backend, seq, wait, force=False, settle=0.0, raw=None):
+def replay(backend, seq, wait, force=False, settle=0.0, raw=None, defer=0.0):
     """raw (optional list): one (step, rn, observation text, gap) per step; gap=True when the step was unresolved and
     `observation text` is the fresh observation it failed against, else the observation after the step ran."""
     env, args = dict(os.environ), []
@@ -108,6 +108,10 @@ def replay(backend, seq, wait, force=False, settle=0.0, raw=None):
                     if not h:
                         fresh = settled(m, settle) if settle else m.call("observe", {"mode": "interactive"})
                         h = resolve(fresh, rn, text, force)
+                    if not h and defer and rn is not None:  # --defer-late: poll up to `defer` s for the role+name to appear
+                        t0 = time.time()
+                        while not h and time.time() - t0 < defer:
+                            time.sleep(0.5); fresh = m.call("observe", {"mode": "interactive"}); h = resolve(fresh, rn, text, force)
                     if not h:
                         why = "handle unseen in transcript" if rn is None else f"unresolved: {rn[0]} \"{rn[1]}\""
                         log.append((i, t, why, None))
@@ -239,6 +243,52 @@ def first_action_diff(ml, cl):
     return None
 
 
+def late_distance(raw, k):
+    """Steps after raw[k] (a gap step) until its role+name first appears in a later observation, else None."""
+    rn = raw[k][1]
+    for d, (_, _, o, g) in enumerate(raw[k + 1:], 1):
+        if not g and o and resolve(o, rn, True):
+            return d
+    return None
+
+
+def defer_main(a, pin):
+    """--defer-late: per task and backend, find the late steps (as --classify does), measure how many steps later each
+    role+name first appears, then replay again deferring every unresolved step up to --defer s and report which late
+    steps resolve. --mutate shuffle-names: no step may resolve; exit 1 if one does."""
+    settle, shuffled = a.settle or 2.0, a.mutate == "shuffle-names"
+    rows, tot_late, tot_res = [], 0, 0
+    for t in a.tasks.split(","):
+        seq = flatten(lg.steps(os.path.join(TR, f"manuk_{t}_r1.jsonl"))[0])
+        if shuffled:
+            seq = [(k, v, (rn[0], f"ZQX{i}") if rn else None) for i, (k, v, rn) in enumerate(seq)]
+        for side in ("manuk", "chrome"):
+            raw = []
+            replay(side, seq, a.wait, settle=settle, raw=raw)
+            late = [(k, raw[k][0], late_distance(raw, k)) for k in range(len(raw)) if raw[k][3] and raw[k][1] is not None
+                    and late_distance(raw, k) is not None]
+            if not late:
+                continue
+            raw2 = []
+            replay(side, seq, a.wait, force=a.mutate == "force-resolve", settle=settle, raw=raw2, defer=a.defer)
+            gap2 = {i for (i, _, _, g) in raw2 if g}
+            for k, i, d in late:
+                res = i not in gap2
+                rows.append((t, side, i, raw[k][1], d, res))
+                tot_late += 1; tot_res += res
+    tab = ["| task | backend | step | role+name | steps until it appears | resolved by defer |", "|---|---|---|---|---|---|"]
+    tab += [f"| {t} | {sd} | #{i} | {rn[0]} \"{rn[1]}\" | {d} | {'yes' if r else 'no'} |" for t, sd, i, rn, d, r in rows]
+    tab.append(f"| all | | | | | {tot_res} of {tot_late} resolved |")
+    print("\n".join(tab), flush=True)
+    if shuffled:
+        print(f"shuffle-names: {tot_res} resolved of {tot_late} late"); sys.exit(1 if tot_res else 0)
+    if a.mutate == "force-resolve":  # mutant: the deferred replay resolves any step; the table must then show resolutions
+        print(f"force-resolve: {tot_res} resolved of {tot_late} late"); sys.exit(1 if tot_res else 0)
+    md = ["## RG.3.0.b.a.a.a.a.b.a", "", f"chrome_ver={pin}. Late steps (role+name absent when the step is reached, present in a later observation on the same backend) from the classify replay (settle {settle:g} s, wait {a.wait:g} s), then a second replay that polls up to {a.defer:g} s for the role+name of any unresolved step before giving up. The 'steps until it appears' column counts transcript steps after the late step.", "", *tab, ""]
+    open(os.path.join(ROOT, "docs/sprint/rg/RG3baaaabaa-defer-late.md"), "w").write("\n".join(md) + "\n")
+    sys.exit(0)
+
+
 def classify_main(a, pin):
     """--classify: replay both backends at settle 2 (unless --settle is set) and classify every unresolved step on each
     backend. --mutate shuffle-names replaces every transcript name with a token that occurs in no observation; then no
@@ -317,6 +367,8 @@ def main():
     ap.add_argument("--mutate", choices=["identical", "force-resolve", "shuffle-names", "ignore-cap"]); ap.add_argument("--out", default=os.path.join(ROOT, "docs/sprint/rg/LEDGER-3.md"))
     ap.add_argument("--cap", type=float, default=10.0, help="settle cap in s (default 10); with --classify and a cap other than 10 the table goes to RG3baaaab-cap<N>.md")
     ap.add_argument("--classify", action="store_true", help="classify each unresolved step on the failing backend (absent | renamed | late)")
+    ap.add_argument("--defer-late", action="store_true", help="measure late steps' distance and whether deferring the step up to --defer s resolves them")
+    ap.add_argument("--defer", type=float, default=30.0, help="--defer-late: max s to wait for a late role+name")
     ap.add_argument("--selftest", action="store_true", help="check classify() on synthetic late/renamed/absent cases and exit")
     ap.add_argument("--renamed-tsv", default=os.path.join(ROOT, "docs/sprint/rg/RG3baaaac-renamed.tsv"), help="--classify: one row per renamed step")
     a = ap.parse_args()
@@ -326,6 +378,8 @@ def main():
     CAP[0] = 10.0 if a.mutate == "ignore-cap" else a.cap  # mutant: --cap is ignored
     if CAP[0] != a.cap:
         sys.exit(f"red: --cap {a.cap:g} did not reach settled() (cap in force {CAP[0]:g})")
+    if a.defer_late:
+        return defer_main(a, pin)
     if a.classify:
         return classify_main(a, pin)
     intro = [MARK, "", f"chrome_ver={pin}. Replay of each task's manuk r1 transcript (`~/.cache/manuk-rgb2/transcripts`) under manuk and Chrome (`bench/agent-tasks/rg3b_replay.py`); handles re-resolved by role+name. First differing step = first step after which the interactive observation differs (handle ids stripped).", ""]
