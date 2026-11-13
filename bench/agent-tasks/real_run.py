@@ -43,6 +43,12 @@ def scored(t):
 
 
 def grade(task, env):
+    res = grade_vec(task, env)
+    return bool(res) and all(res), sum(res), len(res)
+
+
+def grade_vec(task, env):
+    """Per-eval outcomes in eval order (True/False)."""
     import jmespath
     res = []
     for e in task["evals"]:
@@ -51,7 +57,7 @@ def grade(task, env):
         except Exception as ex:  # REAL: a query error is a failed eval
             got = f"Error: {ex}"
         res.append(got == e["expected_value"])
-    return bool(res) and all(res), sum(res), len(res)
+    return res
 
 
 # ---------------------------------------------------------------- shim
@@ -238,7 +244,7 @@ def proxy(a, child):
 
 
 # ---------------------------------------------------------------- driver
-COLS = ["ts", "arm", "suite", "chrome_ver", "task", "site", "run", "model", "pass", "evals_ok", "evals_n", "state_ok",
+COLS = ["ts", "arm", "suite", "chrome_ver", "task", "site", "run", "model", "pass", "evals_ok", "evals_vec", "evals_n", "state_ok",
         "checkpoints", "restores", "forks", "input_tokens", "output_tokens", "cache_read_tokens", "cache_create_tokens",
         "cost_usd", "seconds", "turns", "is_error", "answer"]
 # W5.T0.b: every run's stream-json is kept here, outside the repo, so w5t0_attrib.py can bucket REAL runs
@@ -341,8 +347,10 @@ def one(arm, task, run, pin, tdir, timeout, judge_env=None, trdir=TRANSCRIPTS):
     final = run_arm.flat_answer(j.get("result") or err or "")
     jm = dict(task, evals=[e for e in task["evals"] if e["type"] == "jmespath"])
     ok, k, n = (True, 0, 0) if not jm["evals"] else (False, 0, len(jm["evals"]))
+    vec = [0] * n  # no usable final state: every jmespath eval failed
     if st and st["ok"] and jm["evals"]:
         ok, k, n = grade(jm, st["state"])
+        vec = [int(x) for x in grade_vec(jm, st["state"])]
     llm = [e for e in task["evals"] if e["type"] == "llm_boolean"]
     llm_ok = 0
     judged_by = ""
@@ -357,7 +365,7 @@ def one(arm, task, run, pin, tdir, timeout, judge_env=None, trdir=TRANSCRIPTS):
     tc = tool_counts(out)
     unavailable = judge_env is not None and judged_by == "judge_unavailable"
     return {"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "arm": arm, "suite": JUDGE_SUITE if judge_env is not None else SUITE, "chrome_ver": pin, "task": task["id"],
-            "site": task["website"]["id"], "run": run, "model": "haiku", "pass": "judge_unavailable" if unavailable else int(ok and llm_ok == len(llm) and not j.get("is_error")), "evals_ok": k,
+            "site": task["website"]["id"], "run": run, "model": "haiku", "pass": "judge_unavailable" if unavailable else int(ok and llm_ok == len(llm) and not j.get("is_error")), "evals_ok": k, "evals_vec": json.dumps(vec),
             "evals_n": n, "state_ok": int(bool(st and st["ok"])), "checkpoints": tc["checkpoint"], "restores": tc["restore"],
             "forks": tc["fork"], "input_tokens": u.get("input_tokens", 0), "output_tokens": u.get("output_tokens", 0),
             "cache_read_tokens": u.get("cache_read_input_tokens", 0), "cache_create_tokens": u.get("cache_creation_input_tokens", 0),
