@@ -6127,6 +6127,13 @@ unsafe fn doc_create_element(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -
             &format!("'{tag}' is not a valid element name"),
         );
     }
+    // **An HTML document lowercases the name** (DOM §createElement), so `createElement('P')` serializes as
+    // `<p>`. Quill builds its blocks that way and reads them back through `innerHTML`; the stored name kept
+    // its case, so a sent email's body was `<P>…</P>` where Chrome gives `<p>…</p>`.
+    let tag = match this_node(vp) {
+        Some((d, doc)) if (*d).content_type(doc) == "text/html" => tag.to_ascii_lowercase(),
+        _ => tag,
+    };
     let node = (*dom).create_element(tag);
     // **The one marking site.** A `<script>` the page's own script built is allowed to execute when
     // it is inserted; anything a PARSER built (the document, `innerHTML`, `DOMParser`, a `<template>`)

@@ -8132,6 +8132,60 @@ impl Page {
         })
     }
 
+    /// Insert `text` into the focused editing host's first block (dropping its placeholder `<br>`s)
+    /// with `removeChild`/`appendChild` run as page script, so `MutationObserver`s on the host see the
+    /// edit. `false` when there is no script context (the caller edits the DOM natively instead).
+    #[cfg(feature = "spidermonkey")]
+    fn insert_into_host_via_script(
+        &mut self,
+        text: &str,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) -> bool {
+        if self.js.is_none() {
+            return false;
+        }
+        let lit = text
+            .chars()
+            .map(|c| match c {
+                '\\' => "\\\\".to_string(),
+                '"' => "\\\"".to_string(),
+                c if (c as u32) < 0x20
+                    || (0x7f..0xa0).contains(&(c as u32))
+                    || c == '\u{2028}'
+                    || c == '\u{2029}' =>
+                {
+                    format!("\\u{:04x}", c as u32)
+                }
+                c => c.to_string(),
+            })
+            .collect::<String>();
+        let js = format!(
+            "(function(){{var h=document.activeElement;if(!h)return;\
+             var b=h.firstElementChild||h;\
+             Array.prototype.slice.call(b.childNodes).forEach(function(n){{if(n.nodeName==='BR')b.removeChild(n);}});\
+             b.appendChild(document.createTextNode(\"{lit}\"));}})()"
+        );
+        let reflow = ReflowScope::install(
+            &self.dom,
+            fonts,
+            viewport_width,
+            &self.images,
+            &self.final_url,
+            &self.external_css,
+            &self.scroll_offsets,
+            self.sticky_scroll_y,
+            self.has_sticky,
+        );
+        self.eval_in_scope(&js, &reflow);
+        true
+    }
+
+    #[cfg(not(feature = "spidermonkey"))]
+    fn insert_into_host_via_script(&mut self, _: &str, _: &FontContext, _: f32) -> bool {
+        false
+    }
+
     pub fn type_text(
         &mut self,
         node: manuk_dom::NodeId,
@@ -8152,6 +8206,14 @@ impl Page {
         // text into its first block, as Chrome does into the caret's block, and announces it with `input`.
         if self.is_editing_host(node) {
             self.fire_plain_event(node, "beforeinput", fonts, viewport_width);
+            // Through the script's own DOM methods when there is a script: an editor (Quill) refreshes
+            // its model from MutationObserver records on its root, and the engine's native edit below
+            // queues none, so Send posted an empty body.
+            if self.insert_into_host_via_script(text, fonts, viewport_width) {
+                self.fire_plain_event(node, "input", fonts, viewport_width);
+                self.relayout(fonts, viewport_width);
+                return true;
+            }
             let block = self
                 .dom
                 .children(node)

@@ -100,13 +100,15 @@ fn handle_of(text: &str, needle: &str) -> String {
     line[start + 1..end].to_string()
 }
 
-
 fn click(mutate: Option<&str>, name: &str) -> (bool, String) {
     let mut c = Client::start_on("chrome", mutate);
     let (err, nav) = c.tool("navigate", json!({"url": fixture("cdp_clip.html")}));
     assert!(!err, "{nav}");
     let h = handle_of(&nav, &format!("button \"{name}\""));
-    c.tool("act", json!({"handle": h, "action": "click", "detail": true}))
+    c.tool(
+        "act",
+        json!({"handle": h, "action": "click", "detail": true}),
+    )
 }
 
 #[test]

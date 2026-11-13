@@ -1,0 +1,18 @@
+<!doctype html>
+<title>editor model fed by MutationObserver</title>
+<div class="ql-container"><div class="ql-editor" contenteditable="true"><p><br></p></div></div>
+<button id="send">Send</button>
+<p id="model">model:none</p>
+<p id="log">log:none</p>
+<script>
+  // Quill-style: the editor's own model is only refreshed from MutationObserver records on its root.
+  var root = document.querySelector('.ql-editor'), model = '', log = [];
+  new MutationObserver(function (recs) {
+    recs.forEach(function (r) { log.push(r.type + ':' + r.target.nodeName); });
+    model = root.innerText || root.textContent;
+    document.getElementById('log').textContent = 'log:' + log.join(',');
+  }).observe(root, {childList: true, characterData: true, subtree: true, attributes: true});
+  document.getElementById('send').addEventListener('click', function () {
+    document.getElementById('model').textContent = 'model:' + model;
+  });
+</script>

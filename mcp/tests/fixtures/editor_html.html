@@ -1,0 +1,11 @@
+<!doctype html>
+<title>editor html</title>
+<p id="out">out:none</p>
+<script>
+  // Quill builds its blocks with createElement('P') and reads them back through innerHTML.
+  var host = document.createElement('div');
+  var p = document.createElement('P');
+  p.appendChild(document.createTextNode('Please find the notes.'));
+  host.appendChild(p);
+  document.getElementById('out').textContent = 'out:' + host.innerHTML;
+</script>
