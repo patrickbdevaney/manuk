@@ -1,0 +1,345 @@
+{
+ "chrome_ver": "145.0.7632.116",
+ "pin": "145.0.7632.116",
+ "runs": [
+  {
+   "run": 1,
+   "states": [
+    {
+     "state": "zilloft-5 Price popover",
+     "baseline_count": 6,
+     "present_after": 0,
+     "absent_after": [
+      "button|Save search",
+      "link|Go to homepage",
+      "button|For Sale",
+      "button|Price",
+      "button|Beds & Baths",
+      "button|Home Type"
+     ],
+     "dom": {
+      "visible": 229,
+      "behind_aria_hidden": 228
+     }
+    },
+    {
+     "state": "gocalendar-2 view popover (5 days)",
+     "baseline_count": 36,
+     "present_after": 0,
+     "absent_after": [
+      "button|close",
+      "button|Create event menu",
+      "button|Previous month",
+      "button|Next month",
+      "button|Mon 15",
+      "button|Tue 16",
+      "button|Wed 17",
+      "button|Thu 18",
+      "button|Fri 19",
+      "button|Toogle sidebar",
+      "button|Go to today",
+      "button|previous",
+      "button|next",
+      "button|apps",
+      "button|Event color indicator Team Standup Meeting 10am - 11am",
+      "button|Event color indicator Client Call 12pm - 1pm",
+      "button|Event color indicator Team Brainstorming Session 3pm - 5pm",
+      "button|Event color indicator Coffee with Mentor 6pm - 7pm",
+      "button|Event color indicator Dinner and Movie 9pm - 11pm",
+      "button|Event color indicator Morning Walk 9am - 10am",
+      "button|Event color indicator Team Workshop 11am - 12pm",
+      "button|Event color indicator Lunch with Boss 2pm - 3pm",
+      "button|Event color indicator Creative Session 4pm - 6pm",
+      "button|Event color indicator Project Sync 10am - 11am",
+      "button|Event color indicator Customer Feedback Session 12pm - 1pm",
+      "button|Event color indicator Team Collaboration Workshop 3pm - 4pm",
+      "button|Event color indicator Follow-up Meeting 5pm - 6pm",
+      "button|Event color indicator Dinner with Friends 7pm - 9pm",
+      "button|Event color indicator Reading Time 10pm - 11pm",
+      "button|Event color indicator Morning Coffee with sister 9am - 10am",
+      "button|Event color indicator Team Check-In 11am - 12pm",
+      "button|Event color indicator Lunch with Marketing Team 1pm - 3pm",
+      "button|Event color indicator Workout Session 5pm - 7pm",
+      "button|Event color indicator Breakfast Meeting with Client 10am - 11am",
+      "button|Event color indicator Team Progress Check 12pm - 1pm",
+      "button|Event color indicator Client Presentation 3pm - 5pm"
+     ],
+     "dom": {
+      "visible": 67,
+      "behind_aria_hidden": 67
+     }
+    },
+    {
+     "state": "gocalendar-2 +N more popover (Month)",
+     "baseline_count": 41,
+     "present_after": 8,
+     "absent_after": [
+      "button|close",
+      "button|30",
+      "button|01",
+      "button|02",
+      "button|03",
+      "button|04",
+      "button|05",
+      "button|06",
+      "button|07",
+      "button|08",
+      "button|09",
+      "button|10",
+      "button|11",
+      "button|12",
+      "button|13",
+      "button|14",
+      "button|15",
+      "button|16",
+      "button|17",
+      "button|18",
+      "button|19",
+      "button|20",
+      "button|+2 more",
+      "button|21",
+      "button|22",
+      "button|23",
+      "button|24",
+      "button|25",
+      "button|26",
+      "button|27",
+      "button|28",
+      "button|29",
+      "button|31"
+     ],
+     "dom": {
+      "visible": 45,
+      "behind_aria_hidden": 0
+     }
+    }
+   ]
+  },
+  {
+   "run": 2,
+   "states": [
+    {
+     "state": "zilloft-5 Price popover",
+     "baseline_count": 6,
+     "present_after": 0,
+     "absent_after": [
+      "button|Save search",
+      "link|Go to homepage",
+      "button|For Sale",
+      "button|Price",
+      "button|Beds & Baths",
+      "button|Home Type"
+     ],
+     "dom": {
+      "visible": 229,
+      "behind_aria_hidden": 228
+     }
+    },
+    {
+     "state": "gocalendar-2 view popover (5 days)",
+     "baseline_count": 36,
+     "present_after": 0,
+     "absent_after": [
+      "button|close",
+      "button|Create event menu",
+      "button|Previous month",
+      "button|Next month",
+      "button|Mon 15",
+      "button|Tue 16",
+      "button|Wed 17",
+      "button|Thu 18",
+      "button|Fri 19",
+      "button|Toogle sidebar",
+      "button|Go to today",
+      "button|previous",
+      "button|next",
+      "button|apps",
+      "button|Event color indicator Team Standup Meeting 10am - 11am",
+      "button|Event color indicator Client Call 12pm - 1pm",
+      "button|Event color indicator Team Brainstorming Session 3pm - 5pm",
+      "button|Event color indicator Coffee with Mentor 6pm - 7pm",
+      "button|Event color indicator Dinner and Movie 9pm - 11pm",
+      "button|Event color indicator Morning Walk 9am - 10am",
+      "button|Event color indicator Team Workshop 11am - 12pm",
+      "button|Event color indicator Lunch with Boss 2pm - 3pm",
+      "button|Event color indicator Creative Session 4pm - 6pm",
+      "button|Event color indicator Project Sync 10am - 11am",
+      "button|Event color indicator Customer Feedback Session 12pm - 1pm",
+      "button|Event color indicator Team Collaboration Workshop 3pm - 4pm",
+      "button|Event color indicator Follow-up Meeting 5pm - 6pm",
+      "button|Event color indicator Dinner with Friends 7pm - 9pm",
+      "button|Event color indicator Reading Time 10pm - 11pm",
+      "button|Event color indicator Morning Coffee with sister 9am - 10am",
+      "button|Event color indicator Team Check-In 11am - 12pm",
+      "button|Event color indicator Lunch with Marketing Team 1pm - 3pm",
+      "button|Event color indicator Workout Session 5pm - 7pm",
+      "button|Event color indicator Breakfast Meeting with Client 10am - 11am",
+      "button|Event color indicator Team Progress Check 12pm - 1pm",
+      "button|Event color indicator Client Presentation 3pm - 5pm"
+     ],
+     "dom": {
+      "visible": 67,
+      "behind_aria_hidden": 67
+     }
+    },
+    {
+     "state": "gocalendar-2 +N more popover (Month)",
+     "baseline_count": 41,
+     "present_after": 8,
+     "absent_after": [
+      "button|close",
+      "button|30",
+      "button|01",
+      "button|02",
+      "button|03",
+      "button|04",
+      "button|05",
+      "button|06",
+      "button|07",
+      "button|08",
+      "button|09",
+      "button|10",
+      "button|11",
+      "button|12",
+      "button|13",
+      "button|14",
+      "button|15",
+      "button|16",
+      "button|17",
+      "button|18",
+      "button|19",
+      "button|20",
+      "button|+2 more",
+      "button|21",
+      "button|22",
+      "button|23",
+      "button|24",
+      "button|25",
+      "button|26",
+      "button|27",
+      "button|28",
+      "button|29",
+      "button|31"
+     ],
+     "dom": {
+      "visible": 45,
+      "behind_aria_hidden": 0
+     }
+    }
+   ]
+  },
+  {
+   "run": 3,
+   "states": [
+    {
+     "state": "zilloft-5 Price popover",
+     "baseline_count": 6,
+     "present_after": 0,
+     "absent_after": [
+      "button|Save search",
+      "link|Go to homepage",
+      "button|For Sale",
+      "button|Price",
+      "button|Beds & Baths",
+      "button|Home Type"
+     ],
+     "dom": {
+      "visible": 229,
+      "behind_aria_hidden": 228
+     }
+    },
+    {
+     "state": "gocalendar-2 view popover (5 days)",
+     "baseline_count": 36,
+     "present_after": 0,
+     "absent_after": [
+      "button|close",
+      "button|Create event menu",
+      "button|Previous month",
+      "button|Next month",
+      "button|Mon 15",
+      "button|Tue 16",
+      "button|Wed 17",
+      "button|Thu 18",
+      "button|Fri 19",
+      "button|Toogle sidebar",
+      "button|Go to today",
+      "button|previous",
+      "button|next",
+      "button|apps",
+      "button|Event color indicator Team Standup Meeting 10am - 11am",
+      "button|Event color indicator Client Call 12pm - 1pm",
+      "button|Event color indicator Team Brainstorming Session 3pm - 5pm",
+      "button|Event color indicator Coffee with Mentor 6pm - 7pm",
+      "button|Event color indicator Dinner and Movie 9pm - 11pm",
+      "button|Event color indicator Morning Walk 9am - 10am",
+      "button|Event color indicator Team Workshop 11am - 12pm",
+      "button|Event color indicator Lunch with Boss 2pm - 3pm",
+      "button|Event color indicator Creative Session 4pm - 6pm",
+      "button|Event color indicator Project Sync 10am - 11am",
+      "button|Event color indicator Customer Feedback Session 12pm - 1pm",
+      "button|Event color indicator Team Collaboration Workshop 3pm - 4pm",
+      "button|Event color indicator Follow-up Meeting 5pm - 6pm",
+      "button|Event color indicator Dinner with Friends 7pm - 9pm",
+      "button|Event color indicator Reading Time 10pm - 11pm",
+      "button|Event color indicator Morning Coffee with sister 9am - 10am",
+      "button|Event color indicator Team Check-In 11am - 12pm",
+      "button|Event color indicator Lunch with Marketing Team 1pm - 3pm",
+      "button|Event color indicator Workout Session 5pm - 7pm",
+      "button|Event color indicator Breakfast Meeting with Client 10am - 11am",
+      "button|Event color indicator Team Progress Check 12pm - 1pm",
+      "button|Event color indicator Client Presentation 3pm - 5pm"
+     ],
+     "dom": {
+      "visible": 67,
+      "behind_aria_hidden": 67
+     }
+    },
+    {
+     "state": "gocalendar-2 +N more popover (Month)",
+     "baseline_count": 41,
+     "present_after": 8,
+     "absent_after": [
+      "button|close",
+      "button|30",
+      "button|01",
+      "button|02",
+      "button|03",
+      "button|04",
+      "button|05",
+      "button|06",
+      "button|07",
+      "button|08",
+      "button|09",
+      "button|10",
+      "button|11",
+      "button|12",
+      "button|13",
+      "button|14",
+      "button|15",
+      "button|16",
+      "button|17",
+      "button|18",
+      "button|19",
+      "button|20",
+      "button|+2 more",
+      "button|21",
+      "button|22",
+      "button|23",
+      "button|24",
+      "button|25",
+      "button|26",
+      "button|27",
+      "button|28",
+      "button|29",
+      "button|31"
+     ],
+     "dom": {
+      "visible": 45,
+      "behind_aria_hidden": 0
+     }
+    }
+   ]
+  }
+ ]
+}
