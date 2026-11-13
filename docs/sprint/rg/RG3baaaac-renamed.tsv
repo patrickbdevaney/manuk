@@ -1,10 +1,10 @@
-chrome_ver	task	backend	step	tr_role	tr_name	obs_role	obs_name	match
-145.0.7632.116	zilloft-2	chrome	8	radio	Use exact match	button	Use exact match Use exact match	substring
-145.0.7632.116	zilloft-2	chrome	11	radio	Use exact match	button	Use exact match Use exact match	substring
-145.0.7632.116	zilloft-2	chrome	12	radio	Use exact match	button	Use exact match Use exact match	substring
-145.0.7632.116	zilloft-2	chrome	14	button	APPLY	button	Apply	prefix
-145.0.7632.116	opendining-4	manuk	6	button	2	button	2:00 PM	prefix
-145.0.7632.116	gomail-3	chrome	3	button	Sent	menuitem	Sent menu item	substring
-145.0.7632.116	udriver-9	chrome	12	button	Choose date, selected date is Jul 18, 2024	textbox	Choose date, selected date is Jul 18, 2024	substring
-145.0.7632.116	udriver-9	chrome	14	radio	2024	textbox	Choose date, selected date is Jul 18, 2024	substring
-145.0.7632.116	udriver-9	chrome	15	button	18	textbox	Choose date, selected date is Jul 18, 2024	substring
+chrome_ver	task	backend	step	tr_role	tr_name	obs_role	obs_name	match	verdict	observation	why
+145.0.7632.116	zilloft-2	chrome	8	radio	Use exact match	button	Use exact match Use exact match	substring	real	Use exact match Use exact match	same label with the role changed radio -> button and the label repeated; one control, the 'Use exact match' option
+145.0.7632.116	zilloft-2	chrome	11	radio	Use exact match	button	Use exact match Use exact match	substring	real	Use exact match Use exact match	same control as step 8 (same label, button role, label repeated)
+145.0.7632.116	zilloft-2	chrome	12	radio	Use exact match	button	Use exact match Use exact match	substring	real	Use exact match Use exact match	same control as step 8 (same label, button role, label repeated)
+145.0.7632.116	zilloft-2	chrome	14	button	APPLY	button	Apply	prefix	not-judged		outside the short-token set
+145.0.7632.116	opendining-4	manuk	6	button	2	button	2:00 PM	prefix	coincidental	2:00 PM	transcript clicks day-cell '2' of the calendar after two 'Next month' clicks; the observed node is the time slot '2:00 PM', a different control
+145.0.7632.116	gomail-3	chrome	3	button	Sent	menuitem	Sent menu item	substring	not-judged		outside the short-token set
+145.0.7632.116	udriver-9	chrome	12	button	Choose date, selected date is Jul 18, 2024	textbox	Choose date, selected date is Jul 18, 2024	substring	not-judged		outside the short-token set
+145.0.7632.116	udriver-9	chrome	14	radio	2024	textbox	Choose date, selected date is Jul 18, 2024	substring	coincidental	Choose date, selected date is Jul 18, 2024	transcript clicks the year radio '2024' in the year view; the observed node is the pickup-date textbox whose name merely contains '2024'; the year view is not open
+145.0.7632.116	udriver-9	chrome	15	button	18	textbox	Choose date, selected date is Jul 18, 2024	substring	coincidental	Choose date, selected date is Jul 18, 2024	transcript clicks day-cell '18' in the calendar; the observed node is the pickup-date textbox whose name merely contains '18'; no day cells are present
