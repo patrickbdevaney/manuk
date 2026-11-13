@@ -15648,6 +15648,69 @@ impl PageContext {
         Ok(proceed)
     }
 
+    /// Dispatch a typed-text `beforeinput`/`input` as a real **`InputEvent`** (`inputType`, `data`)
+    /// with the caret at the end of the field's value, as Chrome does for a keystroke. A sectioned/
+    /// masked field (MUI's date field) reads `e.inputType`/`e.data` and `selectionStart` to decide
+    /// what the keystroke means; a bare event with neither wiped the field to its placeholder.
+    /// Returns `false` iff a handler called `preventDefault()`.
+    pub fn dispatch_input_event(
+        &self,
+        runtime: &mut Runtime,
+        dom: &mut Dom,
+        node: NodeId,
+        ty: &str,
+        input_type: &str,
+        data: &str,
+        layout: &std::collections::HashMap<NodeId, [f32; 4]>,
+        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+    ) -> Result<bool, String> {
+        set_view_maps(layout, styles);
+        set_current_dom(dom as *mut Dom);
+        let raw_cx = unsafe { runtime.cx().raw_cx() };
+        rooted!(&in(runtime.cx()) let global = self.global.get());
+        let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
+        unsafe {
+            let _ = new_reflector(raw_cx, dom as *mut Dom, node);
+        }
+        let script = format!(
+            "(function(){{\
+               var nid={nid};\
+               var target=(globalThis.__nodes && __nodes[nid])||null;\
+               if(target && typeof target.setSelectionRange==='function'){{\
+                 try{{var n=(target.value||'').length;target.setSelectionRange(n,n);}}catch(e){{}}\
+               }}\
+               var ty={ty};\
+               var ev=new InputEvent(ty,{{inputType:{it},data:{data},bubbles:true,composed:true,cancelable:ty==='beforeinput'}});\
+               return __dispatchEvent(nid,ev);\
+             }})()",
+            nid = node.0,
+            ty = js_string_literal(ty),
+            it = js_string_literal(input_type),
+            data = js_string_literal(data),
+        );
+        rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
+        let opts = CompileOptionsWrapper::new(
+            runtime.cx_no_gc(),
+            c"dispatch_input_event.js".to_owned(),
+            1,
+        );
+        let proceed = match evaluate_script(
+            runtime.cx(),
+            global.handle(),
+            &script,
+            rval.handle_mut(),
+            opts,
+        ) {
+            Ok(()) => {
+                let v = rval.get();
+                !v.is_boolean() || v.to_boolean()
+            }
+            Err(()) => true,
+        };
+        crate::event_loop::run_deferred(runtime, global.handle())?;
+        Ok(proceed)
+    }
+
     /// Dispatch one **mouse** event carrying the fields a handler actually branches on: `detail`
     /// (the click count), `button`/`buttons`, and the coordinate pairs. Returns `false` iff a
     /// handler called `preventDefault()`.

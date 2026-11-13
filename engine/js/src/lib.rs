@@ -1923,6 +1923,43 @@ pub fn dispatch_composition(
     Ok(true)
 }
 
+/// Dispatch a typed-text `beforeinput`/`input` as an `InputEvent` (`inputType`, `data`) with the
+/// caret at the end of the value. Returns `false` iff a handler `preventDefault()`-ed it. See
+/// [`PageContext::dispatch_input_event`].
+#[cfg(feature = "_sm")]
+#[allow(clippy::too_many_arguments)]
+pub fn dispatch_input_event(
+    ctx: &PageContext,
+    dom: &mut manuk_dom::Dom,
+    node: manuk_dom::NodeId,
+    ty: &str,
+    input_type: &str,
+    data: &str,
+    layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+) -> Result<bool, JsError> {
+    let _interaction = crate::event_loop::InteractionScope::enter();
+    with_runtime(|rt| {
+        ctx.dispatch_input_event(rt, dom, node, ty, input_type, data, layout, styles)
+            .map_err(|message| JsError { message })
+    })
+}
+
+#[cfg(not(feature = "_sm"))]
+#[allow(clippy::too_many_arguments)]
+pub fn dispatch_input_event(
+    _ctx: &PageContext,
+    _dom: &mut manuk_dom::Dom,
+    _node: manuk_dom::NodeId,
+    _ty: &str,
+    _input_type: &str,
+    _data: &str,
+    _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+) -> Result<bool, JsError> {
+    Ok(true)
+}
+
 /// Dispatch one mouse event carrying `detail` (the click count) and `button`. Returns `false` iff a
 /// handler called `preventDefault()`. See [`PageContext::dispatch_mouse`].
 #[cfg(feature = "_sm")]

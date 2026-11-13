@@ -8033,6 +8033,19 @@ impl Page {
         fonts: &FontContext,
         viewport_width: f32,
     ) {
+        self.dispatch_input_typed(node, value, None, fonts, viewport_width);
+    }
+
+    /// [`Page::dispatch_input`], announcing a typed insertion (`Some(data)`) as an `InputEvent`
+    /// (`inputType: insertText`, `data`) with the caret at the end, or a bare `input` for `None`.
+    fn dispatch_input_typed(
+        &mut self,
+        node: manuk_dom::NodeId,
+        value: &str,
+        typed: Option<&str>,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) {
         self.dom.set_attr(node, "value", value.to_string());
         #[cfg(feature = "spidermonkey")]
         {
@@ -8057,13 +8070,88 @@ impl Page {
                 self.sticky_scroll_y,
                 self.has_sticky,
             );
-            if let Err(e) =
-                manuk_js::dispatch_event(ctx, &mut self.dom, node, "input", &rects, &self.styles)
-            {
+            let res = match typed {
+                Some(data) => manuk_js::dispatch_input_event(
+                    ctx,
+                    &mut self.dom,
+                    node,
+                    "input",
+                    "insertText",
+                    data,
+                    &rects,
+                    &self.styles,
+                ),
+                None => manuk_js::dispatch_event(
+                    ctx,
+                    &mut self.dom,
+                    node,
+                    "input",
+                    &rects,
+                    &self.styles,
+                ),
+            };
+            if let Err(e) = res {
                 tracing::warn!("input dispatch: {e}");
             }
         }
+        #[cfg(not(feature = "spidermonkey"))]
+        let _ = typed;
         self.relayout(fonts, viewport_width);
+    }
+
+    /// `beforeinput` for one typed character as an `InputEvent` (`insertText`, `data`), caret at the
+    /// end; `true` iff no handler cancelled it.
+    fn fire_before_input_text(
+        &mut self,
+        node: manuk_dom::NodeId,
+        data: &str,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) -> bool {
+        #[cfg(feature = "spidermonkey")]
+        {
+            let Some(ctx) = &self.js else {
+                return true;
+            };
+            let rects: HashMap<manuk_dom::NodeId, [f32; 4]> = self
+                .root_box
+                .node_rects(&self.dom)
+                .into_iter()
+                .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
+                .collect();
+            let _reflow = ReflowScope::install(
+                &self.dom,
+                fonts,
+                viewport_width,
+                &self.images,
+                &self.final_url,
+                &self.external_css,
+                &self.scroll_offsets,
+                self.sticky_scroll_y,
+                self.has_sticky,
+            );
+            match manuk_js::dispatch_input_event(
+                ctx,
+                &mut self.dom,
+                node,
+                "beforeinput",
+                "insertText",
+                data,
+                &rects,
+                &self.styles,
+            ) {
+                Ok(p) => p,
+                Err(e) => {
+                    tracing::warn!("beforeinput dispatch: {e}");
+                    true
+                }
+            }
+        }
+        #[cfg(not(feature = "spidermonkey"))]
+        {
+            let _ = (node, data, fonts, viewport_width);
+            true
+        }
     }
 
     /// Fire a single bare event (`beforeinput`, `change`, …) at `node`; `true` iff no handler
@@ -8246,7 +8334,7 @@ impl Page {
         for ch in text.chars() {
             let key = ch.to_string();
             let go = self.dispatch_key(node, "keydown", &key, fonts, viewport_width);
-            if go && self.fire_plain_event(node, "beforeinput", fonts, viewport_width) {
+            if go && self.fire_before_input_text(node, &key, fonts, viewport_width) {
                 // A controlled component may have rewritten the value in its own `input`
                 // handler; continue from what the field holds now, not from our local copy.
                 let now = self
@@ -8261,7 +8349,7 @@ impl Page {
                     value
                 };
                 value.push(ch);
-                self.dispatch_input(node, &value, fonts, viewport_width);
+                self.dispatch_input_typed(node, &value, Some(&key), fonts, viewport_width);
             }
             self.dispatch_key(node, "keyup", &key, fonts, viewport_width);
         }
