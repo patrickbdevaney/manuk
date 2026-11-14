@@ -37,7 +37,7 @@ class Mcp:
         env = dict(os.environ, MANUK_ACTLOG_DIR=logdir)
         s.p = subprocess.Popen([BIN], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                stderr=subprocess.DEVNULL, text=True, bufsize=1, env=env)
-        s.id = 0
+        s.id, s.buf = 0, b""  # buf: bytes read from the pipe but not yet split into lines (see line)
         s.rpc("initialize", {"protocolVersion": "2025-03-26", "capabilities": {},
                              "clientInfo": {"name": "w36", "version": "0"}})
         s.p.stdin.write(json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + "\n")
@@ -48,11 +48,23 @@ class Mcp:
         s.p.stdin.write(json.dumps({"jsonrpc": "2.0", "id": s.id, "method": m, "params": params}) + "\n")
         s.p.stdin.flush()
         while True:
-            if not select.select([s.p.stdout], [], [], timeout)[0]:
-                raise TimeoutError(m)
-            v = json.loads(s.p.stdout.readline())
+            v = json.loads(s.line(timeout, m))
             if v.get("id") == s.id:
                 return v
+
+    def line(s, timeout, m):
+        """The next stdout line. Reads the fd itself: a buffered readline() can hold a response that select()
+        cannot see, so the wait ran out the timeout (manuk-mcp sends a notification just before a response)."""
+        fd = s.p.stdout.fileno()
+        while b"\n" not in s.buf:
+            if not select.select([fd], [], [], timeout)[0]:
+                raise TimeoutError(m)
+            chunk = os.read(fd, 65536)
+            if not chunk:
+                raise RuntimeError(f"{m}: manuk-mcp closed stdout")
+            s.buf += chunk
+        raw, _, s.buf = s.buf.partition(b"\n")
+        return raw.decode("utf-8")
 
     def tool(s, name, **a):
         r = s.rpc("tools/call", {"name": name, "arguments": a})["result"]
