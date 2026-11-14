@@ -551,6 +551,23 @@ impl Drop for PhaseGuard {
     }
 }
 
+thread_local! {
+    /// Probes answered by `Ctx::measure_by_width` — a different avail/mode that resolved to a width
+    /// already laid out. Never reset: callers diff it around a layout.
+    static MEASURE_BY_WIDTH_HITS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// How many flex/grid item probes on this thread were served by the by-width memo.
+pub fn measure_by_width_hits() -> u64 {
+    MEASURE_BY_WIDTH_HITS.with(|c| c.get())
+}
+
+/// `MANUK_NO_MEASURE_BY_WIDTH=1` turns the by-width memo off — read once, like [`trace_intrinsic`].
+fn measure_by_width_enabled() -> bool {
+    static V: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *V.get_or_init(|| std::env::var_os("MANUK_NO_MEASURE_BY_WIDTH").is_none())
+}
+
 /// Note one `measure_cache` HIT. Deliberately not a `PhaseGuard`: a hit does no work, and giving it
 /// a clock would make the instrument the hot path.
 fn note_measure_hit() {
@@ -1792,6 +1809,11 @@ struct Ctx<'a> {
     /// `(width, height, first-line baseline)` — the baseline rides along because the measure
     /// already lays the subtree out and used to DISCARD the content it came from.
     measure_cache: RefCell<HashMap<(NodeId, u32, bool), (f32, f32, Option<f32>)>>,
+    /// The second-level memo behind `measure_cache`: the height and baseline of a flex/grid item's
+    /// content depend ONLY on the width it resolved to, not on the available width or probe mode
+    /// that produced it. Keyed `(node, width bits)`, so a probe at a different avail/mode that
+    /// shrink-to-fits to the same width reuses the subtree layout instead of repeating it.
+    measure_by_width: RefCell<HashMap<(NodeId, u32), (f32, Option<f32>)>>,
     /// **CSS 2.1 §12.4 counter values, per node that actually needs one** — computed once, lazily,
     /// by a single document-order walk. See [`Ctx::counter_values`].
     counters: RefCell<Option<HashMap<NodeId, HashMap<String, i32>>>>,
@@ -2196,6 +2218,7 @@ pub fn layout_document(
         styles,
         fonts,
         measure_cache: RefCell::new(HashMap::new()),
+        measure_by_width: RefCell::new(HashMap::new()),
         counters: RefCell::new(None),
         intrinsic_probe: std::cell::Cell::new(false),
         relative_offsets: RefCell::new(HashMap::new()),
@@ -9375,6 +9398,17 @@ impl Ctx<'_> {
         } else {
             self.shrink_to_fit(node, avail)
         };
+        let by_width_key = (node, width.to_bits());
+        if measure_by_width_enabled() {
+            let hit = self.measure_by_width.borrow().get(&by_width_key).copied();
+            if let Some((height, baseline)) = hit {
+                let result = (width, height, baseline);
+                self.measure_cache.borrow_mut().insert(key, result);
+                note_measure_hit();
+                MEASURE_BY_WIDTH_HITS.with(|c| c.set(c.get() + 1));
+                return result;
+            }
+        }
         let mut fc = FloatContext::new(0.0, width.max(1.0));
         // ⚠⚠ **THIS IS AN INTRINSIC MEASUREMENT AND IT WAS THE ONE THAT DID NOT SAY SO.**
         // `min_content_width` and `max_content_width_uncached` both raise the flag; this path — the
@@ -9399,6 +9433,9 @@ impl Ctx<'_> {
                 );
             }
         }
+        self.measure_by_width
+            .borrow_mut()
+            .insert(by_width_key, (result.1, result.2));
         self.measure_cache.borrow_mut().insert(key, result);
         result
     }
@@ -17812,6 +17849,21 @@ mod tests {
         let styles = MinimalCascade.cascade(&dom, &sheets);
         let root = TEST_FONTS.with(|fonts| layout_document(&dom, &styles, fonts, width));
         (dom, root)
+    }
+
+    /// RG.S1.a.a.a.b.a — a flex item that taffy probes at several available widths which all
+    /// shrink-to-fit to the same width is laid out ONCE (`measure_by_width`), not once per probe.
+    #[test]
+    fn rg_s1_measure_by_width_dedupes_probes_resolving_to_one_width() {
+        let html = r#"<div id="row"><div class="card"><div class="in"><span>alpha</span><span>beta</span></div></div><div class="card"><div class="in"><span>gamma</span></div></div></div>"#;
+        let css = "#row{display:flex;width:600px} .card{display:flex;padding:8px} .in{display:flex;gap:4px}";
+        let before = measure_by_width_hits();
+        let (_dom, root) = layout_html(html, css, 800.0);
+        assert!(root.content_bottom() > 0.0);
+        assert!(
+            measure_by_width_hits() > before,
+            "no probe was served by the by-width memo"
+        );
     }
 
     /// # G_GENERATED_BOX_DISPLAY — CSS 2.1 §12.1: a generated box has its own `display`

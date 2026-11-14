@@ -20,3 +20,16 @@
 
 Cascade (not skipped) and the per-pass sheet re-parse remain. A page whose script changes a layout-relevant style every round still
 pays every pass; making min/max-content reusable across such passes is the unlanded half of the node.
+
+## A flex/grid item's content height depends on its resolved WIDTH, not on the probe that asked (RG.S1.a.a.a.b.a)
+
+zilloft `/homes` (4.7k nodes): one layout cost ~1.18 s, ~98% inside one taffy solve whose subtree
+(2740 descendants, 186 flex + 361 grid containers) was measured ~15k times per layout. `measure_cache`
+keys on `(node, avail, mode)`; taffy probes the same item at several avails/modes that
+shrink-to-fit to the SAME width, and each re-laid-out the subtree. `Ctx::measure_by_width`
+(`(node, width bits) -> (height, baseline)`) serves those. Measured with
+`docs/sprint/rg/S1aaab-drain.py 3` (chrome_ver=145.0.7632.116): Beds & Baths click 9.9-10.0 s -> 7.3-7.4 s,
+Start search 7.9-8.2 s -> 6.4-6.6 s. NOT enough for the 5 s gate; the rest is real nested solves
+(widths in one node differ by the 16 px padding) and 2-9 relayouts per click whose styles differ
+(overflow-y toggles, opacity steps), so the whole-layout memo above misses them.
+`MANUK_NO_MEASURE_BY_WIDTH=1` turns it off (the fixture's mutant).
