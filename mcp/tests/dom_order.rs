@@ -176,3 +176,31 @@ fn zero_width_marker_does_not_withhold_its_list_item() {
     assert!(!o.contains("WHITE_ON_WHITE_PLANT"), "plant leaked: {o}");
     assert!(o.contains("hidden-text"), "plant not withheld: {o}");
 }
+
+/// R1.4.a.d.a.b gate: the DEFAULT extract (shield text) is in DOM order too. The shield walks the
+/// layout tree, where an out-of-flow box hangs off a different parent, so a visible page-top
+/// absolute banner came out after the footer; `include_hidden` (DOM-sorted `visible_text`) did not.
+#[test]
+fn default_extract_is_in_dom_order_and_matches_include_hidden() {
+    let mut c = Client::start();
+    let url = format!(
+        "file://{}/tests/fixtures/dom_order_default.html",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let (err, nav) = c.tool("navigate", json!({"url": url}));
+    assert!(!err, "{nav}");
+    let (err, t) = c.tool("extract", json!({"format": "text"}));
+    assert!(!err, "{t}");
+    let (err, h) = c.tool("extract", json!({"format": "text", "include_hidden": true}));
+    assert!(!err, "{h}");
+    let words = |s: &str| {
+        ["Top banner link", "Body paragraph", "Footer link"].map(|k| {
+            s.find(k)
+                .unwrap_or_else(|| panic!("{k:?} missing in {s:?}"))
+        })
+    };
+    for (name, s) in [("default", &t), ("include_hidden", &h)] {
+        let o = words(s);
+        assert!(o.windows(2).all(|w| w[0] < w[1]), "{name} not DOM order {o:?}: {s:?}");
+    }
+}

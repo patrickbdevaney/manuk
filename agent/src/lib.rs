@@ -2117,11 +2117,18 @@ impl AgentBrowser {
                     || st.overflow_y != manuk_css::Overflow::Visible
             })
         };
+        let order: std::collections::HashMap<manuk_dom::NodeId, usize> =
+            std::iter::once(page.dom().root())
+                .chain(page.dom().descendants(page.dom().root()))
+                .enumerate()
+                .map(|(i, n)| (n, i))
+                .collect();
         Ok(shield::analyze(
             &page.root_box,
             self.width as f32,
             &inline_bg,
             &clips,
+            &|n| order.get(&n).copied(),
         ))
     }
 

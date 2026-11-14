@@ -183,7 +183,10 @@ fn walk(b: &LayoutBox, mut ctx: Ctx, w: &mut Walk<'_>) {
                 if f.text.chars().all(|c| c.is_whitespace() || is_zero_width(c)) {
                     // Spacing still participates in the join below, so keep it with the seen runs.
                     if ctx.box_reason.is_none() && f.text.trim().is_empty() {
-                        w.seen.push(f.clone());
+                        w.seen.push(TextFragment {
+                            node: f.node.or(b.node),
+                            ..f.clone()
+                        });
                     }
                     continue;
                 }
@@ -206,7 +209,10 @@ fn walk(b: &LayoutBox, mut ctx: Ctx, w: &mut Walk<'_>) {
                         if let Some(n) = f.node.or(b.node) {
                             w.seen_nodes.insert(n);
                         }
-                        w.seen.push(f.clone());
+                        w.seen.push(TextFragment {
+                            node: f.node.or(b.node),
+                            ..f.clone()
+                        });
                     }
                 }
             }
@@ -228,6 +234,7 @@ pub fn analyze(
     viewport_w: f32,
     inline_bg: &dyn Fn(NodeId) -> Option<Rgba>,
     clips: &dyn Fn(NodeId) -> bool,
+    dom_pos: &dyn Fn(NodeId) -> Option<usize>,
 ) -> Shield {
     let mut w = Walk {
         viewport_w,
@@ -255,9 +262,25 @@ pub fn analyze(
         &mut w,
     );
 
+    // DOM order, not layout-tree order: out-of-flow boxes (absolute/fixed, floats) hang off a
+    // different parent in the box tree, so a page-top banner would print after the footer. Same
+    // rule as `Page::visible_text`; a run with no node keeps the position of the one before it.
+    let mut last = 0usize;
+    let keys: Vec<usize> = w
+        .seen
+        .iter()
+        .map(|f| {
+            if let Some(k) = f.node.and_then(dom_pos) {
+                last = k;
+            }
+            last
+        })
+        .collect();
+    let mut idx: Vec<usize> = (0..w.seen.len()).collect();
+    idx.sort_by_key(|&i| keys[i]);
     let mut text = String::new();
     let mut prev: Option<&TextFragment> = None;
-    for f in &w.seen {
+    for f in idx.into_iter().map(|i| &w.seen[i]) {
         if f.text.is_empty() {
             continue;
         }
