@@ -1,0 +1,5 @@
+group	runs	runs_with_toolsearch	distinct_shapes	distinct_params	distinct_tool_schemas	identical_to_first_group
+-tmp-w5t3aa-cwd-hq1r10m2@18:12:34-18:13:10	9	8	1	1	1	1
+-tmp-w5t3aaaaaa-cwd-rxvoyapx@00:00:00-23:59:59	9	0	1	1	1	1
+-tmp-w5t3aa-cwd-hq1r10m2@18:11:00-18:12:30	9	0	1	1	1	0
+-tmp-w5envprobe-cwd-nxc4kklu@00:00:00-23:59:59	10	0	1	1	1	1

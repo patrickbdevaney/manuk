@@ -1,0 +1,38 @@
+W5.T3.a.a.a.a.a.a.a: did the environment decide whether the navigate-quiet task calls ToolSearch?
+chrome_ver=145.0.7632.116 claude=2.1.306 (Claude Code)
+
+Finding 1. The 8-of-9 ToolSearch runs are on record after all. T3aaaaaa could not record the query, because it looked for
+  it in new runs only. Claude Code keeps every session transcript under ~/.claude/projects/<cwd-slug>/. The T3aaaaa
+  after-arm runs (cwd /tmp/w5t3aa-cwd-hq1r10m2, 18:12:34-18:13:10) are there. Eight of them call
+  ToolSearch with query "select:mcp__browser__navigate,mcp__browser__extract" (max_results 2 or 5), then call
+  mcp__browser__navigate. The nine before-arm runs (18:11:58-18:12:28) are on file as well, with no ToolSearch.
+
+Finding 2. The environment does not decide it. T3aaaaaaa-envprobe.py (10 runs, same binary b9742038db32f0fe, same
+  prompt, cwd and claude flags):
+    inherit   (CLAUDE_CODE_*, CLAUDECODE, AI_AGENT, CLAUDE_EFFORT, CLAUDE_PID as launched): 0 of 5 call ToolSearch
+    stripped  (those variables removed):                                                  0 of 5 call ToolSearch
+  ToolSearch is in the init tool list in all 10 runs (48 tools), so it is available and not called.
+
+Finding 3. The requests were identical. T3aaaaaaa-reqdiff.py compares the api-request-shape (system + tools) and the
+  api-request params of the sessions in each group, with the per-run cwd path normalised out
+  (T3aaaaaaa-reqdiff.tsv):
+    T3aaaaa after-arm   18:12:34-18:13:10  runs=9   runs_with_ToolSearch=8  identical to the reference
+    T3aaaaaa after-arm  whole session      runs=9   runs_with_ToolSearch=0  identical
+    envprobe            whole session      runs=10  runs_with_ToolSearch=0  identical
+    T3aaaaa before-arm  18:11:00-18:12:30  runs=9   runs_with_ToolSearch=0  NOT identical (different binary tools)
+  So the 8/9 and the 0/n runs sent the same tool schemas, system prompt and params. The local client did not change
+  what it sent. Whatever flipped the first-turn choice sits outside the request (model serving or sampling state).
+
+Finding 4. Time pattern. ToolSearch appears in the after-arm batch 18:12:34-18:13:10 and in none of the 25 later runs
+  on the same binary (T3aaaaaa 9 runs 18:15-18:16, diag 6 runs 18:16, envprobe 10 runs 18:20-18:21). All nine
+  before-arm runs (18:11:58-18:12:28, another binary) also called nothing. The switch is between 18:13:10 and 18:15:25.
+  The cause of the switch is not identified. The GrowthBook flag cache in ~/.claude.json was rewritten at 18:21:27,
+  after the switch, and no earlier copy exists to compare it against.
+
+Verdict on the node gate. GREEN is not met: today's runs do not show ToolSearch in 9 runs, and no environment
+  difference flips the count. The gate is met in its measurement form: the query is recorded from transcripts, the
+  request diff can go red (self-test mutates one tool description and the digest changes; a group with no sessions is
+  refused, rc=2; a before/after mismatch shows identical=0). The T3aaaaa +46% claim stays unreproduced today. Its
+  per-run numbers are correct for that batch: 8 of 9 calls, extra turn 579 tokens.
+
+chrome_ver=145.0.7632.116

@@ -1,0 +1,11 @@
+chrome_ver	env	run	init_tools	init_has_toolsearch	toolsearch_calls	claude_version	bin_sha256
+145.0.7632.116	inherit	1	48	1	0	2.1.306 (Claude Code)	b9742038db32f0fe
+145.0.7632.116	inherit	2	48	1	0	2.1.306 (Claude Code)	b9742038db32f0fe
+145.0.7632.116	inherit	3	48	1	0	2.1.306 (Claude Code)	b9742038db32f0fe
+145.0.7632.116	inherit	4	48	1	0	2.1.306 (Claude Code)	b9742038db32f0fe
+145.0.7632.116	inherit	5	48	1	0	2.1.306 (Claude Code)	b9742038db32f0fe
+145.0.7632.116	stripped	1	48	1	0	2.1.306 (Claude Code)	b9742038db32f0fe
+145.0.7632.116	stripped	2	48	1	0	2.1.306 (Claude Code)	b9742038db32f0fe
+145.0.7632.116	stripped	3	48	1	0	2.1.306 (Claude Code)	b9742038db32f0fe
+145.0.7632.116	stripped	4	48	1	0	2.1.306 (Claude Code)	b9742038db32f0fe
+145.0.7632.116	stripped	5	48	1	0	2.1.306 (Claude Code)	b9742038db32f0fe
