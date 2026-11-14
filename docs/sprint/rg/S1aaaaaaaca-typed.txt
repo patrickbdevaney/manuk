@@ -1,0 +1,5 @@
+manuk_zilloft-2_r1.jsonl ["mcp__browser__type:'San Francisco, CA'"]
+manuk_zilloft-2_r2.jsonl ["mcp__browser__type:'San Francisco, CA'", "mcp__browser__type:'San Francisco, CA'", "mcp__browser__type:'San Francisco, CA'", "mcp__browser__type:'San Francisco, CA'", "mcp__browser__type:'San Francisco, CA'"]
+manuk_zilloft-2_r3.jsonl ["mcp__browser__type:'San Francisco, CA'", "mcp__browser__type:'San Francisco, CA'", "mcp__browser__type:'San Francisco, CA'", "mcp__browser__type:'San Francisco'", "mcp__browser__type:'San Francisco'"]
+manuk_zilloft-2_r4.jsonl ["mcp__browser__type:'San Francisco, CA'", "mcp__browser__type:'San Francisco, CA'"]
+manuk_zilloft-2_r5.jsonl ["mcp__browser__type:'San Francisco, CA'", "mcp__browser__type:'San Francisco, CA'", "mcp__browser__type:'San Francisco'", "mcp__browser__type:'San Francisco'"]

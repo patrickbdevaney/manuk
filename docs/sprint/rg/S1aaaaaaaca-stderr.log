@@ -1,0 +1,6 @@
+manuk zilloft-2 r1: FAIL 0/0 state_ok=1 restores=0
+manuk zilloft-2 r2: FAIL 0/0 state_ok=1 restores=0
+manuk zilloft-2 r3: PASS 0/0 state_ok=1 restores=0
+manuk zilloft-2 r4: FAIL 0/0 state_ok=1 restores=0
+manuk zilloft-2 r5: FAIL 0/0 state_ok=1 restores=0
+done
