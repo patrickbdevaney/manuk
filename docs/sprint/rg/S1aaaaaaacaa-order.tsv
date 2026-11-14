@@ -1,0 +1,8 @@
+run	first_SF_type(turn,text)	first_typed_CA_turn	first_count_turn	count	total_turns
+manuk_zilloft-2_r1.jsonl	first_SF_type	(2, 'San Francisco')	first_typed_CA_turn	None	first_count_turn	7	count	56	total_turns	18
+manuk_zilloft-2_r2.jsonl	first_SF_type	(2, 'San Francisco')	first_typed_CA_turn	4	first_count_turn	12	count	147	total_turns	14
+manuk_zilloft-2_r3.jsonl	first_SF_type	(3, 'San Francisco')	first_typed_CA_turn	8	first_count_turn	None	count	None	total_turns	20
+manuk_zilloft-2_r4.jsonl	first_SF_type	(2, 'San Francisco')	first_typed_CA_turn	5	first_count_turn	7	count	522	total_turns	21
+manuk_zilloft-2_r5.jsonl	first_SF_type	(2, 'San Francisco')	first_typed_CA_turn	4	first_count_turn	14	count	147	total_turns	20
+# chrome_ver=145.0.7632.116. Source: the 5 baseline zilloft-2 manuk transcripts (~/.cache/manuk-real/transcripts, 01:36-01:43 on 2026-11-14); the with-note run transcripts were not retained, only S1aaaaaaaca-typed.txt.
+# Finding: in 5/5 runs the first typed location is plain 'San Francisco' (turn 2-3, submit=true -> 'no change, url unchanged'), BEFORE any result count. 'San Francisco, CA' is typed later (turn 4-8) in 4/5 runs, and in 3/4 of those (r2,r4,r5... r2 turn 4, r4 turn 5, r5 turn 4, r3 turn 8) before any count is seen (first_count_turn is later in r2 12, r4 7, r5 14; r3 none). The ', CA' form is not copied from page text (no 'San Francisco, CA' string in results before it, except r4 at turn 7 after typing). So a count note cannot influence it: the choice follows the no-op submit on the homepage, not result sizes.
