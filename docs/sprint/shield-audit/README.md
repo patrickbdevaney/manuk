@@ -76,8 +76,8 @@ false positives. Those become follow-up rows R1.4.a.a and R1.4.a.b, not a reason
 - The visibility screenshot compares only the glyph box. A visible element overlapping the box in the same
   pixels would count as VISIBLE (a possible over-count, not under-count).
 - Chunk-level reasons are not in the MCP output (only page-level counts). Per-run reasons need a shield
-  debug output (follow-up R1.4.a.c).
-- The observe diff repeats text already in the extract diff, so the observe VISIBLE rows double-count.
+  debug output (follow-up R1.4.a.d).
+- The observe diff repeats text already in the extract diff; those rows are now DUP and not counted (R1.4.a.c).
 - `marker_withheld` counts text fragments (a word or span each), not runs. Planted: 21 fragments, 2 runs.
 - Single run per page at a 1280x800 viewport; no scrolling beyond the element's own scrollIntoView.
 
@@ -87,3 +87,60 @@ The Alan Turing quotation was withheld as `zero-size`: the layout box carrying i
 wrapper at (76, 3214) with `overflow: visible`, so its text still paints outside it. The shield now treats
 a collapsed box as hiding text only when its element clips (`overflow` other than `visible`). Rerun: the
 paragraph is no longer in the withheld set; suite pages report 0 visible-but-withheld runs.
+
+## R1.4.a.c — audit tooling (chrome_ver=145.0.7632.116)
+
+Verdicts, per run:
+
+- **AMBIGUOUS**: the run matches more than one place in Chrome's DOM (`chrome_matches > 1`). No element is checked.
+- **DUP**: an observe run whose text repeats an extract run on the same page. Not counted, so it cannot double-count.
+- **UNMATCHED**: the run is in no single DOM text run. `unmatched_cause` names why: `in-shadow-dom`, `in-iframe`,
+  `case-transformed-text`, `in-attribute`, `prefix-in-dom k/n` (the first k of n characters are in DOM order and
+  the rest is not), or `not-in-dom-text`.
+
+The matcher also ignores zero-width and soft-hyphen code points on both sides (`\u200b-\u200d`, `\u2060`, `\ufeff`,
+`\u00ad`), which Python's `\s` and JS's `\s` disagree on. Observe rows drop tree syntax (`-`/`#` bullets,
+`[clickable]`). The per-call page id (`pXXXXXX:N`) is stripped from both diff sides.
+
+Harness faults found and fixed in this node. Each one changed the numbers, so the earlier tables are not comparable:
+
+1. **Stale page.** `navigate` was refused by the value-flow egress guard (`EGRESS-DENIED (value-flow)`) and the audit
+   measured the previous page. The audit now fails the page when navigate is refused, and runs one `manuk-mcp` per
+   page so that an earlier page's value reads cannot block the next navigation. This is a separate false positive
+   in the guard (follow-up R1.4.a.c.a).
+2. **Observe order.** After `extract(include_hidden)`, the next `observe()` default no longer lists the withheld
+   nodes, so the observe diff read 0 runs on Main_Page (1 when observe ran first). The audit calls observe before
+   extract (follow-up R1.4.a.c.c).
+3. **Invariants.** `check_invariants()` gates the run. Red test: 5 deliberately broken rows give 5 violations
+   (VISIBLE on an ambiguous run, UNMATCHED without a cause, DUP on an extract row, and so on). The 41 rows of the
+   real run give 0.
+
+Result (37 pages, 41 runs; the gate is `GATE GREEN`, planted FP VISIBLE, planted control HIDDEN_CONFIRMED,
+0 invariant violations):
+
+| verdict | count | where |
+|---|---|---|
+| VISIBLE | 2 | planted FP (1); corpus a11yproject observe, rect 39,66,1181x68 (candidate FP, follow-up R1.4.a.c.d) |
+| HIDDEN_CONFIRMED | 11 | planted control, fixtures, suite and corpus |
+| AMBIGUOUS | 5 | books.toscrape `/` (5 matches), Rust `var` (48), Turing `t` (8279), fasterthanli `.` (414), books page-2 `/` (6) |
+| DUP | 9 | observe repeats of extract runs |
+| UNMATCHED | 11 | see causes below |
+| UNVERIFIABLE_* | 3 | out of viewport (cloudflare x2, jvns observe) |
+
+Causes of the UNMATCHED rows:
+
+- **Wikipedia footer** (`Main_Page`, extract, 515 chars): `prefix-in-dom 114/515`. The run is footer text in DOM
+  order (`…Cookie statement Mobile view`), then `Jump to content Main menu Main menu move to sidebar Main page
+  Contents …`, which is the page-top sidebar. The hidden extract emits the top-of-page hidden nodes after the
+  footer, so the run is not contiguous in the DOM. Every word of it is in the DOM (checked with Playwright). This
+  is a manuk ordering fault (follow-up R1.4.a.c.b).
+- **Numeric fragments** (`164894;`, `148063;`, `214529;`, `31696;` on Wikipedia and jvns): `prefix-in-dom 2–3/6–7`.
+  Single-token diff fragments whose source was not traced; they are not confirmed as withheld page text.
+- **Observe names cut with `…`** (fixture `inj/offscreen` 67/69, `inj/tiny` 66/67, both injection-slice pages):
+  observe truncates long names, so the run matches only up to the cut.
+- **Cloudflare / martinfowler extract**: `prefix-in-dom 13/105`, `not-in-dom-text`. Not yet diagnosed further.
+
+Limitations of this node: the sample is the same 37 pages as before, and the live sites changed between runs (the
+Python and Rust Wikipedia counts moved). Only the planted FP is an expected-positive gate; the candidate
+a11yproject FP is not confirmed until a fixture reproduces it.
+
