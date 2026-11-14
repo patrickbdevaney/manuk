@@ -2231,11 +2231,16 @@ pub fn reuse_for_opacity_only(
                 _ => return false,
             },
             None => {
-                if b.opacity != anc.0 {
+                if b.opacity == 1.0 && anc.0 != 1.0 {
+                    // A box layout builds with a literal `1.0`, not its ancestor's folded value:
+                    // a relayout would give it `1.0` again, so it keeps it.
+                    anc
+                } else if b.opacity != anc.0 {
                     return false;
+                } else {
+                    b.opacity = anc.1;
+                    anc
                 }
-                b.opacity = anc.1;
-                anc
             }
         };
         if let BoxContent::Block(kids) = &mut b.content {
@@ -17940,6 +17945,29 @@ mod tests {
         assert!(
             reuse_for_opacity_only(&s0, &s2, &r0).is_none(),
             "a layout-affecting difference must not reuse"
+        );
+    }
+
+    /// RG.S1.a.a.a.b.a.a.a — boxes layout builds with a literal opacity of `1.0` (anonymous flex
+    /// items, table wrappers, list markers) under an `opacity:0` ancestor no longer defeat the
+    /// reuse: the live zilloft panel fade-in missed on one of them. Patched == fresh layout.
+    #[test]
+    fn rg_s1_opacity_patch_tolerates_literal_one_anonymous_boxes() {
+        let html = r#"<div id="a">loose run<div>block</div>another run <b>x</b><div class="f">loose text <b>x</b></div><div style="position:absolute;top:5px">abs</div><ul><li>item</li></ul><table><tr><td>cell</td></tr></table><div class="g">grid text</div></div>"#;
+        let css = ".f{display:flex} .g{display:grid} #a{opacity:__O__}";
+        let dom = manuk_html::parse(html);
+        let cascade = |o: &str| {
+            MinimalCascade.cascade(&dom, &vec![Stylesheet::parse(&css.replace("__O__", o))])
+        };
+        let lay = |st: &StyleMap| TEST_FONTS.with(|f| layout_document(&dom, st, f, 400.0));
+        let (s0, s1) = (cascade("0"), cascade("1"));
+        let (r0, r1) = (lay(&s0), lay(&s1));
+        let patched = reuse_for_opacity_only(&s0, &s1, &r0)
+            .expect("a literal-1.0 box under an opacity:0 ancestor must not block the reuse");
+        assert_eq!(
+            format!("{patched:?}"),
+            format!("{r1:?}"),
+            "patched == fresh layout"
         );
     }
 
