@@ -5,6 +5,7 @@
  3. probe:   click handler fetches /api/g?z=1 -> the server logged it
 Exit 0 only if all three hold."""
 import json, os, subprocess, sys, threading, time, re, urllib.request
+import os as _os, sys as _sys; _sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), ".")); from mcp_readline import readline as _rl
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "bench/agent-tasks"))
@@ -30,7 +31,7 @@ class C:
         s.i += 1
         s.p.stdin.write(json.dumps({"jsonrpc": "2.0", "id": s.i, "method": m, "params": params}) + "\n"); s.p.stdin.flush()
         while True:
-            v = json.loads(s.p.stdout.readline())
+            v = json.loads(_rl(s.p))
             if v.get("id") == s.i: return v
     def tool(s, n, **a):
         r = s.rpc("tools/call", {"name": n, "arguments": a})["result"]

@@ -8,6 +8,7 @@ Usage: python3 -I c3_bon.py [--runs 3] [--trials 8] [--out FILE] [--arms manuk,c
 Needs MANUK_CHROME_PIN. MANUK_C3_MUTATE=1 makes the judge pick branch 1 unconditionally (the gate must then fail).
 """
 import argparse, json, os, random, re, shutil, statistics, subprocess, sys, threading, time
+import os as _os, sys as _sys; _sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "../../scripts")); from mcp_readline import readline as _rl
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -59,7 +60,7 @@ class Mcp:
         self.id += 1
         self.p.stdin.write(json.dumps({"jsonrpc": "2.0", "id": self.id, "method": method, "params": params}) + "\n"); self.p.stdin.flush()
         while True:
-            line = self.p.stdout.readline()
+            line = _rl(self.p)
             if not line: raise RuntimeError("server closed")
             v = json.loads(line)
             if v.get("id") == self.id: return v

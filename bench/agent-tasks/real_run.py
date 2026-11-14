@@ -151,7 +151,7 @@ def proxy(a, child):
         p.stdin.write(json.dumps({"jsonrpc": "2.0", "id": i, "method": "tools/call", "params": {"name": name, "arguments": args, "_meta": dict(meta)}}) + "\n")
         p.stdin.flush()
         while True:  # drop any stale response (a late answer to an earlier call)
-            r = resp.get(timeout=90)
+            r = resp.get(timeout=50)
             if r is None or r.get("id") == i:
                 break
         if not r or "result" not in r:

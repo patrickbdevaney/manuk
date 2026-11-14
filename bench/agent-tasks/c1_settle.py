@@ -7,6 +7,7 @@ Arms: manuk (manuk-mcp), cdp-layer (manuk-mcp --backend chrome), playwright (@pl
 Usage: python3 -I c1_settle.py [--runs 3] [--out FILE]      (needs MANUK_CHROME_PIN; MANUK_C1_MUTATE=no-wait breaks the oracle; MANUK_C1_ARMS=playwright runs one arm)
 """
 import argparse, json, os, re, statistics, subprocess, sys, threading, time
+import os as _os, sys as _sys; _sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "../../scripts")); from mcp_readline import readline as _rl
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -62,7 +63,7 @@ class Mcp:
         self.id += 1
         self.p.stdin.write(json.dumps({"jsonrpc": "2.0", "id": self.id, "method": method, "params": params}) + "\n"); self.p.stdin.flush()
         while True:
-            line = self.p.stdout.readline()
+            line = _rl(self.p)
             if not line: raise RuntimeError("server closed")
             v = json.loads(line)
             if v.get("id") == self.id: return v

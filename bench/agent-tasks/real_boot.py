@@ -8,6 +8,7 @@ booted = after --wait seconds the observation has no 'Application error' / 'DMCA
 Run with `python3 -I`. Requires MANUK_CHROME_PIN.
 """
 import argparse, json, os, subprocess, sys, time
+import os as _os, sys as _sys; _sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "../../scripts")); from mcp_readline import readline as _rl
 
 SITES = "dashdish fly-unified gocalendar gomail networkin omnizon opendining staynb topwork udriver zilloft".split()
 EXE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "target/release/manuk-mcp")
@@ -24,7 +25,7 @@ class M:
         s.i += 1
         s.p.stdin.write(json.dumps({"jsonrpc": "2.0", "id": s.i, "method": m, "params": pa}) + "\n"); s.p.stdin.flush()
         while True:
-            l = s.p.stdout.readline()
+            l = _rl(s.p)
             if not l:
                 return None
             j = json.loads(l)

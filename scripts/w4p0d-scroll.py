@@ -1,11 +1,12 @@
 import subprocess,json,sys
+import os as _os, sys as _sys; _sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), ".")); from mcp_readline import readline as _rl
 p=subprocess.Popen(["target/release/manuk-mcp"],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.DEVNULL,text=True)
 i=0
 def rpc(m,pa):
     global i; i+=1
     p.stdin.write(json.dumps({"jsonrpc":"2.0","id":i,"method":m,"params":pa})+"\n"); p.stdin.flush()
     while True:
-        v=json.loads(p.stdout.readline())
+        v=json.loads(_rl(p))
         if v.get("id")==i: return v
 def tool(n,a):
     r=rpc("tools/call",{"name":n,"arguments":a})

@@ -8,6 +8,7 @@ fixture's token is visible (cap 8). Arms: manuk (retry on), manuk-noretry (MANUK
 Usage: python3 -I c2_retry.py [--runs 3] [--out FILE]   (needs MANUK_CHROME_PIN; MANUK_C2_MUTATE=1 sets MANUK_NO_RETRY on every layer arm)
 """
 import argparse, json, os, re, statistics, subprocess, sys, threading
+import os as _os, sys as _sys; _sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "../../scripts")); from mcp_readline import readline as _rl
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -46,7 +47,7 @@ class Mcp:
         self.id += 1
         self.p.stdin.write(json.dumps({"jsonrpc": "2.0", "id": self.id, "method": method, "params": params}) + "\n"); self.p.stdin.flush()
         while True:
-            line = self.p.stdout.readline()
+            line = _rl(self.p)
             if not line: raise RuntimeError("server closed")
             v = json.loads(line)
             if v.get("id") == self.id: return v
