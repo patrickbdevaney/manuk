@@ -45,3 +45,21 @@ All 7 "extra" events appear in every recorded gocalendar-2 answer, for manuk (B,
 A first fallback pass had a join bug that dropped run 3's "Monday list" sentence and the Client Presentation time from S and SI. It was fixed before the table above was produced, and no numbers from it are used.
 
 Follow-up nodes: `RG.2.0.b.a.a.a.a.a.a` (re-run on the primary judge when it returns), `RG.2.0.b.a.a.a.a.a.b` (owner decision on the rubric's set reading).
+
+## Primary-judge re-run (RG.2.0.b.a.a.a.a.a.a, chrome_ver=145.0.7632.116)
+Command: `MANUK_CHROME_PIN=145.0.7632.116 python3 -I docs/sprint/rg/R20baaaaa-rejudge.py` (primary judge `openai/gpt-oss-120b`; 429 retries were absorbed, all 33 cells judged). Output: `R20baaaaa-rejudge.tsv`.
+
+| cell | rep 1 | rep 2 | rep 3 |
+|---|---|---|---|
+| run1 F / S / SI | 0 / 0 / 0 | 0 / 0 / 0 | 0 / 0 / 0 |
+| run2 F / S / SI | 0 / 1 / 0 | 0 / 0 / 0 | 0 / 0 / 0 |
+| run3 F / S / SI | 0 / 0 / 0 | 0 / 0 / 0 | 0 / 0 / 0 |
+| POS control | 0 | 0 | 0 |
+| NEG control | 0 | 0 | 0 |
+
+(1 = judged pass, 0 = judged fail.)
+
+- **Gate: FAIL (exit 1).** The stripper changed all 3 answers, but the POS control fails 3/3 when it should pass. The cause is the control text itself: the hand-written POS answer says "Team Collaboration Workshop", and the rubric says "Team Collaboration Work". The judge's reason is correct on the rubric's wording. NEG passes (false 3/3).
+- **Closing-state hypothesis not confirmed on the primary judge either.** No run flips from fail to pass when the view sentences are stripped (run2 S gives 1/3 pass, a single sample inside noise).
+- **Failing clauses named by the judge:** the name variant (Team Collaboration Workshop vs Work) and the extra events beyond the 15 rubric events. None of the reasons mention the Month or Day view.
+- **Not changed:** the POS control was not edited after this red result. Correcting it is an owner decision, tracked as RG.2.0.b.a.a.a.a.a.c.

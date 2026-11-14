@@ -1,34 +1,34 @@
 chrome_ver	answer	cond	rep	verdict	reason	answer_chars	judge_model
-145.0.7632.116	run2	F	1	False	"The answer lists ""Team Collaboration Workshop"" instead of the required ""Team Collaboration Work"""	1323	openai/gpt-oss-120b
-145.0.7632.116	run2	F	2	False	The answer misses or misnames required events such as 'Team Collaboration Work' and 'Breakfast Metting with Client'.	1323	openai/gpt-oss-120b
-145.0.7632.116	run2	F	3	False	"The answer misses or misnames ""Team Collaboration Work"" (listed as ""Team Collaboration Workshop""), so it does not accurately list all required events."	1323	openai/gpt-oss-120b
-145.0.7632.116	run2	S	1	True	All required events are listed in the answer.	1116	openai/gpt-oss-120b
-145.0.7632.116	run2	S	2	True	The answer includes every event specified in the rubric	1116	openai/gpt-oss-120b
-145.0.7632.116	run2	S	3	True	All required events are included in the answer's list.	1116	openai/gpt-oss-120b
-145.0.7632.116	run2	SI	1	True	The answer lists all required events (with minor naming variations) for July 2024.	1116	openai/gpt-oss-120b
-145.0.7632.116	run2	SI	2	False	The answer lists 'Team Collaboration Workshop' instead of the required 'Team Collaboration Work'.	1116	openai/gpt-oss-120b
-145.0.7632.116	run2	SI	3	True	The answer includes every event from the required list, covering all specified July 2024 events.	1116	openai/gpt-oss-120b
-145.0.7632.116	run3	F	1	False	The answer includes events not shown and misnames 'Team Collaboration Work', so it does not accurately list the displayed July 2024 events.	1331	openai/gpt-oss-120b
-145.0.7632.116	run3	F	2	False	Answer includes extra events and misnames required event (Team Collaboration Work vs Workshop)	1331	openai/gpt-oss-120b
-145.0.7632.116	run3	F	3	False	The answer lists extra events and misnames required events, not accurately matching the specified list.	1331	openai/gpt-oss-120b
-145.0.7632.116	run3	S	1	False	The answer mismatches the required event name and includes extra events, so it does not accurately list the specified events	1285	openai/gpt-oss-120b
-145.0.7632.116	run3	S	2	False	The answer lists extra events and misnames 'Team Collaboration Work', so it does not accurately list the required events	1285	openai/gpt-oss-120b
-145.0.7632.116	run3	S	3	False	The answer lists many extra events and misnames 'Team Collaboration Work', so it does not accurately list only the required July events.	1285	openai/gpt-oss-120b
-145.0.7632.116	run3	SI	1	False	The answer includes extra events not requested and does not match the exact 'Team Collaboration Work' entry.	1179	openai/gpt-oss-120b
-145.0.7632.116	run3	SI	2	False	The answer includes extra events and misnames required events, so it does not accurately list the required July 2024 events	1179	openai/gpt-oss-120b
+145.0.7632.116	run2	F	1	False	The answer includes extra events and misnames 'Team Collaboration Work', so it does not accurately list exactly the required events	1323	openai/gpt-oss-120b
+145.0.7632.116	run2	F	2	False	"The answer lists extra events and misnames ""Team Collaboration Work"" as ""Team Collaboration Workshop"", so it does not accurately list all displayed events."	1323	openai/gpt-oss-120b
+145.0.7632.116	run2	F	3	False	"The answer includes extra events and misnames ""Team Collaboration Work"" as ""Team Collaboration Workshop"", so it does not accurately list exactly the displayed July 2024 events."	1323	openai/gpt-oss-120b
+145.0.7632.116	run2	S	1	False	The answer lists a different event name ('Team Collaboration Workshop') instead of the required 'Team Collaboration Work'	1116	openai/gpt-oss-120b
+145.0.7632.116	run2	S	2	True	All required events are present in the answer	1116	openai/gpt-oss-120b
+145.0.7632.116	run2	S	3	False	The answer lists 'Team Collaboration Workshop' instead of the required 'Team Collaboration Work', so it does not accurately list all specified events.	1116	openai/gpt-oss-120b
+145.0.7632.116	run2	SI	1	False	The answer lists 'Team Collaboration Workshop' instead of the required 'Team Collaboration Work', so it does not accurately list all specified events.	1116	openai/gpt-oss-120b
+145.0.7632.116	run2	SI	2	False	"The answer lists ""Team Collaboration Workshop"" instead of the required ""Team Collaboration Work"""	1116	openai/gpt-oss-120b
+145.0.7632.116	run2	SI	3	False	The answer lists a different event name ('Team Collaboration Workshop') instead of the required 'Team Collaboration Work'.	1116	openai/gpt-oss-120b
+145.0.7632.116	run3	F	1	False	The answer lists extra events and misnames 'Team Collaboration Work', so it does not accurately list only the required events.	1331	openai/gpt-oss-120b
+145.0.7632.116	run3	F	2	False	The answer lists extra events and misnames 'Team Collaboration Work', so it does not accurately list only the required events.	1331	openai/gpt-oss-120b
+145.0.7632.116	run3	F	3	False	The answer lists extra inferred events and misnames 'Team Collaboration Work' as 'Team Collaboration Workshop', so it does not accurately list the displayed July events.	1331	openai/gpt-oss-120b
+145.0.7632.116	run3	S	1	False	The answer includes extra events and mislabels 'Team Collaboration Work' as 'Team Collaboration Workshop', so it does not accurately list only the required events.	1285	openai/gpt-oss-120b
+145.0.7632.116	run3	S	2	False	The answer lists extra events and misnames 'Team Collaboration Work' as 'Team Collaboration Workshop', so it does not accurately list only the required events.	1285	openai/gpt-oss-120b
+145.0.7632.116	run3	S	3	False	The answer lists extra events and misnames 'Team Collaboration Work' as 'Team Collaboration Workshop', so it does not accurately list only the required events.	1285	openai/gpt-oss-120b
+145.0.7632.116	run3	SI	1	False	The answer lists extra events and misnames 'Team Collaboration Work', so it does not accurately list exactly the required July events.	1179	openai/gpt-oss-120b
+145.0.7632.116	run3	SI	2	False	The answer includes many events not in the required list, so it does not accurately list only the displayed July 2024 events.	1179	openai/gpt-oss-120b
 145.0.7632.116	run3	SI	3	False	The answer lists extra events and misnames 'Team Collaboration Work', so it does not accurately list only the required events.	1179	openai/gpt-oss-120b
-145.0.7632.116	run1	F	1	False	The answer misnames 'Team Collaboration Work' as 'Team Collaboration Workshop' and thus does not accurately list all required events.	1150	openai/gpt-oss-120b
-145.0.7632.116	run1	F	2	False	The answer lists many events not in the required list, so it does not accurately list only the displayed events.	1150	openai/gpt-oss-120b
-145.0.7632.116	run1	F	3	False	"The answer lists extra events and mismatches ""Team Collaboration Work"" as ""Team Collaboration Workshop""."	1150	openai/gpt-oss-120b
+145.0.7632.116	run1	F	1	False	The answer lists many events not in the required list, so it does not accurately list only the displayed July 2024 events.	1150	openai/gpt-oss-120b
+145.0.7632.116	run1	F	2	False	"The answer lists ""Team Collaboration Workshop"" instead of the required ""Team Collaboration Work"""	1150	openai/gpt-oss-120b
+145.0.7632.116	run1	F	3	False	The answer lists many events not in the required list, so it does not accurately list only the displayed July 2024 events.	1150	openai/gpt-oss-120b
 145.0.7632.116	run1	S	1	False	"The answer lists ""Team Collaboration Workshop"" instead of the required ""Team Collaboration Work"""	1000	openai/gpt-oss-120b
-145.0.7632.116	run1	S	2	False	The answer lists 'Team Collaboration Workshop' instead of the required 'Team Collaboration Work'	1000	openai/gpt-oss-120b
-145.0.7632.116	run1	S	3	False	The answer lists 'Team Collaboration Workshop' instead of the required 'Team Collaboration Work'	1000	openai/gpt-oss-120b
-145.0.7632.116	run1	SI	1	False	"The answer lists ""Team Collaboration Workshop"" instead of the required ""Team Collaboration Work""."	1000	openai/gpt-oss-120b
-145.0.7632.116	run1	SI	2	False	The answer lists 'Team Collaboration Workshop' instead of the required 'Team Collaboration Work'	1000	openai/gpt-oss-120b
-145.0.7632.116	run1	SI	3	False	"The answer lists ""Team Collaboration Workshop"" instead of the required ""Team Collaboration Work""."	1000	openai/gpt-oss-120b
-145.0.7632.116	POS	control	1	False	The answer misnames or omits some of the required events (e.g., 'Team Collaboration Work' is listed as 'Team Collaboration Workshop')	412	openai/gpt-oss-120b
-145.0.7632.116	POS	control	2	False	The answer misnames or omits events from the required list	412	openai/gpt-oss-120b
-145.0.7632.116	POS	control	3	False	The answer misnames or omits events from the required list	412	openai/gpt-oss-120b
-145.0.7632.116	NEG	control	1	False	The answer omits events like Morning Walk, Team Collaboration Work, and Team Progress Check, so it does not list all required events.	377	openai/gpt-oss-120b
-145.0.7632.116	NEG	control	2	False	The answer omits several listed events such as Morning Walk, Team Collaboration Work, and Team Progress Check.	377	openai/gpt-oss-120b
-145.0.7632.116	NEG	control	3	False	The answer omits events like Morning Walk, Team Collaboration Work, and Team Progress Check, so it does not list all required events.	377	openai/gpt-oss-120b
+145.0.7632.116	run1	S	2	False	The answer lists 'Team Collaboration Workshop' instead of the required 'Team Collaboration Work', so it does not accurately list all required events.	1000	openai/gpt-oss-120b
+145.0.7632.116	run1	S	3	False	The answer lists 'Team Collaboration Workshop' instead of the required 'Team Collaboration Work', so it does not accurately list all required events.	1000	openai/gpt-oss-120b
+145.0.7632.116	run1	SI	1	False	The answer omits or misnames required events (e.g., 'Team Collaboration Work' is listed as 'Team Collaboration Workshop')	1000	openai/gpt-oss-120b
+145.0.7632.116	run1	SI	2	False	The answer lists 'Team Collaboration Workshop' instead of the required 'Team Collaboration Work', so it does not accurately list all required events.	1000	openai/gpt-oss-120b
+145.0.7632.116	run1	SI	3	False	The answer lists 'Team Collaboration Workshop' instead of the required 'Team Collaboration Work', so it does not accurately list all required events.	1000	openai/gpt-oss-120b
+145.0.7632.116	POS	control	1	False	The answer lists 'Team Collaboration Workshop' instead of the required 'Team Collaboration Work', so it does not accurately list all events.	412	openai/gpt-oss-120b
+145.0.7632.116	POS	control	2	False	The answer lists 'Team Collaboration Workshop' instead of the required 'Team Collaboration Work', so it does not accurately list all events.	412	openai/gpt-oss-120b
+145.0.7632.116	POS	control	3	False	The answer lists 'Team Collaboration Workshop' instead of the required 'Team Collaboration Work', so it does not accurately list all events.	412	openai/gpt-oss-120b
+145.0.7632.116	NEG	control	1	False	The answer omits events like Morning Walk, Team Collaboration Work, and Team Progress Check, and misnames others.	377	openai/gpt-oss-120b
+145.0.7632.116	NEG	control	2	False	The answer omits events like Morning Walk, Team Collaboration Work, and Team Progress Check, and misnames others.	377	openai/gpt-oss-120b
+145.0.7632.116	NEG	control	3	False	The answer omits events like Morning Walk, Team Collaboration Work, and Team Progress Check, and misnames others.	377	openai/gpt-oss-120b
