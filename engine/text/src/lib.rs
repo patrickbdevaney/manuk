@@ -443,6 +443,12 @@ pub struct FontContext {
     /// that had loaded the real webfont. **A failed download must look failed, not like a different
     /// font.**
     declared_webfonts: RefCell<std::collections::HashSet<String>>,
+    /// Memo of [`FontContext::resolve_family`] / [`FontContext::first_non_generic_family`] by the
+    /// exact `font-family` list, valid for one [`FontContext::fingerprint`]. Both answers are pure
+    /// in (list, registered fonts), and the miss path is a fontdb query that scans every installed
+    /// face by string compare: sampled under the zilloft /homes click, ~78% of a 4.7k-node layout
+    /// was this one scan, repeated per text node per probe.
+    family_memo: RefCell<FamilyMemo>,
     /// **Every `@font-face` `src` URL this context has already tried**, absolute and resolved.
     ///
     /// The page layer needs an idempotence key because `fetch_and_apply_stylesheets` re-runs after
@@ -708,6 +714,7 @@ impl FontContext {
             family_ids: RefCell::new(HashMap::new()),
             webfonts: RefCell::new(HashMap::new()),
             declared_webfonts: RefCell::new(std::collections::HashSet::new()),
+            family_memo: RefCell::new(FamilyMemo::default()),
             attempted_webfont_srcs: RefCell::new(std::collections::HashSet::new()),
             scale_ctx: RefCell::new(swash::scale::ScaleContext::new()),
             shape_ctx: RefCell::new(swash::shape::ShapeContext::new()),
@@ -870,6 +877,16 @@ impl FontContext {
     /// is a generic keyword, an installed/`@font-face` face by that exact name, or a known
     /// named→generic mapping (Courier→mono, Times→serif). Defaults to sans-serif.
     pub fn resolve_family(&self, names: &[String]) -> FontFamily {
+        let fp = self.fingerprint();
+        if let Some(hit) = self.family_memo.borrow_mut().resolved(fp, names) {
+            return hit;
+        }
+        let r = self.resolve_family_uncached(names);
+        self.family_memo.borrow_mut().resolved_store(fp, names, r);
+        r
+    }
+
+    fn resolve_family_uncached(&self, names: &[String]) -> FontFamily {
         for raw in names {
             // ── THE NAME KEEPS ITS CASE FOR THE FACE QUERY (tick 557).
             //
@@ -998,6 +1015,18 @@ impl FontContext {
     ///
     /// [`resolve_family`]: FontContext::resolve_family
     pub fn first_non_generic_family(&self, names: &[String]) -> Option<u32> {
+        let fp = self.fingerprint();
+        if let Some(hit) = self.family_memo.borrow_mut().non_generic(fp, names) {
+            return hit;
+        }
+        let r = self.first_non_generic_family_uncached(names);
+        self.family_memo
+            .borrow_mut()
+            .non_generic_store(fp, names, r);
+        r
+    }
+
+    fn first_non_generic_family_uncached(&self, names: &[String]) -> Option<u32> {
         for raw in names {
             let orig = raw.trim().trim_matches(['"', '\'']);
             let n = orig.to_ascii_lowercase();
@@ -2606,6 +2635,74 @@ mod tests {
             loaded <= walked + 1,
             "resolving U+4E00 loaded {loaded} faces; walking the list to index {walked} needs at most {}",
             walked + 1
+        );
+    }
+}
+
+/// See [`FontContext::family_memo`]. Dropped wholesale when the font fingerprint moves.
+#[derive(Default)]
+struct FamilyMemo {
+    fingerprint: u64,
+    resolved: HashMap<Vec<String>, FontFamily>,
+    non_generic: HashMap<Vec<String>, Option<u32>>,
+}
+
+impl FamilyMemo {
+    fn sync(&mut self, fp: u64) {
+        if self.fingerprint != fp {
+            self.fingerprint = fp;
+            self.resolved.clear();
+            self.non_generic.clear();
+        }
+    }
+    fn resolved(&mut self, fp: u64, names: &[String]) -> Option<FontFamily> {
+        self.sync(fp);
+        self.resolved.get(names).copied()
+    }
+    fn resolved_store(&mut self, fp: u64, names: &[String], r: FontFamily) {
+        self.sync(fp);
+        self.resolved.insert(names.to_vec(), r);
+    }
+    fn non_generic(&mut self, fp: u64, names: &[String]) -> Option<Option<u32>> {
+        self.sync(fp);
+        self.non_generic.get(names).copied()
+    }
+    fn non_generic_store(&mut self, fp: u64, names: &[String], r: Option<u32>) {
+        self.sync(fp);
+        self.non_generic.insert(names.to_vec(), r);
+    }
+}
+
+#[cfg(test)]
+mod family_memo_tests {
+    use super::*;
+
+    fn stack(v: &[&str]) -> Vec<String> {
+        v.iter().map(|s| s.to_string()).collect()
+    }
+
+    /// RG.S1.a.a.a.b.a.b: the memoed answer must equal the uncached one, and a font registered
+    /// AFTER the first lookup must change the answer (the memo keys on the font fingerprint).
+    #[test]
+    fn family_memo_agrees_with_uncached_and_sees_new_webfonts() {
+        let fc = FontContext::new();
+        let s = stack(&["Zz Memo Probe", "sans-serif"]);
+        let first = fc.resolve_family(&s);
+        assert_eq!(first, fc.resolve_family_uncached(&s));
+        assert_eq!(first, FontFamily::SansSerif, "not installed yet");
+        assert_eq!(fc.first_non_generic_family(&s), None);
+        let data = include_bytes!("../tests/fixtures/Ahem.woff2");
+        let ttf = decode_woff2(data).expect("decode Ahem");
+        fc.register_named_font("Zz Memo Probe", ttf, None);
+        let after = fc.resolve_family(&s);
+        assert_eq!(after, fc.resolve_family_uncached(&s));
+        assert!(
+            matches!(after, FontFamily::Named(_)),
+            "stale memo served: {after:?}"
+        );
+        assert!(
+            fc.first_non_generic_family(&s).is_some(),
+            "stale non-generic memo"
         );
     }
 }

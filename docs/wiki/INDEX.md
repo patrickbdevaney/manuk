@@ -165,6 +165,7 @@
   - L19 · Limits
   - L24 · A flex/grid item's content height depends on its resolved WIDTH, not on the probe that asked (RG.S1.a.a.a.b.a)
   - L37 · An opacity-only restyle reuses the memoed fragment tree (RG.S1.a.a.a.b.a.a)
+  - L40 · font-family resolution is memoed per list (RG.S1.a.a.a.b.a.b)
 
 ## A linked sheet is in the CSSOM
 `docs/wiki/a-linked-sheet-is-in-the-cssom.md`
@@ -3799,4 +3800,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3098 sections across 174 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3099 sections across 174 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
