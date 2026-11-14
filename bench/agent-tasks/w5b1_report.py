@@ -8,6 +8,7 @@ Inputs (written by docs/sprint/w5/b1-run.sh and docs/sprint/w5/b1a-run.sh):
   B1-real-<arm>.tsv   REAL judged slice: every non-omnizon task (102), real_run.py --judge
   B1-full-<arm>.tsv   own 40 + external 14 (the suite run_arm.py --suite full runs), run_arm.py
   B1-preload-real.tsv / B1-preload-full.tsv   the playwright+preload arm (W5.B1.a), same two slices
+  B1-manuk-preload-full.tsv   the manuk+preload arm (W5.B1.a.a, ENABLE_TOOL_SEARCH=false), full slice only (b1b-run.sh)
 
 Integrity (exit 1 on any miss, the gate): each (arm, slice) has exactly one row per (task, run 1..3) for the expected
 task set; every row carries chrome_ver == docs/sprint/CHROME_PIN; one judge_model per REAL slice; every row's
@@ -24,12 +25,19 @@ import argparse, csv, glob, json, os, sys, tempfile, shutil
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 ARMS = ["manuk", "cdp-layer", "playwright", "playwright+preload"]
+ARMS_FULL = ARMS + ["manuk+preload"]  # W5.B1.a.a: manuk with ENABLE_TOOL_SEARCH=false, full slice only
 SLICES = {"real": "B1-real-{arm}.tsv", "full": "B1-full-{arm}.tsv"}
 PRELOAD_FILES = {"real": "B1-preload-real.tsv", "full": "B1-preload-full.tsv"}  # W5.B1.a: playwright+preload
 RUNS = (1, 2, 3)
 
 
+def arms_for(slice_):
+    return ARMS_FULL if slice_ == "full" else ARMS
+
+
 def fname(slice_, arm):
+    if arm == "manuk+preload":
+        return "B1-manuk-preload-full.tsv"
     return PRELOAD_FILES[slice_] if arm == "playwright+preload" else SLICES[slice_].format(arm=arm)
 
 
@@ -68,7 +76,7 @@ def check(root, transcripts, pin, errors, incomplete):
     data = {}
     for slice_ in SLICES:
         exp = set(expected_tasks(slice_))
-        for arm in ARMS:
+        for arm in arms_for(slice_):
             rows, path = load_slice(root, slice_, arm)
             if rows is None:
                 incomplete.append(f"{slice_}/{arm}: {os.path.basename(path)} missing")
@@ -122,7 +130,7 @@ def report(data, summary_path):
         lines.append(f"\n## slice {slice_}")
         lines.append("| arm | tasks | pass>=2of3 | rate | pass/run | in+out tok/task (run band) | total tok/task | USD/run |")
         lines.append("|---|---|---|---|---|---|---|---|")
-        for arm in ARMS:
+        for arm in arms_for(slice_):
             rows = data.get((slice_, arm))
             if not rows:
                 continue
@@ -148,6 +156,7 @@ def report(data, summary_path):
     fpp = data.get(("full", "playwright+preload", "stats"))
     if fpp:
         lines.append(f"Playwright+preload (full slice): {fpp['rate']:.1f}%, in+out {fpp['io_per_task']:.0f} per task")
+    fmp = data.get(("full", "manuk+preload", "stats"))
     if fm and fp:
         d = fm["rate"] - fp["rate"]
         overlap = fm["run_pass_band"][0] <= fp["run_pass_band"][1] and fp["run_pass_band"][0] <= fm["run_pass_band"][1]
@@ -163,6 +172,15 @@ def report(data, summary_path):
     # W5.B1.a: the incumbent is the cheaper (in+out per task) of the two Playwright arms, as in W4.B4
     inc = min((x for x in (tp, fpp) if x), key=lambda x: x["io_per_task"], default=None)
     inc_name = "playwright+preload" if inc is fpp and fpp else "playwright"
+    if fmp and fpp and len(data.get(("full", "manuk+preload"), [])) == 3 * fmp["n"]:
+        # W5.B1.a.a: like-for-like, both arms under ENABLE_TOOL_SEARCH=false; the verdict uses the same 30% / equal-or-better rule
+        # (printed only once all 3 runs are in, so a partial arm never reads as a verdict)
+        red = 100.0 * (1 - fmp["io_per_task"] / fpp["io_per_task"])
+        ok22 = red >= 30 and fmp["rate"] >= fpp["rate"]
+        lines.append(f"Bar 2.2 tokens, like-for-like (both tool-loading preloaded, full slice, in+out per task): manuk+preload "
+                     f"{fmp['io_per_task']:.0f} [band {fmp['io_band'][0]:.0f}, {fmp['io_band'][1]:.0f}] at {fmp['rate']:.1f}% vs "
+                     f"playwright+preload {fpp['io_per_task']:.0f} [band {fpp['io_band'][0]:.0f}, {fpp['io_band'][1]:.0f}] at {fpp['rate']:.1f}% "
+                     f"-> {abs(red):.1f}% {'fewer' if red >= 0 else 'more'} -> {'MET' if ok22 else 'NOT MET'}")
     if tm and inc:
         red = 100.0 * (1 - tm["io_per_task"] / inc["io_per_task"])
         ok22 = red >= 30 and tm["rate"] >= inc["rate"]
@@ -195,10 +213,10 @@ def self_test(pin):
     """The gate must go red: a dropped row, a wrong chrome_ver and a deleted transcript each make the check fail.
     The unmutated copy must be clean (no integrity error and no missing row)."""
     src = os.path.join(ROOT, "docs/sprint/w5")
-    if not all(os.path.exists(os.path.join(src, fname(s, a))) for s in SLICES for a in ARMS):
+    if not all(os.path.exists(os.path.join(src, fname(s, a))) for s in SLICES for a in arms_for(s)):
         print("self-test: B1 rows not complete yet"); return 2
     rows = {(s, a): [r for r in csv.DictReader(open(os.path.join(src, fname(s, a))), delimiter="\t") if r.get("task")]
-            for s in SLICES for a in ARMS}
+            for s in SLICES for a in arms_for(s)}
     results = []
     with tempfile.TemporaryDirectory(prefix="w5b1-") as tmp:
         tr = os.path.join(tmp, "tr")
@@ -224,6 +242,7 @@ def self_test(pin):
 
         build("clean")
         build("drop-row", mutate=lambda s, a, rs: rs[1:] if (s, a) == ("real", "manuk") else rs)
+        build("drop-row-manuk-preload", mutate=lambda s, a, rs: rs[1:] if (s, a) == ("full", "manuk+preload") else rs)
         build("wrong-chrome", mutate=lambda s, a, rs: [dict(r, chrome_ver="0.0.0") for r in rs] if (s, a) == ("full", "cdp-layer") else rs)
         first = rows[("real", "playwright")][0]
         build("no-transcript", drop_transcript=f"playwright_{first['task']}_r{first['run']}.jsonl")

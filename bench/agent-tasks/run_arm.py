@@ -15,12 +15,13 @@ chrome_ver. Run with `python3 -I`. Requires MANUK_CHROME_PIN (refuses without it
 Load-upfront treatments (W4.B1): manuk loads navigate/act/type/extract upfront via `_meta["anthropic/alwaysLoad"]`
 (set in mcp/src/server.rs). Playwright ships no such marker, so `playwright+preload` runs it with
 ENABLE_TOOL_SEARCH=false, which stops Claude Code deferring any MCP tool. Report both Playwright arms.
+W5.B1.a.a: `manuk+preload` is the manuk arm with the same ENABLE_TOOL_SEARCH=false, so Bar 2.2 compares like with like.
 """
 import argparse, json, os, shutil, subprocess, sys, tempfile, threading, time
 import psutil
 
 # W4.B1: arm name -> extra environment for `claude` (the load-upfront treatment for Playwright).
-ARM_ENV = {"playwright+preload": {"ENABLE_TOOL_SEARCH": "false"}}
+ARM_ENV = {"playwright+preload": {"ENABLE_TOOL_SEARCH": "false"}, "manuk+preload": {"ENABLE_TOOL_SEARCH": "false"}}
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
@@ -89,7 +90,7 @@ def arm_config(arm, tmp):
             return None, None
         cfg = {"mcpServers": {"browser": {"command": exe, "args": [], "env": {"MANUK_NO_RETRY": "1"}}}}
         allowed = "mcp__browser"
-    elif arm in ("manuk", "manuk+rollback", "manuk+rollback.v2", "manuk-prealwaysload", "manuk-lean", "manuk-noquery", "manuk-legacy-observe"):  # W4.B1 before-arm: MANUK_MCP_BIN
+    elif arm in ("manuk", "manuk+preload", "manuk+rollback", "manuk+rollback.v2", "manuk-prealwaysload", "manuk-lean", "manuk-noquery", "manuk-legacy-observe"):  # W4.B1 before-arm: MANUK_MCP_BIN
         exe = mcp_bin()
         if not os.path.exists(exe):
             return None, None

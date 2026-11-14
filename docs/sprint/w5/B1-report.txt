@@ -14,12 +14,14 @@
 | cdp-layer | 54 | 50 | 92.6% | [50, 50, 49] | 512 [471, 540] | 87749 | 0.0027 |
 | playwright | 54 | 51 | 94.4% | [50, 52, 52] | 689 [662, 725] | 125053 | 0.0041 |
 | playwright+preload | 54 | 50 | 92.6% | [51, 49, 49] | 528 [517, 544] | 170938 | 0.0040 |
+| manuk+preload | 54 | 48 | 88.9% | [50, 49, 47] | 682 [637, 712] | 180352 | 0.0046 |
 
 REAL judge rows: {'claude-haiku (claude -p)': 1224}; tasks judged by more than one judge: 0 []
 Playwright+preload (full slice): 92.6%, in+out 528 per task
 
 Bar 2.1 (full slice): manuk 96.3% vs playwright 94.4% -> diff +1.9 pts, bands overlap=True -> MET
 REAL slice (not a Bar 2 input by itself): manuk 28.4% vs playwright 46.1%
+Bar 2.2 tokens, like-for-like (both tool-loading preloaded, full slice, in+out per task): manuk+preload 682 [band 637, 712] at 88.9% vs playwright+preload 528 [band 517, 544] at 92.6% -> 29.2% more -> NOT MET
 Bar 2.2 tokens (full slice, in+out per task): manuk 594 vs playwright+preload 528 -> 12.5% more (need >=30% fewer at equal-or-better success) -> NOT MET
   (K1 arm 3, cdp-layer: 512 in+out per task; manuk uses 16.0% more)
   (total incl. cache, manuk vs playwright+preload: 38.2% fewer)
