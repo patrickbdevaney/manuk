@@ -1,0 +1,133 @@
+chrome_ver	arm	task	run	turn	tool	result_bytes	output_tokens	thinking_tokens
+145.0.7632.116	manuk-diffview-off	D01	1	1	mcp__browser__navigate	381	45	0
+145.0.7632.116	manuk-diffview-off	D01	1	2	mcp__browser__act	792	39	0
+145.0.7632.116	manuk-diffview-off	D01	1	3		0	142	0
+145.0.7632.116	manuk-diffview-off	D02	1	1	mcp__browser__navigate	381	41	0
+145.0.7632.116	manuk-diffview-off	D02	1	2	mcp__browser__act	792	36	0
+145.0.7632.116	manuk-diffview-off	D02	1	3		0	142	0
+145.0.7632.116	manuk-diffview-off	D03	1	1	mcp__browser__navigate	381	45	0
+145.0.7632.116	manuk-diffview-off	D03	1	2	mcp__browser__act	667	40	0
+145.0.7632.116	manuk-diffview-off	D03	1	3		0	137	0
+145.0.7632.116	manuk-diffview-off	D04	1	1	mcp__browser__navigate	381	65	0
+145.0.7632.116	manuk-diffview-off	D04	1	2	mcp__browser__act	667	57	0
+145.0.7632.116	manuk-diffview-off	D04	1	3		0	175	81
+145.0.7632.116	manuk-diffview-off	D05	1	1	mcp__browser__navigate	381	37	0
+145.0.7632.116	manuk-diffview-off	D05	1	2	mcp__browser__act	823	32	0
+145.0.7632.116	manuk-diffview-off	D05	1	3		0	159	0
+145.0.7632.116	manuk-diffview-off	D06	1	1	mcp__browser__navigate	381	40	0
+145.0.7632.116	manuk-diffview-off	D06	1	2	mcp__browser__act	823	36	0
+145.0.7632.116	manuk-diffview-off	D06	1	3		0	144	0
+145.0.7632.116	manuk-diffview-off	D07	1	1	mcp__browser__navigate	381	40	0
+145.0.7632.116	manuk-diffview-off	D07	1	2	mcp__browser__act	769	36	0
+145.0.7632.116	manuk-diffview-off	D07	1	3		0	146	0
+145.0.7632.116	manuk-diffview-off	D08	1	1	mcp__browser__navigate	381	42	0
+145.0.7632.116	manuk-diffview-off	D08	1	2	mcp__browser__act	769	53	0
+145.0.7632.116	manuk-diffview-off	D08	1	3		0	154	0
+145.0.7632.116	manuk-diffview-off	D09	1	1	mcp__browser__navigate	381	43	0
+145.0.7632.116	manuk-diffview-off	D09	1	2	mcp__browser__act	765	54	0
+145.0.7632.116	manuk-diffview-off	D09	1	3		0	148	0
+145.0.7632.116	manuk-diffview-off	D10	1	1	mcp__browser__navigate	381	45	0
+145.0.7632.116	manuk-diffview-off	D10	1	2	mcp__browser__act	765	39	0
+145.0.7632.116	manuk-diffview-off	D10	1	3		0	121	0
+145.0.7632.116	manuk-diffview-off	D11	1	1	mcp__browser__navigate	381	46	0
+145.0.7632.116	manuk-diffview-off	D11	1	2	mcp__browser__act	792	80	0
+145.0.7632.116	manuk-diffview-off	D11	1	3		0	111	0
+145.0.7632.116	manuk-diffview-off	D12	1	1	mcp__browser__navigate	381	55	0
+145.0.7632.116	manuk-diffview-off	D12	1	2	mcp__browser__act	769	49	0
+145.0.7632.116	manuk-diffview-off	D12	1	3	mcp__browser__act	850	49	0
+145.0.7632.116	manuk-diffview-off	D12	1	4		0	127	0
+145.0.7632.116	manuk-diffview-off	D13	1	1	mcp__browser__navigate	381	101	52
+145.0.7632.116	manuk-diffview-off	D13	1	2	mcp__browser__act	667	89	46
+145.0.7632.116	manuk-diffview-off	D13	1	3		0	259	134
+145.0.7632.116	manuk-diffview-off	D14	1	1	mcp__browser__navigate	381	45	0
+145.0.7632.116	manuk-diffview-off	D14	1	2	mcp__browser__act	792	40	0
+145.0.7632.116	manuk-diffview-off	D14	1	3	mcp__browser__act	802	40	0
+145.0.7632.116	manuk-diffview-off	D14	1	4		0	186	0
+145.0.7632.116	manuk-diffview-off	D01	2	1	mcp__browser__navigate	381	43	0
+145.0.7632.116	manuk-diffview-off	D01	2	2	mcp__browser__act	792	37	0
+145.0.7632.116	manuk-diffview-off	D01	2	3		0	138	0
+145.0.7632.116	manuk-diffview-off	D02	2	1	mcp__browser__navigate	381	46	0
+145.0.7632.116	manuk-diffview-off	D02	2	2	mcp__browser__act	792	57	0
+145.0.7632.116	manuk-diffview-off	D02	2	3		0	140	0
+145.0.7632.116	manuk-diffview-off	D03	2	1	mcp__browser__navigate	381	58	0
+145.0.7632.116	manuk-diffview-off	D03	2	2	mcp__browser__act	667	72	0
+145.0.7632.116	manuk-diffview-off	D03	2	3		0	141	33
+145.0.7632.116	manuk-diffview-off	D04	2	1	mcp__browser__navigate	381	78	0
+145.0.7632.116	manuk-diffview-off	D04	2	2	mcp__browser__act	667	68	0
+145.0.7632.116	manuk-diffview-off	D04	2	3		0	227	150
+145.0.7632.116	manuk-diffview-off	D05	2	1	mcp__browser__navigate	381	44	0
+145.0.7632.116	manuk-diffview-off	D05	2	2	mcp__browser__act	823	38	0
+145.0.7632.116	manuk-diffview-off	D05	2	3		0	138	0
+145.0.7632.116	manuk-diffview-off	D06	2	1	mcp__browser__navigate	381	41	0
+145.0.7632.116	manuk-diffview-off	D06	2	2	mcp__browser__act	823	51	0
+145.0.7632.116	manuk-diffview-off	D06	2	3		0	165	0
+145.0.7632.116	manuk-diffview-off	D07	2	1	mcp__browser__navigate	381	45	0
+145.0.7632.116	manuk-diffview-off	D07	2	2	mcp__browser__act	769	40	0
+145.0.7632.116	manuk-diffview-off	D07	2	3		0	140	0
+145.0.7632.116	manuk-diffview-off	D08	2	1	mcp__browser__navigate	381	42	0
+145.0.7632.116	manuk-diffview-off	D08	2	2	mcp__browser__act	769	51	0
+145.0.7632.116	manuk-diffview-off	D08	2	3		0	174	0
+145.0.7632.116	manuk-diffview-off	D09	2	1	mcp__browser__navigate	381	38	0
+145.0.7632.116	manuk-diffview-off	D09	2	2	mcp__browser__act	765	34	0
+145.0.7632.116	manuk-diffview-off	D09	2	3		0	165	0
+145.0.7632.116	manuk-diffview-off	D10	2	1	mcp__browser__navigate	381	46	0
+145.0.7632.116	manuk-diffview-off	D10	2	2	mcp__browser__act	765	40	0
+145.0.7632.116	manuk-diffview-off	D10	2	3		0	129	0
+145.0.7632.116	manuk-diffview-off	D11	2	1	mcp__browser__navigate	381	39	0
+145.0.7632.116	manuk-diffview-off	D11	2	2	mcp__browser__act	792	67	0
+145.0.7632.116	manuk-diffview-off	D11	2	3		0	147	0
+145.0.7632.116	manuk-diffview-off	D12	2	1	mcp__browser__navigate	381	55	0
+145.0.7632.116	manuk-diffview-off	D12	2	2	mcp__browser__act	769	49	0
+145.0.7632.116	manuk-diffview-off	D12	2	3	mcp__browser__act	850	48	0
+145.0.7632.116	manuk-diffview-off	D12	2	4		0	119	0
+145.0.7632.116	manuk-diffview-off	D13	2	1	mcp__browser__navigate	381	50	0
+145.0.7632.116	manuk-diffview-off	D13	2	2	mcp__browser__act	726	61	25
+145.0.7632.116	manuk-diffview-off	D13	2	3		0	180	0
+145.0.7632.116	manuk-diffview-off	D14	2	1	mcp__browser__navigate	381	57	0
+145.0.7632.116	manuk-diffview-off	D14	2	2	mcp__browser__act	792	51	0
+145.0.7632.116	manuk-diffview-off	D14	2	3	mcp__browser__act	802	50	0
+145.0.7632.116	manuk-diffview-off	D14	2	4		0	101	0
+145.0.7632.116	manuk-diffview-off	D01	3	1	mcp__browser__navigate	381	45	0
+145.0.7632.116	manuk-diffview-off	D01	3	2	mcp__browser__act	792	39	0
+145.0.7632.116	manuk-diffview-off	D01	3	3		0	134	0
+145.0.7632.116	manuk-diffview-off	D02	3	1	mcp__browser__navigate	381	49	0
+145.0.7632.116	manuk-diffview-off	D02	3	2	mcp__browser__act	792	43	0
+145.0.7632.116	manuk-diffview-off	D02	3	3		0	98	0
+145.0.7632.116	manuk-diffview-off	D03	3	1	mcp__browser__navigate	381	79	0
+145.0.7632.116	manuk-diffview-off	D03	3	2	mcp__browser__act	667	70	0
+145.0.7632.116	manuk-diffview-off	D03	3	3		0	190	131
+145.0.7632.116	manuk-diffview-off	D04	3	1	mcp__browser__navigate	381	46	0
+145.0.7632.116	manuk-diffview-off	D04	3	2	mcp__browser__act	667	41	0
+145.0.7632.116	manuk-diffview-off	D04	3	3		0	139	0
+145.0.7632.116	manuk-diffview-off	D05	3	1	mcp__browser__navigate	381	39	0
+145.0.7632.116	manuk-diffview-off	D05	3	2	mcp__browser__act	823	35	0
+145.0.7632.116	manuk-diffview-off	D05	3	3		0	162	0
+145.0.7632.116	manuk-diffview-off	D06	3	1	mcp__browser__navigate	381	40	0
+145.0.7632.116	manuk-diffview-off	D06	3	2	mcp__browser__act	823	35	0
+145.0.7632.116	manuk-diffview-off	D06	3	3		0	154	0
+145.0.7632.116	manuk-diffview-off	D07	3	1	mcp__browser__navigate	381	41	0
+145.0.7632.116	manuk-diffview-off	D07	3	2	mcp__browser__act	769	36	0
+145.0.7632.116	manuk-diffview-off	D07	3	3		0	152	0
+145.0.7632.116	manuk-diffview-off	D08	3	1	mcp__browser__navigate	381	39	0
+145.0.7632.116	manuk-diffview-off	D08	3	2	mcp__browser__act	769	34	0
+145.0.7632.116	manuk-diffview-off	D08	3	3		0	154	0
+145.0.7632.116	manuk-diffview-off	D09	3	1	mcp__browser__navigate	381	39	0
+145.0.7632.116	manuk-diffview-off	D09	3	2	mcp__browser__act	765	35	0
+145.0.7632.116	manuk-diffview-off	D09	3	3		0	162	0
+145.0.7632.116	manuk-diffview-off	D10	3	1	mcp__browser__navigate	381	41	0
+145.0.7632.116	manuk-diffview-off	D10	3	2	mcp__browser__act	765	36	0
+145.0.7632.116	manuk-diffview-off	D10	3	3		0	149	0
+145.0.7632.116	manuk-diffview-off	D11	3	1	mcp__browser__navigate	381	49	0
+145.0.7632.116	manuk-diffview-off	D11	3	2	mcp__browser__act	792	99	0
+145.0.7632.116	manuk-diffview-off	D11	3	3		0	79	0
+145.0.7632.116	manuk-diffview-off	D12	3	1	mcp__browser__navigate	381	57	0
+145.0.7632.116	manuk-diffview-off	D12	3	2	mcp__browser__act	769	50	0
+145.0.7632.116	manuk-diffview-off	D12	3	3	mcp__browser__act	850	50	0
+145.0.7632.116	manuk-diffview-off	D12	3	4		0	101	0
+145.0.7632.116	manuk-diffview-off	D13	3	1	mcp__browser__navigate	381	52	0
+145.0.7632.116	manuk-diffview-off	D13	3	2	mcp__browser__act	726	63	28
+145.0.7632.116	manuk-diffview-off	D13	3	3		0	164	0
+145.0.7632.116	manuk-diffview-off	D14	3	1	mcp__browser__navigate	381	48	0
+145.0.7632.116	manuk-diffview-off	D14	3	2	mcp__browser__act	792	42	0
+145.0.7632.116	manuk-diffview-off	D14	3	3	mcp__browser__act	802	74	0
+145.0.7632.116	manuk-diffview-off	D14	3	4		0	159	0
