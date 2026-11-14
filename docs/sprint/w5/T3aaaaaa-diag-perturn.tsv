@@ -1,0 +1,13 @@
+chrome_ver	arm	run	turn	tools	toolsearch	context_tokens	output_tokens	bin_sha256	claude_version	rc
+145.0.7632.116	before-W5.T3	1	1	mcp__browser__navigate	0	22870	8	b9742038db32f0fe	2.1.306 (Claude Code)	0
+145.0.7632.116	before-W5.T3	1	2	-	0	23110	3	b9742038db32f0fe	2.1.306 (Claude Code)	0
+145.0.7632.116	before-W5.T3	2	1	mcp__browser__navigate	0	22870	8	b9742038db32f0fe	2.1.306 (Claude Code)	0
+145.0.7632.116	before-W5.T3	2	2	-	0	23115	5	b9742038db32f0fe	2.1.306 (Claude Code)	0
+145.0.7632.116	before-W5.T3	3	1	mcp__browser__navigate	0	22870	24	b9742038db32f0fe	2.1.306 (Claude Code)	0
+145.0.7632.116	before-W5.T3	3	2	-	0	23058	3	b9742038db32f0fe	2.1.306 (Claude Code)	0
+145.0.7632.116	after-W5.T3	1	1	mcp__browser__navigate	0	22870	4	b9742038db32f0fe	2.1.306 (Claude Code)	0
+145.0.7632.116	after-W5.T3	1	2	-	0	23109	3	b9742038db32f0fe	2.1.306 (Claude Code)	0
+145.0.7632.116	after-W5.T3	2	1	mcp__browser__navigate	0	22870	8	b9742038db32f0fe	2.1.306 (Claude Code)	0
+145.0.7632.116	after-W5.T3	2	2	-	0	23103	3	b9742038db32f0fe	2.1.306 (Claude Code)	0
+145.0.7632.116	after-W5.T3	3	1	mcp__browser__navigate	0	22870	5	b9742038db32f0fe	2.1.306 (Claude Code)	0
+145.0.7632.116	after-W5.T3	3	2	-	0	23132	8	b9742038db32f0fe	2.1.306 (Claude Code)	0
