@@ -1,0 +1,5 @@
+chrome_ver	arm	task	run	turn	tool	result_bytes	output_tokens	thinking_tokens
+145.0.7632.116	playwright	L01	1	1	ToolSearch	0	95	34
+145.0.7632.116	playwright	L01	1	2	mcp__browser__browser_navigate	387	59	0
+145.0.7632.116	playwright	L01	1	3	mcp__browser__browser_snapshot	32037	28	0
+145.0.7632.116	playwright	L01	1	4		0	220	78
