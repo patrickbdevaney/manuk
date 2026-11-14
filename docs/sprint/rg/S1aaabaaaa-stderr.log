@@ -1,0 +1,501 @@
+### run 1
+manuk-mcp: agent profile=full
+2026-11-14T09:42:20.563120Z  INFO serve_inner: rmcp::service: Service initialized as server peer_info=Some(InitializeRequestParams { meta: None, protocol_version: ProtocolVersion("2025-03-26"), capabilities: ClientCapabilities { experimental: None, extensions: None, roots: None, sampling: None, elicitation: None }, client_info: Implementation { name: "t", title: None, version: "0", description: None, icons: None, website_url: None } })
+2026-11-14T09:42:20.563293Z  INFO serve_inner: rmcp::service: received notification notification=InitializedNotification(NotificationNoParam { method: InitializedNotificationMethod, extensions: Extensions })
+2026-11-14T09:42:20.563366Z  INFO serve_inner: rmcp::handler::server: client initialized
+2026-11-14T09:42:21.287642Z  INFO manuk_agent: agent phase done: fetch html + prewarm js ms=711
+2026-11-14T09:42:21.288153Z  INFO manuk_page: load phase done phase="html parse" ms=0 gave_up=0 elapsed_ms=0
+2026-11-14T09:42:21.936249Z  INFO manuk_page: load phase done phase="external scripts" ms=648 gave_up=0 elapsed_ms=648
+2026-11-14T09:42:21.936280Z  INFO manuk_page: load phase done phase="module graph prefetch" ms=0 gave_up=0 elapsed_ms=648
+2026-11-14T09:42:21.936293Z  INFO manuk_page: load phase done phase="blocking stylesheets" ms=0 gave_up=0 elapsed_ms=648
+2026-11-14T09:42:21.937176Z  WARN manuk_layout: LAYOUT PHASES nodes=68 total_ms=0.334614 measure_ms=0.0 measure_n=0 measure_hits=4 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=0.301171 taffy_n=1 abs_ms=0.003547 worst_solve_probes=4 worst_solve_node=Some(NodeId(39)) unattributed_ms=0.029896
+2026-11-14T09:42:21.954317Z  WARN manuk_layout: LAYOUT PHASES nodes=71 total_ms=0.085772 measure_ms=0.0 measure_n=0 measure_hits=4 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=0.068009 taffy_n=1 abs_ms=0.003406 worst_solve_probes=4 worst_solve_node=Some(NodeId(39)) unattributed_ms=0.014357
+2026-11-14T09:42:21.954386Z  INFO manuk_page: load phase done phase="cascade+layout+blocking scripts" ms=18 gave_up=0 elapsed_ms=666
+2026-11-14T09:42:21.954943Z  WARN manuk_layout: LAYOUT PHASES nodes=71 total_ms=0.055405 measure_ms=0.0 measure_n=0 measure_hits=4 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=0.04215 taffy_n=1 abs_ms=0.002696 worst_solve_probes=4 worst_solve_node=Some(NodeId(39)) unattributed_ms=0.010559
+2026-11-14T09:42:22.115553Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:22.123258Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:22.132577Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:23.197554Z  WARN manuk_layout: LAYOUT PHASES nodes=1480 total_ms=7.666172 measure_ms=0.0 measure_n=0 measure_hits=762 min_content_ms=0.0 min_content_n=0 max_content_ms=0.088658 max_content_n=1 taffy_ms=6.949514 taffy_n=8 abs_ms=0.172598 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.455402
+2026-11-14T09:42:23.198158Z  INFO manuk_page: load phase done phase="deferred scripts" ms=1243 gave_up=0 elapsed_ms=1910
+2026-11-14T09:42:23.199768Z  INFO manuk_page: load phase done phase="DOMContentLoaded" ms=1 gave_up=0 elapsed_ms=1912
+2026-11-14T09:42:23.589449Z  WARN manuk_layout: LAYOUT PHASES nodes=1480 total_ms=4.674371 measure_ms=0.0 measure_n=0 measure_hits=762 min_content_ms=0.0 min_content_n=0 max_content_ms=0.040146 max_content_n=1 taffy_ms=4.203659 taffy_n=8 abs_ms=0.171815 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.258751
+2026-11-14T09:42:23.590899Z  INFO manuk_page: load phase done phase="subframes (pre-load)" ms=391 gave_up=0 elapsed_ms=2303
+2026-11-14T09:42:23.707291Z  WARN manuk_layout: LAYOUT PHASES nodes=1480 total_ms=4.796342 measure_ms=0.0 measure_n=0 measure_hits=739 min_content_ms=0.0 min_content_n=0 max_content_ms=0.057779 max_content_n=1 taffy_ms=4.266606 taffy_n=8 abs_ms=0.176644 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.295313
+2026-11-14T09:42:23.708722Z  INFO manuk_page: load phase done phase="initial images+masks" ms=117 gave_up=0 elapsed_ms=2421
+2026-11-14T09:42:23.720717Z  INFO manuk_page: load phase done phase="load event" ms=11 gave_up=0 elapsed_ms=2432
+2026-11-14T09:42:23.720738Z  INFO manuk_page: navigation phases reconciled (load_async; finish_loading keeps its own ledger) total_ms=2433 accounted_ms=2429 unaccounted_ms=4
+2026-11-14T09:42:23.734487Z  WARN manuk_layout: LAYOUT PHASES nodes=1480 total_ms=4.370705 measure_ms=0.0 measure_n=0 measure_hits=731 min_content_ms=0.0 min_content_n=0 max_content_ms=0.040016 max_content_n=1 taffy_ms=3.944888 taffy_n=7 abs_ms=0.146979 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.238822
+2026-11-14T09:42:23.765068Z  INFO manuk_page: load phase done phase="external CSS" ms=44 gave_up=0 elapsed_ms=44
+2026-11-14T09:42:23.826792Z  WARN manuk_layout: LAYOUT PHASES nodes=1480 total_ms=4.380353 measure_ms=0.0 measure_n=0 measure_hits=731 min_content_ms=0.0 min_content_n=0 max_content_ms=0.039384 max_content_n=1 taffy_ms=3.941823 taffy_n=7 abs_ms=0.152309 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.246837
+2026-11-14T09:42:23.856879Z  INFO manuk_page: load phase done phase="dynamic scripts" ms=91 gave_up=0 elapsed_ms=136
+2026-11-14T09:42:23.857005Z  INFO manuk_page: load phase done phase="subframes" ms=0 gave_up=0 elapsed_ms=136
+2026-11-14T09:42:23.857099Z  INFO manuk_page: load phase done phase="page fetches" ms=0 gave_up=0 elapsed_ms=136
+2026-11-14T09:42:23.857205Z  INFO manuk_page: load phase done phase="images" ms=0 gave_up=0 elapsed_ms=136
+2026-11-14T09:42:23.857214Z  INFO manuk_page: load phase done phase="icon masks" ms=0 gave_up=0 elapsed_ms=136
+2026-11-14T09:42:23.857243Z  INFO manuk_page: load phase done phase="background images" ms=0 gave_up=0 elapsed_ms=136
+2026-11-14T09:42:23.858253Z  INFO manuk_agent: agent phase done: service websockets ms=0
+### run 1 step navigate 3534ms
+2026-11-14T09:42:24.104597Z  WARN manuk_layout: LAYOUT PHASES nodes=1482 total_ms=4.340558 measure_ms=0.0 measure_n=0 measure_hits=731 min_content_ms=0.0 min_content_n=0 max_content_ms=0.040978 max_content_n=1 taffy_ms=3.881538 taffy_n=7 abs_ms=0.150234 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.267808
+2026-11-14T09:42:24.127050Z  WARN manuk_layout: LAYOUT PHASES nodes=1482 total_ms=4.238895 measure_ms=0.0 measure_n=0 measure_hits=731 min_content_ms=0.0 min_content_n=0 max_content_ms=0.040216 max_content_n=1 taffy_ms=3.757242 taffy_n=7 abs_ms=0.145656 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.295781
+2026-11-14T09:42:24.136898Z  WARN manuk_layout: LAYOUT PHASES nodes=1482 total_ms=4.15163 measure_ms=0.0 measure_n=0 measure_hits=731 min_content_ms=0.0 min_content_n=0 max_content_ms=0.040417 max_content_n=1 taffy_ms=3.729279 taffy_n=7 abs_ms=0.151727 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.230207
+2026-11-14T09:42:24.140600Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:24.158114Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.446247 measure_ms=0.0 measure_n=0 measure_hits=754 min_content_ms=0.0 min_content_n=0 max_content_ms=0.039896 max_content_n=1 taffy_ms=3.963593 taffy_n=7 abs_ms=0.150144 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.292614
+2026-11-14T09:42:24.161420Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:24.169256Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.232784 measure_ms=0.0 measure_n=0 measure_hits=754 min_content_ms=0.0 min_content_n=0 max_content_ms=0.039334 max_content_n=1 taffy_ms=3.827956 taffy_n=7 abs_ms=0.147921 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.217573
+2026-11-14T09:42:24.172363Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:24.179898Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.236 measure_ms=0.0 measure_n=0 measure_hits=754 min_content_ms=0.0 min_content_n=0 max_content_ms=0.040056 max_content_n=1 taffy_ms=3.813248 taffy_n=7 abs_ms=0.159162 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.223534
+2026-11-14T09:42:24.182937Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:24.190444Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.351078 measure_ms=0.0 measure_n=0 measure_hits=754 min_content_ms=0.0 min_content_n=0 max_content_ms=0.038934 max_content_n=1 taffy_ms=3.94592 taffy_n=7 abs_ms=0.148161 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.218063
+2026-11-14T09:42:24.193458Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:24.200910Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.25218 measure_ms=0.0 measure_n=0 measure_hits=754 min_content_ms=0.0 min_content_n=0 max_content_ms=0.039976 max_content_n=1 taffy_ms=3.820761 taffy_n=7 abs_ms=0.162849 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.228594
+2026-11-14T09:42:24.204041Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:24.211302Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.214389 measure_ms=0.0 measure_n=0 measure_hits=754 min_content_ms=0.0 min_content_n=0 max_content_ms=0.039766 max_content_n=1 taffy_ms=3.811686 taffy_n=7 abs_ms=0.147029 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.215908
+2026-11-14T09:42:24.214402Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:24.221644Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.23637 measure_ms=0.0 measure_n=0 measure_hits=754 min_content_ms=0.0 min_content_n=0 max_content_ms=0.039715 max_content_n=1 taffy_ms=3.818607 taffy_n=7 abs_ms=0.147259 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.230789
+2026-11-14T09:42:24.224950Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:24.232464Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.205923 measure_ms=0.0 measure_n=0 measure_hits=754 min_content_ms=0.0 min_content_n=0 max_content_ms=0.038654 max_content_n=1 taffy_ms=3.806325 taffy_n=7 abs_ms=0.146478 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.214466
+2026-11-14T09:42:24.235517Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:24.242729Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.292256 measure_ms=0.0 measure_n=0 measure_hits=754 min_content_ms=0.0 min_content_n=0 max_content_ms=0.039445 max_content_n=1 taffy_ms=3.890386 taffy_n=7 abs_ms=0.146508 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.215917
+2026-11-14T09:42:24.245787Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:24.252983Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.20957 measure_ms=0.0 measure_n=0 measure_hits=754 min_content_ms=0.0 min_content_n=0 max_content_ms=0.040156 max_content_n=1 taffy_ms=3.797968 taffy_n=7 abs_ms=0.149203 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.222243
+2026-11-14T09:42:24.256053Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:24.263289Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.241971 measure_ms=0.0 measure_n=0 measure_hits=754 min_content_ms=0.0 min_content_n=0 max_content_ms=0.039054 max_content_n=1 taffy_ms=3.839759 taffy_n=7 abs_ms=0.147249 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.215909
+2026-11-14T09:42:24.266285Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:24.273321Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.29911 measure_ms=0.0 measure_n=0 measure_hits=754 min_content_ms=0.0 min_content_n=0 max_content_ms=0.039344 max_content_n=1 taffy_ms=3.895223 taffy_n=7 abs_ms=0.14781 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.216733
+2026-11-14T09:42:24.276247Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:24.283292Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.323566 measure_ms=0.0 measure_n=0 measure_hits=762 min_content_ms=0.0 min_content_n=0 max_content_ms=0.039284 max_content_n=1 taffy_ms=3.921273 taffy_n=7 abs_ms=0.147159 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.21585
+2026-11-14T09:42:24.289918Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.405491 measure_ms=0.0 measure_n=0 measure_hits=762 min_content_ms=0.0 min_content_n=0 max_content_ms=0.074852 max_content_n=1 taffy_ms=3.958222 taffy_n=7 abs_ms=0.155825 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.216592
+2026-11-14T09:42:24.298440Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.23073 measure_ms=0.0 measure_n=0 measure_hits=762 min_content_ms=0.0 min_content_n=0 max_content_ms=0.038894 max_content_n=1 taffy_ms=3.82998 taffy_n=7 abs_ms=0.148171 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.213685
+### run 1 step type 410ms
+2026-11-14T09:42:24.527399Z  WARN manuk_layout: LAYOUT PHASES nodes=1488 total_ms=4.430528 measure_ms=0.0 measure_n=0 measure_hits=762 min_content_ms=0.0 min_content_n=0 max_content_ms=0.041018 max_content_n=1 taffy_ms=3.972081 taffy_n=7 abs_ms=0.15857 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.258859
+ACT tree+resolve +2ms
+ACT snapshot +2ms
+2026-11-14T09:42:24.644218Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:24.664812Z  WARN manuk_layout: LAYOUT PHASES nodes=1505 total_ms=4.441048 measure_ms=0.0 measure_n=0 measure_hits=785 min_content_ms=0.0 min_content_n=0 max_content_ms=0.040638 max_content_n=1 taffy_ms=3.998851 taffy_n=7 abs_ms=0.170413 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.231146
+2026-11-14T09:42:24.667651Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:24.722035Z  WARN manuk_layout: LAYOUT PHASES nodes=1511 total_ms=0.105119 measure_ms=0.0 measure_n=0 measure_hits=4 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=0.079872 taffy_n=1 abs_ms=0.007324 worst_solve_probes=4 worst_solve_node=Some(NodeId(1510)) unattributed_ms=0.017923
+2026-11-14T09:42:24.726095Z  WARN manuk_layout: LAYOUT PHASES nodes=1512 total_ms=0.141348 measure_ms=0.0 measure_n=0 measure_hits=4 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=0.047349 taffy_n=1 abs_ms=0.01584 worst_solve_probes=4 worst_solve_node=Some(NodeId(1510)) unattributed_ms=0.078159
+2026-11-14T09:42:24.756395Z  WARN manuk_layout: LAYOUT PHASES nodes=1512 total_ms=0.088778 measure_ms=0.0 measure_n=0 measure_hits=4 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=0.046759 taffy_n=1 abs_ms=0.01572 worst_solve_probes=4 worst_solve_node=Some(NodeId(1510)) unattributed_ms=0.026299
+ACT dispatch +225ms
+2026-11-14T09:42:29.099943Z  WARN manuk_layout: LAYOUT PHASES nodes=4461 total_ms=169.063604 measure_ms=0.0 measure_n=0 measure_hits=45338 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=166.589863 taffy_n=3 abs_ms=2.366536 worst_solve_probes=44663 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.107205
+2026-11-14T09:42:29.103607Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=17 layout_ms=169 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4461 caller=engine/page/src/lib.rs:2518
+2026-11-14T09:42:29.110137Z  INFO manuk_page: SLOW FORCED REFLOW — one geometry read laid out the whole document total_ms=198 sheets_ms=2 n_sheets=10 layout_ms=194 rects_ms=0 n_rects=1894 publish_ms=0 nodes=4461
+2026-11-14T09:42:29.376530Z  WARN manuk_layout: LAYOUT PHASES nodes=4635 total_ms=179.094298 measure_ms=0.0 measure_n=0 measure_hits=46866 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=174.317151 taffy_n=3 abs_ms=4.701632 worst_solve_probes=45997 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.075515
+2026-11-14T09:42:29.385488Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=16 layout_ms=179 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4635 caller=engine/page/src/lib.rs:2518
+2026-11-14T09:42:29.398302Z  INFO manuk_page: SLOW FORCED REFLOW — one geometry read laid out the whole document total_ms=217 sheets_ms=2 n_sheets=10 layout_ms=211 rects_ms=2 n_rects=2068 publish_ms=0 nodes=4635
+2026-11-14T09:42:29.405470Z  WARN manuk_page: load budget exhausted with page fetches still in flight round=0
+2026-11-14T09:42:29.627065Z  WARN manuk_layout: LAYOUT PHASES nodes=4635 total_ms=198.472291 measure_ms=0.0 measure_n=0 measure_hits=46866 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=193.118181 taffy_n=3 abs_ms=5.203544 worst_solve_probes=45997 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.150566
+2026-11-14T09:42:29.630808Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=22 layout_ms=199 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4635 caller=engine/page/src/lib.rs:5653
+ACT settle +5099ms
+ACT effect-diff +5123ms
+2026-11-14T09:42:30.198699Z  WARN manuk_layout: LAYOUT PHASES nodes=4635 total_ms=174.95924 measure_ms=0.0 measure_n=0 measure_hits=48726 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=171.09254 taffy_n=3 abs_ms=3.772351 worst_solve_probes=47857 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.094349
+2026-11-14T09:42:30.202104Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=0 layout_ms=175 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4635 caller=engine/page/src/lib.rs:7223
+### run 1 step click:Start search 6397ms
+2026-11-14T09:42:31.128162Z  WARN manuk_layout: LAYOUT PHASES nodes=4637 total_ms=174.540306 measure_ms=0.0 measure_n=0 measure_hits=48726 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=170.736566 taffy_n=3 abs_ms=3.726795 worst_solve_probes=47857 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.076945
+2026-11-14T09:42:31.131324Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=0 layout_ms=175 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4637 caller=engine/page/src/lib.rs:5653
+ACT tree+resolve +11ms
+ACT snapshot +12ms
+2026-11-14T09:42:32.706294Z  WARN manuk_layout: LAYOUT PHASES nodes=4757 total_ms=174.162931 measure_ms=0.0 measure_n=0 measure_hits=49218 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=169.51983 taffy_n=3 abs_ms=4.580202 worst_solve_probes=47857 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.062899
+2026-11-14T09:42:32.713367Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=18 layout_ms=174 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4757 caller=engine/page/src/lib.rs:2518
+2026-11-14T09:42:32.720030Z  INFO manuk_page: SLOW FORCED REFLOW — one geometry read laid out the whole document total_ms=208 sheets_ms=3 n_sheets=10 layout_ms=205 rects_ms=0 n_rects=2116 publish_ms=0 nodes=4757
+2026-11-14T09:42:32.986180Z  WARN manuk_layout: LAYOUT PHASES nodes=4757 total_ms=173.912275 measure_ms=0.0 measure_n=0 measure_hits=49218 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=169.442032 taffy_n=3 abs_ms=4.407174 worst_solve_probes=47857 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.063069
+2026-11-14T09:42:32.991592Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=14 layout_ms=173 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4757 caller=engine/page/src/lib.rs:2518
+2026-11-14T09:42:32.999272Z  INFO manuk_page: SLOW FORCED REFLOW — one geometry read laid out the whole document total_ms=203 sheets_ms=2 n_sheets=10 layout_ms=199 rects_ms=0 n_rects=2116 publish_ms=0 nodes=4757
+2026-11-14T09:42:33.234265Z  WARN manuk_layout: LAYOUT PHASES nodes=4757 total_ms=174.772116 measure_ms=0.0 measure_n=0 measure_hits=49218 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=170.149303 taffy_n=3 abs_ms=4.556377 worst_solve_probes=47857 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.066436
+2026-11-14T09:42:33.238060Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=14 layout_ms=174 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4757 caller=engine/page/src/lib.rs:2518
+2026-11-14T09:42:33.245676Z  INFO manuk_page: SLOW FORCED REFLOW — one geometry read laid out the whole document total_ms=201 sheets_ms=2 n_sheets=10 layout_ms=198 rects_ms=0 n_rects=2116 publish_ms=0 nodes=4757
+2026-11-14T09:42:33.451212Z  WARN manuk_layout: LAYOUT PHASES nodes=4771 total_ms=175.863455 measure_ms=0.0 measure_n=0 measure_hits=49272 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=171.046675 taffy_n=3 abs_ms=4.755114 worst_solve_probes=47857 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.061666
+2026-11-14T09:42:33.456223Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=14 layout_ms=175 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4771 caller=engine/page/src/lib.rs:10052
+2026-11-14T09:42:33.667483Z  WARN manuk_layout: LAYOUT PHASES nodes=4771 total_ms=178.564295 measure_ms=0.0 measure_n=0 measure_hits=49272 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=173.76598 taffy_n=3 abs_ms=4.718064 worst_solve_probes=47857 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.080251
+2026-11-14T09:42:33.670960Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=0 layout_ms=179 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4771 caller=engine/page/src/lib.rs:7223
+2026-11-14T09:42:33.861664Z  WARN manuk_layout: LAYOUT PHASES nodes=4771 total_ms=169.936329 measure_ms=0.0 measure_n=0 measure_hits=47412 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=165.161969 taffy_n=3 abs_ms=4.697735 worst_solve_probes=45997 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.076625
+2026-11-14T09:42:33.865179Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=0 layout_ms=170 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4771 caller=engine/page/src/lib.rs:11441
+ACT dispatch +2718ms
+ACT settle +2743ms
+ACT effect-diff +2750ms
+### run 1 step click:Beds & Baths 3466ms
+2026-11-14T09:42:34.814321Z  WARN manuk_layout: LAYOUT PHASES nodes=4773 total_ms=173.375158 measure_ms=0.0 measure_n=0 measure_hits=47412 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=168.023894 taffy_n=3 abs_ms=5.264349 worst_solve_probes=45997 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.086915
+2026-11-14T09:42:34.818171Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=0 layout_ms=174 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4773 caller=engine/page/src/lib.rs:5653
+ACT tree+resolve +5ms
+ACT snapshot +6ms
+2026-11-14T09:42:35.326268Z  WARN manuk_layout: LAYOUT PHASES nodes=4777 total_ms=171.795544 measure_ms=0.0 measure_n=0 measure_hits=47412 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=166.561222 taffy_n=3 abs_ms=5.161554 worst_solve_probes=45997 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.072768
+2026-11-14T09:42:35.332006Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=15 layout_ms=171 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4777 caller=engine/page/src/lib.rs:2518
+2026-11-14T09:42:35.338982Z  INFO manuk_page: SLOW FORCED REFLOW — one geometry read laid out the whole document total_ms=199 sheets_ms=3 n_sheets=10 layout_ms=195 rects_ms=0 n_rects=2132 publish_ms=0 nodes=4777
+2026-11-14T09:42:35.618207Z  WARN manuk_layout: LAYOUT PHASES nodes=4777 total_ms=177.90731 measure_ms=0.0 measure_n=0 measure_hits=47412 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=172.517183 taffy_n=3 abs_ms=5.305046 worst_solve_probes=45997 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.085081
+2026-11-14T09:42:35.621873Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=0 layout_ms=178 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4777 caller=engine/page/src/lib.rs:5653
+ACT dispatch +794ms
+ACT settle +821ms
+ACT effect-diff +829ms
+### run 1 step click:exact 1615ms
+ACT tree+resolve +8ms
+ACT snapshot +8ms
+2026-11-14T09:42:37.046961Z  WARN manuk_layout: LAYOUT PHASES nodes=4796 total_ms=168.325077 measure_ms=0.0 measure_n=0 measure_hits=47412 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=163.306493 taffy_n=3 abs_ms=4.947618 worst_solve_probes=45997 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.070966
+2026-11-14T09:42:37.051036Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=14 layout_ms=168 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4796 caller=engine/page/src/lib.rs:2518
+2026-11-14T09:42:37.057888Z  INFO manuk_page: SLOW FORCED REFLOW — one geometry read laid out the whole document total_ms=193 sheets_ms=3 n_sheets=10 layout_ms=189 rects_ms=0 n_rects=2132 publish_ms=0 nodes=4796
+2026-11-14T09:42:37.284310Z  WARN manuk_layout: LAYOUT PHASES nodes=4796 total_ms=171.237107 measure_ms=0.0 measure_n=0 measure_hits=47412 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=166.088687 taffy_n=3 abs_ms=5.071804 worst_solve_probes=45997 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.076616
+2026-11-14T09:42:37.288061Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=0 layout_ms=171 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4796 caller=engine/page/src/lib.rs:5653
+ACT dispatch +845ms
+ACT settle +871ms
+ACT effect-diff +878ms
+### run 1 step click:beds3+ 1598ms
+ACT tree+resolve +8ms
+ACT snapshot +8ms
+2026-11-14T09:42:38.489919Z  WARN manuk_layout: LAYOUT PHASES nodes=4800 total_ms=169.638236 measure_ms=0.0 measure_n=0 measure_hits=47412 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=164.341355 taffy_n=3 abs_ms=5.219174 worst_solve_probes=45997 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.077707
+2026-11-14T09:42:38.496606Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=15 layout_ms=169 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4800 caller=engine/page/src/lib.rs:2518
+2026-11-14T09:42:38.503635Z  INFO manuk_page: SLOW FORCED REFLOW — one geometry read laid out the whole document total_ms=198 sheets_ms=3 n_sheets=10 layout_ms=195 rects_ms=0 n_rects=2132 publish_ms=0 nodes=4800
+2026-11-14T09:42:38.739666Z  WARN manuk_layout: LAYOUT PHASES nodes=4800 total_ms=182.128583 measure_ms=0.0 measure_n=0 measure_hits=47412 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=176.649167 taffy_n=3 abs_ms=5.392592 worst_solve_probes=45997 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.086824
+2026-11-14T09:42:38.743505Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=0 layout_ms=182 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4800 caller=engine/page/src/lib.rs:5653
+ACT dispatch +701ms
+ACT settle +729ms
+ACT effect-diff +735ms
+### run 1 step click:baths2+ 1457ms
+2026-11-14T09:42:39.698217Z  WARN manuk_layout: LAYOUT PHASES nodes=4802 total_ms=171.79783 measure_ms=0.0 measure_n=0 measure_hits=47412 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=166.631426 taffy_n=3 abs_ms=5.080441 worst_solve_probes=45997 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.085963
+2026-11-14T09:42:39.702224Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=0 layout_ms=172 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4802 caller=engine/page/src/lib.rs:5653
+ACT tree+resolve +5ms
+ACT snapshot +6ms
+2026-11-14T09:42:39.780501Z  WARN manuk_layout: LAYOUT PHASES nodes=4813 total_ms=2.641006 measure_ms=0.0 measure_n=0 measure_hits=1064 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=1.543206 taffy_n=3 abs_ms=1.042806 worst_solve_probes=331 worst_solve_node=Some(NodeId(1601)) unattributed_ms=0.054994
+2026-11-14T09:42:39.797310Z  WARN manuk_layout: LAYOUT PHASES nodes=4813 total_ms=2.56908 measure_ms=0.0 measure_n=0 measure_hits=1064 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=1.485896 taffy_n=3 abs_ms=1.033108 worst_solve_probes=331 worst_solve_node=Some(NodeId(1601)) unattributed_ms=0.050076
+2026-11-14T09:42:39.804379Z  WARN manuk_layout: LAYOUT PHASES nodes=4813 total_ms=1.644808 measure_ms=0.0 measure_n=0 measure_hits=518 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=1.49835 taffy_n=3 abs_ms=0.095731 worst_solve_probes=331 worst_solve_node=Some(NodeId(1601)) unattributed_ms=0.050727
+2026-11-14T09:42:39.809431Z  WARN manuk_layout: LAYOUT PHASES nodes=4813 total_ms=1.617676 measure_ms=0.0 measure_n=0 measure_hits=518 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=1.475617 taffy_n=3 abs_ms=0.09511 worst_solve_probes=331 worst_solve_node=Some(NodeId(1601)) unattributed_ms=0.046949
+ACT dispatch +100ms
+2026-11-14T09:42:40.011580Z  WARN manuk_layout: LAYOUT PHASES nodes=5938 total_ms=68.080714 measure_ms=0.0 measure_n=0 measure_hits=18404 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=66.937016 taffy_n=3 abs_ms=1.08143 worst_solve_probes=17839 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.062268
+2026-11-14T09:42:40.123257Z  WARN manuk_layout: LAYOUT PHASES nodes=6006 total_ms=68.710008 measure_ms=0.0 measure_n=0 measure_hits=18980 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=67.03438 taffy_n=3 abs_ms=1.612507 worst_solve_probes=18351 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.063121
+2026-11-14T09:42:40.215860Z  WARN manuk_layout: LAYOUT PHASES nodes=6006 total_ms=71.792881 measure_ms=0.0 measure_n=0 measure_hits=18980 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=70.047813 taffy_n=3 abs_ms=1.663413 worst_solve_probes=18351 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.081655
+2026-11-14T09:42:40.425596Z  WARN manuk_layout: LAYOUT PHASES nodes=6006 total_ms=74.832323 measure_ms=0.0 measure_n=0 measure_hits=20018 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=73.100168 taffy_n=3 abs_ms=1.643536 worst_solve_probes=19389 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.088619
+ACT settle +717ms
+ACT effect-diff +724ms
+### run 1 step click:apply 1079ms
+### run 2
+manuk-mcp: agent profile=full
+2026-11-14T09:42:40.795334Z  INFO serve_inner: rmcp::service: Service initialized as server peer_info=Some(InitializeRequestParams { meta: None, protocol_version: ProtocolVersion("2025-03-26"), capabilities: ClientCapabilities { experimental: None, extensions: None, roots: None, sampling: None, elicitation: None }, client_info: Implementation { name: "t", title: None, version: "0", description: None, icons: None, website_url: None } })
+2026-11-14T09:42:40.795458Z  INFO serve_inner: rmcp::service: received notification notification=InitializedNotification(NotificationNoParam { method: InitializedNotificationMethod, extensions: Extensions })
+2026-11-14T09:42:40.795533Z  INFO serve_inner: rmcp::handler::server: client initialized
+2026-11-14T09:42:40.992441Z  INFO manuk_agent: agent phase done: fetch html + prewarm js ms=184
+2026-11-14T09:42:40.992981Z  INFO manuk_page: load phase done phase="html parse" ms=0 gave_up=0 elapsed_ms=0
+2026-11-14T09:42:41.159246Z  INFO manuk_page: load phase done phase="external scripts" ms=166 gave_up=0 elapsed_ms=166
+2026-11-14T09:42:41.159281Z  INFO manuk_page: load phase done phase="module graph prefetch" ms=0 gave_up=0 elapsed_ms=166
+2026-11-14T09:42:41.159295Z  INFO manuk_page: load phase done phase="blocking stylesheets" ms=0 gave_up=0 elapsed_ms=166
+2026-11-14T09:42:41.160204Z  WARN manuk_layout: LAYOUT PHASES nodes=68 total_ms=0.331448 measure_ms=0.0 measure_n=0 measure_hits=4 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=0.301852 taffy_n=1 abs_ms=0.003878 worst_solve_probes=4 worst_solve_node=Some(NodeId(39)) unattributed_ms=0.025718
+2026-11-14T09:42:41.177949Z  WARN manuk_layout: LAYOUT PHASES nodes=71 total_ms=0.082437 measure_ms=0.0 measure_n=0 measure_hits=4 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=0.065704 taffy_n=1 abs_ms=0.003217 worst_solve_probes=4 worst_solve_node=Some(NodeId(39)) unattributed_ms=0.013516
+2026-11-14T09:42:41.178017Z  INFO manuk_page: load phase done phase="cascade+layout+blocking scripts" ms=18 gave_up=0 elapsed_ms=185
+2026-11-14T09:42:41.178515Z  WARN manuk_layout: LAYOUT PHASES nodes=71 total_ms=0.052891 measure_ms=0.0 measure_n=0 measure_hits=4 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=0.039965 taffy_n=1 abs_ms=0.002494 worst_solve_probes=4 worst_solve_node=Some(NodeId(39)) unattributed_ms=0.010432
+2026-11-14T09:42:41.339874Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:41.347547Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:41.357012Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:41.928363Z  WARN manuk_layout: LAYOUT PHASES nodes=1480 total_ms=7.175602 measure_ms=0.0 measure_n=0 measure_hits=762 min_content_ms=0.0 min_content_n=0 max_content_ms=0.083308 max_content_n=1 taffy_ms=6.461036 taffy_n=8 abs_ms=0.17411 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.457148
+2026-11-14T09:42:41.928920Z  INFO manuk_page: load phase done phase="deferred scripts" ms=750 gave_up=0 elapsed_ms=936
+2026-11-14T09:42:41.930549Z  INFO manuk_page: load phase done phase="DOMContentLoaded" ms=1 gave_up=0 elapsed_ms=938
+2026-11-14T09:42:42.288617Z  WARN manuk_layout: LAYOUT PHASES nodes=1480 total_ms=4.592566 measure_ms=0.0 measure_n=0 measure_hits=762 min_content_ms=0.0 min_content_n=0 max_content_ms=0.041078 max_content_n=1 taffy_ms=4.149545 taffy_n=8 abs_ms=0.167258 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.234685
+2026-11-14T09:42:42.290018Z  INFO manuk_page: load phase done phase="subframes (pre-load)" ms=359 gave_up=0 elapsed_ms=1297
+2026-11-14T09:42:42.391066Z  WARN manuk_layout: LAYOUT PHASES nodes=1480 total_ms=4.793576 measure_ms=0.0 measure_n=0 measure_hits=739 min_content_ms=0.0 min_content_n=0 max_content_ms=0.044204 max_content_n=1 taffy_ms=4.278891 taffy_n=8 abs_ms=0.175532 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.294949
+2026-11-14T09:42:42.392499Z  INFO manuk_page: load phase done phase="initial images+masks" ms=102 gave_up=0 elapsed_ms=1399
+2026-11-14T09:42:42.404483Z  INFO manuk_page: load phase done phase="load event" ms=11 gave_up=0 elapsed_ms=1411
+2026-11-14T09:42:42.404501Z  INFO manuk_page: navigation phases reconciled (load_async; finish_loading keeps its own ledger) total_ms=1411 accounted_ms=1407 unaccounted_ms=4
+2026-11-14T09:42:42.418419Z  WARN manuk_layout: LAYOUT PHASES nodes=1480 total_ms=4.331952 measure_ms=0.0 measure_n=0 measure_hits=731 min_content_ms=0.0 min_content_n=0 max_content_ms=0.040877 max_content_n=1 taffy_ms=3.905152 taffy_n=7 abs_ms=0.14743 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.238493
+2026-11-14T09:42:42.448420Z  INFO manuk_page: load phase done phase="external CSS" ms=43 gave_up=0 elapsed_ms=43
+2026-11-14T09:42:42.505613Z  WARN manuk_layout: LAYOUT PHASES nodes=1480 total_ms=4.474282 measure_ms=0.0 measure_n=0 measure_hits=731 min_content_ms=0.0 min_content_n=0 max_content_ms=0.040366 max_content_n=1 taffy_ms=3.912716 taffy_n=7 abs_ms=0.147369 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.373831
+2026-11-14T09:42:42.536368Z  INFO manuk_page: load phase done phase="dynamic scripts" ms=87 gave_up=0 elapsed_ms=131
+2026-11-14T09:42:42.536503Z  INFO manuk_page: load phase done phase="subframes" ms=0 gave_up=0 elapsed_ms=131
+2026-11-14T09:42:42.536618Z  INFO manuk_page: load phase done phase="page fetches" ms=0 gave_up=0 elapsed_ms=132
+2026-11-14T09:42:42.536725Z  INFO manuk_page: load phase done phase="images" ms=0 gave_up=0 elapsed_ms=132
+2026-11-14T09:42:42.536734Z  INFO manuk_page: load phase done phase="icon masks" ms=0 gave_up=0 elapsed_ms=132
+2026-11-14T09:42:42.536765Z  INFO manuk_page: load phase done phase="background images" ms=0 gave_up=0 elapsed_ms=132
+2026-11-14T09:42:42.537853Z  INFO manuk_agent: agent phase done: service websockets ms=0
+### run 2 step navigate 1980ms
+2026-11-14T09:42:42.783449Z  WARN manuk_layout: LAYOUT PHASES nodes=1482 total_ms=4.411012 measure_ms=0.0 measure_n=0 measure_hits=731 min_content_ms=0.0 min_content_n=0 max_content_ms=0.040577 max_content_n=1 taffy_ms=3.928208 taffy_n=7 abs_ms=0.157709 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.284518
+2026-11-14T09:42:42.806737Z  WARN manuk_layout: LAYOUT PHASES nodes=1482 total_ms=4.579411 measure_ms=0.0 measure_n=0 measure_hits=731 min_content_ms=0.0 min_content_n=0 max_content_ms=0.040727 max_content_n=1 taffy_ms=3.957081 taffy_n=7 abs_ms=0.14763 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.433973
+2026-11-14T09:42:42.816727Z  WARN manuk_layout: LAYOUT PHASES nodes=1482 total_ms=4.177088 measure_ms=0.0 measure_n=0 measure_hits=731 min_content_ms=0.0 min_content_n=0 max_content_ms=0.038914 max_content_n=1 taffy_ms=3.769185 taffy_n=7 abs_ms=0.146918 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.222071
+2026-11-14T09:42:42.820437Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:42.838271Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.614357 measure_ms=0.0 measure_n=0 measure_hits=754 min_content_ms=0.0 min_content_n=0 max_content_ms=0.040026 max_content_n=1 taffy_ms=3.977028 taffy_n=7 abs_ms=0.149073 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.44823
+2026-11-14T09:42:42.841610Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:42.849294Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.291115 measure_ms=0.0 measure_n=0 measure_hits=754 min_content_ms=0.0 min_content_n=0 max_content_ms=0.038654 max_content_n=1 taffy_ms=3.880776 taffy_n=7 abs_ms=0.149353 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.222332
+2026-11-14T09:42:42.852516Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:42.860174Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.309509 measure_ms=0.0 measure_n=0 measure_hits=754 min_content_ms=0.0 min_content_n=0 max_content_ms=0.039385 max_content_n=1 taffy_ms=3.895935 taffy_n=7 abs_ms=0.146848 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.227341
+2026-11-14T09:42:42.863327Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:42.870926Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.27817 measure_ms=0.0 measure_n=0 measure_hits=754 min_content_ms=0.0 min_content_n=0 max_content_ms=0.039906 max_content_n=1 taffy_ms=3.832395 taffy_n=7 abs_ms=0.161676 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.244193
+2026-11-14T09:42:42.874071Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:42.881622Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.271287 measure_ms=0.0 measure_n=0 measure_hits=754 min_content_ms=0.0 min_content_n=0 max_content_ms=0.039715 max_content_n=1 taffy_ms=3.86153 taffy_n=7 abs_ms=0.149494 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.220548
+2026-11-14T09:42:42.884882Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:42.892221Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.312975 measure_ms=0.0 measure_n=0 measure_hits=754 min_content_ms=0.0 min_content_n=0 max_content_ms=0.040056 max_content_n=1 taffy_ms=3.900894 taffy_n=7 abs_ms=0.148592 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.223433
+2026-11-14T09:42:42.895376Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:42.902705Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.263362 measure_ms=0.0 measure_n=0 measure_hits=754 min_content_ms=0.0 min_content_n=0 max_content_ms=0.043112 max_content_n=1 taffy_ms=3.853264 taffy_n=7 abs_ms=0.148121 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.218865
+2026-11-14T09:42:42.905749Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:42.913411Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.255617 measure_ms=0.0 measure_n=0 measure_hits=754 min_content_ms=0.0 min_content_n=0 max_content_ms=0.039725 max_content_n=1 taffy_ms=3.848887 taffy_n=7 abs_ms=0.14773 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.219275
+2026-11-14T09:42:42.916484Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:42.923696Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.258152 measure_ms=0.0 measure_n=0 measure_hits=754 min_content_ms=0.0 min_content_n=0 max_content_ms=0.038964 max_content_n=1 taffy_ms=3.852763 taffy_n=7 abs_ms=0.148081 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.218344
+2026-11-14T09:42:42.926769Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:42.934052Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.256088 measure_ms=0.0 measure_n=0 measure_hits=754 min_content_ms=0.0 min_content_n=0 max_content_ms=0.040026 max_content_n=1 taffy_ms=3.846681 taffy_n=7 abs_ms=0.148141 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.22124
+2026-11-14T09:42:42.937028Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:42.944256Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.264503 measure_ms=0.0 measure_n=0 measure_hits=754 min_content_ms=0.0 min_content_n=0 max_content_ms=0.039374 max_content_n=1 taffy_ms=3.859795 taffy_n=7 abs_ms=0.14811 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.217224
+2026-11-14T09:42:42.947254Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:42.954312Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.254936 measure_ms=0.0 measure_n=0 measure_hits=754 min_content_ms=0.0 min_content_n=0 max_content_ms=0.039675 max_content_n=1 taffy_ms=3.850579 taffy_n=7 abs_ms=0.147059 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.217623
+2026-11-14T09:42:42.957280Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:42.964383Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.298648 measure_ms=0.0 measure_n=0 measure_hits=762 min_content_ms=0.0 min_content_n=0 max_content_ms=0.039775 max_content_n=1 taffy_ms=3.894713 taffy_n=7 abs_ms=0.148061 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.216099
+2026-11-14T09:42:42.970917Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.272619 measure_ms=0.0 measure_n=0 measure_hits=762 min_content_ms=0.0 min_content_n=0 max_content_ms=0.039896 max_content_n=1 taffy_ms=3.835461 taffy_n=7 abs_ms=0.159473 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.237789
+2026-11-14T09:42:42.979538Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.269674 measure_ms=0.0 measure_n=0 measure_hits=762 min_content_ms=0.0 min_content_n=0 max_content_ms=0.039765 max_content_n=1 taffy_ms=3.869696 taffy_n=7 abs_ms=0.146859 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.213354
+### run 2 step type 412ms
+2026-11-14T09:42:43.208967Z  WARN manuk_layout: LAYOUT PHASES nodes=1488 total_ms=4.577978 measure_ms=0.0 measure_n=0 measure_hits=762 min_content_ms=0.0 min_content_n=0 max_content_ms=0.04253 max_content_n=1 taffy_ms=4.054969 taffy_n=7 abs_ms=0.168679 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.3118
+ACT tree+resolve +2ms
+ACT snapshot +2ms
+2026-11-14T09:42:43.275241Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:43.296402Z  WARN manuk_layout: LAYOUT PHASES nodes=1505 total_ms=4.443814 measure_ms=0.0 measure_n=0 measure_hits=785 min_content_ms=0.0 min_content_n=0 max_content_ms=0.040146 max_content_n=1 taffy_ms=4.016024 taffy_n=7 abs_ms=0.152129 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.235515
+2026-11-14T09:42:43.299837Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:43.355912Z  WARN manuk_layout: LAYOUT PHASES nodes=1511 total_ms=0.143562 measure_ms=0.0 measure_n=0 measure_hits=4 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=0.106322 taffy_n=1 abs_ms=0.008286 worst_solve_probes=4 worst_solve_node=Some(NodeId(1510)) unattributed_ms=0.028954
+2026-11-14T09:42:43.360559Z  WARN manuk_layout: LAYOUT PHASES nodes=1512 total_ms=0.144965 measure_ms=0.0 measure_n=0 measure_hits=4 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=0.049233 taffy_n=1 abs_ms=0.016131 worst_solve_probes=4 worst_solve_node=Some(NodeId(1510)) unattributed_ms=0.079601
+2026-11-14T09:42:43.391531Z  WARN manuk_layout: LAYOUT PHASES nodes=1512 total_ms=0.133944 measure_ms=0.0 measure_n=0 measure_hits=4 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=0.075643 taffy_n=1 abs_ms=0.016451 worst_solve_probes=4 worst_solve_node=Some(NodeId(1510)) unattributed_ms=0.04185
+ACT dispatch +178ms
+2026-11-14T09:42:45.649222Z  WARN manuk_layout: LAYOUT PHASES nodes=4461 total_ms=182.471585 measure_ms=0.0 measure_n=0 measure_hits=45338 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=179.323167 taffy_n=3 abs_ms=2.993975 worst_solve_probes=44663 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.154443
+2026-11-14T09:42:45.653820Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=17 layout_ms=182 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4461 caller=engine/page/src/lib.rs:2518
+2026-11-14T09:42:45.660892Z  INFO manuk_page: SLOW FORCED REFLOW — one geometry read laid out the whole document total_ms=213 sheets_ms=3 n_sheets=10 layout_ms=210 rects_ms=0 n_rects=1894 publish_ms=0 nodes=4461
+2026-11-14T09:42:45.931876Z  WARN manuk_layout: LAYOUT PHASES nodes=4635 total_ms=173.048603 measure_ms=0.0 measure_n=0 measure_hits=46866 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=168.721651 taffy_n=3 abs_ms=4.243664 worst_solve_probes=45997 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.083288
+2026-11-14T09:42:45.938744Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=17 layout_ms=173 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4635 caller=engine/page/src/lib.rs:2518
+2026-11-14T09:42:45.947721Z  INFO manuk_page: SLOW FORCED REFLOW — one geometry read laid out the whole document total_ms=207 sheets_ms=3 n_sheets=10 layout_ms=204 rects_ms=0 n_rects=2068 publish_ms=0 nodes=4635
+2026-11-14T09:42:45.953256Z  WARN manuk_page: load budget exhausted with page fetches still in flight round=0
+2026-11-14T09:42:46.158936Z  WARN manuk_layout: LAYOUT PHASES nodes=4635 total_ms=186.326423 measure_ms=0.0 measure_n=0 measure_hits=46866 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=181.777699 taffy_n=3 abs_ms=4.416152 worst_solve_probes=45997 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.132572
+2026-11-14T09:42:46.162251Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=18 layout_ms=186 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4635 caller=engine/page/src/lib.rs:5653
+ACT settle +2948ms
+ACT effect-diff +2965ms
+2026-11-14T09:42:46.553153Z  WARN manuk_layout: LAYOUT PHASES nodes=4635 total_ms=190.441494 measure_ms=0.0 measure_n=0 measure_hits=48726 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=185.87118 taffy_n=3 abs_ms=4.466316 worst_solve_probes=47857 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.103998
+2026-11-14T09:42:46.557002Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=0 layout_ms=191 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4635 caller=engine/page/src/lib.rs:7223
+### run 2 step click:Start search 4071ms
+2026-11-14T09:42:47.491100Z  WARN manuk_layout: LAYOUT PHASES nodes=4637 total_ms=181.052126 measure_ms=0.0 measure_n=0 measure_hits=48726 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=176.753156 taffy_n=3 abs_ms=4.206293 worst_solve_probes=47857 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.092677
+2026-11-14T09:42:47.494559Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=0 layout_ms=181 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4637 caller=engine/page/src/lib.rs:5653
+ACT tree+resolve +12ms
+ACT snapshot +13ms
+2026-11-14T09:42:48.369982Z  WARN manuk_layout: LAYOUT PHASES nodes=4757 total_ms=191.730858 measure_ms=0.0 measure_n=0 measure_hits=49218 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=186.158666 taffy_n=3 abs_ms=5.493894 worst_solve_probes=47857 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.078298
+2026-11-14T09:42:48.377211Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=19 layout_ms=191 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4757 caller=engine/page/src/lib.rs:2518
+2026-11-14T09:42:48.384771Z  INFO manuk_page: SLOW FORCED REFLOW — one geometry read laid out the whole document total_ms=228 sheets_ms=3 n_sheets=10 layout_ms=224 rects_ms=0 n_rects=2116 publish_ms=0 nodes=4757
+2026-11-14T09:42:48.667457Z  WARN manuk_layout: LAYOUT PHASES nodes=4757 total_ms=183.653196 measure_ms=0.0 measure_n=0 measure_hits=49218 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=178.33771 taffy_n=3 abs_ms=5.234763 worst_solve_probes=47857 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.080723
+2026-11-14T09:42:48.672323Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=14 layout_ms=183 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4757 caller=engine/page/src/lib.rs:2518
+2026-11-14T09:42:48.680859Z  INFO manuk_page: SLOW FORCED REFLOW — one geometry read laid out the whole document total_ms=214 sheets_ms=3 n_sheets=10 layout_ms=210 rects_ms=0 n_rects=2116 publish_ms=0 nodes=4757
+2026-11-14T09:42:48.932359Z  WARN manuk_layout: LAYOUT PHASES nodes=4757 total_ms=186.940257 measure_ms=0.0 measure_n=0 measure_hits=49218 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=181.388303 taffy_n=3 abs_ms=5.463808 worst_solve_probes=47857 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.088146
+2026-11-14T09:42:48.937655Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=14 layout_ms=187 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4757 caller=engine/page/src/lib.rs:2518
+2026-11-14T09:42:48.946136Z  INFO manuk_page: SLOW FORCED REFLOW — one geometry read laid out the whole document total_ms=217 sheets_ms=3 n_sheets=10 layout_ms=214 rects_ms=0 n_rects=2116 publish_ms=0 nodes=4757
+2026-11-14T09:42:49.159015Z  WARN manuk_layout: LAYOUT PHASES nodes=4771 total_ms=180.082417 measure_ms=0.0 measure_n=0 measure_hits=49272 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=174.814783 taffy_n=3 abs_ms=5.175521 worst_solve_probes=47857 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.092113
+2026-11-14T09:42:49.163561Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=15 layout_ms=180 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4771 caller=engine/page/src/lib.rs:10052
+2026-11-14T09:42:49.387025Z  WARN manuk_layout: LAYOUT PHASES nodes=4771 total_ms=192.87599 measure_ms=0.0 measure_n=0 measure_hits=49272 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=187.212244 taffy_n=3 abs_ms=5.566912 worst_solve_probes=47857 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.096834
+2026-11-14T09:42:49.391070Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=0 layout_ms=193 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4771 caller=engine/page/src/lib.rs:7223
+2026-11-14T09:42:49.593834Z  WARN manuk_layout: LAYOUT PHASES nodes=4771 total_ms=179.095868 measure_ms=0.0 measure_n=0 measure_hits=47412 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=173.701371 taffy_n=3 abs_ms=5.242618 worst_solve_probes=45997 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.151879
+2026-11-14T09:42:49.597742Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=0 layout_ms=179 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4771 caller=engine/page/src/lib.rs:11441
+ACT dispatch +2086ms
+ACT settle +2112ms
+ACT effect-diff +2119ms
+### run 2 step click:Beds & Baths 2832ms
+2026-11-14T09:42:50.547912Z  WARN manuk_layout: LAYOUT PHASES nodes=4773 total_ms=175.761667 measure_ms=0.0 measure_n=0 measure_hits=47412 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=170.389864 taffy_n=3 abs_ms=5.28607 worst_solve_probes=45997 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.085733
+2026-11-14T09:42:50.551791Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=0 layout_ms=176 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4773 caller=engine/page/src/lib.rs:5653
+ACT tree+resolve +5ms
+ACT snapshot +6ms
+2026-11-14T09:42:51.054336Z  WARN manuk_layout: LAYOUT PHASES nodes=4777 total_ms=175.719077 measure_ms=0.0 measure_n=0 measure_hits=47412 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=170.190286 taffy_n=3 abs_ms=5.453948 worst_solve_probes=45997 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.074843
+2026-11-14T09:42:51.061625Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=16 layout_ms=175 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4777 caller=engine/page/src/lib.rs:2518
+2026-11-14T09:42:51.069038Z  INFO manuk_page: SLOW FORCED REFLOW — one geometry read laid out the whole document total_ms=206 sheets_ms=3 n_sheets=10 layout_ms=202 rects_ms=0 n_rects=2132 publish_ms=0 nodes=4777
+2026-11-14T09:42:51.343540Z  WARN manuk_layout: LAYOUT PHASES nodes=4777 total_ms=181.627427 measure_ms=0.0 measure_n=0 measure_hits=47412 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=176.025137 taffy_n=3 abs_ms=5.50719 worst_solve_probes=45997 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.0951
+2026-11-14T09:42:51.347264Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=0 layout_ms=182 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4777 caller=engine/page/src/lib.rs:5653
+ACT dispatch +786ms
+ACT settle +879ms
+ACT effect-diff +886ms
+### run 2 step click:exact 1615ms
+ACT tree+resolve +8ms
+ACT snapshot +8ms
+2026-11-14T09:42:52.902479Z  WARN manuk_layout: LAYOUT PHASES nodes=4796 total_ms=182.292478 measure_ms=0.0 measure_n=0 measure_hits=47412 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=176.661695 taffy_n=3 abs_ms=5.545191 worst_solve_probes=45997 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.085592
+2026-11-14T09:42:52.909730Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=16 layout_ms=182 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4796 caller=engine/page/src/lib.rs:2518
+2026-11-14T09:42:52.917164Z  INFO manuk_page: SLOW FORCED REFLOW — one geometry read laid out the whole document total_ms=214 sheets_ms=3 n_sheets=10 layout_ms=209 rects_ms=0 n_rects=2132 publish_ms=0 nodes=4796
+2026-11-14T09:42:53.161835Z  WARN manuk_layout: LAYOUT PHASES nodes=4796 total_ms=187.116283 measure_ms=0.0 measure_n=0 measure_hits=47412 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=181.179439 taffy_n=3 abs_ms=5.83986 worst_solve_probes=45997 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.096984
+2026-11-14T09:42:53.165902Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=0 layout_ms=187 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4796 caller=engine/page/src/lib.rs:5653
+ACT dispatch +990ms
+ACT settle +1018ms
+ACT effect-diff +1025ms
+### run 2 step click:beds3+ 1744ms
+ACT tree+resolve +6ms
+ACT snapshot +6ms
+2026-11-14T09:42:54.371368Z  WARN manuk_layout: LAYOUT PHASES nodes=4800 total_ms=179.565549 measure_ms=0.0 measure_n=0 measure_hits=47412 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=173.959532 taffy_n=3 abs_ms=5.524062 worst_solve_probes=45997 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.081955
+2026-11-14T09:42:54.376389Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=16 layout_ms=179 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4800 caller=engine/page/src/lib.rs:2518
+2026-11-14T09:42:54.383689Z  INFO manuk_page: SLOW FORCED REFLOW — one geometry read laid out the whole document total_ms=208 sheets_ms=3 n_sheets=10 layout_ms=204 rects_ms=0 n_rects=2132 publish_ms=0 nodes=4800
+2026-11-14T09:42:54.624655Z  WARN manuk_layout: LAYOUT PHASES nodes=4800 total_ms=184.340411 measure_ms=0.0 measure_n=0 measure_hits=47412 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=178.514528 taffy_n=3 abs_ms=5.706879 worst_solve_probes=45997 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.119004
+2026-11-14T09:42:54.628541Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=0 layout_ms=185 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4800 caller=engine/page/src/lib.rs:5653
+ACT dispatch +708ms
+ACT settle +735ms
+ACT effect-diff +742ms
+### run 2 step click:baths2+ 1462ms
+2026-11-14T09:42:55.588811Z  WARN manuk_layout: LAYOUT PHASES nodes=4802 total_ms=178.624366 measure_ms=0.0 measure_n=0 measure_hits=47412 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=173.564555 taffy_n=3 abs_ms=4.974279 worst_solve_probes=45997 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.085532
+2026-11-14T09:42:55.592857Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=0 layout_ms=179 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4802 caller=engine/page/src/lib.rs:5653
+ACT tree+resolve +5ms
+ACT snapshot +6ms
+2026-11-14T09:42:55.681944Z  WARN manuk_layout: LAYOUT PHASES nodes=4813 total_ms=2.761866 measure_ms=0.0 measure_n=0 measure_hits=1064 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=1.606536 taffy_n=3 abs_ms=1.093894 worst_solve_probes=331 worst_solve_node=Some(NodeId(1601)) unattributed_ms=0.061436
+2026-11-14T09:42:55.699899Z  WARN manuk_layout: LAYOUT PHASES nodes=4813 total_ms=2.696431 measure_ms=0.0 measure_n=0 measure_hits=1064 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=1.574214 taffy_n=3 abs_ms=1.065089 worst_solve_probes=331 worst_solve_node=Some(NodeId(1601)) unattributed_ms=0.057128
+2026-11-14T09:42:55.707465Z  WARN manuk_layout: LAYOUT PHASES nodes=4813 total_ms=1.722575 measure_ms=0.0 measure_n=0 measure_hits=518 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=1.568173 taffy_n=3 abs_ms=0.100311 worst_solve_probes=331 worst_solve_node=Some(NodeId(1601)) unattributed_ms=0.054091
+2026-11-14T09:42:55.712721Z  WARN manuk_layout: LAYOUT PHASES nodes=4813 total_ms=1.620593 measure_ms=0.0 measure_n=0 measure_hits=518 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=1.476159 taffy_n=3 abs_ms=0.096673 worst_solve_probes=331 worst_solve_node=Some(NodeId(1601)) unattributed_ms=0.047761
+ACT dispatch +114ms
+2026-11-14T09:42:55.921049Z  WARN manuk_layout: LAYOUT PHASES nodes=5938 total_ms=69.502911 measure_ms=0.0 measure_n=0 measure_hits=18404 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=68.300544 taffy_n=3 abs_ms=1.136394 worst_solve_probes=17839 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.065973
+2026-11-14T09:42:56.036539Z  WARN manuk_layout: LAYOUT PHASES nodes=6006 total_ms=70.232074 measure_ms=0.0 measure_n=0 measure_hits=18980 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=68.57832 taffy_n=3 abs_ms=1.588942 worst_solve_probes=18351 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.064812
+2026-11-14T09:42:56.128497Z  WARN manuk_layout: LAYOUT PHASES nodes=6006 total_ms=71.878605 measure_ms=0.0 measure_n=0 measure_hits=18980 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=70.131474 taffy_n=3 abs_ms=1.664785 worst_solve_probes=18351 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.082346
+2026-11-14T09:42:56.268977Z  WARN manuk_layout: LAYOUT PHASES nodes=6006 total_ms=76.10634 measure_ms=0.0 measure_n=0 measure_hits=20018 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=74.344029 taffy_n=3 abs_ms=1.675938 worst_solve_probes=19389 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.086373
+ACT settle +671ms
+ACT effect-diff +678ms
+### run 2 step click:apply 1033ms
+### run 3
+manuk-mcp: agent profile=full
+2026-11-14T09:42:56.639228Z  INFO serve_inner: rmcp::service: Service initialized as server peer_info=Some(InitializeRequestParams { meta: None, protocol_version: ProtocolVersion("2025-03-26"), capabilities: ClientCapabilities { experimental: None, extensions: None, roots: None, sampling: None, elicitation: None }, client_info: Implementation { name: "t", title: None, version: "0", description: None, icons: None, website_url: None } })
+2026-11-14T09:42:56.639368Z  INFO serve_inner: rmcp::service: received notification notification=InitializedNotification(NotificationNoParam { method: InitializedNotificationMethod, extensions: Extensions })
+2026-11-14T09:42:56.639442Z  INFO serve_inner: rmcp::handler::server: client initialized
+2026-11-14T09:42:56.769692Z  INFO manuk_agent: agent phase done: fetch html + prewarm js ms=117
+2026-11-14T09:42:56.770217Z  INFO manuk_page: load phase done phase="html parse" ms=0 gave_up=0 elapsed_ms=0
+2026-11-14T09:42:56.979923Z  INFO manuk_page: load phase done phase="external scripts" ms=209 gave_up=0 elapsed_ms=210
+2026-11-14T09:42:56.979963Z  INFO manuk_page: load phase done phase="module graph prefetch" ms=0 gave_up=0 elapsed_ms=210
+2026-11-14T09:42:56.979978Z  INFO manuk_page: load phase done phase="blocking stylesheets" ms=0 gave_up=0 elapsed_ms=210
+2026-11-14T09:42:56.980899Z  WARN manuk_layout: LAYOUT PHASES nodes=68 total_ms=0.351467 measure_ms=0.0 measure_n=0 measure_hits=4 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=0.324736 taffy_n=1 abs_ms=0.003516 worst_solve_probes=4 worst_solve_node=Some(NodeId(39)) unattributed_ms=0.023215
+2026-11-14T09:42:56.998380Z  WARN manuk_layout: LAYOUT PHASES nodes=71 total_ms=0.085963 measure_ms=0.0 measure_n=0 measure_hits=4 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=0.06869 taffy_n=1 abs_ms=0.003306 worst_solve_probes=4 worst_solve_node=Some(NodeId(39)) unattributed_ms=0.013967
+2026-11-14T09:42:56.998462Z  INFO manuk_page: load phase done phase="cascade+layout+blocking scripts" ms=18 gave_up=0 elapsed_ms=228
+2026-11-14T09:42:56.998955Z  WARN manuk_layout: LAYOUT PHASES nodes=71 total_ms=0.052189 measure_ms=0.0 measure_n=0 measure_hits=4 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=0.039435 taffy_n=1 abs_ms=0.003015 worst_solve_probes=4 worst_solve_node=Some(NodeId(39)) unattributed_ms=0.009739
+2026-11-14T09:42:57.160408Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:57.168096Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:57.177439Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:57.753454Z  WARN manuk_layout: LAYOUT PHASES nodes=1480 total_ms=7.145816 measure_ms=0.0 measure_n=0 measure_hits=762 min_content_ms=0.0 min_content_n=0 max_content_ms=0.084551 max_content_n=1 taffy_ms=6.429167 taffy_n=8 abs_ms=0.173519 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.458579
+2026-11-14T09:42:57.754057Z  INFO manuk_page: load phase done phase="deferred scripts" ms=755 gave_up=0 elapsed_ms=984
+2026-11-14T09:42:57.755726Z  INFO manuk_page: load phase done phase="DOMContentLoaded" ms=1 gave_up=0 elapsed_ms=985
+2026-11-14T09:42:58.116308Z  WARN manuk_layout: LAYOUT PHASES nodes=1480 total_ms=4.589069 measure_ms=0.0 measure_n=0 measure_hits=762 min_content_ms=0.0 min_content_n=0 max_content_ms=0.039926 max_content_n=1 taffy_ms=4.144738 taffy_n=8 abs_ms=0.170713 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.233692
+2026-11-14T09:42:58.117756Z  INFO manuk_page: load phase done phase="subframes (pre-load)" ms=362 gave_up=0 elapsed_ms=1347
+2026-11-14T09:42:58.220914Z  WARN manuk_layout: LAYOUT PHASES nodes=1480 total_ms=4.724826 measure_ms=0.0 measure_n=0 measure_hits=739 min_content_ms=0.0 min_content_n=0 max_content_ms=0.041939 max_content_n=1 taffy_ms=4.201647 taffy_n=8 abs_ms=0.182796 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.298444
+2026-11-14T09:42:58.222363Z  INFO manuk_page: load phase done phase="initial images+masks" ms=104 gave_up=0 elapsed_ms=1452
+2026-11-14T09:42:58.234586Z  INFO manuk_page: load phase done phase="load event" ms=12 gave_up=0 elapsed_ms=1464
+2026-11-14T09:42:58.234611Z  INFO manuk_page: navigation phases reconciled (load_async; finish_loading keeps its own ledger) total_ms=1464 accounted_ms=1461 unaccounted_ms=3
+2026-11-14T09:42:58.248923Z  WARN manuk_layout: LAYOUT PHASES nodes=1480 total_ms=4.370495 measure_ms=0.0 measure_n=0 measure_hits=731 min_content_ms=0.0 min_content_n=0 max_content_ms=0.04219 max_content_n=1 taffy_ms=3.915671 taffy_n=7 abs_ms=0.162127 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.250507
+2026-11-14T09:42:58.279057Z  INFO manuk_page: load phase done phase="external CSS" ms=44 gave_up=0 elapsed_ms=44
+2026-11-14T09:42:58.344157Z  WARN manuk_layout: LAYOUT PHASES nodes=1480 total_ms=4.393859 measure_ms=0.0 measure_n=0 measure_hits=731 min_content_ms=0.0 min_content_n=0 max_content_ms=0.040377 max_content_n=1 taffy_ms=3.953274 taffy_n=7 abs_ms=0.148291 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.251917
+2026-11-14T09:42:58.374698Z  INFO manuk_page: load phase done phase="dynamic scripts" ms=95 gave_up=0 elapsed_ms=140
+2026-11-14T09:42:58.374838Z  INFO manuk_page: load phase done phase="subframes" ms=0 gave_up=0 elapsed_ms=140
+2026-11-14T09:42:58.374943Z  INFO manuk_page: load phase done phase="page fetches" ms=0 gave_up=0 elapsed_ms=140
+2026-11-14T09:42:58.375049Z  INFO manuk_page: load phase done phase="images" ms=0 gave_up=0 elapsed_ms=140
+2026-11-14T09:42:58.375058Z  INFO manuk_page: load phase done phase="icon masks" ms=0 gave_up=0 elapsed_ms=140
+2026-11-14T09:42:58.375088Z  INFO manuk_page: load phase done phase="background images" ms=0 gave_up=0 elapsed_ms=140
+2026-11-14T09:42:58.376106Z  INFO manuk_agent: agent phase done: service websockets ms=0
+### run 3 step navigate 1977ms
+2026-11-14T09:42:58.624361Z  WARN manuk_layout: LAYOUT PHASES nodes=1482 total_ms=4.540877 measure_ms=0.0 measure_n=0 measure_hits=731 min_content_ms=0.0 min_content_n=0 max_content_ms=0.04225 max_content_n=1 taffy_ms=4.035389 taffy_n=7 abs_ms=0.167107 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.296131
+2026-11-14T09:42:58.648230Z  WARN manuk_layout: LAYOUT PHASES nodes=1482 total_ms=4.427904 measure_ms=0.0 measure_n=0 measure_hits=731 min_content_ms=0.0 min_content_n=0 max_content_ms=0.041188 max_content_n=1 taffy_ms=3.881738 taffy_n=7 abs_ms=0.160935 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.344043
+2026-11-14T09:42:58.658589Z  WARN manuk_layout: LAYOUT PHASES nodes=1482 total_ms=4.343484 measure_ms=0.0 measure_n=0 measure_hits=731 min_content_ms=0.0 min_content_n=0 max_content_ms=0.041559 max_content_n=1 taffy_ms=3.893151 taffy_n=7 abs_ms=0.153862 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.254912
+2026-11-14T09:42:58.662459Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:58.680739Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.514518 measure_ms=0.0 measure_n=0 measure_hits=754 min_content_ms=0.0 min_content_n=0 max_content_ms=0.041219 max_content_n=1 taffy_ms=3.963984 taffy_n=7 abs_ms=0.165003 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.344312
+2026-11-14T09:42:58.684251Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:58.692550Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.538764 measure_ms=0.0 measure_n=0 measure_hits=754 min_content_ms=0.0 min_content_n=0 max_content_ms=0.041118 max_content_n=1 taffy_ms=4.059294 taffy_n=7 abs_ms=0.165885 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.272467
+2026-11-14T09:42:58.695962Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:58.703961Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.500772 measure_ms=0.0 measure_n=0 measure_hits=754 min_content_ms=0.0 min_content_n=0 max_content_ms=0.042761 max_content_n=1 taffy_ms=4.011905 taffy_n=7 abs_ms=0.160645 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.285461
+2026-11-14T09:42:58.707353Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:58.715078Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.316763 measure_ms=0.0 measure_n=0 measure_hits=754 min_content_ms=0.0 min_content_n=0 max_content_ms=0.041289 max_content_n=1 taffy_ms=3.851803 taffy_n=7 abs_ms=0.155354 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.268317
+2026-11-14T09:42:58.718260Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:58.725988Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.38904 measure_ms=0.0 measure_n=0 measure_hits=754 min_content_ms=0.0 min_content_n=0 max_content_ms=0.040807 max_content_n=1 taffy_ms=3.943305 taffy_n=7 abs_ms=0.153351 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.251577
+2026-11-14T09:42:58.729284Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:58.736653Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.281255 measure_ms=0.0 measure_n=0 measure_hits=754 min_content_ms=0.0 min_content_n=0 max_content_ms=0.040727 max_content_n=1 taffy_ms=3.842824 taffy_n=7 abs_ms=0.151287 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.246417
+2026-11-14T09:42:58.739997Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:58.747496Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.285875 measure_ms=0.0 measure_n=0 measure_hits=754 min_content_ms=0.0 min_content_n=0 max_content_ms=0.040517 max_content_n=1 taffy_ms=3.849366 taffy_n=7 abs_ms=0.152199 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.243793
+2026-11-14T09:42:58.750579Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:58.758372Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.384601 measure_ms=0.0 measure_n=0 measure_hits=754 min_content_ms=0.0 min_content_n=0 max_content_ms=0.041348 max_content_n=1 taffy_ms=3.951171 taffy_n=7 abs_ms=0.149484 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.242598
+2026-11-14T09:42:58.761562Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:58.768864Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.258262 measure_ms=0.0 measure_n=0 measure_hits=754 min_content_ms=0.0 min_content_n=0 max_content_ms=0.039816 max_content_n=1 taffy_ms=3.81449 taffy_n=7 abs_ms=0.156526 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.24743
+2026-11-14T09:42:58.772129Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:58.779567Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.254605 measure_ms=0.0 measure_n=0 measure_hits=754 min_content_ms=0.0 min_content_n=0 max_content_ms=0.039906 max_content_n=1 taffy_ms=3.827516 taffy_n=7 abs_ms=0.148902 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.238281
+2026-11-14T09:42:58.782664Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:58.790031Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.332533 measure_ms=0.0 measure_n=0 measure_hits=754 min_content_ms=0.0 min_content_n=0 max_content_ms=0.040988 max_content_n=1 taffy_ms=3.808348 taffy_n=7 abs_ms=0.238682 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.244515
+2026-11-14T09:42:58.793131Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:58.800225Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.25142 measure_ms=0.0 measure_n=0 measure_hits=754 min_content_ms=0.0 min_content_n=0 max_content_ms=0.039695 max_content_n=1 taffy_ms=3.827395 taffy_n=7 abs_ms=0.148982 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.235348
+2026-11-14T09:42:58.803270Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:58.810460Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.361988 measure_ms=0.0 measure_n=0 measure_hits=762 min_content_ms=0.0 min_content_n=0 max_content_ms=0.040507 max_content_n=1 taffy_ms=3.937273 taffy_n=7 abs_ms=0.149463 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.234745
+2026-11-14T09:42:58.816973Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.258242 measure_ms=0.0 measure_n=0 measure_hits=762 min_content_ms=0.0 min_content_n=0 max_content_ms=0.040376 max_content_n=1 taffy_ms=3.838164 taffy_n=7 abs_ms=0.148632 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.23107
+2026-11-14T09:42:58.825820Z  WARN manuk_layout: LAYOUT PHASES nodes=1486 total_ms=4.342912 measure_ms=0.0 measure_n=0 measure_hits=762 min_content_ms=0.0 min_content_n=0 max_content_ms=0.039825 max_content_n=1 taffy_ms=3.914888 taffy_n=7 abs_ms=0.155264 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.232935
+### run 3 step type 419ms
+2026-11-14T09:42:59.057220Z  WARN manuk_layout: LAYOUT PHASES nodes=1488 total_ms=4.664513 measure_ms=0.0 measure_n=0 measure_hits=762 min_content_ms=0.0 min_content_n=0 max_content_ms=0.043021 max_content_n=1 taffy_ms=4.163062 taffy_n=7 abs_ms=0.170583 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.287847
+ACT tree+resolve +2ms
+ACT snapshot +2ms
+2026-11-14T09:42:59.124439Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:59.146556Z  WARN manuk_layout: LAYOUT PHASES nodes=1505 total_ms=4.504278 measure_ms=0.0 measure_n=0 measure_hits=785 min_content_ms=0.0 min_content_n=0 max_content_ms=0.040166 max_content_n=1 taffy_ms=4.049447 taffy_n=7 abs_ms=0.159472 worst_solve_probes=300 worst_solve_node=Some(NodeId(208)) unattributed_ms=0.255193
+2026-11-14T09:42:59.150305Z  INFO page.console: FGL hide_aria_labels: true
+2026-11-14T09:42:59.208862Z  WARN manuk_layout: LAYOUT PHASES nodes=1511 total_ms=0.138873 measure_ms=0.0 measure_n=0 measure_hits=4 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=0.109016 taffy_n=1 abs_ms=0.008195 worst_solve_probes=4 worst_solve_node=Some(NodeId(1510)) unattributed_ms=0.021662
+2026-11-14T09:42:59.213491Z  WARN manuk_layout: LAYOUT PHASES nodes=1512 total_ms=0.143302 measure_ms=0.0 measure_n=0 measure_hits=4 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=0.048392 taffy_n=1 abs_ms=0.01559 worst_solve_probes=4 worst_solve_node=Some(NodeId(1510)) unattributed_ms=0.07932
+2026-11-14T09:42:59.244667Z  WARN manuk_layout: LAYOUT PHASES nodes=1512 total_ms=0.134855 measure_ms=0.0 measure_n=0 measure_hits=4 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=0.075904 taffy_n=1 abs_ms=0.016671 worst_solve_probes=4 worst_solve_node=Some(NodeId(1510)) unattributed_ms=0.04228
+ACT dispatch +183ms
+2026-11-14T09:43:01.525116Z  WARN manuk_layout: LAYOUT PHASES nodes=4461 total_ms=184.00641 measure_ms=0.0 measure_n=0 measure_hits=45338 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=180.786366 taffy_n=3 abs_ms=3.087984 worst_solve_probes=44663 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.13206
+2026-11-14T09:43:01.529850Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=17 layout_ms=184 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4461 caller=engine/page/src/lib.rs:2518
+2026-11-14T09:43:01.537002Z  INFO manuk_page: SLOW FORCED REFLOW — one geometry read laid out the whole document total_ms=214 sheets_ms=2 n_sheets=10 layout_ms=211 rects_ms=0 n_rects=1894 publish_ms=0 nodes=4461
+2026-11-14T09:43:01.799065Z  WARN manuk_layout: LAYOUT PHASES nodes=4635 total_ms=170.346676 measure_ms=0.0 measure_n=0 measure_hits=46866 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=166.19137 taffy_n=3 abs_ms=4.074534 worst_solve_probes=45997 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.080772
+2026-11-14T09:43:01.805628Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=16 layout_ms=170 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4635 caller=engine/page/src/lib.rs:2518
+2026-11-14T09:43:01.814566Z  INFO manuk_page: SLOW FORCED REFLOW — one geometry read laid out the whole document total_ms=204 sheets_ms=3 n_sheets=10 layout_ms=200 rects_ms=0 n_rects=2068 publish_ms=0 nodes=4635
+2026-11-14T09:43:01.819729Z  WARN manuk_page: load budget exhausted with page fetches still in flight round=0
+2026-11-14T09:43:02.026227Z  WARN manuk_layout: LAYOUT PHASES nodes=4635 total_ms=187.618347 measure_ms=0.0 measure_n=0 measure_hits=46866 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=182.626363 taffy_n=3 abs_ms=4.872356 worst_solve_probes=45997 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.119628
+2026-11-14T09:43:02.029843Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=18 layout_ms=188 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4635 caller=engine/page/src/lib.rs:5653
+ACT settle +2967ms
+ACT effect-diff +2988ms
+2026-11-14T09:43:02.428394Z  WARN manuk_layout: LAYOUT PHASES nodes=4635 total_ms=187.033379 measure_ms=0.0 measure_n=0 measure_hits=48726 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=182.762973 taffy_n=3 abs_ms=4.15701 worst_solve_probes=47857 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.113396
+2026-11-14T09:43:02.431848Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=0 layout_ms=187 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4635 caller=engine/page/src/lib.rs:7223
+### run 3 step click:Start search 4097ms
+2026-11-14T09:43:03.365159Z  WARN manuk_layout: LAYOUT PHASES nodes=4637 total_ms=180.174997 measure_ms=0.0 measure_n=0 measure_hits=48726 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=176.150318 taffy_n=3 abs_ms=3.929769 worst_solve_probes=47857 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.09491
+2026-11-14T09:43:03.368448Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=0 layout_ms=180 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4637 caller=engine/page/src/lib.rs:5653
+ACT tree+resolve +11ms
+ACT snapshot +12ms
+2026-11-14T09:43:04.235816Z  WARN manuk_layout: LAYOUT PHASES nodes=4757 total_ms=180.440201 measure_ms=0.0 measure_n=0 measure_hits=49218 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=175.392984 taffy_n=3 abs_ms=4.968899 worst_solve_probes=47857 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.078318
+2026-11-14T09:43:04.242250Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=20 layout_ms=180 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4757 caller=engine/page/src/lib.rs:2518
+2026-11-14T09:43:04.248954Z  INFO manuk_page: SLOW FORCED REFLOW — one geometry read laid out the whole document total_ms=216 sheets_ms=3 n_sheets=10 layout_ms=213 rects_ms=0 n_rects=2116 publish_ms=0 nodes=4757
+2026-11-14T09:43:04.518315Z  WARN manuk_layout: LAYOUT PHASES nodes=4757 total_ms=177.731717 measure_ms=0.0 measure_n=0 measure_hits=49218 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=172.824243 taffy_n=3 abs_ms=4.834745 worst_solve_probes=47857 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.072729
+2026-11-14T09:43:04.525247Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=14 layout_ms=177 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4757 caller=engine/page/src/lib.rs:2518
+2026-11-14T09:43:04.533113Z  INFO manuk_page: SLOW FORCED REFLOW — one geometry read laid out the whole document total_ms=209 sheets_ms=2 n_sheets=10 layout_ms=205 rects_ms=0 n_rects=2116 publish_ms=0 nodes=4757
+2026-11-14T09:43:04.771930Z  WARN manuk_layout: LAYOUT PHASES nodes=4757 total_ms=176.397768 measure_ms=0.0 measure_n=0 measure_hits=49218 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=171.628627 taffy_n=3 abs_ms=4.695481 worst_solve_probes=47857 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.07366
+2026-11-14T09:43:04.776016Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=14 layout_ms=176 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4757 caller=engine/page/src/lib.rs:2518
+2026-11-14T09:43:04.783430Z  INFO manuk_page: SLOW FORCED REFLOW — one geometry read laid out the whole document total_ms=205 sheets_ms=3 n_sheets=10 layout_ms=201 rects_ms=0 n_rects=2116 publish_ms=0 nodes=4757
+2026-11-14T09:43:04.995080Z  WARN manuk_layout: LAYOUT PHASES nodes=4771 total_ms=181.944353 measure_ms=0.0 measure_n=0 measure_hits=49272 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=176.458773 taffy_n=3 abs_ms=5.412129 worst_solve_probes=47857 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.073451
+2026-11-14T09:43:04.999984Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=14 layout_ms=182 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4771 caller=engine/page/src/lib.rs:10052
+2026-11-14T09:43:05.210952Z  WARN manuk_layout: LAYOUT PHASES nodes=4771 total_ms=180.682401 measure_ms=0.0 measure_n=0 measure_hits=49272 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=175.495047 taffy_n=3 abs_ms=5.097864 worst_solve_probes=47857 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.08949
+2026-11-14T09:43:05.214748Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=0 layout_ms=181 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4771 caller=engine/page/src/lib.rs:7223
+2026-11-14T09:43:05.407601Z  WARN manuk_layout: LAYOUT PHASES nodes=4771 total_ms=170.84399 measure_ms=0.0 measure_n=0 measure_hits=47412 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=165.82676 taffy_n=3 abs_ms=4.919525 worst_solve_probes=45997 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.097705
+2026-11-14T09:43:05.411265Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=0 layout_ms=171 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4771 caller=engine/page/src/lib.rs:11441
+ACT dispatch +2027ms
+ACT settle +2053ms
+ACT effect-diff +2060ms
+### run 3 step click:Beds & Baths 2779ms
+2026-11-14T09:43:06.362359Z  WARN manuk_layout: LAYOUT PHASES nodes=4773 total_ms=170.897882 measure_ms=0.0 measure_n=0 measure_hits=47412 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=165.912993 taffy_n=3 abs_ms=4.891612 worst_solve_probes=45997 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.093277
+2026-11-14T09:43:06.365932Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=0 layout_ms=171 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4773 caller=engine/page/src/lib.rs:5653
+ACT tree+resolve +5ms
+ACT snapshot +5ms
+2026-11-14T09:43:06.850734Z  WARN manuk_layout: LAYOUT PHASES nodes=4777 total_ms=172.578308 measure_ms=0.0 measure_n=0 measure_hits=47412 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=167.481927 taffy_n=3 abs_ms=5.018353 worst_solve_probes=45997 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.078028
+2026-11-14T09:43:06.857716Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=15 layout_ms=172 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4777 caller=engine/page/src/lib.rs:2518
+2026-11-14T09:43:06.864537Z  INFO manuk_page: SLOW FORCED REFLOW — one geometry read laid out the whole document total_ms=202 sheets_ms=3 n_sheets=10 layout_ms=198 rects_ms=0 n_rects=2132 publish_ms=0 nodes=4777
+2026-11-14T09:43:07.124194Z  WARN manuk_layout: LAYOUT PHASES nodes=4777 total_ms=169.93091 measure_ms=0.0 measure_n=0 measure_hits=47412 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=164.963763 taffy_n=3 abs_ms=4.888247 worst_solve_probes=45997 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.0789
+2026-11-14T09:43:07.127565Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=0 layout_ms=170 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4777 caller=engine/page/src/lib.rs:5653
+ACT dispatch +754ms
+ACT settle +837ms
+ACT effect-diff +844ms
+### run 3 step click:exact 1568ms
+ACT tree+resolve +6ms
+ACT snapshot +6ms
+2026-11-14T09:43:08.551603Z  WARN manuk_layout: LAYOUT PHASES nodes=4796 total_ms=169.737944 measure_ms=0.0 measure_n=0 measure_hits=47412 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=164.746933 taffy_n=3 abs_ms=4.919737 worst_solve_probes=45997 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.071274
+2026-11-14T09:43:08.558058Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=14 layout_ms=169 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4796 caller=engine/page/src/lib.rs:2518
+2026-11-14T09:43:08.564700Z  INFO manuk_page: SLOW FORCED REFLOW — one geometry read laid out the whole document total_ms=198 sheets_ms=3 n_sheets=10 layout_ms=194 rects_ms=0 n_rects=2132 publish_ms=0 nodes=4796
+2026-11-14T09:43:08.791739Z  WARN manuk_layout: LAYOUT PHASES nodes=4796 total_ms=172.46827 measure_ms=0.0 measure_n=0 measure_hits=47412 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=167.453073 taffy_n=3 abs_ms=4.920198 worst_solve_probes=45997 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.094999
+2026-11-14T09:43:08.795355Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=0 layout_ms=173 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4796 caller=engine/page/src/lib.rs:5653
+ACT dispatch +853ms
+ACT settle +878ms
+ACT effect-diff +886ms
+### run 3 step click:beds3+ 1599ms
+ACT tree+resolve +6ms
+ACT snapshot +6ms
+2026-11-14T09:43:09.978637Z  WARN manuk_layout: LAYOUT PHASES nodes=4800 total_ms=168.52769 measure_ms=0.0 measure_n=0 measure_hits=47412 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=163.599948 taffy_n=3 abs_ms=4.856947 worst_solve_probes=45997 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.070795
+2026-11-14T09:43:09.982691Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=14 layout_ms=168 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4800 caller=engine/page/src/lib.rs:2518
+2026-11-14T09:43:09.989406Z  INFO manuk_page: SLOW FORCED REFLOW — one geometry read laid out the whole document total_ms=194 sheets_ms=3 n_sheets=10 layout_ms=190 rects_ms=0 n_rects=2132 publish_ms=0 nodes=4800
+2026-11-14T09:43:10.219581Z  WARN manuk_layout: LAYOUT PHASES nodes=4800 total_ms=175.519104 measure_ms=0.0 measure_n=0 measure_hits=47412 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=170.510058 taffy_n=3 abs_ms=4.924746 worst_solve_probes=45997 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.0843
+2026-11-14T09:43:10.223078Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=0 layout_ms=176 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4800 caller=engine/page/src/lib.rs:5653
+ACT dispatch +681ms
+ACT settle +707ms
+ACT effect-diff +714ms
+### run 3 step click:baths2+ 1427ms
+2026-11-14T09:43:11.165615Z  WARN manuk_layout: LAYOUT PHASES nodes=4802 total_ms=170.476035 measure_ms=0.0 measure_n=0 measure_hits=47412 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=165.512014 taffy_n=3 abs_ms=4.876383 worst_solve_probes=45997 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.087638
+2026-11-14T09:43:11.169342Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=0 layout_ms=171 container_query_ms=0 cq_relaid=false n_sheets=10 nodes=4802 caller=engine/page/src/lib.rs:5653
+ACT tree+resolve +5ms
+ACT snapshot +5ms
+2026-11-14T09:43:11.249572Z  WARN manuk_layout: LAYOUT PHASES nodes=4813 total_ms=2.624676 measure_ms=0.0 measure_n=0 measure_hits=1064 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=1.534478 taffy_n=3 abs_ms=1.035183 worst_solve_probes=331 worst_solve_node=Some(NodeId(1601)) unattributed_ms=0.055015
+2026-11-14T09:43:11.267030Z  WARN manuk_layout: LAYOUT PHASES nodes=4813 total_ms=2.571625 measure_ms=0.0 measure_n=0 measure_hits=1064 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=1.494362 taffy_n=3 abs_ms=1.026306 worst_solve_probes=331 worst_solve_node=Some(NodeId(1601)) unattributed_ms=0.050957
+2026-11-14T09:43:11.274185Z  WARN manuk_layout: LAYOUT PHASES nodes=4813 total_ms=1.733677 measure_ms=0.0 measure_n=0 measure_hits=518 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=1.589194 taffy_n=3 abs_ms=0.095782 worst_solve_probes=331 worst_solve_node=Some(NodeId(1601)) unattributed_ms=0.048701
+2026-11-14T09:43:11.279218Z  WARN manuk_layout: LAYOUT PHASES nodes=4813 total_ms=1.608419 measure_ms=0.0 measure_n=0 measure_hits=518 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=1.467672 taffy_n=3 abs_ms=0.0949 worst_solve_probes=331 worst_solve_node=Some(NodeId(1601)) unattributed_ms=0.045847
+ACT dispatch +104ms
+2026-11-14T09:43:11.484978Z  WARN manuk_layout: LAYOUT PHASES nodes=5938 total_ms=69.551045 measure_ms=0.0 measure_n=0 measure_hits=18404 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=68.336664 taffy_n=3 abs_ms=1.148417 worst_solve_probes=17839 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.065964
+2026-11-14T09:43:11.599894Z  WARN manuk_layout: LAYOUT PHASES nodes=6006 total_ms=69.088558 measure_ms=0.0 measure_n=0 measure_hits=18980 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=67.42219 taffy_n=3 abs_ms=1.599822 worst_solve_probes=18351 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.066546
+2026-11-14T09:43:11.691167Z  WARN manuk_layout: LAYOUT PHASES nodes=6006 total_ms=71.161277 measure_ms=0.0 measure_n=0 measure_hits=18980 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=69.355214 taffy_n=3 abs_ms=1.726823 worst_solve_probes=18351 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.07924
+2026-11-14T09:43:11.871715Z  WARN manuk_layout: LAYOUT PHASES nodes=6006 total_ms=74.370512 measure_ms=0.0 measure_n=0 measure_hits=20018 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=72.656562 taffy_n=3 abs_ms=1.6304 worst_solve_probes=19389 worst_solve_node=Some(NodeId(4181)) unattributed_ms=0.08355
+ACT settle +697ms
+ACT effect-diff +704ms
+### run 3 step click:apply 1056ms
