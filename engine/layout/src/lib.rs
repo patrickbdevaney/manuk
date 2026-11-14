@@ -2259,6 +2259,36 @@ pub fn reuse_for_opacity_only(
     walk(&mut out, old, new, (1.0, 1.0)).then_some(out)
 }
 
+/// CSS Overflow §3.3: when `html` is `overflow:visible`, `body`'s `overflow` is propagated to the
+/// viewport and `body` itself then behaves as `visible` — so it is NOT a BFC root and its last
+/// child's bottom margin still collapses through it (a scroll-lock `body{overflow:hidden}` must not
+/// change the layout). Returns a style map with body's overflow reset, or `None` when nothing
+/// propagates (the common case, which pays two lookups and no clone).
+///
+/// Only `hidden`/`auto` propagate here; `scroll` keeps its on-body gutter reservation (residue:
+/// the gutter belongs to the viewport) and `clip` is already not a BFC.
+fn propagate_body_overflow(dom: &Dom, styles: &StyleMap) -> Option<StyleMap> {
+    let html = dom.children(dom.root()).find(|&c| dom.is_element(c))?;
+    let body = dom.find_first("body")?;
+    if html == body || styles.get(&html)?.overflow != Overflow::Visible {
+        return None;
+    }
+    let b = styles.get(&body)?;
+    let prop = |o: Overflow| matches!(o, Overflow::Hidden | Overflow::Auto);
+    if !(prop(b.overflow)
+        && !matches!(b.overflow_x, Overflow::Scroll)
+        && !matches!(b.overflow_y, Overflow::Scroll))
+    {
+        return None;
+    }
+    let mut m = styles.clone();
+    let b = m.get_mut(&body)?;
+    b.overflow = Overflow::Visible;
+    b.overflow_x = Overflow::Visible;
+    b.overflow_y = Overflow::Visible;
+    Some(m)
+}
+
 pub fn layout_document(
     dom: &Dom,
     styles: &StyleMap,
@@ -2282,6 +2312,8 @@ pub fn layout_document(
     // cascade's own map, byte for byte, and pays one pass over the style values to prove it.
     let wm_plan = writing_mode::plan(dom, styles);
     let styles: &StyleMap = wm_plan.as_ref().map(|p| &p.styles).unwrap_or(styles);
+    let propagated = propagate_body_overflow(dom, styles);
+    let styles: &StyleMap = propagated.as_ref().unwrap_or(styles);
     let ctx = Ctx {
         dom,
         styles,
@@ -17918,6 +17950,22 @@ mod tests {
         let styles = MinimalCascade.cascade(&dom, &sheets);
         let root = TEST_FONTS.with(|fonts| layout_document(&dom, &styles, fonts, width));
         (dom, root)
+    }
+
+    /// RG.S1.a.a.a.b.a.a.a.b.a — `body{overflow:hidden}` (html visible) propagates to the viewport,
+    /// so body is not a BFC and lays out identically to `body{overflow:visible}`. Red on revert.
+    #[test]
+    fn rg_s1_body_overflow_propagates_to_viewport() {
+        let page = r#"<div style="height:20px;margin-bottom:16px"></div>"#;
+        let h = |css: &str| layout_html(page, css, 800.0).1.rect.height;
+        let vis = h("body{margin:0;overflow:visible}");
+        assert_eq!(h("body{margin:0;overflow:hidden}"), vis);
+        assert_eq!(h("body{margin:0;overflow:auto}"), vis);
+        // html itself non-visible: body keeps its own BFC (nothing propagates to it).
+        assert_ne!(
+            h("html{overflow:hidden} body{margin:0;overflow:hidden}"),
+            vis
+        );
     }
 
     /// RG.S1.a.a.a.b.a.a — two style maps that differ only in effective opacity reuse the laid-out
