@@ -86,6 +86,11 @@ pub struct Session<B: Backend> {
     taint: crate::taint::Taint,
     /// Per-call opt-out of the injection shield (`include_hidden=true`).
     include_hidden: bool,
+    /// The current call is a default `observe`: it lists the page as the shield sees it, whatever an
+    /// earlier `include_hidden` call exposed for acting on (R1.4.a.c.c).
+    plain_observe: bool,
+    /// The current call lists handles (observe), so what it lists under `include_hidden` stays actable.
+    exposes: bool,
     /// W3.9: origin sets and confirm kinds; open by default.
     grants: crate::policy::Grants,
     /// This call carried `confirm=true`.
@@ -498,6 +503,8 @@ impl<B: Backend> Session<B> {
             snap_url: String::new(),
             view_alt: None,
             include_hidden: false,
+            plain_observe: false,
+            exposes: false,
             taint: Default::default(),
             grants: Default::default(),
             confirmed: false,
@@ -573,11 +580,14 @@ impl<B: Backend> Session<B> {
         let mut tree = self.b.tree()?;
         if let Some(sh) = self.b.shield()?.filter(|sh| !sh.nodes.is_empty()) {
             if self.include_hidden {
-                if std::env::var_os("MANUK_EXPOSED_MUTATE").is_none() {
+                // Only an observation hands out handles; extract/find output carries none to act on.
+                if std::env::var_os("MANUK_EXPOSED_MUTATE").is_none() && self.exposes {
                     self.exposed.borrow_mut().extend(sh.nodes.keys().copied());
                 }
             } else {
                 let exposed = self.exposed.borrow();
+                let none = HashSet::new();
+                let exposed = if self.plain_observe { &none } else { &*exposed };
                 let hide: HashMap<NodeId, &'static str> = sh
                     .nodes
                     .iter()
@@ -1308,6 +1318,8 @@ impl<B: Backend> Session<B> {
             .get("include_hidden")
             .and_then(Value::as_bool)
             .unwrap_or(false);
+        self.plain_observe = tool == "observe" && !self.include_hidden;
+        self.exposes = tool != "extract";
         self.confirmed = a.get("confirm").and_then(Value::as_bool).unwrap_or(false);
         // Follow-up requests a handler, scroll listener or interval queued run before any read, so
         // an idle wait (observe again) sees the page the user would.

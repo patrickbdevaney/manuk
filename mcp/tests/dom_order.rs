@@ -106,3 +106,29 @@ fn include_hidden_extract_is_in_dom_order() {
         "not DOM order {order:?}: {t:?}"
     );
 }
+
+/// R1.4.a.c.c gate: a default observe is the same before and after an `extract(include_hidden)`.
+#[test]
+fn observe_is_unchanged_by_an_include_hidden_extract() {
+    let mut c = Client::start();
+    let url = format!(
+        "file://{}/tests/fixtures/injection.html",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let (err, nav) = c.tool("navigate", json!({"url": url}));
+    assert!(!err, "{nav}");
+    let body = |s: String| s.split("\npage: ").next().unwrap().to_string();
+    let (_, a) = c.tool("observe", json!({}));
+    let a = body(a);
+    assert!(a.contains("hidden-text"), "fixture withholds nothing: {a}");
+    let (err, t) = c.tool("extract", json!({"format": "text", "include_hidden": true}));
+    assert!(!err && t.contains("HIDDEN_OPACITY"), "{t}");
+    let (_, b) = c.tool("observe", json!({}));
+    let b = body(b);
+    assert_eq!(a, b, "observe changed after include_hidden extract");
+    // and after an include_hidden observe
+    c.tool("observe", json!({"include_hidden": true}));
+    let (_, d) = c.tool("observe", json!({}));
+    let d = body(d);
+    assert_eq!(a, d, "observe changed after include_hidden observe");
+}
