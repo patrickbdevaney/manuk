@@ -15,7 +15,7 @@ Writes chunks.tsv and pages.tsv next to this file. Exit 1 when the planted
 false positive is not reported VISIBLE, the planted control is not HIDDEN, or check_invariants() finds a
 verdict that breaks a structural rule (e.g. VISIBLE on an ambiguous run, UNMATCHED without a cause).
 """
-import argparse, csv, difflib, functools, http.server, json, os, re, select, subprocess, sys, tempfile, threading, time
+import argparse, collections, csv, difflib, functools, http.server, json, os, re, select, subprocess, sys, tempfile, threading, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "..", "..", ".."))
@@ -196,16 +196,62 @@ def full_extract(mcp, args):
     return "".join(parts), err
 
 
-def withheld_runs(default_text, hidden_text):
-    a = strip_noise(default_text).split()
-    b = strip_noise(hidden_text).split()
+# Words and single punctuation marks: include_hidden glues fragments ("meaning.Warning!") that the default
+# text separates ("meaning. Warning!"), so whitespace-split words differ where the text does not.
+TOKEN = re.compile(r"\w+|[^\w\s]")
+
+
+def withheld_runs(default_text, hidden_text, ordered=False):
+    """Words only in the include_hidden text, as contiguous runs.
+
+    include_hidden prints in DOM order and the default in visual order, so a plain sequence diff reads
+    reordered text as inserted (books.toscrape's price row). The shield only removes words, so the words
+    it withheld are exactly the surplus of the hidden word multiset over the default one. Each sequence-diff
+    run keeps only the words that draw on that surplus; a reordered word has none left and ends the run.
+    A run whose whitespace-stripped text is already in the stripped default text is dropped too: include_hidden
+    glues fragments ("2024 7" prints as "20247"), so such a run is the same text spaced differently.
+    ordered=True is the old sequence-only diff (the --mutate seqdiff mutation).
+    """
+    a = TOKEN.findall(strip_noise(default_text))
+    hidden = strip_noise(hidden_text)
+    spans = [m.span() for m in TOKEN.finditer(hidden)]
+    b = [hidden[x:y] for x, y in spans]
     sm = difflib.SequenceMatcher(None, a, b, autojunk=False)
+    flat_default = re.sub(ZW_PY + "+", "", strip_noise(default_text))
+    surplus = collections.Counter(b) - collections.Counter(a)
     runs, anomalies = [], 0
     for tag, _i1, _i2, j1, j2 in sm.get_opcodes():
         if tag == "delete":
             anomalies += 1
-        if tag in ("insert", "replace") and j2 > j1:
-            runs.append(" ".join(b[j1:j2]))
+        if tag not in ("insert", "replace") or j2 <= j1:
+            continue
+        cur = []  # indexes into b; the run text is the original slice, so spacing and hyphens survive
+        for j in range(j1, j2):
+            w = b[j]
+            if ordered or surplus[w] > 0:
+                surplus[w] -= 1
+                cur.append(j)
+            elif cur:
+                runs.append(" ".join(hidden[spans[cur[0]][0]:spans[cur[-1]][1]].split()))
+                cur = []
+        if cur:
+            runs.append(" ".join(hidden[spans[cur[0]][0]:spans[cur[-1]][1]].split()))
+    if not ordered:
+        # Reordered and glued text ("2024" ... "7" printing as "20247", "next next" as "nextnext") has the same
+        # characters in both extracts, so it is no surplus either: a run must fit the character surplus.
+        flat_hidden = re.sub(ZW_PY + "+", "", hidden)
+        chars = collections.Counter(flat_hidden) - collections.Counter(flat_default)
+        kept = []
+        for r in runs:
+            flat = re.sub(ZW_PY + "+", "", r)
+            if flat in flat_default:
+                continue
+            need = collections.Counter(flat)
+            if any(chars[c] < n for c, n in need.items()):
+                continue
+            chars.subtract(need)
+            kept.append(r)
+        runs = kept
     return runs, anomalies
 
 
@@ -220,6 +266,8 @@ def check_invariants(rows):
             bad.append(f"{v} with chrome_matches={m}: {r['chunk'][:60]}")
         if v == "UNMATCHED" and not r["unmatched_cause"]:
             bad.append(f"UNMATCHED without a cause: {r['chunk'][:60]}")
+        if r["reason"] == "UNKNOWN":
+            bad.append(f"UNKNOWN reason (a withheld run no shield fragment explains): {r['chunk'][:60]}")
         if v == "DUP" and r["source"] != "observe":
             bad.append(f"DUP on a {r['source']} row: {r['chunk'][:60]}")
     return bad
@@ -270,6 +318,8 @@ def run_reason(chunk, dump):
         f = " ".join(re.sub(ZW_PY + "+", "", frag).split())
         if f and f in flat and r not in rs:
             rs.append(r)
+    if not rs and not re.sub(r"[\u200e\u200f\u202a-\u202e\u2066-\u2069]", "", flat):
+        return "non-layout-mark"  # bidi control characters only: text the page never lays out
     return "+".join(rs) or "UNKNOWN"
 
 
@@ -286,8 +336,9 @@ def audit_page(mcp, page, url, group, mutate):
     # The diff runs over every window of both extracts; default_x (the first window) keeps the marker and dump.
     full_default, e2 = full_extract(mcp, {"format": "text"})
     full_hidden, e3 = full_extract(mcp, {"format": "text", "include_hidden": True})
-    runs, anom_x = withheld_runs(full_default, full_hidden)
-    obs_runs, anom_o = withheld_runs(obs_d, obs_h)
+    ordered = mutate == "seqdiff"
+    runs, anom_x = withheld_runs(full_default, full_hidden, ordered)
+    obs_runs, anom_o = withheld_runs(obs_d, obs_h, ordered)
     # observe() withholds nodes; the extract diff is the text view, the observe diff the a11y view.
     chunks = [("extract", r) for r in runs] + [("observe", r) for r in obs_runs]
     n_marker, reasons = marker_reasons(default_x)
@@ -390,7 +441,7 @@ def suite_urls(base):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--mutate", choices=["blind", "reason"], default=None)
+    ap.add_argument("--mutate", choices=["blind", "reason", "seqdiff"], default=None)
     ap.add_argument("--skip-live", action="store_true", help="planted page + F-fixtures only (quick check)")
     a = ap.parse_args()
     pin = os.environ.get("MANUK_CHROME_PIN")
