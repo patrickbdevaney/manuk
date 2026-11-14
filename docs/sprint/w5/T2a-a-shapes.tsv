@@ -1,0 +1,5 @@
+shape	n	median_tokens	mean_tokens	sum_share
+navigated	51	147.0	411.9	0.98
+concise-ok	14	21.0	26.6	0.02
+other-full-diff	2	16.2	16.2	0.00
+ALL	67	106.2	319.6	1.00
