@@ -154,3 +154,25 @@ fn nav_over_a_dark_sibling_is_not_withheld() {
     assert!(!o.contains("WHITE_ON_WHITE_PLANT"), "plant leaked: {o}");
     assert!(o.contains("hidden-text"), "plant not withheld: {o}");
 }
+
+/// R1.4.a.c.d.a gate: a `li:before{content:"\200b"}` marker is not text, so it must not get the whole
+/// `li` (and the link inside it) withheld; the white-on-white plant still is.
+#[test]
+fn zero_width_marker_does_not_withhold_its_list_item() {
+    let mut c = Client::start();
+    let url = format!(
+        "file://{}/tests/fixtures/nav_zwsp_li.html",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let (err, nav) = c.tool("navigate", json!({"url": url}));
+    assert!(!err, "{nav}");
+    let (_, o) = c.tool("observe", json!({}));
+    for name in ["Posts", "Spotlight"] {
+        assert!(
+            o.contains(&format!("link \"{name}\"")),
+            "{name} withheld: {o}"
+        );
+    }
+    assert!(!o.contains("WHITE_ON_WHITE_PLANT"), "plant leaked: {o}");
+    assert!(o.contains("hidden-text"), "plant not withheld: {o}");
+}

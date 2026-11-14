@@ -151,6 +151,12 @@ fn collect_under(b: &LayoutBox, out: &mut Vec<(f32, f32, f32, f32, Rgba)>) {
     }
 }
 
+/// Characters that paint nothing (a `li:before{content:"\u200b"}` list marker): a run of only these
+/// carries no text, so it is spacing, not something to withhold or to hide its element for.
+fn is_zero_width(c: char) -> bool {
+    matches!(c, '\u{200b}'..='\u{200f}' | '\u{2060}' | '\u{feff}')
+}
+
 fn walk(b: &LayoutBox, mut ctx: Ctx, w: &mut Walk<'_>) {
     if ctx.box_reason.is_none() {
         if b.opacity <= 0.01 {
@@ -174,9 +180,9 @@ fn walk(b: &LayoutBox, mut ctx: Ctx, w: &mut Walk<'_>) {
     match &b.content {
         BoxContent::Inline(frags) => {
             for f in frags {
-                if f.text.trim().is_empty() {
+                if f.text.chars().all(|c| c.is_whitespace() || is_zero_width(c)) {
                     // Spacing still participates in the join below, so keep it with the seen runs.
-                    if ctx.box_reason.is_none() {
+                    if ctx.box_reason.is_none() && f.text.trim().is_empty() {
                         w.seen.push(f.clone());
                     }
                     continue;
