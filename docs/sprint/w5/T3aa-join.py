@@ -19,8 +19,8 @@ def sha(path):
         return hashlib.sha256(f.read()).hexdigest()[:16]
 
 
-def manifest():
-    with open(MANIFEST) as f:
+def manifest(path=MANIFEST):
+    with open(path) as f:
         return {r["arm"]: r for r in csv.DictReader(f, delimiter="\t")}
 
 
@@ -41,8 +41,9 @@ def main():
     ap.add_argument("--after-tsv", required=True)
     ap.add_argument("--before-bin", required=True)
     ap.add_argument("--after-bin", required=True)
+    ap.add_argument("--manifest", default=MANIFEST, help="arm/commit/sha table (default T3aa-binaries.tsv)")
     a = ap.parse_args()
-    m = manifest()
+    m = manifest(a.manifest)
     arms = {"before-W5.T3": (a.before_tsv, a.before_bin), "after-W5.T3": (a.after_tsv, a.after_bin)}
     rows = {}
     for arm, (tsv, binp) in arms.items():
@@ -63,7 +64,8 @@ def main():
         firsts = [int(min(v, key=lambda r: int(r["turn"]))["context_tokens"]) for v in per.values()]
         ts_runs = sum(1 for v in per.values() if any(int(r["toolsearch"]) for r in v))
         sd = lambda xs: statistics.stdev(xs) if len(xs) > 1 else 0.0  # noqa: E731
-        print(f"{arm} n={len(per)} runs_with_ToolSearch={ts_runs}")
+        observe_runs = sum(1 for v in per.values() if any("observe" in r["tools"] for r in v))
+        print(f"{arm} n={len(per)} runs_with_ToolSearch={ts_runs} runs_with_observe={observe_runs}")
         print(f"  task context total  mean={statistics.mean(totals):.0f} sd={sd(totals):.0f} "
               f"min={min(totals)} max={max(totals)}")
         print(f"  first-turn context  mean={statistics.mean(firsts):.0f} sd={sd(firsts):.0f}")

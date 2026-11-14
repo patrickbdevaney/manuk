@@ -24,6 +24,9 @@ PROMPTS = {
     # W5.T3.a.a.a: a navigate+observe task that never needs a deferred tool.
     "navigate": ("Navigate to {url} with the browser tools, then observe the page. "
                  "Finally reply with the exact page title you saw."),
+    # W5.T3.a.a.a.a.a: the same navigate-only shape with no instruction to observe, so any observe call is the model's own.
+    "navigate-quiet": ("Navigate to {url} with the browser tools. "
+                       "Finally reply with the exact page title you saw."),
 }
 COLS = ["chrome_ver", "arm", "run", "turn", "tools", "toolsearch", "context_tokens", "output_tokens",
         "bin_sha256", "claude_version", "rc"]

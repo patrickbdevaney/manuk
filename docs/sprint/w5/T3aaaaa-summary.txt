@@ -1,0 +1,14 @@
+chrome_ver=145.0.7632.116 claude=2.1.306 (Claude Code)
+before-W5.T3 n=9 runs_with_ToolSearch=0 runs_with_observe=0
+  task context total  mean=46020 sd=1 min=46018 max=46021
+  first-turn context  mean=22916 sd=0
+after-W5.T3 n=9 runs_with_ToolSearch=8 runs_with_observe=0
+  task context total  mean=67296 sd=7996 min=45974 max=69962
+  first-turn context  mean=22872 sd=0
+  ToolSearch-turn delta mean=579 sd=0 min=579 max=579 n=8
+(task navigate-quiet: "Navigate to {url} with the browser tools. Finally reply with the exact page title you saw." — no observe mention)
+Binaries: rebuilt from the two commits in clean worktrees (toolchain 1.99.1, MOZJS_ARCHIVE = the verified linux archive).
+The pinned shas in T3aa-binaries.tsv (20d47826.., e201138d..) did NOT reproduce, so the join uses T3aaaaa-binaries.tsv:
+  before bb497243 = 34fa60547af4836f ; after 3c0d499d = b9742038db32f0fe. The old manifest refuses these (rc=1).
+Both arms: observe calls 0/9 (no observe mention in the prompt, so the T3.a.a.a.a observe turn is not produced by this prompt).
+Red: swapped binaries refused (T3aaaaa-red-swapped.txt, rc=1).
