@@ -7287,7 +7287,15 @@ impl Page {
             }
         }
         let count = images.len();
-        self.images = images;
+        // **Merge, don't replace.** The caller hands over only what is NEW (`images` is empty on an
+        // inline-svg-only pass), so assigning it dropped every decoded bitmap already held: on
+        // zilloft's Beds & Baths click 232 images became 182, and the next full recascade
+        // (`recascade_all_sources`, e.g. a focus change) had no natural size left to restate on 53
+        // nodes — a different layout from the one the settle path produced, and a memo miss.
+        let mut merged = std::mem::take(&mut self.images);
+        merged.retain(|n, _| self.dom.is_alive(*n));
+        merged.extend(images);
+        self.images = merged;
         for (n, img) in &self.inline_svg_cache {
             self.images.entry(*n).or_insert_with(|| img.clone());
         }
@@ -16608,6 +16616,44 @@ mod tests {
         let h0 = page.content_height;
         page.relayout(&fonts, 800.0);
         assert!(page.content_height > h0, "a changed style must re-lay out");
+    }
+
+    /// RG.S1.a.a.a.b.a.a.a.a.a.a: `apply_images` with a map that lacks an already-decoded image keeps
+    /// that image, so the next full recascade restates the same natural sizes the settle path left.
+    /// RED when `apply_images` assigns `self.images = images` again (the bitmap is dropped).
+    #[test]
+    fn rg_s1_apply_images_keeps_previously_decoded_images() {
+        let fonts = FontContext::new();
+        let png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+        let html = format!("<body><img id=a src='{png}'><img id=b src='x.png'></body>");
+        let mut page = Page::load(&html, "http://x/", &fonts, 800.0);
+        let find = |p: &Page, id: &str| {
+            p.dom
+                .descendants(p.dom.root())
+                .find(|&n| p.dom.element(n).and_then(|e| e.id()) == Some(id))
+                .unwrap()
+        };
+        let (a, b) = (find(&page, "a"), find(&page, "b"));
+        let img = page
+            .images
+            .get(&a)
+            .expect("inline data: image decoded")
+            .clone();
+        let mut only_b = std::collections::HashMap::new();
+        only_b.insert(b, img);
+        page.apply_images(only_b, &fonts, 800.0);
+        assert!(
+            page.images.contains_key(&a),
+            "the earlier image must survive a partial map"
+        );
+        assert!(page.images.contains_key(&b));
+        let settled = page.styles[&a].clone();
+        page.recascade_all_sources(800.0);
+        assert_eq!(
+            format!("{:?}", page.styles[&a]),
+            format!("{:?}", settled),
+            "recascade must restate the natural size the settle path left"
+        );
     }
 
     #[test]
