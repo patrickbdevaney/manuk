@@ -121,6 +121,34 @@ struct Walk<'a> {
     out: Vec<(&'static str, TextFragment)>,
     hidden_nodes: HashMap<NodeId, &'static str>,
     seen_nodes: HashSet<NodeId>,
+    /// Every visible opaque-background box, in tree order: a run can be painted over a box that is
+    /// not its ancestor (a nav laid over a sibling hero), which `Ctx::bg` cannot see.
+    under: Vec<(f32, f32, f32, f32, Rgba)>,
+}
+
+/// True when the last (approximately topmost) visible opaque box covering the middle of `f` gives
+/// its colour enough contrast. Only the last: an earlier, lower box (the white page under a dark
+/// panel) must not rescue dark-on-dark text.
+fn readable_over_any_box(f: &TextFragment, w: &Walk<'_>) -> bool {
+    let (cx, cy) = (f.x + f.width / 2.0, f.line_top + f.style.line_height / 2.0);
+    w.under
+        .iter()
+        .rev()
+        .find(|&&(x, y, bw, bh, _)| cx >= x && cx <= x + bw && cy >= y && cy <= y + bh)
+        .is_some_and(|&(.., bg)| contrast(f.style.color, bg) >= MIN_CONTRAST)
+}
+
+fn collect_under(b: &LayoutBox, out: &mut Vec<(f32, f32, f32, f32, Rgba)>) {
+    if b.opacity > 0.01 && !b.hidden {
+        if let Some(bg) = b.background.filter(|bg| bg.a >= 200) {
+            out.push((b.rect.x, b.rect.y, b.rect.width, b.rect.height, bg));
+        }
+        if let BoxContent::Block(children) = &b.content {
+            for c in children {
+                collect_under(c, out);
+            }
+        }
+    }
 }
 
 fn walk(b: &LayoutBox, mut ctx: Ctx, w: &mut Walk<'_>) {
@@ -159,7 +187,9 @@ fn walk(b: &LayoutBox, mut ctx: Ctx, w: &mut Walk<'_>) {
                 if let Some(bg) = f.node.and_then(|n| (w.inline_bg)(n)) {
                     fctx.bg = bg;
                 }
-                match classify(f, fctx, w.viewport_w) {
+                match classify(f, fctx, w.viewport_w)
+                    .filter(|&r| r != "low-contrast" || !readable_over_any_box(f, w))
+                {
                     Some(r) => {
                         if let Some(n) = f.node.or(b.node) {
                             w.hidden_nodes.entry(n).or_insert(r);
@@ -201,7 +231,9 @@ pub fn analyze(
         out: Vec::new(),
         hidden_nodes: HashMap::new(),
         seen_nodes: HashSet::new(),
+        under: Vec::new(),
     };
+    collect_under(root, &mut w.under);
     let white = Rgba {
         r: 255,
         g: 255,

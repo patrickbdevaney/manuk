@@ -132,3 +132,25 @@ fn observe_is_unchanged_by_an_include_hidden_extract() {
     let d = body(d);
     assert_eq!(a, d, "observe changed after include_hidden observe");
 }
+
+/// R1.4.a.c.d gate: white nav links painted over a dark sibling hero are visible, so a default observe
+/// lists them; white text over the plain white page stays withheld.
+#[test]
+fn nav_over_a_dark_sibling_is_not_withheld() {
+    let mut c = Client::start();
+    let url = format!(
+        "file://{}/tests/fixtures/nav_over_hero.html",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let (err, nav) = c.tool("navigate", json!({"url": url}));
+    assert!(!err, "{nav}");
+    let (_, o) = c.tool("observe", json!({}));
+    for name in ["Posts", "Spotlight", "About"] {
+        assert!(
+            o.contains(&format!("link \"{name}\"")),
+            "{name} withheld: {o}"
+        );
+    }
+    assert!(!o.contains("WHITE_ON_WHITE_PLANT"), "plant leaked: {o}");
+    assert!(o.contains("hidden-text"), "plant not withheld: {o}");
+}
