@@ -56,7 +56,12 @@ impl Shield {
     pub fn reason_lines(&self) -> String {
         self.withheld
             .iter()
-            .map(|(r, t)| format!("⚠withheld[{r}]: {}", t.split_whitespace().collect::<Vec<_>>().join(" ")))
+            .map(|(r, t)| {
+                format!(
+                    "⚠withheld[{r}]: {}",
+                    t.split_whitespace().collect::<Vec<_>>().join(" ")
+                )
+            })
             .collect::<Vec<_>>()
             .join("\n")
     }

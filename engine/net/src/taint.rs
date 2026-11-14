@@ -172,6 +172,11 @@ impl Taint {
         }
         let vs = views(payload);
         for (tok, src) in foreign {
+            // A bare host is part of every URL on that host, not a secret: a page that shows its
+            // own address must not block navigating to another port of the same host.
+            if tok == &host_of(&dest) || tok == &host_of(src) {
+                continue;
+            }
             // A token that is also shown on the destination origin is not a secret from it.
             if self.seen.iter().any(|(t, o)| t == tok && *o == dest) {
                 continue;
@@ -220,6 +225,15 @@ pub fn check_egress(payload: &str, dest_url: &str, what: &str) -> Result<(), Str
     }
 }
 
+/// Host part of an origin string (`scheme://host[:port]`), lowercased.
+fn host_of(origin: &str) -> String {
+    let rest = origin.split_once("://").map_or(origin, |(_, r)| r);
+    rest.rsplit_once(':')
+        .filter(|(_, p)| p.bytes().all(|b| b.is_ascii_digit()))
+        .map_or(rest, |(h, _)| h)
+        .to_string()
+}
+
 fn mask(t: &str) -> String {
     let head: String = t.chars().take(2).collect();
     format!("{head}… {} chars", t.chars().count())
@@ -236,6 +250,30 @@ mod tests {
         let mut t = Taint::default();
         t.record(A, "Your API token: tok_9f8e7d6c5b4a ok");
         t
+    }
+
+    #[test]
+    fn same_host_other_port_navigation_is_not_a_value_flow() {
+        let mut t = Taint::default();
+        t.record(
+            "http://127.0.0.1:18766/",
+            "Page A at http://127.0.0.1:18766/ token tok_9f8e7d6c5b4a",
+        );
+        assert!(t
+            .check(
+                "http://127.0.0.1:18765/index.html",
+                "http://127.0.0.1:18765/index.html",
+                "navigation"
+            )
+            .is_ok());
+        // a real value still blocks toward that same destination
+        assert!(t
+            .check(
+                "http://127.0.0.1:18765/?q=tok_9f8e7d6c5b4a",
+                "http://127.0.0.1:18765/",
+                "navigation"
+            )
+            .is_err());
     }
 
     #[test]
