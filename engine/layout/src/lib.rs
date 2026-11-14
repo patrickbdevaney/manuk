@@ -2259,6 +2259,25 @@ pub fn reuse_for_opacity_only(
     walk(&mut out, old, new, (1.0, 1.0)).then_some(out)
 }
 
+/// [`reuse_for_opacity_only`] that also treats a `body` overflow toggle (the scroll-lock
+/// `visible`<->`hidden`/`auto`) as no difference when it propagates to the viewport: layout reads
+/// the propagated styles ([`propagate_body_overflow`]), so both maps lay out to the same tree.
+pub fn reuse_for_restyle(
+    dom: &Dom,
+    old: &StyleMap,
+    new: &StyleMap,
+    root: &LayoutBox,
+) -> Option<LayoutBox> {
+    if old == new {
+        return reuse_for_opacity_only(old, new, root);
+    }
+    let (po, pn) = (
+        propagate_body_overflow(dom, old),
+        propagate_body_overflow(dom, new),
+    );
+    reuse_for_opacity_only(po.as_ref().unwrap_or(old), pn.as_ref().unwrap_or(new), root)
+}
+
 /// CSS Overflow §3.3: when `html` is `overflow:visible`, `body`'s `overflow` is propagated to the
 /// viewport and `body` itself then behaves as `visible` — so it is NOT a BFC root and its last
 /// child's bottom margin still collapses through it (a scroll-lock `body{overflow:hidden}` must not
@@ -17966,6 +17985,30 @@ mod tests {
             h("html{overflow:hidden} body{margin:0;overflow:hidden}"),
             vis
         );
+    }
+
+    /// RG.S1.a.a.a.b.a.a.a.b.a.a — a body scroll-lock toggle reuses the laid-out tree (patched ==
+    /// fresh); with html non-visible nothing propagates, so it must lay out for real.
+    #[test]
+    fn rg_s1_body_scroll_lock_toggle_reuses_layout() {
+        let html = r#"<div id="a">hi</div><p style="margin-bottom:16px">tail</p>"#;
+        let dom = manuk_html::parse(html);
+        let cascade = |css: &str| MinimalCascade.cascade(&dom, &vec![Stylesheet::parse(css)]);
+        let lay = |st: &StyleMap| TEST_FONTS.with(|f| layout_document(&dom, st, f, 400.0));
+        let s0 = cascade("body{margin:0}");
+        let s1 = cascade("body{margin:0;overflow:hidden}");
+        let (r0, r1) = (lay(&s0), lay(&s1));
+        let patched = reuse_for_restyle(&dom, &s0, &s1, &r0)
+            .expect("body overflow toggle must reuse the memoed tree");
+        assert_eq!(
+            format!("{patched:?}"),
+            format!("{r1:?}"),
+            "patched == fresh"
+        );
+        assert!(reuse_for_opacity_only(&s0, &s1, &r0).is_none());
+        let h0 = cascade("html{overflow:hidden} body{margin:0}");
+        let h1 = cascade("html{overflow:hidden} body{margin:0;overflow:hidden}");
+        assert!(reuse_for_restyle(&dom, &h0, &h1, &lay(&h0)).is_none());
     }
 
     /// RG.S1.a.a.a.b.a.a — two style maps that differ only in effective opacity reuse the laid-out

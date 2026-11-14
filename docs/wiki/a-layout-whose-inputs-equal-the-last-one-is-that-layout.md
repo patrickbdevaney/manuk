@@ -51,3 +51,5 @@ A gdb-sampled profile (1200 samples, symbols built into a side target dir) of th
 RG.S1.a.a.a.b.a.a.a.a.a.a: `Page::apply_images` receives only the NEW images (an inline-svg-only pass hands it an empty map) and used to *assign* it to `self.images`, dropping every earlier decoded bitmap (zilloft Beds & Baths: 232 -> 182). The next `recascade_all_sources` then lost the natural sizes of 53 nodes, so a focus relayout could never equal the settled layout. It now merges (and drops dead nodes). Fixture `rg_s1_apply_images_keeps_previously_decoded_images`.
 
 RG.S1.a.a.a.b.a.a.a.a.a.a: `layout_key` no longer hashes hover/focus/active (layout reads none; the cascade carries them and its styles are compared whole), so a focus change that restyles nothing reuses the layout. Beds & Baths SLOW layouts 6 -> 5 (3 runs, chrome_ver=145.0.7632.116). Fixture `rg_s1_layout_key_ignores_focus_state`.
+
+- RG.S1.a.a.a.b.a.a.a.b.a.a: `reuse_for_restyle` compares styles after `propagate_body_overflow`, so a body scroll-lock toggle (overflow visible<->hidden/auto, html visible) reuses the memoed fragment tree instead of a slow layout.

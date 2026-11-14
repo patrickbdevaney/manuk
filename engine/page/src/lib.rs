@@ -339,7 +339,7 @@ fn restyle_and_layout(
                 // re-pass changed nothing (`styles_out == styles_in`), so `styles` IS the output.
                 if m.styles_out == m.styles_in {
                     let root =
-                        manuk_layout::reuse_for_opacity_only(&m.styles_in, &styles, &m.root_box)?;
+                        manuk_layout::reuse_for_restyle(dom, &m.styles_in, &styles, &m.root_box)?;
                     return Some((styles.clone(), root));
                 }
                 None
