@@ -2215,7 +2215,11 @@ pub fn reuse_for_opacity_only(
             let mut o2 = o.clone();
             o2.opacity = v.opacity;
             if &o2 != v {
-                return None;
+                // `transform-origin` only positions a transform: with none, it moves nothing.
+                o2.transform_origin = v.transform_origin;
+                if &o2 != v || !v.effective_transform().is_empty() {
+                    return None;
+                }
             }
         }
     }
@@ -17968,6 +17972,33 @@ mod tests {
             format!("{patched:?}"),
             format!("{r1:?}"),
             "patched == fresh layout"
+        );
+    }
+
+    /// RG.S1.a.a.a.b.a.a.a.a — a fade-in that also changes `transform-origin` on a node with no
+    /// transform reuses the layout (patched == fresh); with a transform it still lays out.
+    #[test]
+    fn rg_s1_opacity_patch_tolerates_origin_only_difference_without_transform() {
+        let html = r#"<div id="a">text<div id="b">inner</div></div>"#;
+        let dom = manuk_html::parse(html);
+        let cascade = |css: &str| MinimalCascade.cascade(&dom, &vec![Stylesheet::parse(css)]);
+        let lay = |st: &StyleMap| TEST_FONTS.with(|f| layout_document(&dom, st, f, 400.0));
+        let s0 = cascade("#a{opacity:0;transform-origin:50% 50%} #b{transform-origin:50% 50%}");
+        let s1 = cascade("#a{opacity:1;transform-origin:0px 0px} #b{transform-origin:0px 0px}");
+        let (r0, r1) = (lay(&s0), lay(&s1));
+        let patched = reuse_for_opacity_only(&s0, &s1, &r0)
+            .expect("an origin-only difference without a transform must not block the reuse");
+        assert_eq!(
+            format!("{patched:?}"),
+            format!("{r1:?}"),
+            "patched == fresh layout"
+        );
+        let t0 = cascade("#a{opacity:0;transform:scale(2);transform-origin:50% 50%}");
+        let t1 = cascade("#a{opacity:1;transform:scale(2);transform-origin:0px 0px}");
+        let q0 = lay(&t0);
+        assert!(
+            reuse_for_opacity_only(&t0, &t1, &q0).is_none(),
+            "a real transform needs layout"
         );
     }
 

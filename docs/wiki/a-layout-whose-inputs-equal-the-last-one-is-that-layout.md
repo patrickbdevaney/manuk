@@ -42,3 +42,5 @@ A gdb-sampled profile (1200 samples, symbols built into a side target dir) of th
 
 ## Literal-1.0 boxes under an opacity-0 ancestor (RG.S1.a.a.a.b.a.a.a)
 `reuse_for_opacity_only` rejected a restyle when an anonymous box (e.g. the inline-run wrapper in a block with mixed text/block children) carried `opacity: 1.0` under an ancestor whose old opacity was 0: layout builds those boxes with a literal 1.0, not the folded value, so "equal to the ancestor's" is the wrong test. They now keep 1.0 (a fresh layout builds the same). Measured on the zilloft Beds & Baths click (chrome_ver=145.0.7632.116, 3 runs): 8 -> 7 SLOW RESTYLE+LAYOUT. The other misses are real: DOM growth, body scroll-lock overflow-y, a baked transform-origin, and attr/text mutations (cascade-only hover/focus/active state is in `layout_key` although layout never reads it, but a direct-path memo without it still missed on the attr/text changes).
+
+`reuse_for_opacity_only` also tolerates a `transform-origin` difference on a node whose effective transform is empty (the origin only positions a transform); with a transform it still lays out for real.
