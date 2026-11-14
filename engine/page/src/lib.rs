@@ -507,14 +507,10 @@ fn layout_key(
     let (iw, ih) = manuk_css::values::icb_size();
     (iw.to_bits(), ih.to_bits()).hash(&mut h);
     fonts.fingerprint().hash(&mut h);
-    (
-        dom.quirks(),
-        dom.hovered(),
-        dom.focused(),
-        dom.focused().map(|f| dom.is_focus_visible(f)),
-        dom.active(),
-    )
-        .hash(&mut h);
+    // Hover / focus / active are NOT in the key: layout reads none of them, they act through the
+    // cascade, and the cascade's output (the styles) is compared whole by every consumer. A focus
+    // change that restyles nothing is therefore the same layout.
+    dom.quirks().hash(&mut h);
     dom.len().hash(&mut h);
     for n in dom.descendants(dom.root()) {
         n.hash(&mut h);
@@ -16653,6 +16649,30 @@ mod tests {
             format!("{:?}", page.styles[&a]),
             format!("{:?}", settled),
             "recascade must restate the natural size the settle path left"
+        );
+    }
+
+    /// RG.S1.a.a.a.b.a.a.a.a.a.a: moving focus changes no layout input by itself, so the layout key
+    /// is the same (the cascade's styles decide whether anything really changed).
+    /// RED when hover/focus/active are hashed into `layout_key` again.
+    #[test]
+    fn rg_s1_layout_key_ignores_focus_state() {
+        let fonts = FontContext::new();
+        let page = Page::load("<body><input id=a><p>text</p></body>", "x", &fonts, 800.0);
+        let a = page
+            .dom
+            .descendants(page.dom.root())
+            .find(|&n| page.dom.element(n).and_then(|e| e.id()) == Some("a"))
+            .unwrap();
+        let sheets = page.all_sheets();
+        let key = |p: &Page| layout_key(&p.dom, &sheets, &fonts, 800.0, &p.images).unwrap();
+        let before = key(&page);
+        let mut page = page;
+        assert!(page.dom_mut().set_focused(Some(a), true));
+        assert_eq!(
+            key(&page),
+            before,
+            "focus alone must not change the layout key"
         );
     }
 
