@@ -1,0 +1,8 @@
+chrome_ver=145.0.7632.116 claude=2.1.306 (Claude Code)
+before-W5.T3 (bb497243) n=9: task context total mean=46035 sd=10; observe called 0/9
+after-W5.T3 + restored navigate title wording (bin 9b433bc7e6d486b2) n=9: total mean=69338 sd=56 (+50.6%); observe called 9/9
+navigate result in the after binary carries the title (stdio call): http://127.0.0.1:8765/index.html — "QUOKKA-7741"
+Finding: restoring the description did NOT remove the observe turn (hypothesis refuted). In bb497243 `observe` was deferred (not in the
+always-load set), so the before-arm model could not call it for the prompt's "then observe the page"; in 3c0d499d observe is always-loaded
+and the model obeys the prompt. The +50% is the task prompt asking for observe, not a lost title mention.
+Red: T3aa-join.py with swapped binaries refuses rc=1.
