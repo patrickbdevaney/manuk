@@ -2190,6 +2190,66 @@ pub fn layouts_run() -> usize {
     LAYOUTS.load(std::sync::atomic::Ordering::Relaxed)
 }
 
+/// `MANUK_NO_OPACITY_PATCH=1` turns the opacity-only fragment reuse off (the gate's mutant).
+fn opacity_patch_enabled() -> bool {
+    static V: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *V.get_or_init(|| std::env::var_os("MANUK_NO_OPACITY_PATCH").is_none())
+}
+
+/// **A restyle whose styles differ from the ones `root` was laid out from ONLY in effective
+/// `opacity` needs no layout: opacity moves nothing, so the fragment tree is the same tree with
+/// its boxes' `opacity` replaced.** Returns that tree, or `None` when any style differs in any
+/// other property, the node sets differ, or an anonymous box's opacity cannot be told apart from
+/// its nearest named ancestor's (the caller then lays out for real).
+pub fn reuse_for_opacity_only(
+    old: &StyleMap,
+    new: &StyleMap,
+    root: &LayoutBox,
+) -> Option<LayoutBox> {
+    if !opacity_patch_enabled() || old.len() != new.len() {
+        return None;
+    }
+    for (n, v) in new {
+        let o = old.get(n)?;
+        if v != o {
+            let mut o2 = o.clone();
+            o2.opacity = v.opacity;
+            if &o2 != v {
+                return None;
+            }
+        }
+    }
+    let mut out = root.clone();
+    // `anc` = (old effective opacity, new effective opacity) of the nearest box with a DOM node.
+    fn walk(b: &mut LayoutBox, old: &StyleMap, new: &StyleMap, anc: (f32, f32)) -> bool {
+        let anc = match b.node {
+            Some(n) => match (old.get(&n), new.get(&n)) {
+                (Some(o), Some(nw)) => {
+                    b.opacity = nw.opacity;
+                    (o.opacity, nw.opacity)
+                }
+                _ => return false,
+            },
+            None => {
+                if b.opacity != anc.0 {
+                    return false;
+                }
+                b.opacity = anc.1;
+                anc
+            }
+        };
+        if let BoxContent::Block(kids) = &mut b.content {
+            for k in kids {
+                if !walk(k, old, new, anc) {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+    walk(&mut out, old, new, (1.0, 1.0)).then_some(out)
+}
+
 pub fn layout_document(
     dom: &Dom,
     styles: &StyleMap,
@@ -17849,6 +17909,38 @@ mod tests {
         let styles = MinimalCascade.cascade(&dom, &sheets);
         let root = TEST_FONTS.with(|fonts| layout_document(&dom, &styles, fonts, width));
         (dom, root)
+    }
+
+    /// RG.S1.a.a.a.b.a.a — two style maps that differ only in effective opacity reuse the laid-out
+    /// tree with opacities patched; the patched tree equals a fresh layout. `MANUK_NO_OPACITY_PATCH=1`
+    /// (the mutant) makes the reuse return `None` and this go red.
+    #[test]
+    fn rg_s1_opacity_only_restyle_patches_the_fragment_tree() {
+        let html =
+            r#"<div id="a"><p id="b">hello <b>world</b></p><p>tail</p></div><div id="c">x</div>"#;
+        let dom = manuk_html::parse(html);
+        let cascade = |css: &str| MinimalCascade.cascade(&dom, &vec![Stylesheet::parse(css)]);
+        let lay = |st: &StyleMap| TEST_FONTS.with(|f| layout_document(&dom, st, f, 400.0));
+        let s0 = cascade("p{height:20px} #a{opacity:0}");
+        let s1 = cascade("p{height:20px} #a{opacity:1}");
+        let s2 = cascade("p{height:30px} #a{opacity:1}");
+        let (r0, r1) = (lay(&s0), lay(&s1));
+        let patched = reuse_for_opacity_only(&s0, &s1, &r0)
+            .expect("opacity-only change must reuse the memoed tree");
+        assert_eq!(
+            format!("{patched:?}"),
+            format!("{r1:?}"),
+            "patched == fresh layout"
+        );
+        assert_ne!(
+            format!("{r0:?}"),
+            format!("{r1:?}"),
+            "the fixture changes opacity"
+        );
+        assert!(
+            reuse_for_opacity_only(&s0, &s2, &r0).is_none(),
+            "a layout-affecting difference must not reuse"
+        );
     }
 
     /// RG.S1.a.a.a.b.a — a flex item that taffy probes at several available widths which all

@@ -33,3 +33,6 @@ Start search 7.9-8.2 s -> 6.4-6.6 s. NOT enough for the 5 s gate; the rest is re
 (widths in one node differ by the 16 px padding) and 2-9 relayouts per click whose styles differ
 (overflow-y toggles, opacity steps), so the whole-layout memo above misses them.
 `MANUK_NO_MEASURE_BY_WIDTH=1` turns it off (the fixture's mutant).
+
+## An opacity-only restyle reuses the memoed fragment tree (RG.S1.a.a.a.b.a.a)
+zilloft's panel fades elements in/out: forced reflows at equal `layout_key` whose styles differ only in effective `opacity` (and nothing else) used to miss the memo and pay a ~1 s relayout. `restyle_and_layout` now calls `manuk_layout::reuse_for_opacity_only(styles_in, styles, root_box)`: every style pair must be equal after masking `opacity`, then the cached tree is cloned with each box's `opacity` set from the new style (anonymous boxes take their nearest named ancestor's, or the reuse bails). Only when the `@container` re-pass changed nothing. Any other differing property (e.g. `overflow-y`) still lays out. `MANUK_NO_OPACITY_PATCH=1` disables it (the fixture's mutant).

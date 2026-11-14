@@ -330,8 +330,19 @@ fn restyle_and_layout(
             c.borrow().as_ref().and_then(|m| {
                 // `layouts_run` unchanged = no other layout ran since, so the thread-local side
                 // outputs of `layout_document` (grid tracks, relative offsets, ...) are still ours.
-                (m.key == k && m.epoch == manuk_layout::layouts_run() && m.styles_in == styles)
-                    .then(|| (m.styles_out.clone(), m.root_box.clone()))
+                (m.key == k && m.epoch == manuk_layout::layouts_run()).then_some(())?;
+                if m.styles_in == styles {
+                    return Some((m.styles_out.clone(), m.root_box.clone()));
+                }
+                // Same inputs except effective opacity (a fade-in/out): the fragment tree is
+                // the memoed one with its boxes' opacity patched. Only when the `@container`
+                // re-pass changed nothing (`styles_out == styles_in`), so `styles` IS the output.
+                if m.styles_out == m.styles_in {
+                    let root =
+                        manuk_layout::reuse_for_opacity_only(&m.styles_in, &styles, &m.root_box)?;
+                    return Some((styles.clone(), root));
+                }
+                None
             })
         });
         if let Some(out) = hit {
