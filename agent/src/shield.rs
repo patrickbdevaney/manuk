@@ -50,6 +50,18 @@ impl Shield {
     }
 }
 
+impl Shield {
+    /// One `⚠withheld[reason]: text` line per withheld fragment, in document order (the debug dump
+    /// behind `MANUK_SHIELD_REASONS=1`). Fragment text is newline-free so each is exactly one line.
+    pub fn reason_lines(&self) -> String {
+        self.withheld
+            .iter()
+            .map(|(r, t)| format!("⚠withheld[{r}]: {}", t.split_whitespace().collect::<Vec<_>>().join(" ")))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+}
+
 fn lin(c: u8) -> f32 {
     let c = c as f32 / 255.0;
     if c <= 0.03928 {

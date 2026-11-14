@@ -125,7 +125,7 @@ DIAG_JS = """(stripped) => {
 
 class Mcp:
     def __init__(self):
-        self.p = subprocess.Popen([MCP_BIN], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+        self.p = subprocess.Popen([MCP_BIN], env={**os.environ, "MANUK_SHIELD_REASONS": "1"}, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                   stderr=subprocess.DEVNULL, text=True, bufsize=1)
         self.id = 0
         self.rpc("initialize", {"protocolVersion": "2025-03-26", "capabilities": {},
@@ -166,7 +166,7 @@ def sh(cmd):
 
 def strip_noise(text):
     # The marker line, [hN] handles and the per-call page id (pXXXXXX:N) are bookkeeping, not page text.
-    out = [l for l in text.splitlines() if not l.lstrip().startswith("⚠hidden-text")]
+    out = [l for l in text.splitlines() if not l.lstrip().startswith(("⚠hidden-text", "⚠withheld["))]
     text = re.sub(r"\[h\d+\]", " ", "\n".join(out))
     return re.sub(r"\bp[0-9a-f]{6,}:\d+\b", " ", text)
 
@@ -216,6 +216,38 @@ def marker_reasons(text):
     return (m.group(1), m.group(2)) if m else ("0", "")
 
 
+def reason_dump(text, mutate=None):
+    """[(reason, fragment words)] from the shield's MANUK_SHIELD_REASONS dump lines."""
+    out = [(m.group(1), m.group(2)) for m in re.finditer(r"^⚠withheld\[([^\]]+)\]: (.*)$", text, re.M)]
+    if mutate == "reason" and out:
+        out[0] = ("opacity" if out[0][0] != "opacity" else "tiny-font", out[0][1])  # a wrong reason
+    return out
+
+
+def reason_check(label, text, dump):
+    """Per-reason fragment counts of the dump must equal the page marker's own counts."""
+    _n, parts = marker_reasons(text)
+    want = {}
+    for p in filter(None, (x.strip() for x in parts.split(","))):
+        k, _, n = p.rpartition(" ")
+        want[k] = int(n)
+    got = {}
+    for r, _ in dump:
+        got[r] = got.get(r, 0) + 1
+    return [] if got == want else [f"{label}: reason dump {got} != marker {want}"]
+
+
+def run_reason(chunk, dump):
+    """Reasons of the withheld fragments that lie inside this run (several joined with '+')."""
+    flat = " ".join(re.sub(ZW_PY + "+", "", chunk).split())
+    rs = []
+    for r, frag in dump:
+        f = " ".join(re.sub(ZW_PY + "+", "", frag).split())
+        if f and f in flat and r not in rs:
+            rs.append(r)
+    return "+".join(rs) or "UNKNOWN"
+
+
 def audit_page(mcp, page, url, group, mutate):
     nav, nav_err = mcp.call("navigate", {"url": url})
     if nav_err or "EGRESS-DENIED" in nav:
@@ -232,6 +264,9 @@ def audit_page(mcp, page, url, group, mutate):
     # observe() withholds nodes; the extract diff is the text view, the observe diff the a11y view.
     chunks = [("extract", r) for r in runs] + [("observe", r) for r in obs_runs]
     n_marker, reasons = marker_reasons(default_x)
+    dump_x = reason_dump(default_x, mutate)
+    dump_o = reason_dump(obs_d)
+    rviol = reason_check("extract", default_x, dump_x) + reason_check("observe", obs_d, dump_o)
 
     page.goto(url, wait_until="load", timeout=90000)
     time.sleep(0.5)
@@ -249,7 +284,8 @@ def audit_page(mcp, page, url, group, mutate):
         f = page.evaluate(FIND_JS, stripped)
         row = {"group": group, "url": url, "source": src, "chunk": chunk[:160], "chunk_words": len(chunk.split()),
                "chrome_matches": f.get("matches", 0), "pixel_diff": "", "verdict": "", "rect": "",
-               "unmatched_cause": ""}
+               "unmatched_cause": "",
+               "reason": run_reason(chunk, dump_x if src == "extract" else dump_o)}
         if src == "extract":
             extract_stripped.append(stripped)
         # An observe run that repeats extract text is the same withheld words seen twice: count it once.
@@ -301,7 +337,7 @@ def audit_page(mcp, page, url, group, mutate):
 
     summary = {"group": group, "url": url, "marker_withheld": n_marker, "marker_reasons": reasons,
                "extract_withheld_runs": len(runs), "observe_withheld_runs": len(obs_runs),
-               "diff_anomalies": anom_x + anom_o, "extract_error": e1 or e2}
+               "diff_anomalies": anom_x + anom_o, "extract_error": e1 or e2, "reason_violations": rviol}
     return rows, summary
 
 
@@ -327,7 +363,7 @@ def suite_urls(base):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--mutate", choices=["blind"], default=None)
+    ap.add_argument("--mutate", choices=["blind", "reason"], default=None)
     ap.add_argument("--skip-live", action="store_true", help="planted page + F-fixtures only (quick check)")
     a = ap.parse_args()
     pin = os.environ.get("MANUK_CHROME_PIN")
@@ -382,7 +418,7 @@ def main():
     plant_srv.shutdown()
 
     cols = ["chrome_ver", "group", "url", "source", "chunk", "chunk_words", "chrome_matches", "rect",
-            "pixel_diff", "verdict", "unmatched_cause"]
+            "pixel_diff", "verdict", "unmatched_cause", "reason"]
     with open(os.path.join(HERE, "chunks.tsv"), "w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh, delimiter="\t")
         w.writerow(cols)
@@ -406,6 +442,8 @@ def main():
     print(f"visible-but-withheld on suite pages: {task_fp}; on corpus pages: "
           f"{fp_total - task_fp}")
     violations = check_invariants(all_rows)
+    for s in summaries:
+        violations += [f"{s['url']}: {v}" for v in s.get("reason_violations", [])]
     for line in violations[:20]:
         print("INVARIANT VIOLATED: " + line)
     print(f"verdict invariants: {len(violations)} violation(s) over {len(all_rows)} rows")

@@ -652,7 +652,16 @@ impl<B: Backend> Session<B> {
             return String::new();
         }
         match self.b.shield() {
-            Ok(Some(sh)) => sh.marker().map(|m| format!("\n{m}")).unwrap_or_default(),
+            Ok(Some(sh)) => sh
+                .marker()
+                .map(|m| {
+                    // Debug dump for the shield audit: the reason behind each withheld fragment.
+                    let dump = std::env::var_os("MANUK_SHIELD_REASONS")
+                        .map(|_| format!("\n{}", sh.reason_lines()))
+                        .unwrap_or_default();
+                    format!("\n{m}{dump}")
+                })
+                .unwrap_or_default(),
             _ => String::new(),
         }
     }
