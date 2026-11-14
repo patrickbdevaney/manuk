@@ -1,0 +1,8 @@
+navigate               wall=  2004 layouts=  8 layout_ms=    146 taffy_ms=    133 unattr=     9 max1=    31 nodes=1480 non_layout=   1858
+type                   wall=   817 layouts= 18 layout_ms=    513 taffy_ms=    468 unattr=    31 max1=    29 nodes=1486 non_layout=    304
+click:Start            wall=  7946 layouts=  9 layout_ms=   4692 taffy_ms=   4623 unattr=     5 max1=  1184 nodes=4635 non_layout=   3254
+click:Beds             wall=  9922 layouts=  8 layout_ms=   9445 taffy_ms=   9262 unattr=     1 max1=  1184 nodes=4771 non_layout=    477
+click:exact            wall=  3564 layouts=  3 layout_ms=   3537 taffy_ms=   3465 unattr=     0 max1=  1184 nodes=4777 non_layout=     27
+click:beds3+           wall=  3576 layouts=  2 layout_ms=   2352 taffy_ms=   2304 unattr=     0 max1=  1177 nodes=4796 non_layout=   1224
+click:baths2+          wall=  3410 layouts=  2 layout_ms=   2349 taffy_ms=   2301 unattr=     0 max1=  1182 nodes=4800 non_layout=   1061
+click:apply            wall=  2724 layouts=  9 layout_ms=   3180 taffy_ms=   3115 unattr=     1 max1=  1169 nodes=6006 non_layout=   -456

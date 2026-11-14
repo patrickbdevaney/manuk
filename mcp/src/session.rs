@@ -1721,6 +1721,13 @@ impl<B: Backend> Session<B> {
     }
 
     /// The settle line (W3.12). `MANUK_SETTLE_MUTATE=no-settle` skips the wait, for the gate's mutant.
+    /// `MANUK_ACT_TRACE=1`: cumulative ms since the act began, per stage, on stderr (RG.S1.a.a.a.b measurement).
+    fn act_trace(stage: &str, since: std::time::Instant) {
+        if std::env::var_os("MANUK_ACT_TRACE").is_some() {
+            eprintln!("ACT {stage} +{}ms", since.elapsed().as_millis());
+        }
+    }
+
     async fn settled(&mut self) -> String {
         if std::env::var("MANUK_SETTLE_MUTATE").is_ok_and(|v| v == "no-settle") {
             return "settled: (mutant)".into();
@@ -2041,7 +2048,9 @@ impl<B: Backend> Session<B> {
     }
 
     async fn act_inner(&mut self, hs: &str, action: &str, value: Option<&str>) -> Result<String> {
+        let t_act = std::time::Instant::now();
         let tree = self.tree()?;
+        Self::act_trace("tree+resolve", t_act);
         let (h, n) = self.resolve(&tree, hs)?;
         let (node, role, checked, disabled) =
             (n.node, n.role.clone(), n.state.checked, n.state.disabled);
@@ -2053,6 +2062,7 @@ impl<B: Backend> Session<B> {
             self.gate(crate::policy::Op::Click, Some(node), &name)?;
         }
         let before = self.snapshot(&tree);
+        Self::act_trace("snapshot", t_act);
         let state_hash = {
             use std::hash::{Hash, Hasher};
             let mut hs = std::collections::hash_map::DefaultHasher::new();
@@ -2110,12 +2120,15 @@ impl<B: Backend> Session<B> {
             a => bail!("unknown action {a:?}: use click, check, select, focus, hover"),
         };
         // The result waits for the act's own consequences, then says what is still pending.
+        Self::act_trace("dispatch", t_act);
         let settle = self.settled().await;
+        Self::act_trace("settle", t_act);
         let r = self.effect(
             before,
             &url_before,
             &format!("verified: target was topmost at dispatch; {outcome}"),
         )?;
+        Self::act_trace("effect-diff", t_act);
         let errs = self.b.act_errors();
         // A click that navigated to an error page did nothing useful either: undo it, then retry like a dead click.
         let landed_on_error = action == "click"

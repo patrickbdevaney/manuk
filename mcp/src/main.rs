@@ -29,6 +29,13 @@ fn main() -> anyhow::Result<()> {
 }
 
 fn real_main(mut args: Vec<String>) -> anyhow::Result<()> {
+    // `MANUK_LAYOUT_PROFILE=1` logs `LAYOUT PHASES` through `tracing`; without a subscriber it goes nowhere.
+    if std::env::var_os("MANUK_LAYOUT_PROFILE").is_some() {
+        let _ = tracing_subscriber::fmt()
+            .with_writer(std::io::stderr)
+            .with_ansi(false)
+            .try_init();
+    }
     if args.first().map(String::as_str) == Some("--confine-selftest") {
         return manuk_mcp::confine::selftest(&args[1..]);
     }
