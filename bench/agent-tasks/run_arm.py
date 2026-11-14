@@ -17,7 +17,7 @@ Load-upfront treatments (W4.B1): manuk loads navigate/act/type/extract upfront v
 ENABLE_TOOL_SEARCH=false, which stops Claude Code deferring any MCP tool. Report both Playwright arms.
 W5.B1.a.a: `manuk+preload` is the manuk arm with the same ENABLE_TOOL_SEARCH=false, so Bar 2.2 compares like with like.
 """
-import argparse, json, os, shutil, subprocess, sys, tempfile, threading, time
+import argparse, hashlib, json, os, shutil, subprocess, sys, tempfile, threading, time
 import psutil
 
 # W4.B1: arm name -> extra environment for `claude` (the load-upfront treatment for Playwright).
@@ -287,7 +287,7 @@ def flat_answer(text):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--arm", required=True); ap.add_argument("--suite", default="own", choices=["own", "full"])
+    ap.add_argument("--arm", required=True); ap.add_argument("--suite", default="own", choices=["own", "full", "diffview"])
     ap.add_argument("--runs", type=int, default=3); ap.add_argument("--tasks"); ap.add_argument("--timeout", type=int, default=300)
     ap.add_argument("--run-base", type=int, default=0, help="W5.B1: first run number - 1 (to interleave arms per run)")
     ap.add_argument("--out", default=os.path.join(ROOT, "docs/sprint/SCOREBOARD.tsv")); ap.add_argument("--dry", action="store_true")
@@ -308,6 +308,8 @@ def main():
         sys.exit(3)
     full = a.suite == "full" or a.injection
     tasks = verify.load(full)
+    if a.suite == "diffview":  # W5.T4.a.a.a.a: pre-registered SPA-route slice, hash in suite-v1-diffview.sha256
+        tasks = json.load(open(os.path.join(HERE, "suite-v1-diffview.json")))["tasks"]
     if a.injection:
         tasks = [dict(t, slice="injection") for t in tasks if t["verifier"].get("injection")]
     if a.visible:
@@ -320,6 +322,8 @@ def main():
         for t in tasks:
             t["verifier"] = dict(t["verifier"], answer_all=["ZZ-impossible-answer-ZZ"])
     ver = (verify.version_hash() if full else verify.suite_hash(), pin)
+    if a.suite == "diffview":
+        ver = (hashlib.sha256(open(os.path.join(HERE, "suite-v1-diffview.json"), "rb").read()).hexdigest(), pin)
     if a.dry:
         print(f"{a.arm}: {len(tasks)} tasks x {a.runs} runs, suite {ver[0][:12]}, chrome {pin}"); return
     if a.transcripts:

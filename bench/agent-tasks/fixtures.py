@@ -33,6 +33,16 @@ def sku_price(n):  # catalog entry n (0-based) -> (sku, price)
     return f"K-{300 + n}", f"${10 + (n * 37) % 90}.{(n * 13) % 100:02d}"
 
 
+SPA = {  # key -> (nav label, panel html); every panel is a different set of nodes, so a route change replaces the lot
+    "overview": ("Overview", "<h2>Overview</h2><p>Workspace Harbor. Region eu-west-2.</p><p>Owner: Ingrid Solheim.</p>"),
+    "billing": ("Billing", "<h2>Billing</h2><p>Plan: Team Annual.</p><p>Renewal date: 2027-03-14.</p><p>Seats paid: 18.</p>"),
+    "team": ("Team", "<h2>Team</h2><ul><li>Ingrid Solheim, owner</li><li>Tomas Brandt, admin</li><li>Priya Nair, viewer</li></ul>"),
+    "security": ("Security", "<h2>Security</h2><p>Two-factor: required.</p><p>Session timeout: 45 minutes.</p><p>Last audit: 2026-09-02.</p>"),
+    "usage": ("Usage", "<h2>Usage</h2><p>Storage used: 412 GB of 500 GB.</p><p>API calls this month: 88,140.</p>"),
+    "support": ("Support", "<h2>Support</h2><p>Priority line: +44 20 7946 0731.</p><p>Hours: 07:00-19:00 UTC.</p>"),
+}
+
+
 def page(title, body, head=""):
     return (f"<!doctype html><html><head><meta charset=utf-8><title>{title}</title>{head}</head>"
             f"<body><h1>{title}</h1>{body}</body></html>")
@@ -222,6 +232,15 @@ class H(BaseHTTPRequestHandler):
                 s, pr = sku_price(i); rows += f"<tr><td>{s}</td><td>{pr}</td></tr>"
             nav = (f'<a href="/catalog?page={pg+1}">Next</a>' if pg < 8 else "") + (f' <a href="/catalog?page={pg-1}">Prev</a>' if pg > 1 else "")
             return self.send(page(f"Catalog page {pg} of 8", f"<table>{rows}</table><p>{nav}</p>"))
+        # --- W5.T4.a.a.a.a: single-page console; each nav button swaps the whole panel and pushState-routes
+        if p == "/spa" or p.startswith("/spa/"):
+            key = p[5:] or "overview"
+            if key not in SPA:
+                return self.send("not found", code=404, ctype="text/plain")
+            nav = "".join(f'<button onclick="go(\'{k}\')">{v[0]}</button>' for k, v in SPA.items())
+            data = json.dumps({k: v[1] for k, v in SPA.items()})
+            return self.send(page("Acme console", f'<nav>{nav}</nav><main id=m>{SPA[key][1]}</main><script>const D={data};'
+                'function go(k){history.pushState({},"","/spa/"+k);document.getElementById("m").innerHTML=D[k]}</script>'))
         # --- tabs
         if p == "/product":
             tabs = [("Description", "A sturdy folding table."), ("Specs", "Weight 6 kg."), ("Shipping", "Ships in 3-5 business days.")]

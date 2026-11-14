@@ -1,0 +1,191 @@
+{
+ "suite": "v1-diffview",
+ "tasks": [
+  {
+   "id": "D01",
+   "slice": "diffview",
+   "kind": "fixture",
+   "start_url": "{BASE}/spa",
+   "goal": "Open the Billing section. What is the plan renewal date?",
+   "verifier": {
+    "answer_all": [
+     "2027-03-14"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "D02",
+   "slice": "diffview",
+   "kind": "fixture",
+   "start_url": "{BASE}/spa",
+   "goal": "Open the Billing section. How many seats are paid for?",
+   "verifier": {
+    "answer_all": [
+     "18"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "D03",
+   "slice": "diffview",
+   "kind": "fixture",
+   "start_url": "{BASE}/spa",
+   "goal": "Open the Team section. What is Priya Nair's role?",
+   "verifier": {
+    "answer_all": [
+     "viewer"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "D04",
+   "slice": "diffview",
+   "kind": "fixture",
+   "start_url": "{BASE}/spa",
+   "goal": "Open the Team section. Who is the admin?",
+   "verifier": {
+    "answer_all": [
+     "Tomas Brandt"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "D05",
+   "slice": "diffview",
+   "kind": "fixture",
+   "start_url": "{BASE}/spa",
+   "goal": "Open the Security section. What is the session timeout in minutes?",
+   "verifier": {
+    "answer_all": [
+     "45"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "D06",
+   "slice": "diffview",
+   "kind": "fixture",
+   "start_url": "{BASE}/spa",
+   "goal": "Open the Security section. When was the last audit?",
+   "verifier": {
+    "answer_all": [
+     "2026-09-02"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "D07",
+   "slice": "diffview",
+   "kind": "fixture",
+   "start_url": "{BASE}/spa",
+   "goal": "Open the Usage section. How many GB of storage are used?",
+   "verifier": {
+    "answer_all": [
+     "412"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "D08",
+   "slice": "diffview",
+   "kind": "fixture",
+   "start_url": "{BASE}/spa",
+   "goal": "Open the Usage section. How many API calls were made this month?",
+   "verifier": {
+    "answer_all": [
+     "88,140"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "D09",
+   "slice": "diffview",
+   "kind": "fixture",
+   "start_url": "{BASE}/spa",
+   "goal": "Open the Support section. What is the priority support phone number?",
+   "verifier": {
+    "answer_all": [
+     "+44 20 7946 0731"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "D10",
+   "slice": "diffview",
+   "kind": "fixture",
+   "start_url": "{BASE}/spa",
+   "goal": "Open the Support section. What are the support hours?",
+   "verifier": {
+    "answer_all": [
+     "07:00-19:00"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "D11",
+   "slice": "diffview",
+   "kind": "fixture",
+   "start_url": "{BASE}/spa",
+   "goal": "Find the plan name in Billing and the owner's name in Overview. Report both.",
+   "verifier": {
+    "answer_all": [
+     "Team Annual",
+     "Ingrid Solheim"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "D12",
+   "slice": "diffview",
+   "kind": "fixture",
+   "start_url": "{BASE}/spa",
+   "goal": "Report the storage limit from Usage and the two-factor policy from Security.",
+   "verifier": {
+    "answer_all": [
+     "500",
+     "required"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "D13",
+   "slice": "diffview",
+   "kind": "fixture",
+   "start_url": "{BASE}/spa",
+   "goal": "Report the workspace region from Overview and the number of people listed in Team.",
+   "verifier": {
+    "answer_all": [
+     "eu-west-2",
+     "3"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "D14",
+   "slice": "diffview",
+   "kind": "fixture",
+   "start_url": "{BASE}/spa",
+   "goal": "Report the renewal date from Billing, then the priority phone number from Support.",
+   "verifier": {
+    "answer_all": [
+     "2027-03-14",
+     "+44 20 7946 0731"
+    ],
+    "answer_none": []
+   }
+  }
+ ]
+}
