@@ -17,8 +17,14 @@ import argparse, hashlib, http.server, json, os, socketserver, statistics, subpr
 CLAUDE = os.path.expanduser("~/.local/bin/claude")
 MARKER = "QUOKKA-7741"
 PAGE = f"<!doctype html><html><head><title>{MARKER}</title></head><body><h1>Fixture</h1></body></html>"
-PROMPT = ("Navigate to {url} with the browser tools. Then call the storage_state tool (it is a browser tool; "
-          "load it first if it is not loaded). Finally reply with the exact page title you saw.")
+PROMPTS = {
+    # W5.T3.a.a: a deferred tool (storage_state) is needed, so ToolSearch must run in the after-arm.
+    "deferred": ("Navigate to {url} with the browser tools. Then call the storage_state tool (it is a browser tool; "
+                 "load it first if it is not loaded). Finally reply with the exact page title you saw."),
+    # W5.T3.a.a.a: a navigate+observe task that never needs a deferred tool.
+    "navigate": ("Navigate to {url} with the browser tools, then observe the page. "
+                 "Finally reply with the exact page title you saw."),
+}
 COLS = ["chrome_ver", "arm", "run", "turn", "tools", "toolsearch", "context_tokens", "output_tokens",
         "bin_sha256", "claude_version", "rc"]
 
@@ -38,11 +44,11 @@ def serve(root):
     return srv
 
 
-def one_run(cwd, cfg, url):
+def one_run(cwd, cfg, url, prompt):
     """Return a list of turns: (tools called, ToolSearch calls, context tokens, output tokens), plus rc."""
     cmd = [CLAUDE, "-p", "--model", "haiku", "--output-format", "stream-json", "--verbose",
            "--mcp-config", cfg, "--strict-mcp-config", "--allowedTools", "mcp__browser",
-           "--permission-mode", "dontAsk", PROMPT.format(url=url)]
+           "--permission-mode", "dontAsk", prompt.format(url=url)]
     p = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=600, stdin=subprocess.DEVNULL)
     turns, order = {}, []  # message id -> accumulated turn, in first-seen order
     for line in p.stdout.splitlines():
@@ -107,6 +113,7 @@ def main():
     ap.add_argument("--after", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--runs", type=int, default=9)
+    ap.add_argument("--task", choices=sorted(PROMPTS), default="deferred")
     a = ap.parse_args()
     pin = os.environ.get("MANUK_CHROME_PIN") or sys.exit("refusing: MANUK_CHROME_PIN unset")
     root = tempfile.mkdtemp(prefix="w5t3aa-site-")
@@ -123,7 +130,7 @@ def main():
             json.dump({"mcpServers": {"browser": {"command": binp, "args": []}}}, f)
         shas[arm] = sha(binp)
         for run in range(1, a.runs + 1):
-            turns, rc = one_run(cwd, cfg, url)
+            turns, rc = one_run(cwd, cfg, url, PROMPTS[a.task])
             if not turns:
                 sys.exit(f"refusing: {arm} run {run} produced no assistant turns (rc={rc})")
             for i, (tools, ctx, out) in enumerate(turns, 1):

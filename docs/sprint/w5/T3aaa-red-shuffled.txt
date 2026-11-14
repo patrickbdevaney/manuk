@@ -1,0 +1,2 @@
+refuse: /tmp/t3aa-mcp-after sha e201138d67bb96b1 is not the before-W5.T3 binary (bb497243 = 20d47826ed01652c)
+join rc=1
