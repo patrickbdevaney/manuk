@@ -171,6 +171,31 @@ def strip_noise(text):
     return re.sub(r"\bp[0-9a-f]{6,}:\d+\b", " ", text)
 
 
+PAGE_HDR = re.compile(r"^\[chars (\d+)-(\d+) of (\d+)[^\n]*\n?", re.M)
+
+
+def full_extract(mcp, args):
+    """Every window of extract(format=text), joined with the pagination header removed.
+
+    extract returns 20000 chars per call, with a header "[chars a-b of N; more: ...]". Diffing only the first
+    window compares two different slices of the page (the hidden text is longer, so the window ends in a
+    different place), and the header's own total N then shows up as a withheld run ("164894;" on Wikipedia).
+    """
+    parts, err, off = [], False, 0
+    while True:
+        t, e = mcp.call("extract", {**args, "offset": off})
+        err = err or e
+        m = PAGE_HDR.search(t)
+        if not m:
+            parts.append(t)
+            break
+        parts.append(t[:m.start()] + t[m.end():])
+        if int(m.group(2)) >= int(m.group(3)):
+            break
+        off = int(m.group(2))
+    return "".join(parts), err
+
+
 def withheld_runs(default_text, hidden_text):
     a = strip_noise(default_text).split()
     b = strip_noise(hidden_text).split()
@@ -258,8 +283,10 @@ def audit_page(mcp, page, url, group, mutate):
     obs_d, _ = mcp.call("observe", {"mode": "full", "budget_tokens": 200000})
     obs_h, _ = mcp.call("observe", {"mode": "full", "budget_tokens": 200000, "include_hidden": True})
     default_x, e1 = mcp.call("extract", {"format": "text"})
-    hidden_x, e2 = mcp.call("extract", {"format": "text", "include_hidden": True})
-    runs, anom_x = withheld_runs(default_x, hidden_x)
+    # The diff runs over every window of both extracts; default_x (the first window) keeps the marker and dump.
+    full_default, e2 = full_extract(mcp, {"format": "text"})
+    full_hidden, e3 = full_extract(mcp, {"format": "text", "include_hidden": True})
+    runs, anom_x = withheld_runs(full_default, full_hidden)
     obs_runs, anom_o = withheld_runs(obs_d, obs_h)
     # observe() withholds nodes; the extract diff is the text view, the observe diff the a11y view.
     chunks = [("extract", r) for r in runs] + [("observe", r) for r in obs_runs]
@@ -337,7 +364,7 @@ def audit_page(mcp, page, url, group, mutate):
 
     summary = {"group": group, "url": url, "marker_withheld": n_marker, "marker_reasons": reasons,
                "extract_withheld_runs": len(runs), "observe_withheld_runs": len(obs_runs),
-               "diff_anomalies": anom_x + anom_o, "extract_error": e1 or e2, "reason_violations": rviol}
+               "diff_anomalies": anom_x + anom_o, "extract_error": e1 or e2 or e3, "reason_violations": rviol}
     return rows, summary
 
 
