@@ -1,0 +1,9 @@
+chrome_ver=145.0.7632.116 claude=2.1.306 (Claude Code)
+before-W5.T3 n=9 runs_with_ToolSearch=9
+  task context total  mean=70135 sd=25 min=70102 max=70176
+  first-turn context  mean=22948 sd=0
+  ToolSearch-turn delta mean=557 sd=1 min=555 max=558 n=9
+after-W5.T3 n=9 runs_with_ToolSearch=9
+  task context total  mean=69981 sd=143 min=69856 max=70276
+  first-turn context  mean=22904 sd=0
+  ToolSearch-turn delta mean=537 sd=84 min=484 max=710 n=9
