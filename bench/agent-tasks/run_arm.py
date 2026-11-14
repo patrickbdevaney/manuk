@@ -90,7 +90,7 @@ def arm_config(arm, tmp):
             return None, None
         cfg = {"mcpServers": {"browser": {"command": exe, "args": [], "env": {"MANUK_NO_RETRY": "1"}}}}
         allowed = "mcp__browser"
-    elif arm in ("manuk", "manuk+preload", "manuk+rollback", "manuk+rollback.v2", "manuk-prealwaysload", "manuk-lean", "manuk-noquery", "manuk-legacy-observe", "manuk-diffview-off"):  # W4.B1 before-arm: MANUK_MCP_BIN
+    elif arm in ("manuk", "manuk+preload", "manuk+rollback", "manuk+rollback.v2", "manuk-prealwaysload", "manuk-lean", "manuk-noquery", "manuk-legacy-observe", "manuk-diffview-off", "manuk-navcut"):  # W4.B1 before-arm: MANUK_MCP_BIN
         exe = mcp_bin()
         if not os.path.exists(exe):
             return None, None
@@ -103,6 +103,8 @@ def arm_config(arm, tmp):
             cfg["mcpServers"]["browser"]["env"] = {"MANUK_OBSERVE_MUTATE": "legacy"}
         if arm == "manuk-diffview-off":  # W5.T4.a.a before-arm: same binary, diff-or-view rule removed (session.rs MANUK_DIFFVIEW_MUTATE)
             cfg["mcpServers"]["browser"]["env"] = {"MANUK_DIFFVIEW_MUTATE": "off"}
+        if arm == "manuk-navcut":  # W5.T2.a.a.a: same binary, navigated act results cut to the URL change (MANUK_NAV_CUT)
+            cfg["mcpServers"]["browser"]["env"] = {"MANUK_NAV_CUT": "1"}
         allowed = "mcp__browser"
     elif arm in ("cdp-layer", "cdp-layer+pwfmt"):  # R4.1 (K1 arm 3): the manuk tool surface and disciplines over Chrome via CDP
         exe = mcp_bin()

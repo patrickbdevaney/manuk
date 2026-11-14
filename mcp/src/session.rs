@@ -2010,6 +2010,13 @@ impl<B: Backend> Session<B> {
             self.seed(&tree)?;
             self.snap = Some(self.snapshot(&tree));
             self.snap_url = url_now.clone();
+            // W5.T2.a.a.a: opt-in nav-cut. The new page's handles are already seeded, so the body is
+            // replaced by a pointer; the agent reads the page with observe when it needs it.
+            if std::env::var("MANUK_NAV_CUT").is_ok_and(|v| v == "1") {
+                return Ok(format!(
+                    "{evidence}\nnavigated: {url_before} → {url_now}\n(page body omitted: call observe to read the new page)"
+                ));
+            }
             let body = Self::fit(
                 self.lines(&tree, false, "all"),
                 DEFAULT_BUDGET_TOKENS / 2,
