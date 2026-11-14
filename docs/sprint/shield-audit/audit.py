@@ -128,6 +128,7 @@ class Mcp:
         self.p = subprocess.Popen([MCP_BIN], env={**os.environ, "MANUK_SHIELD_REASONS": "1"}, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                   stderr=subprocess.DEVNULL, text=True, bufsize=1)
         self.id = 0
+        self.buf = b""  # bytes read from the pipe but not yet split into lines (see rpc)
         self.rpc("initialize", {"protocolVersion": "2025-03-26", "capabilities": {},
                                 "clientInfo": {"name": "shield-audit", "version": "0"}})
         self.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
@@ -140,15 +141,24 @@ class Mcp:
         self.id += 1
         self.send({"jsonrpc": "2.0", "id": self.id, "method": method, "params": params})
         while True:
-            ready, _, _ = select.select([self.p.stdout], [], [], timeout)
-            if not ready:
-                raise TimeoutError(f"manuk-mcp silent for {timeout}s on {method}")
-            line = self.p.stdout.readline()
-            if not line:
-                raise RuntimeError("manuk-mcp closed stdout")
-            v = json.loads(line)
+            v = json.loads(self.line(timeout, method))
             if v.get("id") == self.id:
                 return v
+
+    def line(self, timeout, method):
+        """The next stdout line. Reads the fd itself: a buffered readline() can hold a response that select()
+        cannot see, so the client waited out the timeout (manuk-mcp sends a notification just before a response)."""
+        fd = self.p.stdout.fileno()
+        while b"\n" not in self.buf:
+            ready, _, _ = select.select([fd], [], [], timeout)
+            if not ready:
+                raise TimeoutError(f"manuk-mcp silent for {timeout}s on {method}")
+            chunk = os.read(fd, 65536)
+            if not chunk:
+                raise RuntimeError("manuk-mcp closed stdout")
+            self.buf += chunk
+        raw, _, self.buf = self.buf.partition(b"\n")
+        return raw.decode("utf-8")
 
     def call(self, name, args):
         r = self.rpc("tools/call", {"name": name, "arguments": args})
