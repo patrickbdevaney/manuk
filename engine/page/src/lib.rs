@@ -320,7 +320,7 @@ fn restyle_and_layout(
     // round, so the DOM and the dirty bits move, but the computed styles (and everything else layout
     // reads) come out equal. Layout reads no `class`/`style` attribute (those act through the
     // cascade, whose output is compared whole below), so the key leaves them out.
-    let memo_key = if dom.len() >= PASS_MEMO_MIN_NODES {
+    let memo_key = if dom.len() >= pass_memo_min_nodes() {
         layout_key(dom, sheets, fonts, viewport_width, images)
     } else {
         None
@@ -330,7 +330,7 @@ fn restyle_and_layout(
             c.borrow().as_ref().and_then(|m| {
                 // `layouts_run` unchanged = no other layout ran since, so the thread-local side
                 // outputs of `layout_document` (grid tracks, relative offsets, ...) are still ours.
-                (m.key == k && m.epoch == manuk_layout::layouts_run()).then_some(())?;
+                (m.key.0 == k.0 && m.epoch == manuk_layout::layouts_run()).then_some(())?;
                 if m.styles_in == styles {
                     return Some((m.styles_out.clone(), m.root_box.clone()));
                 }
@@ -351,6 +351,9 @@ fn restyle_and_layout(
             }
             return out;
         }
+        if std::env::var_os("MANUK_MEMO_WHY").is_some() {
+            log_memo_miss(k.0, dom.len(), &styles);
+        }
     }
     let styles_in = memo_key.map(|_| styles.clone());
     let t_layout = std::time::Instant::now();
@@ -368,7 +371,7 @@ fn restyle_and_layout(
     }
     if let (Some(k), Some(styles_in)) = (memo_key, styles_in) {
         // Only a layout slow enough to be worth the clones is remembered.
-        if (us_layout + us_cq) / 1000 >= PASS_MEMO_MIN_MS {
+        if (us_layout + us_cq) / 1000 >= pass_memo_min_ms() {
             LAST_LAYOUT.with(|c| {
                 *c.borrow_mut() = Some(LayoutMemo {
                     key: k,
@@ -395,13 +398,76 @@ fn restyle_and_layout(
     (styles, root_box)
 }
 
+/// `MANUK_MEMO_WHY=1`: say why the layout memo missed — which input moved since the remembered
+/// layout (the key = DOM shape/attrs/env, an intervening layout, or the computed styles, naming
+/// the first differing node and the properties that differ).
+fn log_memo_miss(key: u64, nodes: usize, styles: &StyleMap) {
+    LAST_LAYOUT.with(|c| match c.borrow().as_ref() {
+        None => tracing::info!("MEMO MISS: nothing remembered"),
+        Some(m) => {
+            let mut diffs: Vec<_> = styles
+                .iter()
+                .filter(|(n, st)| m.styles_in.get(n) != Some(*st))
+                .map(|(n, _)| *n)
+                .collect();
+            diffs.sort_by_key(|n| n.0);
+            let first = diffs.first().map(|n| {
+                let (a, b) = (
+                    format!("{:?}", m.styles_in.get(n)),
+                    format!("{:?}", styles[n]),
+                );
+                let fields = styles_field_diff(&a, &b);
+                format!("node {} fields {:?}", n.0, fields)
+            });
+            tracing::info!(
+                key_same = m.key.0 == key,
+                epoch_same = m.epoch == manuk_layout::layouts_run(),
+                nodes_then = m.styles_in.len(),
+                nodes_now = nodes,
+                styles_diff_nodes = diffs.len(),
+                first = first.as_deref().unwrap_or("-"),
+                "MEMO MISS"
+            );
+        }
+    });
+}
+
+/// Names of the top-level `Debug` fields whose rendering differs between two `ComputedStyle`s.
+fn styles_field_diff(a: &str, b: &str) -> Vec<String> {
+    let bs: Vec<&str> = b.split(", ").collect();
+    a.split(", ")
+        .filter(|f| !bs.contains(f))
+        .map(|f| f.split(':').next().unwrap_or(f).trim().to_string())
+        .collect()
+}
+
 /// Smallest document the layout memo bothers with; below it a layout is too cheap to be worth proving.
 const PASS_MEMO_MIN_NODES: usize = 1000;
+#[cfg(test)]
+thread_local! {
+    /// Unit tests lower both thresholds so a small fixture exercises the memo.
+    static PASS_MEMO_FORCE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+fn pass_memo_min_nodes() -> usize {
+    #[cfg(test)]
+    if PASS_MEMO_FORCE.with(|f| f.get()) {
+        return 0;
+    }
+    PASS_MEMO_MIN_NODES
+}
+fn pass_memo_min_ms() -> u64 {
+    #[cfg(test)]
+    if PASS_MEMO_FORCE.with(|f| f.get()) {
+        return 0;
+    }
+    PASS_MEMO_MIN_MS
+}
 /// Smallest layout (ms) that is stored. `MANUK_NO_PASS_MEMO=1` disables the memo (the gate's mutant).
 const PASS_MEMO_MIN_MS: u64 = 50;
 
 struct LayoutMemo {
-    key: u64,
+    /// (everything, everything but the decoded images)
+    key: (u64, u64),
     epoch: usize,
     /// The styles layout was handed (post-cascade, pre-`@container` re-pass).
     styles_in: StyleMap,
@@ -424,7 +490,7 @@ fn layout_key(
     fonts: &FontContext,
     viewport_width: f32,
     images: &std::collections::HashMap<manuk_dom::NodeId, std::rc::Rc<manuk_paint::DecodedImage>>,
-) -> Option<u64> {
+) -> Option<(u64, u64)> {
     use manuk_dom::NodeData;
     use std::hash::{Hash, Hasher};
     if std::env::var_os("MANUK_NO_PASS_MEMO").is_some() {
@@ -441,20 +507,6 @@ fn layout_key(
     let (iw, ih) = manuk_css::values::icb_size();
     (iw.to_bits(), ih.to_bits()).hash(&mut h);
     fonts.fingerprint().hash(&mut h);
-    let mut imgs: Vec<_> = images
-        .iter()
-        .map(|(n, i)| {
-            (
-                n.0,
-                i.width,
-                i.height,
-                i.rgba.len(),
-                std::rc::Rc::as_ptr(i) as usize,
-            )
-        })
-        .collect();
-    imgs.sort_unstable();
-    imgs.hash(&mut h);
     (
         dom.quirks(),
         dom.hovered(),
@@ -485,7 +537,26 @@ fn layout_key(
             other => std::mem::discriminant(other).hash(&mut h),
         }
     }
-    Some(h.finish())
+    // Hashed LAST so the key without images is the same stream minus this tail: a caller that
+    // compares the styles itself (they already carry every decoded size; `layout_document` takes
+    // no images) uses `.1` and so ignores a re-decoded identical image.
+    let no_images = h.finish();
+    let mut imgs: Vec<_> = images
+        .iter()
+        .map(|(n, i)| {
+            (
+                n.0,
+                i.width,
+                i.height,
+                i.rgba.len(),
+                std::rc::Rc::as_ptr(i) as usize,
+            )
+        })
+        .collect();
+    imgs.sort_unstable();
+    imgs.hash(&mut h);
+    imgs.hash(&mut h);
+    Some((h.finish(), no_images))
 }
 
 /// A hyperlink discovered in the page, with its href resolved to an absolute URL.
@@ -11095,7 +11166,49 @@ impl Page {
             scaled = manuk_css::zoom_styles(&self.styles, self.zoom);
             &scaled
         };
-        let root = layout_document(&self.dom, styles, fonts, viewport_width);
+        // **A relayout whose inputs equal the previous layout's IS that layout** — the same proof
+        // `restyle_and_layout` uses, here for the callers that lay out the styles they already hold
+        // (image settle, focus change). The Beds & Baths click laid the same 4,771-node tree out
+        // three times in a row this way (~175 ms each). Unzoomed only: zoom lays out scaled styles.
+        let memo_key = if self.zoom == 1.0 && self.dom.len() >= pass_memo_min_nodes() {
+            let sheets = self.all_sheets();
+            layout_key(&self.dom, &sheets, fonts, viewport_width, &self.images)
+        } else {
+            None
+        };
+        let reused = memo_key.and_then(|k| {
+            LAST_LAYOUT.with(|c| {
+                let c = c.borrow();
+                let m = c.as_ref()?;
+                (m.key.1 == k.1
+                    && m.epoch == manuk_layout::layouts_run()
+                    && m.styles_out == self.styles)
+                    .then(|| m.root_box.clone())
+            })
+        });
+        if memo_key.is_some() && reused.is_none() && std::env::var_os("MANUK_MEMO_WHY").is_some() {
+            log_memo_miss(memo_key.map_or(0, |k| k.0), self.dom.len(), &self.styles);
+        }
+        let root = match reused {
+            Some(r) => r,
+            None => {
+                let root = layout_document(&self.dom, styles, fonts, viewport_width);
+                if let Some(k) = memo_key {
+                    if t_layout.elapsed().as_millis() as u64 >= pass_memo_min_ms() {
+                        LAST_LAYOUT.with(|c| {
+                            *c.borrow_mut() = Some(LayoutMemo {
+                                key: k,
+                                epoch: manuk_layout::layouts_run(),
+                                styles_in: self.styles.clone(),
+                                styles_out: self.styles.clone(),
+                                root_box: root.clone(),
+                            })
+                        });
+                    }
+                }
+                root
+            }
+        };
         self.set_root_box(root);
         self.content_height = self.root_box.content_bottom();
         self.dom.clear_all_dirty();
@@ -16454,6 +16567,47 @@ mod tests {
             before,
             page.content_height
         );
+    }
+
+    /// RG.S1.a.a.a.b.a.a.a.a.a: `relayout` over an unchanged tree reuses the previous layout, and
+    /// what it installs equals a fresh layout; any input change (a style, here) lays out again.
+    #[test]
+    fn rg_s1_relayout_with_equal_inputs_reuses_the_previous_layout() {
+        PASS_MEMO_FORCE.with(|f| f.set(true));
+        let fonts = FontContext::new();
+        let html = "<body><div id=a style='width:100px;height:20px'>hi</div><p>text</p></body>";
+        let mut page = Page::load(html, "x", &fonts, 800.0);
+        // Other tests' layouts bump the process-wide epoch, which (correctly) defeats a reuse, so
+        // retry: some attempt must run with no foreign layout in between.
+        let mut reused = false;
+        for _ in 0..200 {
+            page.relayout(&fonts, 800.0); // lays out and remembers
+            let before = manuk_layout::layouts_run();
+            page.relayout(&fonts, 800.0);
+            if manuk_layout::layouts_run() == before {
+                reused = true;
+                break;
+            }
+        }
+        assert!(reused, "an equal-input relayout must not lay out again");
+        let fresh = layout_document(&page.dom, &page.styles, &fonts, 800.0);
+        assert_eq!(
+            format!("{:?}", page.root_box),
+            format!("{:?}", fresh),
+            "the reused layout must equal a fresh one"
+        );
+        // A real change is not reused.
+        let a = page
+            .dom
+            .descendants(page.dom.root())
+            .find(|&n| page.dom.element(n).and_then(|e| e.id()) == Some("a"))
+            .unwrap();
+        page.dom_mut()
+            .set_attr(a, "style", "width:100px;height:90px");
+        page.recascade_all_sources(800.0);
+        let h0 = page.content_height;
+        page.relayout(&fonts, 800.0);
+        assert!(page.content_height > h0, "a changed style must re-lay out");
     }
 
     #[test]

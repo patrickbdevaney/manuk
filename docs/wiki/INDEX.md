@@ -167,6 +167,7 @@
   - L37 · An opacity-only restyle reuses the memoed fragment tree (RG.S1.a.a.a.b.a.a)
   - L40 · font-family resolution is memoed per list (RG.S1.a.a.a.b.a.b)
   - L43 · Literal-1.0 boxes under an opacity-0 ancestor (RG.S1.a.a.a.b.a.a.a)
+  - L48 · relayout reuses the previous layout too (RG.S1.a.a.a.b.a.a.a.a.a)
 
 ## A linked sheet is in the CSSOM
 `docs/wiki/a-linked-sheet-is-in-the-cssom.md`
@@ -3801,4 +3802,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3100 sections across 174 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3101 sections across 174 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
