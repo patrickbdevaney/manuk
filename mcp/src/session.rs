@@ -492,6 +492,28 @@ fn honour_query(q: Option<&str>) -> Option<&str> {
     }
 }
 
+/// W5.T0.a.a, test and bench only: `MANUK_NAV_CAP_BYTES=<n>` caps the navigate observation at `n` bytes so the
+/// causal test can give manuk the Playwright snapshot size. The cut lands on a char boundary and says so.
+/// Without the variable (or an unparseable value) the observation is returned unchanged.
+fn nav_cap(text: String) -> String {
+    let cap = std::env::var("MANUK_NAV_CAP_BYTES").ok().and_then(|v| v.parse::<usize>().ok());
+    cap_to(text, cap)
+}
+
+fn cap_to(text: String, cap: Option<usize>) -> String {
+    let Some(cap) = cap else {
+        return text;
+    };
+    if text.len() <= cap {
+        return text;
+    }
+    let mut end = cap;
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}\n[truncated: navigate observation capped at {cap} bytes]", &text[..end])
+}
+
 impl<B: Backend> Session<B> {
     pub fn new(b: B) -> Self {
         Session {
@@ -1380,6 +1402,7 @@ impl<B: Backend> Session<B> {
                     honour_query(arg_str(a, "query")),
                 )
                 .await
+                .map(nav_cap)
                 .map(Output::Text),
             "observe" => self
                 .observe(
@@ -3003,4 +3026,29 @@ fn preview(key: &str, v: &str) -> String {
 fn inside_dialog(n: &manuk_a11y::A11yNode, id: NodeId, in_dialog: bool) -> bool {
     let d = in_dialog || matches!(n.role, Role::Dialog | Role::AlertDialog);
     (n.node == id && d) || n.children.iter().any(|c| inside_dialog(c, id, d))
+}
+
+#[cfg(test)]
+mod nav_cap_tests {
+    use super::cap_to;
+
+    #[test]
+    fn unset_or_large_observation_is_unchanged() {
+        assert_eq!(cap_to("abcdef".into(), None), "abcdef");
+        assert_eq!(cap_to("abcdef".into(), Some(6)), "abcdef");
+    }
+
+    #[test]
+    fn long_observation_is_cut_and_says_so() {
+        let out = cap_to("abcdefghij".into(), Some(4));
+        assert!(out.starts_with("abcd\n[truncated"), "{out}");
+        assert!(out.ends_with("capped at 4 bytes]"), "{out}");
+    }
+
+    #[test]
+    fn cut_lands_on_a_char_boundary() {
+        // 'é' is two bytes: a cap of 3 falls inside it and must back off to 2.
+        let out = cap_to("aéb".into(), Some(2));
+        assert!(out.starts_with("a\n[truncated"), "{out}");
+    }
 }
