@@ -12821,14 +12821,46 @@ impl Page {
         // The geometry needed to tell the two cases apart was already on the fragment, and the rule
         // now lives on `TextFragment::continues` — beside the data, because find-in-page and
         // selection-copy had made the identical mistake independently (tick 578).
-        let mut out = String::new();
-        let mut prev: Option<manuk_layout::TextFragment> = None;
+        // ── DOM ORDER, NOT BOX-TREE ORDER. Out-of-flow boxes (absolute/fixed, floats) hang off a
+        // different parent in the box tree than in the DOM, so a hidden page-top nav came out AFTER
+        // the footer (Wikipedia `include_hidden` extract). Runs are sorted (stably) by the pre-order
+        // position of their node; a run with no node keeps the position of the one before it.
+        let mut frags_all: Vec<manuk_layout::TextFragment> = Vec::new();
         self.root_box.walk(&mut |b| {
             if let BoxContent::Inline(frags) = &b.content {
-                for f in frags {
-                    if f.text.is_empty() {
-                        continue;
-                    }
+                for f in frags.iter().filter(|f| !f.text.is_empty()) {
+                    let mut f = f.clone();
+                    // A bare text run carries no node of its own: it sits in its block's.
+                    f.node = f.node.or(b.node);
+                    frags_all.push(f);
+                }
+            }
+        });
+        if frags_all.iter().any(|f| f.node.is_some()) {
+            let order: std::collections::HashMap<NodeId, usize> = std::iter::once(self.dom.root())
+                .chain(self.dom.descendants(self.dom.root()))
+                .enumerate()
+                .map(|(i, n)| (n, i))
+                .collect();
+            let mut last = 0usize;
+            let mut keys = Vec::with_capacity(frags_all.len());
+            for f in &frags_all {
+                if let Some(&k) = f.node.and_then(|n| order.get(&n)) {
+                    last = k;
+                }
+                keys.push(last);
+            }
+            let mut idx: Vec<usize> = (0..frags_all.len()).collect();
+            idx.sort_by_key(|&i| keys[i]);
+            let mut slots: Vec<Option<manuk_layout::TextFragment>> =
+                frags_all.into_iter().map(Some).collect();
+            frags_all = idx.into_iter().filter_map(|i| slots[i].take()).collect();
+        }
+        let mut out = String::new();
+        let mut prev: Option<manuk_layout::TextFragment> = None;
+        {
+            {
+                for f in &frags_all {
                     // Nothing emitted yet ⇒ no separator before the first run.
                     if prev.as_ref().is_some_and(|p| !f.continues(p)) {
                         out.push(' ');
@@ -12837,7 +12869,7 @@ impl Page {
                     prev = Some(f.clone());
                 }
             }
-        });
+        }
         out
     }
 }
