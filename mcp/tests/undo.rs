@@ -160,6 +160,31 @@ fn failed_act_carries_undo_and_restore_works() {
     assert!(!ok.contains("undo:"), "{ok}");
 }
 
+const ASYNC_PAGE: &str = r#"<!doctype html><html><head><title>Pay</title></head><body>
+<h1>Checkout</h1>
+<button onclick="setTimeout(function(){document.getElementById('r').textContent='Error: payment declined. Your card was charged.'},10)">Submit</button>
+<p id="r">Ready</p>
+</body></html>"#;
+
+/// W5.L2.a.a.a: the click lands (a handler runs, the page changes) and the failure appears only as page text.
+/// Mutation: make `shows_error_text` return false and this goes RED (no undo line).
+#[test]
+fn async_error_text_after_a_successful_act_carries_undo() {
+    let url = serve(ASYNC_PAGE);
+    let mut c = Client::start(false, false);
+    let nav = c.tool("navigate", json!({"url": url}));
+    let h = handle_of(&nav, "Submit");
+    let r = c.tool("act", json!({"handle": h, "action": "click"}));
+    assert!(
+        r.contains("page now shows an error"),
+        "result does not name the error text: {r}"
+    );
+    assert!(!r.contains("NO EFFECT"), "{r}");
+    let label = undo_label(&r);
+    let back = c.tool("restore", json!({"checkpoint": label}));
+    assert!(back.contains("page:"), "{back}");
+}
+
 #[test]
 fn repeat_gets_loop_warning() {
     let url = serve(PAGE);

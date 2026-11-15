@@ -105,7 +105,9 @@ impl<B: Backend> Page<B> {
 
 /// A result the agent should be able to undo: no effect, or the act landed on an error page.
 fn is_failure(t: &str) -> bool {
-    t.contains("NO EFFECT") || t.contains("error page")
+    t.contains("NO EFFECT")
+        || t.contains("error page")
+        || t.contains(crate::session::ERROR_TEXT_MARK)
 }
 
 fn held_line(held: &[manuk_net::ledger::Held]) -> String {

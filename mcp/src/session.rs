@@ -496,7 +496,9 @@ fn honour_query(q: Option<&str>) -> Option<&str> {
 /// causal test can give manuk the Playwright snapshot size. The cut lands on a char boundary and says so.
 /// Without the variable (or an unparseable value) the observation is returned unchanged.
 fn nav_cap(text: String) -> String {
-    let cap = std::env::var("MANUK_NAV_CAP_BYTES").ok().and_then(|v| v.parse::<usize>().ok());
+    let cap = std::env::var("MANUK_NAV_CAP_BYTES")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok());
     cap_to(text, cap)
 }
 
@@ -511,7 +513,10 @@ fn cap_to(text: String, cap: Option<usize>) -> String {
     while !text.is_char_boundary(end) {
         end -= 1;
     }
-    format!("{}\n[truncated: navigate observation capped at {cap} bytes]", &text[..end])
+    format!(
+        "{}\n[truncated: navigate observation capped at {cap} bytes]",
+        &text[..end]
+    )
 }
 
 impl<B: Backend> Session<B> {
@@ -1358,7 +1363,18 @@ impl<B: Backend> Session<B> {
                 let t = manuk_net::secrets::redact(&t);
                 let alt = self.view_alt.take();
                 let t = if matches!(tool, "act" | "type") && !a.contains_key("steps") && !detail {
-                    concise(&t).unwrap_or(t)
+                    match concise(&t) {
+                        // The settled page's text lines live in the full view, not the raw `~text` diff.
+                        Some(c) => match alt.as_ref().and_then(|(_, v)| added_error_text(v)) {
+                            Some(e) => c.replacen(
+                                "; url unchanged",
+                                &format!("; {ERROR_TEXT_MARK}{e:?}; url unchanged"),
+                                1,
+                            ),
+                            None => c,
+                        },
+                        None => t,
+                    }
                 } else {
                     t
                 };
@@ -2943,6 +2959,22 @@ impl<B: Backend> Session<B> {
 /// dialog or popup, a rebind, a confirmation) keeps the full diff, and `detail=true` always does.
 /// `MANUK_CONCISE_MUTATE=full` removes the whole rule; `=always` removes the auto-detail exceptions
 /// (the gate's mutants).
+/// W5.L2.a.a.a: marks an otherwise successful act whose settled page now shows an error text (an async
+/// fetch result); the hub reads it to offer the undo line.
+pub(crate) const ERROR_TEXT_MARK: &str = "page now shows an error: ";
+
+/// The first plain-text line (`- text` in a full view, `+ text` in a diff) that opens with an error word.
+fn added_error_text(full: &str) -> Option<String> {
+    full.lines().find_map(|l| {
+        let t = l.strip_prefix("- ").or_else(|| l.strip_prefix("+ "))?;
+        let low = t.to_ascii_lowercase();
+        ["error", "failed", "failure"]
+            .iter()
+            .any(|w| low.starts_with(w))
+            .then(|| t.chars().take(80).collect())
+    })
+}
+
 fn concise(full: &str) -> Option<String> {
     if std::env::var("MANUK_CONCISE_MUTATE").is_ok_and(|v| v == "full") {
         return None;
