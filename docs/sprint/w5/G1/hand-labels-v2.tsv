@@ -1,0 +1,11 @@
+arm	task	run	hand_label	evidence
+cdp-layer+pwfmt	dashdish-10	3	target	Add button OCCLUDED by unlabeled modal form; Escape, scroll, fresh tab all showed it; handoff unavailable
+cdp-layer+pwfmt	dashdish-7	2	target	modal overlay with no close control blocked the store page; Escape no effect; stopped
+cdp-layer+pwfmt	fly-unified-6	1	target	modal overlay reappears after One-way, covers Origin field; Escape and handoff failed
+cdp-layer+pwfmt	fly-unified-6	2	target	modal overlay blocks booking form with no close control; Escape no effect; handoff failed
+cdp-layer+pwfmt	gomail-3	3	act	compose fields typed ~6 times, every call STALE (handle gone) incl. right after observe; never landed
+cdp-layer+pwfmt	gomail-5	3	act	type/focus/fill_form all STALE on every attempt, also after reopening Compose; never landed
+cdp-layer+pwfmt	opendining-10	1	perceive	booking completed; failure is a tie/ranking pick from the menu survey (and past date), not a browser block
+cdp-layer+pwfmt	opendining-10	2	perceive	menu section showed no dishes in the page text so no vegetarian counts; model could not read the menus
+cdp-layer+pwfmt	staynb-2	1	target	Reserve covered by overlay with no close control; Escape and re-clicks failed; handoff unavailable
+cdp-layer+pwfmt	staynb-4	1	perceive	reached Confirm-and-pay with empty card fields; model chose to stop rather than invent payment details
