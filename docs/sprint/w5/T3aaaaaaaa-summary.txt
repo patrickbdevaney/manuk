@@ -1,0 +1,20 @@
+W5.T3.a.a.a.a.a.a.a.a: does the ToolSearch call come back in a time-spread rerun of the navigate-quiet task?
+chrome_ver=145.0.7632.116 claude=2.1.306 (Claude Code)
+after binary: manuk-mcp-3c0d499d sha b9742038db32f0fe (/home/patrickd/.cache/manuk-t3aaaaa/bin/manuk-mcp-3c0d499d)
+
+Design: 20 runs of the navigate-quiet task (T3aaaaaa-capture.py, 5 runs per batch), batch k started at T0+(k-1)*40min,
+T0 = 18:26:21 local. Driver: T3aaaaaaaa-spread.sh. Each batch has its own cwd; reqdiff compares the four windows.
+
+batch  window                    runs  runs_with_ToolSearch  identical_to_first
+1      18:26:21-18:26:40        5     0                     1
+2      19:06:21-19:06:43        5     0                     1
+3      19:46:21-19:46:45        5     0                     1
+4      20:26:21-20:26:49        5     0                     1
+Total: 20 runs, span first run start to last run end = 120 min 28 s, ToolSearch calls 0.
+Request digests identical across the four windows: tools 30be25928218ea22, system 02dd2ae7568d71d4, params 918b1dda41acc1b9.
+
+Red checks: reqdiff --self-test mutates one tool description and the digest changes (rc=1, diff fires);
+an empty group is refused (rc=2, "no sessions in -tmp-w5t3aaaaaa-cwd-nonexist").
+
+Reading: the 8-of-9 ToolSearch regime (T3aaaaa, 18:12) did not recur at any of four times across two hours on this binary.
+The cause of the earlier switch is still not identified; this measurement rules out a time-of-day recurrence, not the cause.
