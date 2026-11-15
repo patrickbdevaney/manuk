@@ -26,7 +26,7 @@ ACTS = {"act", "type", "fill_form", "browser_click", "browser_type", "browser_fi
 # a result that is not a success: the same signals real_classify counts as act failures, plus plain errors
 FAIL = re.compile(r"^no change \| url: unchanged|STALE|no longer on the page|handles are per-page|is unknown \(handles|"
                   r"bad page handle|not found in the current page snapshot|is not supported by this backend|"
-                  r"no enclosing <form>|TimeoutError|^\s*(Error|error)\b|### Error", re.M)
+                  r"no enclosing <form>|no human surface is attached|TimeoutError|^\s*(Error|error)\b|### Error", re.M)
 ARMS = ["cdp-layer", "cdp-layer+pwfmt"]
 CLASSES = ["perceive", "target", "act", "tool-choice", "turn-limit"]
 
@@ -58,6 +58,20 @@ def unrecovered(path):
     return c
 
 
+TYPING = {"type", "fill_form", "browser_type", "browser_fill_form"}
+
+
+def typing_never_landed(path):
+    """>=2 typing results and every one of them failed: the agent never got text into a field (STALE-only typing)."""
+    res = [b for n, b in rc.parse(path)[2] if n in TYPING]
+    return len(res) >= 2 and all(FAIL.search(b) for b in res)
+
+
+def action_failed(path):
+    """Some action result the agent saw was a refusal/no-effect: an overlay it merely read about is not a target failure."""
+    return any(n in ACTS and FAIL.search(b) for n, b in rc.parse(path)[2])
+
+
 def classify(path, mutate=None):
     f = rc.features(path)
     if f["is_error"]:
@@ -65,10 +79,10 @@ def classify(path, mutate=None):
     if action_calls(path) == 0:
         return "tool-choice"
     u = unrecovered(path)
-    act = u["nochange"] >= 2 or u["stale"] >= 2 or u["unsup"] or u["enter_gap"] or (f["typed_fail_text"] and f["type_calls"]) or u["timeout"]
+    act = u["nochange"] >= 2 or u["stale"] >= 2 or u["unsup"] or u["enter_gap"] or (f["typed_fail_text"] and f["type_calls"]) or u["timeout"] or typing_never_landed(path)
     if act:
         return None if mutate == "drop-act" else "act"  # mutant: the act rule is gone, so its runs stay unclassified
-    if f["strict"] or f["ambig_text"] or f["occl"] or f["dialog_text"]:
+    if f["strict"] or f["ambig_text"] or ((f["occl"] or f["dialog_text"]) and action_failed(path)):
         return "target"
     return "perceive"
 
