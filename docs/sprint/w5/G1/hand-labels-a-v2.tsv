@@ -1,0 +1,11 @@
+arm	task	run	hand_label	evidence
+cdp-layer	gomail-5	1	perceive	custom schedule-send date picker: read-only date field, day cells not found by find; stopped with draft unscheduled
+cdp-layer	staynb-2	3	none	reached booking page with right party after clearing an occluding backdrop; stopped on its own payment-safety decision (not one of the five classes)
+cdp-layer	opendining-10	3	perceive	Menu heading empty on three detail pages, /menu 404; no dishes to read
+cdp-layer	gomail-8	2	none	moved four github.com emails to Trash and verified Trash lists all four; no blocker or failure in the transcript (outcome vs grader not examined)
+cdp-layer	gomail-8	1	none	opened each email to confirm github.com sender, moved four to Trash, verified; no blocker or failure in the transcript
+cdp-layer	opendining-10	1	perceive	Menu heading empty on three detail pages; screenshot confirmed blank section
+cdp-layer	opendining-10	2	perceive	Menu heading empty on four detail pages; text/find/scroll found no dishes
+cdp-layer	gomail-5	3	perceive	time listbox shows 05..55 minutes but no 00 / 9 hours option found by find; stopped with date set, time unset
+cdp-layer	dashdish-10	2	target	Add to cart covered by modal overlay h312 with no close control; OCCLUDED; model refused to route around it and stopped
+cdp-layer	opendining-4	1	none	booking page ignored the search date and party size (site behaviour); model stopped rather than book the wrong slot; not one of the five classes
