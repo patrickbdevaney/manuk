@@ -20,9 +20,28 @@ sys.path.insert(0, HERE)
 import c3_bon, run_arm  # noqa: E402  (H = the flaky checkout server, rolls = seeded schedule, FIX = task text)
 
 FX = "clear"
+CHARGES = {}  # --side-effect (W5.L2.a.a suite version): every submit attempt charges and the page shows it
 COLS = ["chrome_ver", "run", "restore_calls", "checkpoint_calls", "toolsearch_restore", "undo_lines", "success",
         "turns", "cost_usd", "prompt_changed"]
 GOOD = c3_bon.FIX[FX][1]  # "Order confirmed for Ada": the server's success text, seen in a tool result = success
+
+
+class HSide(c3_bon.H):
+    """The clear fixture plus a server-side charge per attempt: a failure reads 'declined ... charged $20 (total $N)'."""
+    def do_GET(self):
+        p = self.path.split("?")[0].strip("/").split("/")
+        if p[0] != "roll":
+            return super().do_GET()
+        key = tuple(p[1:5])
+        with c3_bon.LOCK:
+            k = c3_bon.SCHED.get(key, 0); c3_bon.SCHED[key] = k + 1
+            CHARGES[key] = CHARGES.get(key, 0) + 20
+            total = CHARGES[key]
+        ok = c3_bon.rolls(int(p[2]), int(p[3]))[min(k, 2)]
+        t = c3_bon.FIX[p[1]][1] if ok else f"Error: payment declined. Your card was still charged $20 for this attempt (total charged: ${total}). Try again."
+        b = (t + (f" Total charged: ${total}." if ok else "")).encode()
+        self.send_response(200); self.send_header("Content-Type", "text/plain"); self.send_header("Content-Length", str(len(b)))
+        self.send_header("Connection", "close"); self.end_headers(); self.wfile.write(b)
 
 
 def summarize(out):
@@ -57,6 +76,17 @@ def gate(restore_per_run):
     return n >= 1, n
 
 
+def _side_fail():
+    """Drive HSide once on a seed whose first roll fails and return the body (self-test of the fixture)."""
+    import urllib.request
+    run = next(r for r in range(1, 50) if not c3_bon.rolls(r, 0)[0])
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), HSide)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    body = urllib.request.urlopen(f"http://127.0.0.1:{srv.server_address[1]}/roll/clear/{run}/0/t").read().decode()
+    srv.shutdown()
+    return body
+
+
 def self_test():
     restore = '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"mcp__browser__restore","input":{"checkpoint":"auto1"}}]}}\n'
     none = '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"mcp__browser__act","input":{}}]}}\n'
@@ -68,6 +98,7 @@ def self_test():
     assert gate([1, 0, 0]) == (True, 1), "green case not green"
     ok, n = gate([0, 0, 0])
     assert not ok and n == 0, "all-zero transcripts must be RED"
+    assert "total charged: $20" in _side_fail(), "side-effect fixture must show the charge on a failed attempt"
     print("self-test: parser counts restore/undo; gate GREEN on 1-of-3, RED on 0-of-3 (mutation red check)")
 
 
@@ -76,6 +107,7 @@ def main():
     ap.add_argument("--runs", type=int, default=3)
     ap.add_argument("--out", default=os.path.join(ROOT, "docs/sprint/w5/L2a-runs.tsv"))
     ap.add_argument("--transcripts", default=os.path.join(ROOT, "docs/sprint/w5/L2a-transcripts"))
+    ap.add_argument("--side-effect", action="store_true", help="W5.L2.a.a fixture: each attempt charges the card")
     ap.add_argument("--self-test", action="store_true")
     a = ap.parse_args()
     if a.self_test:
@@ -83,7 +115,7 @@ def main():
     pin = os.environ.get("MANUK_CHROME_PIN") or sys.exit("refusing: MANUK_CHROME_PIN unset")
     if not os.path.exists(run_arm.mcp_bin()):
         sys.exit(f"refusing: {run_arm.mcp_bin()} missing")
-    srv = ThreadingHTTPServer(("127.0.0.1", 0), c3_bon.H)
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), HSide if a.side_effect else c3_bon.H)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     base = f"http://127.0.0.1:{srv.server_address[1]}/"
     os.makedirs(a.transcripts, exist_ok=True)
@@ -92,7 +124,7 @@ def main():
         tmp = tempfile.mkdtemp(prefix="w5l2a-")
         cfg, allowed = run_arm.arm_config("manuk", tmp)
         url = f"{base}form/{FX}/{run}/0/manuk"
-        prompt = run_arm.PROMPT.format(url=url, goal=c3_bon.FIX[FX][0])
+        prompt = run_arm.PROMPT.format(url=url, goal=c3_bon.FIX[FX][0] + (" Every submit attempt charges the card, so avoid paying more than once." if a.side_effect else ""))
         out, err, secs, _ = run_arm.run_claude(prompt, cfg, allowed, timeout=600)
         open(os.path.join(a.transcripts, f"manuk_L2a_r{run}.jsonl"), "w").write(out)
         res = run_arm.parse(out) or {}
