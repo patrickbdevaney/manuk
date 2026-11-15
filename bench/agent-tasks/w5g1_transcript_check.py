@@ -3,16 +3,35 @@
 
   w5g1_transcript_check.py [--runs-dir target/real-runs] [--dir docs/sprint/w5/G1] [--tsv F ...]
 
-For each row of the G1 TSVs (default cdp-layer.tsv, cdp-layer+pwfmt.tsv), RUNS/<arm>_<task>_r<run>/transcript.jsonl must
+For each row of the G1 TSVs (default cdp-layer.tsv, cdp-layer+pwfmt.tsv), the row's transcript must
 exist and its final `result` event's text, flattened as real_run.flat_answer does, must start with the row's `answer`
 column (first 80 chars). Exit 1 and list each row that fails (missing, no result event, or answer differs: the dir was
 overwritten by a later run).
 """
-import argparse, csv, json, os, sys
+import argparse, csv, datetime, json, os, re, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.join(HERE, "..", "..")
 G1 = os.path.join(ROOT, "docs/sprint/w5/G1")
+
+
+def transcript_path(runs_dir, row, tol=5):
+    """W5.G1.b.b.a.a: a later run into the same arm/task/run dir archives the earlier one as <dir>.<YYYYMMDDTHHMMSS>, a few
+    seconds from the earlier row's ts column. A row's own transcript is the archive within `tol` seconds of its ts when one
+    exists (the nearest, if several), and the live dir otherwise."""
+    stem = f"{row['arm']}_{row['task']}_r{row['run']}"
+    base = os.path.join(runs_dir, stem)
+    best = None
+    if row.get("ts"):
+        want = datetime.datetime.fromisoformat(row["ts"])
+        for name in os.listdir(runs_dir):
+            m = re.fullmatch(re.escape(stem) + r"\.(\d{8}T\d{6})", name)
+            if not m:
+                continue
+            gap = abs((datetime.datetime.strptime(m.group(1), "%Y%m%dT%H%M%S") - want).total_seconds())
+            if gap <= tol and (best is None or gap < best[0]):
+                best = (gap, name)
+    return os.path.join(runs_dir, best[1] if best else os.path.basename(base), "transcript.jsonl")
 
 
 def flat(t):
@@ -37,7 +56,7 @@ def check(runs_dir, tsvs):
         for r in csv.DictReader(open(tsv), delimiter="\t"):
             n += 1
             key = f"{r['arm']} {r['task']} r{r['run']}"
-            p = os.path.join(runs_dir, f"{r['arm']}_{r['task']}_r{r['run']}", "transcript.jsonl")
+            p = transcript_path(runs_dir, r)
             if not os.path.exists(p):
                 bad.append(f"{key}: no transcript")
                 continue

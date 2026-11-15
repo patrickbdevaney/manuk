@@ -3,6 +3,9 @@
 docs/sprint/w5/G1/causes.tsv says. Exit 1 on any mismatch, so an edited count goes red.
 
   w5g1_counts_check.py [--md docs/sprint/w5/G1.md] [--causes docs/sprint/w5/G1/causes.tsv]
+                       [--causes-a docs/sprint/w5/G1/causes-v2.tsv]
+
+(b) is counted from --causes; (a) from --causes-a, the causes file derived from cdp-layer-v2.tsv (W5.G1.b.b.a.a).
 
 Checked in G1.md:
 - one bullet per class, "- `<class>`: ... **N** in (a), **M** in (b)." (exactly two bold numbers per bullet);
@@ -63,8 +66,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--md", default=os.path.join(ROOT, "docs/sprint/w5/G1.md"))
     ap.add_argument("--causes", default=os.path.join(ROOT, "docs/sprint/w5/G1/causes.tsv"))
+    ap.add_argument("--causes-a", default=os.path.join(ROOT, "docs/sprint/w5/G1/causes-v2.tsv"))
     a = ap.parse_args()
     counts = causes_counts(a.causes)
+    counts[ARMS["a"]] = causes_counts(a.causes_a)[ARMS["a"]]  # (a) is the v2 rows; causes.tsv has no (a) rows
     text = open(a.md).read()
     bad = []
 

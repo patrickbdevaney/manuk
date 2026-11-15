@@ -4,6 +4,10 @@ target, act, tool-choice, turn-limit), from the stream-json transcript; then the
 Playwright passes and cdp-layer fails.
 
   w5g1_report.py [--runs-dir target/real-runs] [--dir docs/sprint/w5/G1] [--mutate drop-act]
+                 [--arm-tsv F] [--causes-out F] [--table-out F]
+
+--arm-tsv replaces the (a) rows (default DIR/cdp-layer.tsv), e.g. cdp-layer-v2.tsv; --causes-out and --table-out keep that
+run's output apart from DIR/causes.tsv and DIR/table.tsv.
 (causes.tsv is derived only from rows whose transcript passes w5g1_transcript_check's answer match.)
 
 Inputs: DIR/<arm>.tsv for arm in cdp-layer (a: current observation) and cdp-layer+pwfmt (b: Playwright-shaped snapshot,
@@ -87,8 +91,8 @@ def classify(path, mutate=None):
     return "perceive"
 
 
-def load(dirpath, arm):
-    rows = list(csv.DictReader(open(os.path.join(dirpath, f"{arm}.tsv")), delimiter="\t"))
+def load(path):
+    rows = list(csv.DictReader(open(path), delimiter="\t"))
     return {(r["task"], int(r["run"])): r for r in rows}
 
 
@@ -97,16 +101,21 @@ def main():
     ap.add_argument("--runs-dir", default=os.path.join(ROOT, "target/real-runs"))
     ap.add_argument("--dir", default=os.path.join(ROOT, "docs/sprint/w5/G1"))
     ap.add_argument("--mutate", choices=["drop-act"])
+    ap.add_argument("--arm-tsv")
+    ap.add_argument("--causes-out")
+    ap.add_argument("--table-out")
     a = ap.parse_args()
     bad, causes, rows, skipped = [], [], {}, []
+    paths = {"cdp-layer": a.arm_tsv or os.path.join(a.dir, "cdp-layer.tsv"),
+             "cdp-layer+pwfmt": os.path.join(a.dir, "cdp-layer+pwfmt.tsv")}
     for arm in ARMS:
-        rows[arm] = load(a.dir, arm)
+        rows[arm] = load(paths[arm])
         keys = collections.Counter(k[0] for k in rows[arm])
         for task, n in keys.items():
             if n != 3:
                 bad.append(f"{arm} {task}: {n} runs, not 3")
         for (task, run), r in sorted(rows[arm].items()):
-            p = os.path.join(a.runs_dir, f"{arm}_{task}_r{run}", "transcript.jsonl")
+            p = tc.transcript_path(a.runs_dir, r)
             if not os.path.exists(p):
                 bad.append(f"{arm} {task} r{run}: no transcript")
                 continue
@@ -119,7 +128,7 @@ def main():
                 if c not in CLASSES:
                     bad.append(f"{arm} {task} r{run}: unclassified")
                 causes.append((arm, task, run, c))
-    with open(os.path.join(a.dir, "causes.tsv"), "w") as fh:
+    with open(a.causes_out or os.path.join(a.dir, "causes.tsv"), "w") as fh:
         fh.write("arm\ttask\trun\tclass\n" + "".join("\t".join(map(str, c)) + "\n" for c in causes))
     tasks = sorted({t for arm in ARMS for (t, _) in rows[arm]})
     lines = ["task\t" + "\t".join(f"{arm} (runs pass / 3)" for arm in ARMS)]
@@ -129,7 +138,7 @@ def main():
             ps = [int(rows[arm][(t, r)]["pass"]) for r in (1, 2, 3) if (t, r) in rows[arm]]
             cells.append(f"{sum(ps)}/{len(ps)}")
         lines.append(t + "\t" + "\t".join(cells))
-    with open(os.path.join(a.dir, "table.tsv"), "w") as fh:
+    with open(a.table_out or os.path.join(a.dir, "table.tsv"), "w") as fh:
         fh.write("\n".join(lines) + "\n")
     print("\n".join(lines))
     for arm in ARMS:
