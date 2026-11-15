@@ -32,8 +32,12 @@ ACTS = {"act", "type", "fill_form", "browser_click", "browser_type", "browser_fi
 FAIL = re.compile(r"^no change \| url: unchanged|STALE|no longer on the page|handles are per-page|is unknown \(handles|"
                   r"bad page handle|not found in the current page snapshot|is not supported by this backend|"
                   r"no enclosing <form>|no human surface is attached|TimeoutError|^\s*(Error|error)\b|### Error", re.M)
+# W5.G1.b.c.a.a.a.a.a: perceive needs the agent's own account of an empty/missing observation; without it the run is `unexplained`
+EMPTY = re.compile(r"no dishes|\bempty\b|no add button|no (?:\w+ )?(?:item|dish|result)s?\b|"
+                   r"not (?:visible|shown|listed|present)|nothing (?:beneath|under|appeared)|no .{0,40}appear|did(?:n't| not) appear|"
+                   r"doesn't (?:appear|have|show)|(?:couldn't|could not|did not|didn't) (?:find|see)|found no|none of the", re.I)
 ARMS = ["cdp-layer", "cdp-layer+pwfmt"]
-CLASSES = ["perceive", "target", "act", "tool-choice", "turn-limit", "grader-issue"]
+CLASSES = ["perceive", "target", "act", "tool-choice", "turn-limit", "grader-issue", "unexplained"]
 # W5.G1.b.b.a.a.a.a.a: gomail-8 fails only checkpoint 2 (exactly one email updated) while the goal asks for all of them
 # (docs/sprint/w5/G1/gomail8-grader.md): a task/grader finding, not an agent-side class, so it is not hand-labelled.
 GRADER_ISSUE = {("gomail-8", "[1, 1, 0]")}
@@ -92,7 +96,9 @@ def classify(path, mutate=None):
         return None if mutate == "drop-act" else "act"  # mutant: the act rule is gone, so its runs stay unclassified
     if f["strict"] or f["ambig_text"] or ((f["occl"] or f["dialog_text"]) and action_failed(path)):
         return "target"
-    return "perceive"
+    if mutate == "perceive-fallback" or EMPTY.search(rc.parse(path)[1]):  # mutant: the old unconditional fallback
+        return "perceive"
+    return "unexplained"
 
 
 def load(path):
@@ -104,7 +110,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--runs-dir", default=os.path.join(ROOT, "target/real-runs"))
     ap.add_argument("--dir", default=os.path.join(ROOT, "docs/sprint/w5/G1"))
-    ap.add_argument("--mutate", choices=["drop-act"])
+    ap.add_argument("--mutate", choices=["drop-act", "perceive-fallback"])
     ap.add_argument("--arm-tsv")
     ap.add_argument("--b-tsv", help="replaces the (b) rows (default DIR/cdp-layer+pwfmt.tsv), e.g. cdp-layer+pwfmt-v2.tsv")
     ap.add_argument("--b-label", help="arm name written in causes (b) rows, so a re-run is not confused with labelled keys")
