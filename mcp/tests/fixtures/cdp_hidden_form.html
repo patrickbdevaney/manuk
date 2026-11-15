@@ -1,0 +1,13 @@
+<!doctype html><html><head><title>Compose</title></head><body>
+<div role="dialog" aria-label="New Message" aria-modal="true" style="position:absolute;left:40px;top:20px;width:600px;height:400px;background:#fff;overflow:auto">
+  <h2>New Message</h2>
+  <div class="content" style="display:flex;flex-direction:column;overflow:auto">
+    <input placeholder="Recipients" aria-label="Email input" type="text">
+    <input placeholder="Subject" type="text">
+    <div class="ql-editor" contenteditable="true" style="min-height:80px;border:1px solid #888"><p><br></p></div>
+    <!-- a visually-hidden live region: the page's own, one text fragment a human cannot see -->
+    <span style="border:0;clip:rect(0,0,0,0);height:1px;margin:-1px;overflow:hidden;padding:0;position:absolute;width:1px;white-space:nowrap">Message saved</span>
+  </div>
+  <button>Send</button>
+</div>
+</body></html>

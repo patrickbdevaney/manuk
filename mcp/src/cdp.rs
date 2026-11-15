@@ -702,6 +702,18 @@ fn role_of(r: &Raw, i: usize, body_child: bool) -> Role {
             return m;
         }
     }
+    // A `contenteditable` editing host is a textbox, as the in-process engine reports it (Quill's `.ql-editor`,
+    // gomail's message body). Only the host: an editable child stays what it is.
+    let editable = |j: usize| {
+        r.attr(j, "contenteditable")
+            .is_some_and(|v| !v.eq_ignore_ascii_case("false"))
+    };
+    if editable(i)
+        && !matches!(tag.as_str(), "input" | "textarea" | "select" | "button")
+        && !(r.parent[i] >= 0 && editable(r.parent[i] as usize))
+    {
+        return Role::TextBox;
+    }
     match tag.as_str() {
         "a" if r.attr(i, "href").is_some() => Role::Link,
         "button" => Role::Button,
@@ -1361,6 +1373,28 @@ fn shield_of(r: &Raw, ids: &Idents, viewport_w: f32) -> Shield {
                 seen_below[p as usize] += 1;
             }
             p = r.parent[p as usize];
+        }
+    }
+    // A visible form control (a box a human can see and type into) is something seen too: a container holding
+    // one is not "all hidden" because its only text is a visually-hidden live region.
+    if std::env::var("MANUK_CDP_MUTATE").as_deref() != Ok("drop-form-containers") {
+        for i in 0..n {
+            let editable = r.attr(i, "contenteditable").is_some_and(|v| v != "false");
+            if r.kind[i] != 1
+                || !(matches!(r.tag(i).as_str(), "input" | "textarea" | "select") || editable)
+            {
+                continue;
+            }
+            let shown = r.layout.get(&i).is_some_and(|(b, _, st)| {
+                b[2] > 1.0 && b[3] > 1.0 && st.opacity > 0.01 && !st.visibility_hidden
+            });
+            if shown && !(r.tag(i) == "input" && r.input_type(i) == "hidden") {
+                let mut p = r.parent[i];
+                while p >= 0 {
+                    seen_below[p as usize] += 1;
+                    p = r.parent[p as usize];
+                }
+            }
         }
     }
     let by_index: HashMap<usize, u64> = ids.index.iter().map(|(&id, &i)| (i, id)).collect();
