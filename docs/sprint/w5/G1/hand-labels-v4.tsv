@@ -1,0 +1,11 @@
+arm	task	run	hand_label	evidence
+cdp-layer+pwfmt-v2	gomail-5	1	perceive	searched for a schedule-send control (Send hover, More options menu, find queries) and found none; concluded the app has no schedule option
+cdp-layer+pwfmt-v2	staynb-4	2	grader-issue	booked the stay and the confirmation page showed 3 Guests (the eval's expected value); no failure in the run, reason for eval 0 not in the transcript
+cdp-layer+pwfmt-v2	opendining-10	3	perceive	Menu heading on 5 restaurant pages followed by no dishes; model reported empty menus and stopped
+cdp-layer+pwfmt-v2	opendining-4	1	grader-issue	booked Sushi Zen Sep 2 4:30 PM 7 people, Booking Complete shown; eval still 0; no failure in the run
+cdp-layer+pwfmt-v2	gomail-3	2	none	composed with correct To/Subject/body and left the draft open without sending by choice (task says compose); no tool failure or misperception
+cdp-layer+pwfmt-v2	gomail-8	1	grader-issue	four GitHub emails moved to Trash and verified, search empty; no failure in the run
+cdp-layer+pwfmt-v2	opendining-10	1	perceive	Menu heading on Royal Dine, Vegan Table, Crowded Corner followed straight by reviews; no dishes visible; stopped
+cdp-layer+pwfmt-v2	opendining-4	2	none	booking page opened with Jul 18 and 2 people instead of Sep 2 and 7; model refused to continue and stopped after one retry; no failed action or empty perception
+cdp-layer+pwfmt-v2	gomail-8	2	grader-issue	four GitHub emails moved to Trash and listed in Trash view; no failure in the run
+cdp-layer+pwfmt-v2	dashdish-7	1	perceive	Mushroom Swiss Burger card in the carousel shows no Add button in the observed tree; click on card did nothing; no overlay; stopped
