@@ -1,0 +1,6 @@
+cdp-layer_gomail-3_r4: send_clicks=0 act_clicks=1 added=0 AGREE
+cdp-layer_gomail-3_r5: send_clicks=0 act_clicks=1 added=0 AGREE
+cdp-layer_gomail-3_r6: send_clicks=1 act_clicks=3 added=1 AGREE
+cdp-layer_gomail-3_r7: send_clicks=1 act_clicks=3 added=1 AGREE
+cdp-layer_gomail-3_r8: send_clicks=1 act_clicks=3 added=1 AGREE
+sent 3/5 runs (draft-only 2)
