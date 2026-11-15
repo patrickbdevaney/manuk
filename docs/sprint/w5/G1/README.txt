@@ -3,3 +3,4 @@ causes.tsv: one class per failed run. table.tsv: per-task pass counts. Regenerat
 python3 -I bench/agent-tasks/w5g1_report.py (needs target/real-runs transcripts from the run).
 
 cdp-layer-v2.tsv (W5.G1.b.a.a, chrome_ver=145.0.7632.116) classed by W5.G1.b.b.a.a: causes-v2.tsv (arm a and b rows) and table-v2.tsv. Regenerate with: python3 -I bench/agent-tasks/w5g1_report.py --arm-tsv G1/cdp-layer-v2.tsv --causes-out G1/causes-v2.tsv --table-out G1/table-v2.tsv
+cdp-layer+pwfmt-v2.tsv (W5.G1.b.c.a.a.a, chrome_ver=145.0.7632.116): 30 fresh pwfmt runs with the archive guard, 30/30 tied; classed into causes-pwfmt-v2.tsv (arm cdp-layer+pwfmt-v2, 18 failed rows, none in hand-labels*.tsv). Regenerate: python3 -I bench/agent-tasks/w5g1_report.py --b-tsv G1/cdp-layer+pwfmt-v2.tsv --b-label cdp-layer+pwfmt-v2 --causes-out G1/causes-pwfmt-v2.tsv --table-out /tmp/t.tsv

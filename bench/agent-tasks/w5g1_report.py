@@ -6,6 +6,7 @@ Playwright passes and cdp-layer fails.
   w5g1_report.py [--runs-dir target/real-runs] [--dir docs/sprint/w5/G1] [--mutate drop-act]
                  [--arm-tsv F] [--causes-out F] [--table-out F]
 
+--b-tsv/--b-label do the same for the (b) arm (W5.G1.b.c.a.a.a).
 --arm-tsv replaces the (a) rows (default DIR/cdp-layer.tsv), e.g. cdp-layer-v2.tsv; --causes-out and --table-out keep that
 run's output apart from DIR/causes.tsv and DIR/table.tsv.
 (causes.tsv is derived only from rows whose transcript passes w5g1_transcript_check's answer match.)
@@ -105,12 +106,14 @@ def main():
     ap.add_argument("--dir", default=os.path.join(ROOT, "docs/sprint/w5/G1"))
     ap.add_argument("--mutate", choices=["drop-act"])
     ap.add_argument("--arm-tsv")
+    ap.add_argument("--b-tsv", help="replaces the (b) rows (default DIR/cdp-layer+pwfmt.tsv), e.g. cdp-layer+pwfmt-v2.tsv")
+    ap.add_argument("--b-label", help="arm name written in causes (b) rows, so a re-run is not confused with labelled keys")
     ap.add_argument("--causes-out")
     ap.add_argument("--table-out")
     a = ap.parse_args()
     bad, causes, rows, skipped = [], [], {}, []
     paths = {"cdp-layer": a.arm_tsv or os.path.join(a.dir, "cdp-layer.tsv"),
-             "cdp-layer+pwfmt": os.path.join(a.dir, "cdp-layer+pwfmt.tsv")}
+             "cdp-layer+pwfmt": a.b_tsv or os.path.join(a.dir, "cdp-layer+pwfmt.tsv")}
     for arm in ARMS:
         rows[arm] = load(paths[arm])
         keys = collections.Counter(k[0] for k in rows[arm])
@@ -130,7 +133,7 @@ def main():
                 c = "grader-issue" if (task, r.get("evals_vec")) in GRADER_ISSUE else classify(p, a.mutate)
                 if c not in CLASSES:
                     bad.append(f"{arm} {task} r{run}: unclassified")
-                causes.append((arm, task, run, c))
+                causes.append((a.b_label if a.b_label and arm == "cdp-layer+pwfmt" else arm, task, run, c))
     with open(a.causes_out or os.path.join(a.dir, "causes.tsv"), "w") as fh:
         fh.write("arm\ttask\trun\tclass\n" + "".join("\t".join(map(str, c)) + "\n" for c in causes))
     tasks = sorted({t for arm in ARMS for (t, _) in rows[arm]})
