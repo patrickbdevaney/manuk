@@ -32,7 +32,10 @@ FAIL = re.compile(r"^no change \| url: unchanged|STALE|no longer on the page|han
                   r"bad page handle|not found in the current page snapshot|is not supported by this backend|"
                   r"no enclosing <form>|no human surface is attached|TimeoutError|^\s*(Error|error)\b|### Error", re.M)
 ARMS = ["cdp-layer", "cdp-layer+pwfmt"]
-CLASSES = ["perceive", "target", "act", "tool-choice", "turn-limit"]
+CLASSES = ["perceive", "target", "act", "tool-choice", "turn-limit", "grader-issue"]
+# W5.G1.b.b.a.a.a.a.a: gomail-8 fails only checkpoint 2 (exactly one email updated) while the goal asks for all of them
+# (docs/sprint/w5/G1/gomail8-grader.md): a task/grader finding, not an agent-side class, so it is not hand-labelled.
+GRADER_ISSUE = {("gomail-8", "[1, 1, 0]")}
 
 
 def action_calls(path):
@@ -124,7 +127,7 @@ def main():
                 skipped.append(f"{arm} {task} r{run}")  # overwritten transcript: no cause is derived from it
                 continue
             if r["pass"] == "0":
-                c = classify(p, a.mutate)
+                c = "grader-issue" if (task, r.get("evals_vec")) in GRADER_ISSUE else classify(p, a.mutate)
                 if c not in CLASSES:
                     bad.append(f"{arm} {task} r{run}: unclassified")
                 causes.append((arm, task, run, c))

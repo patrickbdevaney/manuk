@@ -15,7 +15,7 @@ import argparse, collections, csv, os, re, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.join(HERE, "..", "..")
-CLASSES = ["perceive", "target", "act", "tool-choice", "turn-limit"]
+CLASSES = ["perceive", "target", "act", "tool-choice", "turn-limit", "grader-issue"]
 ARMS = {"a": "cdp-layer", "b": "cdp-layer+pwfmt"}
 
 
