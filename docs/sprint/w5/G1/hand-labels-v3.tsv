@@ -1,0 +1,11 @@
+arm	task	run	hand_label	evidence
+cdp-layer+pwfmt	gomail-3	1	target	modal overlay h7 with no close control covers the start page; compose never reached; handoff unavailable
+cdp-layer+pwfmt	dashdish-10	3	target	Add button OCCLUDED by unlabeled modal form; Escape, scroll, fresh tab all showed it; handoff unavailable
+cdp-layer+pwfmt	gomail-5	1	act	compose opened but every type/fill_form on To/Subject returned STALE and never landed
+cdp-layer+pwfmt	opendining-10	2	perceive	menu section text empty on detail pages and /menu 404; overlay never blocked reading; model stopped without comparing menus
+cdp-layer+pwfmt	opendining-10	1	perceive	run completed Booking Complete; wrong restaurant from the vegetarian count; no unrecovered act or target block
+cdp-layer+pwfmt	fly-unified-6	1	target	modal overlay after One-way with no close control; Origin field OCCLUDED; Escape no effect
+cdp-layer+pwfmt	gomail-3	2	act	compose open; every type/fill_form on To/Subject STALE, nothing typed
+cdp-layer+pwfmt	dashdish-7	2	target	modal overlay with no close control blocked the store page; Escape no effect; stopped
+cdp-layer+pwfmt	opendining-4	1	perceive	slot click opened booking page with default party size/date; model stopped by choice at submit; overlay incidental
+cdp-layer+pwfmt	fly-unified-6	2	target	modal overlay blocked every booking form field; Escape no effect; handoff unavailable
