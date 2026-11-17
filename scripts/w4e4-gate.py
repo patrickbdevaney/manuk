@@ -10,7 +10,7 @@ shared --profile, which MUST turn the isolation check red. Also asserts the pool
 thread at fork (it refuses otherwise) and that it stays at one thread while serving.
 Exit 1 on any failed check. Prints chrome_ver (no Chrome arm here).
 """
-import argparse, http.server, importlib.util, json, os, select, socket, subprocess, sys, tempfile, threading, time
+import argparse, http.server, importlib.util, json, os, re, select, socket, subprocess, sys, tempfile, threading, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -101,8 +101,10 @@ def main():
             _, t, _ = m.call("navigate", {"url": base + "/iso"})
             seen.append(t); m.kill()
         print("iso A:", seen[0][100:260].replace("\n", " ")); print("iso B:", seen[1][100:260].replace("\n", " "))
-        want = 'ls=null ck=srv=A"'  # B may see only the cookie its own response set
-        iso_ok = want in seen[0] and want in seen[1]
+        # Observation line: "... # ls=<localStorage k> ck=<document.cookie> page: <id>:<n>". B may see only the
+        # cookie its own response set (srv=A) and no localStorage. Match the fields, not the trailing text.
+        want = re.compile(r"ls=null ck=srv=A\s+page:")
+        iso_ok = all(want.search(s) for s in seen)
         print("isolation:", "PASS session B saw no cookie or localStorage from A" if iso_ok else "FAIL session B saw state from A")
         fail += 0 if iso_ok else 1
     finally:
