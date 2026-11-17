@@ -41,6 +41,10 @@ wait_online() {
   say "⇡ Anthropic API reachable again"
 }
 netwatch() { while kill -0 "$1" 2>/dev/null; do online || touch "$NETDOWN"; sleep 30; done; }
+# ── usage limits: "You've hit your weekly limit · resets …" exits in 3s without the agent doing anything. On
+# 2026-11-15 that was counted as a failed attempt and auto-BLOCKED 104 nodes in 14 minutes; it is now a wait.
+LIMIT_ERR="hit your [a-z0-9 -]*limit"
+LIMIT_WAIT=${LIMIT_WAIT:-1800}
 export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
 export DBUS_SESSION_BUS_ADDRESS=${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}
 
@@ -183,7 +187,12 @@ EOF
   # only a FAILED attempt is logged as '■ node X exited' — that line is the escalation counter
   st=$(awk -F'\t' -v id="$node" '$1==id{print $6}' docs/sprint/GRAPH.tsv)
   tailout=$(tail -c +$((logoff + 1)) "$LOG" | tail -20)
-  if [ "$st" = DONE ]; then say "✓ node $node DONE on ${LADDER[$t]} (rc=$rc)"; rm -f "$RESUME"
+  if [ "$st" != DONE ] && [ "$rc" -ne 0 ] && grep -qE "$LIMIT_ERR" <<<"$tailout"; then
+    # checked before BLOCKED: a node picked while already BLOCKED must not log a second ⛔ (sprint-next counts them)
+    printf '%s\t%s\t%s\t%s\n' "$node" "$t" "$sid" "${rn:-0}" >"$RESUME"
+    say "⏸ node $node stopped by the usage limit on ${LADDER[$t]} — not counted; retrying in $(( LIMIT_WAIT / 60 )) min"
+    rm -f "$NETDOWN"; sleep "$LIMIT_WAIT"; continue
+  elif [ "$st" = DONE ]; then say "✓ node $node DONE on ${LADDER[$t]} (rc=$rc)"; rm -f "$RESUME"
   elif [ "$st" = BLOCKED ]; then say "⛔ node $node BLOCKED by the agent on ${LADDER[$t]}"; rm -f "$RESUME"
   elif [ -n "$resume_sid" ] && [ "$rc" -ne 0 ] && grep -q 'No conversation found' <<<"$tailout"; then
     say "↻ node $node: session $sid could not be resumed — restarting it fresh on ${LADDER[$t]} (not counted)"
