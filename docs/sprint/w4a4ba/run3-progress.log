@@ -1,0 +1,7 @@
+ARM_DONE manuk run1 rc=0
+ARM_DONE manuk-textoff run1 rc=0
+ARM_DONE manuk run2 rc=0
+ARM_DONE manuk-textoff run2 rc=0
+ARM_DONE manuk run3 rc=0
+ARM_DONE manuk-textoff run3 rc=0
+ALL_DONE
