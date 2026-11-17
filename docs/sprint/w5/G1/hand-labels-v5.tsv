@@ -1,0 +1,11 @@
+arm	task	run	hand_label	evidence
+cdp-layer+pwfmt-v3	fly-unified-6	3	unexplained	Agent saw the date picker open at Dec 2025 with previous-month disabled, never tried the year dropdown, and stopped by choice asking the user for a different date.
+cdp-layer+pwfmt-v3	fly-unified-6	1	perceive	Agent said the picker's year dropdown 'isn't exposed to my tools' so it could not reach 2024, and gave up.
+cdp-layer+pwfmt-v3	fly-unified-6	2	act	Focusing the picker control h61 returned 'refused focus (inert or disabled)' and the site showed 'Please enter a valid departure date', so the agent could not set Dec 11 2024.
+cdp-layer+pwfmt-v3	gomail-3	1	unexplained	Agent filled To/Subject/Body correctly but declined to click Send by choice ('compose doesn't clearly ask for sending').
+cdp-layer+pwfmt-v3	opendining-4	2	unexplained	After the booking page opened with Jul 18 / 2 people instead of Sep 2 / 7, the agent stopped without correcting the form fields or submitting.
+cdp-layer+pwfmt-v3	opendining-4	1	target	Agent picked year 2027 for Sep 2 (calendar defaulted to 2024) and booked Sushi Zen for Sep 2, 2027, the wrong date.
+cdp-layer+pwfmt-v3	gomail-8	2	grader-issue	Agent moved all four GitHub inbox emails to trash as the goal asked, but the grader expects exactly one updated email (id 3).
+cdp-layer+pwfmt-v3	gomail-8	3	grader-issue	Agent trashed all four GitHub emails and confirmed them in Trash, matching the goal, yet the grader's 'exactly one email updated' check fails.
+cdp-layer+pwfmt-v3	staynb-4	3	unexplained	Agent set 1 adult and 2 children and searched, then stopped by choice claiming the site has no booking step without opening a listing.
+cdp-layer+pwfmt-v3	opendining-10	2	perceive	Agent reported the Menu heading on three restaurant pages had no dishes or dietary labels visible, so it could not rank vegetarian options and did not book.
