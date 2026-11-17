@@ -1746,6 +1746,31 @@ fn sweep_stale_profiles() {
     }
 }
 
+/// W4.A5.b.b: a server killed with SIGKILL runs no Drop, so its Chrome and profile dir would wait for the
+/// next launch's sweep. This starts a detached shell that waits for the server pid to vanish, then (only if
+/// the dir is still there, i.e. the server did not reap normally) kills Chrome's process group and removes
+/// the dir. The shell is double-forked (the outer `sh` exits at once, so nothing here is a zombie of ours).
+/// Red under `MANUK_CDP_MUTATE=no-reap`, which skips the spawn.
+fn spawn_orphan_reaper(server_pid: u32, pgid: i32, dir: &std::path::Path) {
+    if mutated("no-reap") {
+        return;
+    }
+    // The dir goes in the environment, not the script: the script's argv must not carry the
+    // `manuk-cdp-<pid>-` marker, or the test probes (which scan argv for it) mistake this shell for Chrome.
+    let script = format!(
+        "while kill -0 {server_pid} 2>/dev/null; do sleep 0.2; done; \
+         if [ -d \"$MANUK_REAP_DIR\" ]; then kill -9 -- -{pgid} 2>/dev/null; rm -rf \"$MANUK_REAP_DIR\"; fi"
+    );
+    let _ = Command::new("/bin/sh")
+        .arg("-c")
+        .arg(format!("( {script} ) &"))
+        .env("MANUK_REAP_DIR", dir)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+}
+
 /// Armed from spawn until `launch` succeeds: any early `?` or bail reaps Chrome and its profile dir.
 struct LaunchGuard {
     pgid: i32,
@@ -1815,6 +1840,7 @@ impl CdpBackend {
         if let Ok(mut l) = LIVE_CHROME.lock() {
             l.push((pgid, dir.clone()));
         }
+        spawn_orphan_reaper(std::process::id(), pgid, &dir);
         let mut guard = LaunchGuard {
             pgid,
             dir: dir.clone(),

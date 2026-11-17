@@ -633,3 +633,43 @@ fn chrome_backend_leaves_no_profile_dir_or_process() {
     }
     assert!(leaks.is_empty(), "leaked:\n{}", leaks.join("\n"));
 }
+
+/// W4.A5.b.b gate: the server itself is SIGKILLed (no Drop, no signal handler runs). Its Chrome and profile
+/// dir must still go within seconds, via the detached orphan reaper, not wait for a later launch's sweep.
+/// Red under `MANUK_CDP_MUTATE=no-reap` (the reaper is not spawned, so the dir survives).
+#[test]
+fn sigkilled_server_leaves_no_profile_dir_or_process() {
+    if std::env::var("MANUK_CDP_MUTATE").is_ok_and(|v| v != "no-reap") {
+        return;
+    }
+    let mutate = std::env::var("MANUK_CDP_MUTATE").ok();
+    let mut leaks = vec![];
+    for _ in 0..3 {
+        let mut c = Client::start(mutate.as_deref());
+        let (err, nav) = c.tool("navigate", json!({"url": fixture("injection.html")}));
+        assert!(!err, "{nav}");
+        let pid = c.child.id();
+        let marker = format!("manuk-cdp-{pid}-");
+        assert!(!dirs_for(pid).is_empty(), "no profile dir while running");
+        unsafe { libc::kill(pid as i32, libc::SIGKILL) };
+        let _ = c.child.wait();
+        drop(c.tx.take());
+        let t0 = std::time::Instant::now();
+        let (mut d, mut p) = (dirs_for(pid), procs_with(&marker));
+        while (!d.is_empty() || !p.is_empty()) && t0.elapsed().as_secs() < 8 {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            d = dirs_for(pid);
+            p = procs_with(&marker);
+        }
+        if !d.is_empty() || !p.is_empty() {
+            leaks.push(format!("server {pid} SIGKILLed: dirs {d:?} procs {p:?}"));
+            for p in p {
+                unsafe { libc::kill(p.parse().unwrap(), libc::SIGKILL) };
+            }
+            for d in d {
+                let _ = std::fs::remove_dir_all(std::env::temp_dir().join(d));
+            }
+        }
+    }
+    assert!(leaks.is_empty(), "leaked:\n{}", leaks.join("\n"));
+}
