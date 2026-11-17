@@ -88,3 +88,12 @@ Metrics are named, because the rankings differ by metric: **in+out** = input+out
 **Harness checks (done on this run):** every row is at chrome_ver 145.0.7632.116 (the report refuses any other pin); 0 error rows in any arm (is_error column). Pass counts were not cross-checked against the transcripts. **Red check:** a halved-token mutant of the manuk arm flips the total metric to MET with disjoint bands, which shows the report can go green; a row at a wrong pin is refused (exit 1). Both mutations ran on copies in ~/.cache, not on the data.
 
 **Caveat, not resolved here:** the per-turn `.turns.tsv` output_tokens do not sum to the run-level `output_tokens` (the per-turn average sums to far less than ~717 output tokens/task). Per-turn attribution is therefore not used for any claim in this addendum; follow-up W4.B4.a.
+
+## Addendum W4.A6 status (own-suite clause re-measured after W4.A6.a; the verdict and addenda above are not edited)
+Source: docs/sprint/w4a6aa/own3.tsv (manuk engine, own suite 40 tasks x 3 runs, Haiku, suite 69903c7d, chrome_ver=145.0.7632.116, binary with the AgentBrowser viewport fix). Gate: `python3 docs/sprint/w4a6aa/gate.py` (exit 0; red at `--l12-bar 4` and on a truncated TSV).
+- **Own-suite clause (manuk within 39-40 in every run): MET.** Per run 39/40, 39/40, 39/40 (earlier 2026-10-31 runs were 38/39/38). The only tasks that moved are L12 (0/3 before, 3/3 now) and F08 (1/3 and 1/3 and 0/3 before, 0/3 now).
+- **Tokens and turns per task, manuk own suite, 3 runs:** in+out 431, 455, 461 tokens/task (mean 449); turns 3.48, 3.75, 3.52 (mean 3.58); 0 error rows.
+- **cdp-layer own-suite clause:** the 2026-10-31 run (commit 67a6beec) gave 40, 40, 40 on the same suite and pin. It was NOT re-run after the viewport fix. The fix sits in manuk's AgentBrowser, which the cdp-layer arm does not use, so the number is carried over. A re-measure is a follow-up (W4.A6.b).
+- **REAL clause:** unchanged from the addendum above (cdp-layer 15/47 vs baseline 10/47, met). No engine win is claimed.
+- **F08 is not part of this node's gate.** It fails 0/3 because the literal-string grader rejects 'Item 45 is **amber**'. That remains in W4.A6.a, which stays BLOCKED. Grader and task were not edited.
+- **Node status:** DONE.
