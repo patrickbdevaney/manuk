@@ -1,0 +1,11 @@
+arm	task	run	hand_label	basis	chrome_ver
+cdp-layer	staynb-5	3	dialog_modal	guest picker modal covers Reserve button, no close	145.0.7632.116
+cdp-layer	dashdish-7	1	wrong_answer	order placed Order Successful; ended with answer, no layer defect	145.0.7632.116
+manuk	gocalendar-1	3	wrong_answer	event created, 2pm-2pm grid label; ended with answer	145.0.7632.116
+cdp-layer	zilloft-3	1	dialog_modal	consent overlay blocks results pages	145.0.7632.116
+manuk	dashdish-2	1	wrong_answer	order placed after one retry; ended with answer	145.0.7632.116
+manuk+rollback.v2	gocalendar-7	3	key_hover_enter_gap	agent blocked: no drag tool (event click also did nothing)	145.0.7632.116
+manuk+rollback.v2	fly-unified-2	2	dialog_modal	overlay covers Previous Month; year control ignored	145.0.7632.116
+manuk+rollback.v2	gomail-3	1	click_no_effect	Compose not exposed; unlabelled button clicks had no effect	145.0.7632.116
+manuk+rollback.v2	topwork-2	3	typed_not_registered	Add button stays disabled after typing skill	145.0.7632.116
+cdp-layer	gocalendar-4	3	wrong_answer	modal dismissed, event saved; ended with answer	145.0.7632.116
