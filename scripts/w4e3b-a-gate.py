@@ -22,6 +22,7 @@ import argparse, json, os, re, shutil, subprocess, sys, tempfile, threading
 ap = argparse.ArgumentParser()
 ap.add_argument("--bin", default="target/release/manuk-mcp")
 ap.add_argument("--runs", type=int, default=3)
+ap.add_argument("--lean", action="store_true", help="MANUK_AGENT_PROFILE=lean: exercises the fetch_prefix image sniff")
 ap.add_argument("--url", default="https://books.toscrape.com/")
 a = ap.parse_args()
 
@@ -35,6 +36,9 @@ MSGS = [
 ]
 
 
+PREFIX = [0]
+
+
 def trace_sum(path):
     """(sum of body lengths, count of 304 bodies) from a MANUK_NET_TRACE file."""
     total, nots = 0, 0
@@ -43,7 +47,7 @@ def trace_sum(path):
     with open(path, encoding="utf-8", errors="replace") as f:
         for line in f:
             parts = line.rstrip("\n").split("\t")
-            if len(parts) < 3 or parts[1] != "body":
+            if len(parts) < 3 or parts[1] not in ("body", "prefix"):  # prefix = image-dimension sniff reads
                 continue
             # `t \t body \t url \t len [\t status]`; the URL never contains a tab.
             try:
@@ -51,6 +55,8 @@ def trace_sum(path):
             except (IndexError, ValueError):
                 continue
             total += n
+            if parts[1] == "prefix":
+                PREFIX[0] += n
             if len(parts) >= 5 and parts[4] == "304":
                 nots += 1
     return total, nots
@@ -59,6 +65,8 @@ def trace_sum(path):
 def run(cache_dir, trace_path):
     env = dict(os.environ)
     env.pop("MANUK_AGENT_PROFILE", None)
+    if a.lean:
+        env["MANUK_AGENT_PROFILE"] = "lean"
     env.pop("MANUK_HTTP_CACHE_DIR", None)
     env["MANUK_NET_TRACE"] = trace_path
     # The trace file is outside the cache dir, so it needs an explicit write grant (confined process).
@@ -102,6 +110,8 @@ def run(cache_dir, trace_path):
 
 bad = 0
 cold_w, warm_w = [], []
+import atexit
+atexit.register(lambda: print(f"prefix_bytes_in_trace={PREFIX[0]}"))
 root = tempfile.mkdtemp(prefix="w4e3b-a-gate-")
 try:
     for r in range(a.runs):

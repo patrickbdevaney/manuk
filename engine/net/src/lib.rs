@@ -2174,8 +2174,11 @@ pub async fn fetch_streaming<F: FnMut(&[u8])>(url: &str, mut on_chunk: F) -> Res
             on_chunk(c)
         })
         .await?;
+        // Streamed document bytes are wire traffic too (W4.E3.b.a.a); the trace line carries the same
+        // number and the status, so trace and counter agree by construction.
+        lean::WIRE_BYTES.fetch_add(streamed as u64, std::sync::atomic::Ordering::Relaxed);
         if nettrace::enabled() {
-            nettrace::emit("body", &format!("{current}\t{streamed}"));
+            nettrace::emit("body", &format!("{current}\t{streamed}\t{status}"));
         }
         return Ok(ResponseMeta {
             status,
