@@ -170,6 +170,33 @@ Gate evidence: `--real-pages-mutant` navigates fixture pages while checking agai
 `WRONG_PAGE` with `landed_ok=0/10` (`docs/sprint/footprint/runs-real-pages-mutant.tsv`). The harness selftest covers
 the same-site rule and the manuk landed-host parse.
 
+## Pages on real URLs, unique-URL control (W4.E0.c.a): the N=10 ratio was inflated by repeats
+
+_Measured 2026-11-17, `chrome_ver = 145.0.7632.116`, `manuk-mcp` built from the tree at this commit. Raw rows:
+`docs/sprint/footprint/runs-real-pages-n5.tsv`. Summary: `docs/sprint/footprint/summary-real-pages-n5.tsv`. Run with
+`MANUK_CHROME_PIN=145.0.7632.116 python3 -I scripts/w4e0-footprint.py --real-pages-n5 --out docs/sprint/footprint`._
+
+Same 5 paired URLs as the section above, but N = 5: each URL is open exactly once per run (`unique_targets()` refuses
+any list shorter than 5 or with a repeated registered domain). 3 runs, both arms.
+
+| arm | total PSS (MB) | per page (MB) | runs | landed_ok |
+|---|---|---|---|---|
+| manuk-proc | 959–974 | 191.9–194.7 | 3 | 5/5 each run |
+| chrome-tabs | 739–780 | 147.7–155.9 | 3 | 5/5 each run |
+
+**manuk / chrome-tabs per-page PSS: 1.25–1.30×** (3 runs), against 2.22–2.24× at N = 10 on the same URLs.
+
+Read: the repeats mattered. At N = 10 each site was open twice, and Chrome's tabs got cheaper per page (about 85 MB at
+N = 10 against about 150 MB at N = 5), so Chrome shares work between same-site tabs. manuk's per-page cost did not move
+(about 190 MB in both sets), since each manuk page is its own process. The N = 10 ratio of 2.22–2.24× is therefore an
+overstatement for unique sites. Neither number is a general claim: 5 URLs on live sites, one Chrome, one chrome_ver.
+The unique-URL 1.25–1.30× is the number to quote for "manuk-proc against one Chrome with one tab per site".
+Wall clock is not claimed (manuk-proc 47–60 s, chrome-tabs 12–13 s; live sites, navigates in sequence).
+
+Gate evidence: `--real-pages-n5-mutant` (fixture pages checked against the real hosts) comes out `WRONG_PAGE`,
+`landed_ok=0/5` on both arms (`docs/sprint/footprint/runs-real-pages-n5-mutant.tsv`). `--selftest` refuses a 4-URL list
+and a list with `m.comix.to` added beside `comix.to`. The per-page comparison against chrome-procs is still W4.E0.c.b.
+
 ## Wall clock on the URL set, 10 runs (W4.E0.d): not settled
 
 Note: `BASELINE-URLS.txt` has 10 URLs, not 20. Run: `--url-runs 10`, rows in `footprint/runs-urls.tsv`, summary in

@@ -482,28 +482,49 @@ def same_site(landed, want):
     return bool(landed) and landed.split(".")[-2:] == want.split(".")[-2:]
 
 
-def run_real_pages(out_dir, fx, log_root, mutant=False):
-    """pages-real: N=10 pages round-robin over the paired real URLs, manuk-proc vs chrome-tabs, 3 runs.
+def unique_targets(urls, n):
+    """The unique-URL control (W4.E0.c.a): one page per paired URL, no URL or registered domain twice.
+    Refuses (ValueError) a list shorter than n or with a repeated registered domain, so a truncated or
+    duplicated input cannot pass as an N=n run."""
+    if len(urls) < n:
+        raise ValueError(f"need {n} paired URLs, have {len(urls)}")
+    pick = list(urls[:n])
+    doms = [".".join((urllib.parse.urlparse(u).hostname or "").split(".")[-2:]) for u in pick]
+    if "" in doms or len(set(doms)) != n:
+        raise ValueError(f"not {n} distinct registered domains: {doms}")
+    return pick
+
+
+def run_real_pages(out_dir, fx, log_root, mutant=False, n=REAL_N, runs=REAL_RUNS, unique=False):
+    """pages-real: N pages round-robin over the paired real URLs, manuk-proc vs chrome-tabs, `runs` runs.
+    unique=True is the W4.E0.c.a control: N=n equals the number of paired URLs, so every URL is open once.
     Every page must land on its own site; otherwise the run is WRONG_PAGE. `mutant` navigates fixture pages
     while still checking against the real URLs, so every run must come out WRONG_PAGE or FAIL."""
     urls = paired_targets(load_runs(os.path.join(out_dir, "runs.tsv")))
     if not urls:
         sys.exit("no URL loaded OK on both arms in runs.tsv: nothing to round-robin")
+    if unique:
+        try:
+            urls = unique_targets(urls, n)
+        except ValueError as e:
+            sys.exit(f"unique-URL control refused: {e}")
+    axis = "pages-real-n5" if unique else "pages-real"
+    target = "|".join(page_target(k, fx, urls) for k in range(n)) if unique else "|".join(urls)
     rows = []
     arms = [("manuk-proc", run_manuk_proc), ("chrome-tabs", run_chrome_tabs)]
-    for run in range(1, (1 if mutant else REAL_RUNS) + 1):
+    for run in range(1, (1 if mutant else runs) + 1):
         for arm, fn in arms:
             landed = []
-            wall, pss, st, _ = fn(REAL_N, fx, log_root, urls=None if mutant else urls, landed=landed)
-            want = [urllib.parse.urlparse(page_target(k, fx, urls)).hostname or "" for k in range(REAL_N)]
+            wall, pss, st, _ = fn(n, fx, log_root, urls=None if mutant else urls, landed=landed)
+            want = [urllib.parse.urlparse(page_target(k, fx, urls)).hostname or "" for k in range(n)]
             bad = [k for k in range(len(landed)) if not same_site(landed[k], want[k])]
-            if st == "OK" and (bad or len(landed) != REAL_N):
+            if st == "OK" and (bad or len(landed) != n):
                 st = "WRONG_PAGE"
-            rows.append({"axis": "pages-real", "arm": arm, "n": REAL_N, "run": run, "target": "|".join(urls),
+            rows.append({"axis": axis, "arm": arm, "n": n, "run": run, "target": target,
                          "wall_s": round(wall, 3), "pss_kb": pss, "status": st,
-                         "note": f"landed_ok={REAL_N - len(bad)}/{REAL_N}" + (" MUTANT_FIXTURE" if mutant else "")})
-            print(f"pages-real run{run} {arm:12} N={REAL_N} {st:10} pss={pss/1024:8.1f}MB wall={wall:6.2f}s "
-                  f"landed_ok={REAL_N - len(bad)}/{REAL_N}", file=sys.stderr)
+                         "note": f"landed_ok={n - len(bad)}/{n}" + (" MUTANT_FIXTURE" if mutant else "")})
+            print(f"{axis} run{run} {arm:12} N={n} {st:10} pss={pss/1024:8.1f}MB wall={wall:6.2f}s "
+                  f"landed_ok={n - len(bad)}/{n}", file=sys.stderr)
             touch()
     return rows
 
@@ -523,23 +544,24 @@ def summarize_real_pages(rows):
     """Per arm: total and per-page PSS band over the OK runs. Ratio = manuk total / chrome total per run,
     band = min-max over the runs where both arms are OK. Nothing is summarised from a non-OK run."""
     out = ["axis\tarm\tn\tvalue\tper_page\truns\tchrome_ver"]
+    axis, n = rows[0]["axis"], rows[0]["n"]
     by = {}
     for r in rows:
         by.setdefault(r["arm"], []).append(r)
     for arm, rs in by.items():
         ok = [r for r in rs if r["status"] == "OK"]
         if not ok:
-            out.append(f"pages-real\t{arm}\t{REAL_N}\tNO_OK_RUNS (not OK: {len(rs)})\t-\t0\t{PIN}")
+            out.append(f"{axis}\t{arm}\t{n}\tNO_OK_RUNS (not OK: {len(rs)})\t-\t0\t{PIN}")
             continue
         tot = [r["pss_kb"] / 1024 for r in ok]
-        out.append(f"pages-real\t{arm}\t{REAL_N}\t{min(tot):.0f}-{max(tot):.0f} MB total\t"
-                   f"{min(tot)/REAL_N:.1f}-{max(tot)/REAL_N:.1f} MB/page\truns={len(ok)}\t{PIN}")
+        out.append(f"{axis}\t{arm}\t{n}\t{min(tot):.0f}-{max(tot):.0f} MB total\t"
+                   f"{min(tot)/n:.1f}-{max(tot)/n:.1f} MB/page\truns={len(ok)}\t{PIN}")
     m = {r["run"]: r for r in rows if r["arm"] == "manuk-proc" and r["status"] == "OK"}
     c = {r["run"]: r for r in rows if r["arm"] == "chrome-tabs" and r["status"] == "OK"}
     both = sorted(set(m) & set(c))
     if both:
         ratios = [m[k]["pss_kb"] / c[k]["pss_kb"] for k in both if c[k]["pss_kb"] > 0]
-        out.append(f"pages-real\tmanuk-proc / chrome-tabs per-page PSS\t{REAL_N}\t"
+        out.append(f"{axis}\tmanuk-proc / chrome-tabs per-page PSS\t{n}\t"
                    f"{min(ratios):.2f}-{max(ratios):.2f}x\t-\truns={len(ratios)}\t{PIN}")
     return out
 
@@ -766,6 +788,19 @@ def selftest():
             or not wall_verdict([2.4] * 3).startswith("NOT_SETTLED") \
             or not wall_verdict([]).startswith("NOT_SETTLED"):
         fails.append("wall verdict does not separate a quotable band from short, 1.0-spanning, or prior-overlapping ones")
+    # 2g. Unique-URL control (W4.E0.c.a): five distinct registered domains are accepted; a truncated list
+    #     (4 URLs for N=5), a repeated registered domain (mutant: same site twice), or an empty host is refused.
+    good = ["https://comix.to/", "https://client.dkitrxmdwoqruvsi.net/", "https://www.mobile.bg/",
+            "https://app.ordertime.com/", "https://www.puentedemando.com/"]
+    def _refused(u, n=5):
+        try:
+            unique_targets(u, n)
+            return False
+        except ValueError:
+            return True
+    if unique_targets(good, 5) != good or not _refused(good[:4]) \
+            or not _refused(good[:4] + ["https://m.comix.to/"]) or not _refused(good[:4] + ["http://"]):
+        fails.append("unique-URL control does not refuse a truncated or same-domain input")
     # 3. The pin must be present: a row with no pin is a refusal, not a number.
     if not PIN:
         fails.append("MANUK_CHROME_PIN unset (refused)")
@@ -796,6 +831,10 @@ def main():
                     help="pages axis on the paired real URLs (N=10 round-robin, manuk-proc vs chrome-tabs, 3 runs)")
     ap.add_argument("--real-pages-mutant", action="store_true",
                     help="gate check: same run but navigating fixture pages; must come out WRONG_PAGE/FAIL")
+    ap.add_argument("--real-pages-n5", action="store_true",
+                    help="unique-URL control (W4.E0.c.a): N=5, one page per paired URL, 3 runs, both arms")
+    ap.add_argument("--real-pages-n5-mutant", action="store_true",
+                    help="gate check for --real-pages-n5: fixture pages against real hosts; must come out WRONG_PAGE/FAIL")
     ap.add_argument("--url-runs", type=int, metavar="K",
                     help="urls axis only, K runs per arm (W4.E0.d); writes runs-urls.tsv and summary-urls.tsv")
     args = ap.parse_args()
@@ -823,23 +862,27 @@ def main():
     if args.summarize_only:
         write_summary(args.out)
         return
-    if args.real_pages or args.real_pages_mutant:
+    if args.real_pages or args.real_pages_mutant or args.real_pages_n5 or args.real_pages_n5_mutant:
         if not PIN:
             sys.exit("MANUK_CHROME_PIN unset: refusing to write rows without a chrome_ver")
         if not os.path.exists(MCP) or not os.path.exists(CHROME):
             sys.exit(f"missing {MCP} or pinned Chrome {CHROME}")
+        unique = args.real_pages_n5 or args.real_pages_n5_mutant
+        mutant = args.real_pages_mutant or args.real_pages_n5_mutant
+        n = 5 if unique else REAL_N
         srv, fx = start_fixture()
         log_root = tempfile.mkdtemp(prefix="w4e0-root-")
         try:
-            rows = run_real_pages(args.out, fx, log_root, mutant=args.real_pages_mutant)
+            rows = run_real_pages(args.out, fx, log_root, mutant=mutant, n=n, unique=unique)
         finally:
             srv.shutdown()
             shutil.rmtree(log_root, ignore_errors=True)
-        name = "runs-real-pages-mutant.tsv" if args.real_pages_mutant else "runs-real-pages.tsv"
+        suffix = "-n5" if unique else ""
+        name = f"runs-real-pages{suffix}{'-mutant' if mutant else ''}.tsv"
         path = write_real_pages(args.out, rows, name)
         summ = summarize_real_pages(rows)
-        if not args.real_pages_mutant:  # the mutant never writes the summary a reader would quote
-            with open(os.path.join(args.out, "summary-real-pages.tsv"), "w") as f:
+        if not mutant:  # the mutant never writes the summary a reader would quote
+            with open(os.path.join(args.out, f"summary-real-pages{suffix}.tsv"), "w") as f:
                 f.write("\n".join(summ) + "\n")
         print("\n".join(summ))
         print(f"raw rows: {path}")
