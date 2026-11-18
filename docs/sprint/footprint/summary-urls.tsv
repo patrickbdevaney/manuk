@@ -20,6 +20,6 @@ urls	chrome-proc CHALLENGE	https://basescan.org/	marker=__cf_chl	-	-	run=8	145.0
 urls	chrome-proc CHALLENGE	https://basescan.org/	marker=__cf_chl	-	-	run=9	145.0.7632.116
 urls	chrome-proc CHALLENGE	https://basescan.org/	marker=__cf_chl	-	-	run=10	145.0.7632.116
 urls	manuk-proc / chrome-proc	7 paired URLs	manuk:{'OK': 70, 'CHALLENGE': 10, 'FAIL': 20, 'TIMEOUT': 0} chrome:{'OK': 70, 'CHALLENGE': 10, 'FAIL': 10, 'TIMEOUT': 10}	-	-	OK-in-all-runs	145.0.7632.116
-urls	manuk/chrome wall ratio	7 URLs	1.67-3.85x (median of per-URL ratios, per run)	-	-	runs=10	145.0.7632.116
-urls	manuk/chrome wall VERDICT	7 URLs	NOT_SETTLED (band 1.67-3.85 overlaps prior 1.66-1.96x)	-	-	runs=10	145.0.7632.116
-urls	manuk/chrome pss ratio	7 URLs	0.42-0.48x (median of per-URL ratios, per run)	-	-	runs=10	145.0.7632.116
+urls	manuk/chrome wall ratio	7 URLs	1.66-5.81x (median of per-URL ratios, per run)	-	-	runs=10	145.0.7632.116
+urls	manuk/chrome wall VERDICT	7 URLs	NOT_SETTLED (band 1.66-5.81 overlaps prior 1.66-1.96x)	-	-	runs=10	145.0.7632.116
+urls	manuk/chrome pss ratio	7 URLs	0.21-0.25x (median of per-URL ratios, per run)	-	-	runs=10	145.0.7632.116

@@ -67,10 +67,7 @@ Per-URL outcomes over 3 runs (30 rows per arm):
 | manuk-proc | 17 | 6 | 7 | 0 |
 | chrome-proc | 24 | 0 | 3 | 3 |
 
-- **CHALLENGE** (rule replaced by W4.E0.b, applies to re-runs only; the numbers below were taken with the old broad "challenge" text rule): the page text/DOM contains a specific marker (`__cf_chl`, `Just a moment`), logged per row in summary.tsv, on both arms. It catches Cloudflare pages on basescan.org
-  (`__cf_chl_rt_tk`) and a zoomph.com login page. The rule is broad, and the matched text is not stored, so the
-  zoomph row is not confirmed as a bot challenge. The Chrome side has no content check, so its OK rows may include
-  challenge pages too. This is a load-level comparison, not a content-level one.
+- **CHALLENGE** (W4.E0.b rule: the page text/DOM contains `__cf_chl` or `Just a moment`, logged per row in summary.tsv; the old broad "challenge" text rule is retired). Re-checked in W4.E0.b.a with the specific markers on both arms: basescan.org is a Cloudflare challenge on every run on both arms (`__cf_chl`). **zoomph.com is settled as not a challenge by this rule:** `admin.zoomph.com` redirects to `authentication.zoomph.com/login`, and no marker matched on either arm in any of 10 runs (both arms OK). That is a login page with no Cloudflare marker, not a bot-challenge interstitial. The marker rule says nothing about whether the login page is bot-gated otherwise. The Chrome side now has a content check too, so its OK rows are checked for the same markers.
 - **FAIL / TIMEOUT** on both arms: `mkp.gem.gov.in` (manuk: connection refused; Chrome: FAIL) and
   `virtual.lapampa.edu.ar` (manuk: FAIL after 30 s; Chrome: TIMEOUT at 60 s). Also manuk-only: `ebanking.bdm-sa.com`
   (OK in 2 of 3 runs). These rows are kept in `runs.tsv`. For manuk FAIL rows the `note` column holds the page-id
@@ -182,8 +179,8 @@ quotable only with 10 runs, a band that excludes 1.0, and no overlap with the ea
 | metric | value over 10 runs | verdict |
 |---|---|---|
 | paired URLs (OK in all 10 runs, both arms) | 7 | |
-| manuk / chrome per-URL wall, median per run | **1.67–3.85×** | NOT_SETTLED: overlaps the prior 1.66–1.96× range |
-| manuk / chrome per-URL PSS, median per run | 0.42–0.48× | band reported, not part of the wall claim |
+| manuk / chrome per-URL wall, median per run | **1.66–5.81×** (2026-10-31 sweep: 1.67–3.85×) | NOT_SETTLED: overlaps the prior 1.66–1.96× range |
+| manuk / chrome per-URL PSS, median per run | 0.21–0.25× (2026-10-31 sweep: 0.42–0.48×) | band reported, not part of the wall claim. **Moved between sweeps, not a manuk change:** Chrome's per-URL PSS rose about 50% on every URL (e.g. comix.to 345→496 MB, puentedemando.com 375→524 MB) while manuk's stayed within about 10% (manuk-proc means in `runs-urls.tsv`). The denominator is Chrome-side box state; do not quote either band as a stable ratio. |
 
 Why the wall stays unsettled: per-URL walls on live sites are bimodal between runs. Example: comix.to manuk ran
 10.3–13.6 s in runs 1–6 and 9.3–9.5 s in runs 7–10; app.ordertime.com ran 11.2 s once and 3.7–6.0 s in the others. Per-run
@@ -196,7 +193,9 @@ Outcomes on the 10 URLs × 10 runs (100 rows per arm):
 | manuk-proc | 70 | 10 (basescan.org, `__cf_chl`, every run) | 20 | 0 |
 | chrome-proc | 70 | 10 (basescan.org, `__cf_chl`, every run) | 10 | 10 |
 
+Re-run in W4.E0.b.a (2026-11-17, same pin, same 10 URLs × 10 runs, `runs-urls.tsv` overwritten; the counts above are unchanged). Outcome counts are identical to the 2026-10-31 sweep; the CHALLENGE rows now carry the matched marker.
+
 `virtual.lapampa.edu.ar` times out at 30 s on manuk and at 60 s on Chrome; `mkp.gem.gov.in` fails on both arms.
 
 **Claim:** none. The earlier per-URL wall ratios are not replaced by this table. The 10-run band is the number to quote, and
-it is 1.67–3.85×, not a single ratio.
+it is now 1.66–5.81× (W4.E0.b.a re-run), not a single ratio. The wall band widened and still spans the earlier ranges, so the verdict stays NOT_SETTLED.
