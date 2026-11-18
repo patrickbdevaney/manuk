@@ -1,0 +1,23 @@
+chrome_ver	arm	task	run	turn	tool	result_bytes	output_tokens	thinking_tokens
+145.0.7632.116	manuk-lean	P03	1	1	ToolSearch+mcp__browser__navigate	333	171	83
+145.0.7632.116	manuk-lean	P03	1	2	mcp__browser__scroll	141	70	0
+145.0.7632.116	manuk-lean	P03	1	3		0	308	150
+145.0.7632.116	manuk-lean	P04	1	1	ToolSearch	0	73	0
+145.0.7632.116	manuk-lean	P04	1	2	mcp__browser__navigate	277	62	121
+145.0.7632.116	manuk-lean	P04	1	3	mcp__browser__scroll	141	56	0
+145.0.7632.116	manuk-lean	P04	1	4		0	266	0
+145.0.7632.116	manuk-lean	P03	2	1	ToolSearch+mcp__browser__navigate	333	163	68
+145.0.7632.116	manuk-lean	P03	2	2	mcp__browser__scroll	141	67	0
+145.0.7632.116	manuk-lean	P03	2	3		0	236	99
+145.0.7632.116	manuk-lean	P04	2	1	ToolSearch	0	71	0
+145.0.7632.116	manuk-lean	P04	2	2	mcp__browser__navigate	277	61	117
+145.0.7632.116	manuk-lean	P04	2	3	mcp__browser__scroll	141	54	0
+145.0.7632.116	manuk-lean	P04	2	4		0	254	0
+145.0.7632.116	manuk-lean	P03	3	1	ToolSearch	0	74	82
+145.0.7632.116	manuk-lean	P03	3	2	mcp__browser__navigate	333	64	71
+145.0.7632.116	manuk-lean	P03	3	3	mcp__browser__scroll	141	56	0
+145.0.7632.116	manuk-lean	P03	3	4		0	290	0
+145.0.7632.116	manuk-lean	P04	3	1	ToolSearch	0	73	0
+145.0.7632.116	manuk-lean	P04	3	2	mcp__browser__navigate	277	62	78
+145.0.7632.116	manuk-lean	P04	3	3	mcp__browser__scroll	141	55	0
+145.0.7632.116	manuk-lean	P04	3	4		0	193	0

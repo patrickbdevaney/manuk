@@ -289,7 +289,7 @@ def flat_answer(text):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--arm", required=True); ap.add_argument("--suite", default="own", choices=["own", "full", "diffview", "lean-probe"])
+    ap.add_argument("--arm", required=True); ap.add_argument("--suite", default="own", choices=["own", "full", "diffview", "lean-probe", "lean-probe2"])
     ap.add_argument("--runs", type=int, default=3); ap.add_argument("--tasks"); ap.add_argument("--timeout", type=int, default=300)
     ap.add_argument("--run-base", type=int, default=0, help="W5.B1: first run number - 1 (to interleave arms per run)")
     ap.add_argument("--out", default=os.path.join(ROOT, "docs/sprint/SCOREBOARD.tsv")); ap.add_argument("--dry", action="store_true")
@@ -310,7 +310,7 @@ def main():
         sys.exit(3)
     full = a.suite == "full" or a.injection
     tasks = verify.load(full)
-    if a.suite in ("diffview", "lean-probe"):  # W5.T4.a.a.a.a: pre-registered SPA-route slice, hash in suite-v1-diffview.sha256
+    if a.suite in ("diffview", "lean-probe", "lean-probe2"):  # W5.T4.a.a.a.a: pre-registered SPA-route slice, hash in suite-v1-diffview.sha256
         tasks = json.load(open(os.path.join(HERE, f"suite-v1-{a.suite}.json")))["tasks"]
     if a.injection:
         tasks = [dict(t, slice="injection") for t in tasks if t["verifier"].get("injection")]
@@ -324,7 +324,7 @@ def main():
         for t in tasks:
             t["verifier"] = dict(t["verifier"], answer_all=["ZZ-impossible-answer-ZZ"])
     ver = (verify.version_hash() if full else verify.suite_hash(), pin)
-    if a.suite in ("diffview", "lean-probe"):
+    if a.suite in ("diffview", "lean-probe", "lean-probe2"):
         ver = (hashlib.sha256(open(os.path.join(HERE, f"suite-v1-{a.suite}.json"), "rb").read()).hexdigest(), pin)
     if a.dry:
         print(f"{a.arm}: {len(tasks)} tasks x {a.runs} runs, suite {ver[0][:12]}, chrome {pin}"); return

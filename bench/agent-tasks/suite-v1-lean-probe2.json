@@ -1,0 +1,33 @@
+{
+ "suite": "v1-lean-probe2",
+ "tasks": [
+  {
+   "id": "P03",
+   "slice": "lean-probe",
+   "kind": "fixture",
+   "start_url": "{BASE}/lp2",
+   "goal": "Scroll the page down once with the scroll tool (dy 100). Its result starts with a line 'scrolled to y=A of H'. Report the number H (the total page height in px) exactly as printed.",
+   "verifier": {
+    "answer_all": [
+     "674"
+    ],
+    "answer_none": [],
+    "state": {}
+   }
+  },
+  {
+   "id": "P04",
+   "slice": "lean-probe",
+   "kind": "fixture",
+   "start_url": "{BASE}/lp",
+   "goal": "Scroll the page down once with the scroll tool (dy 100). Its result starts with a line 'scrolled to y=A of H'. Report the number H (the total page height in px) exactly as printed.",
+   "verifier": {
+    "answer_all": [
+     "474"
+    ],
+    "answer_none": [],
+    "state": {}
+   }
+  }
+ ]
+}
