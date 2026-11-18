@@ -235,5 +235,21 @@ fn real_main(mut args: Vec<String>) -> anyhow::Result<()> {
         manuk_net::lean::WIRE_BYTES.load(std::sync::atomic::Ordering::Relaxed),
         manuk_net::lean::BLOCKED.load(std::sync::atomic::Ordering::Relaxed)
     );
+    // W4.E3.b.b: SpiderMonkey's static destructors (MutexImpl::~MutexImpl) abort on a still-held mutex while
+    // helper threads run, so a normal return segfaults at exit. Flush and leave without running them.
+    #[cfg(unix)]
+    {
+        let _ = std::io::Write::flush(&mut std::io::stdout());
+        let _ = std::io::Write::flush(&mut std::io::stderr());
+        let code = match &r {
+            Ok(()) => 0,
+            Err(e) => {
+                eprintln!("Error: {e:?}");
+                1
+            }
+        };
+        unsafe { libc::_exit(code) }
+    }
+    #[cfg(not(unix))]
     r
 }
