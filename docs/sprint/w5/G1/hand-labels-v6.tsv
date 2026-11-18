@@ -1,0 +1,11 @@
+arm	task	run	hand_label	evidence
+cdp-layer+pwfmt-v4	opendining-4	1	unexplained	Agent stopped by choice: "I did not click Complete reservation... booking page is set up for the wrong date and party size" (Jul 18, 2 people) and called it a site bug.
+cdp-layer+pwfmt-v4	gomail-3	3	grader-issue	Agent composed all three fields and said "I left it unsent because the task said compose", while the grader checks differences.emails.added (a sent email).
+cdp-layer+pwfmt-v4	gomail-5	2	perceive	Agent said "the day cells are not exposed as clickable elements" in the custom date calendar, so it could not pick 9:00 AM next Monday.
+cdp-layer+pwfmt-v4	fly-unified-6	2	perceive	Agent said the year dropdown "is not exposed in the page's accessibility tree" so December 2024 was unreachable.
+cdp-layer+pwfmt-v4	fly-unified-6	1	perceive	Agent said "I found no year control I could use to go back to 2024" and the previous-month arrow was disabled.
+cdp-layer+pwfmt-v4	opendining-10	3	perceive	Agent said "None of the five restaurants shows any menu items" - the Menu heading rendered with nothing under it.
+cdp-layer+pwfmt-v4	opendining-4	3	act	Agent said the United States option "can't be scrolled into view" and the country stayed Switzerland, so the phone number was rejected and the booking never completed.
+cdp-layer+pwfmt-v4	opendining-10	1	perceive	Agent said "Each restaurant page has a Menu heading, but no dishes, prices, or dietary labels appear under it" so it could not pick a restaurant.
+cdp-layer+pwfmt-v4	fly-unified-6	3	perceive	Agent said "The month and year dropdowns are not exposed to my browser tools" so December 2024 was not reachable.
+cdp-layer+pwfmt-v4	gomail-8	1	grader-issue	Agent trashed all four GitHub-matching emails as the goal says "Clear all emails from GitHub", but the grader requires exactly one email (id 3) updated.

@@ -31,11 +31,14 @@ ACTS = {"act", "type", "fill_form", "browser_click", "browser_type", "browser_fi
 # a result that is not a success: the same signals real_classify counts as act failures, plus plain errors
 FAIL = re.compile(r"^no change \| url: unchanged|STALE|no longer on the page|handles are per-page|is unknown \(handles|"
                   r"bad page handle|not found in the current page snapshot|is not supported by this backend|"
-                  r"no enclosing <form>|no human surface is attached|TimeoutError|^\s*(Error|error)\b|### Error", re.M)
+                  r"refused focus|no enclosing <form>|no human surface is attached|TimeoutError|^\s*(Error|error)\b|### Error", re.M)
 # W5.G1.b.c.a.a.a.a.a: perceive needs the agent's own account of an empty/missing observation; without it the run is `unexplained`
 EMPTY = re.compile(r"no dishes|\bempty\b|no add button|no (?:\w+ )?(?:item|dish|result)s?\b|"
                    r"not (?:visible|shown|listed|present)|nothing (?:beneath|under|appeared)|no .{0,40}appear|did(?:n't| not) appear|"
                    r"doesn't (?:appear|have|show)|(?:couldn't|could not|did not|didn't) (?:find|see)|found no|none of the", re.I)
+# W5.G1.b.c.a.a.a.a.a.a.a: the agent's own statement that a control is not in what it can see (date-picker year dropdown) is perceive
+NOT_EXPOSED = re.compile(r"(?:isn't|is not|aren't|are not|wasn't|not)\s+(?:exposed|reachable through|available to) (?:to )?(?:my )?(?:tools|snapshot)|"
+                         r"(?:not|n't) (?:in|part of) (?:the|my) (?:snapshot|observation)|can(?:'|no)t (?:see|find) (?:a |the )?(?:year|month) (?:dropdown|selector|control)", re.I)
 ARMS = ["cdp-layer", "cdp-layer+pwfmt"]
 CLASSES = ["perceive", "target", "act", "tool-choice", "turn-limit", "grader-issue", "unexplained"]
 # W5.G1.b.b.a.a.a.a.a: gomail-8 fails only checkpoint 2 (exactly one email updated) while the goal asks for all of them
@@ -65,6 +68,8 @@ def unrecovered(path):
         for k in ("stale", "unsup", "enter_gap", "timeout"):
             if rc.RX[k].search(body):
                 c[k] += 1
+        if re.search(r"refused focus", body):
+            c["refused"] += 1
         if rc.RX["nochange"].search(body.lstrip()):
             c["nochange"] += 1
     return c
@@ -90,11 +95,13 @@ def classify(path, mutate=None):
         return "turn-limit"
     if action_calls(path) == 0:
         return "tool-choice"
+    if NOT_EXPOSED.search(rc.parse(path)[1]):
+        return "perceive"
     u = unrecovered(path)
-    act = u["nochange"] >= 2 or u["stale"] >= 2 or u["unsup"] or u["enter_gap"] or (f["typed_fail_text"] and f["type_calls"]) or u["timeout"] or typing_never_landed(path)
+    act = u["refused"] or u["nochange"] >= 2 or u["stale"] >= 2 or u["unsup"] or u["enter_gap"] or (f["typed_fail_text"] and f["type_calls"]) or u["timeout"] or typing_never_landed(path)
     if act:
         return None if mutate == "drop-act" else "act"  # mutant: the act rule is gone, so its runs stay unclassified
-    if f["strict"] or f["ambig_text"] or ((f["occl"] or f["dialog_text"]) and action_failed(path)):
+    if f["strict"] or f["ambig_text"] or ((f["occl"] or f["dialog_text"]) and sum(unrecovered(path).values()) > 0):
         return "target"
     if mutate == "perceive-fallback" or EMPTY.search(rc.parse(path)[1]):  # mutant: the old unconditional fallback
         return "perceive"
