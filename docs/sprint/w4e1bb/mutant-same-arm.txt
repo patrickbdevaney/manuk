@@ -1,0 +1,7 @@
+https://comix.to/: subres_fetch manuk 1.42..19.02 med 6.09 | manuk 1.42..19.02 med 6.09 -> bands overlap: no difference claimed; img body MB manuk=5.39 manuk=5.39
+https://ebanking.bdm-sa.com/: INSUFFICIENT (OK runs manuk=1 manuk=1, need 3 each); img body MB manuk=0.16 manuk=0.16
+https://www.mobile.bg/: subres_fetch manuk 2.43..2.63 med 2.45 | manuk 2.43..2.63 med 2.45 -> bands overlap: no difference claimed; img body MB manuk=0.56 manuk=0.56
+https://www.puentedemando.com/: subres_fetch manuk 2.61..3.27 med 2.92 | manuk 2.61..3.27 med 2.92 -> bands overlap: no difference claimed; img body MB manuk=5.58 manuk=5.58
+TREATMENT NOT APPLIED (lean arm did not carry fewer image body bytes) on: https://comix.to/, https://ebanking.bdm-sa.com/, https://www.mobile.bg/, https://www.puentedemando.com/
+SAMPLE SHORT on: https://ebanking.bdm-sa.com/ (no band verdict on those URLs)
+VERDICT: GATE VOID
