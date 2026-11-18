@@ -1652,7 +1652,9 @@ async fn fetch_scoped(url: &str, initiator: Option<&Url>) -> Result<Response> {
     let out = fetch_with_deadline(url, request_timeout(), initiator).await;
     mark_origin_known(url);
     if let Ok(r) = &out {
-        lean::WIRE_BYTES.fetch_add(r.body.len() as u64, std::sync::atomic::Ordering::Relaxed);
+        // Wire bytes are counted where the body is read off the network (`send_once`, and the
+        // document path in `fetch_document_or_download`), not here: this point also sees a stored
+        // body served by a `304` or a cache hit, which crossed no wire (W4.E3.b.a).
         note_http_version(url, r.http_version);
         nav_recent_put(url, r);
     }
@@ -1891,6 +1893,12 @@ pub async fn fetch_document_or_download(url: &str, dir: &std::path::Path) -> Res
         Ok(b) => b?,
         Err(_) => bail!("timed out reading document body for {final_url}"),
     };
+    // The top-level document is wire traffic too. It was never counted, so `wire_bytes` understated
+    // every navigation by the size of its HTML (W4.E3.b.a). A cache hit returned above, uncounted.
+    lean::WIRE_BYTES.fetch_add(body.len() as u64, std::sync::atomic::Ordering::Relaxed);
+    if nettrace::enabled() {
+        nettrace::emit("body", &format!("{url}\t{}\t{status}", body.len()));
+    }
     let resp = Response {
         status,
         headers,
@@ -2638,8 +2646,14 @@ async fn send_once(
     let encoding = content_encoding(&resp);
 
     let decoded = read_body_decoded(resp.into_body(), encoding.as_deref()).await?;
+    // The one place a body is read off the network for a subresource, redirect hop, or POST, so the
+    // one place wire bytes are counted. A `304` carries no body: its stored copy is substituted by the
+    // caller, and counting that copy here would report traffic that never happened (W4.E3.b.a).
+    if status != 304 {
+        lean::WIRE_BYTES.fetch_add(decoded.len() as u64, std::sync::atomic::Ordering::Relaxed);
+    }
     if nettrace::enabled() {
-        nettrace::emit("body", &format!("{url}\t{}", decoded.len()));
+        nettrace::emit("body", &format!("{url}\t{}\t{status}", decoded.len()));
     }
 
     Ok(Response {
