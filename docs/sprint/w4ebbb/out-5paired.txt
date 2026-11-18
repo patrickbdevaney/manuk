@@ -1,0 +1,4 @@
+5 URLs: app.ordertime.com client.dkitrxmdwoqruvsi.net comix.to www.mobile.bg www.puentedemando.com
+run 1: median per-URL 0.333  pooled sum/sum 0.469  mean/page manuk 214.7 MB chrome 458.0 MB
+run 2: median per-URL 0.329  pooled sum/sum 0.465  mean/page manuk 213.8 MB chrome 459.7 MB
+run 3: median per-URL 0.322  pooled sum/sum 0.464  mean/page manuk 213.0 MB chrome 459.1 MB

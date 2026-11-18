@@ -931,6 +931,8 @@ def main():
                          "(N=10 round-robin, 3 runs); exits 1 unless every arm has 3 OK runs")
     ap.add_argument("--real-pages-procs-mutant", action="store_true",
                     help="gate check for --real-pages-procs: fixture pages against real hosts; must come out WRONG_PAGE/FAIL")
+    ap.add_argument("--real-pages-n5-procs", action="store_true",
+                    help="W4.E0.c.b.b: unique-URL N=5 with all three arms (manuk-proc, chrome-tabs, chrome-procs), 3 runs")
     ap.add_argument("--url-runs", type=int, metavar="K",
                     help="urls axis only, K runs per arm (W4.E0.d); writes runs-urls.tsv and summary-urls.tsv")
     args = ap.parse_args()
@@ -959,13 +961,13 @@ def main():
         write_summary(args.out)
         return
     if args.real_pages or args.real_pages_mutant or args.real_pages_n5 or args.real_pages_n5_mutant \
-            or args.real_pages_procs or args.real_pages_procs_mutant:
+            or args.real_pages_procs or args.real_pages_procs_mutant or args.real_pages_n5_procs:
         if not PIN:
             sys.exit("MANUK_CHROME_PIN unset: refusing to write rows without a chrome_ver")
         if not os.path.exists(MCP) or not os.path.exists(CHROME):
             sys.exit(f"missing {MCP} or pinned Chrome {CHROME}")
-        unique = args.real_pages_n5 or args.real_pages_n5_mutant
-        procs = args.real_pages_procs or args.real_pages_procs_mutant
+        unique = args.real_pages_n5 or args.real_pages_n5_mutant or args.real_pages_n5_procs
+        procs = args.real_pages_procs or args.real_pages_procs_mutant or args.real_pages_n5_procs
         mutant = args.real_pages_mutant or args.real_pages_n5_mutant or args.real_pages_procs_mutant
         n = 5 if unique else REAL_N
         srv, fx = start_fixture()
@@ -975,7 +977,7 @@ def main():
         finally:
             srv.shutdown()
             shutil.rmtree(log_root, ignore_errors=True)
-        suffix = "-n5" if unique else ("-procs" if procs else "")
+        suffix = "-n5-procs" if (unique and procs) else ("-n5" if unique else ("-procs" if procs else ""))
         name = f"runs-real-pages{suffix}{'-mutant' if mutant else ''}.tsv"
         path = write_real_pages(args.out, rows, name)
         print(f"raw rows: {path}")

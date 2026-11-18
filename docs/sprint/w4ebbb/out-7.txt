@@ -1,0 +1,4 @@
+7 URLs: admin.zoomph.com app.ordertime.com client.dkitrxmdwoqruvsi.net comix.to ebanking.bdm-sa.com www.mobile.bg www.puentedemando.com
+run 1: median per-URL 0.217  pooled sum/sum 0.394  mean/page manuk 169.1 MB chrome 429.4 MB
+run 2: median per-URL 0.219  pooled sum/sum 0.391  mean/page manuk 169.5 MB chrome 433.4 MB
+run 3: median per-URL 0.212  pooled sum/sum 0.390  mean/page manuk 168.1 MB chrome 430.9 MB

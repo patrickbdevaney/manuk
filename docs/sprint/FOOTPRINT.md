@@ -297,8 +297,7 @@ and this table does not separate them.
 **What this says, and the band to quote.** On these five live pages, with one manuk-mcp process per page versus one Chrome process
 per page, manuk-proc holds **0.57–0.70×** the summed PSS of chrome-procs across both sessions (6 runs). Against one shared Chrome
 with the pages in tabs, manuk-proc holds **1.60–1.90×**. Quote the pooled band, with the two sessions named. Do not quote either
-session's band alone as the answer. The 0.30–0.31× URL-sweep figure from the earlier comparison is still not reconciled here (see
-W4.E0.c.b.b).
+session's band alone as the answer. The 0.30–0.31× URL-sweep figure is reconciled in the section below (W4.E0.c.b.b).
 
 **Not claimed.** Wall clock (not claimed; in the reported set, manuk-proc took 71–112 s for the 10 navigates, chrome-procs 44–62 s, chrome-tabs
 13–19 s, on live sites). Any claim about the Oct-31 sweep (N = 10 repeated URLs, 2.22–2.24×) is not part of this table.
@@ -321,3 +320,46 @@ W4.E0.c.b.b).
 - `--real-pages-procs` exited 0 and wrote the summary because each arm had exactly 3 OK runs. On attempt 1, the same command
   exited 1 with `NOT_SETTLED` (chrome-procs at 2 OK runs), so the rule is exercised on live data in both directions.
 - `--selftest` OK at this commit.
+
+## Reconciling 0.30–0.31× with 0.57–0.65× (W4.E0.c.b.b)
+
+_Measured 2026-11-18, `chrome_ver = 145.0.7632.116`, one session. Raw rows: `docs/sprint/footprint/session-3/runs-urls.tsv`
+(sweep) and `session-3/runs-real-pages-n5-procs.tsv` (N=5 concurrent). Arithmetic: `python3 -I docs/sprint/w4ebbb/reconcile.py`
+(outputs in `docs/sprint/w4ebbb/`). New harness flag: `--real-pages-n5-procs`._
+
+The two figures are different statistics on different arms, over the same pages:
+
+| figure | arms | pages per measurement | statistic | value |
+|---|---|---|---|---|
+| 0.30–0.31× (URL sweep, `runs.tsv`) | manuk-mcp process vs one fresh Chrome process (r01 driver), each loading **one** URL alone | 1 | **median** of the per-URL manuk/chrome PSS ratios, 5 paired URLs | 0.300–0.310 |
+| 0.57–0.65× (W4.E0.c.b) | 10 manuk-mcp processes vs 10 Chrome processes alive at once | 10 (5 URLs, each twice) | summed PSS manuk / summed PSS chrome | 0.57–0.65 |
+
+Re-measured in this session on the same 5 paired URLs (sweep, 3 runs, same harness):
+
+| statistic on the single-URL sweep | this session (3 runs) | original sweep (3 runs) |
+|---|---|---|
+| median of per-URL ratios | **0.322–0.333×** | 0.300–0.310× |
+| pooled (sum manuk / sum chrome) | **0.464–0.469×** | 0.423–0.426× |
+| mean per page, manuk / chrome | 213–215 / 458–460 MB | 211–212 / 498–500 MB |
+
+So the 0.30× case reproduces approximately (0.32–0.33× now; the Chrome single-process cost per page fell from about 499 to
+about 459 MB between sessions, which this note does not explain). Two things then separate it from 0.57–0.65×:
+
+1. **The statistic.** The median is set by the light pages (client.dkitrxmdwoqruvsi.net is 25–31 MB on manuk against about
+   360 MB on Chrome, 0.07×); the heavy pages (comix.to, puentedemando.com at 350–450 MB on manuk) sit at 0.7–0.9×. Pooling
+   sum over sum on the identical rows gives 0.46–0.47× here (0.42–0.43× on the original rows).
+2. **How many pages are alive at once.** On the same 5 URLs, one page each, all alive together (N=5, three arms in one session):
+   manuk-proc 192–195 MB/page, chrome-procs 319–320 MB/page, **ratio 0.60–0.61×** (chrome-tabs 151–161 MB/page, manuk-proc /
+   chrome-tabs 1.21–1.28×). Chrome's per-page PSS falls from about 459 MB alone to about 319 MB with five running together
+   (shared library and zygote pages are split across more processes); manuk's falls only from about 214 to about 194 MB.
+   Whether that drop is shared-library splitting is a reading, not something this node isolated.
+
+Reading: the ratio is not a property of the engine alone. Median of single-page runs: 0.32–0.33×. Same rows pooled: 0.46–0.47×.
+Five concurrent processes: 0.60–0.61×. Ten concurrent: 0.57–0.70× (6 runs over two sessions). Quote the concurrency and the
+statistic with the number. The 7-URL variant (adds admin.zoomph.com and ebanking.bdm-sa.com, both light on manuk) gives median
+0.21–0.22× and pooled 0.39× in this session, so the paired-set choice moves the figure too.
+
+Gate: `reconcile.py --selftest` goes red on swapped arms (ratio inverts above 1.5) and on a truncated run set; a wrong URL set
+exits 1 (`RED: paired_urls=0`). The N=5 run landed 5 of 5 pages on every arm in all 3 runs; the page-landing mutants of the
+earlier nodes cover the same code path (`--real-pages-n5-mutant`, `--real-pages-procs-mutant`). Not tested: the 10-URL sweep's
+remaining sites (CHALLENGE and FAIL rows are excluded from every figure above).
