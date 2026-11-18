@@ -1,0 +1,11 @@
+arm	task	run	hand_label	basis	chrome_ver
+playwright	dashdish-4	2	click_no_effect	final answer: Schedule for later click opened no time picker	145.0.7632.116
+playwright	gocalendar-7	1	wrong_answer	final answer: claims success; no layer blocker narrated	145.0.7632.116
+playwright	zilloft-6	3	wrong_answer	final answer: finished with answer, no layer blocker	145.0.7632.116
+manuk+rollback.v2	dashdish-5	1	dialog_modal	final answer: Pickup chip covered by occluding element	145.0.7632.116
+cdp-layer	dashdish-5	3	dialog_modal	final answer: Add button covered by invisible modal overlay	145.0.7632.116
+manuk+rollback.v2	gocalendar-3	1	click_no_effect	final answer: all event clicks produced no change	145.0.7632.116
+playwright	staynb-8	2	wrong_answer	final answer: stopped for payment details; no layer blocker	145.0.7632.116
+manuk	gocalendar-1	1	wrong_answer	final answer: finished with answer, no blocker	145.0.7632.116
+manuk+rollback.v2	staynb-8	1	dialog_modal	final answer: Reserve button occluded by dimming element	145.0.7632.116
+cdp-layer	gocalendar-7	1	key_hover_enter_gap	final answer: drag tool only accepts handles, no slot target	145.0.7632.116

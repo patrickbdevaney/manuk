@@ -127,6 +127,22 @@ FINAL_RX = {
 }
 
 
+# v3.1: "disabled"/"greyed out" only counts when the same sentence is about typed text (not a calendar arrow or a Search button waiting on other fields)
+DISABLED_RX = re.compile(r"stays? disabled|still disabled|stayed disabled|greyed out", re.I)
+TYPEDCTX_RX = re.compile(r"free-?text|typed|typing|text ?box|input|counter|register|\b0/\d+|add button", re.I)
+
+
+def typed_fail_final(final):
+    if RX["selferr_text"].search(final):
+        return False
+    if re.search(RX["typed_fail"].pattern.replace("|stays? disabled|still disabled|stayed disabled|greyed out", ""), final, re.I):
+        return True
+    for sent in re.split(r"(?<=[.!?])\s+|\n", final):
+        if DISABLED_RX.search(sent) and TYPEDCTX_RX.search(sent):
+            return True
+    return False
+
+
 def end_features(path):
     err, final, results, texts, type_calls = parse(path)
     f = collections.Counter()
@@ -149,7 +165,7 @@ def end_features(path):
             f["strict"] += 1
         if RX["timeout"].search(body):
             f["timeout"] += 1
-    if RX["typed_fail"].search(final) and not RX["selferr_text"].search(final):
+    if typed_fail_final(final):
         f["typed_fail_text"] += 1
     if FINAL_RX["dialog"].search(final):
         f["final_dialog"] += 1
