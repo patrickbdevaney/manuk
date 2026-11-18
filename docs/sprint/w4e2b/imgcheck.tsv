@@ -1,0 +1,11 @@
+url	manuk_post_js	chrome_runs	chrome_median	verdict	gate_required	chrome_ver
+https://comix.to/	190	190,190,190	190	AGREE	yes	145.0.7632.116
+https://client.dkitrxmdwoqruvsi.net/	0	0,0,0	0	AGREE	no	145.0.7632.116
+https://www.mobile.bg/	47	47,47,47	47	AGREE	yes	145.0.7632.116
+https://mkp.gem.gov.in/	ERR:fetching_https://mkp.gem.gov.in/	ERR:FAIL,ERR:FAIL,ERR:FAIL	ERR:0/3	NA	no	145.0.7632.116
+https://app.ordertime.com/	2	2,2,2	2	AGREE	no	145.0.7632.116
+https://www.puentedemando.com/	92	87,88,88	88	AGREE	yes	145.0.7632.116
+https://basescan.org/	0	1,1,1	1	AGREE	no	145.0.7632.116
+https://ebanking.bdm-sa.com/	5	ERR:FAIL,ERR:FAIL,ERR:FAIL	ERR:0/3	NA	no	145.0.7632.116
+https://admin.zoomph.com/	2	2,2,2	2	AGREE	yes	145.0.7632.116
+https://virtual.lapampa.edu.ar/	ERR:fetching_https://virtual.lapampa.edu.ar/	ERR:FAIL,ERR:FAIL,ERR:FAIL	ERR:0/3	NA	no	145.0.7632.116

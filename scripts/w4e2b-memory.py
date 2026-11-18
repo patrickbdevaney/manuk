@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """W4.E2.b: peak summed PSS of manuk-mcp, lean vs full profile, at actionable and with a screenshot.
 
-Matrix: 10 baseline URLs x {full, lean} x {actionable, shot} x RUNS. Every run is a fresh manuk-mcp
+Matrix: 10 baseline URLs x {full, lean} x {actionable, shot} x RUNS. Each URL also gets a post-JS image
+count (`img_post_js`: <img> elements in the DOM after navigate + JS, from examples/img_count, full profile);
+it is the img column of summary.tsv and is checked against an independent Chrome DOM count by
+scripts/w4e2b-imgcheck.py (W4.E2.b.a). The raw HTML <img> count is no longer used (0 tags on comix.to). Every run is a fresh manuk-mcp
 process with one page. `actionable` = navigate + observe; `shot` = navigate + observe + screenshot.
 The two modes are separate processes so the screenshot path cannot change the actionable number.
 A band is min-max PSS (MB) over the OK runs of one (url, mode, arm).
@@ -21,7 +24,7 @@ Usage (run with -I so no local module can shadow the stdlib):
   python3 -I scripts/w4e2b-memory.py --canary-only
   python3 -I scripts/w4e2b-memory.py --canary-only --mutant-canary     # must exit 1
   python3 -I scripts/w4e2b-memory.py --selftest
-Needs target/release/manuk-mcp and target/release/examples/lean_probe.
+Needs target/release/manuk-mcp, target/release/examples/lean_probe and target/release/examples/img_count.
 """
 import argparse
 import importlib.util
@@ -33,12 +36,12 @@ import subprocess
 import sys
 import tempfile
 import time
-import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 URLS = os.path.join(ROOT, "docs", "sprint", "BASELINE-URLS.txt")
 PROBE = os.path.join(ROOT, "target", "release", "examples", "lean_probe")
+IMG_PROBE = os.path.join(ROOT, "target", "release", "examples", "img_count")
 FIXTURE = os.path.join(HERE, "w4e2-fixture.py")
 PIN = os.environ.get("MANUK_CHROME_PIN", "")
 RUNS = 3
@@ -60,15 +63,18 @@ def load_urls():
         return [ln.strip() for ln in f if ln.strip() and not ln.startswith("#")]
 
 
-def static_img_tags(url):
-    """Count of <img> tags in the raw HTML (before any JS). A rough image-heaviness label, not a render count."""
+def post_js_img(url):
+    """<img> elements in the DOM after navigate + JS (manuk, full profile). ERR:<why> if the load fails."""
+    env = dict(os.environ)
+    env.pop("MANUK_AGENT_PROFILE", None)
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64)"})
-        with urllib.request.urlopen(req, timeout=20) as r:
-            html = r.read(2_000_000).decode("utf-8", "replace")
-        return str(len(re.findall(r"<img\b", html, re.I)))
-    except Exception as e:  # network is live; a dead host is recorded, not fatal
+        out = subprocess.run([IMG_PROBE, url], env=env, capture_output=True, text=True, timeout=180).stdout
+    except (subprocess.TimeoutExpired, OSError) as e:  # a dead host is recorded, not fatal
         return f"ERR:{type(e).__name__}"
+    kv = dict(re.findall(r"(\w+)=(\S+)", out))
+    if kv.get("ok") == "true" and kv.get("img_post_js", "").isdigit():
+        return kv["img_post_js"]
+    return f"ERR:{kv.get('err', 'no-output')[:40]}"
 
 
 def one_run(url, lean, shot):
@@ -159,11 +165,11 @@ def write_tsv(path, header, rows):
 
 
 def summarize(rows, out):
-    header = ["url", "mode", "full_pss_mb", "lean_pss_mb", "full_median_mb", "lean_median_mb", "verdict", "static_img_tags"]
+    header = ["url", "mode", "full_pss_mb", "lean_pss_mb", "full_median_mb", "lean_median_mb", "verdict", "post_js_img"]
     summary = []
     urls = list(dict.fromkeys(r["url"] for r in rows))
     for url in urls:
-        imgs = next(r["img_tags"] for r in rows if r["url"] == url)
+        imgs = next(r["img_post_js"] for r in rows if r["url"] == url)
         for mode in ("actionable", "shot"):
             pts = {arm: [r["pss_mb"] for r in rows if r["url"] == url and r["mode"] == mode
                          and r["arm"] == arm and r["status"] == "OK"] for arm in ("full", "lean")}
@@ -171,7 +177,7 @@ def summarize(rows, out):
             med = {a: f"{statistics.median(x):.0f}" if x else "-" for a, x in pts.items()}
             summary.append({"url": url, "mode": mode, "full_pss_mb": band(pts["full"]),
                             "lean_pss_mb": band(pts["lean"]), "full_median_mb": med["full"],
-                            "lean_median_mb": med["lean"], "verdict": v, "static_img_tags": imgs})
+                            "lean_median_mb": med["lean"], "verdict": v, "post_js_img": imgs})
     write_tsv(os.path.join(out, "summary.tsv"), header, summary)
     print("\t".join(header))
     for s in summary:
@@ -212,7 +218,7 @@ def main():
         print("canary RED: the lean profile is not engaged; no memory numbers are written", file=sys.stderr)
         return 1
     urls = load_urls()
-    img = {u: static_img_tags(u) for u in urls}
+    img = {u: post_js_img(u) for u in urls}
     rows = []
     for run in range(1, RUNS + 1):
         for url in urls:
@@ -221,11 +227,11 @@ def main():
                     peak, wall, st = one_run(url, arm == "lean", mode == "shot")
                     rows.append({"url": url, "mode": mode, "arm": arm, "run": run, "status": st,
                                  "pss_kb": peak, "pss_mb": round(peak / 1024, 1), "wall_s": round(wall, 2),
-                                 "img_tags": img[url], "chrome_ver": PIN})
+                                 "img_post_js": img[url], "chrome_ver": PIN})
                     print(f"run{run} {mode:10} {arm:4} {st:9} {peak/1024:7.1f}MB {wall:6.2f}s {url}", file=sys.stderr)
                     touch()
     write_tsv(os.path.join(a.out, "runs.tsv"),
-              ["url", "mode", "arm", "run", "status", "pss_kb", "pss_mb", "wall_s", "img_tags", "chrome_ver"], rows)
+              ["url", "mode", "arm", "run", "status", "pss_kb", "pss_mb", "wall_s", "img_post_js", "chrome_ver"], rows)
     summarize(rows, a.out)
     return 0
 
