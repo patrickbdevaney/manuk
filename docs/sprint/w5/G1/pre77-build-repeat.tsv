@@ -1,0 +1,3 @@
+role	path	sha256	marker_count	commit	note
+pre77	/home/patrickd/manuk-pre77/target/release/manuk-mcp	f978c5514a55a2c5520f64924c0340789a7f8a5a134b53289ca8cdf346cf1ad9	0	0d02a367285635d0642219384175d2e45d6a30f7	same binary as pre-77 build (pre77-build.tsv), re-hashed 2026-11-18
+head	/home/patrickd/manuk/target/release/manuk-mcp	82900822842644cab5e6366ef3ad348060f901d8e140aa6decb443d5ef9d9aa0	1	a45160e5	rebuilt 2026-11-18 05:58 from HEAD tree a45160e5 (no engine change since); the v2/v3 binary and the eb38 binary in pre77-build.tsv are not this one
