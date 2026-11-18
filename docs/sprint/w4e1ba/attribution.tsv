@@ -1,0 +1,2 @@
+url	runs	subres_fetch_s	cap_wait_s	server_ttfb_s	transfer_s	discovered_late_s	bucket_sum_s	recon_err_pct	late_cap_s	late_ttfb_s	late_transfer_s	n_sub	n_late	n_http1	chrome_ver
+https___ebanking_bdm_sa_com_	3	3.888	2.265	0.204	0.199	1.188	3.857	0.8	0.000	0.382	0.719	62	61	62	145.0.7632.116

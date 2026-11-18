@@ -201,6 +201,9 @@ fn default_extract_is_in_dom_order_and_matches_include_hidden() {
     };
     for (name, s) in [("default", &t), ("include_hidden", &h)] {
         let o = words(s);
-        assert!(o.windows(2).all(|w| w[0] < w[1]), "{name} not DOM order {o:?}: {s:?}");
+        assert!(
+            o.windows(2).all(|w| w[0] < w[1]),
+            "{name} not DOM order {o:?}: {s:?}"
+        );
     }
 }

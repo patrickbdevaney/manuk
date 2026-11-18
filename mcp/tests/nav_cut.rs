@@ -62,7 +62,12 @@ impl Client {
             .expect("spawn manuk-mcp");
         let tx = child.stdin.take().unwrap();
         let rx = BufReader::new(child.stdout.take().unwrap());
-        let mut c = Client { child, tx, rx, id: 0 };
+        let mut c = Client {
+            child,
+            tx,
+            rx,
+            id: 0,
+        };
         c.rpc("initialize", json!({"protocolVersion": "2025-03-26", "capabilities": {}, "clientInfo": {"name": "t", "version": "0"}}));
         c.send(json!({"jsonrpc": "2.0", "method": "notifications/initialized"}));
         c
@@ -77,7 +82,10 @@ impl Client {
         self.send(json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}));
         loop {
             let mut line = String::new();
-            assert!(self.rx.read_line(&mut line).unwrap() > 0, "server closed stdout");
+            assert!(
+                self.rx.read_line(&mut line).unwrap() > 0,
+                "server closed stdout"
+            );
             let v: Value = serde_json::from_str(&line).unwrap();
             if v["id"] == json!(id) {
                 return v;
@@ -95,7 +103,10 @@ impl Client {
             .filter_map(|b| b["text"].as_str())
             .collect::<Vec<_>>()
             .join("\n");
-        assert!(!res["isError"].as_bool().unwrap_or(false), "{name} failed: {text}");
+        assert!(
+            !res["isError"].as_bool().unwrap_or(false),
+            "{name} failed: {text}"
+        );
         text
     }
 }
@@ -107,7 +118,10 @@ impl Drop for Client {
 }
 
 fn handle_of(obs: &str, needle: &str) -> String {
-    let l = obs.lines().find(|l| l.contains(needle)).unwrap_or_else(|| panic!("no {needle} in\n{obs}"));
+    let l = obs
+        .lines()
+        .find(|l| l.contains(needle))
+        .unwrap_or_else(|| panic!("no {needle} in\n{obs}"));
     let a = l.find("[h").unwrap();
     l[a + 1..l[a..].find(']').unwrap() + a].to_string()
 }
@@ -126,13 +140,31 @@ fn navigate_act(cut: bool) -> (String, String) {
 #[test]
 fn navigated_act_is_cut_to_url_change_behind_flag() {
     let (full, _) = navigate_act(false);
-    assert!(full.contains("navigated: ") && full.contains("Buy now"), "default keeps the body: {full}");
+    assert!(
+        full.contains("navigated: ") && full.contains("Buy now"),
+        "default keeps the body: {full}"
+    );
     let (cut, after) = navigate_act(true);
-    eprintln!("W5T2aaa full_lines={} cut_lines={}\n{cut}", full.lines().count(), cut.lines().count());
-    assert!(cut.contains("navigated: ") && cut.contains("/two"), "URL change kept: {cut}");
+    eprintln!(
+        "W5T2aaa full_lines={} cut_lines={}\n{cut}",
+        full.lines().count(),
+        cut.lines().count()
+    );
+    assert!(
+        cut.contains("navigated: ") && cut.contains("/two"),
+        "URL change kept: {cut}"
+    );
     // outcome + URL change + pointer, then the settle/writes/page receipt lines every act result ends with
     assert!(cut.lines().count() <= 6, "cut result is <= 6 lines: {cut}");
-    assert!(cut.len() * 3 <= full.len(), "cut {} bytes must be <= 1/3 of full {}", cut.len(), full.len());
+    assert!(
+        cut.len() * 3 <= full.len(),
+        "cut {} bytes must be <= 1/3 of full {}",
+        cut.len(),
+        full.len()
+    );
     assert!(!cut.contains("Buy now"), "body omitted: {cut}");
-    assert!(after.contains("Buy now"), "observe still reads the new page: {after}");
+    assert!(
+        after.contains("Buy now"),
+        "observe still reads the new page: {after}"
+    );
 }

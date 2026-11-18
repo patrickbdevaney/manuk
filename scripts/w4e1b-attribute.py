@@ -29,12 +29,15 @@ def host_of(u):
     return u.split("/")[2] if "//" in u else u
 
 
-def attribute(pf, text, drop=None):
+def attribute(pf, text, drop=None, q_at_send=False, cap_first=False):
     ev = pf.parse_trace(text)
     t_nav = next(t for t, k, a in ev if k == "mark" and a[0] == "navigate_returned")
     reqs, bodies, iv = [], {}, {c: [] for c in pf.PRIORITY}
+    qs = {}  # url -> queue-entry times (`q` lines: request began waiting for a per-host slot)
     for t, k, a in ev:
-        if k == "req":
+        if k == "q":
+            qs.setdefault(a[0], []).append(t)
+        elif k == "req":
             reqs.append((a[0], int(a[1]), int(a[2]), a[4]))
         elif k == "body":
             bodies.setdefault(a[0], []).append(t)
@@ -51,25 +54,31 @@ def attribute(pf, text, drop=None):
             if te >= st + ttfb:
                 end = te
                 break
-        rows.append(dict(url=url, host=host_of(url), st=st, hdr=st + ttfb, end=end, ver=ver))
+        cand = [q for q in qs.get(url, []) if q <= st + 1000]
+        q = max(cand) if cand and not q_at_send else None
+        if q is not None:
+            qs[url].remove(q)
+        rows.append(dict(url=url, host=host_of(url), st=st, hdr=st + ttfb, end=end, ver=ver, q=q))
+    for r in rows:
+        r["qs"] = min(r["q"], r["st"]) if r["q"] is not None else r["st"]
     first = min(range(len(rows)), key=lambda i: rows[i]["st"])
     iv["doc_fetch"].append((rows[first]["st"], rows[first]["end"]))
     sub = [r for i, r in enumerate(rows) if i != first]
-    first_sub = min((r["st"] for r in sub), default=0)
+    first_sub = min((r["qs"] for r in sub), default=0)
     for r in sub:
-        r["wait_end"] = r["st"]
-        if r["ver"].startswith("HTTP/1"):
+        r["wait_end"] = r["st"]  # measured: slot granted at `req` start when a `q` line exists
+        if r["q"] is None and r["ver"].startswith("HTTP/1"):
             same = [o for o in sub if o["host"] == r["host"] and o is not r and o["st"] <= r["st"] < o["end"]]
             if len(same) >= CAP:
                 r["wait_end"] = min(r["hdr"], sorted(o["end"] for o in same)[len(same) - CAP])
-        r["late"] = r["st"] > first_sub + LATE_US
+        r["late"] = r["qs"] > first_sub + LATE_US
     higher = [c for c in pf.PRIORITY if c != "subres_fetch"]
     pts = {0, t_nav}
     for c in higher:
         for s, e in iv[c]:
             pts.update((max(0, min(t_nav, s)), max(0, min(t_nav, e))))
     for r in sub:
-        pts.update(max(0, min(t_nav, x)) for x in (r["st"], r["wait_end"], r["hdr"], r["end"]))
+        pts.update(max(0, min(t_nav, x)) for x in (r["qs"], r["st"], r["wait_end"], r["hdr"], r["end"]))
     bs = sorted(pts)
     acc = {b: 0 for b in BUCKETS}
     late_in = {b: 0 for b in BUCKETS[:3]}
@@ -77,16 +86,21 @@ def attribute(pf, text, drop=None):
         mid = (a_ + b_) / 2
         if any(s <= mid < e for c in higher for s, e in iv[c]):
             continue
-        act = [r for r in sub if r["st"] <= mid < r["end"]]
+        act = [r for r in sub if r["qs"] <= mid < r["end"]]
         if not act:
             continue
 
         def state(r):
-            return "cap_wait" if mid < r["wait_end"] else "server_ttfb" if mid < r["hdr"] else "transfer"
+            return "cap_wait" if mid < r["wait_end"] or mid < r["st"] and r["q"] is not None else "server_ttfb" if mid < r["hdr"] else "transfer"
         early = [r for r in act if not r["late"]]
+        if cap_first and any(state(r) == "cap_wait" for r in act):
+            acc["cap_wait"] += b_ - a_  # --cap-first: a slice with ANY request queued behind the per-host cap
+            continue
         if early:
             sts = {state(r) for r in early}
             b = "transfer" if "transfer" in sts else "server_ttfb" if "server_ttfb" in sts else "cap_wait"
+            if cap_first and "cap_wait" in sts:
+                b = "cap_wait"  # --cap-first: any queued parse-time request outranks progress of the others
         else:
             b = "discovered_late"
             sts = {state(r) for r in act}
@@ -111,6 +125,11 @@ def self_test(pf):
     assert abs(b["server_ttfb"] - 0.1) < 1e-6 and abs(b["transfer"] - 0.1) < 1e-6 and abs(b["discovered_late"] - 0.2) < 1e-6, b
     d = attribute(pf, tr, drop="transfer")
     assert abs(sum(d["buckets_s"].values()) - d["subres_fetch_s"]) > 0.05, "mutation must break reconcile"
+    # q lines: a request queued from 150 ms until its 500 ms send (parse-time batch), 300-500 ms uncovered by other early reqs a per-host slot -> cap_wait 0.2; the send-time mutant must read 0.
+    tq = tr.replace("700000\treq", "150000\tq\thttp://x/i\n700000\treq")
+    cq = attribute(pf, tq)["buckets_s"]["cap_wait"]
+    assert abs(cq - 0.2) < 1e-6, cq
+    assert attribute(pf, tq, q_at_send=True)["buckets_s"]["cap_wait"] == 0, "q-at-send mutant must give cap_wait 0"
     print("self-test ok", b, "subres_fetch", r["subres_fetch_s"])
 
 
@@ -120,6 +139,8 @@ def main():
     ap.add_argument("--out")
     ap.add_argument("--self-test", action="store_true")
     ap.add_argument("--drop")
+    ap.add_argument("--cap-first", action="store_true", help="cap_wait outranks every other bucket: a slice with any request queued behind the per-host cap (default: lowest priority, so queueing overlapped by other progress reads 0)")
+    ap.add_argument("--mutant-q-at-send", action="store_true", help="ignore q lines (as if stamped at send time)")
     a = ap.parse_args()
     pf = _pf()
     if a.self_test:
@@ -127,7 +148,7 @@ def main():
     res = {}
     for p in a.traces:
         url = os.path.basename(p).rsplit(".run", 1)[0]
-        res.setdefault(url, []).append(attribute(pf, open(p).read(), a.drop))
+        res.setdefault(url, []).append(attribute(pf, open(p).read(), a.drop, a.mutant_q_at_send, a.cap_first))
     lines = ["url\truns\tsubres_fetch_s\tcap_wait_s\tserver_ttfb_s\ttransfer_s\tdiscovered_late_s\tbucket_sum_s\trecon_err_pct\tlate_cap_s\tlate_ttfb_s\tlate_transfer_s\tn_sub\tn_late\tn_http1\tchrome_ver"]
     ok = True
     for url, rs in res.items():

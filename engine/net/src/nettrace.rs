@@ -7,6 +7,8 @@
 //!   epoch    unix_us                            wall clock at t_us=0 (first line of the file)
 //!   dns      host  dur_us                       resolver call (getaddrinfo)
 //!   connect  host  dur_us                       DNS + TCP + TLS for one NEW connection
+//!   q        url                                request starts waiting for a per-host connection slot (t_us = queue entry;
+//!                                               its `req` start_us is when the slot was granted)
 //!   req      url   start_us ttfb_us status http_version content_length
 //!   body     url   bytes                        decoded body fully read (t_us = end of body)
 //! ```

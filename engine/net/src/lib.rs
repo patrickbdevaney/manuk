@@ -1631,7 +1631,13 @@ async fn fetch_scoped(url: &str, initiator: Option<&Url>) -> Result<Response> {
     // whole point: a deadline that runs while queued is a deadline on our own backlog, and it was
     // failing 147 of 173 images that the origin was answering in half a second.
     let _conn = match host_permit_for(url) {
-        Some(sem) => sem.acquire_owned().await.ok(),
+        Some(sem) => {
+            // Trace-only: stamp when this request starts waiting for a slot (`req` start is after it).
+            if nettrace::enabled() {
+                nettrace::emit("q", url);
+            }
+            sem.acquire_owned().await.ok()
+        }
         None => None,
     };
 

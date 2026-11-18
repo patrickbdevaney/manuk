@@ -180,7 +180,10 @@ fn walk(b: &LayoutBox, mut ctx: Ctx, w: &mut Walk<'_>) {
     match &b.content {
         BoxContent::Inline(frags) => {
             for f in frags {
-                if f.text.chars().all(|c| c.is_whitespace() || is_zero_width(c)) {
+                if f.text
+                    .chars()
+                    .all(|c| c.is_whitespace() || is_zero_width(c))
+                {
                     // Spacing still participates in the join below, so keep it with the seen runs.
                     if ctx.box_reason.is_none() && f.text.trim().is_empty() {
                         w.seen.push(TextFragment {
