@@ -1,0 +1,280 @@
+axis	arm	n	run	target	wall_s_or_ms	peak_pss_kb	status	note	chrome_ver
+pages	manuk-proc	1	1	-	2.057	31468	OK		145.0.7632.116
+pages	manuk-fork	1	1	-	2.053	31916	OK		145.0.7632.116
+pages	chrome-tabs	1	1	-	2.318	416680	OK		145.0.7632.116
+pages	chrome-procs	1	1	-	2.329	413370	OK		145.0.7632.116
+pages	manuk-proc	10	1	-	2.551	145461	OK		145.0.7632.116
+pages	manuk-fork	10	1	-	2.389	72044	OK		145.0.7632.116
+pages	chrome-tabs	10	1	-	2.569	532552	OK		145.0.7632.116
+pages	chrome-procs	10	1	-	2.99	2120078	OK		145.0.7632.116
+pages	manuk-proc	50	1	-	4.755	634257	OK		145.0.7632.116
+pages	manuk-fork	50	1	-	3.913	251044	OK		145.0.7632.116
+pages	chrome-tabs	50	1	-	3.794	1027837	OK		145.0.7632.116
+pages	chrome-procs	50	1	-	7.006	9737737	OK		145.0.7632.116
+pages	manuk-proc	1	2	-	2.056	31459	OK		145.0.7632.116
+pages	manuk-fork	1	2	-	2.053	31567	OK		145.0.7632.116
+pages	chrome-tabs	1	2	-	2.314	409795	OK		145.0.7632.116
+pages	chrome-procs	1	2	-	2.317	407945	OK		145.0.7632.116
+pages	manuk-proc	10	2	-	2.548	145535	OK		145.0.7632.116
+pages	manuk-fork	10	2	-	2.389	72121	OK		145.0.7632.116
+pages	chrome-tabs	10	2	-	2.576	529677	OK		145.0.7632.116
+pages	chrome-procs	10	2	-	2.97	2115366	OK		145.0.7632.116
+pages	manuk-proc	50	2	-	4.738	633776	OK		145.0.7632.116
+pages	manuk-fork	50	2	-	3.91	250915	OK		145.0.7632.116
+pages	chrome-tabs	50	2	-	3.787	1029782	OK		145.0.7632.116
+pages	chrome-procs	50	2	-	6.992	9758766	OK		145.0.7632.116
+pages	manuk-proc	1	3	-	2.056	31583	OK		145.0.7632.116
+pages	manuk-fork	1	3	-	2.053	31583	OK		145.0.7632.116
+pages	chrome-tabs	1	3	-	2.333	408149	OK		145.0.7632.116
+pages	chrome-procs	1	3	-	2.317	408448	OK		145.0.7632.116
+pages	manuk-proc	10	3	-	2.55	145464	OK		145.0.7632.116
+pages	manuk-fork	10	3	-	2.39	71801	OK		145.0.7632.116
+pages	chrome-tabs	10	3	-	2.589	531493	OK		145.0.7632.116
+pages	chrome-procs	10	3	-	2.944	2090823	OK		145.0.7632.116
+pages	manuk-proc	50	3	-	4.753	634594	OK		145.0.7632.116
+pages	manuk-fork	50	3	-	3.903	250801	OK		145.0.7632.116
+pages	chrome-tabs	50	3	-	3.787	1028847	OK		145.0.7632.116
+pages	chrome-procs	50	3	-	6.998	9737441	OK		145.0.7632.116
+fork	manuk-fork	10	1	-	37.1		OK		145.0.7632.116
+fork	manuk-fork	10	1	-	38.3		OK		145.0.7632.116
+fork	manuk-fork	10	1	-	37.4		OK		145.0.7632.116
+fork	manuk-fork	10	1	-	37.4		OK		145.0.7632.116
+fork	manuk-fork	10	1	-	37.0		OK		145.0.7632.116
+fork	manuk-fork	10	1	-	37.6		OK		145.0.7632.116
+fork	manuk-fork	10	1	-	36.7		OK		145.0.7632.116
+fork	manuk-fork	10	1	-	38.8		OK		145.0.7632.116
+fork	manuk-fork	10	1	-	36.7		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	37.9		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	37.2		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	36.9		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	36.7		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	37.1		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	36.8		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	36.7		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	38.4		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	36.7		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	36.4		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	38.7		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	36.9		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	37.5		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	40.4		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	37.6		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	36.6		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	38.3		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	36.7		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	36.9		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	39.6		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	37.1		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	36.7		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	40.0		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	37.8		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	37.5		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	39.5		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	36.9		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	36.5		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	40.6		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	36.8		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	36.9		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	40.7		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	36.5		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	36.5		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	41.6		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	37.0		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	36.6		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	41.3		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	37.0		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	36.4		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	42.4		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	37.3		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	36.8		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	41.7		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	37.0		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	36.5		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	42.8		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	36.9		OK		145.0.7632.116
+fork	manuk-fork	50	1	-	37.1		OK		145.0.7632.116
+fork	chrome-context	1	1	-	65.5		OK		145.0.7632.116
+cold	manuk-proc	1	1	-	57.2		OK		145.0.7632.116
+cold	chrome-proc	1	1	-	305.2		OK		145.0.7632.116
+fork	manuk-fork	10	2	-	37.3		OK		145.0.7632.116
+fork	manuk-fork	10	2	-	37.8		OK		145.0.7632.116
+fork	manuk-fork	10	2	-	36.6		OK		145.0.7632.116
+fork	manuk-fork	10	2	-	36.8		OK		145.0.7632.116
+fork	manuk-fork	10	2	-	40.1		OK		145.0.7632.116
+fork	manuk-fork	10	2	-	36.7		OK		145.0.7632.116
+fork	manuk-fork	10	2	-	36.6		OK		145.0.7632.116
+fork	manuk-fork	10	2	-	38.4		OK		145.0.7632.116
+fork	manuk-fork	10	2	-	36.4		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	39.5		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	38.2		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	37.4		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	37.2		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	36.7		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	36.9		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	36.4		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	38.2		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	37.0		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	36.4		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	38.9		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	37.2		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	36.9		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	39.2		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	36.9		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	36.5		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	41.4		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	37.3		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	38.2		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	38.4		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	36.7		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	36.3		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	39.4		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	36.7		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	36.4		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	40.0		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	37.1		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	36.7		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	36.5		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	36.9		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	37.2		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	37.0		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	40.6		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	37.3		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	36.9		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	41.2		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	36.6		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	37.1		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	40.9		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	36.8		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	36.8		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	42.0		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	37.0		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	37.4		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	41.7		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	37.7		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	37.6		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	40.5		OK		145.0.7632.116
+fork	manuk-fork	50	2	-	36.5		OK		145.0.7632.116
+fork	chrome-context	1	2	-	64.9		OK		145.0.7632.116
+cold	manuk-proc	1	2	-	55.3		OK		145.0.7632.116
+cold	chrome-proc	1	2	-	313.7		OK		145.0.7632.116
+fork	manuk-fork	10	3	-	37.8		OK		145.0.7632.116
+fork	manuk-fork	10	3	-	37.5		OK		145.0.7632.116
+fork	manuk-fork	10	3	-	37.4		OK		145.0.7632.116
+fork	manuk-fork	10	3	-	36.8		OK		145.0.7632.116
+fork	manuk-fork	10	3	-	36.9		OK		145.0.7632.116
+fork	manuk-fork	10	3	-	36.9		OK		145.0.7632.116
+fork	manuk-fork	10	3	-	36.8		OK		145.0.7632.116
+fork	manuk-fork	10	3	-	39.7		OK		145.0.7632.116
+fork	manuk-fork	10	3	-	36.8		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	37.1		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	37.2		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	36.7		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	36.4		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	36.7		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	37.2		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	36.5		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	37.1		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	37.1		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	36.6		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	36.4		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	37.7		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	36.9		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	36.6		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	39.7		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	36.7		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	36.5		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	39.6		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	36.9		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	36.5		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	39.7		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	36.7		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	37.1		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	40.1		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	37.1		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	36.4		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	40.4		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	36.6		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	36.1		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	41.1		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	36.6		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	36.2		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	41.0		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	36.2		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	36.8		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	41.3		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	37.0		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	37.9		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	42.0		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	36.7		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	36.3		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	42.2		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	36.5		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	36.3		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	41.7		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	36.4		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	36.5		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	41.9		OK		145.0.7632.116
+fork	manuk-fork	50	3	-	37.3		OK		145.0.7632.116
+fork	chrome-context	1	3	-	70.4		OK		145.0.7632.116
+cold	manuk-proc	1	3	-	55.9		OK		145.0.7632.116
+cold	chrome-proc	1	3	-	306.2		OK		145.0.7632.116
+urls	manuk-proc	1	1	https://comix.to/	19.395	337163	OK	⚠hidden-text: 1116 text fragment(s) a human cannot see were withheld (low-contra	145.0.7632.116
+urls	chrome-proc	1	1	https://comix.to/	2.846	539421	OK		145.0.7632.116
+urls	manuk-proc	1	1	https://client.dkitrxmdwoqruvsi.net/	1.311	24043	OK	https://client.dkitrxmdwoqruvsi.net/ — "PP Live Casino"	145.0.7632.116
+urls	chrome-proc	1	1	https://client.dkitrxmdwoqruvsi.net/	1.508	402537	OK		145.0.7632.116
+urls	manuk-proc	1	1	https://www.mobile.bg/	11.95	163198	OK	https://www.mobile.bg/ — "Mobile.bg — Продажба на нови и употребявани автомобили	145.0.7632.116
+urls	chrome-proc	1	1	https://www.mobile.bg/	6.094	526662	OK		145.0.7632.116
+urls	manuk-proc	1	1	https://mkp.gem.gov.in/	8.525	23499	FAIL	page: pcb64e7:1	145.0.7632.116
+urls	chrome-proc	1	1	https://mkp.gem.gov.in/	10.126	409560	FAIL		145.0.7632.116
+urls	manuk-proc	1	1	https://app.ordertime.com/	5.237	139276	OK	https://app.ordertime.com/ — "Order Time"	145.0.7632.116
+urls	chrome-proc	1	1	https://app.ordertime.com/	3.721	515427	OK		145.0.7632.116
+urls	manuk-proc	1	1	https://www.puentedemando.com/	15.907	423737	OK	⚠hidden-text: 2110 text fragment(s) a human cannot see were withheld (low-contra	145.0.7632.116
+urls	chrome-proc	1	1	https://www.puentedemando.com/	3.121	568054	OK		145.0.7632.116
+urls	manuk-proc	1	1	https://basescan.org/	0.32	24134	CHALLENGE	https://basescan.org/?__cf_chl_rt_tk=_8vvtJ6JMMDwTufghlT5h9gJe6hK.lQqxzpbGFzZ7vo	145.0.7632.116
+urls	chrome-proc	1	1	https://basescan.org/	1.621	460254	OK		145.0.7632.116
+urls	manuk-proc	1	1	https://ebanking.bdm-sa.com/	5.645	24040	FAIL	page: p3fd725:1	145.0.7632.116
+urls	chrome-proc	1	1	https://ebanking.bdm-sa.com/	2.325	412854	OK		145.0.7632.116
+urls	manuk-proc	1	1	https://admin.zoomph.com/	2.78	48599	CHALLENGE	https://authentication.zoomph.com/login?client_id=knsjmnjp6fjan19vr58kptg2c&resp	145.0.7632.116
+urls	chrome-proc	1	1	https://admin.zoomph.com/	2.83	431910	OK		145.0.7632.116
+urls	manuk-proc	1	1	https://virtual.lapampa.edu.ar/	30.016	23592	FAIL	page: p7c4e49:1	145.0.7632.116
+urls	chrome-proc	1	1	https://virtual.lapampa.edu.ar/	60.101	407981	TIMEOUT		145.0.7632.116
+urls	manuk-proc	1	2	https://comix.to/	8.999	339152	OK	⚠hidden-text: 1116 text fragment(s) a human cannot see were withheld (low-contra	145.0.7632.116
+urls	chrome-proc	1	2	https://comix.to/	2.821	541269	OK		145.0.7632.116
+urls	manuk-proc	1	2	https://client.dkitrxmdwoqruvsi.net/	0.33	24180	OK	https://client.dkitrxmdwoqruvsi.net/ — "PP Live Casino"	145.0.7632.116
+urls	chrome-proc	1	2	https://client.dkitrxmdwoqruvsi.net/	0.855	403712	OK		145.0.7632.116
+urls	manuk-proc	1	2	https://www.mobile.bg/	9.253	158313	OK	https://www.mobile.bg/ — "Mobile.bg — Продажба на нови и употребявани автомобили	145.0.7632.116
+urls	chrome-proc	1	2	https://www.mobile.bg/	5.506	527411	OK		145.0.7632.116
+urls	manuk-proc	1	2	https://mkp.gem.gov.in/	9.357	23529	FAIL	page: p640b47:1	145.0.7632.116
+urls	chrome-proc	1	2	https://mkp.gem.gov.in/	8.85	408869	FAIL		145.0.7632.116
+urls	manuk-proc	1	2	https://app.ordertime.com/	3.834	139217	OK	https://app.ordertime.com/ — "Order Time"	145.0.7632.116
+urls	chrome-proc	1	2	https://app.ordertime.com/	2.145	514494	OK		145.0.7632.116
+urls	manuk-proc	1	2	https://www.puentedemando.com/	9.108	423069	OK	⚠hidden-text: 2110 text fragment(s) a human cannot see were withheld (low-contra	145.0.7632.116
+urls	chrome-proc	1	2	https://www.puentedemando.com/	2.345	568617	OK		145.0.7632.116
+urls	manuk-proc	1	2	https://basescan.org/	0.313	24376	CHALLENGE	https://basescan.org/?__cf_chl_rt_tk=C.43OyBQVoJX3q5aZ0upwnMIiYZbq5Sh1JkliG5.eWU	145.0.7632.116
+urls	chrome-proc	1	2	https://basescan.org/	1.698	471754	OK		145.0.7632.116
+urls	manuk-proc	1	2	https://ebanking.bdm-sa.com/	7.111	68906	OK	https://ebanking.bdm-sa.com/index.ebk — "BDM-sa Web-Banking"	145.0.7632.116
+urls	chrome-proc	1	2	https://ebanking.bdm-sa.com/	1.683	406978	OK		145.0.7632.116
+urls	manuk-proc	1	2	https://admin.zoomph.com/	1.37	45612	CHALLENGE	https://authentication.zoomph.com/login?client_id=knsjmnjp6fjan19vr58kptg2c&resp	145.0.7632.116
+urls	chrome-proc	1	2	https://admin.zoomph.com/	1.954	409232	OK		145.0.7632.116
+urls	manuk-proc	1	2	https://virtual.lapampa.edu.ar/	30.015	23339	FAIL	page: p220504:1	145.0.7632.116
+urls	chrome-proc	1	2	https://virtual.lapampa.edu.ar/	60.004	408671	TIMEOUT		145.0.7632.116
+urls	manuk-proc	1	3	https://comix.to/	9.058	329889	OK	⚠hidden-text: 1116 text fragment(s) a human cannot see were withheld (low-contra	145.0.7632.116
+urls	chrome-proc	1	3	https://comix.to/	2.527	543529	OK		145.0.7632.116
+urls	manuk-proc	1	3	https://client.dkitrxmdwoqruvsi.net/	0.406	23961	OK	https://client.dkitrxmdwoqruvsi.net/ — "PP Live Casino"	145.0.7632.116
+urls	chrome-proc	1	3	https://client.dkitrxmdwoqruvsi.net/	0.822	407932	OK		145.0.7632.116
+urls	manuk-proc	1	3	https://www.mobile.bg/	9.095	161681	OK	https://www.mobile.bg/ — "Mobile.bg — Продажба на нови и употребявани автомобили	145.0.7632.116
+urls	chrome-proc	1	3	https://www.mobile.bg/	5.955	527133	OK		145.0.7632.116
+urls	manuk-proc	1	3	https://mkp.gem.gov.in/	8.451	23429	FAIL	page: pd05042:1	145.0.7632.116
+urls	chrome-proc	1	3	https://mkp.gem.gov.in/	8.92	408920	FAIL		145.0.7632.116
+urls	manuk-proc	1	3	https://app.ordertime.com/	3.888	139102	OK	https://app.ordertime.com/ — "Order Time"	145.0.7632.116
+urls	chrome-proc	1	3	https://app.ordertime.com/	2.347	515157	OK		145.0.7632.116
+urls	manuk-proc	1	3	https://www.puentedemando.com/	9.296	427725	OK	⚠hidden-text: 2110 text fragment(s) a human cannot see were withheld (low-contra	145.0.7632.116
+urls	chrome-proc	1	3	https://www.puentedemando.com/	2.541	564225	OK		145.0.7632.116
+urls	manuk-proc	1	3	https://basescan.org/	0.399	24199	CHALLENGE	https://basescan.org/?__cf_chl_rt_tk=NI3mXtd0S2BoM.Vkvii7tK_x72Q6cx0VkprrDPLM6AQ	145.0.7632.116
+urls	chrome-proc	1	3	https://basescan.org/	1.732	473102	OK		145.0.7632.116
+urls	manuk-proc	1	3	https://ebanking.bdm-sa.com/	6.933	60286	OK	https://ebanking.bdm-sa.com/index.ebk — "BDM-sa Web-Banking"	145.0.7632.116
+urls	chrome-proc	1	3	https://ebanking.bdm-sa.com/	1.468	413957	OK		145.0.7632.116
+urls	manuk-proc	1	3	https://admin.zoomph.com/	1.7	43278	CHALLENGE	https://authentication.zoomph.com/login?client_id=knsjmnjp6fjan19vr58kptg2c&resp	145.0.7632.116
+urls	chrome-proc	1	3	https://admin.zoomph.com/	1.693	409438	OK		145.0.7632.116
+urls	manuk-proc	1	3	https://virtual.lapampa.edu.ar/	30.014	23275	FAIL	page: pef4dcc:1	145.0.7632.116
+urls	chrome-proc	1	3	https://virtual.lapampa.edu.ar/	60.065	408784	TIMEOUT		145.0.7632.116

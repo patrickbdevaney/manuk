@@ -1,0 +1,13 @@
+session	arm	runs_ok	per_page_MB_band	ratio_band	chrome_ver	source
+s1-2026-11-17	manuk-proc	3	158.9-189.6	-	145.0.7632.116	summary-real-pages-procs.tsv
+s1-2026-11-17	chrome-tabs	3	99.0-100.4	-	145.0.7632.116	summary-real-pages-procs.tsv
+s1-2026-11-17	chrome-procs	3	279.3-291.0	-	145.0.7632.116	summary-real-pages-procs.tsv
+s1-2026-11-17	manuk-proc / chrome-procs	3	-	0.57-0.65x	145.0.7632.116	summary-real-pages-procs.tsv
+s1-2026-11-17	manuk-proc / chrome-tabs	3	-	1.60-1.89x	145.0.7632.116	summary-real-pages-procs.tsv
+s2-2026-11-17	manuk-proc	3	178.2-191.4	-	145.0.7632.116	session-2/summary-real-pages-procs.tsv
+s2-2026-11-17	chrome-tabs	3	99.6-103.1	-	145.0.7632.116	session-2/summary-real-pages-procs.tsv
+s2-2026-11-17	chrome-procs	3	272.2-281.6	-	145.0.7632.116	session-2/summary-real-pages-procs.tsv
+s2-2026-11-17	manuk-proc / chrome-procs	3	-	0.64-0.70x	145.0.7632.116	session-2/summary-real-pages-procs.tsv
+s2-2026-11-17	manuk-proc / chrome-tabs	3	-	1.73-1.90x	145.0.7632.116	session-2/summary-real-pages-procs.tsv
+pooled	manuk-proc / chrome-procs	6	-	0.57-0.70x	145.0.7632.116	derived from the two rows above (per-run ratios, min-max over 6 runs)
+pooled	manuk-proc / chrome-tabs	6	-	1.60-1.90x	145.0.7632.116	derived from the two rows above (per-run ratios, min-max over 6 runs)

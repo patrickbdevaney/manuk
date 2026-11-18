@@ -270,3 +270,54 @@ set, so it is not a best-of-two.
 - `--real-pages-procs` exits 1 and writes no summary unless every arm has exactly 3 OK runs (`arms_short_of_runs()`).
 - `--selftest` checks that the chrome-procs ratio is derived from OK runs only (a WRONG_PAGE run is excluded from the band),
   that the chrome-tabs ratio line is unchanged, and that an arm with a WRONG_PAGE run is reported short.
+
+## Pages on real URLs, with chrome-procs, second session (W4.E0.c.b.a): the ratio moves between sessions, 0.57–0.70×
+
+_Measured 2026-11-17, `chrome_ver = 145.0.7632.116`, `manuk-mcp` from `target/release` at this commit. Same harness, same five
+paired URLs, N = 10 round-robin, 3 runs, all three arms in one session, as in W4.E0.c.b. The URL list is read from a copy of
+`docs/sprint/footprint/runs.tsv` placed in the session dir, so both sessions use the same pairing. Raw rows:
+`docs/sprint/footprint/session-2/runs-real-pages-procs.tsv`. Summary: `docs/sprint/footprint/session-2/summary-real-pages-procs.tsv`.
+Run with `MANUK_CHROME_PIN=145.0.7632.116 python3 -I scripts/w4e0-footprint.py --real-pages-procs --out docs/sprint/footprint/session-2`._
+
+Both sessions side by side (per-page PSS in MB; ratios are per run, min–max over the 3 runs):
+`docs/sprint/footprint/session-compare-procs.tsv`.
+
+| session | manuk-proc (MB/page) | chrome-tabs (MB/page) | chrome-procs (MB/page) | manuk-proc / chrome-procs | manuk-proc / chrome-tabs |
+|---|---|---|---|---|---|
+| s1 (W4.E0.c.b) | 158.9–189.6 | 99.0–100.4 | 279.3–291.0 | 0.57–0.65× | 1.60–1.89× |
+| s2 (this node) | 178.2–191.4 | 99.6–103.1 | 272.2–281.6 | 0.64–0.70× | 1.73–1.90× |
+| pooled, 6 runs | | | | **0.57–0.70×** | **1.60–1.90×** |
+
+**What moved, and what did not.** chrome-procs per page is stable across sessions (272–291 MB, within about 7%). chrome-tabs is
+stable (99–103 MB). The drift is in the manuk-proc arm: its low end moved from 158.9 to 178.2 MB/page, and its run-to-run spread
+was 19% in session 1 and 7% in session 2. So the ratio's session-to-session shift comes mostly from the manuk-proc side. Two
+sessions with three runs each cannot say why. The live pages, the browser, and the harness sampling all vary between sessions,
+and this table does not separate them.
+
+**What this says, and the band to quote.** On these five live pages, with one manuk-mcp process per page versus one Chrome process
+per page, manuk-proc holds **0.57–0.70×** the summed PSS of chrome-procs across both sessions (6 runs). Against one shared Chrome
+with the pages in tabs, manuk-proc holds **1.60–1.90×**. Quote the pooled band, with the two sessions named. Do not quote either
+session's band alone as the answer. The 0.30–0.31× URL-sweep figure from the earlier comparison is still not reconciled here (see
+W4.E0.c.b.b).
+
+**Not claimed.** Wall clock (not claimed; in the reported set, manuk-proc took 71–112 s for the 10 navigates, chrome-procs 44–62 s, chrome-tabs
+13–19 s, on live sites). Any claim about the Oct-31 sweep (N = 10 repeated URLs, 2.22–2.24×) is not part of this table.
+
+**Attempt record (disclosed; both sets kept).**
+- Attempt 1 of this session: `docs/sprint/footprint/session-2/attempt1-runs-real-pages-procs-FAIL.tsv`. manuk-proc and chrome-tabs
+  OK in all 3 runs; chrome-procs OK in runs 1 and 2, and **FAIL in run 3** (a Chrome process raised one of the exceptions the harness
+  maps to FAIL; the cause was not logged). The harness correctly exited 1 with `NOT_SETTLED` and wrote no summary. This is the red
+  case for the three-OK-runs rule on real data.
+- Attempt 2 (the reported set above): rerun in full with the same settings. Zero FAIL rows. This is a rerun after a failed
+  attempt, not a best-of-two: attempt 1's raw rows are kept and the run is not selected by its numbers. The W4.E0.c.b precedent
+  is the same kind of rerun.
+- Known harness defect, not fixed here: a FAIL row's `note` reads `landed_ok=10/10` even though its `landed` list is empty, because
+  the note is computed from the list without checking status. Non-OK rows are never averaged, so the summary is not affected, but
+  the raw row is misleading. Follow-up node W4.E0.c.b.a.a.
+
+**Gate evidence.**
+- `--real-pages-procs-mutant` (session-2 dir): all three arms `WRONG_PAGE`, `landed_ok=0/10`
+  (`docs/sprint/footprint/session-2/runs-real-pages-procs-mutant.tsv`); no summary written.
+- `--real-pages-procs` exited 0 and wrote the summary because each arm had exactly 3 OK runs. On attempt 1, the same command
+  exited 1 with `NOT_SETTLED` (chrome-procs at 2 OK runs), so the rule is exercised on live data in both directions.
+- `--selftest` OK at this commit.
