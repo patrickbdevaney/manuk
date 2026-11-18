@@ -187,8 +187,9 @@ def page_target(k, fx, urls=None):
 
 
 def run_manuk_proc(n, fx, log_root, urls=None, landed=None):
-    """N manuk-mcp processes, one page each. Returns (wall_s, peak_pss_kb, status, []).
-    If `landed` is a list, the host each page reports after navigate is appended to it."""
+    """N manuk-mcp processes, one page each. Returns (wall_s, peak_pss_kb, status, reason).
+    reason is "" for OK and says why a FAIL failed. If `landed` is a list, the host each page reports after
+    navigate is appended to it."""
     procs = []
     sampler = Sampler(lambda: [p.p.pid for p in procs])
     t0 = time.monotonic()
@@ -201,14 +202,14 @@ def run_manuk_proc(n, fx, log_root, urls=None, landed=None):
                 sampler.start()
             try:
                 err, text, _ = m.call("navigate", {"url": page_target(k, fx, urls)})
-            except (TimeoutError, OSError, ValueError):  # a silent manuk-mcp on a live page is a FAIL run, not a crash
-                return time.monotonic() - t0, 0, "FAIL", []
+            except (TimeoutError, OSError, ValueError) as e:  # a silent manuk-mcp on a live page is a FAIL run, not a crash
+                return time.monotonic() - t0, 0, "FAIL", f"page {k}: {exc_reason(e)}"
             if err:
-                return time.monotonic() - t0, 0, "FAIL", []
+                return time.monotonic() - t0, 0, "FAIL", f"page {k}: navigate tool error: {text[:160]}"
             if landed is not None:
                 landed.append(landed_host_manuk(text))
         time.sleep(SETTLE_S)
-        return time.monotonic() - t0, sampler.finish(), "OK", []
+        return time.monotonic() - t0, sampler.finish(), "OK", ""
     finally:
         if sampler.is_alive():
             sampler.finish()
@@ -334,7 +335,7 @@ def chrome_connect(proc, profile, timeout):
 
 
 def run_chrome_tabs(n, fx, _, urls=None, landed=None):
-    """One Chrome, n tabs. Returns (wall_s, peak_pss_kb, status, [])."""
+    """One Chrome, n tabs. Returns (wall_s, peak_pss_kb, status, reason); reason is "" unless FAIL."""
     profile = tempfile.mkdtemp(prefix="w4e0-chrome-")
     proc = subprocess.Popen(chrome_argv(profile), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     sampler = Sampler(lambda: [proc.pid])
@@ -350,9 +351,9 @@ def run_chrome_tabs(n, fx, _, urls=None, landed=None):
             for s in sessions:
                 host = cdp.call("Runtime.evaluate", {"expression": "location.host", "returnByValue": True}, s)
                 landed.append(host.get("result", {}).get("value", "").split(":")[0])
-        return time.monotonic() - t0, sampler.finish(), "OK", []
-    except (TimeoutError, OSError, KeyError, ValueError):
-        return 0.0, 0, "FAIL", []
+        return time.monotonic() - t0, sampler.finish(), "OK", ""
+    except (TimeoutError, OSError, KeyError, ValueError) as e:
+        return 0.0, 0, "FAIL", exc_reason(e)
     finally:
         if sampler.is_alive():
             sampler.finish()
@@ -363,7 +364,7 @@ def run_chrome_tabs(n, fx, _, urls=None, landed=None):
 
 
 def run_chrome_procs(n, fx, _, urls=None, landed=None):
-    """n Chrome processes, one tab each. Returns (wall_s, peak_pss_kb, status, []).
+    """n Chrome processes, one tab each. Returns (wall_s, peak_pss_kb, status, reason); reason is "" unless FAIL.
     If `landed` is a list, the host each tab reports after settle is appended to it (as run_chrome_tabs)."""
     procs, profiles = [], []
     sampler = Sampler(lambda: [p.pid for p in procs])
@@ -387,9 +388,9 @@ def run_chrome_procs(n, fx, _, urls=None, landed=None):
             for cdp, sess in zip(cdps, sessions):
                 host = cdp.call("Runtime.evaluate", {"expression": "location.host", "returnByValue": True}, sess)
                 landed.append(host.get("result", {}).get("value", "").split(":")[0])
-        return time.monotonic() - t0, sampler.finish(), "OK", []
-    except (TimeoutError, OSError, KeyError, ValueError):
-        return 0.0, 0, "FAIL", []
+        return time.monotonic() - t0, sampler.finish(), "OK", ""
+    except (TimeoutError, OSError, KeyError, ValueError) as e:
+        return 0.0, 0, "FAIL", exc_reason(e)
     finally:
         if sampler.is_alive():
             sampler.finish()
@@ -514,6 +515,36 @@ def arms_short_of_runs(rows, runs):
     return {a: k for a, k in counts.items() if k != runs}
 
 
+def exc_reason(e):
+    """One tab-free line naming the exception class and message, for a FAIL row's note."""
+    return f"{type(e).__name__}: {e}".replace("\t", " ").replace("\n", " ")[:200]
+
+
+def checked_arm(fn, n, fx, log_root, urls, mutant):
+    """Run one real-pages arm and grade it. Returns the row fields (wall, pss, status, note).
+    Any exception that escapes `fn` is a FAIL row that names it, never a crash of the whole run. The note of a
+    non-OK row counts the pages that landed (len(landed)), not the pages requested, so a FAIL reads landed=0/n."""
+    landed = []
+    try:
+        wall, pss, st, why = fn(n, fx, log_root, urls=None if mutant else urls, landed=landed)
+    except Exception as e:  # noqa: BLE001 - every failure must become a named row, not a traceback
+        wall, pss, st, why = 0.0, 0, "FAIL", exc_reason(e)
+    want = [urllib.parse.urlparse(page_target(k, fx, urls)).hostname or "" for k in range(n)]
+    bad = [k for k in range(len(landed)) if not same_site(landed[k], want[k])]
+    ok_pages = n - len(bad)
+    if st == "OK" and (bad or len(landed) != n):
+        st, why = "WRONG_PAGE", ""
+    if st == "OK":
+        note = f"landed_ok={ok_pages}/{n}"
+    elif st == "WRONG_PAGE":
+        note = f"landed={len(landed)}/{n} landed_ok={ok_pages}/{n}"
+    else:
+        note = f"landed={len(landed)}/{n} {st}: {why}"
+    if mutant:
+        note += " MUTANT_FIXTURE"
+    return {"wall": wall, "pss": pss, "status": st, "note": note}
+
+
 def run_real_pages(out_dir, fx, log_root, mutant=False, n=REAL_N, runs=REAL_RUNS, unique=False, procs=False):
     """pages-real: N pages round-robin over the paired real URLs, manuk-proc vs chrome-tabs, `runs` runs.
     unique=True is the W4.E0.c.a control: N=n equals the number of paired URLs, so every URL is open once.
@@ -535,17 +566,12 @@ def run_real_pages(out_dir, fx, log_root, mutant=False, n=REAL_N, runs=REAL_RUNS
         arms.append(("chrome-procs", run_chrome_procs))
     for run in range(1, (1 if mutant else runs) + 1):
         for arm, fn in arms:
-            landed = []
-            wall, pss, st, _ = fn(n, fx, log_root, urls=None if mutant else urls, landed=landed)
-            want = [urllib.parse.urlparse(page_target(k, fx, urls)).hostname or "" for k in range(n)]
-            bad = [k for k in range(len(landed)) if not same_site(landed[k], want[k])]
-            if st == "OK" and (bad or len(landed) != n):
-                st = "WRONG_PAGE"
+            r = checked_arm(fn, n, fx, log_root, urls, mutant)
+            wall, pss, st = r["wall"], r["pss"], r["status"]
             rows.append({"axis": axis, "arm": arm, "n": n, "run": run, "target": target,
-                         "wall_s": round(wall, 3), "pss_kb": pss, "status": st,
-                         "note": f"landed_ok={n - len(bad)}/{n}" + (" MUTANT_FIXTURE" if mutant else "")})
+                         "wall_s": round(wall, 3), "pss_kb": pss, "status": st, "note": r["note"]})
             print(f"{axis} run{run} {arm:12} N={n} {st:10} pss={pss/1024:8.1f}MB wall={wall:6.2f}s "
-                  f"landed_ok={n - len(bad)}/{n}", file=sys.stderr)
+                  f"{r['note']}", file=sys.stderr)
             touch()
     return rows
 
@@ -848,6 +874,24 @@ def selftest():
     short_one[-1]["status"] = "WRONG_PAGE"
     if arms_short_of_runs(full, 3) != {} or arms_short_of_runs(short_one, 3) != {"chrome-procs": 2}:
         fails.append("procs settle rule does not flag an arm with a WRONG_PAGE run")
+    # 2j. Attributable FAIL (W4.E0.c.b.a.a): an exception escaping an arm is a FAIL row whose note names the
+    #     exception and counts landed pages (0/10 here), not requested pages. A mutant that drops the reason
+    #     or reports landed_ok=n for a FAIL would print a different note and fail here.
+    def _closed_socket(n, fx, log_root, urls=None, landed=None):
+        raise OSError("closed CDP socket")
+    fx_urls = ["https://www.mobile.bg/", "https://www.zoomph.com/"]
+    got = checked_arm(_closed_socket, 10, "http://127.0.0.1:1/", None, fx_urls, False)
+    if got["status"] != "FAIL" or "OSError: closed CDP socket" not in got["note"] or "landed=0/10" not in got["note"] \
+            or "landed_ok" in got["note"]:
+        fails.append(f"forced exception is not an attributable FAIL row: {got}")
+    # a landed page that is on the wrong site counts as WRONG_PAGE, with landed and landed_ok both shown
+    def _wrong_host(n, fx, log_root, urls=None, landed=None):
+        landed.extend(["www.mobile.bg", "www.zoomph.com"] * (n // 2))
+        landed[3] = "127.0.0.1"  # the fixture host, not the site this page should be on
+        return 1.0, 1024, "OK", ""
+    wp = checked_arm(_wrong_host, 10, "http://127.0.0.1:1/", None, fx_urls, False)
+    if wp["status"] != "WRONG_PAGE" or wp["note"] != "landed=10/10 landed_ok=9/10":
+        fails.append(f"WRONG_PAGE note is not counted from the landed pages: {wp}")
     # 3. The pin must be present: a row with no pin is a refusal, not a number.
     if not PIN:
         fails.append("MANUK_CHROME_PIN unset (refused)")
