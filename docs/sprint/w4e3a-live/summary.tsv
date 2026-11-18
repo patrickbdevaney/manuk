@@ -1,0 +1,4 @@
+page	cold_ms	warm_ms	warm_hits	plain_digest_stable	digest_ok	drift_cold_vs_warm	timeouts	nonzero_rc	warm_below_cold_band	verdict
+bbc	[126.9, 127.3, 127.6]	[55.9, 56.0, 56.0]	162	False	True	1	0	0	True	PASS
+nasa	[547.5, 548.8, 549.7]	[524.6, 527.3, 528.3]	102	True	True	0	0	0	True	PASS
+guardian	[276.5, 278.2, 280.6]	[269.7, 273.4, 276.4]	42	False	True	2	0	3	True	PASS

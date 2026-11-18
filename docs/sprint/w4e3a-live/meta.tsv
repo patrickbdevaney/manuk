@@ -1,0 +1,5 @@
+node	W4.E3.a.a
+chrome_ver	145.0.7632.116
+gate	python3 -I scripts/w4e3a-live-gate.py --runs 3 (PASS, rc 0); --mutant nocache --runs 1 (FAIL, rc 1)
+bin	target/release/a11y-dump (manuk-agent, rebuilt 2026-11-18)
+pages	bbc.com/news (58 script tags), nasa.gov (36), theguardian.com/international (19); pre-registered by tag count before measuring
