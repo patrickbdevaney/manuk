@@ -1,0 +1,3 @@
+https://ebanking.bdm-sa.com/: INSUFFICIENT (OK runs manuk=1 manuk-b=2, need 3 each); img body MB manuk=0.16 manuk-b=0.00
+SAMPLE SHORT on: https://ebanking.bdm-sa.com/ (no band verdict on those URLs)
+VERDICT: NOT_SETTLED

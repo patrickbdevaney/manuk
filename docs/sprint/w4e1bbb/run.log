@@ -1,0 +1,6 @@
+run1 manuk    OK       subres=  4.78 settle=  0.07 https://ebanking.bdm-sa.com/
+run1 manuk-b  OK       subres=  3.38 settle=  0.07 https://ebanking.bdm-sa.com/
+run2 manuk-b  OK       subres=  2.34 settle=  0.05 https://ebanking.bdm-sa.com/
+run2 manuk    FAIL     subres=  0.00 settle=  0.00 https://ebanking.bdm-sa.com/
+run3 manuk    FAIL     subres=  0.00 settle=  0.00 https://ebanking.bdm-sa.com/
+run3 manuk-b  FAIL     subres=  0.00 settle=  0.00 https://ebanking.bdm-sa.com/
