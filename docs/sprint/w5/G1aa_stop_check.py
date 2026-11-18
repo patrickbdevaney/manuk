@@ -62,7 +62,10 @@ def main(argv):
     failed = 0
     for src, text in quotes:
         if src not in corpus:
-            tr = os.path.join(root, f"target/real-runs/cdp-layer_gomail-3_{src}/transcript.jsonl")
+            # src is a timestamped archive dir name (the live r<N> dirs are overwritten by reruns);
+            # bare run labels such as "r1" still resolve to the live dir for older docs
+            dirname = src if src.startswith("cdp-layer_") else f"cdp-layer_gomail-3_{src}"
+            tr = os.path.join(root, f"target/real-runs/{dirname}/transcript.jsonl")
             vals = []
             with open(tr, encoding="utf-8") as f:
                 for line in f:
