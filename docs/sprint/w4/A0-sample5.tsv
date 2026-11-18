@@ -1,0 +1,11 @@
+arm	task	run	hand_label	basis	chrome_ver
+cdp-layer	zilloft-6	3	dialog_modal	final answer: consent overlay covers page, For Sale click had no effect (also no listings/404s)	145.0.7632.116
+manuk+rollback.v2	opendining-4	3	dialog_modal	day cells covered by overlay, clicks refused	145.0.7632.116
+cdp-layer	gomail-5	3	dialog_modal	stale modal overlay blocks time picker controls (act STALE hidden behind dialog)	145.0.7632.116
+cdp-layer	fly-unified-6	3	wrong_answer	calendar prev-month greyed out, no layer defect, agent stopped and asked	145.0.7632.116
+cdp-layer	dashdish-5	1	dialog_modal	modal overlay covers every Add button	145.0.7632.116
+manuk+rollback.v2	dashdish-5	2	click_no_effect	tile clicks return no change, url unchanged	145.0.7632.116
+manuk+rollback.v2	staynb-8	2	dialog_modal	gray overlay covers Reserve stay, OCCLUDED results at end	145.0.7632.116
+manuk+rollback.v2	networkin-6	1	typed_not_registered	note box counter stayed 0/200, Send disabled	145.0.7632.116
+manuk	staynb-4	3	wrong_answer	stopped at payment card details by choice; no layer defect	145.0.7632.116
+manuk+rollback.v2	udriver-11	3	wrong_answer	site lacks the pickup suggestion; agent asked user; no layer defect	145.0.7632.116

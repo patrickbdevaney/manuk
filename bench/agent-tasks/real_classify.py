@@ -118,6 +118,71 @@ def features(path):
     return f
 
 
+END_N = 5  # v3: a cause counts only if it is still true at the END: the final answer's own account, or the last END_N tool results
+FINAL_RX = {
+    "dialog": re.compile(r"(overlay|modal|popover|dialog|pop-?up)[^.\n]{0,80}(cover|block|won'?t|doesn'?t|no close|refus|dims?|intercept)|"
+                         r"(cover|block|intercept)[^.\n]{0,60}(overlay|modal|popover|dialog)", re.I),
+    "noeffect": re.compile(r"(do(es)?n'?t|did ?n'?t|not|never) (respond|react|take|do anything|open|navigate)|no change|no (visible )?effect|nothing happened|click(s)? (had|have) no", re.I),
+    "nokey": re.compile(r"no (drag|hover|focus|key|press)\b|none of them can (drag|hover)|cannot (drag|hover)|can'?t (drag|hover)|not supported by this backend", re.I),
+}
+
+
+def end_features(path):
+    err, final, results, texts, type_calls = parse(path)
+    f = collections.Counter()
+    f["is_error"] = int(err)
+    f["type_calls"] = type_calls
+    last = results[-END_N:]
+    for name, body in last:
+        head = body.lstrip()
+        if RX["occl"].search(body) or re.search(r"hidden behind an open dialog", body):
+            f["occl"] += 1
+        elif RX["stale"].search(body):
+            f["stale"] += 1
+        if RX["nochange"].search(head):
+            f["nochange"] += 1
+        if RX["unsup"].search(body):
+            f["unsup"] += 1
+        if RX["enter_gap"].search(body):
+            f["enter_gap"] += 1
+        if RX["strict"].search(body):
+            f["strict"] += 1
+        if RX["timeout"].search(body):
+            f["timeout"] += 1
+    if RX["typed_fail"].search(final) and not RX["selferr_text"].search(final):
+        f["typed_fail_text"] += 1
+    if FINAL_RX["dialog"].search(final):
+        f["final_dialog"] += 1
+    if FINAL_RX["noeffect"].search(final):
+        f["final_noeffect"] += 1
+    if FINAL_RX["nokey"].search(final):
+        f["final_nokey"] += 1
+    if RX["ambig_text"].search(final):
+        f["ambig_text"] += 1
+    f["answered"] = int(bool(final.strip()))
+    return f
+
+
+def cause_v3(f):
+    if f["typed_fail_text"] and f["type_calls"]:
+        return "typed_not_registered"
+    if f["final_dialog"] or f["occl"] >= 2:
+        return "dialog_modal"
+    if f["stale"] >= 2:
+        return "handle_lost"
+    if f["final_nokey"] or f["unsup"] or f["enter_gap"]:
+        return "key_hover_enter_gap"
+    if f["final_noeffect"] or f["nochange"] >= 2:
+        return "click_no_effect"
+    if f["strict"] or f["ambig_text"]:
+        return "ambiguous_target"
+    if f["is_error"] or (f["timeout"] >= 1 and not f["answered"]):
+        return "timeout_cap"
+    if f["answered"]:
+        return "wrong_answer"
+    return "no_signal"
+
+
 def cause(f):
     if f["typed_fail_text"] and f["type_calls"]:
         return "typed_not_registered"
@@ -145,6 +210,7 @@ def main():
     ap.add_argument("--runs-dir", default=os.path.join(ROOT, "target/real-runs"))
     ap.add_argument("--tsv", default=os.path.join(ROOT, "docs/sprint/w318/real-runs.tsv"))
     ap.add_argument("--out", default=os.path.join(ROOT, "docs/sprint/w4/A0-causes.tsv"))
+    ap.add_argument("--v3", action="store_true", help="end-state classifier: final answer + last %d tool results only" % END_N)
     a = ap.parse_args()
     rows = {}
     for r in csv.DictReader(open(a.tsv), delimiter="\t"):
@@ -154,12 +220,14 @@ def main():
     for (arm, task, run), r in sorted(rows.items()):
         if r["pass"] == "1":
             continue
-        d = os.path.join(a.runs_dir, f"{arm}_{task}_r{run}", "transcript.jsonl")
+        d = os.path.join(ROOT, "docs/sprint/w4/transcripts-keep", f"{arm}_{task}_r{run}.jsonl")  # v3: the kept copy first
+        if not os.path.exists(d):
+            d = os.path.join(a.runs_dir, f"{arm}_{task}_r{run}", "transcript.jsonl")
         if not os.path.exists(d):
             print(f"skip (transcript gone): {d}", file=sys.stderr)
             continue
-        f = features(d)
-        c = cause(f)
+        f = end_features(d) if a.v3 else features(d)
+        c = cause_v3(f) if a.v3 else cause(f)
         table[arm][c] += 1
         out.append([arm, task, run, c, r["chrome_ver"], r["ts"], ";".join(f"{k}={v}" for k, v in sorted(f.items()))])
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
