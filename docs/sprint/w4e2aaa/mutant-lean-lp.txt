@@ -1,0 +1,18 @@
+content_height	177.9
+sem_lines	6
+node	heading	"Gallery"	8.0	21.4	1264.0	37.0
+node	paragraph	""	8.0	79.9	1264.0	18.0
+node	link	"Open Amber"	8.0	113.9	1264.0	16.0
+node	link	"Open Birch"	8.0	129.9	1264.0	16.0
+node	link	"Open Cobalt"	8.0	145.9	1264.0	16.0
+node	link	"Open Harbor"	8.0	161.9	1264.0	16.0
+sem	heading level 1 "Gallery" @(640,40)
+sem	paragraph @(640,89)
+sem	link "Open Amber" @(640,122)
+sem	link "Open Birch" @(640,138)
+sem	link "Open Cobalt" @(640,154)
+sem	link "Open Harbor" @(640,170)
+landing	"Open Amber"	(640.0,121.9)	link "Open Amber"
+landing	"Open Birch"	(640.0,137.9)	link "Open Birch"
+landing	"Open Cobalt"	(640.0,153.9)	link "Open Cobalt"
+landing	"Open Harbor"	(640.0,169.9)	link "Open Harbor"

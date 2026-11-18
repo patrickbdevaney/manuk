@@ -1,0 +1,26 @@
+content_height	303.9
+sem_lines	10
+node	heading	"Gallery two"	8.0	21.4	1264.0	37.0
+node	heading	"Albums"	8.0	117.9	1264.0	28.0
+node	paragraph	""	8.0	163.9	1264.0	20.0
+node	link	"Open Amber"	28.4	165.9	90.7	17.0
+node	paragraph	""	8.0	199.9	1264.0	20.0
+node	link	"Open Birch"	28.4	201.9	80.0	17.0
+node	paragraph	""	8.0	235.9	1264.0	20.0
+node	link	"Open Cobalt"	28.4	237.9	89.8	17.0
+node	paragraph	""	8.0	271.9	1264.0	20.0
+node	link	"Open Harbor"	28.4	273.9	92.5	17.0
+sem	heading level 1 "Gallery two" @(640,40)
+sem	heading level 2 "Albums" @(640,132)
+sem	paragraph @(640,174)
+sem	link "Open Amber" @(74,174)
+sem	paragraph @(640,210)
+sem	link "Open Birch" @(68,210)
+sem	paragraph @(640,246)
+sem	link "Open Cobalt" @(73,246)
+sem	paragraph @(640,282)
+sem	link "Open Harbor" @(75,282)
+landing	"Open Amber"	(73.8,174.4)	link "Open Amber"
+landing	"Open Birch"	(68.5,210.4)	link "Open Birch"
+landing	"Open Cobalt"	(73.4,246.4)	link "Open Cobalt"
+landing	"Open Harbor"	(74.7,282.4)	link "Open Harbor"

@@ -267,6 +267,11 @@ class H(BaseHTTPRequestHandler):
         if m_ and int(m_.group(1)) < len(LP_ALTS):
             i = int(m_.group(1)); S["lp_clicked"] = LP_ALTS[i]
             return self.send(page(f"{LP_ALTS[i]} album", f"<p>Album code: {LP_CODES[i]}</p>"))
+        # --- W4.E2.a.a.a: image-dominated layout (imgs without width/height attrs stacked above text links)
+        if p == "/lp2":
+            imgs = "".join(f'<img src="/lp/img/{i}.png" alt="">' for i in range(len(LP_ALTS)))
+            rows = "".join(f'<p><img src="/lp/img/{i}.png" alt=""> <a href="/lp/go/{i}">Open {a}</a></p>' for i, a in enumerate(LP_ALTS))
+            return self.send(page("Gallery two", f"{imgs}<h2>Albums</h2>{rows}"))
         # --- tabs
         if p == "/product":
             tabs = [("Description", "A sturdy folding table."), ("Specs", "Weight 6 kg."), ("Shipping", "Ships in 3-5 business days.")]
