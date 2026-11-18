@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """W4.E3.b.a gate: `wire_bytes` counts only bytes that crossed the wire, checked against a network trace.
 
-Usage: w4e3b-a-gate.py [--bin target/release/manuk-mcp] [--runs 3] [--url https://books.toscrape.com/]
+Usage: w4e3b-a-gate.py [--bin target/release/manuk-mcp] [--runs 3] [--url https://docs.python.org/3/] [--require-304 1]
+
+Default page docs.python.org/3/ (W4.E3.b.a.b): ETag + no Cache-Control, so every warm response is revalidated and
+answered 304 (17 per warm visit measured; books.toscrape.com has 0, Wikipedia is `private` so is never stored).
 
 Per run: a fresh cache dir, a cold navigate (empty cache), then a warm navigate in a NEW process reusing that
 dir (`--http-cache-dir`). Each process writes a per-request trace (`MANUK_NET_TRACE`). The reference is the sum of
@@ -23,7 +26,8 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--bin", default="target/release/manuk-mcp")
 ap.add_argument("--runs", type=int, default=3)
 ap.add_argument("--lean", action="store_true", help="MANUK_AGENT_PROFILE=lean: exercises the fetch_prefix image sniff")
-ap.add_argument("--url", default="https://books.toscrape.com/")
+ap.add_argument("--url", default="https://docs.python.org/3/")
+ap.add_argument("--require-304", type=int, default=1, help="fail a run whose warm visit shows fewer 304 responses (0 disables)")
 a = ap.parse_args()
 
 MSGS = [
@@ -140,7 +144,10 @@ try:
             if ww != wsum:
                 print(f"FAIL: warm wire_bytes {ww} != trace body sum {wsum} (304s counted as bodies?)")
                 bad += 1
-            if not wnots:
+            if a.require_304 and (wnots or 0) < a.require_304:
+                print(f"FAIL: warm_304={wnots} < --require-304 {a.require_304}: revalidation not exercised on the wire")
+                bad += 1
+            elif not wnots:
                 # books.toscrape.com's warm visit is all fresh cache hits (no conditional request leaves the
                 # process), so the 304 path is not exercised live here; tests/g_wire_bytes.rs claim B covers it.
                 print("NOTE: warm run issued no conditional request (every response fresh from cache)")
