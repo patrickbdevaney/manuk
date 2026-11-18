@@ -1798,13 +1798,20 @@ impl<B: Backend> Session<B> {
     async fn navigate(&mut self, url: &str, query: Option<&str>) -> Result<String> {
         self.gate(crate::policy::Op::Navigate(url), None, "")?;
         self.taint_check(url, url, "navigation URL")?;
+        let ms = |t: std::time::Instant| t.elapsed().as_secs_f64() * 1000.0;
+        let t0 = std::time::Instant::now();
         self.b.navigate(url).await?;
+        manuk_agent::phase_log("b_navigate_total", ms(t0));
+        let t1 = std::time::Instant::now();
         let settle = self.settled().await;
+        manuk_agent::phase_log("settled", ms(t1));
+        let t2 = std::time::Instant::now();
         self.new_document();
         let tree = self.tree()?;
         self.seed(&tree)?;
         self.snap = Some(self.snapshot(&tree));
         self.snap_url = self.b.url();
+        manuk_agent::phase_log("tree_seed_snapshot", ms(t2));
         if let Some(q) = query.filter(|q| !q.trim().is_empty()) {
             let ans = self.answer(q)?;
             return Ok(format!(

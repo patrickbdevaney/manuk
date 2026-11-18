@@ -25,6 +25,11 @@ struct Job {
     reply: oneshot::Sender<Reply>,
 }
 
+/// W4.E4.a.a.b: set in a pool-forked session, whose first navigation otherwise pays the JS runtime's
+/// ~9 ms creation (the parent cannot hand one over: the engine is thread-affine). The session thread
+/// builds it as soon as it starts, while the agent is still deciding what to open.
+pub static EAGER_PREWARM: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 /// The session loop: one `Hub` serving jobs until every sender is dropped. Runs on the calling thread.
 fn session_loop<B: Backend + 'static>(
     make: impl Fn() -> B + 'static,
@@ -36,6 +41,9 @@ fn session_loop<B: Backend + 'static>(
         .enable_all()
         .build()
         .expect("session runtime");
+    if EAGER_PREWARM.load(std::sync::atomic::Ordering::Relaxed) {
+        manuk_js::prewarm();
+    }
     rt.block_on(async move {
         let mut s = Hub::new(make, log_dir).with_grants(grants);
         while let Some(job) = rx.recv().await {

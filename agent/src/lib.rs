@@ -723,10 +723,17 @@ impl AgentBrowser {
         // thread-locals exist.
         let _settle = PrewarmSettle;
         let fetch_started = std::time::Instant::now();
-        let (fetched, ()) = futures_util::future::join(fetch_html(url), async {
+        let (fetched, prewarm_ms) = futures_util::future::join(fetch_html(url), async {
+            let t = std::time::Instant::now();
             manuk_page::prewarm_js();
+            t.elapsed().as_secs_f64() * 1000.0
         })
         .await;
+        phase_log("js_realm_prewarm", prewarm_ms);
+        phase_log(
+            "fetch_join_total",
+            fetch_started.elapsed().as_secs_f64() * 1000.0,
+        );
         let (html, final_url) = fetched?;
         tracing::info!(
             ms = fetch_started.elapsed().as_millis() as u64,
@@ -751,7 +758,10 @@ impl AgentBrowser {
         // The agent scrolls in `self.height`, so without this a page that loads its next batch when
         // `scrollY == scrollHeight - innerHeight` (quotes.toscrape.com/scroll) never sees that offset.
         manuk_css::values::set_viewport(self.width as f32, self.height as f32);
+        let t_load = std::time::Instant::now();
         let mut page = Page::load_async(&html, &final_url, &self.fonts, self.width as f32).await;
+        phase_log("load_async", t_load.elapsed().as_secs_f64() * 1000.0);
+        let t_fin = std::time::Instant::now();
         // ── ⭐⭐⭐ **ADOPTED AT t1470, AFTER t1467 REFUSED IT AGAINST A FLATTERING BASELINE.**
         //    `finish_loading` carries the dynamic-script drain, so without it no module loader on
         //    the web completes: `mw.loader.getState('jquery')` reads `loading`, jQuery is
@@ -769,6 +779,7 @@ impl AgentBrowser {
         //    `CONSTITUTION-CHECK` records for the t1023 re-baseline. The engine strictly gains a
         //    rendered page, completed module loaders, and 488 more laid-out list items.
         page.finish_loading(&self.fonts, self.width as f32).await;
+        phase_log("finish_loading", t_fin.elapsed().as_secs_f64() * 1000.0);
         self.scroll_y = 0.0;
         // The previous page's sockets die with it: dropping the senders closes them.
         self.ws_send.clear();
@@ -4114,4 +4125,15 @@ fn with_init_script(html: &str, js: &str) -> String {
         0
     };
     format!("{}{tag}{}", &html[..at], &html[at..])
+}
+
+/// W4.E4.a.a.b: one `phase <name> <ms>` line on stderr per navigation phase, only when
+/// `MANUK_PHASE_TIMING` is set (a diagnostic for attributing first-navigate cost; off by default).
+#[doc(hidden)]
+pub fn phase_log(name: &str, ms: f64) {
+    use std::sync::OnceLock;
+    static ON: OnceLock<bool> = OnceLock::new();
+    if *ON.get_or_init(|| std::env::var_os("MANUK_PHASE_TIMING").is_some()) {
+        eprintln!("phase {name} {ms:.3}");
+    }
 }

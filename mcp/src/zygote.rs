@@ -145,6 +145,9 @@ fn accept_loop(sock: &Path, preloaded: bool) -> Result<()> {
                     libc::signal(libc::SIGCHLD, libc::SIG_DFL);
                 }
                 drop(conn);
+                if !preloaded && std::env::var_os("MANUK_NO_EAGER_PREWARM").is_none() {
+                    crate::server::EAGER_PREWARM.store(true, std::sync::atomic::Ordering::Relaxed);
+                }
                 // The child must not keep the pool's listening socket open.
                 drop(listener);
                 return Ok(());

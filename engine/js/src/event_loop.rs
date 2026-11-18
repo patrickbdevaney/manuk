@@ -9331,6 +9331,11 @@ pub fn precompile(rt: &mut Runtime) {
     if std::env::var_os("MANUK_NO_STENCIL").is_some() {
         return;
     }
+    // W4.E4.a.a.b: the stencils belong to the thread's runtime and outlive a navigation; compiling them
+    // again on every prewarm cost ~9 ms per navigation and grew the cache by 14 entries each time.
+    if STENCILS.with(|c| !c.borrow().is_empty()) {
+        return;
+    }
     let list: [(&'static str, &str); 14] = [
         (DOC_PROTO_JS, "doc_proto.js"),
         (PRELUDE, "event_loop_prelude.js"),

@@ -168,16 +168,20 @@ fn with_runtime_arming<R>(
     // is the entire fix for the exit segfault: two separate thread-locals have an *unspecified* drop
     // order relative to one another, so the only way to guarantee "context first, then JS_ShutDown()"
     // is to put them in one struct and let its `Drop` say so. See `spidermonkey::JsThread`.
+    let t_eng = std::time::Instant::now();
     let handle = spidermonkey::engine_handle()?;
+    phase_log("prewarm.engine_init", t_eng);
     spidermonkey::RUNTIME.with(|cell| {
         let mut slot = cell.borrow_mut();
         if slot.is_none() {
+            let t_rt = std::time::Instant::now();
             let mut rt = Runtime::new(handle);
             // The host hooks are per-JSContext, and this is a DIFFERENT context from the one
             // `SpiderMonkeyRuntime::new` builds. Without this line `new FinalizationRegistry(...)`
             // still aborts the process on the PAGE path — the only path a real tab uses.
             spidermonkey::install_host_hooks_on(&mut rt);
             *slot = Some(std::mem::ManuallyDrop::new(rt));
+            phase_log("prewarm.runtime_new", t_rt);
         }
         let rt: &mut Runtime = slot.as_mut().expect("runtime just initialized");
         let out = f(rt);
@@ -345,6 +349,7 @@ pub fn prewarm() {
             use mozjs::rust::{
                 evaluate_script, CompileOptionsWrapper, RealmOptions, SIMPLE_GLOBAL_CLASS,
             };
+            let t_g = std::time::Instant::now();
             let options = RealmOptions::default();
             rooted!(&in(rt.cx()) let global = unsafe {
                 JS_NewGlobalObject(rt.cx(), &SIMPLE_GLOBAL_CLASS, std::ptr::null_mut(),
@@ -353,8 +358,11 @@ pub fn prewarm() {
             rooted!(&in(rt.cx()) let mut rval = mozjs::jsval::UndefinedValue());
             let opts = CompileOptionsWrapper::new(rt.cx_no_gc(), c"prewarm.js".to_owned(), 1);
             let _ = evaluate_script(rt.cx(), global.handle(), "0", rval.handle_mut(), opts);
+            phase_log("prewarm.global_eval", t_g);
             // PERF.1.4.a: compile the document-independent preludes now, off the critical path.
+            let t_p = std::time::Instant::now();
             event_loop::precompile(rt);
+            phase_log("prewarm.precompile", t_p);
             Ok(())
         });
     }
@@ -2135,5 +2143,15 @@ mod tests {
     fn factory_returns_something_named() {
         let rt = new_runtime();
         assert!(!rt.engine_name().is_empty());
+    }
+}
+
+/// W4.E4.a.a.b: `phase <name> <ms>` on stderr when `MANUK_PHASE_TIMING` is set (diagnostic only).
+#[doc(hidden)]
+pub fn phase_log(name: &str, since: std::time::Instant) {
+    use std::sync::OnceLock;
+    static ON: OnceLock<bool> = OnceLock::new();
+    if *ON.get_or_init(|| std::env::var_os("MANUK_PHASE_TIMING").is_some()) {
+        eprintln!("phase {name} {:.3}", since.elapsed().as_secs_f64() * 1000.0);
     }
 }
