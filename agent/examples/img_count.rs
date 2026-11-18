@@ -7,12 +7,21 @@ fn main() {
     rt.block_on(async {
         let mut b = manuk_agent::AgentBrowser::new(1280, 800);
         if let Err(e) = b.navigate(&url).await {
-            println!("ok=false err={}", e.to_string().replace(char::is_whitespace, "_"));
+            println!(
+                "ok=false err={}",
+                e.to_string().replace(char::is_whitespace, "_")
+            );
             return;
         }
-        match b.eval_value("document.querySelectorAll('img').length").await {
+        match b
+            .eval_value("document.querySelectorAll('img').length")
+            .await
+        {
             Ok(v) => println!("ok=true img_post_js={}", v.trim()),
-            Err(e) => println!("ok=false err={}", e.to_string().replace(char::is_whitespace, "_")),
+            Err(e) => println!(
+                "ok=false err={}",
+                e.to_string().replace(char::is_whitespace, "_")
+            ),
         }
     });
 }

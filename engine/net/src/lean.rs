@@ -14,6 +14,22 @@ static ENV_READ: AtomicBool = AtomicBool::new(false);
 static VISUAL: AtomicBool = AtomicBool::new(false);
 /// Tracker requests refused since the last [`reset_stats`].
 pub static BLOCKED: AtomicUsize = AtomicUsize::new(0);
+/// URLs refused since the last [`reset_stats`] (W4.E2.c.a.a: so a probe can name the hosts).
+pub static REFUSED: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
+
+/// Count and record one refused tracker request.
+pub fn note_refused(url: &str) {
+    BLOCKED.fetch_add(1, Relaxed);
+    if let Ok(mut g) = REFUSED.lock() {
+        g.push(url.to_string());
+    }
+}
+
+/// Refused URLs recorded since the last [`reset_stats`].
+pub fn refused_urls() -> Vec<String> {
+    REFUSED.lock().map(|g| g.clone()).unwrap_or_default()
+}
+
 /// Body bytes that came off the wire (past the HTTP cache) since the last [`reset_stats`].
 pub static WIRE_BYTES: AtomicU64 = AtomicU64::new(0);
 
@@ -76,6 +92,9 @@ pub fn reset_stats() {
         m.lock().unwrap().clear();
     }
     BLOCKED.store(0, Relaxed);
+    if let Ok(mut g) = REFUSED.lock() {
+        g.clear();
+    }
     WIRE_BYTES.store(0, Relaxed);
 }
 

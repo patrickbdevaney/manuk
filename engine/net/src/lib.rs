@@ -1546,7 +1546,7 @@ fn partition_of(url: &str, initiator: Option<&Url>) -> String {
 
 async fn fetch_scoped(url: &str, initiator: Option<&Url>) -> Result<Response> {
     if lean::is_tracker(url) {
-        lean::BLOCKED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        lean::note_refused(url);
         bail!("lean profile: tracker host not fetched: {url}");
     }
     FETCHES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -2186,7 +2186,7 @@ pub async fn fetch_streaming<F: FnMut(&[u8])>(url: &str, mut on_chunk: F) -> Res
 /// the cookie jar's `Cookie` header but does not store `Set-Cookie`.
 pub async fn fetch_prefix(url: &str, max: usize) -> Result<(u16, Vec<u8>)> {
     if lean::is_tracker(url) {
-        lean::BLOCKED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        lean::note_refused(url);
         bail!("lean profile: tracker host not fetched: {url}");
     }
     let mut current = Url::parse(url).with_context(|| format!("invalid URL: {url}"))?;

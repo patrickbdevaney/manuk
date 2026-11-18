@@ -25,9 +25,31 @@ Usage:
   python3 -I scripts/w4ec-a-easyprivacy-ab.py --self-test
 """
 import argparse, os, re, statistics, subprocess, sys, tempfile
+from urllib.parse import urlsplit
+
+SLD = {"co", "com", "org", "net", "gov", "ac", "edu"}
+
+
+def reg_domain(host):
+    """Approximate registrable domain: last two labels, three when the TLD is 2 letters and the label before
+    it is a generic second-level (co.uk, com.au). No public-suffix list: documented approximation."""
+    h = host.lower().rstrip(".").split(".")
+    if len(h) >= 3 and len(h[-1]) == 2 and h[-2] in SLD:
+        return ".".join(h[-3:])
+    return ".".join(h[-2:])
+
+
+def refused_hosts(cell):
+    return sorted({urlsplit(u).hostname or "" for u in cell.split(",") if u})
+
+
+def over_blocked(page_url, hosts):
+    """Refused hosts sharing a registrable domain with the page (first-party: over-blocking)."""
+    d = reg_domain(urlsplit(page_url).hostname or "")
+    return [h for h in hosts if h and reg_domain(h) == d]
 
 MARKER = b"||crazyegg.com^"
-COLS = ["url", "arm", "run", "status", "blocked", "wire_bytes", "wall_ms", "a11y", "links", "chrome_ver"]
+COLS = ["url", "arm", "run", "status", "blocked", "wire_bytes", "wall_ms", "a11y", "links", "refused", "chrome_ver"]
 CHROME = os.environ.get("MANUK_CHROME_PIN", "145.0.7632.116")
 
 
@@ -52,12 +74,13 @@ def probe(binary, url):
         out = subprocess.run([binary, url], env=env, capture_output=True, text=True, timeout=150).stdout
     except subprocess.TimeoutExpired:
         return {"status": "TIMEOUT"}
-    kv = dict(re.findall(r"(\w+)=(\S+)", out))
+    refused = [ln[len("refused="):].strip() for ln in out.splitlines() if ln.startswith("refused=")]
+    kv = dict(re.findall(r"(\w+)=(\S+)", "\n".join(l for l in out.splitlines() if not l.startswith("refused="))))
     ok = kv.get("ok") == "true" and kv.get("observed") == "true"
     if not ok:
         return {"status": "FAIL"}
     return {"status": "OK", "blocked": kv["blocked"], "wire_bytes": kv["wire_bytes"], "wall_ms": kv["wall_ms"],
-            "a11y": kv["a11y"], "links": kv["links"]}
+            "a11y": kv["a11y"], "links": kv["links"], "refused": ",".join(refused)}
 
 
 def load_rows(path):
@@ -82,7 +105,7 @@ def analyse(rows, min_ok=3):
     by = {}
     for r in rows:
         by.setdefault(r["url"], {}).setdefault(r["arm"], []).append(r)
-    out, rc = [], 0
+    out, rc, overblock = [], 0, []
     out.append("url\tarm\tok\tblocked_band\twire_band\twall_median_ms\ta11y_stable\tverdict")
     for url in by:
         verdicts = []
@@ -102,6 +125,19 @@ def analyse(rows, min_ok=3):
                        f"{'yes' if stable else 'no'}\t-")
             verdicts.append(arm)
             by[url][arm + "_ok"] = ok
+        # per-host report from every ON-arm OK run (over-blocking does not need the OFF arm)
+        on_hosts, off_hosts = set(), set()
+        for r in by[url].get("on", []):
+            if r["status"] == "OK":
+                on_hosts.update(refused_hosts(r.get("refused", "")))
+        for r in by[url].get("off", []):
+            if r["status"] == "OK":
+                off_hosts.update(refused_hosts(r.get("refused", "")))
+        ob_hosts = over_blocked(url, sorted(on_hosts | off_hosts))
+        out.append(f"{url}\thosts\t-\tEP-only: {','.join(sorted(on_hosts - off_hosts)) or '-'}\t"
+                   f"both: {','.join(sorted(on_hosts & off_hosts)) or '-'}\t-\t-\t"
+                   f"OVERBLOCK={len(ob_hosts)} {','.join(ob_hosts)}")
+        overblock.extend(ob_hosts)
         if "off_ok" in by[url] and "on_ok" in by[url]:
             off, on = by[url]["off_ok"], by[url]["on_ok"]
             ob, nb = [int(r["blocked"]) for r in off], [int(r["blocked"]) for r in on]
@@ -129,6 +165,7 @@ def analyse(rows, min_ok=3):
             else:
                 digest = "digest not compared (not self-stable)"
             out.append(f"{url}\tverdict\t-\t{refuse}\t{wire}\t-\t-\t{digest}")
+    out.append(f"TOTAL_OVERBLOCKED_HOSTS={len(overblock)}")
     return out, rc
 
 
@@ -196,10 +233,26 @@ def self_test():
     _, rc = analyse(short)
     if rc != 2:
         fails.append("2-OK-run sample not INCOMPLETE")
+    # per-host report: EP-only hosts named; page-host refusal counted as over-blocking (mutant RED)
+    def hrow(arm, run, refused):
+        r = row(u, arm, run, 1, 1, "aa")
+        r["refused"] = refused
+        return r
+    clean = [hrow(a, r, "https://x.crazyegg.com/a.js,https://t.mouseflow.com/b" if a == "on" else "https://x.doubleclick.net/c")
+             for a in ("off", "on") for r in (1, 2, 3)]
+    lines, _ = analyse(clean)
+    if "TOTAL_OVERBLOCKED_HOSTS=0" not in lines[-1] or not any("EP-only: t.mouseflow.com,x.crazyegg.com" in l for l in lines):
+        fails.append("clean host report wrong")
+    bad = [hrow(a, r, "https://cdn.example.test/a.js,https://t.mouseflow.com/b") for a in ("off", "on") for r in (1, 2, 3)]
+    lines, _ = analyse(bad)
+    if "TOTAL_OVERBLOCKED_HOSTS=0" in lines[-1]:
+        fails.append("page-host-in-list mutant not counted as over-blocking")
+    if reg_domain("news.bbc.co.uk") != "bbc.co.uk" or reg_domain("www.bbc.com") != "bbc.com":
+        fails.append("reg_domain wrong")
     if fails:
         print("SELF-TEST FAIL:", *fails, sep="\n  ")
         return 1
-    print("SELF-TEST OK (build-marker, digest-mutant RED, sample INCOMPLETE)")
+    print("SELF-TEST OK (build-marker, digest-mutant RED, sample INCOMPLETE, over-blocking mutant RED)")
     return 0
 
 

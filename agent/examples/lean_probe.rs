@@ -17,6 +17,7 @@ fn main() {
         let wall = t.elapsed().as_millis();
         let wire = manuk_net::lean::WIRE_BYTES.load(std::sync::atomic::Ordering::Relaxed);
         let blocked = manuk_net::lean::BLOCKED.load(std::sync::atomic::Ordering::Relaxed);
+        let refused = manuk_net::lean::refused_urls();
         let (obs, a11y, links) = match b.observe() {
             Ok(o) => (
                 true,
@@ -38,6 +39,9 @@ fn main() {
         let shot = fnv(&png);
         let shot_ms = ts.elapsed().as_millis();
         let wire_after = manuk_net::lean::WIRE_BYTES.load(std::sync::atomic::Ordering::Relaxed);
+        for u in &refused {
+            println!("refused={u}");
+        }
         println!(
             "ok={} observed={obs} wall_ms={wall} wire_bytes={wire} blocked={blocked} sem_lines={nsem} a11y={a11y:016x} links={links:016x} shot={shot:016x} shot_ms={shot_ms} wire_after_shot={wire_after}",
             r.is_ok()
