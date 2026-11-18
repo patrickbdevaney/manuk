@@ -58,8 +58,8 @@ def touch():
     w0.touch()
 
 
-def load_urls():
-    with open(URLS) as f:
+def load_urls(path=None):
+    with open(path or URLS) as f:
         return [ln.strip() for ln in f if ln.strip() and not ln.startswith("#")]
 
 
@@ -200,6 +200,7 @@ def main():
     global RUNS
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=os.path.join(ROOT, "docs", "sprint", "w4e2b"))
+    ap.add_argument("--urls", default=URLS, help="URL list (default: the v1 BASELINE-URLS.txt; v2 is docs/sprint/w4e2b/URLS-v2.txt)")
     ap.add_argument("--runs", type=int, default=RUNS)
     ap.add_argument("--canary-only", action="store_true")
     ap.add_argument("--mutant-canary", action="store_true", help="gate check: lean env stripped, must be RED")
@@ -217,7 +218,7 @@ def main():
     if not canary():
         print("canary RED: the lean profile is not engaged; no memory numbers are written", file=sys.stderr)
         return 1
-    urls = load_urls()
+    urls = load_urls(a.urls)
     img = {u: post_js_img(u) for u in urls}
     rows = []
     for run in range(1, RUNS + 1):

@@ -1,0 +1,15 @@
+# W4.E2.b.b: pre-registered replacement URL set (v2), written BEFORE any v2 run. v1 (docs/sprint/BASELINE-URLS.txt) is not edited.
+# Replaces the unusable v1 URLs: mkp.gem.gov.in, virtual.lapampa.edu.ar, basescan.org, ebanking.bdm-sa.com.
+# Choice rule: public, no-login, server-rendered image-bearing pages that are not bot-challenged in a plain curl check.
+# No URL is swapped after seeing results; failures are reported as INCOMPLETE.
+https://en.wikipedia.org/wiki/Paris
+https://en.wikipedia.org/wiki/List_of_birds_of_North_America
+https://commons.wikimedia.org/wiki/Main_Page
+https://www.bbc.com/news
+https://www.theguardian.com/international
+https://news.ycombinator.com/
+https://www.nasa.gov/
+https://www.flickr.com/explore
+https://www.nationalgeographic.com/
+https://www.bbc.com/travel
+# Pre-run curl status check (UA Mozilla/5.0) swapped unsplash(403), gutenberg(503), imdb(202) for flickr/nationalgeographic/bbc travel (200); no manuk run had happened.
