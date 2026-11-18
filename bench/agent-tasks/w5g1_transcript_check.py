@@ -13,6 +13,8 @@ import argparse, csv, datetime, json, os, re, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.join(HERE, "..", "..")
 G1 = os.path.join(ROOT, "docs/sprint/w5/G1")
+# The run timeout real_run.py uses by default (--timeout 420). A run killed by it writes no result event.
+RUN_TIMEOUT_S = 420
 
 
 def transcript_path(runs_dir, row, tol=5):
@@ -50,6 +52,15 @@ def final_result(path):
     return res
 
 
+def is_timeout_row(r):
+    """A row killed by the run timeout: seconds at least RUN_TIMEOUT_S, pass 0, and the TIMEOUT marker in answer."""
+    try:
+        secs = float(r.get("seconds") or "nan")
+    except ValueError:
+        return False
+    return secs >= RUN_TIMEOUT_S and r.get("pass") == "0" and r.get("answer", "").strip() == "TIMEOUT"
+
+
 def check(runs_dir, tsvs):
     bad, n = [], 0
     for tsv in tsvs:
@@ -62,6 +73,10 @@ def check(runs_dir, tsvs):
                 continue
             res = final_result(p)
             if res is None:
+                # W5.G1.b.a.a.a.a.b: a timed-out run (seconds at least the run timeout, pass 0, answer TIMEOUT) has no
+                # result event by construction; its transcript is tied as a timeout. Any other row without one is untied.
+                if is_timeout_row(r):
+                    continue
                 bad.append(f"{key}: no result event")
             elif flat(res)[:80] != r["answer"][:80]:
                 bad.append(f"{key}: transcript answer differs from the row (overwritten by a later run)")
