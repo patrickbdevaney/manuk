@@ -1,0 +1,3 @@
+axis	arm	n	value	note	chrome_ver
+local-wall	manuk-proc / chrome-proc	7 fixtures x 10 runs	0.46-0.49x (band of per-run median of per-URL ratios)	wall_verdict QUOTABLE (band excludes 1.0, no overlap with prior 1.66-1.96 / 3.1-3.8); cold process start to page loaded, both arms; local pages sized from sizes.tsv, subresources are 20 KB placeholders; per-arm median 0.177 s manuk vs 0.370 s chrome (manuk max 2.449 s, one outlier)	145.0.7632.116
+local-wall	mutant ratio forced 1.0	10 runs	VERDICT NOT_SETTLED (band 1.00-1.00 contains 1.0)	runs-mutant.tsv	145.0.7632.116
