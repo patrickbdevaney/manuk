@@ -1,0 +1,6 @@
+url	arm	ok	blocked_band	wire_band	wall_median_ms	a11y_stable	verdict
+https://www.theguardian.com/international	off	3	1..1	3868937..3868937	11688	yes	-
+https://www.theguardian.com/international	on	3	11..11	3153710..3153710	13001	yes	-
+https://www.theguardian.com/international	hosts	-	EP-only: cdn.confiant-integrations.net,ophan.theguardian.com	both: securepubads.g.doubleclick.net	-	-	OVERBLOCK=1 ophan.theguardian.com
+https://www.theguardian.com/international	verdict	-	ON refuses more (bands disjoint)	ON wire lower (bands disjoint)	-	-	digest agrees (both self-stable)
+TOTAL_OVERBLOCKED_HOSTS=1
