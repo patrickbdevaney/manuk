@@ -1,0 +1,10 @@
+axis	arm	n	run	target	wall_s_or_ms	peak_pss_kb	status	note	chrome_ver
+pages-real	manuk-proc	10	1	https://comix.to/|https://client.dkitrxmdwoqruvsi.net/|https://www.mobile.bg/|https://app.ordertime.com/|https://www.puentedemando.com/	137.858	1688494	OK	landed_ok=10/10	145.0.7632.116
+pages-real	chrome-tabs	10	1	https://comix.to/|https://client.dkitrxmdwoqruvsi.net/|https://www.mobile.bg/|https://app.ordertime.com/|https://www.puentedemando.com/	14.7	1016525	OK	landed_ok=10/10	145.0.7632.116
+pages-real	chrome-procs	10	1	https://comix.to/|https://client.dkitrxmdwoqruvsi.net/|https://www.mobile.bg/|https://app.ordertime.com/|https://www.puentedemando.com/	53.126	2860252	OK	landed_ok=10/10	145.0.7632.116
+pages-real	manuk-proc	10	2	https://comix.to/|https://client.dkitrxmdwoqruvsi.net/|https://www.mobile.bg/|https://app.ordertime.com/|https://www.puentedemando.com/	133.18	1626780	OK	landed_ok=10/10	145.0.7632.116
+pages-real	chrome-tabs	10	2	https://comix.to/|https://client.dkitrxmdwoqruvsi.net/|https://www.mobile.bg/|https://app.ordertime.com/|https://www.puentedemando.com/	15.79	1014040	OK	landed_ok=10/10	145.0.7632.116
+pages-real	chrome-procs	10	2	https://comix.to/|https://client.dkitrxmdwoqruvsi.net/|https://www.mobile.bg/|https://app.ordertime.com/|https://www.puentedemando.com/	54.46	2861993	OK	landed_ok=10/10	145.0.7632.116
+pages-real	manuk-proc	10	3	https://comix.to/|https://client.dkitrxmdwoqruvsi.net/|https://www.mobile.bg/|https://app.ordertime.com/|https://www.puentedemando.com/	109.757	1941421	OK	landed_ok=10/10	145.0.7632.116
+pages-real	chrome-tabs	10	3	https://comix.to/|https://client.dkitrxmdwoqruvsi.net/|https://www.mobile.bg/|https://app.ordertime.com/|https://www.puentedemando.com/	13.981	1028104	OK	landed_ok=10/10	145.0.7632.116
+pages-real	chrome-procs	10	3	https://comix.to/|https://client.dkitrxmdwoqruvsi.net/|https://www.mobile.bg/|https://app.ordertime.com/|https://www.puentedemando.com/	135.453	2979978	OK	landed_ok=10/10	145.0.7632.116

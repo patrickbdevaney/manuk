@@ -226,3 +226,47 @@ Re-run in W4.E0.b.a (2026-11-17, same pin, same 10 URLs × 10 runs, `runs-urls.t
 
 **Claim:** none. The earlier per-URL wall ratios are not replaced by this table. The 10-run band is the number to quote, and
 it is now 1.66–5.81× (W4.E0.b.a re-run), not a single ratio. The wall band widened and still spans the earlier ranges, so the verdict stays NOT_SETTLED.
+
+## Pages on real URLs, with chrome-procs (W4.E0.c.b): one Chrome process per page is 0.57–0.65× manuk-proc's PSS
+
+_Measured 2026-11-17, `chrome_ver = 145.0.7632.116`, `manuk-mcp` from `target/release` at this commit. All three arms in
+one session, so the three numbers are comparable with each other: `manuk-proc`, `chrome-tabs` and `chrome-procs`, N = 10,
+round-robin over the 5 paired URLs (each URL twice, as in W4.E0.c), 3 runs. Raw rows:
+`docs/sprint/footprint/runs-real-pages-procs.tsv`. Summary: `docs/sprint/footprint/summary-real-pages-procs.tsv`. Run with
+`MANUK_CHROME_PIN=145.0.7632.116 python3 -I scripts/w4e0-footprint.py --real-pages-procs --out docs/sprint/footprint`._
+
+| arm | total PSS (MB) | per page (MB) | runs | landed_ok |
+|---|---|---|---|---|
+| manuk-proc (10 processes) | 1589–1896 | 158.9–189.6 | 3 | 10/10 each run |
+| chrome-tabs (1 Chrome, 10 tabs) | 990–1004 | 99.0–100.4 | 3 | 10/10 each run |
+| chrome-procs (10 Chromes, 1 tab each) | 2793–2910 | 279.3–291.0 | 3 | 10/10 each run |
+
+Per run, the ratio of PSS on the same session: manuk-proc / chrome-procs **0.59, 0.57, 0.65** (band **0.57–0.65×**);
+manuk-proc / chrome-tabs **1.66, 1.60, 1.89** (band **1.60–1.89×**).
+
+What this says: on the same live pages, a manuk process per page holds about 0.6× the summed PSS of a Chrome process per
+page. Against one shared Chrome with the same pages in tabs (chrome-tabs), the manuk arm holds 1.6–1.9× the PSS. Both
+statements come from this table and only from this table.
+
+**Not claimed, and not reconciled here:**
+- **The earlier 0.30–0.31× figure** (the URL sweep: manuk one page vs Chrome one process) is a different comparison,
+  made on a different page set and in a different session. It does not match 0.57–0.65× and this section does not explain
+  the gap. Quote the 0.57–0.65× band for "real pages, same session, process per page", not the older figure.
+- **Session drift.** The manuk-proc / chrome-tabs ratio moved from 2.22–2.24× (N=10, repeated URLs, 2026-10-31) to
+  1.25–1.30× (N=5, unique URLs, 2026-11-17, W4.E0.c.a) to 1.60–1.89× here (N=10, repeated URLs, same day as c.a). Repeats and
+  live-site state both change it; a second session of this set is owed (see the node's follow-up row).
+- **Wall clock is not claimed.** manuk-proc took 110–138 s for the 10 navigates (in sequence) and chrome-procs 53–135 s;
+  chrome-tabs 14–16 s. The live sites are slow and noisy. Not a claim.
+
+**Harness note (disclosed).** The first attempt of this session crashed on run 1 at manuk-proc: `manuk-mcp` was silent for
+the 60 s page timeout on a live page, and the exception was not caught, so no rows were written. The harness now records a
+silent navigate as a `FAIL` run (`run_manuk_proc`), which is the rule the node sets: a run that is not `OK` on every page is
+reported as FAIL, not averaged. The rerun is the one reported above; it had **zero** FAIL runs. The rerun is the only full
+set, so it is not a best-of-two.
+
+**Gate evidence.**
+- `--real-pages-procs-mutant` navigates fixture pages while checking against the real hosts. All three arms come out
+  `WRONG_PAGE` with `landed_ok=0/10` (`docs/sprint/footprint/runs-real-pages-procs-mutant.tsv`), and no summary is written.
+- `--real-pages-procs` exits 1 and writes no summary unless every arm has exactly 3 OK runs (`arms_short_of_runs()`).
+- `--selftest` checks that the chrome-procs ratio is derived from OK runs only (a WRONG_PAGE run is excluded from the band),
+  that the chrome-tabs ratio line is unchanged, and that an arm with a WRONG_PAGE run is reported short.

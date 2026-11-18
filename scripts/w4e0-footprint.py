@@ -199,7 +199,10 @@ def run_manuk_proc(n, fx, log_root, urls=None, landed=None):
             procs.append(m)
             if k == 0:
                 sampler.start()
-            err, text, _ = m.call("navigate", {"url": page_target(k, fx, urls)})
+            try:
+                err, text, _ = m.call("navigate", {"url": page_target(k, fx, urls)})
+            except (TimeoutError, OSError, ValueError):  # a silent manuk-mcp on a live page is a FAIL run, not a crash
+                return time.monotonic() - t0, 0, "FAIL", []
             if err:
                 return time.monotonic() - t0, 0, "FAIL", []
             if landed is not None:
@@ -359,11 +362,12 @@ def run_chrome_tabs(n, fx, _, urls=None, landed=None):
         shutil.rmtree(profile, ignore_errors=True)
 
 
-def run_chrome_procs(n, fx, _, urls=None):
-    """n Chrome processes, one tab each. Returns (wall_s, peak_pss_kb, status, [])."""
+def run_chrome_procs(n, fx, _, urls=None, landed=None):
+    """n Chrome processes, one tab each. Returns (wall_s, peak_pss_kb, status, []).
+    If `landed` is a list, the host each tab reports after settle is appended to it (as run_chrome_tabs)."""
     procs, profiles = [], []
     sampler = Sampler(lambda: [p.pid for p in procs])
-    cdps = []
+    cdps, sessions = [], []
     try:
         t0 = time.monotonic()
         for k in range(n):
@@ -376,8 +380,13 @@ def run_chrome_procs(n, fx, _, urls=None):
             cdp = chrome_connect(proc, profiles[k], PAGE_TIMEOUT_S)
             cdps.append(cdp)
             sess = cdp.new_page(page_target(k, fx, urls))
+            sessions.append(sess)
             cdp.wait_loads([sess], PAGE_TIMEOUT_S)
         time.sleep(SETTLE_S)
+        if landed is not None:
+            for cdp, sess in zip(cdps, sessions):
+                host = cdp.call("Runtime.evaluate", {"expression": "location.host", "returnByValue": True}, sess)
+                landed.append(host.get("result", {}).get("value", "").split(":")[0])
         return time.monotonic() - t0, sampler.finish(), "OK", []
     except (TimeoutError, OSError, KeyError, ValueError):
         return 0.0, 0, "FAIL", []
@@ -495,7 +504,17 @@ def unique_targets(urls, n):
     return pick
 
 
-def run_real_pages(out_dir, fx, log_root, mutant=False, n=REAL_N, runs=REAL_RUNS, unique=False):
+def arms_short_of_runs(rows, runs):
+    """Arms whose OK-run count is not exactly `runs` (arm -> count). Empty means every arm settled."""
+    counts = {}
+    for r in rows:
+        counts.setdefault(r["arm"], 0)
+        if r["status"] == "OK":
+            counts[r["arm"]] += 1
+    return {a: k for a, k in counts.items() if k != runs}
+
+
+def run_real_pages(out_dir, fx, log_root, mutant=False, n=REAL_N, runs=REAL_RUNS, unique=False, procs=False):
     """pages-real: N pages round-robin over the paired real URLs, manuk-proc vs chrome-tabs, `runs` runs.
     unique=True is the W4.E0.c.a control: N=n equals the number of paired URLs, so every URL is open once.
     Every page must land on its own site; otherwise the run is WRONG_PAGE. `mutant` navigates fixture pages
@@ -512,6 +531,8 @@ def run_real_pages(out_dir, fx, log_root, mutant=False, n=REAL_N, runs=REAL_RUNS
     target = "|".join(page_target(k, fx, urls) for k in range(n)) if unique else "|".join(urls)
     rows = []
     arms = [("manuk-proc", run_manuk_proc), ("chrome-tabs", run_chrome_tabs)]
+    if procs:  # W4.E0.c.b: all three arms in one session, so the procs row is not compared across sessions
+        arms.append(("chrome-procs", run_chrome_procs))
     for run in range(1, (1 if mutant else runs) + 1):
         for arm, fn in arms:
             landed = []
@@ -557,12 +578,15 @@ def summarize_real_pages(rows):
         out.append(f"{axis}\t{arm}\t{n}\t{min(tot):.0f}-{max(tot):.0f} MB total\t"
                    f"{min(tot)/n:.1f}-{max(tot)/n:.1f} MB/page\truns={len(ok)}\t{PIN}")
     m = {r["run"]: r for r in rows if r["arm"] == "manuk-proc" and r["status"] == "OK"}
-    c = {r["run"]: r for r in rows if r["arm"] == "chrome-tabs" and r["status"] == "OK"}
-    both = sorted(set(m) & set(c))
-    if both:
-        ratios = [m[k]["pss_kb"] / c[k]["pss_kb"] for k in both if c[k]["pss_kb"] > 0]
-        out.append(f"{axis}\tmanuk-proc / chrome-tabs per-page PSS\t{n}\t"
-                   f"{min(ratios):.2f}-{max(ratios):.2f}x\t-\truns={len(ratios)}\t{PIN}")
+    for arm in by:
+        if arm == "manuk-proc":
+            continue
+        c = {r["run"]: r for r in rows if r["arm"] == arm and r["status"] == "OK"}
+        both = sorted(set(m) & set(c))
+        if both:
+            ratios = [m[k]["pss_kb"] / c[k]["pss_kb"] for k in both if c[k]["pss_kb"] > 0]
+            out.append(f"{axis}\tmanuk-proc / {arm} per-page PSS\t{n}\t"
+                       f"{min(ratios):.2f}-{max(ratios):.2f}x\t-\truns={len(ratios)}\t{PIN}")
     return out
 
 
@@ -801,6 +825,29 @@ def selftest():
     if unique_targets(good, 5) != good or not _refused(good[:4]) \
             or not _refused(good[:4] + ["https://m.comix.to/"]) or not _refused(good[:4] + ["http://"]):
         fails.append("unique-URL control does not refuse a truncated or same-domain input")
+    # 2h. Procs summary (W4.E0.c.b): a manuk-proc/chrome-procs ratio line is derived from OK runs only. A chrome-procs
+    #     run that is WRONG_PAGE must not enter the band; a mutant that averaged it in would change the printed range.
+    def _row(arm, run, kb, st="OK"):
+        return {"axis": "pages-real", "arm": arm, "n": 10, "run": run, "target": "t", "wall_s": 1.0,
+                "pss_kb": kb, "status": st, "note": ""}
+    rr = [_row("manuk-proc", 1, 2000 * 1024), _row("manuk-proc", 2, 2000 * 1024), _row("manuk-proc", 3, 2000 * 1024),
+          _row("chrome-tabs", 1, 1000 * 1024), _row("chrome-tabs", 2, 1000 * 1024), _row("chrome-tabs", 3, 1000 * 1024),
+          _row("chrome-procs", 1, 1500 * 1024), _row("chrome-procs", 2, 1500 * 1024),
+          _row("chrome-procs", 3, 9999 * 1024, "WRONG_PAGE")]
+    sm = summarize_real_pages(rr)
+    procs_line = [l for l in sm if "manuk-proc / chrome-procs" in l]
+    if len(procs_line) != 1 or "1.33-1.33x" not in procs_line[0] or "runs=2" not in procs_line[0] \
+            or not any(l.startswith("pages-real\tchrome-procs\t10\t") and "runs=2" in l for l in sm):
+        fails.append(f"procs summary does not derive the chrome-procs ratio from OK runs only: {procs_line}")
+    if not any("manuk-proc / chrome-tabs per-page PSS" in l and "2.00-2.00x" in l for l in sm):
+        fails.append("chrome-tabs ratio line changed under the generalised summary")
+    # 2i. Procs settle rule (W4.E0.c.b): an arm with a WRONG_PAGE or FAIL run among its 3 runs is reported short,
+    #     and a full 3-run arm is not. A mutant that counted non-OK runs as OK would come out empty and fail here.
+    full = [_row(a, r, 1024) for a in ("manuk-proc", "chrome-tabs", "chrome-procs") for r in (1, 2, 3)]
+    short_one = [dict(x) for x in full]
+    short_one[-1]["status"] = "WRONG_PAGE"
+    if arms_short_of_runs(full, 3) != {} or arms_short_of_runs(short_one, 3) != {"chrome-procs": 2}:
+        fails.append("procs settle rule does not flag an arm with a WRONG_PAGE run")
     # 3. The pin must be present: a row with no pin is a refusal, not a number.
     if not PIN:
         fails.append("MANUK_CHROME_PIN unset (refused)")
@@ -835,6 +882,11 @@ def main():
                     help="unique-URL control (W4.E0.c.a): N=5, one page per paired URL, 3 runs, both arms")
     ap.add_argument("--real-pages-n5-mutant", action="store_true",
                     help="gate check for --real-pages-n5: fixture pages against real hosts; must come out WRONG_PAGE/FAIL")
+    ap.add_argument("--real-pages-procs", action="store_true",
+                    help="W4.E0.c.b: manuk-proc, chrome-tabs and chrome-procs in one session on the paired real URLs "
+                         "(N=10 round-robin, 3 runs); exits 1 unless every arm has 3 OK runs")
+    ap.add_argument("--real-pages-procs-mutant", action="store_true",
+                    help="gate check for --real-pages-procs: fixture pages against real hosts; must come out WRONG_PAGE/FAIL")
     ap.add_argument("--url-runs", type=int, metavar="K",
                     help="urls axis only, K runs per arm (W4.E0.d); writes runs-urls.tsv and summary-urls.tsv")
     args = ap.parse_args()
@@ -862,30 +914,40 @@ def main():
     if args.summarize_only:
         write_summary(args.out)
         return
-    if args.real_pages or args.real_pages_mutant or args.real_pages_n5 or args.real_pages_n5_mutant:
+    if args.real_pages or args.real_pages_mutant or args.real_pages_n5 or args.real_pages_n5_mutant \
+            or args.real_pages_procs or args.real_pages_procs_mutant:
         if not PIN:
             sys.exit("MANUK_CHROME_PIN unset: refusing to write rows without a chrome_ver")
         if not os.path.exists(MCP) or not os.path.exists(CHROME):
             sys.exit(f"missing {MCP} or pinned Chrome {CHROME}")
         unique = args.real_pages_n5 or args.real_pages_n5_mutant
-        mutant = args.real_pages_mutant or args.real_pages_n5_mutant
+        procs = args.real_pages_procs or args.real_pages_procs_mutant
+        mutant = args.real_pages_mutant or args.real_pages_n5_mutant or args.real_pages_procs_mutant
         n = 5 if unique else REAL_N
         srv, fx = start_fixture()
         log_root = tempfile.mkdtemp(prefix="w4e0-root-")
         try:
-            rows = run_real_pages(args.out, fx, log_root, mutant=mutant, n=n, unique=unique)
+            rows = run_real_pages(args.out, fx, log_root, mutant=mutant, n=n, unique=unique, procs=procs)
         finally:
             srv.shutdown()
             shutil.rmtree(log_root, ignore_errors=True)
-        suffix = "-n5" if unique else ""
+        suffix = "-n5" if unique else ("-procs" if procs else "")
         name = f"runs-real-pages{suffix}{'-mutant' if mutant else ''}.tsv"
         path = write_real_pages(args.out, rows, name)
+        print(f"raw rows: {path}")
+        if procs:
+            # a run that is not OK on every page is FAIL/WRONG_PAGE, never averaged: each arm needs REAL_RUNS OK runs
+            short = arms_short_of_runs(rows, REAL_RUNS)
+            if short and not mutant:
+                print(f"NOT_SETTLED: OK runs per arm != {REAL_RUNS}: {short}; no summary written", file=sys.stderr)
+                sys.exit(1)
         summ = summarize_real_pages(rows)
         if not mutant:  # the mutant never writes the summary a reader would quote
             with open(os.path.join(args.out, f"summary-real-pages{suffix}.tsv"), "w") as f:
                 f.write("\n".join(summ) + "\n")
         print("\n".join(summ))
-        print(f"raw rows: {path}")
+        if mutant and any(r["status"] == "OK" for r in rows):
+            sys.exit("MUTANT_NOT_RED: a mutant row came out OK")
         return
     if args.live_fork_check:
         srv, fx = start_fixture()
