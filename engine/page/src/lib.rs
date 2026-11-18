@@ -1410,25 +1410,29 @@ async fn lean_image_dims(url: &str) -> Option<(u32, u32)> {
 
 async fn lean_image_dims_uncached(url: &str) -> Option<(u32, u32)> {
     if url.starts_with("http://") || url.starts_with("https://") {
-        // ONE request per URL (W4.E1.b.b.a): ask for a 128 KB range once and stop reading as soon as
-        // the header names a size (most do within 2 KB; a JPEG with a large EXIF/ICC block needs more).
-        const MAX: usize = 128 * 1024;
+        // W4.E1.b.b.a.a: a 2 KB range first (most headers fit), and only when the size is not in it ONE
+        // continuation with a 32 KB range, read in 2 KB steps and stopped at the header. The one-request
+        // form (a single 16-128 KB range) measured +24-33% on mobile.bg's real interface rx vs the pre-fix
+        // probe, because the server puts the whole range on the wire before our early stop reaches it.
         let dims_of = |b: &[u8]| {
             image::ImageReader::new(std::io::Cursor::new(b))
                 .with_guessed_format()
                 .ok()
                 .and_then(|r| r.into_dimensions().ok())
         };
-        if let Ok((status, head)) =
-            manuk_net::fetch_prefix_until(url, MAX, |b| dims_of(b).is_some()).await
-        {
+        for max in [2 * 1024, 32 * 1024] {
+            let Ok((status, head)) =
+                manuk_net::fetch_prefix_until(url, max, |b| dims_of(b).is_some()).await
+            else {
+                break;
+            };
             if status >= 400 {
                 return None;
             }
             if let Some(d) = dims_of(&head) {
                 return Some(d);
             }
-            if head.len() < MAX {
+            if head.len() < max {
                 // The whole body is in hand and the header has no readable size (SVG, odd format):
                 // decode it from what we already have instead of asking for it again.
                 let img = decode_bitmap(&head, url)?;

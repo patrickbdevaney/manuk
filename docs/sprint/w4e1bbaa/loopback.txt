@@ -1,0 +1,8 @@
+pre-fix run1 bytes=2078020 reqs=60; run2 bytes=2078020 reqs=60; fixed bytes=2831684 reqs=57  sndbuf=0
+ratio fixed/pre-fix=1.363 repro=True
+rc=1
+pre-fix run1 bytes=2078020 reqs=60; run2 bytes=2078020 reqs=60; fixed bytes=3862428 reqs=47  sndbuf=0
+ratio fixed/pre-fix=1.859 repro=True
+rc=1
+pre-fix run1 bytes=2078020 reqs=60; run2 bytes=2078020 reqs=60; fixed bytes=2241860 reqs=60  sndbuf=0
+ratio fixed/pre-fix=1.079 repro=True
