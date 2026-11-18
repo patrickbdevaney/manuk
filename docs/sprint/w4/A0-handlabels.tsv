@@ -1,0 +1,148 @@
+arm	task	run	cause	basis	chrome_ver
+cdp-layer	dashdish-10	1	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+cdp-layer	dashdish-10	2	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+cdp-layer	dashdish-10	3	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+cdp-layer	dashdish-2	1	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	dashdish-2	2	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	dashdish-2	3	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	dashdish-4	1	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	dashdish-4	2	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	dashdish-4	3	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	dashdish-5	1	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	dashdish-5	2	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	dashdish-5	3	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	dashdish-7	1	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+cdp-layer	dashdish-7	2	widget_unreachable	final answer: date/time picker or offscreen control could not be operated (no clickable area, inert, occluded)	145.0.7632.116
+cdp-layer	dashdish-7	3	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+cdp-layer	fly-unified-2	1	widget_unreachable	final answer: date/time picker or offscreen control could not be operated (no clickable area, inert, occluded)	145.0.7632.116
+cdp-layer	fly-unified-2	2	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	fly-unified-2	3	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	fly-unified-4	1	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	fly-unified-4	2	widget_unreachable	final answer: date/time picker or offscreen control could not be operated (no clickable area, inert, occluded)	145.0.7632.116
+cdp-layer	fly-unified-4	3	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	fly-unified-5	1	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	fly-unified-5	2	widget_unreachable	final answer: date/time picker or offscreen control could not be operated (no clickable area, inert, occluded)	145.0.7632.116
+cdp-layer	fly-unified-5	3	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	fly-unified-6	1	widget_unreachable	final answer: date/time picker or offscreen control could not be operated (no clickable area, inert, occluded)	145.0.7632.116
+cdp-layer	fly-unified-6	2	widget_unreachable	final answer: date/time picker or offscreen control could not be operated (no clickable area, inert, occluded)	145.0.7632.116
+cdp-layer	fly-unified-6	3	widget_unreachable	final answer: date/time picker or offscreen control could not be operated (no clickable area, inert, occluded)	145.0.7632.116
+cdp-layer	fly-unified-9	1	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	fly-unified-9	2	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	fly-unified-9	3	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	gocalendar-1	1	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+cdp-layer	gocalendar-1	2	no_final_answer	run ended without a final answer (empty or mid-task text) after the call cap	145.0.7632.116
+cdp-layer	gocalendar-1	3	no_final_answer	run ended without a final answer (empty or mid-task text) after the call cap	145.0.7632.116
+cdp-layer	gocalendar-4	3	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+cdp-layer	gocalendar-7	1	key_hover_enter_gap	final answer: needed a drag/hover/key action the tool lacks	145.0.7632.116
+cdp-layer	gocalendar-7	2	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+cdp-layer	gocalendar-7	3	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+cdp-layer	gomail-2	2	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+cdp-layer	gomail-3	1	stopped_early	agent stopped before the final step by its own choice (declined to send/pay/post)	145.0.7632.116
+cdp-layer	gomail-3	2	stopped_early	agent stopped before the final step by its own choice (declined to send/pay/post)	145.0.7632.116
+cdp-layer	gomail-3	3	stopped_early	agent stopped before the final step by its own choice (declined to send/pay/post)	145.0.7632.116
+cdp-layer	gomail-5	1	widget_unreachable	final answer: date/time picker or offscreen control could not be operated (no clickable area, inert, occluded)	145.0.7632.116
+cdp-layer	gomail-5	2	widget_unreachable	final answer: date/time picker or offscreen control could not be operated (no clickable area, inert, occluded)	145.0.7632.116
+cdp-layer	gomail-5	3	widget_unreachable	final answer: date/time picker or offscreen control could not be operated (no clickable area, inert, occluded)	145.0.7632.116
+cdp-layer	gomail-7	1	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	gomail-7	2	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+cdp-layer	gomail-7	3	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	gomail-8	1	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+cdp-layer	gomail-8	2	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+cdp-layer	gomail-8	3	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+cdp-layer	networkin-10	1	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+cdp-layer	networkin-10	2	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+cdp-layer	networkin-10	3	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+cdp-layer	networkin-3	1	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+cdp-layer	networkin-3	3	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+cdp-layer	networkin-5	1	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+cdp-layer	networkin-6	1	typed_not_registered	final answer: typed text went to the wrong field or the field never accepted input	145.0.7632.116
+cdp-layer	networkin-6	2	app_error	site itself errored or ignored the request (empty menus, 0 results, wrong booking params)	145.0.7632.116
+cdp-layer	networkin-6	3	typed_not_registered	final answer: typed text went to the wrong field or the field never accepted input	145.0.7632.116
+cdp-layer	networkin-9	1	typed_not_registered	final answer: typed text went to the wrong field or the field never accepted input	145.0.7632.116
+cdp-layer	networkin-9	2	typed_not_registered	final answer: typed text went to the wrong field or the field never accepted input	145.0.7632.116
+cdp-layer	networkin-9	3	typed_not_registered	final answer: typed text went to the wrong field or the field never accepted input	145.0.7632.116
+cdp-layer	opendining-10	1	no_final_answer	run ended without a final answer (empty or mid-task text) after the call cap	145.0.7632.116
+cdp-layer	opendining-10	2	app_error	site itself errored or ignored the request (empty menus, 0 results, wrong booking params)	145.0.7632.116
+cdp-layer	opendining-10	3	app_error	site itself errored or ignored the request (empty menus, 0 results, wrong booking params)	145.0.7632.116
+cdp-layer	opendining-3	1	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+cdp-layer	opendining-4	1	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+cdp-layer	opendining-4	2	app_error	site itself errored or ignored the request (empty menus, 0 results, wrong booking params)	145.0.7632.116
+cdp-layer	opendining-4	3	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+cdp-layer	opendining-5	1	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	opendining-8	1	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+cdp-layer	opendining-8	2	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+cdp-layer	staynb-2	1	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+cdp-layer	staynb-2	2	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+cdp-layer	staynb-2	3	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+cdp-layer	staynb-4	1	stopped_early	agent stopped before the final step by its own choice (declined to send/pay/post)	145.0.7632.116
+cdp-layer	staynb-4	2	stopped_early	agent stopped before the final step by its own choice (declined to send/pay/post)	145.0.7632.116
+cdp-layer	staynb-4	3	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+cdp-layer	staynb-5	1	stopped_early	agent stopped before the final step by its own choice (declined to send/pay/post)	145.0.7632.116
+cdp-layer	staynb-5	2	stopped_early	agent stopped before the final step by its own choice (declined to send/pay/post)	145.0.7632.116
+cdp-layer	staynb-5	3	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	staynb-6	1	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	staynb-6	2	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	staynb-6	3	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+cdp-layer	staynb-8	1	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	staynb-8	2	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	staynb-8	3	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	staynb-9	1	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+cdp-layer	staynb-9	2	stopped_early	agent stopped before the final step by its own choice (declined to send/pay/post)	145.0.7632.116
+cdp-layer	staynb-9	3	no_final_answer	run ended without a final answer (empty or mid-task text) after the call cap	145.0.7632.116
+cdp-layer	topwork-1	1	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	topwork-1	2	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	topwork-1	3	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	topwork-2	1	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	topwork-2	2	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	topwork-2	3	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	topwork-3	1	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	topwork-3	2	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	topwork-3	3	handle_lost	last results STALE; handle dropped when the page re-rendered	145.0.7632.116
+cdp-layer	topwork-4	1	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	topwork-4	2	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	topwork-4	3	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	udriver-10	1	widget_unreachable	final answer: date/time picker or offscreen control could not be operated (no clickable area, inert, occluded)	145.0.7632.116
+cdp-layer	udriver-10	2	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+cdp-layer	udriver-10	3	widget_unreachable	final answer: date/time picker or offscreen control could not be operated (no clickable area, inert, occluded)	145.0.7632.116
+cdp-layer	udriver-1	1	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+cdp-layer	udriver-6	1	widget_unreachable	final answer: date/time picker or offscreen control could not be operated (no clickable area, inert, occluded)	145.0.7632.116
+cdp-layer	udriver-9	1	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+cdp-layer	udriver-9	2	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	udriver-9	3	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+cdp-layer	zilloft-3	1	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	zilloft-3	2	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	zilloft-3	3	app_error	site itself errored or ignored the request (empty menus, 0 results, wrong booking params)	145.0.7632.116
+cdp-layer	zilloft-6	1	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	zilloft-6	2	dialog_modal	final answer names an overlay/modal covering the target that could not be dismissed or handed off	145.0.7632.116
+cdp-layer	zilloft-6	3	app_error	site itself errored or ignored the request (empty menus, 0 results, wrong booking params)	145.0.7632.116
+manuk	dashdish-10	1	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+manuk	dashdish-2	1	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+manuk	dashdish-2	2	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+manuk	dashdish-2	3	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+manuk	dashdish-4	1	click_no_effect	final answer: click returned no change / control did not respond	145.0.7632.116
+manuk	dashdish-5	1	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+manuk	dashdish-7	1	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+manuk	fly-unified-6	1	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+manuk	fly-unified-6	2	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+manuk	fly-unified-6	3	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+manuk	gocalendar-1	1	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+manuk	gocalendar-1	2	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+manuk	gocalendar-1	3	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+manuk	gomail-3	1	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+manuk	gomail-3	2	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+manuk	gomail-3	3	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+manuk	gomail-5	1	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+manuk	gomail-5	2	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+manuk	gomail-5	3	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+manuk	networkin-3	1	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+manuk	networkin-3	2	stopped_early	agent stopped before the final step by its own choice (declined to send/pay/post)	145.0.7632.116
+manuk	networkin-3	3	stopped_early	agent stopped before the final step by its own choice (declined to send/pay/post)	145.0.7632.116
+manuk	opendining-4	1	app_error	site itself errored or ignored the request (empty menus, 0 results, wrong booking params)	145.0.7632.116
+manuk	opendining-4	2	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+manuk	opendining-4	3	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+manuk	staynb-4	1	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+manuk	staynb-4	2	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+manuk	staynb-4	3	stopped_early	agent stopped before the final step by its own choice (declined to send/pay/post)	145.0.7632.116
+manuk	udriver-10	1	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
+manuk	udriver-10	2	widget_unreachable	final answer: date/time picker or offscreen control could not be operated (no clickable area, inert, occluded)	145.0.7632.116
+manuk	udriver-10	3	wrong_answer	run ended with a completed-looking final answer; no layer blocker is the stated end state	145.0.7632.116
