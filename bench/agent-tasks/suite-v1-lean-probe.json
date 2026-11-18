@@ -1,0 +1,37 @@
+{
+ "suite": "v1-lean-probe",
+ "tasks": [
+  {
+   "id": "P01",
+   "slice": "lean-probe",
+   "kind": "fixture",
+   "start_url": "{BASE}/lp",
+   "goal": "The gallery shows four album thumbnails, each a picture-only link named 'Open <name>'. Open the album named 'Harbor'. What album code does the page it opens show?",
+   "verifier": {
+    "answer_all": [
+     "LP-7725"
+    ],
+    "answer_none": [],
+    "state": {
+     "lp_clicked": "Harbor"
+    }
+   }
+  },
+  {
+   "id": "P02",
+   "slice": "lean-probe",
+   "kind": "fixture",
+   "start_url": "{BASE}/lp",
+   "goal": "The gallery shows four album thumbnails, each a picture-only link named 'Open <name>'. Open the album named 'Birch'. What album code does the page it opens show?",
+   "verifier": {
+    "answer_all": [
+     "LP-5902"
+    ],
+    "answer_none": [],
+    "state": {
+     "lp_clicked": "Birch"
+    }
+   }
+  }
+ ]
+}

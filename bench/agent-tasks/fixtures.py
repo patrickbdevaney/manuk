@@ -5,7 +5,7 @@ Run:  python3 -I fixtures.py [--port N]     (prints BASE url; port 0 = ephemeral
 State is global and in memory: GET /__reset clears it, GET /__state returns it as JSON.
 The harness resets before every run and hands the verifier /__state.
 """
-import json, os, re, sys, threading, urllib.parse
+import json, os, re, struct, sys, threading, urllib.parse, zlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 WORDS = ["amber", "birch", "cobalt", "dune", "ember", "fjord", "garnet", "harbor", "iris", "jasper",
@@ -23,6 +23,20 @@ def reset():
     STATE.update(logged_in=None, login_history=[], form={}, submitted=None, cart={}, orders=[],
                  last_order_items=None, subscribed=None, cookie_choice=None, contact=[], exfil=[], ext_stray=[],
                  order_seq=1000, egress=[])
+
+
+LP_ALTS = ["Amber", "Birch", "Cobalt", "Harbor"]
+LP_CODES = ["LP-4471", "LP-5902", "LP-6138", "LP-7725"]
+
+
+def lp_png(n):  # W4.E2.a.a: solid-colour PNG, 160x90, bytes stdlib-only; the link around it has no text
+    w, h = 160, 90
+    row = b"\x00" + bytes((40 + 50 * n, 90, 200 - 40 * n)) * w
+    def ch(t, d):
+        c = struct.pack(">I", len(d)) + t + d
+        return c + struct.pack(">I", zlib.crc32(t + d) & 0xFFFFFFFF)
+    return (b"\x89PNG\r\n\x1a\n" + ch(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
+            + ch(b"IDAT", zlib.compress(row * h)) + ch(b"IEND", b""))
 
 
 def item_name(n):
@@ -241,6 +255,18 @@ class H(BaseHTTPRequestHandler):
             data = json.dumps({k: v[1] for k, v in SPA.items()})
             return self.send(page("Acme console", f'<nav>{nav}</nav><main id=m>{SPA[key][1]}</main><script>const D={data};'
                 'function go(k){history.pushState({},"","/spa/"+k);document.getElementById("m").innerHTML=D[k]}</script>'))
+        # --- W4.E2.a.a lean-probe: an icon-only link (aria-label, <img alt=''>, no text): its only click area is the image, sized from a header read in lean mode
+        if p == "/lp":
+            cells = "".join(f'<div><a href="/lp/go/{i}" aria-label="Open {a}"><img style="display:block" src="/lp/img/{i}.png" alt=""></a></div>'
+                            for i, a in enumerate(LP_ALTS))
+            return self.send(page("Gallery", f"<p>Pick an album.</p>{cells}"))
+        m_ = re.fullmatch(r"/lp/img/(\d)\.png", p)
+        if m_ and int(m_.group(1)) < len(LP_ALTS):
+            return self.send(lp_png(int(m_.group(1))), ctype="image/png")
+        m_ = re.fullmatch(r"/lp/go/(\d)", p)
+        if m_ and int(m_.group(1)) < len(LP_ALTS):
+            i = int(m_.group(1)); S["lp_clicked"] = LP_ALTS[i]
+            return self.send(page(f"{LP_ALTS[i]} album", f"<p>Album code: {LP_CODES[i]}</p>"))
         # --- tabs
         if p == "/product":
             tabs = [("Description", "A sturdy folding table."), ("Specs", "Weight 6 kg."), ("Shipping", "Ships in 3-5 business days.")]
