@@ -1,0 +1,12 @@
+run1 manuk    OK       subres=  2.52 settle=  1.01 https://www.mobile.bg/
+run1 manuk-b  OK       subres=  2.54 settle=  0.99 https://www.mobile.bg/
+run1 manuk    OK       subres=  2.36 settle=  1.37 https://www.puentedemando.com/
+run1 manuk-b  OK       subres=  2.11 settle=  1.50 https://www.puentedemando.com/
+run2 manuk-b  OK       subres=  2.67 settle=  1.38 https://www.mobile.bg/
+run2 manuk    OK       subres=  2.67 settle=  0.79 https://www.mobile.bg/
+run2 manuk-b  OK       subres=  1.77 settle=  2.15 https://www.puentedemando.com/
+run2 manuk    OK       subres=  4.59 settle=  0.70 https://www.puentedemando.com/
+run3 manuk    OK       subres=  5.42 settle=  0.77 https://www.mobile.bg/
+run3 manuk-b  OK       subres=  4.09 settle=  0.95 https://www.mobile.bg/
+run3 manuk    OK       subres=  3.26 settle=  0.78 https://www.puentedemando.com/
+run3 manuk-b  OK       subres=  6.33 settle=  1.44 https://www.puentedemando.com/

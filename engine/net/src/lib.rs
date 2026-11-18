@@ -2193,6 +2193,19 @@ pub async fn fetch_streaming<F: FnMut(&[u8])>(url: &str, mut on_chunk: F) -> Res
 /// without paying for the pixels (W4.E2). Returns `(status, prefix)`; redirects are followed. Carries
 /// the cookie jar's `Cookie` header but does not store `Set-Cookie`.
 pub async fn fetch_prefix(url: &str, max: usize) -> Result<(u16, Vec<u8>)> {
+    fetch_prefix_until(url, max, |_| false).await
+}
+
+/// **One request, read only as far as `done` needs.** `fetch_prefix` with an early stop: the body is
+/// read in 2 KB steps and `done(&bytes_so_far)` is asked after each; the first `true` ends the read.
+/// The lean image-size probe used to issue a 2 KB range, and when the header did not fit, a second
+/// request for 16 KB (and a third for the whole body on SVG): the same URL up to three times. Asking
+/// for the larger range once and stopping early costs one request and about the same bytes.
+pub async fn fetch_prefix_until(
+    url: &str,
+    max: usize,
+    done: impl Fn(&[u8]) -> bool,
+) -> Result<(u16, Vec<u8>)> {
     if lean::is_tracker(url) {
         lean::note_refused(url);
         bail!("lean profile: tracker host not fetched: {url}");
@@ -2221,16 +2234,23 @@ pub async fn fetch_prefix(url: &str, max: usize) -> Result<(u16, Vec<u8>)> {
         let encoding = content_encoding(&resp);
         let mut decoded = wrap_decoder(body_reader(resp.into_body()), encoding.as_deref());
         let mut out = Vec::with_capacity(max);
-        let mut buf = vec![0u8; 4096];
+        let mut buf = vec![0u8; 2048];
         while out.len() < max {
             let n = decoded.read(&mut buf).await?;
             if n == 0 {
                 break;
             }
             out.extend_from_slice(&buf[..n]);
+            if done(&out) {
+                break;
+            }
         }
         out.truncate(max);
         lean::WIRE_BYTES.fetch_add(out.len() as u64, std::sync::atomic::Ordering::Relaxed);
+        if nettrace::enabled() {
+            // Bytes actually READ: the `req` line's content_length is what the server declared for the range.
+            nettrace::emit("prefix", &format!("{current}\t{}", out.len()));
+        }
         return Ok((status, out));
     }
     bail!("too many redirects (>{MAX_REDIRECTS}) starting at {url}")

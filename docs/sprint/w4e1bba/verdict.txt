@@ -1,0 +1,14 @@
+manuk    https___www_mobile_bg_.run1.tsv                         total= 44 unique= 30 dup= 14 bytes=75422
+manuk    https___www_mobile_bg_.run2.tsv                         total= 44 unique= 30 dup= 14 bytes=75422
+manuk    https___www_mobile_bg_.run3.tsv                         total= 44 unique= 30 dup= 14 bytes=75422
+manuk    https___www_puentedemando_com_.run1.tsv                 total= 70 unique= 54 dup= 16 bytes=377809
+manuk    https___www_puentedemando_com_.run2.tsv                 total= 70 unique= 54 dup= 16 bytes=377809
+manuk    https___www_puentedemando_com_.run3.tsv                 total= 70 unique= 54 dup= 16 bytes=377809
+manuk-b  https___www_mobile_bg_.run1.tsv                         total= 30 unique= 30 dup=  0 bytes=74872
+manuk-b  https___www_mobile_bg_.run2.tsv                         total= 30 unique= 30 dup=  0 bytes=75422
+manuk-b  https___www_mobile_bg_.run3.tsv                         total= 30 unique= 30 dup=  0 bytes=74872
+manuk-b  https___www_puentedemando_com_.run1.tsv                 total= 54 unique= 54 dup=  0 bytes=187111
+manuk-b  https___www_puentedemando_com_.run2.tsv                 total= 54 unique= 54 dup=  0 bytes=187111
+manuk-b  https___www_puentedemando_com_.run3.tsv                 total= 54 unique= 54 dup=  0 bytes=187111
+https___www_mobile_bg_: bytes median A=75422 B=74872 ratio=0.993
+https___www_puentedemando_com_: bytes median A=377809 B=187111 ratio=0.495

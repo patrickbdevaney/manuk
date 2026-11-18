@@ -1410,23 +1410,29 @@ async fn lean_image_dims(url: &str) -> Option<(u32, u32)> {
 
 async fn lean_image_dims_uncached(url: &str) -> Option<(u32, u32)> {
     if url.starts_with("http://") || url.starts_with("https://") {
-        // Most headers name the size in the first 2 KB; a JPEG with a large EXIF/ICC block needs more.
-        for prefix in [2 * 1024, 16 * 1024] {
-            let Ok((status, head)) = manuk_net::fetch_prefix(url, prefix).await else {
-                break;
-            };
-            if status >= 400 {
-                return None;
-            }
-            if let Some(d) = image::ImageReader::new(std::io::Cursor::new(&head))
+        // ONE request per URL (W4.E1.b.b.a): ask for a 128 KB range once and stop reading as soon as
+        // the header names a size (most do within 2 KB; a JPEG with a large EXIF/ICC block needs more).
+        const MAX: usize = 128 * 1024;
+        let dims_of = |b: &[u8]| {
+            image::ImageReader::new(std::io::Cursor::new(b))
                 .with_guessed_format()
                 .ok()
                 .and_then(|r| r.into_dimensions().ok())
-            {
+        };
+        if let Ok((status, head)) =
+            manuk_net::fetch_prefix_until(url, MAX, |b| dims_of(b).is_some()).await
+        {
+            if status >= 400 {
+                return None;
+            }
+            if let Some(d) = dims_of(&head) {
                 return Some(d);
             }
-            if head.len() < prefix {
-                break; // the whole body is in hand and it has no readable size: SVG or odd format
+            if head.len() < MAX {
+                // The whole body is in hand and the header has no readable size (SVG, odd format):
+                // decode it from what we already have instead of asking for it again.
+                let img = decode_bitmap(&head, url)?;
+                return Some((img.width, img.height));
             }
         }
     }
