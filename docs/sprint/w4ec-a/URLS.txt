@@ -1,0 +1,8 @@
+# W4.E2.c.a: pre-registered URL set, written BEFORE any W4.E2.c.a run. Not edited after a run.
+# Choice rule (a priori, no measurement of tracker hosts used): from docs/sprint/w4e2b-v2/URLS-v2.txt, the four
+# commercial news/portal/media pages (bbc, guardian, nasa, flickr). Wikipedia and Commons are excluded because
+# they carry little third-party analytics. All four returned HTTP 200 to a plain curl check before the run.
+https://www.bbc.com/news
+https://www.theguardian.com/international
+https://www.nasa.gov/
+https://www.flickr.com/explore

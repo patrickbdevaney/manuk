@@ -1,0 +1,13 @@
+url	arm	ok	blocked_band	wire_band	wall_median_ms	a11y_stable	verdict
+https://www.bbc.com/news	off	3	0..0	5421475..5421475	9520	yes	-
+https://www.bbc.com/news	on	3	1..1	5324440..5324440	8294	yes	-
+https://www.bbc.com/news	verdict	-	ON refuses more (bands disjoint)	ON wire lower (bands disjoint)	-	-	digest agrees (both self-stable)
+https://www.theguardian.com/international	off	3	1..1	3869071..3869071	12547	yes	-
+https://www.theguardian.com/international	on	3	11..11	3153710..3153710	13142	yes	-
+https://www.theguardian.com/international	verdict	-	ON refuses more (bands disjoint)	ON wire lower (bands disjoint)	-	-	digest agrees (both self-stable)
+https://www.nasa.gov/	off	3	2..2	16655875..16655875	16756	yes	-
+https://www.nasa.gov/	on	3	5..5	16536117..16536117	9122	yes	-
+https://www.nasa.gov/	verdict	-	ON refuses more (bands disjoint)	ON wire lower (bands disjoint)	-	-	digest agrees (both self-stable)
+https://www.flickr.com/explore	off	3	0..0	9299740..9299740	15492	yes	-
+https://www.flickr.com/explore	on	3	1..1	9241320..9241320	16474	yes	-
+https://www.flickr.com/explore	verdict	-	ON refuses more (bands disjoint)	ON wire lower (bands disjoint)	-	-	digest agrees (both self-stable)
