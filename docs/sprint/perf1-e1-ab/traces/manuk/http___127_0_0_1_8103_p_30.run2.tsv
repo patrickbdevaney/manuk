@@ -1,0 +1,120 @@
+0	epoch	1795007684714297
+19260	connect	127.0.0.1	19244
+119735	req	http://127.0.0.1:8103/p-30	0	119733	200	HTTP/1.1	1126	GET
+119776	body	http://127.0.0.1:8103/p-30	1126
+120006	phase	html parse	191
+120007	q	http://127.0.0.1:8103/i0.png
+120014	q	http://127.0.0.1:8103/i1.png
+120031	phase	external scripts	13
+120085	q	http://127.0.0.1:8103/i7.png
+120073	q	http://127.0.0.1:8103/i2.png
+120130	q	http://127.0.0.1:8103/i10.png
+120059	q	http://127.0.0.1:8103/i3.png
+120177	q	http://127.0.0.1:8103/i15.png
+120194	q	http://127.0.0.1:8103/i17.png
+120215	q	http://127.0.0.1:8103/i22.png
+120229	q	http://127.0.0.1:8103/i23.png
+120081	q	http://127.0.0.1:8103/i5.png
+120272	q	http://127.0.0.1:8103/i6.png
+120135	q	http://127.0.0.1:8103/i12.png
+120140	q	http://127.0.0.1:8103/i14.png
+120161	q	http://127.0.0.1:8103/i16.png
+120099	phase	module graph prefetch	12
+120382	phase	blocking stylesheets	1
+120199	q	http://127.0.0.1:8103/i19.png
+120099	q	http://127.0.0.1:8103/i8.png
+120202	q	http://127.0.0.1:8103/i18.png
+120209	q	http://127.0.0.1:8103/i20.png
+120112	q	http://127.0.0.1:8103/i11.png
+120219	q	http://127.0.0.1:8103/i21.png
+120230	q	http://127.0.0.1:8103/i25.png
+120113	q	http://127.0.0.1:8103/i9.png
+120236	q	http://127.0.0.1:8103/i24.png
+120254	q	http://127.0.0.1:8103/i27.png
+120254	q	http://127.0.0.1:8103/i26.png
+120130	q	http://127.0.0.1:8103/i13.png
+120312	q	http://127.0.0.1:8103/i29.png
+120312	q	http://127.0.0.1:8103/i28.png
+120186	q	http://127.0.0.1:8103/i4.png
+120554	cascade	138
+121009	layout	170
+121040	phase	cascade+layout+blocking scripts	645
+121050	phase	deferred scripts	0
+121075	phase	DOMContentLoaded	14
+121094	phase	subframes (pre-load)	9
+220518	req	http://127.0.0.1:8103/i0.png	120061	100456	200	HTTP/1.1	70	GET
+261337	body	http://127.0.0.1:8103/i0.png	70
+261601	connect	127.0.0.1	56
+261630	connect	127.0.0.1	179
+261687	connect	127.0.0.1	83
+261691	connect	127.0.0.1	97
+261696	connect	127.0.0.1	80
+361809	req	http://127.0.0.1:8103/i15.png	261385	100423	200	HTTP/1.1	70	GET
+362048	req	http://127.0.0.1:8103/i1.png	261434	100612	200	HTTP/1.1	70	GET
+362075	body	http://127.0.0.1:8103/i1.png	70
+362153	req	http://127.0.0.1:8103/i7.png	261534	100617	200	HTTP/1.1	70	GET
+362191	body	http://127.0.0.1:8103/i7.png	70
+362312	req	http://127.0.0.1:8103/i10.png	261578	100733	200	HTTP/1.1	70	GET
+362389	body	http://127.0.0.1:8103/i10.png	70
+362658	req	http://127.0.0.1:8103/i2.png	261588	101068	200	HTTP/1.1	70	GET
+362699	body	http://127.0.0.1:8103/i2.png	70
+362873	req	http://127.0.0.1:8103/i3.png	261602	101270	200	HTTP/1.1	70	GET
+362966	body	http://127.0.0.1:8103/i3.png	70
+402345	body	http://127.0.0.1:8103/i15.png	70
+462580	req	http://127.0.0.1:8103/i17.png	362135	100444	200	HTTP/1.1	70	GET
+462617	req	http://127.0.0.1:8103/i22.png	362235	100380	200	HTTP/1.1	70	GET
+462647	req	http://127.0.0.1:8103/i23.png	362423	100223	200	HTTP/1.1	70	GET
+463085	req	http://127.0.0.1:8103/i5.png	362753	100331	200	HTTP/1.1	70	GET
+463275	req	http://127.0.0.1:8103/i6.png	363014	100259	200	HTTP/1.1	70	GET
+502727	req	http://127.0.0.1:8103/i12.png	402409	100317	200	HTTP/1.1	70	GET
+503408	body	http://127.0.0.1:8103/i17.png	70
+503410	body	http://127.0.0.1:8103/i23.png	70
+503458	body	http://127.0.0.1:8103/i22.png	70
+503414	body	http://127.0.0.1:8103/i6.png	70
+503468	body	http://127.0.0.1:8103/i5.png	70
+543344	body	http://127.0.0.1:8103/i12.png	70
+603787	req	http://127.0.0.1:8103/i19.png	503509	100276	200	HTTP/1.1	70	GET
+603898	req	http://127.0.0.1:8103/i16.png	503504	100393	200	HTTP/1.1	70	GET
+603936	req	http://127.0.0.1:8103/i14.png	503475	100460	200	HTTP/1.1	70	GET
+604084	req	http://127.0.0.1:8103/i8.png	503527	100556	200	HTTP/1.1	70	GET
+604133	req	http://127.0.0.1:8103/i18.png	503549	100583	200	HTTP/1.1	70	GET
+643771	req	http://127.0.0.1:8103/i20.png	543394	100376	200	HTTP/1.1	70	GET
+644386	body	http://127.0.0.1:8103/i8.png	70
+644386	body	http://127.0.0.1:8103/i14.png	70
+644436	body	http://127.0.0.1:8103/i18.png	70
+644484	body	http://127.0.0.1:8103/i16.png	70
+644498	body	http://127.0.0.1:8103/i19.png	70
+684345	body	http://127.0.0.1:8103/i20.png	70
+744759	req	http://127.0.0.1:8103/i21.png	644459	100298	200	HTTP/1.1	70	GET
+744831	req	http://127.0.0.1:8103/i24.png	644548	100282	200	HTTP/1.1	70	GET
+745021	req	http://127.0.0.1:8103/i11.png	644436	100583	200	HTTP/1.1	70	GET
+745062	req	http://127.0.0.1:8103/i9.png	644541	100520	200	HTTP/1.1	70	GET
+745131	req	http://127.0.0.1:8103/i25.png	644485	100645	200	HTTP/1.1	70	GET
+784764	req	http://127.0.0.1:8103/i27.png	684394	100368	200	HTTP/1.1	70	GET
+785387	body	http://127.0.0.1:8103/i9.png	70
+785402	body	http://127.0.0.1:8103/i11.png	70
+785397	body	http://127.0.0.1:8103/i24.png	70
+785468	body	http://127.0.0.1:8103/i25.png	70
+785491	body	http://127.0.0.1:8103/i21.png	70
+825345	body	http://127.0.0.1:8103/i27.png	70
+885710	req	http://127.0.0.1:8103/i13.png	785449	100259	200	HTTP/1.1	70	GET
+885835	req	http://127.0.0.1:8103/i28.png	785506	100327	200	HTTP/1.1	70	GET
+885917	req	http://127.0.0.1:8103/i29.png	785470	100446	200	HTTP/1.1	70	GET
+885993	req	http://127.0.0.1:8103/i4.png	785524	100469	200	HTTP/1.1	70	GET
+886118	req	http://127.0.0.1:8103/i26.png	785433	100684	200	HTTP/1.1	70	GET
+926356	body	http://127.0.0.1:8103/i29.png	70
+926373	body	http://127.0.0.1:8103/i28.png	70
+926395	body	http://127.0.0.1:8103/i26.png	70
+926407	body	http://127.0.0.1:8103/i13.png	70
+926399	body	http://127.0.0.1:8103/i4.png	70
+926639	phase	initial images+masks	805535
+926671	phase	load event	16
+926935	phase	finish_loading: external CSS	251
+926999	phase	finish_loading: dynamic scripts	53
+927022	phase	finish_loading: subframes	12
+927034	phase	finish_loading: page fetches	2
+927109	phase	finish_loading: images	65
+927120	phase	finish_loading: icon masks	0
+927130	phase	finish_loading: background images	0
+927152	mark	navigate_returned
+927215	mark	a11y_built
