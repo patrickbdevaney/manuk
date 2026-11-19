@@ -22,6 +22,11 @@ impl Client {
     }
     /// `backend` = `chrome` (CDP) or `manuk` (the in-process engine, no flag).
     fn start_on(backend: &str, mutate: Option<&str>) -> Client {
+        Client::start_env(backend, mutate, &[])
+    }
+    /// [`Self::start_on`] with extra environment for the child (a test-only switch must not leak into the
+    /// parent test process, which runs tests in parallel).
+    fn start_env(backend: &str, mutate: Option<&str>, env: &[(&str, &str)]) -> Client {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_manuk-mcp"));
         if backend == "chrome" {
             cmd.args(["--backend", "chrome"]);
@@ -38,6 +43,9 @@ impl Client {
                 "no-remount" => cmd.env("MANUK_REMOUNT_MUTATE", "1"),
                 _ => &mut cmd,
             };
+        }
+        for (k, v) in env {
+            cmd.env(k, v);
         }
         let mut child = cmd.spawn().expect("spawn manuk-mcp --backend chrome");
         let tx = child.stdin.take().unwrap();
@@ -187,6 +195,37 @@ fn dispatch_revalidation_refuses_a_click_under_a_late_overlay() {
         pay_err && pay_txt.contains("OCCLUDED") && pay_txt.contains("nothing was clicked"),
         "expected an occlusion refusal, got err={pay_err}: {pay_txt}"
     );
+}
+
+/// The backend's dispatch-time hit-test alone: the session's landing check is switched off
+/// (`MANUK_LANDING_MUTATE`), so the only occlusion guard left is `cdp.rs` dispatch revalidation.
+fn late_backend_only(mutate: Option<&str>) -> (bool, String) {
+    let mut c = Client::start_env("chrome", mutate, &[("MANUK_LANDING_MUTATE", "1")]);
+    let (err, nav) = c.tool("navigate", json!({"url": fixture("cdp_late.html")}));
+    assert!(!err, "{nav}");
+    let pay = handle_of(&nav, "button \"Pay now\"");
+    std::thread::sleep(std::time::Duration::from_millis(4000)); // the overlay lands over Pay now
+    c.tool("act", json!({"handle": pay, "action": "click"}))
+}
+
+/// Isolates the backend occlusion check: with the session check off, the refusal must come from the
+/// backend ("OCCLUDED at dispatch") and nothing may be clicked. Run with `MANUK_CDP_MUTATE=no-revalidate`
+/// (the backend check removed) this goes red: the click lands and no refusal is returned.
+#[test]
+fn backend_occlusion_check_refuses_alone() {
+    let mutate = std::env::var("MANUK_CDP_MUTATE").ok();
+    let (err, txt) = late_backend_only(mutate.as_deref());
+    assert!(
+        err && txt.contains("OCCLUDED at dispatch") && txt.contains("nothing was clicked"),
+        "expected the backend's dispatch refusal, got err={err}: {txt}"
+    );
+}
+
+/// Standing twin: the backend check removed, with the session check off, clicks blindly into the overlay.
+#[test]
+fn backend_occlusion_mutant_clicks_alone() {
+    let (err, txt) = late_backend_only(Some("no-revalidate"));
+    assert!(!err, "mutant should have clicked blindly, got: {txt}");
 }
 
 #[test]
