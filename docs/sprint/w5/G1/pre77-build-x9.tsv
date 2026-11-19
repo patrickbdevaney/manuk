@@ -1,0 +1,3 @@
+role	path	sha256	marker_count	commit	note
+pre77	/home/patrickd/manuk-pre77/target/release/manuk-mcp	f978c5514a55a2c5520f64924c0340789a7f8a5a134b53289ca8cdf346cf1ad9	0	0d02a367285635d0642219384175d2e45d6a30f7	same binary as pre77-build.tsv and pre77-build-repeat.tsv (re-hashed 2026-11-19)
+head	/home/patrickd/manuk-a45160/target/release/manuk-mcp	d28e836945bc44a0a3c13213e0aa0160160b6abe80554d144202309491ecc4c1	1	a45160e5	rebuilt 2026-11-19 06:27 in a worktree at a45160e5 (MOZJS_FROM_SOURCE=1, CARGO_TARGET_DIR inside the worktree); NOT byte-identical to the repeat HEAD binary 82900822 (that file was overwritten on 2026-11-18 and cannot be re-hashed); same source tree
