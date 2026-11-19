@@ -9812,7 +9812,47 @@ impl Page {
         // `mousedown` to keep the editor's selection alive still expects its `click`. So the
         // verdicts here are deliberately discarded.
         self.dispatch_pointer_pair(node, detail, fonts, viewport_width);
+        // mousedown's default action: the nearest focusable ancestor-or-self takes focus (blur on the
+        // previous holder, focus/focusin on the new). staynb's GUESTS popover opens on `onFocus` of a
+        // readonly input, so an engine click that never focused it opened nothing. A non-focusable
+        // target moves nothing; `set_focus` itself refuses disabled/inert nodes.
+        // MANUK_CLICK_FOCUS_MUTATE=off drops it (gate mutant).
+        if std::env::var("MANUK_CLICK_FOCUS_MUTATE").as_deref() != Ok("off") {
+            if let Some(f) = self.click_focus_target(node) {
+                self.set_focus(Some(f), false, fonts, viewport_width);
+            }
+        }
         self.dispatch_click_inner(node, detail, fonts, viewport_width)
+    }
+
+    /// The element a pointer press on `node` focuses: the nearest ancestor-or-self that is a text
+    /// field, `<select>`, `contenteditable` host or has a `tabindex`. Buttons and links are left
+    /// alone (their activation does not depend on focus, and focusing them restyles for no gain).
+    fn click_focus_target(&self, node: manuk_dom::NodeId) -> Option<manuk_dom::NodeId> {
+        let mut cur = Some(node);
+        while let Some(n) = cur {
+            if let Some(e) = self.dom.element(n) {
+                let ty = e.attr("type").unwrap_or("text").to_ascii_lowercase();
+                let focusable = match e.name.as_str() {
+                    "input" => !matches!(
+                        ty.as_str(),
+                        "hidden" | "checkbox" | "radio" | "button" | "submit" | "reset" | "image"
+                    ),
+                    "textarea" | "select" => true,
+                    _ => {
+                        e.attr("tabindex")
+                            .is_some_and(|t| t.trim().parse::<i32>().is_ok())
+                            || e.attr("contenteditable")
+                                .is_some_and(|v| !v.eq_ignore_ascii_case("false"))
+                    }
+                };
+                if focusable {
+                    return Some(n);
+                }
+            }
+            cur = self.dom.parent(n);
+        }
+        None
     }
 
     /// `mousedown` then `mouseup` on `node`. Verdicts discarded — see the caller's note.
