@@ -1,0 +1,11 @@
+arm	task	run	second_pass	mine
+playwright	dashdish-4	2	click_no_effect	click_no_effect
+playwright	fly-unified-4	3	payment_rejected	payment_rejected
+playwright	gocalendar-7	2	wrong_answer	wrong_answer
+playwright	gomail-3	1	declined_action	declined_action
+playwright	staynb-6	2	wrong_answer	wrong_answer
+playwright	staynb-9	2	wrong_answer	wrong_answer
+playwright	staynb-9	3	wrong_answer	wrong_answer
+playwright	topwork-1	1	state_not_persisted	state_not_persisted
+playwright	zilloft-3	1	task_data_missing	task_data_missing
+playwright	zilloft-3	3	task_data_missing	task_data_missing

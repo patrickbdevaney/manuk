@@ -149,9 +149,9 @@ manuk	udriver-10	3	wrong_answer	run ended with a completed-looking final answer;
 playwright	dashdish-4	1	click_no_effect	schedule-for-later "Choose a time" control took the click but no picker opened; agent stopped before ordering	145.0.7632.116
 playwright	dashdish-4	2	click_no_effect	schedule-for-later "Choose a time" control took the click but no picker opened; agent stopped before ordering	145.0.7632.116
 playwright	dashdish-4	3	click_no_effect	schedule-for-later "Choose a time" control took the click but no picker opened; agent stopped before ordering	145.0.7632.116
-playwright	dashdish-5	1	stopped_early	cart and checkout set up; agent declined to place the order	145.0.7632.116
-playwright	dashdish-5	2	stopped_early	cart and checkout set up; agent declined to place the order	145.0.7632.116
-playwright	dashdish-5	3	stopped_early	cart and checkout set up; agent declined to place the order	145.0.7632.116
+playwright	dashdish-5	1	declined_action	rule 7: final answer says the agent chose not to perform the final action; names no site failure	145.0.7632.116
+playwright	dashdish-5	2	declined_action	rule 7: final answer says the agent chose not to perform the final action; names no site failure	145.0.7632.116
+playwright	dashdish-5	3	declined_action	rule 7: final answer says the agent chose not to perform the final action; names no site failure	145.0.7632.116
 playwright	fly-unified-2	1	payment_rejected	final answer: checkout form rejects the card expiration date	145.0.7632.116
 playwright	fly-unified-2	2	payment_rejected	final answer: checkout form rejects the card expiration date	145.0.7632.116
 playwright	fly-unified-2	3	payment_rejected	final answer: checkout form rejects the card expiration date	145.0.7632.116
@@ -163,18 +163,18 @@ playwright	fly-unified-5	2	payment_rejected	final answer: checkout rejects the e
 playwright	fly-unified-5	3	payment_rejected	final answer: checkout rejects the expiration date given	145.0.7632.116
 playwright	fly-unified-9	1	task_data_missing	final answer: site requires a card security code the task did not supply	145.0.7632.116
 playwright	fly-unified-9	2	task_data_missing	final answer: site requires a card security code the task did not supply	145.0.7632.116
-playwright	fly-unified-9	3	stopped_early	no flight departs at 10:00; agent declined to pick a nearby one and stopped before fare selection	145.0.7632.116
+playwright	fly-unified-9	3	declined_action	rule 7: final answer says the agent chose not to perform the final action; names no site failure	145.0.7632.116
 playwright	gocalendar-1	1	wrong_answer	finished with completed-looking answer; names no layer failure	145.0.7632.116
 playwright	gocalendar-7	1	wrong_answer	finished: event reported moved to Fri 10am; names no layer failure	145.0.7632.116
 playwright	gocalendar-7	2	wrong_answer	finished: event reported moved to Fri 10am; names no layer failure	145.0.7632.116
 playwright	gocalendar-7	3	wrong_answer	finished: event reported moved to Fri 10am; names no layer failure	145.0.7632.116
-playwright	gomail-3	1	stopped_early	composed email but declined to send (read compose as stop-before-send)	145.0.7632.116
-playwright	gomail-3	2	stopped_early	composed email but declined to send (read compose as stop-before-send)	145.0.7632.116
+playwright	gomail-3	1	declined_action	rule 7: final answer says the agent chose not to perform the final action; names no site failure	145.0.7632.116
+playwright	gomail-3	2	declined_action	rule 7: final answer says the agent chose not to perform the final action; names no site failure	145.0.7632.116
 playwright	gomail-8	2	wrong_answer	finished: trashed 4 emails; names no layer failure (sender-scope ambiguity)	145.0.7632.116
 playwright	gomail-8	3	wrong_answer	finished: trashed 4 emails; names no layer failure (sender-scope ambiguity)	145.0.7632.116
-playwright	networkin-10	1	stopped_early	drafted the follow-up but did not send it	145.0.7632.116
-playwright	networkin-10	2	stopped_early	drafted the follow-up but did not send it	145.0.7632.116
-playwright	networkin-10	3	stopped_early	drafted the follow-up but did not send it	145.0.7632.116
+playwright	networkin-10	1	declined_action	rule 7: final answer says the agent chose not to perform the final action; names no site failure	145.0.7632.116
+playwright	networkin-10	2	declined_action	rule 7: final answer says the agent chose not to perform the final action; names no site failure	145.0.7632.116
+playwright	networkin-10	3	declined_action	rule 7: final answer says the agent chose not to perform the final action; names no site failure	145.0.7632.116
 playwright	networkin-3	3	wrong_answer	published post with invented event details; names no layer failure	145.0.7632.116
 playwright	networkin-6	1	wrong_answer	put message in the connection note instead of a separate message; finished	145.0.7632.116
 playwright	networkin-6	2	app_error	final answer: messaging thread fails to load / no Message button after connect	145.0.7632.116
@@ -195,18 +195,18 @@ playwright	staynb-8	3	task_data_missing	final answer: payment form needs card de
 playwright	staynb-9	1	no_final_answer	final text is a mid-work note, no answer given	145.0.7632.116
 playwright	staynb-9	2	wrong_answer	booked a guest count by own reading of the cap; names no layer failure	145.0.7632.116
 playwright	staynb-9	3	wrong_answer	booked a guest count by own reading of the cap; names no layer failure	145.0.7632.116
-playwright	topwork-1	1	wrong_answer	submitted post, redirected to dashboard, could not confirm saved; names no layer failure	145.0.7632.116
-playwright	topwork-1	2	wrong_answer	submitted post, redirected to dashboard, could not confirm saved; names no layer failure	145.0.7632.116
-playwright	topwork-1	3	wrong_answer	submitted post, redirected to dashboard, could not confirm saved; names no layer failure	145.0.7632.116
-playwright	topwork-2	1	wrong_answer	submitted post, could not confirm saved; names no layer failure	145.0.7632.116
-playwright	topwork-2	2	wrong_answer	submitted post, could not confirm saved; names no layer failure	145.0.7632.116
-playwright	topwork-2	3	wrong_answer	submitted post, could not confirm saved; names no layer failure	145.0.7632.116
-playwright	topwork-3	1	wrong_answer	submitted post, could not confirm saved; names no layer failure	145.0.7632.116
-playwright	topwork-3	2	wrong_answer	submitted post, could not confirm saved; names no layer failure	145.0.7632.116
-playwright	topwork-3	3	wrong_answer	submitted post, could not confirm saved; names no layer failure	145.0.7632.116
-playwright	topwork-4	1	wrong_answer	submitted post, could not confirm saved; names no layer failure	145.0.7632.116
-playwright	topwork-4	2	wrong_answer	submitted post, could not confirm saved; names no layer failure	145.0.7632.116
-playwright	topwork-4	3	wrong_answer	submitted post, could not confirm saved; names no layer failure	145.0.7632.116
+playwright	topwork-1	1	state_not_persisted	rule 8: submit redirected with no error; post not visible afterward	145.0.7632.116
+playwright	topwork-1	2	state_not_persisted	rule 8: submit redirected with no error; post not visible afterward	145.0.7632.116
+playwright	topwork-1	3	state_not_persisted	rule 8: submit redirected with no error; post not visible afterward	145.0.7632.116
+playwright	topwork-2	1	state_not_persisted	rule 8: submit redirected with no error; post not visible afterward	145.0.7632.116
+playwright	topwork-2	2	state_not_persisted	rule 8: submit redirected with no error; post not visible afterward	145.0.7632.116
+playwright	topwork-2	3	state_not_persisted	rule 8: submit redirected with no error; post not visible afterward	145.0.7632.116
+playwright	topwork-3	1	state_not_persisted	rule 8: submit redirected with no error; post not visible afterward	145.0.7632.116
+playwright	topwork-3	2	state_not_persisted	rule 8: submit redirected with no error; post not visible afterward	145.0.7632.116
+playwright	topwork-3	3	state_not_persisted	rule 8: submit redirected with no error; post not visible afterward	145.0.7632.116
+playwright	topwork-4	1	state_not_persisted	rule 8: submit redirected with no error; post not visible afterward	145.0.7632.116
+playwright	topwork-4	2	state_not_persisted	rule 8: submit redirected with no error; post not visible afterward	145.0.7632.116
+playwright	topwork-4	3	state_not_persisted	rule 8: submit redirected with no error; post not visible afterward	145.0.7632.116
 playwright	udriver-9	2	wrong_answer	booked ride for the only allowed date; names no layer failure	145.0.7632.116
 playwright	udriver-9	3	wrong_answer	booked ride for the only allowed date; names no layer failure	145.0.7632.116
 playwright	zilloft-3	1	task_data_missing	final answer: tour form asks follow-up questions the task did not answer	145.0.7632.116
