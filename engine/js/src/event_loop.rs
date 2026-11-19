@@ -8520,6 +8520,7 @@ pub fn install(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Result<()
     // `Runtime::new` — see the N7 research note).
     let raw_cx = unsafe { rt.cx().raw_cx() };
     unsafe { crate::job_queue::install_once(raw_cx) }?;
+    crate::job_queue::reset_global_cache();
     // BEFORE the prelude — the prelude's own `createTreeWalker` fallback calls `__defDoc`.
     eval(rt, global, DOC_PROTO_JS, "doc_proto.js")?;
     if crate::determinism::enabled() {

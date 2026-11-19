@@ -102,7 +102,7 @@ def run_one(arm, url):
             nav = s.tool("navigate", {"url": url})
             line = next(l for l in nav.splitlines() if 'button "Go"' in l)
             h = re.search(r"\[(h\d+)\]", line).group(1)
-            t0 = time.time(); r = s.tool("act", {"handle": h, "action": "click"})
+            t0 = time.time(); r = s.tool("act", {"handle": h, "action": "click", "detail": True})
         return (time.time() - t0) * 1000, r
     finally:
         s.close()
