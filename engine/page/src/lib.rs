@@ -8428,6 +8428,20 @@ impl Page {
             .unwrap_or("")
             .to_string();
         let mut value = String::new();
+        // type=email/number/date/...: no selection API (it throws), so Ctrl+A cannot select the old
+        // text for the first character to replace; clear it, as select-all + type would.
+        let selectable = self.dom.tag_name(node) != Some("input")
+            || matches!(
+                self.dom
+                    .element(node)
+                    .and_then(|e| e.attr("type"))
+                    .map(|t| t.to_ascii_lowercase())
+                    .as_deref(),
+                None | Some("" | "text" | "search" | "tel" | "url" | "password")
+            );
+        if !selectable && !before.is_empty() {
+            self.dom.set_attr(node, "value", String::new());
+        }
         if !before.is_empty() {
             // Replace-all as a person does it: Ctrl+A, then type. No `input` announces an empty value
             // (a sectioned MUI date field reads that as a wipe to its placeholder and ignores the

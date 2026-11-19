@@ -55,20 +55,28 @@ fn run(click: bool) {
         b.navigate(&format!("{base}/")).await.expect("navigate");
         b.type_into("Query", "eia").unwrap();
         if click {
-            b.click_by_name(&manuk_a11y::Role::Button, "Go").await.expect("click");
+            b.click_by_name(&manuk_a11y::Role::Button, "Go")
+                .await
+                .expect("click");
         } else {
             b.submit(None).await.expect("submit");
         }
         b.settle().await;
         let url = b.current_url().unwrap().to_string();
-        assert!(!url.contains("landing") && !url.contains("q="), "page navigated: {url}");
+        assert!(
+            !url.contains("landing") && !url.contains("q="),
+            "page navigated: {url}"
+        );
     });
     let log = log.lock().unwrap();
     assert!(
         log.iter().any(|l| l.contains("/ping?v=eia")),
         "the onsubmit script's fetch never reached the server: {log:?}"
     );
-    assert!(log.iter().all(|l| !l.contains("/landing")), "native submission happened: {log:?}");
+    assert!(
+        log.iter().all(|l| !l.contains("/landing")),
+        "native submission happened: {log:?}"
+    );
 }
 
 // One test: SpiderMonkey runtimes must not be created concurrently in one process.

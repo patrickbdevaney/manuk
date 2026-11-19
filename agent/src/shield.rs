@@ -18,6 +18,8 @@ use manuk_layout::{BoxContent, LayoutBox, TextFragment};
 /// failing line is 3.0; 1.5 is "a reader cannot tell it is there", so ordinary muted grey text
 /// (about 2-3) is kept.
 pub const MIN_CONTRAST: f32 = 1.5;
+/// A form control at or below this effective opacity is not a field a human can see or use.
+pub const MIN_CONTROL_OPACITY: f32 = 0.1;
 /// Fonts at or below this many px are not legible to a human.
 pub const MIN_FONT_PX: f32 = 2.0;
 

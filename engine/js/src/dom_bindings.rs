@@ -15687,7 +15687,11 @@ impl PageContext {
                    var v=String(target.value||''),s=Math.min(target.selectionStart||0,v.length);\
                    var e=Math.min(Math.max(target.selectionEnd||0,s),v.length),d={data};\
                    target.setRangeText(d,s,e,'end');\
-                 }}catch(e){{}}\
+                 }}catch(e){{\
+                   /* type=email/number/...: the selection API throws InvalidStateError, but a person \
+                      still types into such a field. Append (the caller cleared a prior value). */\
+                   try{{target.value=String(target.value||'')+{data};}}catch(e2){{}}\
+                 }}\
                }}\
                var ev=new InputEvent(ty,{{inputType:{it},data:{data},bubbles:true,composed:true,cancelable:ty==='beforeinput'}});\
                return __dispatchEvent(nid,ev);\

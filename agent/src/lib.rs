@@ -2145,13 +2145,60 @@ impl AgentBrowser {
                 .enumerate()
                 .map(|(i, n)| (n, i))
                 .collect();
-        Ok(shield::analyze(
+        let mut sh = shield::analyze(
             &page.root_box,
             self.width as f32,
             &inline_bg,
             &clips,
             &|n| order.get(&n).copied(),
-        ))
+        );
+        // W4.D3.a.a.b: a form control has no text run for the walk above to judge, so a look-alike
+        // field at opacity .02 (or offscreen / zero-size) stayed in the tree and an agent filled it.
+        // A human cannot see or click such a field: withhold it like hidden text.
+        if std::env::var_os("MANUK_HIDDEN_CONTROL_MUTATE").is_none() {
+            let rects = page.node_rects();
+            let dom = page.dom();
+            for n in dom.descendants(dom.root()) {
+                let tag = dom.tag_name(n);
+                let is_ctl = matches!(tag, Some("input" | "textarea" | "select"))
+                    && !dom
+                        .element(n)
+                        .and_then(|e| e.attr("type"))
+                        .is_some_and(|t| t.eq_ignore_ascii_case("hidden"));
+                if !is_ctl {
+                    continue;
+                }
+                let mut op = 1.0f32;
+                let mut cur = Some(n);
+                while let Some(c) = cur {
+                    if let Some(st) = page.styles_of(c) {
+                        op *= st.opacity;
+                    }
+                    cur = dom.parent(c);
+                }
+                let reason = if op <= shield::MIN_CONTROL_OPACITY {
+                    Some("opacity")
+                } else {
+                    rects.get(&n).and_then(|r| {
+                        // `node_rects` unions an inline control with its label's text, so a far-off-canvas input
+                        // keeps a right edge near the label: test its LEFT edge (the `left:-9999px` idiom).
+                        if r.x <= -500.0 || r.y <= -500.0 || r.x >= self.width as f32 {
+                            Some("offscreen")
+                        } else if r.width <= 1.0 || r.height <= 1.0 {
+                            Some("zero-size")
+                        } else {
+                            None
+                        }
+                    })
+                };
+                if let Some(r) = reason {
+                    sh.nodes.insert(n, r);
+                    sh.withheld
+                        .push((r, format!("<{} field>", tag.unwrap_or("input"))));
+                }
+            }
+        }
+        Ok(sh)
     }
 
     /// The current observation.
