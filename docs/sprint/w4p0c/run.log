@@ -1,0 +1,12 @@
+manuk gocalendar-1 r1: PASS 4/4 state_ok=1 restores=0
+manuk gocalendar-3 r1: PASS 2/2 state_ok=1 restores=0
+manuk gocalendar-4 r1: PASS 2/2 state_ok=1 restores=0
+manuk gomail-5 r1: PASS 3/3 state_ok=1 restores=0
+manuk gocalendar-1 r2: PASS 4/4 state_ok=1 restores=0
+manuk gocalendar-3 r2: PASS 2/2 state_ok=1 restores=0
+manuk gocalendar-4 r2: PASS 2/2 state_ok=1 restores=0
+manuk gomail-5 r2: PASS 3/3 state_ok=1 restores=0
+manuk gocalendar-1 r3: PASS 4/4 state_ok=1 restores=0
+manuk gocalendar-3 r3: PASS 2/2 state_ok=1 restores=0
+manuk gocalendar-4 r3: PASS 2/2 state_ok=1 restores=0
+manuk gomail-5 r3: PASS 3/3 state_ok=1 restores=0
