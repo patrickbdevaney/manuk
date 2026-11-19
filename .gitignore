@@ -72,3 +72,5 @@ METHODOLOGY_RESEARCH.MD
 .verify-cache/
 scripts/botauth-verify/node_modules/
 docs/sprint/w4/transcripts-keep/
+bench-queue/pending/
+bench-queue/results/*/worker.log
