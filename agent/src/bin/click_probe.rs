@@ -69,22 +69,24 @@ var p=document.createElement('pre');p.id='__probe';document.body.appendChild(p);
                     Some((id, _)) => b.activate(id).await,
                     None => Err(anyhow::anyhow!("no clickable containing {n:?}")),
                 }
-            } else { match n
-                .rsplit_once('#')
-                .and_then(|(nm, k)| Some((nm, k.parse::<usize>().ok()?)))
-            {
-                Some((nm, k)) => {
-                    let tree = b.a11y_tree()?;
-                    let node = tree
-                        .iter()
-                        .filter(|x| x.role.matches(&role) && x.name == nm)
-                        .nth(k)
-                        .map(|x| x.node)
-                        .ok_or_else(|| anyhow::anyhow!("no {nm}#{k}"))?;
-                    b.activate(node).await
+            } else {
+                match n
+                    .rsplit_once('#')
+                    .and_then(|(nm, k)| Some((nm, k.parse::<usize>().ok()?)))
+                {
+                    Some((nm, k)) => {
+                        let tree = b.a11y_tree()?;
+                        let node = tree
+                            .iter()
+                            .filter(|x| x.role.matches(&role) && x.name == nm)
+                            .nth(k)
+                            .map(|x| x.node)
+                            .ok_or_else(|| anyhow::anyhow!("no {nm}#{k}"))?;
+                        b.activate(node).await
+                    }
+                    None => b.click_by_name(&role, n).await,
                 }
-                None => b.click_by_name(&role, n).await,
-            } };
+            };
             b.settle().await;
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             println!(

@@ -5611,12 +5611,12 @@ unsafe fn doc_element_from_point(cx: *mut RawJSContext, argc: u32, vp: *mut Valu
         *vp = NullValue();
         return true;
     };
-    let x = if argc > 0 {
+    let x = if argc > 0 && (*vp.add(2)).is_number() {
         (*vp.add(2)).to_number() as f32
     } else {
         f32::NAN
     };
-    let y = if argc > 1 {
+    let y = if argc > 1 && (*vp.add(3)).is_number() {
         (*vp.add(3)).to_number() as f32
     } else {
         f32::NAN
@@ -5744,12 +5744,12 @@ unsafe fn doc_elements_from_point(cx: *mut RawJSContext, argc: u32, vp: *mut Val
         *vp = ObjectValue(arr.get());
         return true;
     };
-    let x = if argc > 0 {
+    let x = if argc > 0 && (*vp.add(2)).is_number() {
         (*vp.add(2)).to_number() as f32
     } else {
         f32::NAN
     };
-    let y = if argc > 1 {
+    let y = if argc > 1 && (*vp.add(3)).is_number() {
         (*vp.add(3)).to_number() as f32
     } else {
         f32::NAN
@@ -10838,7 +10838,9 @@ unsafe fn read_sanitizer_remove_elements(
     }
     rooted!(in(cx) let arr = rem.get().to_object());
     rooted!(in(cx) let mut len = UndefinedValue());
-    if JS_GetProperty(&mut c, arr.handle(), c"length".as_ptr(), len.handle_mut()) {
+    if JS_GetProperty(&mut c, arr.handle(), c"length".as_ptr(), len.handle_mut())
+        && len.get().is_number()
+    {
         let n = len.get().to_number() as u32;
         for i in 0..n {
             rooted!(in(cx) let mut item = UndefinedValue());
@@ -11519,7 +11521,9 @@ unsafe fn sheet_text(cx: *mut RawJSContext, sheet: *mut JSObject) -> String {
     {
         rooted!(in(cx) let arr = rules.get().to_object());
         rooted!(in(cx) let mut len = UndefinedValue());
-        if JS_GetProperty(&mut c, arr.handle(), c"length".as_ptr(), len.handle_mut()) {
+        if JS_GetProperty(&mut c, arr.handle(), c"length".as_ptr(), len.handle_mut())
+            && len.get().is_number()
+        {
             let n = len.get().to_number() as u32;
             for i in 0..n {
                 rooted!(in(cx) let mut rule = UndefinedValue());
@@ -11569,7 +11573,9 @@ unsafe fn el_set_adopted_stylesheets(cx: *mut RawJSContext, argc: u32, vp: *mut 
         rooted!(in(cx) let a = arr);
         rooted!(in(cx) let mut len = UndefinedValue());
         let mut c = wrap_cx(cx);
-        if JS_GetProperty(&mut c, a.handle(), c"length".as_ptr(), len.handle_mut()) {
+        if JS_GetProperty(&mut c, a.handle(), c"length".as_ptr(), len.handle_mut())
+            && len.get().is_number()
+        {
             let n = len.get().to_number() as u32;
             for i in 0..n {
                 rooted!(in(cx) let mut item = UndefinedValue());
@@ -24411,6 +24417,21 @@ mod tests {
             before,
             dom.len()
         );
+    }
+
+    /// W4.P0.a.b.b: `document.elementFromPoint(undefined, ..)` must throw a TypeError, not trip mozjs'
+    /// `is_number` assertion (gocalendar /calendar did this 12x per load).
+    #[test]
+    #[ignore = "SpiderMonkey multi-Runtime-per-process teardown; run in isolation"]
+    fn element_from_point_non_number_args_throw_not_assert() {
+        let mut dom = Dom::new();
+        let html = dom.create_element("html");
+        dom.append_child(dom.root(), html);
+        let setup = "var r = 0; try { document.elementFromPoint(undefined, 'a'); } catch (e) { r = e instanceof TypeError ? 1 : 2; }\n\
+            try { document.elementsFromPoint({}, undefined); } catch (e) { r += 10; }\n\
+            globalThis.r = r;";
+        let ok = eval_scene(&mut dom, setup, false, "r === 11").expect("eval");
+        assert!(ok);
     }
 
     /// A getter invoked on a plain object whose fixed slots alias the reserved slots (slot 0 int32,
