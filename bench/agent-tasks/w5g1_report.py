@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""W5.G1: why cdp-layer trails Playwright on the same Chrome. Per failed run, one of five agent-side classes (perceive,
-target, act, tool-choice, turn-limit), from the stream-json transcript; then the A/B table for the 10 REAL tasks that
+"""W5.G1: why cdp-layer trails Playwright on the same Chrome. Per failed run, one of the mechanical classes (refusal-seen,
+stop-by-choice, tool-choice, turn-limit, grader-issue), from the stream-json transcript; perceive/target are not claimed; then the A/B table for the 10 REAL tasks that
 Playwright passes and cdp-layer fails.
 
   w5g1_report.py [--runs-dir target/real-runs] [--dir docs/sprint/w5/G1] [--mutate drop-act]
@@ -14,8 +14,8 @@ run's output apart from DIR/causes.tsv and DIR/table.tsv.
 Inputs: DIR/<arm>.tsv for arm in cdp-layer (a: current observation) and cdp-layer+pwfmt (b: Playwright-shaped snapshot,
 real_run.pw_snapshot); transcripts RUNS/<arm>_<task>_r<run>/transcript.jsonl. Output: DIR/causes.tsv, DIR/table.tsv, and
 the table on stdout. Exit 1 if a failed run gets no class, a (arm,task) key is not 3 runs, or a run has no transcript.
-Precedence (first match wins): turn-limit > tool-choice > act > target > perceive. Classes are read from the agent's side:
-`act` marks a browser-side refusal or no-effect the agent could see in a result, the rest is the model's choice.
+Precedence: turn-limit > tool-choice > refusal-seen > stop-by-choice. `refusal-seen` marks a browser-side refusal or no-effect the agent
+could see in a result. Any class outside CLASSES (e.g. perceive/target) fails the gate.
 """
 import argparse, collections, csv, json, os, re, sys
 
@@ -32,15 +32,8 @@ ACTS = {"act", "type", "fill_form", "browser_click", "browser_type", "browser_fi
 FAIL = re.compile(r"^no change \| url: unchanged|STALE|no longer on the page|handles are per-page|is unknown \(handles|"
                   r"bad page handle|not found in the current page snapshot|is not supported by this backend|"
                   r"refused focus|no enclosing <form>|no human surface is attached|TimeoutError|^\s*(Error|error)\b|### Error", re.M)
-# W5.G1.b.c.a.a.a.a.a: perceive needs the agent's own account of an empty/missing observation; without it the run is `unexplained`
-EMPTY = re.compile(r"no dishes|\bempty\b|no add button|no (?:\w+ )?(?:item|dish|result)s?\b|"
-                   r"not (?:visible|shown|listed|present)|nothing (?:beneath|under|appeared)|no .{0,40}appear|did(?:n't| not) appear|"
-                   r"doesn't (?:appear|have|show)|(?:couldn't|could not|did not|didn't) (?:find|see)|found no|none of the", re.I)
-# W5.G1.b.c.a.a.a.a.a.a.a: the agent's own statement that a control is not in what it can see (date-picker year dropdown) is perceive
-NOT_EXPOSED = re.compile(r"(?:isn't|is not|aren't|are not|wasn't|not)\s+(?:exposed|reachable through|available to) (?:to )?(?:my )?(?:tools|snapshot)|"
-                         r"(?:not|n't) (?:in|part of) (?:the|my) (?:snapshot|observation)|can(?:'|no)t (?:see|find) (?:a |the )?(?:year|month) (?:dropdown|selector|control)", re.I)
 ARMS = ["cdp-layer", "cdp-layer+pwfmt"]
-CLASSES = ["perceive", "target", "act", "tool-choice", "turn-limit", "grader-issue", "unexplained"]
+CLASSES = ["refusal-seen", "stop-by-choice", "tool-choice", "turn-limit", "grader-issue"]
 # W5.G1.b.b.a.a.a.a.a: gomail-8 fails only checkpoint 2 (exactly one email updated) while the goal asks for all of them
 # (docs/sprint/w5/G1/gomail8-grader.md): a task/grader finding, not an agent-side class, so it is not hand-labelled.
 GRADER_ISSUE = {("gomail-8", "[1, 1, 0]")}
@@ -90,22 +83,22 @@ def action_failed(path):
 
 
 def classify(path, mutate=None):
+    """Mechanical classes only (W5.G1.b.c.a.a.a.a.a.a.a.a): each is a count the transcript supports without judgement.
+    turn-limit: the run errored. tool-choice: no action call. refusal-seen: an unrecovered browser-side refusal/no-effect result the
+    agent saw. stop-by-choice: none of those; the agent ended its run with an answer. `perceive` and `target` are NOT claimed:
+    hand labels of them disagreed across draws on the same task, so no cause is attributed to what the agent could see or aim at."""
     f = rc.features(path)
     if f["is_error"]:
         return "turn-limit"
     if action_calls(path) == 0:
         return "tool-choice"
-    if NOT_EXPOSED.search(rc.parse(path)[1]):
+    if mutate == "inject-perceive":  # mutant: a judgement class leaks into the report -> the gate must go red
         return "perceive"
     u = unrecovered(path)
-    act = u["refused"] or u["nochange"] >= 2 or u["stale"] >= 2 or u["unsup"] or u["enter_gap"] or (f["typed_fail_text"] and f["type_calls"]) or u["timeout"] or typing_never_landed(path)
-    if act:
-        return None if mutate == "drop-act" else "act"  # mutant: the act rule is gone, so its runs stay unclassified
-    if f["strict"] or f["ambig_text"] or ((f["occl"] or f["dialog_text"]) and sum(unrecovered(path).values()) > 0):
-        return "target"
-    if mutate == "perceive-fallback" or EMPTY.search(rc.parse(path)[1]):  # mutant: the old unconditional fallback
-        return "perceive"
-    return "unexplained"
+    refused = u["refused"] or u["nochange"] >= 2 or u["stale"] >= 2 or u["unsup"] or u["enter_gap"] or (f["typed_fail_text"] and f["type_calls"]) or u["timeout"] or typing_never_landed(path)
+    if refused:
+        return None if mutate == "drop-act" else "refusal-seen"
+    return "stop-by-choice"
 
 
 def load(path):
@@ -117,7 +110,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--runs-dir", default=os.path.join(ROOT, "target/real-runs"))
     ap.add_argument("--dir", default=os.path.join(ROOT, "docs/sprint/w5/G1"))
-    ap.add_argument("--mutate", choices=["drop-act", "perceive-fallback"])
+    ap.add_argument("--mutate", choices=["drop-act", "inject-perceive"])
     ap.add_argument("--arm-tsv")
     ap.add_argument("--b-tsv", help="replaces the (b) rows (default DIR/cdp-layer+pwfmt.tsv), e.g. cdp-layer+pwfmt-v2.tsv")
     ap.add_argument("--b-label", help="arm name written in causes (b) rows, so a re-run is not confused with labelled keys")

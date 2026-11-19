@@ -33,33 +33,50 @@ class T(unittest.TestCase):
 
     def test_recovered_nochange_is_not_act(self):
         p = transcript([("act", NC), ("act", NC), ("act", "clicked; url: /next")])
-        self.assertNotEqual(r.classify(p), "act")
+        self.assertNotEqual(r.classify(p), "refusal-seen")
 
     def test_unrecovered_nochange_is_act(self):
-        self.assertEqual(r.classify(transcript([("act", NC), ("act", NC)])), "act")
+        self.assertEqual(r.classify(transcript([("act", NC), ("act", NC)])), "refusal-seen")
 
     def test_nochange_after_success_is_act(self):
         p = transcript([("act", "clicked; url: /next"), ("act", NC), ("act", NC)])
-        self.assertEqual(r.classify(p), "act")
+        self.assertEqual(r.classify(p), "refusal-seen")
 
-    # W5.G1.b.c.a: shapes from the v2 draw, built as fixtures (not the hand-labeled transcripts themselves)
-    def test_overlay_seen_but_completed_is_not_target(self):
-        p = transcript([("say", "a modal overlay is in the way, dismissing it"), ("act", "ok: dispatched click"), ("act", "ok: dispatched click; url: /done")])
-        self.assertNotEqual(r.classify(p), "target")
+    def test_overlay_seen_but_completed_is_stop_by_choice(self):
+        p = transcript([("say", "a modal overlay is in the way"), ("act", "ok: dispatched click"), ("act", "ok: dispatched click; url: /done")])
+        self.assertEqual(r.classify(p), "stop-by-choice")
 
-    def test_overlay_then_refusal_is_still_target(self):
-        p = transcript([("say", "a modal overlay is in the way"), ("act", "ok: dispatched click"), ("act", "ok: dispatched click; url: /x"),
-                        ("act", "ok: dispatched click"), ("act", "no change | url: unchanged")])
-        self.assertEqual(r.classify(p), "target")
+    def test_no_judgement_class_emitted(self):
+        for calls in ([("act", "ok")], [("say", "year dropdown is not exposed to my tools"), ("act", "ok")], [("act", NC), ("act", NC)]):
+            self.assertIn(r.classify(transcript(calls)), r.CLASSES)
+        self.assertNotIn("perceive", r.CLASSES); self.assertNotIn("target", r.CLASSES)
+
+    def test_report_exits_1_on_injected_perceive_row(self):
+        import subprocess, csv
+        d = tempfile.mkdtemp(); runs = os.path.join(d, "runs"); os.makedirs(runs)
+        hdr = ["ts", "arm", "task", "run", "pass", "evals_vec", "answer"]
+        for arm in r.ARMS:
+            with open(os.path.join(d, arm + ".tsv"), "w") as fh:
+                w = csv.writer(fh, delimiter="\t"); w.writerow(hdr)
+                for run in (1, 2, 3):
+                    w.writerow(["", arm, "t1", run, 0, "[0]", "wrong answer"])
+                    os.makedirs(os.path.join(runs, f"{arm}_t1_r{run}"))
+                    os.replace(transcript([("act", "ok: dispatched click")]), os.path.join(runs, f"{arm}_t1_r{run}", "transcript.jsonl"))
+        base = ["python3", "-I", os.path.join(os.path.dirname(os.path.abspath(__file__)), "w5g1_report.py"), "--runs-dir", runs, "--dir", d,
+                "--causes-out", os.path.join(d, "c.tsv"), "--table-out", os.path.join(d, "t.tsv")]
+        ok = subprocess.run(base, capture_output=True, text=True)
+        self.assertEqual(ok.returncode, 0, ok.stdout + ok.stderr)
+        bad = subprocess.run(base + ["--mutate", "inject-perceive"], capture_output=True, text=True)
+        self.assertEqual(bad.returncode, 1, bad.stdout)
 
     def test_all_stale_typing_is_act(self):
         p = transcript([("act", "ok: dispatched click; url: /c"), ("type", "STALE: h1 is no longer on the page"), ("act", "ok: dispatched click"),
                         ("type", "STALE: h1 is no longer on the page"), ("handoff", "no human surface is attached to this backend")])
-        self.assertEqual(r.classify(p), "act")
+        self.assertEqual(r.classify(p), "refusal-seen")
 
     def test_typing_that_landed_is_not_act(self):
         p = transcript([("type", "STALE: h1 is no longer on the page"), ("type", "ok: typed"), ("act", "ok: dispatched click; url: /d")])
-        self.assertNotEqual(r.classify(p), "act")
+        self.assertNotEqual(r.classify(p), "refusal-seen")
 
 
 if __name__ == "__main__":
