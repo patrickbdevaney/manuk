@@ -53,6 +53,8 @@ var p=document.createElement('pre');p.id='__probe';document.body.appendChild(p);
             }
             let role = if r == "textbox" {
                 manuk_a11y::Role::TextBox
+            } else if r == "link" {
+                manuk_a11y::Role::Link
             } else {
                 manuk_a11y::Role::Button
             };
@@ -60,7 +62,14 @@ var p=document.createElement('pre');p.id='__probe';document.body.appendChild(p);
                 b.probe_eval(&pre);
             }
             // `Name#K`: the K-th (0-based) match of that name in document order.
-            let act = match n
+            // `clickable:<text>`: a role-less clickable (cursor:pointer div, onclick, scripted listener), found
+            // through the same `clickable_nodes` the MCP `act` fallback uses, then activated (no pointer reach check).
+            let act = if r == "clickable" {
+                match b.clickable_nodes().into_iter().find(|(_, t)| t.contains(n)) {
+                    Some((id, _)) => b.activate(id).await,
+                    None => Err(anyhow::anyhow!("no clickable containing {n:?}")),
+                }
+            } else { match n
                 .rsplit_once('#')
                 .and_then(|(nm, k)| Some((nm, k.parse::<usize>().ok()?)))
             {
@@ -75,7 +84,7 @@ var p=document.createElement('pre');p.id='__probe';document.body.appendChild(p);
                     b.activate(node).await
                 }
                 None => b.click_by_name(&role, n).await,
-            };
+            } };
             b.settle().await;
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             println!(
