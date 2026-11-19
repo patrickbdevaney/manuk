@@ -320,10 +320,17 @@ impl Cdp {
 }
 
 /// Installed on every new document: counts fetch/XHR in flight and setTimeout timers pending.
-const WS_GUARD: &str = r#"(function(){var A=__ALLOWED__.map(function(u){try{return new URL(u).origin}catch(e){return u}}),W=window.WebSocket;
-function ok(u){try{var o=new URL(u,location.href);o.protocol=o.protocol==='wss:'?'https:':'http:';return A.indexOf(o.origin)>=0}catch(e){return false}}
+const WS_GUARD: &str = r#"(function(){var A=__ALLOWED__;
+function inst(g,A){var O=g.Worker,SW=g.SharedWorker,W=g.WebSocket,AO=A.map(function(u){try{return new URL(u).origin}catch(e){return u}});
+function ok(u){try{var o=new URL(u,g.location.href);o.protocol=o.protocol==='wss:'||o.protocol==='https:'?'https:':'http:';return AO.indexOf(o.origin)>=0}catch(e){return false}}
 function G(u,p){if(!ok(u))throw new DOMException('origin not in write set','SecurityError');return p===undefined?new W(u):new W(u,p)}
-G.prototype=W.prototype;['CONNECTING','OPEN','CLOSING','CLOSED'].forEach(function(k){G[k]=W[k]});window.WebSocket=G;})();"#;
+G.prototype=W.prototype;['CONNECTING','OPEN','CLOSING','CLOSED'].forEach(function(k){G[k]=W[k]});g.WebSocket=G;
+var pre='('+inst.toString()+')(self,'+JSON.stringify(A)+');';
+function wrap(C,named){if(!C)return C;var X=function(u,o){var abs=new URL(u,g.location.href).href,mod=o&&typeof o==='object'&&o.type==='module',
+src=pre+(mod?'import('+JSON.stringify(abs)+')':'importScripts('+JSON.stringify(abs)+')');
+return new C(g.URL.createObjectURL(new Blob([src],{type:'text/javascript'})),o)};X.prototype=C.prototype;return X}
+if(O)g.Worker=wrap(O);if(SW)g.SharedWorker=wrap(SW)}
+inst(window,A)})();"#;
 
 /// W3.16/W3.16.b: every WebSocket send (string, ArrayBuffer/view or Blob) waits for the host's verdict
 /// (`__mkEgress` binding -> `__mkV`), so the secret bytes are checked where they leave and never held by
@@ -1653,7 +1660,7 @@ fn init_page_session(cdp: &mut Cdp, width: u32, height: u32) -> Result<()> {
         cdp.call("Fetch.enable", json!({"patterns": [{"urlPattern": "*"}]}))?;
         // W4.D1.a: Fetch never sees a WebSocket upgrade, so the constructor is wrapped in every frame
         // before any page script runs; a socket to an origin outside the write set throws SecurityError.
-        // (Dedicated workers are not covered: a residual, measured not claimed.)
+        // W4.D1.a.a: Worker/SharedWorker are wrapped so the same guard runs first inside every worker.
         let allowed = manuk_net::scope::write_set();
         if !allowed.is_empty() && std::env::var_os("MANUK_SCOPE_MUTATE").is_none() {
             let src = WS_GUARD.replace("__ALLOWED__", &json!(allowed).to_string());
