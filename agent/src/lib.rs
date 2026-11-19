@@ -1523,6 +1523,17 @@ impl AgentBrowser {
             forms::owning_form(page.dom(), anchor)
                 .ok_or_else(|| anyhow!("{}", forms::SubmitError::NoForm))?
         };
+        // W4.D3.a.a.a: `form.submit()`-less activation (agent `submit`, MCP `type(submit)`) is still a
+        // *requested* submission: the `submit` event fires first, so an inline
+        // `onsubmit="...;return false"` (or a framework listener) runs and may cancel.
+        let proceed = {
+            let page = self.page.as_mut().context("no page loaded")?;
+            page.dispatch_submit(form, &self.fonts, self.width as f32)
+        };
+        self.settle().await;
+        if !proceed {
+            return Ok(Activation::Inert);
+        }
         self.submit_form(form).await
     }
 
