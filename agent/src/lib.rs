@@ -1059,7 +1059,7 @@ impl AgentBrowser {
     }
 
     /// Probe support: the URL a page script navigated to (`location.href = u` and kin) that no
-    /// caller has followed yet, taken and cleared. `activate` does not follow it (W4.P0.a).
+    /// caller has followed yet, taken and cleared. (`activate` drains and follows it itself, RG.E2.b.)
     pub fn probe_take_script_navigation(&self) -> Option<String> {
         self.page.as_ref()?.take_script_navigation()
     }
