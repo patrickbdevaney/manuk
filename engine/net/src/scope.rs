@@ -58,6 +58,21 @@ pub fn write_set() -> Vec<String> {
     SCOPE.lock().unwrap().write.clone()
 }
 
+/// The union of the read and write sets (deduplicated); empty = unrestricted.
+pub fn allowed_origins() -> Vec<String> {
+    let s = SCOPE.lock().unwrap();
+    if s.read.is_empty() && s.write.is_empty() {
+        return Vec::new();
+    }
+    let mut v = s.read.clone();
+    for w in &s.write {
+        if !v.contains(w) {
+            v.push(w.clone());
+        }
+    }
+    v
+}
+
 /// Judge one outgoing request. `Err` carries the refusal text (also logged).
 pub fn check(method: &str, url: &str) -> Result<(), String> {
     if !matches!(url.split(':').next(), Some("http" | "https" | "ws" | "wss")) {

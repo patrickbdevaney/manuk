@@ -1605,6 +1605,38 @@ fn chrome_args(unsafe_no_sandbox: bool) -> Vec<&'static str> {
     a
 }
 
+/// W3.9.a.a: with origin sets installed, Chrome's own network stack may not dial anything outside them,
+/// not even a bare preconnect for a frame the Fetch hook is about to fail. Everything not in the sets is
+/// sent to a proxy at a closed port (so the connect lands on 127.0.0.1:9, never on the origin); the sets
+/// themselves bypass it. `MANUK_SCOPE_MUTATE=1` omits this (gate mutation).
+fn scope_proxy_args() -> Vec<String> {
+    let allowed = manuk_net::scope::allowed_origins();
+    if allowed.is_empty() || std::env::var_os("MANUK_SCOPE_MUTATE").is_some() {
+        return Vec::new();
+    }
+    let mut bypass = vec!["<-loopback>".to_string()];
+    for o in &allowed {
+        if let Ok(u) = url::Url::parse(o.trim()) {
+            if let Some(h) = u.host_str() {
+                let h = if h.contains(':') {
+                    format!("[{h}]")
+                } else {
+                    h.to_string()
+                };
+                let port = u
+                    .port_or_known_default()
+                    .map(|p| format!(":{p}"))
+                    .unwrap_or_default();
+                bypass.push(format!("{h}{port}"));
+            }
+        }
+    }
+    vec![
+        "--proxy-server=http://127.0.0.1:9".to_string(),
+        format!("--proxy-bypass-list={}", bypass.join(";")),
+    ]
+}
+
 /// Enable the domains and per-page hooks on the session `cdp` is attached to (the first tab, and every
 /// tab the agent is moved to).
 /// W3.19: `Fetch.continueRequest` params for a paused request. With a Web Bot Auth identity the request
@@ -1830,6 +1862,7 @@ impl CdpBackend {
         }
         let child = match cmd
             .args(chrome_args(no_sandbox))
+            .args(scope_proxy_args())
             .arg(format!("--user-data-dir={}", dir.display()))
             .arg(format!("--window-size={width},{height}"))
             .arg("about:blank")
