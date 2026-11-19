@@ -204,3 +204,23 @@ fn chrome_error_page_baseline_without_retry_stays_on_the_404() {
         "{r}"
     );
 }
+
+/// W4.C2.a.a: an onclick that assigns `location='/path'` (bare assignment, on a role=button div) is a real
+/// navigation on the manuk engine. With the layer retry off the click must land on the 404 and say so; the
+/// harness (c2_retry.py error-page) reads that as a navigation, not a dead click.
+#[test]
+fn manuk_location_assignment_from_onclick_navigates() {
+    let r = act(true, "Broken");
+    assert!(
+        r.contains("→") && r.contains("/gone") && r.contains("404 Not Found"),
+        "{r}"
+    );
+    assert!(!r.contains("no change"), "{r}");
+}
+
+/// Control: a handler that does not navigate must not report a navigation (a click that always navigated would pass above).
+#[test]
+fn manuk_dud_click_does_not_navigate() {
+    let r = act(true, "Dud");
+    assert!(!r.contains("/gone") && !r.contains("navigated:"), "{r}");
+}
