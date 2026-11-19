@@ -526,6 +526,16 @@ pub fn set_view_state(scroll_x: f32, scroll_y: f32, active: Option<manuk_dom::No
     dom_bindings::set_view_state(scroll_x, scroll_y, active);
 }
 
+/// Publish only the focused element (`document.activeElement`), leaving scroll alone: a host that moves
+/// focus without owning a viewport (the agent's `act focus`) must still let the page read it.
+#[cfg(feature = "_sm")]
+pub fn set_active_element(active: Option<manuk_dom::NodeId>) {
+    dom_bindings::set_active_element(active);
+}
+
+#[cfg(not(feature = "_sm"))]
+pub fn set_active_element(_active: Option<manuk_dom::NodeId>) {}
+
 #[cfg(not(feature = "_sm"))]
 pub fn set_view_state(_scroll_x: f32, _scroll_y: f32, _active: Option<manuk_dom::NodeId>) {}
 

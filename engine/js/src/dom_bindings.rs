@@ -199,6 +199,11 @@ pub fn set_view_state(scroll_x: f32, scroll_y: f32, active: Option<NodeId>) {
     ACTIVE_ELEMENT.with(|c| c.set(active));
 }
 
+/// Publish just the focused element (see `manuk_js::set_active_element`).
+pub fn set_active_element(active: Option<NodeId>) {
+    ACTIVE_ELEMENT.with(|c| c.set(active));
+}
+
 /// Drain the scroll requests a page made (`scrollTo`, `scrollBy`, `scrollIntoView`).
 pub fn take_scrolls() -> Vec<(f32, f32)> {
     PENDING_SCROLLS.with(|q| std::mem::take(&mut *q.borrow_mut()))

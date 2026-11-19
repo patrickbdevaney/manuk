@@ -60,6 +60,10 @@
   - L27 · How it presented, and how much it cost
   - L39 · The fix for a mis-measurement is a control, not an apology
 
+## `act focus` must publish the focused node into the JS world
+`docs/wiki/act-focus-publishes-active-element.md`
+
+
 ## A diagnostic that cannot report a non-zero is worse than none — it accuses
 `docs/wiki/a-diagnostic-that-accuses.md`
 
@@ -3802,4 +3806,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3101 sections across 174 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3101 sections across 175 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

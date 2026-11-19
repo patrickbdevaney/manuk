@@ -205,9 +205,8 @@ fn matrix(chrome: bool) {
         focus_reply.contains("focused h"),
         "focus reply: {focus_reply}"
     );
-    // The page sees focus from a timer on chrome. manuk accepts the focus action (checked above by
-    // `tool`), but its engine fires no focus events, so the page's probe stays idle: BACKENDS.md row.
-    if chrome {
+    // The page sees focus from a timer on both backends (CB.1.a.a).
+    {
         let focused = (0..20).any(|_| {
             std::thread::sleep(std::time::Duration::from_millis(50));
             c.tool("observe", json!({})).contains("focused-ok")

@@ -11554,6 +11554,9 @@ impl Page {
         if !self.dom.set_focused(node, from_keyboard) {
             return false;
         }
+        // `document.activeElement` must read the new target from inside every handler below, and from
+        // any later timer: publish it now (hosts without a viewport, e.g. the agent, never do).
+        manuk_js::set_active_element(node);
         // The field that had focus hears it leave (`blur`, then `focusout` — React's `onBlur` listens
         // for the latter) before the new one hears it arrive. A MUI Autocomplete commits its typed
         // recipient on that blur; without it gomail's scheduled mail was saved with `to: [""]`.
