@@ -200,7 +200,7 @@ def main():
     elif a[0] == "start":
         unit = "manuk-bench-worker"
         cmd = ["systemd-run", "--user", "--collect", f"--unit={unit}", f"--working-directory={ROOT}",
-               f"--setenv=MANUK_CHROME_PIN={os.environ.get('MANUK_CHROME_PIN','')}", f"--setenv=PATH={os.environ['PATH']}",
+               f"--setenv=MANUK_CHROME_PIN={os.environ.get('MANUK_CHROME_PIN','')}", f"--setenv=PATH={':'.join(dict.fromkeys(os.environ['PATH'].split(':')))}",
                f"--setenv=HOME={os.environ['HOME']}", "python3", "-I", os.path.join(ROOT, "scripts/bench_queue.py"), "worker", "--once"]
         print(subprocess.run(cmd, capture_output=True, text=True))
     elif a[0] == "status":
