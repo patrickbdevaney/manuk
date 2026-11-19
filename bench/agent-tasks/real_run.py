@@ -117,6 +117,7 @@ def proxy(a, child):
     nav, navargs, rd, rdargs = TOOLS[surface(a.arm)]
     p = subprocess.Popen(child, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1, start_new_session=True)
     resp, out_lock, n = queue.Queue(), threading.Lock(), [0]
+    in_lock = threading.Lock()
 
     def emit(line):
         if a.arm == "cdp-layer+pwfmt":  # W5.G1 (b): the agent sees the Playwright-shaped observation
@@ -148,8 +149,9 @@ def proxy(a, child):
     def call(name, args):
         n[0] += 1
         i = f"px-{n[0]}"
-        p.stdin.write(json.dumps({"jsonrpc": "2.0", "id": i, "method": "tools/call", "params": {"name": name, "arguments": args, "_meta": dict(meta)}}) + "\n")
-        p.stdin.flush()
+        with in_lock:
+            p.stdin.write(json.dumps({"jsonrpc": "2.0", "id": i, "method": "tools/call", "params": {"name": name, "arguments": args, "_meta": dict(meta)}}) + "\n")
+            p.stdin.flush()
         while True:  # drop any stale response (a late answer to an earlier call)
             r = resp.get(timeout=50)
             if r is None or r.get("id") == i:
@@ -233,12 +235,32 @@ def proxy(a, child):
         log("signal")
         detach_and_finish()
     signal.signal(signal.SIGTERM, term); signal.signal(signal.SIGINT, term)
+    # W6.Q1: setup() runs in a thread while this loop keeps forwarding claude's lines. A newer claude advertises the roots
+    # capability and Playwright MCP asks it for roots/list during the first navigate; with setup() blocking this loop the
+    # reply never reached the child and every playwright navigate deadlocked (50 s, "Connection closed").
+    held, setup_ready = [], threading.Event()
+
+    def run_setup():
+        try:
+            setup()
+        finally:
+            with in_lock:  # release the agent's held calls as soon as setup is over (claude sends nothing more until they answer)
+                setup_ready.set()
+                for h in held:
+                    p.stdin.write(h)
+                p.stdin.flush()
+                held.clear()
     for l in sys.stdin:
         snoop(l)
         if not setup_done[0] and '"tools/call"' in l:  # right before the agent's first tool call, never before initialize/tools/list (claude drops a server that is slow to list while Chrome boots)
             setup_done[0] = True
-            setup()
-        p.stdin.write(l); p.stdin.flush()
+            threading.Thread(target=run_setup, daemon=True).start()
+        with in_lock:
+            if setup_done[0] and not setup_ready.is_set() and '"tools/call"' in l:
+                held.append(l)  # the agent's call waits for the setup navigations; replies to server requests do not
+                continue
+            p.stdin.write(l); p.stdin.flush()
+    setup_ready.wait(120)
     log("stdin-eof")
     detach_and_finish()
 
