@@ -1448,8 +1448,7 @@ impl AgentBrowser {
         });
         let target = target.context("page has no element to receive the key")?;
         let w = self.width as f32;
-        let go = page.dispatch_key(target, "keydown", key, &self.fonts, w);
-        page.dispatch_key(target, "keyup", key, &self.fonts, w);
+        let go = page.press_key(target, key, &self.fonts, w);
         page.relayout(&self.fonts, w);
         Ok(go)
     }

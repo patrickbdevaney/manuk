@@ -303,7 +303,6 @@ const KNOWN: &[(&str, &str)] = &[
     ("click-input", "missing-on-manuk:pointermove"),
     ("click-input", "missing-on-manuk:mousemove"),
     ("click-input", "missing-on-manuk:selectionchange"),
-    ("click-input", "order:focusin-before-focus"),
     ("type", "extra-on-manuk:keydown"),
     ("type", "extra-on-manuk:keyup"),
     ("type", "extra-on-manuk:select"),
@@ -311,15 +310,11 @@ const KNOWN: &[(&str, &str)] = &[
     ("type", "missing-on-manuk:selectionchange"),
     ("type", "count:beforeinput:2v1"),
     ("type", "count:input:2v1"),
-    ("type", "order:focusin-before-focus"),
     ("enter", "missing-on-manuk:focus"),
     ("enter", "missing-on-manuk:focusin"),
-    ("enter", "missing-on-manuk:keypress"),
-    ("enter", "missing-on-manuk:beforeinput"),
-    ("tab", "missing-on-manuk:focus"),
-    ("tab", "missing-on-manuk:focusin"),
-    ("tab", "missing-on-manuk:blur"),
-    ("tab", "missing-on-manuk:focusout"),
+    // class 8 (Chrome act-focus defers the setup focus onto the Tab slice): resolved by W6.J2.d
+    ("tab", "count:focus:1v2"),
+    ("tab", "count:focusin:1v2"),
     ("tab", "missing-on-manuk:selectionchange"),
     ("hover", "missing-on-manuk:pointerover"),
     ("hover", "missing-on-manuk:pointerenter"),
@@ -328,7 +323,6 @@ const KNOWN: &[(&str, &str)] = &[
     ("focus", "extra-on-manuk:focus"),
     ("focus", "extra-on-manuk:focusin"),
     ("focus", "missing-on-manuk:selectionchange"),
-    ("focus", "order:focusin-before-focus"),
 ];
 
 #[test]

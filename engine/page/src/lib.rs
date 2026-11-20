@@ -8254,6 +8254,156 @@ impl Page {
         }
     }
 
+    /// An `InputEvent` of `ty` with `inputType` at `node`; `true` iff no handler cancelled it.
+    fn fire_input_event(
+        &mut self,
+        node: manuk_dom::NodeId,
+        ty: &str,
+        input_type: &str,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) -> bool {
+        #[cfg(feature = "spidermonkey")]
+        {
+            let Some(ctx) = &self.js else { return true };
+            let rects: HashMap<manuk_dom::NodeId, [f32; 4]> = self
+                .root_box
+                .node_rects(&self.dom)
+                .into_iter()
+                .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
+                .collect();
+            let _reflow = ReflowScope::install(
+                &self.dom,
+                fonts,
+                viewport_width,
+                &self.images,
+                &self.final_url,
+                &self.external_css,
+                &self.scroll_offsets,
+                self.sticky_scroll_y,
+                self.has_sticky,
+            );
+            manuk_js::dispatch_input_event(
+                ctx,
+                &mut self.dom,
+                node,
+                ty,
+                input_type,
+                "",
+                &rects,
+                &self.styles,
+            )
+            .unwrap_or(true)
+        }
+        #[cfg(not(feature = "spidermonkey"))]
+        {
+            let _ = (node, ty, input_type, fonts, viewport_width);
+            true
+        }
+    }
+
+    /// Whether `n` is a Tab stop: an enabled text-ish `<input>`/`<textarea>`/`<select>`/`<button>`,
+    /// an `<a href>`, or anything with a non-negative `tabindex` / `contenteditable`; not inert.
+    fn is_tab_stop(&self, n: manuk_dom::NodeId) -> bool {
+        let Some(e) = self.dom.element(n) else {
+            return false;
+        };
+        if self.is_inert(n) || self.is_disabled(n) {
+            return false;
+        }
+        if let Some(t) = e
+            .attr("tabindex")
+            .and_then(|t| t.trim().parse::<i32>().ok())
+        {
+            return t >= 0;
+        }
+        match e.name.as_str() {
+            "input" => !e
+                .attr("type")
+                .is_some_and(|t| t.eq_ignore_ascii_case("hidden")),
+            "textarea" | "select" | "button" => true,
+            "a" => e.attr("href").is_some(),
+            _ => e
+                .attr("contenteditable")
+                .is_some_and(|v| !v.eq_ignore_ascii_case("false")),
+        }
+    }
+
+    /// Sequential focus navigation: move focus to the next (or, `reverse`, previous) Tab stop —
+    /// positive `tabindex` first in ascending order, then DOM order — wrapping at the ends.
+    /// Fires blur/focusout/focus/focusin through [`Page::set_focus`]. `false` if nothing moved.
+    pub fn focus_next(&mut self, reverse: bool, fonts: &FontContext, viewport_width: f32) -> bool {
+        let root = self.dom.root();
+        let mut stops: Vec<(i32, usize, manuk_dom::NodeId)> = Vec::new();
+        for (i, n) in self.dom.descendants(root).enumerate() {
+            if self.is_tab_stop(n) {
+                let t = self
+                    .dom
+                    .element(n)
+                    .and_then(|e| e.attr("tabindex"))
+                    .and_then(|t| t.trim().parse::<i32>().ok())
+                    .unwrap_or(0);
+                stops.push((if t > 0 { t } else { i32::MAX }, i, n));
+            }
+        }
+        stops.sort_by_key(|x| (x.0, x.1));
+        let order: Vec<manuk_dom::NodeId> = stops.into_iter().map(|x| x.2).collect();
+        if order.is_empty() {
+            return false;
+        }
+        let cur = self
+            .dom
+            .focused()
+            .and_then(|f| order.iter().position(|&n| n == f));
+        let len = order.len();
+        let next = match (cur, reverse) {
+            (Some(i), false) => (i + 1) % len,
+            (Some(i), true) => (i + len - 1) % len,
+            (None, false) => 0,
+            (None, true) => len - 1,
+        };
+        self.set_focus(Some(order[next]), true, fonts, viewport_width)
+    }
+
+    /// A key press as a user's keyboard delivers it: `keydown`; unless cancelled, its default action
+    /// (Tab moves focus; Enter fires `keypress` and, in an editable, `beforeinput` `insertLineBreak`);
+    /// then `keyup` on whatever holds focus now. `false` iff the page cancelled the keydown.
+    pub fn press_key(
+        &mut self,
+        target: manuk_dom::NodeId,
+        key: &str,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) -> bool {
+        let go = self.dispatch_key(target, "keydown", key, fonts, viewport_width);
+        let mut up = target;
+        if go && key == "Tab" {
+            if std::env::var("MANUK_TAB_FOCUS_MUTATE").as_deref() != Ok("off")
+                && self.focus_next(false, fonts, viewport_width)
+            {
+                up = self.dom.focused().unwrap_or(target);
+            }
+        } else if go && key == "Enter" {
+            let pressed = self.dispatch_key(target, "keypress", key, fonts, viewport_width);
+            let editable = self.dom.element(target).is_some_and(|e| {
+                matches!(e.name.as_str(), "input" | "textarea")
+                    || e.attr("contenteditable")
+                        .is_some_and(|v| !v.eq_ignore_ascii_case("false"))
+            });
+            if pressed && editable {
+                self.fire_input_event(
+                    target,
+                    "beforeinput",
+                    "insertLineBreak",
+                    fonts,
+                    viewport_width,
+                );
+            }
+        }
+        self.dispatch_key(up, "keyup", key, fonts, viewport_width);
+        go
+    }
+
     /// Fire a single bare event (`beforeinput`, `change`, …) at `node`; `true` iff no handler
     /// cancelled it. No JS context → `true`.
     fn fire_plain_event(
@@ -11627,8 +11777,15 @@ impl Page {
         // `focus`. Without them a MUI Autocomplete never marks itself focused and resets its input to
         // the selected value after every keystroke (udriver's pickup box, W4.P0.b).
         if let Some(n) = node {
-            self.fire_plain_event(n, "focusin", fonts, viewport_width);
-            self.fire_plain_event(n, "focus", fonts, viewport_width);
+            // UI Events order (and Chrome's): `focus` first, then `focusin`. MANUK_FOCUS_ORDER_MUTATE=swap
+            // restores the old order (gate mutant).
+            if std::env::var("MANUK_FOCUS_ORDER_MUTATE").as_deref() == Ok("swap") {
+                self.fire_plain_event(n, "focusin", fonts, viewport_width);
+                self.fire_plain_event(n, "focus", fonts, viewport_width);
+            } else {
+                self.fire_plain_event(n, "focus", fonts, viewport_width);
+                self.fire_plain_event(n, "focusin", fonts, viewport_width);
+            }
             let root = self.dom.root();
             if self.dom.is_dirty(root) || self.dom.has_dirty_descendants(root) {
                 self.relayout(fonts, viewport_width);
