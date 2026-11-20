@@ -169,7 +169,13 @@ EOF
 
   # W6.L1: the mandated reading (~115 KB of docs) is replaced by a <6k-token pack unless SPRINT_PROMPT_MODE=full
   # (kept for the before/after token measurement; every attempt's mode is recorded in docs/sprint/LEDGER.tsv).
+  # SPRINT_PROMPT_MODE=alternate: full, pack, full, ... per attempt (counter in .git/sprint-pmode-n survives re-exec)
   PMODE=${SPRINT_PROMPT_MODE:-pack}
+  if [ "$PMODE" = alternate ]; then
+    pn=$(cat "$ROOT/.git/sprint-pmode-n" 2>/dev/null || echo 0); pn=${pn//[!0-9]/}; pn=${pn:-0}
+    if [ $(( pn % 2 )) -eq 0 ]; then PMODE=full; else PMODE=pack; fi
+    echo $(( pn + 1 )) >"$ROOT/.git/sprint-pmode-n"
+  fi
   FULLREAD="Read docs/research/WAVE3-SYNTHESIS.md (the NORTH STAR), docs/research/PRODUCT-SPRINT.md (the plan), docs/sprint/SUCCESS.md (the pre-registered bars — never edit its thresholds or tune tasks to results), docs/research/SYNTHESIS.md (decided facts — do not re-derive), CONSTITUTION.MD, and the node row (title, gate, notes)."
   if [ "$PMODE" = pack ] && python3 scripts/sprint-pack.py "$node" >".git/sprint-pack-$node.md" 2>/dev/null; then
     READ="Read ONLY .git/sprint-pack-${node}.md first: it holds the north star, the pre-registered bars (never edit their thresholds or tune tasks to results), decided facts, constitution invariants, your node row and its dependencies. Open a full doc (docs/research/WAVE3-SYNTHESIS.md, PRODUCT-SPRINT.md, SUCCESS.md, SYNTHESIS.md, CONSTITUTION.MD) only for a specific question the pack cannot answer."
