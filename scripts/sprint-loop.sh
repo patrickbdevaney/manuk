@@ -22,8 +22,11 @@ MIN_FREE_GB=${MIN_FREE_GB:-30}      # pause before the build can fill /home (sha
 CLAUDE=$(command -v claude 2>/dev/null || echo "$HOME/.local/bin/claude")
 
 # the lock lives under .git, not /tmp: a /tmp sweep deleted the old lock file and let a second loop start
-exec 9>.git/sprint-loop.lock
-flock -n 9 || { echo "sprint-loop already running"; exit 0; }
+# (a re-exec'd loop inherits the held lock on fd 9: re-opening it would race orphaned children that still hold the old one)
+if [ -z "${SPRINT_REEXEC:-}" ]; then
+  exec 9>.git/sprint-loop.lock
+  flock -n 9 || { echo "sprint-loop already running"; exit 0; }
+fi
 
 say() { echo "$(date '+%F %T')  $*" >>"$LOG"; }
 
@@ -58,7 +61,7 @@ tier_of() { local i; for i in "${!LADDER[@]}"; do [ "${LADDER[$i]}" = "$1" ] && 
 # ── oracle Chrome pin: docs/sprint/CHROME_PIN names a Chrome-for-Testing version; the oracle resolves Chrome by
 # NAME on PATH (tests/wpt/src/chrome.rs, agent a11y-score), so shims ahead of /usr/bin pin it without touching
 # engine code. The system Chrome stays whatever apt updates it to.
-PIN_HOME=$HOME/.local/chrome-cft
+PIN_HOME=${PIN_HOME:-$HOME/.local/chrome-cft}
 ensure_chrome_pin() {
   local ver; ver=$(tr -d '[:space:]' <docs/sprint/CHROME_PIN)
   local dir=$PIN_HOME/$ver bin=$PIN_HOME/$ver/chrome-linux64/chrome
@@ -111,6 +114,14 @@ watchdog() {  # kill the agent's tree if the working flag goes stale (hung, not 
   done
 }
 
+# ── self re-exec: bash reads this file once at start, so a landed loop change (e.g. the stream-json switch) never
+# reached the running loop (W6.L1.a.a.a: ~1h on old code). Between attempts — after the sleep, never mid-attempt —
+# the loop compares its own file's hash with the one taken at start and, if it changed, exec's the new file. The
+# flock fd 9 is inherited across exec, so the lock is never released. SPRINT_SLEEP only shortens the pause in tests.
+SELF=$ROOT/scripts/sprint-loop.sh
+self_hash() { md5sum <"$SELF" 2>/dev/null | cut -d' ' -f1; }
+START_HASH=$(self_hash)
+SPRINT_SLEEP=${SPRINT_SLEEP:-30}
 say "sprint-loop started (pid $$)"
 while :; do
   if [ -f "$KILL" ]; then sleep 60; continue; fi
@@ -219,5 +230,11 @@ EOF
     say "■ node $node exited rc=$rc on ${LADDER[$t]} without landing — next attempt escalates"; rm -f "$RESUME"
   fi
   rm -f "$NETDOWN"
-  sleep 30
+  sleep "$SPRINT_SLEEP"
+  # REEXEC-BEGIN
+  if [ "$(self_hash)" != "$START_HASH" ] && bash -n "$SELF" 2>/dev/null; then
+    say "↺ sprint-loop.sh changed on disk — re-exec'ing the new file (pid $$)"
+    SPRINT_REEXEC=1 exec bash "$SELF"
+  fi
+  # REEXEC-END
 done
