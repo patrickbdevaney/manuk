@@ -1,0 +1,52 @@
+WPT css/css-transitions: 1 runnable testharness files
+   skip    55  manual test (needs a human)
+   skip    13  not a testharness test
+   skip     6  reftest (Bar 2 — pixel, deferred)
+   skip     5  reftest reference
+   skip     1  support file, not a test
+[2m2026-11-20T19:24:00.517805Z[0m [33m WARN[0m [2mmozjs::rust[0m[2m:[0m Warning at dom_event.js:1:9416: Script terminated by timeout at:
+globalThis.__csAlias@dom_event.js:1:9416
+@dom_event.js:1:3572
+@dom_event.js:1:3599
+root.computedStyle@http://127.0.0.1:40051/css/css-transitions/properties-value-001.html inline#28:56:10
+computedStyle@http://127.0.0.1:40051/css/css-transitions/properties-value-001.html inline#32:24:24
+start@http://127.0.0.1:40051/css/css-transitions/properties-value-001.html inline#61:65:59
+runLoop/</</<@http://127.0.0.1:40051/css/css-transitions/properties-value-001.html inline#30:118:56
+Test.prototype.step@http://127.0.0.1:40051/css/css-transitions/properties-value-001.html inline#22:2869:25
+runLoop/</<@http://127.0.0.1:40051/css/css-transitions/properties-value-001.html inline#30:117:34
+runLoop/<@http://127.0.0.1:40051/css/css-transitions/properties-value-001.html inline#30:116:19
+runLoop@http://127.0.0.1:40051/css/css-transitions/properties-value-001.html inline#30:115:15
+g.requestAnimationFrame/<@dom_event.js:4269:89
+globalThis.setTimeout/<@event_loop_prelude.js:63:55
+@event_loop_tick.js:1:344
+@event_loop_tick.js:1:398
+
+
+[2m2026-11-20T19:24:01.060144Z[0m [33m WARN[0m [2mmanuk_page[0m[2m:[0m FORCED-REFLOW BUDGET EXHAUSTED — this script round has re-laid-out the whole document for longer than its whole budget, so further geometry reads are answered from the layout already published. The alternative measured 125s in ONE task. [3mused_ms[0m[2m=[0m5006 [3mbudget_ms[0m[2m=[0m5000 [3mnodes[0m[2m=[0m3778
+[2m2026-11-20T19:24:01.294557Z[0m [33m WARN[0m [2mmanuk_js::event_loop[0m[2m:[0m event loop hit its TIME budget — the page is not converging fast enough to be worth more of the user's clock. Painting what we have. [3mcount[0m[2m=[0m3 [3melapsed_ms[0m[2m=[0m5782 [3mbudget_ms[0m[2m=[0m5000 [3mreflow_n[0m[2m=[0m12315 [3mreflow_ms[0m[2m=[0m5064
+[2m2026-11-20T19:24:06.329823Z[0m [33m WARN[0m [2mmozjs::rust[0m[2m:[0m Warning at dom_event.js:1:9416: Script terminated by timeout at:
+globalThis.__csAlias@dom_event.js:1:9416
+@dom_event.js:1:3572
+@dom_event.js:1:3599
+root.computedStyle@http://127.0.0.1:40051/css/css-transitions/properties-value-001.html inline#28:56:10
+computedStyle@http://127.0.0.1:40051/css/css-transitions/properties-value-001.html inline#32:24:24
+start@http://127.0.0.1:40051/css/css-transitions/properties-value-001.html inline#61:65:59
+runLoop/</</<@http://127.0.0.1:40051/css/css-transitions/properties-value-001.html inline#30:118:56
+Test.prototype.step@http://127.0.0.1:40051/css/css-transitions/properties-value-001.html inline#22:2869:25
+runLoop/</<@http://127.0.0.1:40051/css/css-transitions/properties-value-001.html inline#30:117:34
+runLoop/<@http://127.0.0.1:40051/css/css-transitions/properties-value-001.html inline#30:116:19
+runLoop@http://127.0.0.1:40051/css/css-transitions/properties-value-001.html inline#30:115:15
+g.requestAnimationFrame/<@dom_event.js:4269:89
+globalThis.setTimeout/<@event_loop_prelude.js:63:55
+@event_loop_tick.js:1:344
+@event_loop_tick.js:1:398
+
+
+[2m2026-11-20T19:24:06.900867Z[0m [33m WARN[0m [2mmanuk_page[0m[2m:[0m FORCED-REFLOW BUDGET EXHAUSTED — this script round has re-laid-out the whole document for longer than its whole budget, so further geometry reads are answered from the layout already published. The alternative measured 125s in ONE task. [3mused_ms[0m[2m=[0m5006 [3mbudget_ms[0m[2m=[0m5000 [3mnodes[0m[2m=[0m7823
+[2m2026-11-20T19:24:07.162683Z[0m [33m WARN[0m [2mmanuk_js::event_loop[0m[2m:[0m event loop hit its TIME budget — the page is not converging fast enough to be worth more of the user's clock. Painting what we have. [3mcount[0m[2m=[0m2 [3melapsed_ms[0m[2m=[0m5852 [3mbudget_ms[0m[2m=[0m5000 [3mreflow_n[0m[2m=[0m21169 [3mreflow_ms[0m[2m=[0m5068
+wrote docs/sprint/w6/raw/J1b-drain/default_r2_properties-value-001.json
+
+── WPT css/css-transitions ──────────────────────────────────────────
+
+  FILES  1   subtests 0/0  =  0.0%
+  NO_REPORT 0   [1mHANG/CRASH 0[0m (Bar 0)   SHORT 0 (instrument)   SLOW 0 (our budget)   TH_TIMEOUT 0 (async test never completed)

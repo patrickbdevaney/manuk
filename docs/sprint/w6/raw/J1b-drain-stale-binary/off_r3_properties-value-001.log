@@ -1,0 +1,1136 @@
+WPT css/css-transitions: 1 runnable testharness files
+   skip    55  manual test (needs a human)
+   skip    13  not a testharness test
+   skip     6  reftest (Bar 2 — pixel, deferred)
+   skip     5  reftest reference
+   skip     1  support file, not a test
+[2m2026-11-20T19:17:42.718703Z[0m [33m WARN[0m [2mmanuk_page[0m[2m:[0m FORCED-REFLOW BUDGET EXHAUSTED — this script round has re-laid-out the whole document for longer than its whole budget, so further geometry reads are answered from the layout already published. The alternative measured 125s in ONE task. [3mused_ms[0m[2m=[0m0 [3mbudget_ms[0m[2m=[0m0 [3mnodes[0m[2m=[0m642
+[2m2026-11-20T19:17:42.771289Z[0m [33m WARN[0m [2mmanuk_page[0m[2m:[0m FORCED-REFLOW BUDGET EXHAUSTED — this script round has re-laid-out the whole document for longer than its whole budget, so further geometry reads are answered from the layout already published. The alternative measured 125s in ONE task. [3mused_ms[0m[2m=[0m0 [3mbudget_ms[0m[2m=[0m0 [3mnodes[0m[2m=[0m1893
+  FILE css/css-transitions/properties-value-001.html  (0/560)
+    FAIL background-color color(rgba) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL background-color color(rgba) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "background-color:2s" but got ""
+    FAIL background-position-x length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL background-position-x length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "background-position-x:2s" but got ""
+    FAIL background-position-x length(pc) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL background-position-x length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "background-position-x:2s" but got ""
+    FAIL background-position-x length(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL background-position-x length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "background-position-x:2s" but got ""
+    FAIL background-position-x length(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL background-position-x length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "background-position-x:2s" but got ""
+    FAIL background-position-x length(ex) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL background-position-x length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "background-position-x:2s" but got ""
+    FAIL background-position-x length(mm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL background-position-x length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "background-position-x:2s" but got ""
+    FAIL background-position-x length(cm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL background-position-x length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "background-position-x:2s" but got ""
+    FAIL background-position-x length(in) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL background-position-x length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "background-position-x:2s" but got ""
+    FAIL background-position-x percentage(%) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL background-position-x percentage(%) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "background-position-x:2s" but got ""
+    FAIL border-top-width length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL border-top-width length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-top-width:2s" but got ""
+    FAIL border-top-width length(pc) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL border-top-width length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-top-width:2s" but got ""
+    FAIL border-top-width length(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL border-top-width length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-top-width:2s" but got ""
+    FAIL border-top-width length(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL border-top-width length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-top-width:2s" but got ""
+    FAIL border-top-width length(ex) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL border-top-width length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-top-width:2s" but got ""
+    FAIL border-top-width length(mm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL border-top-width length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-top-width:2s" but got ""
+    FAIL border-top-width length(cm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL border-top-width length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-top-width:2s" but got ""
+    FAIL border-top-width length(in) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL border-top-width length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-top-width:2s" but got ""
+    FAIL border-right-width length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL border-right-width length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-right-width:2s" but got ""
+    FAIL border-right-width length(pc) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL border-right-width length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-right-width:2s" but got ""
+    FAIL border-right-width length(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL border-right-width length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-right-width:2s" but got ""
+    FAIL border-right-width length(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL border-right-width length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-right-width:2s" but got ""
+    FAIL border-right-width length(ex) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL border-right-width length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-right-width:2s" but got ""
+    FAIL border-right-width length(mm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL border-right-width length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-right-width:2s" but got ""
+    FAIL border-right-width length(cm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL border-right-width length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-right-width:2s" but got ""
+    FAIL border-right-width length(in) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL border-right-width length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-right-width:2s" but got ""
+    FAIL border-bottom-width length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL border-bottom-width length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-bottom-width:2s" but got ""
+    FAIL border-bottom-width length(pc) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL border-bottom-width length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-bottom-width:2s" but got ""
+    FAIL border-bottom-width length(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL border-bottom-width length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-bottom-width:2s" but got ""
+    FAIL border-bottom-width length(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL border-bottom-width length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-bottom-width:2s" but got ""
+    FAIL border-bottom-width length(ex) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL border-bottom-width length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-bottom-width:2s" but got ""
+    FAIL border-bottom-width length(mm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL border-bottom-width length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-bottom-width:2s" but got ""
+    FAIL border-bottom-width length(cm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL border-bottom-width length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-bottom-width:2s" but got ""
+    FAIL border-bottom-width length(in) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL border-bottom-width length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-bottom-width:2s" but got ""
+    FAIL border-left-width length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL border-left-width length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-left-width:2s" but got ""
+    FAIL border-left-width length(pc) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL border-left-width length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-left-width:2s" but got ""
+    FAIL border-left-width length(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL border-left-width length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-left-width:2s" but got ""
+    FAIL border-left-width length(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL border-left-width length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-left-width:2s" but got ""
+    FAIL border-left-width length(ex) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL border-left-width length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-left-width:2s" but got ""
+    FAIL border-left-width length(mm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL border-left-width length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-left-width:2s" but got ""
+    FAIL border-left-width length(cm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL border-left-width length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-left-width:2s" but got ""
+    FAIL border-left-width length(in) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL border-left-width length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-left-width:2s" but got ""
+    FAIL border-top-color color(rgba) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL border-top-color color(rgba) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-top-color:2s" but got ""
+    FAIL border-right-color color(rgba) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL border-right-color color(rgba) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-right-color:2s" but got ""
+    FAIL border-bottom-color color(rgba) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL border-bottom-color color(rgba) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-bottom-color:2s" but got ""
+    FAIL border-left-color color(rgba) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL border-left-color color(rgba) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-left-color:2s" but got ""
+    FAIL padding-bottom length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL padding-bottom length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-bottom:2s" but got ""
+    FAIL padding-bottom length(pc) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL padding-bottom length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-bottom:2s" but got ""
+    FAIL padding-bottom length(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL padding-bottom length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-bottom:2s" but got ""
+    FAIL padding-bottom length(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL padding-bottom length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-bottom:2s" but got ""
+    FAIL padding-bottom length(ex) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL padding-bottom length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-bottom:2s" but got ""
+    FAIL padding-bottom length(mm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL padding-bottom length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-bottom:2s" but got ""
+    FAIL padding-bottom length(cm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL padding-bottom length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-bottom:2s" but got ""
+    FAIL padding-bottom length(in) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL padding-bottom length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-bottom:2s" but got ""
+    FAIL padding-left length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL padding-left length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-left:2s" but got ""
+    FAIL padding-left length(pc) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL padding-left length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-left:2s" but got ""
+    FAIL padding-left length(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL padding-left length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-left:2s" but got ""
+    FAIL padding-left length(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL padding-left length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-left:2s" but got ""
+    FAIL padding-left length(ex) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL padding-left length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-left:2s" but got ""
+    FAIL padding-left length(mm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL padding-left length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-left:2s" but got ""
+    FAIL padding-left length(cm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL padding-left length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-left:2s" but got ""
+    FAIL padding-left length(in) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL padding-left length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-left:2s" but got ""
+    FAIL padding-right length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL padding-right length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-right:2s" but got ""
+    FAIL padding-right length(pc) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL padding-right length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-right:2s" but got ""
+    FAIL padding-right length(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL padding-right length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-right:2s" but got ""
+    FAIL padding-right length(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL padding-right length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-right:2s" but got ""
+    FAIL padding-right length(ex) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL padding-right length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-right:2s" but got ""
+    FAIL padding-right length(mm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL padding-right length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-right:2s" but got ""
+    FAIL padding-right length(cm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL padding-right length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-right:2s" but got ""
+    FAIL padding-right length(in) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL padding-right length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-right:2s" but got ""
+    FAIL padding-top length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL padding-top length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-top:2s" but got ""
+    FAIL padding-top length(pc) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL padding-top length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-top:2s" but got ""
+    FAIL padding-top length(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL padding-top length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-top:2s" but got ""
+    FAIL padding-top length(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL padding-top length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-top:2s" but got ""
+    FAIL padding-top length(ex) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL padding-top length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-top:2s" but got ""
+    FAIL padding-top length(mm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL padding-top length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-top:2s" but got ""
+    FAIL padding-top length(cm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL padding-top length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-top:2s" but got ""
+    FAIL padding-top length(in) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL padding-top length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-top:2s" but got ""
+    FAIL margin-bottom length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL margin-bottom length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-bottom:2s" but got ""
+    FAIL margin-bottom length(pc) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL margin-bottom length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-bottom:2s" but got ""
+    FAIL margin-bottom length(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL margin-bottom length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-bottom:2s" but got ""
+    FAIL margin-bottom length(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL margin-bottom length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-bottom:2s" but got ""
+    FAIL margin-bottom length(ex) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL margin-bottom length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-bottom:2s" but got ""
+    FAIL margin-bottom length(mm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL margin-bottom length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-bottom:2s" but got ""
+    FAIL margin-bottom length(cm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL margin-bottom length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-bottom:2s" but got ""
+    FAIL margin-bottom length(in) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL margin-bottom length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-bottom:2s" but got ""
+    FAIL margin-left length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL margin-left length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-left:2s" but got ""
+    FAIL margin-left length(pc) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL margin-left length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-left:2s" but got ""
+    FAIL margin-left length(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL margin-left length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-left:2s" but got ""
+    FAIL margin-left length(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL margin-left length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-left:2s" but got ""
+    FAIL margin-left length(ex) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL margin-left length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-left:2s" but got ""
+    FAIL margin-left length(mm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL margin-left length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-left:2s" but got ""
+    FAIL margin-left length(cm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL margin-left length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-left:2s" but got ""
+    FAIL margin-left length(in) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL margin-left length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-left:2s" but got ""
+    FAIL margin-right length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL margin-right length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-right:2s" but got ""
+    FAIL margin-right length(pc) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL margin-right length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-right:2s" but got ""
+    FAIL margin-right length(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL margin-right length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-right:2s" but got ""
+    FAIL margin-right length(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL margin-right length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-right:2s" but got ""
+    FAIL margin-right length(ex) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL margin-right length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-right:2s" but got ""
+    FAIL margin-right length(mm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL margin-right length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-right:2s" but got ""
+    FAIL margin-right length(cm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL margin-right length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-right:2s" but got ""
+    FAIL margin-right length(in) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL margin-right length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-right:2s" but got ""
+    FAIL margin-top length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL margin-top length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-top:2s" but got ""
+    FAIL margin-top length(pc) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL margin-top length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-top:2s" but got ""
+    FAIL margin-top length(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL margin-top length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-top:2s" but got ""
+    FAIL margin-top length(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL margin-top length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-top:2s" but got ""
+    FAIL margin-top length(ex) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL margin-top length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-top:2s" but got ""
+    FAIL margin-top length(mm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL margin-top length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-top:2s" but got ""
+    FAIL margin-top length(cm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL margin-top length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-top:2s" but got ""
+    FAIL margin-top length(in) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL margin-top length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-top:2s" but got ""
+    FAIL height length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL height length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "height:2s" but got ""
+    FAIL height length(pc) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL height length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "height:2s" but got ""
+    FAIL height length(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL height length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "height:2s" but got ""
+    FAIL height length(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL height length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "height:2s" but got ""
+    FAIL height length(ex) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL height length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "height:2s" but got ""
+    FAIL height length(mm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL height length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "height:2s" but got ""
+    FAIL height length(cm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL height length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "height:2s" but got ""
+    FAIL height length(in) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL height length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "height:2s" but got ""
+    FAIL height percentage(%) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL height percentage(%) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "height:2s" but got ""
+    FAIL width length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL width length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "width:2s" but got ""
+    FAIL width length(pc) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL width length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "width:2s" but got ""
+    FAIL width length(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL width length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "width:2s" but got ""
+    FAIL width length(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL width length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "width:2s" but got ""
+    FAIL width length(ex) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL width length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "width:2s" but got ""
+    FAIL width length(mm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL width length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "width:2s" but got ""
+    FAIL width length(cm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL width length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "width:2s" but got ""
+    FAIL width length(in) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL width length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "width:2s" but got ""
+    FAIL width percentage(%) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL width percentage(%) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "width:2s" but got ""
+    FAIL min-height length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL min-height length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "min-height:2s" but got ""
+    FAIL min-height length(pc) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL min-height length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "min-height:2s" but got ""
+    FAIL min-height length(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL min-height length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "min-height:2s" but got ""
+    FAIL min-height length(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL min-height length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "min-height:2s" but got ""
+    FAIL min-height length(ex) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL min-height length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "min-height:2s" but got ""
+    FAIL min-height length(mm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL min-height length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "min-height:2s" but got ""
+    FAIL min-height length(cm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL min-height length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "min-height:2s" but got ""
+    FAIL min-height length(in) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL min-height length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "min-height:2s" but got ""
+    FAIL min-height percentage(%) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL min-height percentage(%) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "min-height:2s" but got ""
+    FAIL min-width length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL min-width length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "min-width:2s" but got ""
+    FAIL min-width length(pc) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL min-width length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "min-width:2s" but got ""
+    FAIL min-width length(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL min-width length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "min-width:2s" but got ""
+    FAIL min-width length(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL min-width length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "min-width:2s" but got ""
+    FAIL min-width length(ex) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL min-width length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "min-width:2s" but got ""
+    FAIL min-width length(mm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL min-width length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "min-width:2s" but got ""
+    FAIL min-width length(cm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL min-width length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "min-width:2s" but got ""
+    FAIL min-width length(in) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL min-width length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "min-width:2s" but got ""
+    FAIL min-width percentage(%) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL min-width percentage(%) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "min-width:2s" but got ""
+    FAIL max-height length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL max-height length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "max-height:2s" but got ""
+    FAIL max-height length(pc) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL max-height length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "max-height:2s" but got ""
+    FAIL max-height length(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL max-height length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "max-height:2s" but got ""
+    FAIL max-height length(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL max-height length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "max-height:2s" but got ""
+    FAIL max-height length(ex) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL max-height length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "max-height:2s" but got ""
+    FAIL max-height length(mm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL max-height length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "max-height:2s" but got ""
+    FAIL max-height length(cm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL max-height length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "max-height:2s" but got ""
+    FAIL max-height length(in) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL max-height length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "max-height:2s" but got ""
+    FAIL max-height percentage(%) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL max-height percentage(%) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "max-height:2s" but got ""
+    FAIL max-width length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL max-width length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "max-width:2s" but got ""
+    FAIL max-width length(pc) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL max-width length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "max-width:2s" but got ""
+    FAIL max-width length(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL max-width length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "max-width:2s" but got ""
+    FAIL max-width length(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL max-width length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "max-width:2s" but got ""
+    FAIL max-width length(ex) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL max-width length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "max-width:2s" but got ""
+    FAIL max-width length(mm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL max-width length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "max-width:2s" but got ""
+    FAIL max-width length(cm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL max-width length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "max-width:2s" but got ""
+    FAIL max-width length(in) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL max-width length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "max-width:2s" but got ""
+    FAIL max-width percentage(%) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL max-width percentage(%) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "max-width:2s" but got ""
+    FAIL top length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL top length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "top:2s" but got ""
+    FAIL top length(pc) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL top length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "top:2s" but got ""
+    FAIL top length(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL top length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "top:2s" but got ""
+    FAIL top length(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL top length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "top:2s" but got ""
+    FAIL top length(ex) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL top length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "top:2s" but got ""
+    FAIL top length(mm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL top length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "top:2s" but got ""
+    FAIL top length(cm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL top length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "top:2s" but got ""
+    FAIL top length(in) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL top length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "top:2s" but got ""
+    FAIL top percentage(%) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL top percentage(%) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "top:2s" but got ""
+    FAIL right length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL right length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "right:2s" but got ""
+    FAIL right length(pc) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL right length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "right:2s" but got ""
+    FAIL right length(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL right length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "right:2s" but got ""
+    FAIL right length(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL right length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "right:2s" but got ""
+    FAIL right length(ex) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL right length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "right:2s" but got ""
+    FAIL right length(mm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL right length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "right:2s" but got ""
+    FAIL right length(cm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL right length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "right:2s" but got ""
+    FAIL right length(in) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL right length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "right:2s" but got ""
+    FAIL right percentage(%) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL right percentage(%) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "right:2s" but got ""
+    FAIL bottom length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL bottom length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "bottom:2s" but got ""
+    FAIL bottom length(pc) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL bottom length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "bottom:2s" but got ""
+    FAIL bottom length(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL bottom length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "bottom:2s" but got ""
+    FAIL bottom length(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL bottom length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "bottom:2s" but got ""
+    FAIL bottom length(ex) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL bottom length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "bottom:2s" but got ""
+    FAIL bottom length(mm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL bottom length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "bottom:2s" but got ""
+    FAIL bottom length(cm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL bottom length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "bottom:2s" but got ""
+    FAIL bottom length(in) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL bottom length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "bottom:2s" but got ""
+    FAIL bottom percentage(%) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL bottom percentage(%) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "bottom:2s" but got ""
+    FAIL left length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL left length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "left:2s" but got ""
+    FAIL left length(pc) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL left length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "left:2s" but got ""
+    FAIL left length(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL left length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "left:2s" but got ""
+    FAIL left length(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL left length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "left:2s" but got ""
+    FAIL left length(ex) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL left length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "left:2s" but got ""
+    FAIL left length(mm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL left length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "left:2s" but got ""
+    FAIL left length(cm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL left length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "left:2s" but got ""
+    FAIL left length(in) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL left length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "left:2s" but got ""
+    FAIL left percentage(%) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL left percentage(%) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "left:2s" but got ""
+    FAIL color color(rgba) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL color color(rgba) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "color:2s" but got ""
+    FAIL font-size length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL font-size length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "font-size:2s" but got ""
+    FAIL font-size length(pc) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL font-size length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "font-size:2s" but got ""
+    FAIL font-size length(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL font-size length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "font-size:2s" but got ""
+    FAIL font-size length(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL font-size length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "font-size:2s" but got ""
+    FAIL font-size length(ex) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL font-size length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "font-size:2s" but got ""
+    FAIL font-size length(mm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL font-size length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "font-size:2s" but got ""
+    FAIL font-size length(cm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL font-size length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "font-size:2s" but got ""
+    FAIL font-size length(in) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL font-size length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "font-size:2s" but got ""
+    FAIL font-size percentage(%) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL font-size percentage(%) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "font-size:2s" but got ""
+    FAIL font-weight font-weight(keyword) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL font-weight font-weight(keyword) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "font-weight:2s" but got ""
+    FAIL font-weight font-weight(numeric) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL font-weight font-weight(numeric) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "font-weight:2s" but got ""
+    FAIL line-height number(integer) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL line-height number(integer) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "line-height:2s" but got ""
+    FAIL line-height number(decimal) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL line-height number(decimal) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "line-height:2s" but got ""
+    FAIL line-height length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL line-height length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "line-height:2s" but got ""
+    FAIL line-height length(pc) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL line-height length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "line-height:2s" but got ""
+    FAIL line-height length(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL line-height length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "line-height:2s" but got ""
+    FAIL line-height length(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL line-height length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "line-height:2s" but got ""
+    FAIL line-height length(ex) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL line-height length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "line-height:2s" but got ""
+    FAIL line-height length(mm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL line-height length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "line-height:2s" but got ""
+    FAIL line-height length(cm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL line-height length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "line-height:2s" but got ""
+    FAIL line-height length(in) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL line-height length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "line-height:2s" but got ""
+    FAIL line-height percentage(%) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL line-height percentage(%) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "line-height:2s" but got ""
+    FAIL letter-spacing length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL letter-spacing length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "letter-spacing:2s" but got ""
+    FAIL letter-spacing length(pc) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL letter-spacing length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "letter-spacing:2s" but got ""
+    FAIL letter-spacing length(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL letter-spacing length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "letter-spacing:2s" but got ""
+    FAIL letter-spacing length(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL letter-spacing length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "letter-spacing:2s" but got ""
+    FAIL letter-spacing length(ex) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL letter-spacing length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "letter-spacing:2s" but got ""
+    FAIL letter-spacing length(mm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL letter-spacing length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "letter-spacing:2s" but got ""
+    FAIL letter-spacing length(cm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL letter-spacing length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "letter-spacing:2s" but got ""
+    FAIL letter-spacing length(in) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL letter-spacing length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "letter-spacing:2s" but got ""
+    FAIL word-spacing length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL word-spacing length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "word-spacing:2s" but got ""
+    FAIL word-spacing length(pc) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL word-spacing length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "word-spacing:2s" but got ""
+    FAIL word-spacing length(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL word-spacing length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "word-spacing:2s" but got ""
+    FAIL word-spacing length(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL word-spacing length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "word-spacing:2s" but got ""
+    FAIL word-spacing length(ex) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL word-spacing length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "word-spacing:2s" but got ""
+    FAIL word-spacing length(mm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL word-spacing length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "word-spacing:2s" but got ""
+    FAIL word-spacing length(cm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL word-spacing length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "word-spacing:2s" but got ""
+    FAIL word-spacing length(in) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL word-spacing length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "word-spacing:2s" but got ""
+    FAIL word-spacing percentage(%) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL word-spacing percentage(%) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "word-spacing:2s" but got ""
+    FAIL text-indent length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL text-indent length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "text-indent:2s" but got ""
+    FAIL text-indent length(pc) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL text-indent length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "text-indent:2s" but got ""
+    FAIL text-indent length(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL text-indent length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "text-indent:2s" but got ""
+    FAIL text-indent length(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL text-indent length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "text-indent:2s" but got ""
+    FAIL text-indent length(ex) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL text-indent length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "text-indent:2s" but got ""
+    FAIL text-indent length(mm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL text-indent length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "text-indent:2s" but got ""
+    FAIL text-indent length(cm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL text-indent length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "text-indent:2s" but got ""
+    FAIL text-indent length(in) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL text-indent length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "text-indent:2s" but got ""
+    FAIL text-indent percentage(%) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL text-indent percentage(%) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "text-indent:2s" but got ""
+    FAIL text-shadow shadow(shadow) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL text-shadow shadow(shadow) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "text-shadow:2s" but got ""
+    FAIL outline-color color(rgba) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL outline-color color(rgba) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "outline-color:2s" but got ""
+    FAIL outline-offset length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL outline-offset length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "outline-offset:2s" but got ""
+    FAIL outline-offset length(pc) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL outline-offset length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "outline-offset:2s" but got ""
+    FAIL outline-offset length(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL outline-offset length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "outline-offset:2s" but got ""
+    FAIL outline-offset length(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL outline-offset length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "outline-offset:2s" but got ""
+    FAIL outline-offset length(ex) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL outline-offset length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "outline-offset:2s" but got ""
+    FAIL outline-offset length(mm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL outline-offset length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "outline-offset:2s" but got ""
+    FAIL outline-offset length(cm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL outline-offset length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "outline-offset:2s" but got ""
+    FAIL outline-offset length(in) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL outline-offset length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "outline-offset:2s" but got ""
+    FAIL outline-width length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL outline-width length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "outline-width:2s" but got ""
+    FAIL outline-width length(pc) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL outline-width length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "outline-width:2s" but got ""
+    FAIL outline-width length(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL outline-width length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "outline-width:2s" but got ""
+    FAIL outline-width length(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL outline-width length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "outline-width:2s" but got ""
+    FAIL outline-width length(ex) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL outline-width length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "outline-width:2s" but got ""
+    FAIL outline-width length(mm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL outline-width length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "outline-width:2s" but got ""
+    FAIL outline-width length(cm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL outline-width length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "outline-width:2s" but got ""
+    FAIL outline-width length(in) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL outline-width length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "outline-width:2s" but got ""
+    FAIL clip rectangle(rectangle) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL clip rectangle(rectangle) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "clip:2s" but got ""
+    FAIL vertical-align length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL vertical-align length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "vertical-align:2s" but got ""
+    FAIL vertical-align length(pc) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL vertical-align length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "vertical-align:2s" but got ""
+    FAIL vertical-align length(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL vertical-align length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "vertical-align:2s" but got ""
+    FAIL vertical-align length(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL vertical-align length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "vertical-align:2s" but got ""
+    FAIL vertical-align length(ex) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL vertical-align length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "vertical-align:2s" but got ""
+    FAIL vertical-align length(mm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL vertical-align length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "vertical-align:2s" but got ""
+    FAIL vertical-align length(cm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL vertical-align length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "vertical-align:2s" but got ""
+    FAIL vertical-align length(in) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL vertical-align length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "vertical-align:2s" but got ""
+    FAIL vertical-align percentage(%) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL vertical-align percentage(%) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "vertical-align:2s" but got ""
+    FAIL opacity number[0,1](zero-to-one) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL opacity number[0,1](zero-to-one) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "opacity:2s" but got ""
+    FAIL visibility visibility(keyword) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL visibility visibility(keyword) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "visibility:2s" but got ""
+    FAIL z-index integer(integer) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL z-index integer(integer) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "z-index:2s" but got ""
+wrote docs/sprint/w6/raw/J1b-drain/off_r3_properties-value-001.json
+
+── WPT css/css-transitions ──────────────────────────────────────────
+    0.0%      0/560    (1 files)  css/css-transitions
+
+  FILES  1   subtests 0/560  =  0.0%
+  NO_REPORT 0   [1mHANG/CRASH 0[0m (Bar 0)   SHORT 0 (instrument)   SLOW 0 (our budget)   TH_TIMEOUT 0 (async test never completed)

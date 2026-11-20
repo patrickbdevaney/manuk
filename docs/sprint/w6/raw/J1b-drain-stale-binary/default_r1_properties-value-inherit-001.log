@@ -1,0 +1,809 @@
+WPT css/css-transitions: 1 runnable testharness files
+   skip    55  manual test (needs a human)
+   skip    13  not a testharness test
+   skip     6  reftest (Bar 2 — pixel, deferred)
+   skip     5  reftest reference
+   skip     1  support file, not a test
+[2m2026-11-20T19:16:54.320857Z[0m [33m WARN[0m [2mmozjs::rust[0m[2m:[0m Warning at http://127.0.0.1:41865/css/css-transitions/properties-value-inherit-001.html inline#30:128:9: Script terminated by timeout at:
+_getStyleFor@http://127.0.0.1:41865/css/css-transitions/properties-value-inherit-001.html inline#30:128:9
+getStyle@http://127.0.0.1:41865/css/css-transitions/properties-value-inherit-001.html inline#30:115:15
+start@http://127.0.0.1:41865/css/css-transitions/properties-value-inherit-001.html inline#59:68:49
+runLoop/</</<@http://127.0.0.1:41865/css/css-transitions/properties-value-inherit-001.html inline#28:118:56
+Test.prototype.step@http://127.0.0.1:41865/css/css-transitions/properties-value-inherit-001.html inline#20:2869:25
+runLoop/</<@http://127.0.0.1:41865/css/css-transitions/properties-value-inherit-001.html inline#28:117:34
+runLoop/<@http://127.0.0.1:41865/css/css-transitions/properties-value-inherit-001.html inline#28:116:19
+runLoop@http://127.0.0.1:41865/css/css-transitions/properties-value-inherit-001.html inline#28:115:15
+g.requestAnimationFrame/<@dom_event.js:4269:89
+globalThis.setTimeout/<@event_loop_prelude.js:63:55
+@event_loop_tick.js:1:344
+@event_loop_tick.js:1:398
+
+
+[2m2026-11-20T19:16:54.320936Z[0m [33m WARN[0m [2mmanuk_js::event_loop[0m[2m:[0m event loop PREEMPTED a task that was over budget and not returning — painting what we have. The alternative is a frozen tab that no task-boundary check can reach. [3mcount[0m[2m=[0m2 [3melapsed_ms[0m[2m=[0m5005 [3mbudget_ms[0m[2m=[0m5000
+  FILE css/css-transitions/properties-value-inherit-001.html  (0/560)
+    FAIL background-color color(rgba) / values
+         assert_not_equals: must not be target value after start got disallowed value "rgba(10, 10, 10, 0.4)"
+    FAIL background-color color(rgba) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "background-color:2s" but got ""
+    FAIL background-position-x length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL background-position-x length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "background-position-x:2s" but got ""
+    FAIL background-position-x length(pc) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL background-position-x length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "background-position-x:2s" but got ""
+    FAIL background-position-x length(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL background-position-x length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "background-position-x:2s" but got ""
+    FAIL background-position-x length(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL background-position-x length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "background-position-x:2s" but got ""
+    FAIL background-position-x length(ex) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL background-position-x length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "background-position-x:2s" but got ""
+    FAIL background-position-x length(mm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL background-position-x length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "background-position-x:2s" but got ""
+    FAIL background-position-x length(cm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL background-position-x length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "background-position-x:2s" but got ""
+    FAIL background-position-x length(in) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL background-position-x length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "background-position-x:2s" but got ""
+    FAIL background-position-x percentage(%) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL background-position-x percentage(%) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "background-position-x:2s" but got ""
+    FAIL border-top-width length(pt) / values
+         assert_not_equals: must not be target value after start got disallowed value "13px"
+    FAIL border-top-width length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "border-top-width:2s" but got ""
+    FAIL border-top-width length(pc) / values
+         assert_not_equals: must not be target value after start got disallowed value "160px"
+    FAIL border-top-width length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "border-top-width:2s" but got ""
+    FAIL border-top-width length(px) / values
+         assert_not_equals: must not be target value after start got disallowed value "10px"
+    FAIL border-top-width length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "border-top-width:2s" but got ""
+    FAIL border-top-width length(em) / values
+         assert_not_equals: must not be target value after start got disallowed value "160px"
+    FAIL border-top-width length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "border-top-width:2s" but got ""
+    FAIL border-top-width length(ex) / values
+         assert_not_equals: must not be target value after start got disallowed value "73px"
+    FAIL border-top-width length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "border-top-width:2s" but got ""
+    FAIL border-top-width length(mm) / values
+         assert_not_equals: must not be target value after start got disallowed value "37px"
+    FAIL border-top-width length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "border-top-width:2s" but got ""
+    FAIL border-top-width length(cm) / values
+         assert_not_equals: must not be target value after start got disallowed value "377px"
+    FAIL border-top-width length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "border-top-width:2s" but got ""
+    FAIL border-top-width length(in) / values
+         assert_not_equals: must not be target value after start got disallowed value "960px"
+    FAIL border-top-width length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "border-top-width:2s" but got ""
+    FAIL border-right-width length(pt) / values
+         assert_not_equals: must not be target value after start got disallowed value "13px"
+    FAIL border-right-width length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "border-right-width:2s" but got ""
+    FAIL border-right-width length(pc) / values
+         assert_not_equals: must not be target value after start got disallowed value "160px"
+    FAIL border-right-width length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "border-right-width:2s" but got ""
+    FAIL border-right-width length(px) / values
+         assert_not_equals: must not be target value after start got disallowed value "10px"
+    FAIL border-right-width length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "border-right-width:2s" but got ""
+    FAIL border-right-width length(em) / values
+         assert_not_equals: must not be target value after start got disallowed value "160px"
+    FAIL border-right-width length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "border-right-width:2s" but got ""
+    FAIL border-right-width length(ex) / values
+         assert_not_equals: must not be target value after start got disallowed value "73px"
+    FAIL border-right-width length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "border-right-width:2s" but got ""
+    FAIL border-right-width length(mm) / values
+         assert_not_equals: must not be target value after start got disallowed value "37px"
+    FAIL border-right-width length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "border-right-width:2s" but got ""
+    FAIL border-right-width length(cm) / values
+         assert_not_equals: must not be target value after start got disallowed value "377px"
+    FAIL border-right-width length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "border-right-width:2s" but got ""
+    FAIL border-right-width length(in) / values
+         assert_not_equals: must not be target value after start got disallowed value "960px"
+    FAIL border-right-width length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "border-right-width:2s" but got ""
+    FAIL border-bottom-width length(pt) / values
+         assert_not_equals: must not be target value after start got disallowed value "13px"
+    FAIL border-bottom-width length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "border-bottom-width:2s" but got ""
+    FAIL border-bottom-width length(pc) / values
+         assert_not_equals: must not be target value after start got disallowed value "160px"
+    FAIL border-bottom-width length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "border-bottom-width:2s" but got ""
+    FAIL border-bottom-width length(px) / values
+         assert_not_equals: must not be target value after start got disallowed value "10px"
+    FAIL border-bottom-width length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "border-bottom-width:2s" but got ""
+    FAIL border-bottom-width length(em) / values
+         assert_not_equals: must not be target value after start got disallowed value "160px"
+    FAIL border-bottom-width length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "border-bottom-width:2s" but got ""
+    FAIL border-bottom-width length(ex) / values
+         assert_not_equals: must not be target value after start got disallowed value "73px"
+    FAIL border-bottom-width length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "border-bottom-width:2s" but got ""
+    FAIL border-bottom-width length(mm) / values
+         assert_not_equals: must not be target value after start got disallowed value "37px"
+    FAIL border-bottom-width length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "border-bottom-width:2s" but got ""
+    FAIL border-bottom-width length(cm) / values
+         assert_not_equals: must not be target value after start got disallowed value "377px"
+    FAIL border-bottom-width length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "border-bottom-width:2s" but got ""
+    FAIL border-bottom-width length(in) / values
+         assert_not_equals: must not be target value after start got disallowed value "960px"
+    FAIL border-bottom-width length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "border-bottom-width:2s" but got ""
+    FAIL border-left-width length(pt) / values
+         assert_not_equals: must not be target value after start got disallowed value "13px"
+    FAIL border-left-width length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "border-left-width:2s" but got ""
+    FAIL border-left-width length(pc) / values
+         assert_not_equals: must not be target value after start got disallowed value "160px"
+    FAIL border-left-width length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "border-left-width:2s" but got ""
+    FAIL border-left-width length(px) / values
+         assert_not_equals: must not be target value after start got disallowed value "10px"
+    FAIL border-left-width length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "border-left-width:2s" but got ""
+    FAIL border-left-width length(em) / values
+         assert_not_equals: must not be target value after start got disallowed value "160px"
+    FAIL border-left-width length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "border-left-width:2s" but got ""
+    FAIL border-left-width length(ex) / values
+         assert_not_equals: must not be target value after start got disallowed value "73px"
+    FAIL border-left-width length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "border-left-width:2s" but got ""
+    FAIL border-left-width length(mm) / values
+         assert_not_equals: must not be target value after start got disallowed value "37px"
+    FAIL border-left-width length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "border-left-width:2s" but got ""
+    FAIL border-left-width length(cm) / values
+         assert_not_equals: must not be target value after start got disallowed value "377px"
+    FAIL border-left-width length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "border-left-width:2s" but got ""
+    FAIL border-left-width length(in) / values
+         assert_not_equals: must not be target value after start got disallowed value "960px"
+    FAIL border-left-width length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "border-left-width:2s" but got ""
+    FAIL border-top-color color(rgba) / values
+         assert_not_equals: must not be target value after start got disallowed value "rgba(10, 10, 10, 0.4)"
+    FAIL border-top-color color(rgba) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "border-top-color:2s" but got ""
+    FAIL border-right-color color(rgba) / values
+         assert_not_equals: must not be target value after start got disallowed value "rgba(10, 10, 10, 0.4)"
+    FAIL border-right-color color(rgba) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "border-right-color:2s" but got ""
+    FAIL border-bottom-color color(rgba) / values
+         assert_not_equals: must not be target value after start got disallowed value "rgba(10, 10, 10, 0.4)"
+    FAIL border-bottom-color color(rgba) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "border-bottom-color:2s" but got ""
+    FAIL border-left-color color(rgba) / values
+         assert_not_equals: must not be target value after start got disallowed value "rgba(10, 10, 10, 0.4)"
+    FAIL border-left-color color(rgba) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "border-left-color:2s" but got ""
+    FAIL padding-bottom length(pt) / values
+         assert_not_equals: must not be target value after start got disallowed value "13.333334px"
+    FAIL padding-bottom length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "padding-bottom:2s" but got ""
+    FAIL padding-bottom length(pc) / values
+         assert_not_equals: must not be target value after start got disallowed value "160px"
+    FAIL padding-bottom length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "padding-bottom:2s" but got ""
+    FAIL padding-bottom length(px) / values
+         assert_not_equals: must not be target value after start got disallowed value "10px"
+    FAIL padding-bottom length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "padding-bottom:2s" but got ""
+    FAIL padding-bottom length(em) / values
+         assert_not_equals: must not be target value after start got disallowed value "160px"
+    FAIL padding-bottom length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "padding-bottom:2s" but got ""
+    FAIL padding-bottom length(ex) / values
+         assert_not_equals: must not be target value after start got disallowed value "73.4375px"
+    FAIL padding-bottom length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "padding-bottom:2s" but got ""
+    FAIL padding-bottom length(mm) / values
+         assert_not_equals: must not be target value after start got disallowed value "37.795277px"
+    FAIL padding-bottom length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "padding-bottom:2s" but got ""
+    FAIL padding-bottom length(cm) / values
+         assert_not_equals: must not be target value after start got disallowed value "377.95276px"
+    FAIL padding-bottom length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "padding-bottom:2s" but got ""
+    FAIL padding-bottom length(in) / values
+         assert_not_equals: must not be target value after start got disallowed value "960px"
+    FAIL padding-bottom length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "padding-bottom:2s" but got ""
+    FAIL padding-left length(pt) / values
+         assert_not_equals: must not be target value after start got disallowed value "13.333334px"
+    FAIL padding-left length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "padding-left:2s" but got ""
+    FAIL padding-left length(pc) / values
+         assert_not_equals: must not be target value after start got disallowed value "160px"
+    FAIL padding-left length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "padding-left:2s" but got ""
+    FAIL padding-left length(px) / values
+         assert_not_equals: must not be target value after start got disallowed value "10px"
+    FAIL padding-left length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "padding-left:2s" but got ""
+    FAIL padding-left length(em) / values
+         assert_not_equals: must not be target value after start got disallowed value "160px"
+    FAIL padding-left length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "padding-left:2s" but got ""
+    FAIL padding-left length(ex) / values
+         assert_not_equals: must not be target value after start got disallowed value "73.4375px"
+    FAIL padding-left length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "padding-left:2s" but got ""
+    FAIL padding-left length(mm) / values
+         assert_not_equals: must not be target value after start got disallowed value "37.795277px"
+    FAIL padding-left length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "padding-left:2s" but got ""
+    FAIL padding-left length(cm) / values
+         assert_not_equals: must not be target value after start got disallowed value "377.95276px"
+    FAIL padding-left length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "padding-left:2s" but got ""
+    FAIL padding-left length(in) / values
+         assert_not_equals: must not be target value after start got disallowed value "960px"
+    FAIL padding-left length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "padding-left:2s" but got ""
+    FAIL padding-right length(pt) / values
+         assert_not_equals: must not be target value after start got disallowed value "13.333334px"
+    FAIL padding-right length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "padding-right:2s" but got ""
+    FAIL padding-right length(pc) / values
+         assert_not_equals: must not be target value after start got disallowed value "160px"
+    FAIL padding-right length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "padding-right:2s" but got ""
+    FAIL padding-right length(px) / values
+         assert_not_equals: must not be target value after start got disallowed value "10px"
+    FAIL padding-right length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "padding-right:2s" but got ""
+    FAIL padding-right length(em) / values
+         assert_not_equals: must not be target value after start got disallowed value "160px"
+    FAIL padding-right length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "padding-right:2s" but got ""
+    FAIL padding-right length(ex) / values
+         assert_not_equals: must not be target value after start got disallowed value "73.4375px"
+    FAIL padding-right length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "padding-right:2s" but got ""
+    FAIL padding-right length(mm) / values
+         assert_not_equals: must not be target value after start got disallowed value "37.795277px"
+    FAIL padding-right length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "padding-right:2s" but got ""
+    FAIL padding-right length(cm) / values
+         assert_not_equals: must not be target value after start got disallowed value "377.95276px"
+    FAIL padding-right length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "padding-right:2s" but got ""
+    FAIL padding-right length(in) / values
+         assert_not_equals: must not be target value after start got disallowed value "960px"
+    FAIL padding-right length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "padding-right:2s" but got ""
+    FAIL padding-top length(pt) / values
+         assert_not_equals: must not be target value after start got disallowed value "13.333334px"
+    FAIL padding-top length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "padding-top:2s" but got ""
+    FAIL padding-top length(pc) / values
+         assert_not_equals: must not be target value after start got disallowed value "160px"
+    FAIL padding-top length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "padding-top:2s" but got ""
+    FAIL padding-top length(px) / values
+         assert_not_equals: must not be target value after start got disallowed value "10px"
+    FAIL padding-top length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "padding-top:2s" but got ""
+    FAIL padding-top length(em) / values
+         assert_not_equals: must not be target value after start got disallowed value "160px"
+    FAIL padding-top length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "padding-top:2s" but got ""
+    FAIL padding-top length(ex) / values
+         assert_not_equals: must not be target value after start got disallowed value "73.4375px"
+    FAIL padding-top length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "padding-top:2s" but got ""
+    FAIL padding-top length(mm) / values
+         assert_not_equals: must not be target value after start got disallowed value "37.795277px"
+    FAIL padding-top length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "padding-top:2s" but got ""
+    FAIL padding-top length(cm) / values
+         assert_not_equals: must not be target value after start got disallowed value "377.95276px"
+    FAIL padding-top length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "padding-top:2s" but got ""
+    FAIL padding-top length(in) / values
+         assert_not_equals: must not be target value after start got disallowed value "960px"
+    FAIL padding-top length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "padding-top:2s" but got ""
+    FAIL margin-bottom length(pt) / values
+         assert_not_equals: must not be target value after start got disallowed value "13.333334px"
+    FAIL margin-bottom length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "margin-bottom:2s" but got ""
+    FAIL margin-bottom length(pc) / values
+         assert_not_equals: must not be target value after start got disallowed value "160px"
+    FAIL margin-bottom length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "margin-bottom:2s" but got ""
+    FAIL margin-bottom length(px) / values
+         assert_not_equals: must not be target value after start got disallowed value "10px"
+    FAIL margin-bottom length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "margin-bottom:2s" but got ""
+    FAIL margin-bottom length(em) / values
+         assert_not_equals: must not be target value after start got disallowed value "160px"
+    FAIL margin-bottom length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "margin-bottom:2s" but got ""
+    FAIL margin-bottom length(ex) / values
+         assert_not_equals: must not be target value after start got disallowed value "73.4375px"
+    FAIL margin-bottom length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "margin-bottom:2s" but got ""
+    FAIL margin-bottom length(mm) / values
+         assert_not_equals: must not be target value after start got disallowed value "37.795277px"
+    FAIL margin-bottom length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "margin-bottom:2s" but got ""
+    FAIL margin-bottom length(cm) / values
+         assert_not_equals: must not be target value after start got disallowed value "377.95276px"
+    FAIL margin-bottom length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "margin-bottom:2s" but got ""
+    FAIL margin-bottom length(in) / values
+         assert_not_equals: must not be target value after start got disallowed value "960px"
+    FAIL margin-bottom length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "margin-bottom:2s" but got ""
+    FAIL margin-left length(pt) / values
+         assert_not_equals: must not be target value after start got disallowed value "13.333334px"
+    FAIL margin-left length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "margin-left:2s" but got ""
+    FAIL margin-left length(pc) / values
+         assert_not_equals: must not be target value after start got disallowed value "160px"
+    FAIL margin-left length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "margin-left:2s" but got ""
+    FAIL margin-left length(px) / values
+         assert_not_equals: must not be target value after start got disallowed value "10px"
+    FAIL margin-left length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "margin-left:2s" but got ""
+    FAIL margin-left length(em) / values
+         assert_not_equals: must not be target value after start got disallowed value "160px"
+    FAIL margin-left length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "margin-left:2s" but got ""
+    FAIL margin-left length(ex) / values
+         assert_not_equals: must not be target value after start got disallowed value "73.4375px"
+    FAIL margin-left length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "margin-left:2s" but got ""
+    FAIL margin-left length(mm) / values
+         assert_not_equals: must not be target value after start got disallowed value "37.795277px"
+    FAIL margin-left length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "margin-left:2s" but got ""
+    FAIL margin-left length(cm) / values
+         assert_not_equals: must not be target value after start got disallowed value "377.95276px"
+    FAIL margin-left length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "margin-left:2s" but got ""
+    FAIL margin-left length(in) / values
+         assert_not_equals: must not be target value after start got disallowed value "960px"
+    FAIL margin-left length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "margin-left:2s" but got ""
+    FAIL margin-right length(pt) / values
+         assert_not_equals: must not be target value after start got disallowed value "13.333334px"
+    FAIL margin-right length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "margin-right:2s" but got ""
+    FAIL margin-right length(pc) / values
+         assert_not_equals: must not be target value after start got disallowed value "160px"
+    FAIL margin-right length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "margin-right:2s" but got ""
+    FAIL margin-right length(px) / values
+         assert_not_equals: must not be target value after start got disallowed value "10px"
+    FAIL margin-right length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "margin-right:2s" but got ""
+    FAIL margin-right length(em) / values
+         assert_not_equals: must not be target value after start got disallowed value "160px"
+    FAIL margin-right length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "margin-right:2s" but got ""
+    FAIL margin-right length(ex) / values
+         assert_not_equals: must not be target value after start got disallowed value "73.4375px"
+    FAIL margin-right length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "margin-right:2s" but got ""
+    FAIL margin-right length(mm) / values
+         assert_not_equals: must not be target value after start got disallowed value "37.795277px"
+    FAIL margin-right length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "margin-right:2s" but got ""
+    FAIL margin-right length(cm) / values
+         assert_not_equals: must not be target value after start got disallowed value "377.95276px"
+    Timeout margin-right length(cm) / events
+    FAIL margin-right length(in) / values
+         assert_not_equals: must not be target value after start got disallowed value "960px"
+    Timeout margin-right length(in) / events
+    FAIL margin-top length(pt) / values
+         assert_not_equals: must not be target value after start got disallowed value "13.333334px"
+    Timeout margin-top length(pt) / events
+    FAIL margin-top length(pc) / values
+         assert_not_equals: must not be target value after start got disallowed value "160px"
+    Timeout margin-top length(pc) / events
+    FAIL margin-top length(px) / values
+         assert_not_equals: must not be target value after start got disallowed value "10px"
+    Timeout margin-top length(px) / events
+    FAIL margin-top length(em) / values
+         assert_not_equals: must not be target value after start got disallowed value "160px"
+    Timeout margin-top length(em) / events
+    FAIL margin-top length(ex) / values
+         assert_not_equals: must not be target value after start got disallowed value "73.4375px"
+    Timeout margin-top length(ex) / events
+    FAIL margin-top length(mm) / values
+         assert_not_equals: must not be target value after start got disallowed value "37.795277px"
+    Timeout margin-top length(mm) / events
+    FAIL margin-top length(cm) / values
+         assert_not_equals: must not be target value after start got disallowed value "377.95276px"
+    Timeout margin-top length(cm) / events
+    FAIL margin-top length(in) / values
+         assert_not_equals: must not be target value after start got disallowed value "960px"
+    Timeout margin-top length(in) / events
+    FAIL height length(pt) / values
+         assert_not_equals: must not be target value after start got disallowed value "13.333334px"
+    Timeout height length(pt) / events
+    FAIL height length(pc) / values
+         assert_not_equals: must not be target value after start got disallowed value "160px"
+    Timeout height length(pc) / events
+    FAIL height length(px) / values
+         assert_not_equals: must not be target value after start got disallowed value "10px"
+    Timeout height length(px) / events
+    FAIL height length(em) / values
+         assert_not_equals: must not be target value after start got disallowed value "160px"
+    Timeout height length(em) / events
+    FAIL height length(ex) / values
+         assert_not_equals: must not be target value after start got disallowed value "73.4375px"
+    Timeout height length(ex) / events
+    FAIL height length(mm) / values
+         assert_not_equals: must not be target value after start got disallowed value "37.795277px"
+    Timeout height length(mm) / events
+    FAIL height length(cm) / values
+         assert_not_equals: must not be target value after start got disallowed value "377.95276px"
+    Timeout height length(cm) / events
+    FAIL height length(in) / values
+         assert_not_equals: must not be target value after start got disallowed value "960px"
+    Timeout height length(in) / events
+    FAIL height percentage(%) / values
+         assert_not_equals: must not be target value after start got disallowed value "64px"
+    Timeout height percentage(%) / events
+    Timeout width length(pt) / values
+    NotRun width length(pt) / events
+    NotRun width length(pc) / values
+    NotRun width length(pc) / events
+    NotRun width length(px) / values
+    NotRun width length(px) / events
+    NotRun width length(em) / values
+    NotRun width length(em) / events
+    NotRun width length(ex) / values
+    NotRun width length(ex) / events
+    NotRun width length(mm) / values
+    NotRun width length(mm) / events
+    NotRun width length(cm) / values
+    NotRun width length(cm) / events
+    NotRun width length(in) / values
+    NotRun width length(in) / events
+    NotRun width percentage(%) / values
+    NotRun width percentage(%) / events
+    NotRun min-height length(pt) / values
+    NotRun min-height length(pt) / events
+    NotRun min-height length(pc) / values
+    NotRun min-height length(pc) / events
+    NotRun min-height length(px) / values
+    NotRun min-height length(px) / events
+    NotRun min-height length(em) / values
+    NotRun min-height length(em) / events
+    NotRun min-height length(ex) / values
+    NotRun min-height length(ex) / events
+    NotRun min-height length(mm) / values
+    NotRun min-height length(mm) / events
+    NotRun min-height length(cm) / values
+    NotRun min-height length(cm) / events
+    NotRun min-height length(in) / values
+    NotRun min-height length(in) / events
+    NotRun min-height percentage(%) / values
+    NotRun min-height percentage(%) / events
+    NotRun min-width length(pt) / values
+    NotRun min-width length(pt) / events
+    NotRun min-width length(pc) / values
+    NotRun min-width length(pc) / events
+    NotRun min-width length(px) / values
+    NotRun min-width length(px) / events
+    NotRun min-width length(em) / values
+    NotRun min-width length(em) / events
+    NotRun min-width length(ex) / values
+    NotRun min-width length(ex) / events
+    NotRun min-width length(mm) / values
+    NotRun min-width length(mm) / events
+    NotRun min-width length(cm) / values
+    NotRun min-width length(cm) / events
+    NotRun min-width length(in) / values
+    NotRun min-width length(in) / events
+    NotRun min-width percentage(%) / values
+    NotRun min-width percentage(%) / events
+    NotRun max-height length(pt) / values
+    NotRun max-height length(pt) / events
+    NotRun max-height length(pc) / values
+    NotRun max-height length(pc) / events
+    NotRun max-height length(px) / values
+    NotRun max-height length(px) / events
+    NotRun max-height length(em) / values
+    NotRun max-height length(em) / events
+    NotRun max-height length(ex) / values
+    NotRun max-height length(ex) / events
+    NotRun max-height length(mm) / values
+    NotRun max-height length(mm) / events
+    NotRun max-height length(cm) / values
+    NotRun max-height length(cm) / events
+    NotRun max-height length(in) / values
+    NotRun max-height length(in) / events
+    NotRun max-height percentage(%) / values
+    NotRun max-height percentage(%) / events
+    NotRun max-width length(pt) / values
+    NotRun max-width length(pt) / events
+    NotRun max-width length(pc) / values
+    NotRun max-width length(pc) / events
+    NotRun max-width length(px) / values
+    NotRun max-width length(px) / events
+    NotRun max-width length(em) / values
+    NotRun max-width length(em) / events
+    NotRun max-width length(ex) / values
+    NotRun max-width length(ex) / events
+    NotRun max-width length(mm) / values
+    NotRun max-width length(mm) / events
+    NotRun max-width length(cm) / values
+    NotRun max-width length(cm) / events
+    NotRun max-width length(in) / values
+    NotRun max-width length(in) / events
+    NotRun max-width percentage(%) / values
+    NotRun max-width percentage(%) / events
+    NotRun top length(pt) / values
+    NotRun top length(pt) / events
+    NotRun top length(pc) / values
+    NotRun top length(pc) / events
+    NotRun top length(px) / values
+    NotRun top length(px) / events
+    NotRun top length(em) / values
+    NotRun top length(em) / events
+    NotRun top length(ex) / values
+    NotRun top length(ex) / events
+    NotRun top length(mm) / values
+    NotRun top length(mm) / events
+    NotRun top length(cm) / values
+    NotRun top length(cm) / events
+    NotRun top length(in) / values
+    NotRun top length(in) / events
+    NotRun top percentage(%) / values
+    NotRun top percentage(%) / events
+    NotRun right length(pt) / values
+    NotRun right length(pt) / events
+    NotRun right length(pc) / values
+    NotRun right length(pc) / events
+    NotRun right length(px) / values
+    NotRun right length(px) / events
+    NotRun right length(em) / values
+    NotRun right length(em) / events
+    NotRun right length(ex) / values
+    NotRun right length(ex) / events
+    NotRun right length(mm) / values
+    NotRun right length(mm) / events
+    NotRun right length(cm) / values
+    NotRun right length(cm) / events
+    NotRun right length(in) / values
+    NotRun right length(in) / events
+    NotRun right percentage(%) / values
+    NotRun right percentage(%) / events
+    NotRun bottom length(pt) / values
+    NotRun bottom length(pt) / events
+    NotRun bottom length(pc) / values
+    NotRun bottom length(pc) / events
+    NotRun bottom length(px) / values
+    NotRun bottom length(px) / events
+    NotRun bottom length(em) / values
+    NotRun bottom length(em) / events
+    NotRun bottom length(ex) / values
+    NotRun bottom length(ex) / events
+    NotRun bottom length(mm) / values
+    NotRun bottom length(mm) / events
+    NotRun bottom length(cm) / values
+    NotRun bottom length(cm) / events
+    NotRun bottom length(in) / values
+    NotRun bottom length(in) / events
+    NotRun bottom percentage(%) / values
+    NotRun bottom percentage(%) / events
+    NotRun left length(pt) / values
+    NotRun left length(pt) / events
+    NotRun left length(pc) / values
+    NotRun left length(pc) / events
+    NotRun left length(px) / values
+    NotRun left length(px) / events
+    NotRun left length(em) / values
+    NotRun left length(em) / events
+    NotRun left length(ex) / values
+    NotRun left length(ex) / events
+    NotRun left length(mm) / values
+    NotRun left length(mm) / events
+    NotRun left length(cm) / values
+    NotRun left length(cm) / events
+    NotRun left length(in) / values
+    NotRun left length(in) / events
+    NotRun left percentage(%) / values
+    NotRun left percentage(%) / events
+    NotRun color color(rgba) / values
+    NotRun color color(rgba) / events
+    NotRun font-size length(pt) / values
+    NotRun font-size length(pt) / events
+    NotRun font-size length(pc) / values
+    NotRun font-size length(pc) / events
+    NotRun font-size length(px) / values
+    NotRun font-size length(px) / events
+    NotRun font-size length(em) / values
+    NotRun font-size length(em) / events
+    NotRun font-size length(ex) / values
+    NotRun font-size length(ex) / events
+    NotRun font-size length(mm) / values
+    NotRun font-size length(mm) / events
+    NotRun font-size length(cm) / values
+    NotRun font-size length(cm) / events
+    NotRun font-size length(in) / values
+    NotRun font-size length(in) / events
+    NotRun font-size percentage(%) / values
+    NotRun font-size percentage(%) / events
+    NotRun font-weight font-weight(keyword) / values
+    NotRun font-weight font-weight(keyword) / events
+    NotRun font-weight font-weight(numeric) / values
+    NotRun font-weight font-weight(numeric) / events
+    NotRun line-height number(integer) / values
+    NotRun line-height number(integer) / events
+    NotRun line-height number(decimal) / values
+    NotRun line-height number(decimal) / events
+    NotRun line-height length(pt) / values
+    NotRun line-height length(pt) / events
+    NotRun line-height length(pc) / values
+    NotRun line-height length(pc) / events
+    NotRun line-height length(px) / values
+    NotRun line-height length(px) / events
+    NotRun line-height length(em) / values
+    NotRun line-height length(em) / events
+    NotRun line-height length(ex) / values
+    NotRun line-height length(ex) / events
+    NotRun line-height length(mm) / values
+    NotRun line-height length(mm) / events
+    NotRun line-height length(cm) / values
+    NotRun line-height length(cm) / events
+    NotRun line-height length(in) / values
+    NotRun line-height length(in) / events
+    NotRun line-height percentage(%) / values
+    NotRun line-height percentage(%) / events
+    NotRun letter-spacing length(pt) / values
+    NotRun letter-spacing length(pt) / events
+    NotRun letter-spacing length(pc) / values
+    NotRun letter-spacing length(pc) / events
+    NotRun letter-spacing length(px) / values
+    NotRun letter-spacing length(px) / events
+    NotRun letter-spacing length(em) / values
+    NotRun letter-spacing length(em) / events
+    NotRun letter-spacing length(ex) / values
+    NotRun letter-spacing length(ex) / events
+    NotRun letter-spacing length(mm) / values
+    NotRun letter-spacing length(mm) / events
+    NotRun letter-spacing length(cm) / values
+    NotRun letter-spacing length(cm) / events
+    NotRun letter-spacing length(in) / values
+    NotRun letter-spacing length(in) / events
+    NotRun word-spacing length(pt) / values
+    NotRun word-spacing length(pt) / events
+    NotRun word-spacing length(pc) / values
+    NotRun word-spacing length(pc) / events
+    NotRun word-spacing length(px) / values
+    NotRun word-spacing length(px) / events
+    NotRun word-spacing length(em) / values
+    NotRun word-spacing length(em) / events
+    NotRun word-spacing length(ex) / values
+    NotRun word-spacing length(ex) / events
+    NotRun word-spacing length(mm) / values
+    NotRun word-spacing length(mm) / events
+    NotRun word-spacing length(cm) / values
+    NotRun word-spacing length(cm) / events
+    NotRun word-spacing length(in) / values
+    NotRun word-spacing length(in) / events
+    NotRun word-spacing percentage(%) / values
+    NotRun word-spacing percentage(%) / events
+    NotRun text-indent length(pt) / values
+    NotRun text-indent length(pt) / events
+    NotRun text-indent length(pc) / values
+    NotRun text-indent length(pc) / events
+    NotRun text-indent length(px) / values
+    NotRun text-indent length(px) / events
+    NotRun text-indent length(em) / values
+    NotRun text-indent length(em) / events
+    NotRun text-indent length(ex) / values
+    NotRun text-indent length(ex) / events
+    NotRun text-indent length(mm) / values
+    NotRun text-indent length(mm) / events
+    NotRun text-indent length(cm) / values
+    NotRun text-indent length(cm) / events
+    NotRun text-indent length(in) / values
+    NotRun text-indent length(in) / events
+    NotRun text-indent percentage(%) / values
+    NotRun text-indent percentage(%) / events
+    NotRun text-shadow shadow(shadow) / values
+    NotRun text-shadow shadow(shadow) / events
+    NotRun outline-color color(rgba) / values
+    NotRun outline-color color(rgba) / events
+    NotRun outline-offset length(pt) / values
+    NotRun outline-offset length(pt) / events
+    NotRun outline-offset length(pc) / values
+    NotRun outline-offset length(pc) / events
+    NotRun outline-offset length(px) / values
+    NotRun outline-offset length(px) / events
+    NotRun outline-offset length(em) / values
+    NotRun outline-offset length(em) / events
+    NotRun outline-offset length(ex) / values
+    NotRun outline-offset length(ex) / events
+    NotRun outline-offset length(mm) / values
+    NotRun outline-offset length(mm) / events
+    NotRun outline-offset length(cm) / values
+    NotRun outline-offset length(cm) / events
+    NotRun outline-offset length(in) / values
+    NotRun outline-offset length(in) / events
+    NotRun outline-width length(pt) / values
+    NotRun outline-width length(pt) / events
+    NotRun outline-width length(pc) / values
+    NotRun outline-width length(pc) / events
+    NotRun outline-width length(px) / values
+    NotRun outline-width length(px) / events
+    NotRun outline-width length(em) / values
+    NotRun outline-width length(em) / events
+    NotRun outline-width length(ex) / values
+    NotRun outline-width length(ex) / events
+    NotRun outline-width length(mm) / values
+    NotRun outline-width length(mm) / events
+    NotRun outline-width length(cm) / values
+    NotRun outline-width length(cm) / events
+    NotRun outline-width length(in) / values
+    NotRun outline-width length(in) / events
+    NotRun clip rectangle(rectangle) / values
+    NotRun clip rectangle(rectangle) / events
+    NotRun vertical-align length(pt) / values
+    NotRun vertical-align length(pt) / events
+    NotRun vertical-align length(pc) / values
+    NotRun vertical-align length(pc) / events
+    NotRun vertical-align length(px) / values
+    NotRun vertical-align length(px) / events
+    NotRun vertical-align length(em) / values
+    NotRun vertical-align length(em) / events
+    NotRun vertical-align length(ex) / values
+    NotRun vertical-align length(ex) / events
+    NotRun vertical-align length(mm) / values
+    NotRun vertical-align length(mm) / events
+    NotRun vertical-align length(cm) / values
+    NotRun vertical-align length(cm) / events
+    NotRun vertical-align length(in) / values
+    NotRun vertical-align length(in) / events
+    NotRun vertical-align percentage(%) / values
+    NotRun vertical-align percentage(%) / events
+    NotRun opacity number[0,1](zero-to-one) / values
+    NotRun opacity number[0,1](zero-to-one) / events
+    NotRun visibility visibility(keyword) / values
+    NotRun visibility visibility(keyword) / events
+    NotRun z-index integer(integer) / values
+    NotRun z-index integer(integer) / events
+wrote docs/sprint/w6/raw/J1b-drain/default_r1_properties-value-inherit-001.json
+
+── WPT css/css-transitions ──────────────────────────────────────────
+    0.0%      0/560    (1 files)  css/css-transitions
+
+  FILES  1   subtests 0/560  =  0.0%
+  NO_REPORT 0   [1mHANG/CRASH 0[0m (Bar 0)   SHORT 0 (instrument)   SLOW 0 (our budget)   TH_TIMEOUT 1 (async test never completed)

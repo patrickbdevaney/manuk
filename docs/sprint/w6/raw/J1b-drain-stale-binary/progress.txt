@@ -1,0 +1,13 @@
+arm=default run=1 file=properties-value-001 rc=0 wall_ms=8368
+arm=default run=1 file=properties-value-inherit-001 rc=0 wall_ms=8612
+arm=default run=2 file=properties-value-001 rc=0 wall_ms=8447
+arm=default run=2 file=properties-value-inherit-001 rc=0 wall_ms=14486
+arm=default run=3 file=properties-value-001 rc=0 wall_ms=8186
+arm=default run=3 file=properties-value-inherit-001 rc=0 wall_ms=14509
+arm=off run=1 file=properties-value-001 rc=0 wall_ms=629
+arm=off run=1 file=properties-value-inherit-001 rc=0 wall_ms=622
+arm=off run=2 file=properties-value-001 rc=0 wall_ms=621
+arm=off run=2 file=properties-value-inherit-001 rc=0 wall_ms=621
+arm=off run=3 file=properties-value-001 rc=0 wall_ms=623
+arm=off run=3 file=properties-value-inherit-001 rc=0 wall_ms=622
+DONE
