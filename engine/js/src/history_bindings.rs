@@ -181,7 +181,7 @@ unsafe fn js_string_to_rust(cx: *mut RawJSContext, v: Value) -> String {
     use mozjs::conversions::{ConversionResult, FromJSValConvertible};
     rooted!(in(cx) let rv = v);
     let mut c = wrap_cx(cx);
-    match String::safe_from_jsval(&mut c, rv.handle(), ()) {
+    match String::from_jsval(&mut c, rv.handle(), ()) {
         Ok(ConversionResult::Success(s)) => s,
         _ => String::new(),
     }
@@ -365,7 +365,7 @@ unsafe extern "C" fn location_hash_get(cx: *mut RawJSContext, _argc: u32, vp: *m
 unsafe fn to_js_string(cx: *mut RawJSContext, vp: *mut Value, s: &str) -> bool {
     use mozjs::conversions::ToJSValConvertible;
     rooted!(in(cx) let mut out = UndefinedValue());
-    s.to_jsval(cx, out.handle_mut());
+    s.to_jsval(&mut wrap_cx(cx), out.handle_mut());
     set_rval(vp, out.get());
     true
 }

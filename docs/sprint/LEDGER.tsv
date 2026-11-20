@@ -1,4 +1,4 @@
-ts	node	model	tier	rc	prompt	input_tokens	cache_creation	cache_read	input_total	output_tokens	num_turns	cost_usd	duration_ms	session_id	is_error
+ts	node	model	tier	rc	prompt	input_tokens	cache_creation	cache_read	input_total	output_tokens	num_turns	cost_usd	duration_ms	session_id	is_error	first_turn_input	first_turn_cache_read
 2026-11-20 10:21:18	W6.J3	sonnet	1	0	full	34	36099	588289	624422	6943	17	0.2727229	167397	70114cb0-ede6-40b3-8237-e996822b5c7e	False
 2026-11-20 10:23:39	W6.J1.a	sonnet	1	0	full	46	31393	807718	839157	6293	23	0.26936580000000004	108588	ee24c376-8a66-4297-9ef2-6c35f5da9386	False
 2026-11-20 10:28:39	W6.J1.b	haiku	0	0	full	64	58972	1566506	1625542	21264	33	0.038097860000000004	267461	32ab0874-e430-45c8-9793-6992bd417235	False
@@ -11,3 +11,6 @@ ts	node	model	tier	rc	prompt	input_tokens	cache_creation	cache_read	input_total	
 2026-11-20 12:14:02	W6.V1	sonnet	1	0	pack	54	78332	1674245	1752631	23317	27	0.7140304999999999	237829	26936722-131f-4852-bf32-e94c356d13b8	False
 2026-11-20 12:14:58	W6.V1	opus	2	0	pack	14	27009	206189	233212	2232	7	0.3020058	24903	48a1532d-3d7a-481d-b86d-57d9a5224a41	False
 2026-11-20 12:16:14	W6.V1	opus	2	0	pack	22	18699	377594	396315	4025	11	0.3056988	44396	a20cf912-925a-4d36-b14b-2f653a6a3e88	False
+2026-11-20 12:18:21	W6.L1.a	haiku	0	0	pack	26	49673	557235	606934	18560	13	0.02478955	93545	f2f4a435-7c61-4183-831b-2dca9ec4c936	False
+2026-11-20 12:22:39	W6.L1.a.a	sonnet	1	0	pack	24	24809	373783	398616	5153	12	0.1881923	225951	1181d4fb-3459-41c5-bee8-f68f704807b9	False		
+2026-11-20 12:26:04	W6.R1.b	haiku	0	0	pack	40	52863	943103	996006	22398	20	0.031206630000000003	173247	eb07730e-165a-4eec-bc70-efda19f034bb	False		

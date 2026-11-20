@@ -1704,7 +1704,10 @@ fn init_page_session(cdp: &mut Cdp, width: u32, height: u32) -> Result<()> {
     }
     // W6.J2.d: an unfocused headless page defers focus/focusin until it gains page focus; emulate focus so
     // `act focus` and Tab deliver them synchronously as a focused tab would.
-    cdp.call("Emulation.setFocusEmulationEnabled", json!({"enabled": true}))?;
+    cdp.call(
+        "Emulation.setFocusEmulationEnabled",
+        json!({"enabled": true}),
+    )?;
     cdp.call(
         "Emulation.setDeviceMetricsOverride",
         json!({"width": width, "height": height, "deviceScaleFactor": 1, "mobile": false}),

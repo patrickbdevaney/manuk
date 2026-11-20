@@ -150,6 +150,7 @@ fn instantiate_and_run(
         hideScriptFromDebugger: false,
         deferDebugMetadata: false,
         eagerDelazificationStrategy_: DelazificationOption::OnDemandOnly,
+        eagerBaselineStrategy_: mozjs::jsapi::JS::EagerBaselineOption::None,
     };
     let script =
         unsafe { wrappers2::InstantiateGlobalStencil(&realm, &opts, st, std::ptr::null_mut()) };

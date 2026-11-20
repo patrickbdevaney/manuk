@@ -239,7 +239,7 @@ unsafe fn error_field(
         return None;
     }
     let mut c = wrap_cx(cx);
-    match String::safe_from_jsval(&mut c, v.handle(), ()) {
+    match String::from_jsval(&mut c, v.handle(), ()) {
         Ok(ConversionResult::Success(s)) if !s.trim().is_empty() => Some(s),
         _ => None,
     }
@@ -393,7 +393,7 @@ fn pending_exception(cx: *mut RawJSContext) -> String {
         }
         mozjs::jsapi::JS_ClearPendingException(cx);
         let mut c = wrap_cx(cx);
-        let msg = match String::safe_from_jsval(&mut c, ex.handle(), ()) {
+        let msg = match String::from_jsval(&mut c, ex.handle(), ()) {
             Ok(ConversionResult::Success(s)) => s,
             _ => "(unstringifiable exception)".to_string(),
         };
@@ -4358,7 +4358,7 @@ unsafe fn arg_string(cx: *mut RawJSContext, vp: *mut Value, argc: u32, i: u32) -
     }
     let mut c = wrap_cx(cx);
     rooted!(in(cx) let val = *vp.add(2 + i as usize));
-    match String::safe_from_jsval(&mut c, val.handle(), ()) {
+    match String::from_jsval(&mut c, val.handle(), ()) {
         Ok(ConversionResult::Success(s)) => Some(s),
         _ => None,
     }
@@ -4486,13 +4486,13 @@ unsafe fn eval_in_current_global(cx: *mut RawJSContext, script: &str) -> Option<
 /// of. `to_jsval` carries a NUL through as the character it is.
 unsafe fn utf8_jsval(cx: *mut RawJSContext, s: &str) -> Value {
     rooted!(in(cx) let mut out = UndefinedValue());
-    s.to_jsval(cx, out.handle_mut());
+    s.to_jsval(&mut wrap_cx(cx), out.handle_mut());
     out.get()
 }
 
 unsafe fn return_string(cx: *mut RawJSContext, vp: *mut Value, s: &str) {
     rooted!(in(cx) let mut out = UndefinedValue());
-    s.to_jsval(cx, out.handle_mut());
+    s.to_jsval(&mut wrap_cx(cx), out.handle_mut());
     *vp = out.get();
 }
 
@@ -4991,22 +4991,22 @@ unsafe fn record_mutation(
     }
     rooted!(in(cx) let g = global);
     rooted!(in(cx) let mut kind_v = UndefinedValue());
-    kind.to_jsval(cx, kind_v.handle_mut());
+    kind.to_jsval(&mut wrap_cx(cx), kind_v.handle_mut());
     rooted!(in(cx) let mut target_v = Int32Value(target.0 as i32));
     rooted!(in(cx) let mut attr_v = UndefinedValue());
     match attr {
-        Some(a) => a.to_jsval(cx, attr_v.handle_mut()),
+        Some(a) => a.to_jsval(&mut wrap_cx(cx), attr_v.handle_mut()),
         None => attr_v.set(NullValue()),
     }
     rooted!(in(cx) let mut old_v = UndefinedValue());
     match old_value {
-        Some(o) => o.to_jsval(cx, old_v.handle_mut()),
+        Some(o) => o.to_jsval(&mut wrap_cx(cx), old_v.handle_mut()),
         None => old_v.set(NullValue()),
     }
     rooted!(in(cx) let mut added_v = UndefinedValue());
-    ids(added).to_jsval(cx, added_v.handle_mut());
+    ids(added).to_jsval(&mut wrap_cx(cx), added_v.handle_mut());
     rooted!(in(cx) let mut removed_v = UndefinedValue());
-    ids(removed).to_jsval(cx, removed_v.handle_mut());
+    ids(removed).to_jsval(&mut wrap_cx(cx), removed_v.handle_mut());
     // One contiguous, rooted argument vector — `HandleValueArray` borrows it for the call only.
     let argv: [Value; 6] = [
         kind_v.get(),
@@ -9627,7 +9627,7 @@ unsafe fn el_attach_shadow(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> 
             let is_closed = got && {
                 let mut c = wrap_cx(cx);
                 matches!(
-                    String::safe_from_jsval(&mut c, v.handle(), ()),
+                    String::from_jsval(&mut c, v.handle(), ()),
                     Ok(ConversionResult::Success(ref s)) if s == "closed"
                 )
             };
@@ -10151,7 +10151,7 @@ unsafe fn return_string_array(cx: *mut RawJSContext, vp: *mut Value, items: &[St
     rooted!(in(cx) let arr = arr_ptr);
     for (i, name) in items.iter().enumerate() {
         rooted!(in(cx) let mut v = UndefinedValue());
-        name.as_str().to_jsval(cx, v.handle_mut());
+        name.as_str().to_jsval(&mut wrap_cx(cx), v.handle_mut());
         JS_SetElement(&mut wrap_cx(cx), arr.handle(), i as u32, v.handle());
     }
     *vp = ObjectValue(arr.get());
@@ -10846,7 +10846,7 @@ unsafe fn read_sanitizer_remove_elements(
             rooted!(in(cx) let mut item = UndefinedValue());
             if JS_GetElement(&mut c, arr.handle(), i, item.handle_mut()) {
                 if let Ok(ConversionResult::Success(s)) =
-                    String::safe_from_jsval(&mut c, item.handle(), ())
+                    String::from_jsval(&mut c, item.handle(), ())
                 {
                     out.insert(s.to_ascii_lowercase());
                 }
@@ -11505,7 +11505,7 @@ unsafe fn sheet_text(cx: *mut RawJSContext, sheet: *mut JSObject) -> String {
     if JS_GetProperty(&mut c, obj.handle(), c"_text".as_ptr(), v.handle_mut())
         && !v.get().is_undefined()
     {
-        if let Ok(ConversionResult::Success(t)) = String::safe_from_jsval(&mut c, v.handle(), ()) {
+        if let Ok(ConversionResult::Success(t)) = String::from_jsval(&mut c, v.handle(), ()) {
             return t;
         }
     }
@@ -11534,7 +11534,7 @@ unsafe fn sheet_text(cx: *mut RawJSContext, sheet: *mut JSObject) -> String {
                     rooted!(in(cx) let mut txt = UndefinedValue());
                     if JS_GetProperty(&mut c, ro.handle(), c"cssText".as_ptr(), txt.handle_mut()) {
                         if let Ok(ConversionResult::Success(t)) =
-                            String::safe_from_jsval(&mut c, txt.handle(), ())
+                            String::from_jsval(&mut c, txt.handle(), ())
                         {
                             out.push_str(&t);
                             out.push('\n');
@@ -14720,13 +14720,9 @@ pub fn run_scripts(
     crate::event_loop::install(runtime, global.handle())?;
     // Register the ES-module resolve hook (self-contained modules for now).
     unsafe {
-        mozjs::jsapi::SetModuleDynamicImportHook(
+        mozjs::jsapi::SetModuleLoadHook(
             mozjs::jsapi::JS_GetRuntime(raw_cx),
-            Some(module_dynamic_import_hook),
-        );
-        mozjs::jsapi::SetModuleResolveHook(
-            mozjs::jsapi::JS_GetRuntime(raw_cx),
-            Some(module_resolve_hook),
+            Some(module_load_hook),
         );
         mozjs::jsapi::SetModuleMetadataHook(
             mozjs::jsapi::JS_GetRuntime(raw_cx),
@@ -14886,13 +14882,9 @@ impl PageContext {
             );
         }
         unsafe {
-            mozjs::jsapi::SetModuleDynamicImportHook(
+            mozjs::jsapi::SetModuleLoadHook(
                 mozjs::jsapi::JS_GetRuntime(raw_cx),
-                Some(module_dynamic_import_hook),
-            );
-            mozjs::jsapi::SetModuleResolveHook(
-                mozjs::jsapi::JS_GetRuntime(raw_cx),
-                Some(module_resolve_hook),
+                Some(module_load_hook),
             );
             mozjs::jsapi::SetModuleMetadataHook(
                 mozjs::jsapi::JS_GetRuntime(raw_cx),
@@ -15871,7 +15863,7 @@ impl PageContext {
         }
         let mut c = unsafe { wrap_cx(raw_cx) };
         rooted!(&in(runtime.cx()) let val = v);
-        let s = match unsafe { String::safe_from_jsval(&mut c, val.handle(), ()) } {
+        let s = match unsafe { String::from_jsval(&mut c, val.handle(), ()) } {
             Ok(ConversionResult::Success(s)) => s,
             _ => return Vec::new(),
         };
@@ -15898,7 +15890,7 @@ impl PageContext {
         }
         let mut c = unsafe { wrap_cx(raw_cx) };
         rooted!(&in(runtime.cx()) let val = v);
-        let s = match unsafe { String::safe_from_jsval(&mut c, val.handle(), ()) } {
+        let s = match unsafe { String::from_jsval(&mut c, val.handle(), ()) } {
             Ok(ConversionResult::Success(s)) => s,
             _ => return None,
         };
@@ -15929,7 +15921,7 @@ impl PageContext {
         }
         let mut c = unsafe { wrap_cx(raw_cx) };
         rooted!(&in(runtime.cx()) let val = v);
-        match unsafe { String::safe_from_jsval(&mut c, val.handle(), ()) } {
+        match unsafe { String::from_jsval(&mut c, val.handle(), ()) } {
             Ok(ConversionResult::Success(s)) => Some(s),
             _ => None,
         }
@@ -16426,7 +16418,7 @@ pub unsafe fn esm_registry_gc_selftest_in_realm(cx: *mut RawJSContext) -> bool {
                     if pv.get().is_string() {
                         let mut c = wrap_cx(cx);
                         matches!(
-                            String::safe_from_jsval(&mut c, pv.handle(), ()),
+                            String::from_jsval(&mut c, pv.handle(), ()),
                             Ok(ConversionResult::Success(ref s)) if s == URL
                         )
                     } else {
@@ -16482,10 +16474,7 @@ pub unsafe fn esm_import_graph_selftest_in_realm(cx: *mut RawJSContext) -> bool 
         // The resolve+metadata hooks are per-RUNTIME and installed by `run_scripts` on the page path;
         // this self-test boots its own global, so register them here too or `ModuleLink` reports
         // "Module resolve hook not set" and never reaches the hook under test.
-        mozjs::jsapi::SetModuleResolveHook(
-            mozjs::jsapi::JS_GetRuntime(cx),
-            Some(module_resolve_hook),
-        );
+        mozjs::jsapi::SetModuleLoadHook(mozjs::jsapi::JS_GetRuntime(cx), Some(module_load_hook));
         mozjs::jsapi::SetModuleMetadataHook(
             mozjs::jsapi::JS_GetRuntime(cx),
             Some(module_metadata_hook),
@@ -16530,6 +16519,11 @@ pub unsafe fn esm_import_graph_selftest_in_realm(cx: *mut RawJSContext) -> bool 
             // Link the ROOT: SpiderMonkey walks the graph, calling the resolve hook for './esm-graph-
             // dep.js' → BASE-relative → DEP → the seeded module. Then evaluate: the dep runs first
             // (binding `v`), then the root's top level writes `v + 1` to the global.
+            // (153: the engine walks the graph via `LoadRequestedModules` -> `module_load_hook`, which
+            // finds the seeded dep in the registry; no fetch source is needed.)
+            if !esm_load_graph(cx, BASE, root_r.handle().into(), &|_| None, 0) {
+                return false;
+            }
             if !ModuleLink(cx, root_r.handle().into()) {
                 return false;
             }
@@ -16605,10 +16599,7 @@ pub unsafe fn esm_graph_load_selftest_in_realm(cx: *mut RawJSContext) -> bool {
         let _ar = mozjs::jsapi::JSAutoRealm::new(cx, global.get());
         // Per-RUNTIME hooks — a self-test global must re-register them or `ModuleLink` never reaches the
         // resolve hook under test (same catch B2's self-test documents).
-        mozjs::jsapi::SetModuleResolveHook(
-            mozjs::jsapi::JS_GetRuntime(cx),
-            Some(module_resolve_hook),
-        );
+        mozjs::jsapi::SetModuleLoadHook(mozjs::jsapi::JS_GetRuntime(cx), Some(module_load_hook));
         mozjs::jsapi::SetModuleMetadataHook(
             mozjs::jsapi::JS_GetRuntime(cx),
             Some(module_metadata_hook),
@@ -16746,10 +16737,7 @@ pub unsafe fn esm_page_module_graph_selftest_in_realm(cx: *mut RawJSContext) -> 
         let _ar = mozjs::jsapi::JSAutoRealm::new(cx, global.get());
         // Per-RUNTIME hooks — a self-test global must re-register them or `ModuleLink` never reaches
         // the resolve hook (same catch the B2/B3 self-tests document).
-        mozjs::jsapi::SetModuleResolveHook(
-            mozjs::jsapi::JS_GetRuntime(cx),
-            Some(module_resolve_hook),
-        );
+        mozjs::jsapi::SetModuleLoadHook(mozjs::jsapi::JS_GetRuntime(cx), Some(module_load_hook));
         mozjs::jsapi::SetModuleMetadataHook(
             mozjs::jsapi::JS_GetRuntime(cx),
             Some(module_metadata_hook),
@@ -16830,67 +16818,58 @@ pub unsafe fn esm_page_module_graph_selftest_in_realm(cx: *mut RawJSContext) -> 
 /// registry insert + the local root before the recursive call).
 unsafe fn esm_load_graph(
     cx: *mut RawJSContext,
-    url: &str,
+    _url: &str,
     module: mozjs::jsapi::JS::Handle<*mut JSObject>,
     fetch: &dyn Fn(&str) -> Option<String>,
-    depth: u32,
+    _depth: u32,
 ) -> bool {
-    use mozjs::jsapi::{CompileModule, GetRequestedModuleSpecifier, GetRequestedModulesCount};
-    // Backstop: a graph this deep is either malicious or a cycle guard that failed. Stop cleanly rather
-    // than overflow the stack (the insert-before-recurse guard below is the PRIMARY cycle defence; this
-    // only catches a genuinely unbounded chain).
-    if depth > 256 {
+    // SpiderMonkey 153 owns the graph walk (`LoadRequestedModules`): it calls [`module_load_hook`] once
+    // per request, memoizes by request (so a cycle terminates) and bounds nothing else. This function
+    // only supplies the fetch source for the duration of the call and reports success.
+    //
+    // The closure's lifetime is erased for the thread-local; it is restored before return, so no use
+    // outlives the borrow.
+    let erased: *const (dyn Fn(&str) -> Option<String> + 'static) = std::mem::transmute(fetch);
+    let prev = ESM_FETCH.with(|f| f.replace(Some(erased)));
+    ESM_GRAPH_OUTCOME.with(|o| o.set(None));
+    rooted!(in(cx) let host_defined = UndefinedValue());
+    let started = mozjs::jsapi::JS::LoadRequestedModules(
+        cx,
+        module,
+        host_defined.handle().into(),
+        Some(esm_graph_resolved),
+        Some(esm_graph_rejected),
+    );
+    ESM_FETCH.with(|f| f.set(prev));
+    if !started {
+        mozjs::jsapi::JS_ClearPendingException(cx);
         return false;
     }
-    let count = GetRequestedModulesCount(cx, module);
-    for i in 0..count {
-        // The specifier as written in the dependency's source (`'./b.js'`, `'https://x/y.js'`).
-        let spec_jsstr = GetRequestedModuleSpecifier(cx, module, i);
-        if spec_jsstr.is_null() {
-            continue;
-        }
-        let specifier = {
-            rooted!(in(cx) let sv = mozjs::jsval::StringValue(&*spec_jsstr));
-            let mut c = wrap_cx(cx);
-            match String::safe_from_jsval(&mut c, sv.handle(), ()) {
-                Ok(ConversionResult::Success(s)) => s,
-                _ => continue,
-            }
-        };
-        // Resolve against THIS module's own url, so `./b.js` is relative to the importer; a BARE
-        // specifier resolves through the import map (tick 520) against the document url. Unresolvable
-        // (bare + unmapped) → skip (link fails at that import, loud-but-safe).
-        let resolved = match resolve_module_specifier(url, &specifier) {
-            Some(u) => u,
-            None => continue,
-        };
-        // Cycle guard + memoization: already fetched ⇒ do not fetch/compile/recurse again. This is the
-        // single line that makes `a ↔ b` terminate.
-        if !esm_registry_get(&resolved).is_null() {
-            continue;
-        }
-        // Fetch + compile the dependency. A miss is non-fatal: the importer will fail at ModuleLink.
-        let source = match fetch(&resolved) {
-            Some(s) => s,
-            None => continue,
-        };
-        let dep = {
-            let opts = CompileOptionsWrapper::new(&wrap_cx(cx), c"esm-dep.js".to_owned(), 1);
-            let utf16: Vec<u16> = source.encode_utf16().collect();
-            let mut src = mozjs::rust::transform_u16_to_source_text(&utf16);
-            CompileModule(cx, opts.ptr, &mut src)
-        };
-        if dep.is_null() {
-            continue;
-        }
-        rooted!(in(cx) let dep_r = dep);
-        set_module_private_url(cx, dep_r.handle().get(), &resolved);
-        // INSERT BEFORE RECURSE — the registry now holds `resolved`, so a back-edge to it is a cache hit.
-        esm_registry_insert(&resolved, dep_r.handle().get());
-        if !esm_load_graph(cx, &resolved, dep_r.handle().into(), fetch, depth + 1) {
-            return false;
-        }
-    }
+    ESM_GRAPH_OUTCOME.with(|o| o.get()) == Some(true)
+}
+
+thread_local! {
+    /// The source lookup [`esm_load_graph`] is running under, if any (see its lifetime note).
+    static ESM_FETCH: std::cell::Cell<Option<*const (dyn Fn(&str) -> Option<String> + 'static)>> =
+        const { std::cell::Cell::new(None) };
+    /// How the last `LoadRequestedModules` ended: `Some(true)` resolved, `Some(false)` rejected.
+    static ESM_GRAPH_OUTCOME: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(None) };
+}
+
+unsafe extern "C" fn esm_graph_resolved(
+    _cx: *mut RawJSContext,
+    _host_defined: mozjs::jsapi::JS::Handle<mozjs::jsapi::Value>,
+) -> bool {
+    ESM_GRAPH_OUTCOME.with(|o| o.set(Some(true)));
+    true
+}
+
+unsafe extern "C" fn esm_graph_rejected(
+    _cx: *mut RawJSContext,
+    _host_defined: mozjs::jsapi::JS::Handle<mozjs::jsapi::Value>,
+    _error: mozjs::jsapi::JS::Handle<mozjs::jsapi::Value>,
+) -> bool {
+    ESM_GRAPH_OUTCOME.with(|o| o.set(Some(false)));
     true
 }
 
@@ -16929,7 +16908,7 @@ unsafe fn run_module(cx: *mut RawJSContext, source: &str, node: Option<NodeId>) 
     // Walk the root's `import`s to fetch-from-map + compile + register the whole graph, so that when
     // `ModuleLink` calls `module_resolve_hook` per specifier, every url already resolves. Empty map ⇒
     // this is a no-op and a self-contained module links exactly as before.
-    let have_graph = MODULE_GRAPH_SOURCES.with(|m| !m.borrow().is_empty());
+    let have_graph = true;
     if have_graph {
         let fetch = |u: &str| MODULE_GRAPH_SOURCES.with(|m| m.borrow().get(u).cloned());
         // A miss inside the walk is non-fatal (the importer fails loud-but-safe at `ModuleLink`), so
@@ -17055,7 +17034,7 @@ pub(crate) unsafe fn notify_about_rejected_promises(cx: *mut RawJSContext) {
         rooted!(in(cx) let p = obj);
         // The handler may have been attached at any point since the rejection — synchronously on the
         // next line, or from a microtask that ran during this very checkpoint. Both are "handled".
-        if mozjs::rust::wrappers::GetPromiseIsHandled(p.handle()) {
+        if mozjs::rust::wrappers2::GetPromiseIsHandled(p.handle()) {
             continue;
         }
         report_rejection(cx, p.handle());
@@ -17124,9 +17103,7 @@ unsafe fn report_rejection(cx: *mut RawJSContext, promise: mozjs::rust::HandleOb
         if let Some(v) = eval_in_current_global(cx, "__fireUnhandledRejection()") {
             rooted!(in(cx) let rv = v);
             let mut c = wrap_cx(cx);
-            if let Ok(ConversionResult::Success(s)) =
-                String::safe_from_jsval(&mut c, rv.handle(), ())
-            {
+            if let Ok(ConversionResult::Success(s)) = String::from_jsval(&mut c, rv.handle(), ()) {
                 // "" is the handled case — a listener called `preventDefault()`, so the browser's own
                 // report is exactly what it asked us not to print.
                 if s.is_empty() {
@@ -17141,7 +17118,7 @@ unsafe fn report_rejection(cx: *mut RawJSContext, promise: mozjs::rust::HandleOb
     // realm, or a rejection that beats the prelude's install). Message-only, and honest about it.
     let msg = reported.unwrap_or_else(|| {
         let mut c = wrap_cx(cx);
-        match String::safe_from_jsval(&mut c, val.handle(), ()) {
+        match String::from_jsval(&mut c, val.handle(), ()) {
             Ok(ConversionResult::Success(s)) => s,
             _ => "(unstringifiable rejection)".to_string(),
         }
@@ -17169,9 +17146,12 @@ unsafe fn report_rejection(cx: *mut RawJSContext, promise: mozjs::rust::HandleOb
 
 unsafe extern "C" fn module_metadata_hook(
     cx: *mut RawJSContext,
-    private_value: mozjs::jsapi::JS::Handle<mozjs::jsapi::Value>,
+    module_record: mozjs::jsapi::JS::Handle<*mut JSObject>,
     meta_object: mozjs::jsapi::JS::Handle<*mut JSObject>,
 ) -> bool {
+    // 153 passes the module record, not its private: read the private off it.
+    rooted!(in(cx) let mut private_value = UndefinedValue());
+    mozjs::glue::JS_GetModulePrivate(module_record.get(), private_value.handle_mut().into());
     // `import.meta.url` — the property bundlers actually read (for asset URLs, worker construction,
     // and `import.meta.env` shims). The right answer is the *referencing module's OWN* base url, which
     // `run_module` / the resolve hook (B2) stashed as the module's private at compile time. For the
@@ -17179,10 +17159,10 @@ unsafe extern "C" fn module_metadata_hook(
     // fetched graph module it is that module's resolved url — which is why the source must be the
     // module's private, not the one-per-document `DOC_URL` slot that only ever knows the top document.
     let url = {
-        rooted!(in(cx) let pv = private_value.get());
+        let pv = &private_value;
         if pv.get().is_string() {
             let mut c = wrap_cx(cx);
-            match String::safe_from_jsval(&mut c, pv.handle(), ()) {
+            match String::from_jsval(&mut c, pv.handle(), ()) {
                 Ok(ConversionResult::Success(ref s)) if !s.is_empty() => s.clone(),
                 // A private that is a string but empty/unstringifiable falls back to the document url.
                 _ => DOC_URL.with(|u| u.borrow().clone()),
@@ -17316,153 +17296,133 @@ fn fetch_module_graph_on_demand(root: &str) {
     }
 }
 
-/// **`import()` — the HostImportModuleDynamically hook.** Without it SpiderMonkey throws
-/// *"Dynamic module import is disabled or not supported in this context"* at every `import()`
-/// expression — which surface audit #34 caught the map claiming `works` for.
+/// **The HostLoadImportedModule hook — one entry for `import x from`, `import()` and the graph walk.**
 ///
-/// **Why a synchronous hook is honest here.** The spec's hook starts an asynchronous operation and the
-/// embedder calls `FinishDynamicModuleImport` later. We have no synchronous network on the JS thread,
-/// so the module must already be in hand — and it is: the page pre-fetches the whole reachable graph,
-/// including literal `import("…")` specifiers, before any script runs. The fetch that would make this
-/// asynchronous has already happened.
+/// SpiderMonkey 153 replaced the old synchronous resolve hook and `import()` hook with this single
+/// asynchronous one: it is called per module request, and the embedder must call
+/// `FinishLoadingImportedModule` (or a `...Failed` variant) with the same `payload`. Our module
+/// sources are already in hand (the document pre-fetches the reachable graph) or are fetched
+/// synchronously for an `import()` target the pre-fetch could not see, so every call finishes
+/// before it returns.
 ///
-/// **A specifier we did not pre-fetch REJECTS**, which is the correct answer rather than a limitation
-/// quietly swallowed: a computed specifier cannot be seen by a textual pre-scan, and the page's own
-/// `.catch()` is what such a page already relies on. `FinishDynamicModuleImport` is called on BOTH
-/// paths, as the API requires — a promise that never settles is strictly worse than one that rejects.
-unsafe extern "C" fn module_dynamic_import_hook(
+/// Specifier and base are resolved exactly as they were for the old pair — a dynamic import resolving
+/// differently from a static one would make `import('./a.js')` and `import './a.js'` name different
+/// modules from the same file. The base is the referrer's own private (its resolved url).
+///
+/// A request that cannot be resolved or fetched throws, which the engine turns into a rejected graph
+/// load (static) or a rejected `import()` promise (dynamic): loud-but-safe, never a crash.
+///
+/// For a dynamic import (`payload` is the caller's promise) the module's static closure is loaded
+/// here and `FinishLoadingImportedModule` is called with `usePromise = false`, which links and
+/// evaluates synchronously and settles the caller's promise.
+unsafe extern "C" fn module_load_hook(
     cx: *mut RawJSContext,
-    referencing_private: mozjs::jsapi::JS::Handle<mozjs::jsapi::Value>,
+    referrer: mozjs::jsapi::JS::Handle<*mut mozjs::jsapi::JSScript>,
     module_request: mozjs::jsapi::JS::Handle<*mut JSObject>,
-    promise: mozjs::jsapi::JS::Handle<*mut JSObject>,
+    _host_defined: mozjs::jsapi::JS::Handle<mozjs::jsapi::Value>,
+    payload: mozjs::jsapi::JS::Handle<mozjs::jsapi::Value>,
+    _line: u32,
+    _column: mozjs::jsapi::JS::ColumnNumberOneOrigin,
 ) -> bool {
-    use mozjs::jsapi::{CompileModule, FinishDynamicModuleImport, ModuleEvaluate, ModuleLink};
+    use mozjs::jsapi::{CompileModule, FinishLoadingImportedModule};
 
-    rooted!(in(cx) let mut eval_promise = ptr::null_mut::<JSObject>());
+    let fail = |msg: &std::ffi::CStr| -> bool {
+        mozjs::jsapi::JS_ReportErrorUTF8(cx, msg.as_ptr());
+        false
+    };
 
-    // Specifier + base resolved EXACTLY as `module_resolve_hook` does them, deliberately: a dynamic
-    // import resolving differently from a static one would make `import('./a.js')` and
-    // `import './a.js'` name different modules from the same file.
-    let resolved = (|| -> Option<String> {
-        let spec_jsstr = mozjs::jsapi::GetModuleRequestSpecifier(cx, module_request);
-        if spec_jsstr.is_null() {
-            return None;
-        }
-        let specifier = {
-            rooted!(in(cx) let sv = mozjs::jsval::StringValue(&*spec_jsstr));
-            let mut c = wrap_cx(cx);
-            match String::safe_from_jsval(&mut c, sv.handle(), ()) {
-                Ok(ConversionResult::Success(s)) => s,
-                _ => return None,
-            }
-        };
-        let base = {
-            rooted!(in(cx) let pv = referencing_private.get());
-            if pv.get().is_string() {
-                let mut c = wrap_cx(cx);
-                match String::safe_from_jsval(&mut c, pv.handle(), ()) {
-                    Ok(ConversionResult::Success(ref s)) if !s.is_empty() => s.clone(),
-                    _ => DOC_URL.with(|u| u.borrow().clone()),
-                }
-            } else {
-                DOC_URL.with(|u| u.borrow().clone())
-            }
-        };
-        resolve_module_specifier(&base, &specifier)
-    })();
-
-    if let Some(url) = &resolved {
-        // The document's pre-fetch cannot know which `import()` a page will actually take (a Vike app
-        // names ~3,400 lazy chunks and takes a handful), so a miss is fetched NOW, with its static
-        // closure, rather than rejecting with `undefined`.
-        if esm_registry_get(url).is_null()
-            && !MODULE_GRAPH_SOURCES.with(|m| m.borrow().contains_key(url))
-        {
-            fetch_module_graph_on_demand(url);
-        }
-    }
-    if let Some(url) = resolved {
-        rooted!(in(cx) let mut module = esm_registry_get(&url));
-        if module.get().is_null() {
-            if let Some(src) = MODULE_GRAPH_SOURCES.with(|m| m.borrow().get(&url).cloned()) {
-                let opts =
-                    CompileOptionsWrapper::new(&wrap_cx(cx), c"dynamic-module.js".to_owned(), 1);
-                let utf16: Vec<u16> = src.encode_utf16().collect();
-                let mut text = mozjs::rust::transform_u16_to_source_text(&utf16);
-                module.set(CompileModule(cx, opts.ptr, &mut text));
-                if !module.get().is_null() {
-                    // Its OWN url as the private, so ITS relative imports resolve against IT — the
-                    // rule t617 had to fix in two other places.
-                    set_module_private_url(cx, module.get(), &url);
-                    esm_registry_insert(&url, module.get());
-                    let fetch = |u: &str| MODULE_GRAPH_SOURCES.with(|m| m.borrow().get(u).cloned());
-                    esm_load_graph(cx, &url, module.handle().into(), &fetch, 0);
-                }
-            }
-        }
-        if !module.get().is_null() && ModuleLink(cx, module.handle().into()) {
-            rooted!(in(cx) let mut rval = UndefinedValue());
-            if ModuleEvaluate(cx, module.handle().into(), rval.handle_mut().into())
-                && rval.get().is_object()
-            {
-                eval_promise.set(rval.get().to_object());
-            }
-        }
-    }
-
-    FinishDynamicModuleImport(
-        cx,
-        eval_promise.handle().into(),
-        referencing_private,
-        module_request,
-        promise,
-    )
-}
-
-unsafe extern "C" fn module_resolve_hook(
-    cx: *mut RawJSContext,
-    referencing: mozjs::jsapi::JS::Handle<mozjs::jsapi::Value>,
-    request: mozjs::jsapi::JS::Handle<*mut JSObject>,
-) -> *mut JSObject {
-    // 1. The import specifier, as written in source (`'./b.js'`, `'https://x/y.js'`, `'react'`).
-    let spec_jsstr = mozjs::jsapi::GetModuleRequestSpecifier(cx, request);
+    // 1. The specifier, as written in source.
+    let spec_jsstr = mozjs::jsapi::GetModuleRequestSpecifier(cx, module_request);
     if spec_jsstr.is_null() {
-        return ptr::null_mut();
+        return fail(c"module request has no specifier");
     }
     let specifier = {
         rooted!(in(cx) let sv = mozjs::jsval::StringValue(&*spec_jsstr));
         let mut c = wrap_cx(cx);
-        match String::safe_from_jsval(&mut c, sv.handle(), ()) {
+        match String::from_jsval(&mut c, sv.handle(), ()) {
             Ok(ConversionResult::Success(s)) => s,
-            _ => return ptr::null_mut(),
+            _ => return fail(c"module specifier is not a string"),
         }
     };
-    // 2. The base url is the referencing module's OWN resolved url (its private), so a relative
-    //    specifier resolves against the importer. A referencing module with no/empty string private
-    //    (e.g. a stringless private) falls back to the document url — the same fallback the metadata
-    //    hook uses, so the two never disagree about a root module's base.
+    // 2. The base is the referrer's OWN resolved url (its private); none/empty falls back to the
+    //    document url, the same fallback `module_metadata_hook` uses.
     let base = {
-        rooted!(in(cx) let pv = referencing.get());
+        rooted!(in(cx) let mut pv = UndefinedValue());
+        if !referrer.get().is_null() {
+            mozjs::glue::JS_GetScriptPrivate(referrer.get(), pv.handle_mut().into());
+        }
+        let doc = || DOC_URL.with(|u| u.borrow().clone());
         if pv.get().is_string() {
             let mut c = wrap_cx(cx);
-            match String::safe_from_jsval(&mut c, pv.handle(), ()) {
+            match String::from_jsval(&mut c, pv.handle(), ()) {
                 Ok(ConversionResult::Success(ref s)) if !s.is_empty() => s.clone(),
-                _ => DOC_URL.with(|u| u.borrow().clone()),
+                _ => doc(),
             }
         } else {
-            DOC_URL.with(|u| u.borrow().clone())
+            doc()
         }
     };
-    // 3. Resolve the specifier and return the registered module for it. A relative specifier resolves
-    //    against `base` (the importer); a BARE specifier (`'react'`) resolves through the import map
-    //    (tick 520) against the document url, or fails to null loud-but-safe if unmapped — no guess. An
-    //    unpopulated url also returns null: the module was never fetched/compiled, so the link fails
-    //    gracefully.
-    let resolved = match resolve_module_specifier(&base, &specifier) {
-        Some(u) => u,
-        None => return ptr::null_mut(),
+    // 3. A relative specifier resolves against `base`; a BARE one through the import map; unmapped
+    //    bare fails loud-but-safe.
+    let Some(url) = resolve_module_specifier(&base, &specifier) else {
+        return fail(c"cannot resolve module specifier");
     };
-    esm_registry_get(&resolved)
+
+    let is_dynamic = payload.get().is_object() && {
+        rooted!(in(cx) let po = payload.get().to_object());
+        mozjs::jsapi::IsPromiseObject(po.handle().into())
+    };
+
+    // 4. Registry hit, else source -> compile -> register.
+    rooted!(in(cx) let mut module = esm_registry_get(&url));
+    if module.get().is_null() {
+        let fetcher = ESM_FETCH.with(|f| f.get());
+        let source = match fetcher {
+            Some(f) => (*f)(&url),
+            None => {
+                // The document's pre-fetch cannot know which `import()` a page will actually take (a
+                // Vike app names ~3,400 lazy chunks and takes a handful), so a dynamic miss is fetched
+                // NOW, with its static closure, rather than rejecting.
+                if is_dynamic
+                    && esm_registry_get(&url).is_null()
+                    && !MODULE_GRAPH_SOURCES.with(|m| m.borrow().contains_key(&url))
+                {
+                    fetch_module_graph_on_demand(&url);
+                }
+                MODULE_GRAPH_SOURCES.with(|m| m.borrow().get(&url).cloned())
+            }
+        };
+        let Some(source) = source else {
+            return fail(c"module source not available");
+        };
+        let opts = CompileOptionsWrapper::new(&wrap_cx(cx), c"esm-dep.js".to_owned(), 1);
+        let utf16: Vec<u16> = source.encode_utf16().collect();
+        let mut text = mozjs::rust::transform_u16_to_source_text(&utf16);
+        module.set(CompileModule(cx, opts.ptr, &mut text));
+        if module.get().is_null() {
+            // CompileModule left its SyntaxError pending: that is the rejection reason.
+            return false;
+        }
+        // Its OWN url as the private, so ITS relative imports resolve against IT.
+        set_module_private_url(cx, module.get(), &url);
+        // Insert BEFORE the graph walk: a back-edge to it is then a cache hit.
+        esm_registry_insert(&url, module.get());
+    }
+
+    if is_dynamic {
+        let fetch = |u: &str| MODULE_GRAPH_SOURCES.with(|m| m.borrow().get(u).cloned());
+        if !esm_load_graph(cx, &url, module.handle().into(), &fetch, 0) {
+            return fail(c"dynamic import: module graph failed to load");
+        }
+    }
+    FinishLoadingImportedModule(
+        cx,
+        referrer,
+        module_request,
+        payload,
+        module.handle().into(),
+        false,
+    )
 }
 
 /// The inline JavaScript sources of a document, in tree order. Skips `src=` scripts and

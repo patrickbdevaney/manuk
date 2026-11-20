@@ -406,7 +406,7 @@ unsafe fn pending_exception_message(cx: *mut mozjs::jsapi::JSContext) -> Option<
     }
     mozjs::jsapi::JS_ClearPendingException(cx);
     let mut c = mozjs::context::JSContext::from_ptr(ptr);
-    match String::safe_from_jsval(&mut c, ex.handle(), ()) {
+    match String::from_jsval(&mut c, ex.handle(), ()) {
         Ok(ConversionResult::Success(s)) => Some(s),
         _ => None,
     }

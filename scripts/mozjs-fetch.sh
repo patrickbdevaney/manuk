@@ -29,10 +29,10 @@ cd "$(dirname "$0")/.."
 # The pins: linux x86_64, macOS arm64 and Windows msvc prebuilts. Other hosts must set MOZJS_ARCHIVE
 # themselves (cargo's [env] never overrides a variable already in the environment). The mac/windows shas
 # come from unauthenticated downloads (see docs/sprint/R1.5.a.a-attestation.txt for the linux provenance).
-MOZJS_SYS_VER="140.17.0-0-lts"
-PIN_x86_64_unknown_linux_gnu="69b2920f8787d202f3254bc6546b623c2f90e1224dab8a4f794b748f02dfa3a1"
-PIN_aarch64_apple_darwin="cc6c9d79a70f95ff6eb8450d19f2ee4e3221a68820bf4301bee84078a9aecbaf"
-PIN_x86_64_pc_windows_msvc="009c377adb193b1b7ec6e1b3bdd07d9d5d961030d545e0329b86f1223f0f7669"
+MOZJS_SYS_VER="153.3.0-1"
+PIN_x86_64_unknown_linux_gnu="e0e2537112bcbd803d91ccc6b18a88e2c9fd0f2cbd1bd760275a5d5d896fa68b"
+PIN_aarch64_apple_darwin="c2158543653f3662f76ffaf2a2cde2dcd4b093402056919855c48ad1143beaa2"
+PIN_x86_64_pc_windows_msvc="556de930843f140f6da9df5b87f567b55370b71324c2ddccd16347bb2f7c9ad8"
 
 die() { printf '✗ mozjs-fetch: %s\n' "$1" >&2; exit 1; }
 

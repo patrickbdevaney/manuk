@@ -3213,6 +3213,13 @@
   - L63 · 3. An escaped bracket is an ident character
   - L76 · How the expectations were arbitrated
 
+## SpiderMonkey 153 owns the microtask queue and walks the module graph
+`docs/wiki/spidermonkey-153-owns-the-microtask-queue-and-the-module-graph.md`
+
+  - L9 · Promise jobs: the engine holds the queue
+  - L19 · Modules: one asynchronous load hook
+  - L35 · What did not move
+
 ## STORAGE — the persistence layers a page can reach, and what each one really guarantees
 `docs/wiki/storage.md`
 
@@ -3806,4 +3813,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3101 sections across 175 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3104 sections across 176 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

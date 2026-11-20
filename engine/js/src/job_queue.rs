@@ -1,90 +1,47 @@
-//! N9 step 1 — a **custom promise job queue**, so native `Promise` reactions run through
+//! N9 step 1 — a **custom job-queue host**, so native `Promise` reactions run through
 //! *our* event loop.
 //!
-//! ## Why this exists (and why the old diagnosis was wrong)
+//! ## History (SpiderMonkey 140 → 153)
 //!
-//! D3 recorded that `JS::UseInternalJobQueues` "segfaults in this build", which left native
-//! `Promise.prototype.then` reactions outside our event loop and blocked dynamic `import()`.
-//! The N7 research pass found the real cause: `mozjs`'s `Runtime::create` calls
-//! `JS::InitSelfHostedCode` unconditionally, and SpiderMonkey requires
-//! `js::UseInternalJobQueues(cx)` to be called **before** that. `mozjs` exposes no hook in
-//! between, so the call always arrives too late — a newer `mozjs` cannot fix it.
+//! On 140 the embedder owned the queue: SpiderMonkey called an `enqueuePromiseJob` trap and we
+//! parked each job in a rooted JS array. From 153 the **engine owns the microtask queue**
+//! (`js/public/friend/MicroTask.h`): promise reactions are enqueued inside SpiderMonkey, and the
+//! embedder only provides `runJobs` — pull each task off the queue and run it. That is exactly the
+//! job the old array/slot machinery did by hand, so it is gone; what remains is the checkpoint
+//! (`run_jobs`) and the (null) host-defined-data traps.
 //!
-//! The right answer is the one browsers use: **do not use the internal queue at all.**
-//! Provide an embedder queue via [`JS::JobQueue`], installed with `SetJobQueue`, which has
-//! no ordering constraint. `mozjs_sys`'s glue already ships the C++ shim
-//! (`RustJobQueue : public JS::JobQueue`) and its `JobQueueTraps` vtable; we fill in the
-//! traps.
+//! `JS::UseInternalJobQueues` is still unusable (`mozjs` calls `InitSelfHostedCode` before we can),
+//! so we still install an embedder `JS::JobQueue` via `SetJobQueue`, through `mozjs_sys`'s
+//! `RustJobQueue` shim and its `JobQueueTraps` vtable.
 //!
-//! **Boundary (CLAUDE.md, non-negotiable):** this touches **no** SpiderMonkey internals.
-//! `JS::JobQueue` / `SetJobQueue` are the public embedding interface for exactly this
-//! purpose — the same hook Gecko and Servo use to route promise jobs into their own event
-//! loops. Nothing here patches the JIT, the GC, or the sandbox.
+//! **Boundary (CLAUDE.md, non-negotiable):** public embedding interface only; no SpiderMonkey
+//! internals are touched.
 //!
-//! ## Rooting
-//!
-//! An enqueued job is a `JSObject*` that must survive until it runs. Rather than root it
-//! Rust-side (the hazard that produced the segfaults in the D3 prototype), jobs are pushed
-//! onto a **JS array held by the global** — the same trick [`crate::event_loop`] already
-//! uses for its task queues, where the global's own tracing keeps them alive.
-//!
-//! **Documented gaps (not faked):** `getHostDefinedData` always yields `null` (we have no
-//! host-defined data to attach); the interrupt-queue traps are no-ops, which is correct
-//! only because we never call `StopDrainingJobQueue`; the queue is process-global and
-//! intentionally leaked (one `Runtime` per process, the C1 model).
+//! **Documented gaps (not faked):** `getHostDefinedData`/`getHostDefinedGlobal` yield `null` (no
+//! host-defined data); the queue is process-global and intentionally leaked (one `Runtime` per
+//! process, the C1 model).
 
-use std::cell::Cell;
-use std::ffi::c_void;
 use std::ptr;
 
 use mozjs::glue::{CreateJobQueue, JobQueueTraps};
-use mozjs::jsapi::{Handle, JSContext as RawJSContext, JSObject, MutableHandle};
+use mozjs::jsapi::{JSContext as RawJSContext, JSObject, JSTracer, MutableHandle, Value};
+#[cfg(test)]
 use mozjs::jsval::UndefinedValue;
 use mozjs::rooted;
-use mozjs::rust::wrappers2::{
-    AddRawValueRoot, CurrentGlobalOrNull, GetArrayLength, JS_CallFunctionName, JS_GetProperty,
-    JS_HasProperty, JS_SetElement,
-};
-
-/// The name of the JS-side array the jobs live in. Held by the global, so the GC traces it.
-const JOBS: &str = "__promiseJobs";
 
 static INSTALLED_Q: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
 
-/// Host state behind the queue: just a pending count, because the jobs themselves live in
-/// the JS array. `empty()` has no `JSContext`, so it *must* be answerable from Rust alone.
-pub struct PromiseJobQueue {
-    pending: Cell<usize>,
-    /// Global the setter/drain pair was last verified on (skips a HasProperty per job).
-    installed_on: Cell<usize>,
-    /// Persistent GC root holding the jobs array (leaked; one per process).
-    root: Cell<*mut mozjs::jsapi::Value>,
-    /// Single-job fast slot (persistent root), used only while the whole queue is empty. A
-    /// promise chain (each reaction enqueues the next) then never touches the array or a JS loop.
-    slot: Cell<*mut mozjs::jsapi::Value>,
-    slot_full: Cell<bool>,
-    /// The jobs array may hold entries (set on push, cleared when the JS drain returns).
-    array_busy: Cell<bool>,
-}
-
-// Single-threaded by construction (one `Runtime` per thread; SpiderMonkey calls the traps
-// on the JS thread). The `Cell` is never shared across threads.
-unsafe impl Sync for PromiseJobQueue {}
+/// Handle to the installed queue. The jobs live inside SpiderMonkey now, so this is only a witness
+/// that the queue is installed; ask it for the pending count with [`PromiseJobQueue::pending`].
+pub struct PromiseJobQueue;
 
 impl PromiseJobQueue {
-    fn new() -> Self {
-        PromiseJobQueue {
-            pending: Cell::new(0),
-            installed_on: Cell::new(0),
-            root: Cell::new(ptr::null_mut()),
-            slot: Cell::new(ptr::null_mut()),
-            slot_full: Cell::new(false),
-            array_busy: Cell::new(false),
-        }
-    }
-
-    pub fn pending(&self) -> usize {
-        self.pending.get()
+    /// Number of promise jobs SpiderMonkey currently holds for this context.
+    ///
+    /// # Safety
+    /// `cx` must be a live context.
+    pub unsafe fn pending(&self, cx: *mut RawJSContext) -> usize {
+        mozjs::jsapi::JS::GetRegularMicroTaskCount(cx)
     }
 }
 
@@ -92,24 +49,20 @@ unsafe fn wrap_cx(cx: *mut RawJSContext) -> mozjs::context::JSContext {
     mozjs::context::JSContext::from_ptr(ptr::NonNull::new(cx).expect("trap cx is non-null"))
 }
 
-/// Evaluate `src` in the current global, returning whether it succeeded.
-unsafe fn eval(cx: *mut RawJSContext, src: &str) -> bool {
-    use mozjs::rust::{evaluate_script, CompileOptionsWrapper};
-    let global = CurrentGlobalOrNull(&wrap_cx(cx));
-    if global.is_null() {
-        return false;
-    }
-    rooted!(in(cx) let g = global);
-    rooted!(in(cx) let mut rval = UndefinedValue());
-    let opts = CompileOptionsWrapper::new(&wrap_cx(cx), c"promise_jobs.js".to_owned(), 1);
-    evaluate_script(&mut wrap_cx(cx), g.handle(), src, rval.handle_mut(), opts).is_ok()
-}
-
 // ---- traps ----
 
 /// We attach no host-defined data to promise jobs.
 unsafe extern "C" fn get_host_defined_data(
-    _queue: *const c_void,
+    _cx: *mut RawJSContext,
+    incumbent_global: MutableHandle<*mut JSObject>,
+    optional_host_defined_data: MutableHandle<*mut JSObject>,
+) -> bool {
+    *incumbent_global.ptr = ptr::null_mut();
+    *optional_host_defined_data.ptr = ptr::null_mut();
+    true
+}
+
+unsafe extern "C" fn get_host_defined_global(
     _cx: *mut RawJSContext,
     data: MutableHandle<*mut JSObject>,
 ) -> bool {
@@ -117,217 +70,61 @@ unsafe extern "C" fn get_host_defined_data(
     true
 }
 
-/// SpiderMonkey hands us a job (a nullary function). Park it on the global's job array,
-/// where the GC will trace it, and bump the pending count.
-unsafe extern "C" fn enqueue_promise_job(
-    queue: *const c_void,
-    cx: *mut RawJSContext,
-    _promise: Handle<*mut JSObject>,
-    job: Handle<*mut JSObject>,
-    _allocation_site: Handle<*mut JSObject>,
-    _host_defined: Handle<*mut JSObject>,
-) -> bool {
-    let q = &*(queue as *const PromiseJobQueue);
-    if job.get().is_null() {
-        return false;
-    }
-    // FIFO holds because the slot is only used while NOTHING else is queued: the slot job is then
-    // the oldest, and every later enqueue sees `slot_full`/`array_busy` and goes to the array.
-    if !q.slot_full.get() && !q.array_busy.get() {
-        if q.slot.get().is_null() {
-            let b = Box::into_raw(Box::new(UndefinedValue()));
-            if !AddRawValueRoot(&wrap_cx(cx), b, c"promise-job-slot".as_ptr()) {
-                drop(Box::from_raw(b));
-                return false;
-            }
-            q.slot.set(b);
-        }
-        *q.slot.get() = mozjs::jsval::ObjectValue(job.get());
-        q.slot_full.set(true);
-        q.pending.set(q.pending.get() + 1);
-        return true;
-    }
-    q.array_busy.set(true);
-
-    let global = CurrentGlobalOrNull(&wrap_cx(cx));
-    if global.is_null() {
-        return false;
-    }
-    rooted!(in(cx) let g = global);
-    rooted!(in(cx) let job_val = mozjs::jsval::ObjectValue(job.get()));
-
-    // Fast path: the jobs array is held by a persistent root (updated by the GC if the array
-    // moves), so a push is `GetArrayLength` + `SetElement` -- no property lookup and no JS setter
-    // call. The old path (a global accessor whose JS setter pushed) cost ~0.5 us/job on top of
-    // SpiderMonkey's own ~0.3 us, which made a 3M-reaction chain take 3.6 s (Chrome 0.95 s).
-    if q.installed_on.get() != global as usize && !attach(q, cx, g.handle()) {
-        return false;
-    }
-    rooted!(in(cx) let arr = (*q.root.get()).to_object());
-    let mut len = 0u32;
-    if !GetArrayLength(&mut wrap_cx(cx), arr.handle().into(), &mut len) {
-        return false;
-    }
-    if !JS_SetElement(
-        &mut wrap_cx(cx),
-        arr.handle().into(),
-        len,
-        job_val.handle().into(),
-    ) {
-        return false;
-    }
-    q.pending.set(q.pending.get() + 1);
-    true
-}
-
-/// Point the fast path at `g`'s jobs array (installing the drain loop first if needed).
-unsafe fn attach(q: &PromiseJobQueue, cx: *mut RawJSContext, g: mozjs::rust::HandleObject) -> bool {
-    if !ensure_installed(cx, g) {
-        return false;
-    }
-    rooted!(in(cx) let mut arr = UndefinedValue());
-    if !JS_GetProperty(
-        &mut wrap_cx(cx),
-        g.into(),
-        c"__promiseJobs".as_ptr(),
-        arr.handle_mut().into(),
-    ) || !arr.get().is_object()
-    {
-        return false;
-    }
-    if q.root.get().is_null() {
-        let b = Box::into_raw(Box::new(UndefinedValue()));
-        if !AddRawValueRoot(&wrap_cx(cx), b, c"promise-jobs-array".as_ptr()) {
-            drop(Box::from_raw(b));
-            return false;
-        }
-        q.root.set(b);
-    }
-    *q.root.get() = arr.get();
-    q.installed_on.set(g.get() as usize);
-    true
-}
-
-/// Forget which global the fast path targets. Call whenever a new global is created, so a new
-/// global that reuses a freed one's address cannot be handed a stale jobs array.
-pub fn reset_global_cache() {
-    if let Some(p) = INSTALLED_Q.get() {
-        unsafe { (*(*p as *const PromiseJobQueue)).installed_on.set(0) };
-    }
-}
+/// Every task we queue is a JS microtask (a GC thing), so SpiderMonkey traces it itself.
+unsafe extern "C" fn trace_non_gc_thing_micro_task(_trc: *mut JSTracer, _value: *mut Value) {}
 
 /// Drain the queue. A job may enqueue further jobs (a `.then()` inside a `.then()`), so the
-/// loop must re-check the array rather than snapshot its length — that is what makes this a
-/// *microtask* checkpoint rather than a single pass.
-unsafe extern "C" fn run_jobs(queue: *const c_void, cx: *mut RawJSContext) {
-    let q = &*(queue as *const PromiseJobQueue);
-    let global = CurrentGlobalOrNull(&wrap_cx(cx));
-    if !global.is_null() {
-        rooted!(in(cx) let g = global);
-        rooted!(in(cx) let mut rval = UndefinedValue());
-        let args = mozjs::jsapi::HandleValueArray {
-            length_: 0,
-            elements_: ptr::null(),
-        };
-        loop {
-            if q.slot_full.get() {
-                // Oldest (and only) queued job: take it out of the root, then run it. It may
-                // enqueue the next one into the now-empty slot, which this loop picks up.
-                rooted!(in(cx) let job = *q.slot.get());
-                *q.slot.get() = UndefinedValue();
-                q.slot_full.set(false);
-                if !mozjs::rust::wrappers2::JS_CallFunctionValue(
-                    &mut wrap_cx(cx),
-                    g.handle().into(),
-                    job.handle().into(),
-                    &args,
-                    rval.handle_mut().into(),
-                ) {
-                    // A job that throws must not abort the drain (spec "run the jobs").
-                    mozjs::rust::wrappers2::JS_ClearPendingException(&wrap_cx(cx));
-                }
-            } else if q.array_busy.get() {
-                if ensure_installed(cx, g.handle()) {
-                    JS_CallFunctionName(
-                        &mut wrap_cx(cx),
-                        g.handle(),
-                        c"__drainJobs".as_ptr(),
-                        &args,
-                        rval.handle_mut(),
-                    );
-                }
-                q.array_busy.set(false);
-            } else {
-                break;
-            }
+/// loop pulls until the engine's queue is empty — that is what makes this a *microtask*
+/// checkpoint rather than a single pass.
+unsafe extern "C" fn run_jobs(cx: *mut RawJSContext) {
+    use mozjs::jsapi::JS;
+    loop {
+        let task = JS::DequeueNextRegularMicroTask(cx);
+        if task.is_null_or_undefined() {
+            break;
+        }
+        // Rooted straight away: no GC can run between the dequeue and here.
+        rooted!(in(cx) let task = task);
+        if !JS::IsJSMicroTask(&task.get()) {
+            // We enqueue no embedder tasks; nothing to run for a foreign one.
+            continue;
+        }
+        rooted!(in(cx) let job = JS::ToUnwrappedJSMicroTask(&task.get()));
+        if job.get().is_null() {
+            continue;
+        }
+        let global = JS::GetExecutionGlobalFromJSMicroTask(job.get());
+        if global.is_null() {
+            continue; // dead wrapper
+        }
+        let _ar = mozjs::jsapi::JSAutoRealm::new(cx, global);
+        // A job that throws must not abort the drain (spec "run the jobs").
+        if !JS::RunJSMicroTask(cx, job.handle().into()) {
+            mozjs::rust::wrappers2::JS_ClearPendingException(&wrap_cx(cx));
         }
     }
-    q.pending.set(0);
 }
 
-/// Install (once per global) the `__drainJobs` loop.
-unsafe fn ensure_installed(cx: *mut RawJSContext, g: mozjs::rust::HandleObject) -> bool {
-    let mut installed = false;
-    if !JS_HasProperty(&mut wrap_cx(cx), g, c"__drainJobs".as_ptr(), &mut installed) {
-        return false;
-    }
-    if installed {
-        return true;
-    }
-    // A job that throws must not abort the drain: report and continue, as the spec's
-    // "run the jobs" step does. The ceiling is a backstop against a runaway chain; the watchdog
-    // and drain budget are the real bound.
-    let script = format!(
-        "(function () {{ \
-           var q = globalThis.{JOBS} = globalThis.{JOBS} || []; \
-           Object.defineProperty(globalThis, '__drainJobs', {{ configurable: true, writable: true, value: function () {{ \
-             var i = 0, j; \
-             while (i < q.length && i < 100000000) {{ \
-               j = q[i]; q[i++] = undefined; \
-               try {{ j(); }} catch (e) {{ globalThis.__lastJobError = String(e); }} \
-               if (i >= 1024 && i === q.length) {{ q.length = 0; i = 0; }} \
-             }} \
-             q.length = 0; \
-           }} }}); \
-         }})();"
-    );
-    eval(cx, &script)
-}
-
-unsafe extern "C" fn is_empty(queue: *const c_void) -> bool {
-    let q = &*(queue as *const PromiseJobQueue);
-    q.pending.get() == 0
-}
-
-// The interrupt-queue traps exist only for `StopDrainingJobQueue`, which we never call.
-// They must still be non-null: `~RustJobQueue()` calls `dropInterruptQueues` unconditionally.
-unsafe extern "C" fn push_new_interrupt_queue(_qs: *mut c_void) -> *const c_void {
-    ptr::null()
-}
-unsafe extern "C" fn pop_interrupt_queue(_qs: *mut c_void) -> *const c_void {
-    ptr::null()
-}
-unsafe extern "C" fn drop_interrupt_queues(_qs: *mut c_void) {}
+/// Reset hook kept for the callers that cleared the 140 fast-path cache when a global was created.
+/// There is no per-global cache any more, so this is a no-op.
+pub fn reset_global_cache() {}
 
 /// Install our job queue on `cx`, replacing SpiderMonkey's (absent) default.
-///
-/// Call once, after the `Runtime` is created. Returns the queue so callers can inspect
-/// [`PromiseJobQueue::pending`].
 ///
 /// # Safety
 /// `cx` must be a live context with no other job queue installed. The queue is leaked on
 /// purpose: it must outlive the `Runtime`, and there is one `Runtime` per process.
 pub unsafe fn install(cx: *mut RawJSContext) -> Result<&'static PromiseJobQueue, String> {
-    let queue: &'static PromiseJobQueue = Box::leak(Box::new(PromiseJobQueue::new()));
-    install_with(cx, queue)
+    static Q: PromiseJobQueue = PromiseJobQueue;
+    install_with(cx, &Q)
 }
 
 /// Install exactly once per process. A second call returns the queue already installed —
+/// there is one `Runtime` per process (the C1 model), and `SetJobQueue` twice would leak
+/// the first queue while SpiderMonkey still held pointers into it.
 ///
 /// # Safety
 /// `cx` must be a live context.
-/// there is one `Runtime` per process (the C1 model), and `SetJobQueue` twice would leak
-/// the first queue while SpiderMonkey still held pointers into it.
 pub unsafe fn install_once(cx: *mut RawJSContext) -> Result<&'static PromiseJobQueue, String> {
     if let Some(p) = INSTALLED_Q.get() {
         return Ok(&*(*p as *const PromiseJobQueue));
@@ -337,32 +134,22 @@ pub unsafe fn install_once(cx: *mut RawJSContext) -> Result<&'static PromiseJobQ
     Ok(q)
 }
 
-/// # Safety
-/// `cx` must be a live context with no other job queue installed, and `queue` must live
-/// for the process (SpiderMonkey retains the pointer).
 unsafe fn install_with(
     cx: *mut RawJSContext,
     queue: &'static PromiseJobQueue,
 ) -> Result<&'static PromiseJobQueue, String> {
     let traps = JobQueueTraps {
         getHostDefinedData: Some(get_host_defined_data),
-        enqueuePromiseJob: Some(enqueue_promise_job),
+        getHostDefinedGlobal: Some(get_host_defined_global),
         runJobs: Some(run_jobs),
-        empty: Some(is_empty),
-        pushNewInterruptQueue: Some(push_new_interrupt_queue),
-        popInterruptQueue: Some(pop_interrupt_queue),
-        dropInterruptQueues: Some(drop_interrupt_queues),
+        traceNonGCThingMicroTask: Some(trace_non_gc_thing_micro_task),
     };
-
-    let jq = CreateJobQueue(
-        &traps as *const JobQueueTraps,
-        queue as *const PromiseJobQueue as *const c_void,
-        ptr::null_mut(),
-    );
+    // The shim copies the traps, so a stack value is fine.
+    let jq = CreateJobQueue(&traps as *const JobQueueTraps);
     if jq.is_null() {
         return Err("CreateJobQueue returned null".to_string());
     }
-    mozjs::rust::wrappers2::SetJobQueue(&wrap_cx(cx), jq);
+    mozjs::rust::wrappers2::SetJobQueue(&wrap_cx(cx), jq as *mut mozjs::jsapi::JS::JobQueue);
     Ok(queue)
 }
 
@@ -423,7 +210,11 @@ mod tests {
             0,
             "a reaction must not run before the drain"
         );
-        assert_eq!(queue.pending(), 1, "SpiderMonkey enqueued exactly one job");
+        assert_eq!(
+            unsafe { queue.pending(raw_cx) },
+            1,
+            "SpiderMonkey enqueued exactly one job"
+        );
 
         // Drain: SpiderMonkey dispatches into our `run_jobs` trap.
         unsafe { drain(raw_cx) };
@@ -434,7 +225,7 @@ mod tests {
             7,
             "the native promise reaction must have run"
         );
-        assert_eq!(queue.pending(), 0);
+        assert_eq!(unsafe { queue.pending(raw_cx) }, 0);
     }
 
     /// The two microtask sources interleave correctly: a native promise reaction and a
@@ -472,7 +263,7 @@ mod tests {
         let s = {
             use mozjs::conversions::{ConversionResult, FromJSValConvertible};
             rooted!(&in(runtime.cx()) let rv = v);
-            match String::safe_from_jsval(runtime.cx(), rv.handle(), ()) {
+            match String::from_jsval(runtime.cx(), rv.handle(), ()) {
                 Ok(ConversionResult::Success(s)) => s,
                 _ => String::new(),
             }
@@ -521,7 +312,7 @@ mod tests {
         let s = {
             use mozjs::conversions::{ConversionResult, FromJSValConvertible};
             rooted!(&in(runtime.cx()) let v = joined);
-            match String::safe_from_jsval(runtime.cx(), v.handle(), ()) {
+            match String::from_jsval(runtime.cx(), v.handle(), ()) {
                 Ok(ConversionResult::Success(s)) => s,
                 _ => String::new(),
             }

@@ -9392,6 +9392,7 @@ fn eval_cached(
         hideScriptFromDebugger: false,
         deferDebugMetadata: false,
         eagerDelazificationStrategy_: DelazificationOption::OnDemandOnly,
+        eagerBaselineStrategy_: mozjs::jsapi::JS::EagerBaselineOption::None,
     };
     let script = unsafe {
         wrappers2::InstantiateGlobalStencil(&realm, &opts, st as *mut _, std::ptr::null_mut())
@@ -9475,7 +9476,7 @@ fn eval_string(
     if rval.get().is_null() || rval.get().is_undefined() {
         return Ok(None);
     }
-    match String::safe_from_jsval(rt.cx(), rval.handle(), ()) {
+    match String::from_jsval(rt.cx(), rval.handle(), ()) {
         Ok(ConversionResult::Success(s)) => Ok(Some(s)),
         _ => Ok(None),
     }
