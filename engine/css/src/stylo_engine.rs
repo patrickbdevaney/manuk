@@ -1036,7 +1036,15 @@ pub fn cascade_via_stylo_sized(
         // The cheap gate every element of every page pays: is any transition-delay negative? While
         // the document clock is 0 nothing else can be running (see `crate::transition`'s guard).
         if crate::transition::may_be_running_for(node, &cv) {
-            if let Some(before) = crate::transition::prev_style(node) {
+            // CSS Transitions §starting: an element with no rendered before-change style (it was
+            // `display:none`) has nothing to transition from — it jumps to the after-change value.
+            // The same holds when the after-change style is not rendered: nothing starts.
+            let not_rendered = |c: &ComputedValues| {
+                c.get_box().clone_display() == stylo::values::specified::box_::Display::None
+            };
+            if let Some(before) = crate::transition::prev_style(node)
+                .filter(|b| !not_rendered(b) && !not_rendered(&cv))
+            {
                 // Memoised on `(before, after, clock)` — see `crate::transition::MEMO`. Without
                 // it the `transition-property: all` expansion is ~200 animated-value pairs per
                 // element per recalc, which WPT's own harness turns quadratic.
