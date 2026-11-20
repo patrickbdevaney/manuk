@@ -15310,6 +15310,53 @@ impl PageContext {
         Ok(proceed)
     }
 
+    /// Dispatch a `TransitionEvent` (`transitionrun`/`transitionstart`/`transitionend`) at `node`
+    /// carrying `propertyName`, `elapsedTime` and `pseudoElement`. Bubbles, not cancelable.
+    pub fn dispatch_transition(
+        &self,
+        runtime: &mut Runtime,
+        dom: &mut Dom,
+        node: NodeId,
+        ty: &str,
+        property: &str,
+        elapsed_s: f64,
+        layout: &std::collections::HashMap<NodeId, [f32; 4]>,
+        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+    ) -> Result<bool, String> {
+        set_view_maps(layout, styles);
+        set_current_dom(dom as *mut Dom);
+        let raw_cx = unsafe { runtime.cx().raw_cx() };
+        rooted!(&in(runtime.cx()) let global = self.global.get());
+        let _ar = mozjs::jsapi::JSAutoRealm::new(raw_cx, global.get());
+        unsafe {
+            let _ = new_reflector(raw_cx, dom as *mut Dom, node);
+        }
+        let script = format!(
+            "__dispatchEvent({}, {{type:{}, propertyName:{}, elapsedTime:{}, pseudoElement:'', bubbles:true, cancelable:false}})",
+            node.0,
+            js_string_literal(ty),
+            js_string_literal(property),
+            if elapsed_s.is_finite() { elapsed_s } else { 0.0 }
+        );
+        rooted!(&in(runtime.cx()) let mut rval = UndefinedValue());
+        let opts = CompileOptionsWrapper::new(runtime.cx_no_gc(), c"dispatch.js".to_owned(), 1);
+        let proceed = match evaluate_script(
+            runtime.cx(),
+            global.handle(),
+            &script,
+            rval.handle_mut(),
+            opts,
+        ) {
+            Ok(()) => {
+                let v = rval.get();
+                !v.is_boolean() || v.to_boolean()
+            }
+            Err(()) => true,
+        };
+        crate::event_loop::run_deferred(runtime, global.handle())?;
+        Ok(proceed)
+    }
+
     /// Dispatch a **keyboard** event (`keydown`/`keyup`) at `node` carrying `key` (the DOM
     /// `KeyboardEvent.key` value, e.g. `"Enter"`, `"a"`, `"ArrowDown"`) and its legacy `key_code`.
     /// Returns `false` iff a handler called `preventDefault()` — which is exactly how a page says

@@ -120,8 +120,43 @@ thread_local! {
     /// seen with the clock active; removed the first cascade whose sample is empty.
     static RUNNING: RefCell<HashMap<NodeId, f64>> = RefCell::new(HashMap::new());
 
+    /// Properties (CSS name, duration ms) captured when each running entry started, so the end
+    /// can report `transitionend` per property.
+    static RUNNING_PROPS: RefCell<HashMap<NodeId, Vec<(String, f64)>>> = RefCell::new(HashMap::new());
+
+    /// Transition events waiting for the page to dispatch them to script.
+    static EVENTS: RefCell<Vec<TransitionEventRec>> = const { RefCell::new(Vec::new()) };
+
+    /// Test/host skew added to the wall clock (ms).
+    static WALL_SKEW: std::cell::Cell<f64> = const { std::cell::Cell::new(0.0) };
+
     /// Wall-clock origin of this thread's real-time transition clock.
     static WALL_ORIGIN: std::cell::Cell<Option<std::time::Instant>> = const { std::cell::Cell::new(None) };
+}
+
+/// A transition event waiting for dispatch: `ty` is `transitionrun` / `transitionstart` /
+/// `transitionend`; `elapsed_s` is the TransitionEvent.elapsedTime.
+#[derive(Clone, Debug)]
+pub struct TransitionEventRec {
+    pub node: NodeId,
+    pub ty: &'static str,
+    pub property: String,
+    pub elapsed_s: f64,
+}
+
+/// Take every queued transition event (oldest first).
+pub fn drain_events() -> Vec<TransitionEventRec> {
+    EVENTS.with(|e| std::mem::take(&mut *e.borrow_mut()))
+}
+
+/// Are there queued transition events?
+pub fn has_events() -> bool {
+    EVENTS.with(|e| !e.borrow().is_empty())
+}
+
+/// Move the real-time transition clock forward by `ms` (tests / a host that skips idle time).
+pub fn skew_realtime_ms(ms: f64) {
+    WALL_SKEW.with(|c| c.set(c.get() + ms));
 }
 
 /// Wall time (ms) on the real-time transition clock, without advancing it.
@@ -134,7 +169,7 @@ pub fn realtime_now_ms() -> f64 {
             i
         }
     });
-    o.elapsed().as_secs_f64() * 1000.0
+    o.elapsed().as_secs_f64() * 1000.0 + WALL_SKEW.with(|c| c.get())
 }
 
 /// Advance the real-time transition clock to wall time. Called by the page before every cascade it
@@ -153,6 +188,7 @@ pub fn any_running_realtime() -> bool {
 pub fn set_realtime_clock_ms(ms: Option<f64>) {
     RT_CLOCK.with(|c| c.set(ms));
     if ms.is_none() {
+        RUNNING_PROPS.with(|r| r.borrow_mut().clear());
         RUNNING.with(|r| r.borrow_mut().clear());
     }
 }
@@ -191,9 +227,41 @@ pub fn sample_realtime(
             clock
         }
     };
-    let out = sample_at(before, after, clock - start, true);
+    let mut props = Vec::new();
+    let out = sample_at_collect(before, after, clock - start, true, Some(&mut props));
+    if known.is_none() {
+        // Style change just seen: transitionrun + transitionstart per property.
+        EVENTS.with(|e| {
+            let mut e = e.borrow_mut();
+            for (name, _) in &props {
+                for ty in ["transitionrun", "transitionstart"] {
+                    e.push(TransitionEventRec {
+                        node,
+                        ty,
+                        property: name.clone(),
+                        elapsed_s: 0.0,
+                    });
+                }
+            }
+        });
+        RUNNING_PROPS.with(|r| r.borrow_mut().insert(node, props));
+    }
     if out.is_empty() {
         RUNNING.with(|r| r.borrow_mut().remove(&node));
+        let done = RUNNING_PROPS
+            .with(|r| r.borrow_mut().remove(&node))
+            .unwrap_or_default();
+        EVENTS.with(|e| {
+            let mut e = e.borrow_mut();
+            for (name, dur) in done {
+                e.push(TransitionEventRec {
+                    node,
+                    ty: "transitionend",
+                    property: name,
+                    elapsed_s: dur / 1000.0,
+                });
+            }
+        });
     }
     out
 }
@@ -366,6 +434,16 @@ pub fn sample_at(
     now: f64,
     realtime: bool,
 ) -> Vec<PropertyDeclaration> {
+    sample_at_collect(before, after, now, realtime, None)
+}
+
+fn sample_at_collect(
+    before: &ComputedValues,
+    after: &ComputedValues,
+    now: f64,
+    realtime: bool,
+    mut props: Option<&mut Vec<(String, f64)>>,
+) -> Vec<PropertyDeclaration> {
     SAMPLES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let ui = after.get_ui();
     let mut out = Vec::new();
@@ -423,6 +501,9 @@ pub fn sample_at(
             continue;
         }
         let tf = ui.transition_timing_function_mod(it.index);
+        if let Some(p) = props.as_deref_mut() {
+            p.push((id.name().to_string(), dur));
+        }
         let progress = tf.calculate_output((elapsed / dur).max(0.0), BeforeFlag::Unset, 1e-7);
         match a.animate(&b, Procedure::Interpolate { progress }) {
             Ok(v) if !crate::animation::is_unresolvable(&v) => out.push(v.uncompute()),

@@ -1717,6 +1717,41 @@ pub fn eval_in_page(
     })
 }
 
+/// Dispatch a `TransitionEvent` to `node`. See [`PageContext::dispatch_transition`].
+#[cfg(feature = "_sm")]
+#[allow(clippy::too_many_arguments)]
+pub fn dispatch_transition_event(
+    ctx: &PageContext,
+    dom: &mut manuk_dom::Dom,
+    node: manuk_dom::NodeId,
+    ty: &str,
+    property: &str,
+    elapsed_s: f64,
+    layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+) -> Result<bool, JsError> {
+    let _interaction = crate::event_loop::InteractionScope::enter();
+    with_runtime(|rt| {
+        ctx.dispatch_transition(rt, dom, node, ty, property, elapsed_s, layout, styles)
+            .map_err(|message| JsError { message })
+    })
+}
+
+#[cfg(not(feature = "_sm"))]
+#[allow(clippy::too_many_arguments)]
+pub fn dispatch_transition_event(
+    _ctx: &PageContext,
+    _dom: &mut manuk_dom::Dom,
+    _node: manuk_dom::NodeId,
+    _ty: &str,
+    _property: &str,
+    _elapsed_s: f64,
+    _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
+    _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+) -> Result<bool, JsError> {
+    Ok(true)
+}
+
 #[cfg(feature = "_sm")]
 pub fn dispatch_event(
     ctx: &PageContext,

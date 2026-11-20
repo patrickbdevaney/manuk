@@ -11313,6 +11313,67 @@ impl Page {
         self.relayout_zoomed(fonts, viewport_width, self.zoom);
     }
 
+    /// **Advance CSS transitions to wall time and deliver their events.** A running transition is a
+    /// function of time, not of DOM mutation, so a host calls this per frame: while any transition
+    /// runs it re-cascades (which samples the clock), then dispatches the queued
+    /// `transitionrun` / `transitionstart` / `transitionend` events to script. A no-op (one
+    /// emptiness check) on a page with no running transition and no queued event.
+    pub fn tick_transitions(&mut self, fonts: &FontContext, viewport_width: f32) {
+        if manuk_css::transition::any_running_realtime() {
+            manuk_css::transition::tick_realtime();
+            self.recascade_all_sources(viewport_width);
+            let root = layout_document(&self.dom, &self.styles, fonts, viewport_width);
+            self.set_root_box(root);
+            self.reapply_scroll_offsets();
+            self.content_height = self.root_box.content_bottom();
+        }
+        self.flush_transition_events(fonts, viewport_width);
+    }
+
+    /// Dispatch every queued transition event to its element.
+    #[cfg(feature = "spidermonkey")]
+    pub fn flush_transition_events(&mut self, fonts: &FontContext, viewport_width: f32) {
+        let evs = manuk_css::transition::drain_events();
+        if evs.is_empty() {
+            return;
+        }
+        let Some(ctx) = &self.js else { return };
+        let _reflow = ReflowScope::install(
+            &self.dom,
+            fonts,
+            viewport_width,
+            &self.images,
+            &self.final_url,
+            &self.external_css,
+            &self.scroll_offsets,
+            self.sticky_scroll_y,
+            self.has_sticky,
+        );
+        let rects: HashMap<manuk_dom::NodeId, [f32; 4]> = self
+            .root_box
+            .node_rects(&self.dom)
+            .into_iter()
+            .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
+            .collect();
+        for ev in evs {
+            let _ = manuk_js::dispatch_transition_event(
+                ctx,
+                &mut self.dom,
+                ev.node,
+                ev.ty,
+                &ev.property,
+                ev.elapsed_s,
+                &rects,
+                &self.styles,
+            );
+        }
+    }
+
+    #[cfg(not(feature = "spidermonkey"))]
+    pub fn flush_transition_events(&mut self, _fonts: &FontContext, _viewport_width: f32) {
+        let _ = manuk_css::transition::drain_events();
+    }
+
     /// **Install a freshly computed fragment tree**, and run the passes that can only see a
     /// FINISHED one.
     ///

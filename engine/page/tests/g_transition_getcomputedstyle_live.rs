@@ -33,7 +33,14 @@ fn computed_style_moves_while_a_transition_runs() {
     println!("TRANSITION-LIVE {got}");
     let v: Vec<&str> = got.split('|').collect();
     assert_eq!(v.len(), 4, "{got}");
-    let red = |s: &str| s.trim_start_matches("rgb(").split(',').next().unwrap().parse::<i32>().unwrap();
+    let red = |s: &str| {
+        s.trim_start_matches("rgb(")
+            .split(',')
+            .next()
+            .unwrap()
+            .parse::<i32>()
+            .unwrap()
+    };
     assert!(red(v[0]) <= 30, "start is near the from value: {got}");
     assert!((red(v[1]) - 100).abs() <= 45, "mid is about halfway: {got}");
     assert_ne!(v[1], v[0], "second read must differ while running: {got}");
