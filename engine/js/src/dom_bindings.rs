@@ -15805,9 +15805,15 @@ impl PageContext {
         // `e.button === 0 && e.ctrlKey === false`, and `undefined` fails the strict compare.
         let pointer =
             format!("{pointer}ctrlKey:false, shiftKey:false, altKey:false, metaKey:false, ");
+        // enter/leave events do not bubble and are not cancelable (UI Events); the rest do.
+        let plain = matches!(
+            ty,
+            "mouseenter" | "mouseleave" | "pointerenter" | "pointerleave"
+        );
+        let flag = !plain;
         let script = format!(
             "__dispatchEvent({}, {{type:{}, detail:{detail}, button:{button}, buttons:{buttons}, \
-             {pointer}bubbles:true, cancelable:true, __actgesture:1}})",
+             {pointer}bubbles:{flag}, cancelable:{flag}, __actgesture:1}})",
             node.0,
             js_string_literal(ty),
         );

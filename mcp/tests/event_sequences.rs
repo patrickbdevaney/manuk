@@ -288,26 +288,12 @@ fn classes(m: &[String], ch: &[String]) -> Vec<String> {
 
 /// (action, class) pairs measured against chrome 145.0.7632.116; each class is a follow-up row.
 const KNOWN: &[(&str, &str)] = &[
-    ("click", "missing-on-manuk:pointerover"),
-    ("click", "missing-on-manuk:pointerenter"),
-    ("click", "missing-on-manuk:mouseover"),
-    ("click", "missing-on-manuk:mouseenter"),
-    ("click", "missing-on-manuk:pointermove"),
-    ("click", "missing-on-manuk:mousemove"),
     ("click", "missing-on-manuk:focus"),
     ("click", "missing-on-manuk:focusin"),
-    ("click-input", "missing-on-manuk:pointerover"),
-    ("click-input", "missing-on-manuk:pointerenter"),
-    ("click-input", "missing-on-manuk:mouseover"),
-    ("click-input", "missing-on-manuk:mouseenter"),
-    ("click-input", "missing-on-manuk:pointermove"),
-    ("click-input", "missing-on-manuk:mousemove"),
-    ("click-input", "missing-on-manuk:selectionchange"),
     ("type", "extra-on-manuk:keydown"),
     ("type", "extra-on-manuk:keyup"),
     ("type", "extra-on-manuk:select"),
     ("type", "extra-on-manuk:change"),
-    ("type", "missing-on-manuk:selectionchange"),
     ("type", "count:beforeinput:2v1"),
     ("type", "count:input:2v1"),
     ("enter", "missing-on-manuk:focus"),
@@ -315,14 +301,8 @@ const KNOWN: &[(&str, &str)] = &[
     // class 8 (Chrome act-focus defers the setup focus onto the Tab slice): resolved by W6.J2.d
     ("tab", "count:focus:1v2"),
     ("tab", "count:focusin:1v2"),
-    ("tab", "missing-on-manuk:selectionchange"),
-    ("hover", "missing-on-manuk:pointerover"),
-    ("hover", "missing-on-manuk:pointerenter"),
-    ("hover", "missing-on-manuk:pointermove"),
-    ("hover", "count:mouseenter:1v4"),
     ("focus", "extra-on-manuk:focus"),
     ("focus", "extra-on-manuk:focusin"),
-    ("focus", "missing-on-manuk:selectionchange"),
 ];
 
 #[test]

@@ -8641,6 +8641,11 @@ impl Page {
             }
             self.dispatch_key(node, "keyup", &key, fonts, viewport_width);
         }
+        // The caret moved past the typed text: one `selectionchange` for the whole entry (Chrome's
+        // insertText announces one after its input).
+        if !text.is_empty() && self.is_text_control(node) {
+            self.fire_plain_event(node, "selectionchange", fonts, viewport_width);
+        }
         if self
             .dom
             .element(node)
@@ -9961,6 +9966,16 @@ impl Page {
         // and text selection. Pages depend on precisely that: a toolbar button that prevents
         // `mousedown` to keep the editor's selection alive still expects its `click`. So the
         // verdicts here are deliberately discarded.
+        // The pointer arrives before it presses: over/enter on what it newly entered (and `:hover`), a
+        // move, then the press. MANUK_HOVER_CLICK_MUTATE=off skips it (gate mutant).
+        if std::env::var("MANUK_HOVER_CLICK_MUTATE").as_deref() != Ok("off") {
+            let previous = self.dom.hovered();
+            if self.dom.set_hovered(Some(node)) {
+                self.recascade_all_sources(viewport_width);
+                self.relayout(fonts, viewport_width);
+            }
+            self.fire_hover_events(previous, Some(node), fonts, viewport_width);
+        }
         self.dispatch_pointer_pair(node, detail, fonts, viewport_width);
         // mousedown's default action: the nearest focusable ancestor-or-self takes focus (blur on the
         // previous holder, focus/focusin on the new). staynb's GUESTS popover opens on `onFocus` of a
@@ -9973,6 +9988,33 @@ impl Page {
             }
         }
         self.dispatch_click_inner(node, detail, fonts, viewport_width)
+    }
+
+    /// A text-entry `<input>` or a `<textarea>` (the elements with a caret/selection of their own).
+    fn is_text_control(&self, n: manuk_dom::NodeId) -> bool {
+        let Some(e) = self.dom.element(n) else {
+            return false;
+        };
+        match e.name.as_str() {
+            "textarea" => true,
+            "input" => !matches!(
+                e.attr("type")
+                    .unwrap_or("text")
+                    .to_ascii_lowercase()
+                    .as_str(),
+                "hidden"
+                    | "checkbox"
+                    | "radio"
+                    | "button"
+                    | "submit"
+                    | "reset"
+                    | "image"
+                    | "file"
+                    | "range"
+                    | "color"
+            ),
+            _ => false,
+        }
     }
 
     /// The element a pointer press on `node` focuses: the nearest ancestor-or-self that is a text
@@ -11672,47 +11714,108 @@ impl Page {
         self.recascade_all_sources(viewport_width);
         self.relayout(fonts, viewport_width);
 
-        let Some(ctx) = self.js.as_ref() else {
-            return true;
-        };
-        let rects: std::collections::HashMap<manuk_dom::NodeId, [f32; 4]> = self
-            .root_box
-            .node_rects(&self.dom)
-            .into_iter()
-            .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
-            .collect();
-        let _reflow = ReflowScope::install(
-            &self.dom,
-            fonts,
-            viewport_width,
-            &self.images,
-            &self.final_url,
-            &self.external_css,
-            &self.scroll_offsets,
-            self.sticky_scroll_y,
-            self.has_sticky,
-        );
-
-        // Leaving, then entering — see the note above on why the order is not cosmetic.
-        if let Some(old) = previous.filter(|n| self.dom.is_alive(*n)) {
-            for kind in ["mouseout", "mouseleave"] {
-                if let Err(e) =
-                    manuk_js::dispatch_event(ctx, &mut self.dom, old, kind, &rects, &self.styles)
-                {
-                    tracing::warn!("{kind} dispatch: {e}");
-                }
-            }
-        }
-        if let Some(new) = hit {
-            for kind in ["mouseover", "mousemove", "mouseenter"] {
-                if let Err(e) =
-                    manuk_js::dispatch_event(ctx, &mut self.dom, new, kind, &rects, &self.styles)
-                {
-                    tracing::warn!("{kind} dispatch: {e}");
-                }
-            }
-        }
+        self.fire_hover_events(previous, hit, fonts, viewport_width);
         true
+    }
+
+    /// The mouse/pointer events for a pointer moving from `previous` onto `new`, in Chrome's order:
+    /// out on what it left, leave down the whole chain it exited; pointerover, pointerenter on each
+    /// newly entered ancestor (outermost first, non-bubbling), mouseover, mouseenter likewise; then
+    /// pointermove, mousemove on the target. Leaving precedes entering (a leave handler's close timer
+    /// must be cancelled by the enter handler, not the reverse).
+    fn fire_hover_events(
+        &mut self,
+        previous: Option<manuk_dom::NodeId>,
+        new: Option<manuk_dom::NodeId>,
+        fonts: &FontContext,
+        viewport_width: f32,
+    ) {
+        #[cfg(feature = "spidermonkey")]
+        {
+            let Some(ctx) = self.js.as_ref() else { return };
+            let rects: std::collections::HashMap<manuk_dom::NodeId, [f32; 4]> = self
+                .root_box
+                .node_rects(&self.dom)
+                .into_iter()
+                .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
+                .collect();
+            let _reflow = ReflowScope::install(
+                &self.dom,
+                fonts,
+                viewport_width,
+                &self.images,
+                &self.final_url,
+                &self.external_css,
+                &self.scroll_offsets,
+                self.sticky_scroll_y,
+                self.has_sticky,
+            );
+            let chain = |dom: &manuk_dom::Dom, n: Option<manuk_dom::NodeId>| {
+                let mut v = Vec::new();
+                let mut cur = n.filter(|x| dom.is_alive(*x));
+                while let Some(x) = cur {
+                    v.push(x);
+                    cur = dom.parent(x);
+                }
+                v
+            };
+            let old_chain = chain(&self.dom, previous);
+            let new_chain = chain(&self.dom, new);
+            let left: Vec<_> = old_chain
+                .iter()
+                .filter(|n| !new_chain.contains(n))
+                .copied()
+                .collect();
+            let mut entered: Vec<_> = new_chain
+                .iter()
+                .filter(|n| !old_chain.contains(n))
+                .copied()
+                .collect();
+            entered.reverse();
+            let mut fire = |node: manuk_dom::NodeId, kind: &str| {
+                if let Err(e) = manuk_js::dispatch_mouse_buttons(
+                    ctx,
+                    &mut self.dom,
+                    node,
+                    kind,
+                    0,
+                    0,
+                    0,
+                    &rects,
+                    &self.styles,
+                ) {
+                    tracing::warn!("{kind} dispatch: {e}");
+                }
+            };
+            if let Some(old) = old_chain.first().copied().filter(|_| !left.is_empty()) {
+                fire(old, "pointerout");
+                for n in &left {
+                    fire(*n, "pointerleave");
+                }
+                fire(old, "mouseout");
+                for n in &left {
+                    fire(*n, "mouseleave");
+                }
+            }
+            if let Some(t) = new_chain.first().copied() {
+                if !entered.is_empty() {
+                    fire(t, "pointerover");
+                    for n in &entered {
+                        fire(*n, "pointerenter");
+                    }
+                    fire(t, "mouseover");
+                    for n in &entered {
+                        fire(*n, "mouseenter");
+                    }
+                }
+                fire(t, "pointermove");
+                fire(t, "mousemove");
+            }
+        }
+        #[cfg(not(feature = "spidermonkey"))]
+        {
+            let _ = (previous, new, fonts, viewport_width);
+        }
     }
 
     /// **Route the shell's focus into the cascade** — `:focus`, `:focus-within`, `:focus-visible`.
@@ -11785,6 +11888,11 @@ impl Page {
             } else {
                 self.fire_plain_event(n, "focus", fonts, viewport_width);
                 self.fire_plain_event(n, "focusin", fonts, viewport_width);
+            }
+            // Focusing a text control places its caret: Chrome fires `selectionchange` (at the control,
+            // bubbling to the document).
+            if self.is_text_control(n) {
+                self.fire_plain_event(n, "selectionchange", fonts, viewport_width);
             }
             let root = self.dom.root();
             if self.dom.is_dirty(root) || self.dom.has_dirty_descendants(root) {
