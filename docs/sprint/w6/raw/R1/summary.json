@@ -1,0 +1,19 @@
+{
+ "mutate": "none",
+ "chrome_pin": "145.0.7632.116",
+ "captures": 33,
+ "site_agf": {
+  "dashdish": 0.0,
+  "fly-unified": 0.0,
+  "gocalendar": 0.0,
+  "networkin": 0.0,
+  "opendining": 0.0,
+  "staynb": 0.0,
+  "topwork": 0.0,
+  "udriver": 0.0,
+  "zilloft": 0.0
+ },
+ "rho": null,
+ "n_rho": 9,
+ "misses": 341
+}

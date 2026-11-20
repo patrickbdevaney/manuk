@@ -43,6 +43,10 @@ path = "src/bin/a11y-score.rs"
 name = "drive-probe"
 path = "src/bin/drive-probe.rs"
 
+[[bin]]
+name = "agf-probe"
+path = "src/bin/agf-probe.rs"
+
 [features]
 # W4.E2.c: EasyPrivacy for the lean profile (pulls the adblock crate).
 lean-easyprivacy = ["manuk-net/adblock"]
