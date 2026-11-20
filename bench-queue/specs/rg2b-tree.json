@@ -1,6 +1,6 @@
 {
  "id": "rg2b-tree",
- "note": "RG.2.B reproduced at its own tree: manuk-mcp + real_run.py built/run from git worktree c4c6f399 (contains eba6e4c8, 3fd16dcd, eae96634); manuk x3, no playwright arm",
+ "note": "RG.2.B reproduced at its own tree: manuk-mcp + real_run.py built/run from git worktree c4c6f399 (contains eba6e4c8, 3fd16dcd, eae96634); manuk x3, no playwright arm; worktree real_run.py carries one uncommitted harness-only patch (keep-alive os.utime wrapped in try/except OSError: in a worktree .git is a file, which aborted attempt a666d892 after 2-3 tasks per step)",
  "inputs": [
   "/home/patrickd/manuk-rg2b/target/release/manuk-mcp",
   "/home/patrickd/manuk-rg2b/bench/agent-tasks/real_run.py"
