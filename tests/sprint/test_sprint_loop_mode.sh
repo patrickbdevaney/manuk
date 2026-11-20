@@ -2,12 +2,15 @@
 # gate for W6.L1.a.b.a: SPRINT_PROMPT_MODE=alternate makes the loop alternate full,pack,full,pack; unset => all pack.
 #   test_sprint_loop_mode.sh           -> real loop (green)
 #   test_sprint_loop_mode.sh --mutant  -> loop without the alternate branch must be RED
+#   test_sprint_loop_mode.sh --mutant-file -> loop ignoring docs/sprint/PROMPT_MODE must be RED (W6.L1.a.b)
 set -u; cd "$(dirname "$0")/../.."; SRC=$PWD/scripts/sprint-loop.sh; MUT=${1:-}
 T=$(mktemp -d); trap 'pkill -f "$T/root" 2>/dev/null; [ -n "${KEEP:-}" ] || rm -rf "$T"' EXIT
 run() { # $1 = mode env value ("" = unset), $2 = suffix; prints recorded modes
   local R=$T/root$2; rm -rf $R; mkdir -p $R/scripts $R/docs/sprint $R/.git $T/bin $T/pin/9.9.9.9/chrome-linux64
   cp scripts/sprint-next.py scripts/sprint-pack.py scripts/sprint-ledger.py scripts/sprint-graph.py $R/scripts/ 2>/dev/null
   cp "$SRC" $R/scripts/sprint-loop.sh
+  [ "$MUT" = --mutant-file ] && sed -i 's|^  PMODE=\${SPRINT_PROMPT_MODE:-.*|  PMODE=${SPRINT_PROMPT_MODE:-pack}|' $R/scripts/sprint-loop.sh
+  [ -n "${3:-}" ] && echo "$3" >$R/docs/sprint/PROMPT_MODE
   [ "$MUT" = --mutant ] && python3 - $R/scripts/sprint-loop.sh <<'PY'
 import sys,re
 p=sys.argv[1]; s=open(p).read()
@@ -33,7 +36,7 @@ STUB
   pkill -f "$R/scripts/sprint-loop.sh" 2>/dev/null
   head -4 $T/prompts$2 2>/dev/null | tr '\n' ' '
 }
-alt=$(run alternate A); unset_=$(run "" B)
-echo "alternate=[$alt] unset=[$unset_]"
-[ "$alt" = "full pack full pack " ] && [ "$unset_" = "pack pack pack pack " ] && { echo "ok   alternate -> full,pack,full,pack; unset -> all pack"; exit 0; }
+alt=$(run alternate A); unset_=$(run "" B); file_=$(run "" C alternate)
+echo "alternate=[$alt] unset=[$unset_] file=[$file_]"
+[ "$alt" = "full pack full pack " ] && [ "$unset_" = "pack pack pack pack " ] && [ "$file_" = "full pack full pack " ] && { echo "ok   alternate -> full,pack,full,pack; unset -> all pack; PROMPT_MODE file=alternate -> full,pack,full,pack"; exit 0; }
 echo "FAIL modes wrong"; exit 1

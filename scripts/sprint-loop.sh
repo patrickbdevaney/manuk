@@ -170,7 +170,9 @@ EOF
   # W6.L1: the mandated reading (~115 KB of docs) is replaced by a <6k-token pack unless SPRINT_PROMPT_MODE=full
   # (kept for the before/after token measurement; every attempt's mode is recorded in docs/sprint/LEDGER.tsv).
   # SPRINT_PROMPT_MODE=alternate: full, pack, full, ... per attempt (counter in .git/sprint-pmode-n survives re-exec)
-  PMODE=${SPRINT_PROMPT_MODE:-pack}
+  # docs/sprint/PROMPT_MODE (committed) sets the mode when the env does not, so a landed mode change reaches the
+  # running loop through its re-exec, with no operator restart (W6.L1.a.b).
+  PMODE=${SPRINT_PROMPT_MODE:-$(tr -dc 'a-z' <"$ROOT/docs/sprint/PROMPT_MODE" 2>/dev/null)}; PMODE=${PMODE:-pack}
   if [ "$PMODE" = alternate ]; then
     pn=$(cat "$ROOT/.git/sprint-pmode-n" 2>/dev/null || echo 0); pn=${pn//[!0-9]/}; pn=${pn:-0}
     if [ $(( pn % 2 )) -eq 0 ]; then PMODE=full; else PMODE=pack; fi
