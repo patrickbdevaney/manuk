@@ -80,3 +80,52 @@ Measured, not claimed: the transition now starts (mid strictly between on all th
 wall time (≈1% at 1 s) and dispatches no transitionend in this harness. The css-transitions pass count did not move
 (638 → 637 of a larger denominator). Follow-up rows: W6.J1.b.a.a.a.a.d.a (clock), .b (event delivery without a host tick),
 .c (the non-rendered-element-001 regression and the denominator split).
+
+## 4. Split of the +1620 denominator and the non-rendered-element-001 regression (node W6.J1.b.a.a.a.a.d.c)
+
+chrome_ver=145.0.7632.116 (both runs). Tool: `scripts/attribute-subtest-split.py` (run as
+`python3 -I scripts/attribute-subtest-split.py raw/J1b-drain-cause/css-transitions.before.log raw/J1b-drain-cause/css-transitions.after.log`).
+Authority for totals is the `FILE <path> (p/t)` header, not the printed FAIL lines (see 4c).
+
+### 4a. Per-file attribution of the header-reported totals
+
+| file | before | after | dTotal |
+|---|---|---|---|
+| properties-value-001 | no header (perfile: 0) | 0/560 | +560 |
+| properties-value-inherit-001 | no header (perfile: 0) | 6/560 | +560 |
+| properties-value-inherit-002 | no header (perfile: 0) | 0/560 | +560 |
+| shadow-root-insertion | no header (perfile: 0) | 0/1 | +1 |
+| starting-of-transitions-001 | no header (perfile: 0) | 0/1 | +1 |
+| zero-duration-multiple-transition | no header (perfile: 0) | 0/1 | +1 |
+| transition-base-response-002 | 0/1 | no header (perfile: 0) | −1 |
+
+Attributed sum: **+1682** over 7 files with a non-zero change (the other header files change pass count only, dTotal 0).
+
+### 4b. Residual, not attributable from these logs
+
+Summary: before 638/1544, after 637/3164, so dTotal = **+1620**. Attributed +1682, so the residual is **−62**, the net
+change in subtests of files that print no header (all-pass or header-less files). Those files print no per-file total,
+so the −62 cannot be split by file from these logs. Separately, the header-less files carry 372 total / 336 pass before
+and 310 total / 274 pass after: **36 non-passing subtests in each run have no printed FAIL line and no header**. The
+count is the same in both runs; their files are not located.
+
+Verdict: attributed 1682 ≠ 1620, so the split is **incomplete** and the node stays open (falsifier clause). Follow-up
+W6.J1.b.a.a.a.a.d.c.a takes per-file totals for every runnable file.
+
+### 4c. Printed FAIL lines are not a complete per-file record
+
+Header failing counts (t−p) against printed FAIL/Timeout lines, per file: before, 6 files disagree (e.g.
+`events-001` header 0/9, 1 line printed). After, 9 files disagree, including `properties-value-001` (0/560, 39 lines
+printed) and `properties-value-inherit-001` (6/560, 121 lines printed). The node note "the per-file FAIL lines are the
+authority" does not hold for these files; the header is used above.
+
+### 4d. non-rendered-element-001 (3/4 → 2/4)
+
+- before (`c4e30576`): 3/4. One failing subtest printed: `Timeout — Transitions are canceled when an element is no longer rendered`.
+  The gate's premise of two failing subtests in the before run does not hold; the header says one.
+- after (`0df91d1a`): 2/4. Two failing subtests printed:
+  1. `FAIL — Transitions do not run for an element newly rendered` (`assert_equals: No transition should run expected "rgb(0, 128, 0)" but got "rgb(255, 0, 0)"`). **This is the new regression.**
+  2. `Timeout — Transitions are canceled when an element is no longer rendered` (also failing before).
+
+So the regression is one new failing subtest: after the .a–.c change, a transition runs on an element that becomes rendered,
+where the test expects none. Follow-up W6.J1.b.a.a.a.a.d.c.b.
