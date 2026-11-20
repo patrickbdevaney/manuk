@@ -1,0 +1,73 @@
+{
+ "id": "v1-heldout",
+ "note": "W6.V1 held-out live-web set: 30 frozen tasks x3 runs per arm (manuk, cdp-layer, playwright), Haiku driving; metric band is a pass-through [0,30], the real bands are computed per arm in docs/sprint/w6/V1.md",
+ "inputs": [
+  "target/release/manuk-mcp",
+  "bench/agent-tasks/run_arm.py",
+  "bench/agent-tasks/suite-v1-heldout.json"
+ ],
+ "steps": [
+  {
+   "name": "manuk x3",
+   "argv": [
+    "python3",
+    "-I",
+    "bench/agent-tasks/run_arm.py",
+    "--arm",
+    "manuk",
+    "--suite",
+    "heldout",
+    "--runs",
+    "3",
+    "--out",
+    "bench-queue/out/v1-heldout-manuk.tsv",
+    "--transcripts",
+    "/home/patrickd/.cache/manuk-bq/transcripts-v1"
+   ]
+  },
+  {
+   "name": "cdp-layer x3",
+   "argv": [
+    "python3",
+    "-I",
+    "bench/agent-tasks/run_arm.py",
+    "--arm",
+    "cdp-layer",
+    "--suite",
+    "heldout",
+    "--runs",
+    "3",
+    "--out",
+    "bench-queue/out/v1-heldout-cdp-layer.tsv",
+    "--transcripts",
+    "/home/patrickd/.cache/manuk-bq/transcripts-v1"
+   ]
+  },
+  {
+   "name": "playwright x3",
+   "argv": [
+    "python3",
+    "-I",
+    "bench/agent-tasks/run_arm.py",
+    "--arm",
+    "playwright",
+    "--suite",
+    "heldout",
+    "--runs",
+    "3",
+    "--out",
+    "bench-queue/out/v1-heldout-playwright.tsv",
+    "--transcripts",
+    "/home/patrickd/.cache/manuk-bq/transcripts-v1"
+   ]
+  }
+ ],
+ "band": {
+  "tsv_glob": "bench-queue/out/v1-heldout-manuk.tsv",
+  "runs": 3,
+  "task_pass_2of3": [
+   0,
+   30
+  ]
+ }
+}

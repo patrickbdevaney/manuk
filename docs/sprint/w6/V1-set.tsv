@@ -1,0 +1,31 @@
+id	start_url	goal	expected_all
+H01	https://www.rfc-editor.org/rfc/rfc9110	What is the exact title of this RFC?	HTTP Semantics
+H02	https://www.rfc-editor.org/rfc/rfc2616	Who is the first author listed for this RFC?	Fielding
+H03	https://www.rfc-editor.org/rfc/rfc791	What is the title of this RFC?	Internet Protocol
+H04	https://xkcd.com/1/	What is the title of this xkcd comic?	Barrel - Part 1
+H05	https://xkcd.com/1/	Click 'Next' to go to the following comic. What is its title?	Petit Trees (sketch)
+H06	https://xkcd.com/353/	What is the hover (title attribute) text of the comic image? Quote the last sentence.	Perl, I'm leaving you
+H07	https://www.python.org/downloads/release/python-3120/	What release date does this page give for Python 3.12.0?	Oct. 2, 2023
+H08	https://jsonplaceholder.typicode.com/users/3	What is the name of this user?	Clementine Bauch
+H09	https://jsonplaceholder.typicode.com/users/3	What is this user's email address?	Nathan@yesenia.net
+H10	https://jsonplaceholder.typicode.com/todos/5	What is the title of this todo?	laboriosam mollitia et enim quasi adipisci quia provident illum
+H11	https://www.wikidata.org/wiki/Q42	What is the date of birth statement for this item?	11 March 1952
+H12	https://www.wikidata.org/wiki/Q42	What is the place of birth statement for this item?	Cambridge
+H13	https://en.wikipedia.org/wiki/Mount_Everest	What elevation above sea level does the infobox give, in metres?	8,848.86
+H14	https://en.wikipedia.org/wiki/Linux	What is the initial release date given in the infobox?	17 September 1991
+H15	https://en.wikipedia.org/wiki/Apollo_11	On what date was Apollo 11 launched, per the infobox?	July 16, 1969
+H16	https://www.sqlite.org/copyright.html	Under what licence-like status does this page say SQLite is released?	public domain
+H17	https://pokeapi.co/api/v2/pokemon/ditto	What is the value of the weight field in this JSON?	40
+H18	https://pokeapi.co/api/v2/pokemon/pikachu	What is the value of the id field at the top level of this JSON?	25
+H19	https://the-internet.herokuapp.com/hovers	Hover over the first user avatar. What name is shown?	user1
+H20	https://the-internet.herokuapp.com/dynamic_loading/1	Click Start and wait for the content to load. What text appears?	Hello World!
+H21	https://www.scrapethissite.com/pages/ajax-javascript/	Click the year 2015. Which film is marked as the Best Picture winner?	Spotlight
+H22	http://info.cern.ch/hypertext/WWW/TheProject.html	What is the title (tab title) of this page?	The World Wide Web project
+H23	https://httpbin.org/status/418	What word appears in brackets in the ASCII art on this page?	teapot
+H24	https://httpbin.org/forms/post	Fill the customer name with 'Ada', choose size Large, tick Bacon, and submit. In the response, what Content-Type does the echoed request header show?	application/x-www-form-urlencoded
+H25	https://the-internet.herokuapp.com/status_codes	Click the link for status code 404. What does the page say it returned?	404 status code
+H26	https://the-internet.herokuapp.com/checkboxes	How many of the checkboxes are checked when the page first loads?	1
+H27	https://the-internet.herokuapp.com/add_remove_elements/	Click 'Add Element' three times. How many Delete buttons are on the page now?	3
+H28	https://jsonplaceholder.typicode.com/posts/1	What is the title of this post?	sunt aut facere repellat provident occaecati excepturi optio reprehenderit
+H29	https://en.wikipedia.org/wiki/Mount_Everest	In what year was the first confirmed ascent of Mount Everest, per the lead paragraph?	1953
+H30	https://www.rfc-editor.org/rfc/rfc2616	What month and year was this RFC published?	June 1999

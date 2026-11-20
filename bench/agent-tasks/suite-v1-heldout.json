@@ -1,0 +1,395 @@
+{
+ "suite": "v1-heldout",
+ "tasks": [
+  {
+   "id": "H01",
+   "slice": "heldout",
+   "kind": "live",
+   "start_url": "https://www.rfc-editor.org/rfc/rfc9110",
+   "goal": "What is the exact title of this RFC?",
+   "verifier": {
+    "answer_all": [
+     "HTTP Semantics"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "H02",
+   "slice": "heldout",
+   "kind": "live",
+   "start_url": "https://www.rfc-editor.org/rfc/rfc2616",
+   "goal": "Who is the first author listed for this RFC?",
+   "verifier": {
+    "answer_all": [
+     "Fielding"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "H03",
+   "slice": "heldout",
+   "kind": "live",
+   "start_url": "https://www.rfc-editor.org/rfc/rfc791",
+   "goal": "What is the title of this RFC?",
+   "verifier": {
+    "answer_all": [
+     "Internet Protocol"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "H04",
+   "slice": "heldout",
+   "kind": "live",
+   "start_url": "https://xkcd.com/1/",
+   "goal": "What is the title of this xkcd comic?",
+   "verifier": {
+    "answer_all": [
+     "Barrel - Part 1"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "H05",
+   "slice": "heldout",
+   "kind": "live",
+   "start_url": "https://xkcd.com/1/",
+   "goal": "Click 'Next' to go to the following comic. What is its title?",
+   "verifier": {
+    "answer_all": [
+     "Petit Trees (sketch)"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "H06",
+   "slice": "heldout",
+   "kind": "live",
+   "start_url": "https://xkcd.com/353/",
+   "goal": "What is the hover (title attribute) text of the comic image? Quote the last sentence.",
+   "verifier": {
+    "answer_all": [
+     "Perl, I'm leaving you"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "H07",
+   "slice": "heldout",
+   "kind": "live",
+   "start_url": "https://www.python.org/downloads/release/python-3120/",
+   "goal": "What release date does this page give for Python 3.12.0?",
+   "verifier": {
+    "answer_all": [
+     "Oct. 2, 2023"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "H08",
+   "slice": "heldout",
+   "kind": "live",
+   "start_url": "https://jsonplaceholder.typicode.com/users/3",
+   "goal": "What is the name of this user?",
+   "verifier": {
+    "answer_all": [
+     "Clementine Bauch"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "H09",
+   "slice": "heldout",
+   "kind": "live",
+   "start_url": "https://jsonplaceholder.typicode.com/users/3",
+   "goal": "What is this user's email address?",
+   "verifier": {
+    "answer_all": [
+     "Nathan@yesenia.net"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "H10",
+   "slice": "heldout",
+   "kind": "live",
+   "start_url": "https://jsonplaceholder.typicode.com/todos/5",
+   "goal": "What is the title of this todo?",
+   "verifier": {
+    "answer_all": [
+     "laboriosam mollitia et enim quasi adipisci quia provident illum"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "H11",
+   "slice": "heldout",
+   "kind": "live",
+   "start_url": "https://www.wikidata.org/wiki/Q42",
+   "goal": "What is the date of birth statement for this item?",
+   "verifier": {
+    "answer_all": [
+     "11 March 1952"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "H12",
+   "slice": "heldout",
+   "kind": "live",
+   "start_url": "https://www.wikidata.org/wiki/Q42",
+   "goal": "What is the place of birth statement for this item?",
+   "verifier": {
+    "answer_all": [
+     "Cambridge"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "H13",
+   "slice": "heldout",
+   "kind": "live",
+   "start_url": "https://en.wikipedia.org/wiki/Mount_Everest",
+   "goal": "What elevation above sea level does the infobox give, in metres?",
+   "verifier": {
+    "answer_all": [
+     "8,848.86"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "H14",
+   "slice": "heldout",
+   "kind": "live",
+   "start_url": "https://en.wikipedia.org/wiki/Linux",
+   "goal": "What is the initial release date given in the infobox?",
+   "verifier": {
+    "answer_all": [
+     "17 September 1991"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "H15",
+   "slice": "heldout",
+   "kind": "live",
+   "start_url": "https://en.wikipedia.org/wiki/Apollo_11",
+   "goal": "On what date was Apollo 11 launched, per the infobox?",
+   "verifier": {
+    "answer_all": [
+     "July 16, 1969"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "H16",
+   "slice": "heldout",
+   "kind": "live",
+   "start_url": "https://www.sqlite.org/copyright.html",
+   "goal": "Under what licence-like status does this page say SQLite is released?",
+   "verifier": {
+    "answer_all": [
+     "public domain"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "H17",
+   "slice": "heldout",
+   "kind": "live",
+   "start_url": "https://pokeapi.co/api/v2/pokemon/ditto",
+   "goal": "What is the value of the weight field in this JSON?",
+   "verifier": {
+    "answer_all": [
+     "40"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "H18",
+   "slice": "heldout",
+   "kind": "live",
+   "start_url": "https://pokeapi.co/api/v2/pokemon/pikachu",
+   "goal": "What is the value of the id field at the top level of this JSON?",
+   "verifier": {
+    "answer_all": [
+     "25"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "H19",
+   "slice": "heldout",
+   "kind": "live",
+   "start_url": "https://the-internet.herokuapp.com/hovers",
+   "goal": "Hover over the first user avatar. What name is shown?",
+   "verifier": {
+    "answer_all": [
+     "user1"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "H20",
+   "slice": "heldout",
+   "kind": "live",
+   "start_url": "https://the-internet.herokuapp.com/dynamic_loading/1",
+   "goal": "Click Start and wait for the content to load. What text appears?",
+   "verifier": {
+    "answer_all": [
+     "Hello World!"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "H21",
+   "slice": "heldout",
+   "kind": "live",
+   "start_url": "https://www.scrapethissite.com/pages/ajax-javascript/",
+   "goal": "Click the year 2015. Which film is marked as the Best Picture winner?",
+   "verifier": {
+    "answer_all": [
+     "Spotlight"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "H22",
+   "slice": "heldout",
+   "kind": "live",
+   "start_url": "http://info.cern.ch/hypertext/WWW/TheProject.html",
+   "goal": "What is the title (tab title) of this page?",
+   "verifier": {
+    "answer_all": [
+     "The World Wide Web project"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "H23",
+   "slice": "heldout",
+   "kind": "live",
+   "start_url": "https://httpbin.org/status/418",
+   "goal": "What word appears in brackets in the ASCII art on this page?",
+   "verifier": {
+    "answer_all": [
+     "teapot"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "H24",
+   "slice": "heldout",
+   "kind": "live",
+   "start_url": "https://httpbin.org/forms/post",
+   "goal": "Fill the customer name with 'Ada', choose size Large, tick Bacon, and submit. In the response, what Content-Type does the echoed request header show?",
+   "verifier": {
+    "answer_all": [
+     "application/x-www-form-urlencoded"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "H25",
+   "slice": "heldout",
+   "kind": "live",
+   "start_url": "https://the-internet.herokuapp.com/status_codes",
+   "goal": "Click the link for status code 404. What does the page say it returned?",
+   "verifier": {
+    "answer_all": [
+     "404 status code"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "H26",
+   "slice": "heldout",
+   "kind": "live",
+   "start_url": "https://the-internet.herokuapp.com/checkboxes",
+   "goal": "How many of the checkboxes are checked when the page first loads?",
+   "verifier": {
+    "answer_all": [
+     "1"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "H27",
+   "slice": "heldout",
+   "kind": "live",
+   "start_url": "https://the-internet.herokuapp.com/add_remove_elements/",
+   "goal": "Click 'Add Element' three times. How many Delete buttons are on the page now?",
+   "verifier": {
+    "answer_all": [
+     "3"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "H28",
+   "slice": "heldout",
+   "kind": "live",
+   "start_url": "https://jsonplaceholder.typicode.com/posts/1",
+   "goal": "What is the title of this post?",
+   "verifier": {
+    "answer_all": [
+     "sunt aut facere repellat provident occaecati excepturi optio reprehenderit"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "H29",
+   "slice": "heldout",
+   "kind": "live",
+   "start_url": "https://en.wikipedia.org/wiki/Mount_Everest",
+   "goal": "In what year was the first confirmed ascent of Mount Everest, per the lead paragraph?",
+   "verifier": {
+    "answer_all": [
+     "1953"
+    ],
+    "answer_none": []
+   }
+  },
+  {
+   "id": "H30",
+   "slice": "heldout",
+   "kind": "live",
+   "start_url": "https://www.rfc-editor.org/rfc/rfc2616",
+   "goal": "What month and year was this RFC published?",
+   "verifier": {
+    "answer_all": [
+     "June 1999"
+    ],
+    "answer_none": []
+   }
+  }
+ ]
+}
