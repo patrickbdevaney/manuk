@@ -23377,17 +23377,33 @@ const WINDOW_PRELUDE: &str = r#"
             g.HTMLElement.prototype = {};
         }
         if (typeof g.customElements === 'undefined') {
+            // Valid custom element name (current HTML spec): starts [a-z], contains '-', no ASCII
+            // upper-case, and is a valid element local name (no NUL/TAB/LF/FF/CR/space/'/'/'>').
+            var __ceNameRe = /^[a-z][^\0\t\n\f\r \/>A-Z]*$/u;
+            var __ceReserved = { 'annotation-xml': 1, 'color-profile': 1, 'font-face': 1, 'font-face-src': 1,
+                'font-face-uri': 1, 'font-face-format': 1, 'font-face-name': 1, 'missing-glyph': 1 };
+            var __ceValid = function (n) {
+                return __ceNameRe.test(n) && n.indexOf('-') >= 0 && !__ceReserved.hasOwnProperty(n);
+            };
+            var __ceSyntaxErr = function (n) {
+                var m = "'" + n + "' is not a valid custom element name";
+                if (typeof g.DOMException === 'function') return new g.DOMException(m, 'SyntaxError');
+                var e = new SyntaxError(m); e.name = 'SyntaxError'; return e;
+            };
             g.customElements = {
                 __defs: {},
                 define: function (name, ctor) {
-                    name = String(name).toLowerCase();
+                    name = String(name);
+                    if (!__ceValid(name)) throw __ceSyntaxErr(name);
                     if (this.__defs[name]) return; // already defined
                     this.__defs[name] = ctor;
                     g.__upgradeTag(name);
                 },
-                get: function (name) { return this.__defs[String(name).toLowerCase()]; },
+                get: function (name) { return this.__defs[String(name)]; },
                 whenDefined: function (name) {
-                    return Promise.resolve(this.__defs[String(name).toLowerCase()]);
+                    name = String(name);
+                    if (!__ceValid(name)) return Promise.reject(__ceSyntaxErr(name));
+                    return Promise.resolve(this.__defs[name]);
                 }
             };
             // Upgrade one element: graft the class's prototype methods onto the host object (a
