@@ -38,3 +38,42 @@ measures the read: it shows cost on the first read after a mutation and ~0 on th
 
 ## Caveat
 Per-read timing is wall-clock under the full test run; one slice run, not a 3-run band. Ms/relayout is a single sample set (657 points).
+
+## W6.J1.b.a.a.a.b.a.a: does the slice finish when the reflow budget is raised?
+
+chrome_ver=145.0.7632.116 (MANUK_CHROME_PIN). Same n50 copy (`n50-properties-value-001.html`, run as `css/zzprobeN50/properties-value-001.html`
+with its `support/` copied from the WPT tree, `manuk-wpt wpt css/zzprobeN50 --show-failures`). Raw: `raw/J1b-reads-budget/`.
+Binary: `target/release/manuk-wpt` built from HEAD 2f1915ed, no engine change. ⚠ Host load average was **27 on 24 cores** during
+these runs (another process tree was busy), so all wall-clock budgets were contended. See the caveat.
+
+| arm | env | run 1 | run 2 | run 3 | script "terminated by timeout" | budget-exhausted warn |
+|---|---|---|---|---|---|---|
+| gate | `MANUK_REFLOW_BUDGET_MS=60000`, drain default | 40/100 | 40/100 | 40/100 | yes, each run | no |
+| mutant | `MANUK_REFLOW_BUDGET_MS=1`, drain default | 0/100 | 0/100 | - | (budget warn fires, used_ms=33-35) | yes |
+| default baseline | none | 9/100 | 10/100 | 10/100 | yes | yes |
+| default baseline (repeat) | none | 0/100 | - | - | yes | yes |
+| follow-up, not the gate | `MANUK_REFLOW_BUDGET_MS=60000` + `MANUK_MAX_DRAIN_MS=60000` | 41/100 | - | - | no | no |
+
+Files: `budget60s-run{1,2,3}.out`, `mutant-budget1ms-run{1,2}.out`, `default-baseline-run{1..4}.out`, `followup-drain60s-run1.out`.
+Timeouts: the gate arm has 1 `Script terminated by timeout` per run (in `__csAlias`, reached from `root.computedStyle` in the
+test's `start`), so the slice does NOT finish under the gate arm. The gate arm lists 60 FAIL subtests in run 1 (of 100).
+
+## Answer to the node question
+
+- Raising only the reflow budget to 60 s gives **40/100 in 3 of 3 runs**, not a full finish: the 5 s drain budget (`MANUK_MAX_DRAIN_MS`
+  default) still terminates the script. So the budget is one cut-off, not the only one.
+- Raising both budgets to 60 s gives 41/100 with no timeout (1 run, follow-up only). The slice then finishes; the other 59 subtests fail
+  on their own (events/values), not on time.
+- The deeper failure is therefore a second cut-off, the drain/script deadline, which the reflow budget sits under.
+
+## Gate verdict: NOT MET as written
+
+- The mutant (budget 1 ms) does go red: the budget fires ("FORCED-REFLOW BUDGET EXHAUSTED") and the score falls to 0/100 versus 40/100.
+  But it gives **0/100, not the 20/100 the gate names**, and the default-budget baseline reproduces **0-10/100 today, not 20/100**.
+- Cause (measured): load average 27 on 24 cores while these ran. The 20/100 in the parent node was recorded under lower load. The
+  per-relayout cost (`used_ms`=33-35 for one relayout at 644 nodes vs 7.6 ms mean in the parent trace) and the wall-clock budgets
+  both move with load, so the absolute score is not comparable across these two sessions.
+- Thresholds were not edited. The node is BLOCKED until a quiet-machine re-run (follow-up row) reproduces the 20/100 baseline and the mutant.
+
+## Caveat
+Scores are single-machine wall-clock under load; not a clean band. Do not diff these numbers against the parent's 20/100 (different load).

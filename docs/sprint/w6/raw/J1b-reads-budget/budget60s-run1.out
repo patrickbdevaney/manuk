@@ -1,0 +1,145 @@
+WPT css/zzprobeN50: 1 runnable testharness files
+   skip     1  support file, not a test
+[2m2026-11-20T21:58:47.782334Z[0m [33m WARN[0m [2mmozjs::rust[0m[2m:[0m Warning at dom_event.js:1:9416: Script terminated by timeout at:
+globalThis.__csAlias@dom_event.js:1:9416
+@dom_event.js:1:3560
+@dom_event.js:1:3587
+root.computedStyle@http://127.0.0.1:43315/css/zzprobeN50/properties-value-001.html inline#28:56:10
+computedStyle@http://127.0.0.1:43315/css/zzprobeN50/properties-value-001.html inline#32:34:24
+_getStyleFor@http://127.0.0.1:43315/css/zzprobeN50/properties-value-001.html inline#32:128:46
+getStyle@http://127.0.0.1:43315/css/zzprobeN50/properties-value-001.html inline#32:115:15
+start@http://127.0.0.1:43315/css/zzprobeN50/properties-value-001.html inline#61:57:49
+runLoop/</</<@http://127.0.0.1:43315/css/zzprobeN50/properties-value-001.html inline#30:118:56
+Test.prototype.step@http://127.0.0.1:43315/css/zzprobeN50/properties-value-001.html inline#22:2869:25
+runLoop/</<@http://127.0.0.1:43315/css/zzprobeN50/properties-value-001.html inline#30:117:34
+runLoop/<@http://127.0.0.1:43315/css/zzprobeN50/properties-value-001.html inline#30:116:19
+runLoop@http://127.0.0.1:43315/css/zzprobeN50/properties-value-001.html inline#30:115:15
+
+
+  FILE css/zzprobeN50/properties-value-001.html  (40/100)
+    FAIL background-color color(rgba) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "background-color:2s" but got ""
+    FAIL background-position-x length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL background-position-x length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "background-position-x:2s" but got ""
+    FAIL background-position-x length(pc) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL background-position-x length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "background-position-x:2s" but got ""
+    FAIL background-position-x length(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL background-position-x length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "background-position-x:2s" but got ""
+    FAIL background-position-x length(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL background-position-x length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "background-position-x:2s" but got ""
+    FAIL background-position-x length(ex) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL background-position-x length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "background-position-x:2s" but got ""
+    FAIL background-position-x length(mm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL background-position-x length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "background-position-x:2s" but got ""
+    FAIL background-position-x length(cm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL background-position-x length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "background-position-x:2s" but got ""
+    FAIL background-position-x length(in) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL background-position-x length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "background-position-x:2s" but got ""
+    FAIL background-position-x percentage(%) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL background-position-x percentage(%) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "background-position-x:2s" but got ""
+    FAIL border-top-width length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-top-width:2s" but got ""
+    FAIL border-top-width length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-top-width:2s" but got ""
+    FAIL border-top-width length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-top-width:2s" but got ""
+    FAIL border-top-width length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-top-width:2s" but got ""
+    FAIL border-top-width length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-top-width:2s" but got ""
+    FAIL border-top-width length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-top-width:2s" but got ""
+    FAIL border-top-width length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-top-width:2s" but got ""
+    FAIL border-top-width length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-top-width:2s" but got ""
+    FAIL border-right-width length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-right-width:2s" but got ""
+    FAIL border-right-width length(pc) / values
+         can't access property "getPropertyValue", window.getComputedStyle(...) is null
+    FAIL border-right-width length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-right-width:2s" but got ""
+    FAIL border-right-width length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-right-width:2s" but got ""
+    FAIL border-right-width length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-right-width:2s" but got ""
+    FAIL border-right-width length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-right-width:2s" but got ""
+    FAIL border-right-width length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-right-width:2s" but got ""
+    FAIL border-right-width length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-right-width:2s" but got ""
+    FAIL border-right-width length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-right-width:2s" but got ""
+    FAIL border-bottom-width length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-bottom-width:2s" but got ""
+    FAIL border-bottom-width length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-bottom-width:2s" but got ""
+    FAIL border-bottom-width length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-bottom-width:2s" but got ""
+    FAIL border-bottom-width length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-bottom-width:2s" but got ""
+    FAIL border-bottom-width length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-bottom-width:2s" but got ""
+    FAIL border-bottom-width length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-bottom-width:2s" but got ""
+    FAIL border-bottom-width length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-bottom-width:2s" but got ""
+    FAIL border-bottom-width length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-bottom-width:2s" but got ""
+    FAIL border-left-width length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-left-width:2s" but got ""
+    FAIL border-left-width length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-left-width:2s" but got ""
+    FAIL border-left-width length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-left-width:2s" but got ""
+    FAIL border-left-width length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-left-width:2s" but got ""
+    FAIL border-left-width length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-left-width:2s" but got ""
+    FAIL border-left-width length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-left-width:2s" but got ""
+    FAIL border-left-width length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-left-width:2s" but got ""
+    FAIL border-left-width length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-left-width:2s" but got ""
+    FAIL border-top-color color(rgba) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-top-color:2s" but got ""
+    FAIL border-right-color color(rgba) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-right-color:2s" but got ""
+    FAIL border-bottom-color color(rgba) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-bottom-color:2s" but got ""
+    FAIL border-left-color color(rgba) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-left-color:2s" but got ""
+    FAIL padding-bottom length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-bottom:2s" but got ""
+    FAIL padding-bottom length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-bottom:2s" but got ""
+    FAIL padding-bottom length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-bottom:2s" but got ""
+    FAIL padding-bottom length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-bottom:2s" but got ""
+
+── WPT css/zzprobeN50 ──────────────────────────────────────────
+   40.0%     40/100    (1 files)  css/zzprobeN50
+
+  FILES  1   subtests 40/100  =  40.0%
+  NO_REPORT 0   [1mHANG/CRASH 0[0m (Bar 0)   SHORT 0 (instrument)   SLOW 0 (our budget)   TH_TIMEOUT 0 (async test never completed)
