@@ -60,6 +60,18 @@ def intervention_count(rows, primary_judge, expected):
     return max(len(expected) - len(seen), 0)
 
 
+def failure(n_steps, fails, rows):
+    """W6.Q1.a.a: why a job must end FAILED instead of DONE (None = it may be DONE). A job whose every step exited
+    nonzero, or whose band TSV has no rows, never produced a measurement; banding it would mint a fake in-band row."""
+    if os.environ.get("BENCHQ_MUTATE_FAIL") == "1":  # gate mutant: never refuse
+        return None
+    if n_steps and fails == n_steps:
+        return f"every step exited nonzero ({fails}/{n_steps})"
+    if not rows:
+        return "band TSV has 0 rows"
+    return None
+
+
 def check_band(value, lo, hi):
     if os.environ.get("BENCHQ_MUTATE") == "1":  # gate mutant: a band check that never fails
         return True
@@ -119,15 +131,18 @@ def reconcile(spec, log, env):
     return moved
 
 
-def run_job(path, force=False):
+def run_job(path, force=False, results=RESULTS):
     spec_bytes = open(path, "rb").read(); spec = json.loads(spec_bytes)
     chrome = os.environ.get("MANUK_CHROME_PIN", "")
     if not chrome:
         raise SystemExit("refusing: MANUK_CHROME_PIN unset")
     head = commit(); key = job_key(spec_bytes, spec, chrome, head)
-    rdir = os.path.join(RESULTS, f"{spec['id']}-{key}"); os.makedirs(rdir, exist_ok=True)
+    rdir = os.path.join(results, f"{spec['id']}-{key}"); os.makedirs(rdir, exist_ok=True)
     if os.path.exists(os.path.join(rdir, "DONE")) and not force:
         print(f"CACHE HIT {spec['id']} {key}"); return rdir, True
+    for stale in ("FAILED",):  # a FAILED job re-runs (it has no DONE, so it is never a cache hit)
+        if os.path.exists(os.path.join(rdir, stale)):
+            os.remove(os.path.join(rdir, stale))
     log = os.path.join(rdir, "worker.log"); env = dict(os.environ); t0 = time.time()
     open(os.path.join(rdir, "RUNNING"), "w").write(str(os.getpid()))
     fails = 0
@@ -153,13 +168,20 @@ def run_job(path, force=False):
     ok_int = interv <= 0.10 * len(expected) if expected else fails == 0
     lo, hi = spec["band"]["task_pass_2of3"]
     wall = time.time() - t0
+    why = failure(len(spec["steps"]), fails, rows)
+    # a FAILED job writes no in-band verdict: in_band stays empty, so nothing downstream can read it as a pass
+    in_band = "" if why else int(check_band(t2, lo, hi) and all(check_band(x, *spec["band"].get("per_run", [lo, hi])) for x in runs))
     with open(os.path.join(rdir, "band.tsv"), "w") as f:
         f.write("ts\tjob\tkey\tchrome_ver\tcommit\twall_s\trows\tinterventions\tauto_retries\tmetric\tvalue\tband_lo\tband_hi\tin_band\n")
         f.write("\t".join(map(str, [time.strftime("%FT%T"), spec["id"], key, chrome, head, round(wall), len(rows), interv, auto,
-                "task_pass_2of3", t2, lo, hi, int(check_band(t2, lo, hi) and all(check_band(x, *spec["band"].get("per_run", [lo, hi])) for x in runs))])) + "\n")
+                "task_pass_2of3", t2, lo, hi, in_band])) + "\n")
         f.write("\t".join(map(str, [time.strftime("%FT%T"), spec["id"], key, chrome, head, round(wall), len(rows), interv, auto,
                 "pass_per_run", "/".join(map(str, runs)), "", "", ""])) + "\n")
     os.remove(os.path.join(rdir, "RUNNING"))
+    if why:
+        open(os.path.join(rdir, "FAILED"), "w").write(why + "\n")
+        print(f"FAILED {spec['id']} {key} wall={wall:.0f}s reason: {why}")
+        return rdir, False
     open(os.path.join(rdir, "DONE"), "w").write(f"{int(ok_int)}\n")
     print(f"DONE {spec['id']} {key} wall={wall:.0f}s task_pass_2of3={t2} runs={runs} interventions={interv}")
     return rdir, False
@@ -217,12 +239,31 @@ def self_test():
                        ("fallback row lands in .fallback-dropped", [r["task"] for r in fb_rows] == ["d"])]:
         print(("ok  " if cond else "RED ") + name); ok &= cond
     shutil.rmtree(tmp, ignore_errors=True)
+    # W6.Q1.a.a: end-to-end, a spec whose only step exits 1 and whose band TSV has no rows must end FAILED (not DONE),
+    # with an empty in_band cell. Runs in a temp results dir so the real bench-queue/results is never touched.
+    os.environ.setdefault("MANUK_CHROME_PIN", "145.0.7632.116")
+    tmp2 = tempfile.mkdtemp(prefix="bq-failed-")
+    band_tsv = os.path.join(tmp2, "band", "rows.tsv"); os.makedirs(os.path.dirname(band_tsv))
+    _write_tsv(band_tsv, fields, [])  # header only: 0 rows
+    spec_f = {"id": "tf", "steps": [{"name": "boom", "argv": [sys.executable, "-c", "raise SystemExit(1)"]}],
+              "band": {"tsv_glob": band_tsv, "tasks": ["a"], "runs": 1, "task_pass_2of3": [0, 10]}}
+    spec_path = os.path.join(tmp2, "spec.json"); open(spec_path, "w").write(json.dumps(spec_f))
+    import io, contextlib
+    with contextlib.redirect_stdout(io.StringIO()):
+        rdir, _ = run_job(spec_path, results=os.path.join(tmp2, "results"))
+    band_row = open(os.path.join(rdir, "band.tsv")).read().splitlines()[1].split("\t")
+    for name, cond in [("failing step + empty TSV ends FAILED", os.path.exists(os.path.join(rdir, "FAILED"))),
+                       ("FAILED job has no DONE marker", not os.path.exists(os.path.join(rdir, "DONE"))),
+                       ("FAILED job band.tsv in_band is empty", band_row[-1] == "")]:
+        print(("ok  " if cond else "RED ") + name); ok &= cond
+    shutil.rmtree(tmp2, ignore_errors=True)
     print("SELF-TEST", "GREEN" if ok else "RED"); sys.exit(0 if ok else 1)
 
 
 def status(job):
     for d in sorted(glob.glob(os.path.join(RESULTS, (job or "") + "*"))):
-        st = "DONE" if os.path.exists(d + "/DONE") else "RUNNING" if os.path.exists(d + "/RUNNING") else "?"
+        st = ("DONE" if os.path.exists(d + "/DONE") else "FAILED" if os.path.exists(d + "/FAILED")
+              else "RUNNING" if os.path.exists(d + "/RUNNING") else "?")
         print(os.path.basename(d), st)
         if os.path.exists(d + "/band.tsv"):
             print(open(d + "/band.tsv").read())
