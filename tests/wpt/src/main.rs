@@ -4018,7 +4018,14 @@ fn run_wpt_cmd(args: &[String], fonts: &FontContext) {
                         // a directory bisect to find out which file a bar came from — which is
                         // exactly why "an AREA is not a CAUSE" kept being unfalsifiable. One header
                         // per file that has anything to report; silent for a clean file.
-                        let mut hdr = false;
+                        // MANUK_WPT_TOTALS=1: print the header for EVERY file, clean ones included, so a
+                        // subtest-denominator change can be split per file (a header-less file has no total).
+                        let mut hdr = if std::env::var_os("MANUK_WPT_TOTALS").is_some() {
+                            eprintln!("  FILE {rel}  ({p}/{t})");
+                            true
+                        } else {
+                            false
+                        };
                         for (name, st) in ts {
                             if matches!(st, manuk_wpt::harness::Sub::Pass) {
                                 continue;

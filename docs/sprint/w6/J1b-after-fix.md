@@ -129,3 +129,21 @@ authority" does not hold for these files; the header is used above.
 
 So the regression is one new failing subtest: after the .a–.c change, a transition runs on an element that becomes rendered,
 where the test expects none. Follow-up W6.J1.b.a.a.a.a.d.c.b.
+
+## 4e. Per-file totals for every file (node W6.J1.b.a.a.a.a.d.c.a)
+
+chrome_ver=145.0.7632.116. `MANUK_WPT_TOTALS=1` makes the wpt child print `  FILE <path>  (p/t)` for every file, clean ones
+included (tests/wpt/src/main.rs). Logs: `raw/J1b-totals/{before,after}{,.2}.log` (before = c4e30576, after = 0df91d1a, each with
+only that printer patch; `--show-failures --timeout 120`, host load ~30).
+
+| run | before | after | dTotal | attributed | residual |
+|---|---|---|---|---|---|
+| run 1 | 638/2664 | 665/1544 | -1120 | -1120 (properties-value-001, properties-value-inherit-001, -560 each) | 0 |
+| run 2 | 638/2104 | 594/1969 | -135 | -135 (z-index-interpolation -94, text-shadow-interpolation -41) | 0 |
+
+The split is now always complete (residual 0): header-less files were the whole gap. Mutant: dropping one all-pass file's header from
+the after log gives residual +1, exit 1; `--selftest` GREEN. **But the +1620 itself did not reproduce**: the subtest denominator
+of the same binary moves by hundreds between runs (before 2664 vs 2104, after 1544 vs 1969) because the 560-subtest
+properties-value files and the interpolation files report a different number of subtests when the run is cut off by the drain
+deadline under load. So "+1620" was a load artefact of one pair of runs, not a property of the two commits. Gate clause
+"attributed = 1620" cannot be met; BLOCKED with follow-up .a.
