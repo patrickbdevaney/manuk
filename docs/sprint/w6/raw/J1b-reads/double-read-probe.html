@@ -1,0 +1,11 @@
+<!doctype html><meta charset=utf-8><script src="/resources/testharness.js"></script><script src="/resources/testharnessreport.js"></script>
+<style>.t{background-color:rgb(100,100,100)}</style><body><script>
+test(function(){
+ for (var i=0;i<3;i++){
+  var d=document.createElement('div'); d.className='t'; document.body.appendChild(d);
+  var a=getComputedStyle(d).getPropertyValue('background-color');
+  var b=getComputedStyle(d).getPropertyValue('background-color');
+  assert_equals(a,b); assert_equals(a,'rgb(100, 100, 100)');
+ }
+},'double read');
+</script>

@@ -1,0 +1,24 @@
+diff --git a/engine/js/src/dom_bindings.rs b/engine/js/src/dom_bindings.rs
+index bd46a6ba..184c1244 100644
+--- a/engine/js/src/dom_bindings.rs
++++ b/engine/js/src/dom_bindings.rs
+@@ -830,6 +830,7 @@ fn force_reflow_if_stale() {
+     let t0 = std::time::Instant::now();
+     unsafe { f(ctx, dom) };
+     let us = t0.elapsed().as_micros() as u64;
++    if std::env::var_os("MANUK_REFLOW_TRACE").is_some() { eprintln!("RFREAD us={us}"); }
+     REFLOW_COST.with(|c| {
+         let (n, tot) = c.get();
+         c.set((n + 1, tot + us));
+diff --git a/engine/page/src/lib.rs b/engine/page/src/lib.rs
+index 30fcd4da..28c951cb 100644
+--- a/engine/page/src/lib.rs
++++ b/engine/page/src/lib.rs
+@@ -2692,6 +2692,7 @@ unsafe fn forced_reflow(ctx: *mut std::ffi::c_void, dom: *mut Dom) {
+     c.reflow_us_used = c
+         .reflow_us_used
+         .saturating_add(t_budget.elapsed().as_micros() as u64);
++    if std::env::var_os("MANUK_REFLOW_TRACE").is_some() { eprintln!("RFWORK us={} nodes={}", t_budget.elapsed().as_micros(), dom.len()); }
+     // The box tree is dropped: the read wants rects, and the host's own post-script relayout still
+     // produces the tree that gets painted. A forced reflow answers a question; it does not commit.
+     let t_pub = std::time::Instant::now();
