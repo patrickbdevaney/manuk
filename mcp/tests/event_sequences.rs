@@ -273,7 +273,9 @@ fn classes(m: &[String], ch: &[String]) -> Vec<String> {
             out.push(format!("missing-on-manuk:{t}"));
         } else if b == 0 && a > 0 {
             out.push(format!("extra-on-manuk:{t}"));
-        } else if a != b {
+        } else if a != b && t != "selectionchange" {
+            // selectionchange is queued and coalesced by a task in Chrome: its count is timing-dependent
+            // (measured 2v1 and 1v1 on identical runs), so only presence/absence of it is a class.
             out.push(format!("count:{t}:{a}v{b}"));
         }
     }
@@ -290,19 +292,16 @@ fn classes(m: &[String], ch: &[String]) -> Vec<String> {
 const KNOWN: &[(&str, &str)] = &[
     ("click", "missing-on-manuk:focus"),
     ("click", "missing-on-manuk:focusin"),
+    // W6.J2.d decision (type semantics, re-pinned on purpose): `type` on manuk replays a keystroke stream per char
+    // (keydown, beforeinput, input, keyup, as a user typing would, so key handlers and per-char validators run);
+    // the Chrome backend uses Input.insertText (one beforeinput+input, no key events), the fast agent path.
+    // Neither is wrong; the divergence is the backend's shortcut and is pinned so a change in either is seen.
     ("type", "extra-on-manuk:keydown"),
     ("type", "extra-on-manuk:keyup"),
     ("type", "extra-on-manuk:select"),
     ("type", "extra-on-manuk:change"),
     ("type", "count:beforeinput:2v1"),
     ("type", "count:input:2v1"),
-    ("enter", "missing-on-manuk:focus"),
-    ("enter", "missing-on-manuk:focusin"),
-    // class 8 (Chrome act-focus defers the setup focus onto the Tab slice): resolved by W6.J2.d
-    ("tab", "count:focus:1v2"),
-    ("tab", "count:focusin:1v2"),
-    ("focus", "extra-on-manuk:focus"),
-    ("focus", "extra-on-manuk:focusin"),
 ];
 
 #[test]
