@@ -106,6 +106,69 @@ thread_local! {
     /// it is recorded here rather than paid for with a document generation counter.
     static PREV: RefCell<HashMap<NodeId, ServoArc<ComputedValues>>> =
         RefCell::new(HashMap::new());
+
+    /// **REAL-TIME transition clock, ms. `None` = no page drives it (every static render, and the
+    /// whole WPT negative-delay path), which keeps the legacy behaviour byte-for-byte.**
+    ///
+    /// Separate from [`crate::animation::time_ms`] on purpose: setting it must not move a single
+    /// `@keyframes` sample.
+    static RT_CLOCK: std::cell::Cell<Option<f64>> = const { std::cell::Cell::new(None) };
+
+    /// **Running real-time transitions: node -> clock value (ms) at which its style change was
+    /// first seen.** Per-node: every property changed in the same cascade shares one start, which
+    /// is what a style change event is. Inserted the first cascade a before/after difference is
+    /// seen with the clock active; removed the first cascade whose sample is empty.
+    static RUNNING: RefCell<HashMap<NodeId, f64>> = RefCell::new(HashMap::new());
+}
+
+/// Drive real-time transitions from this clock (ms since the document began). `None` turns the
+/// real-time path off. Does NOT touch the animation clock.
+pub fn set_realtime_clock_ms(ms: Option<f64>) {
+    RT_CLOCK.with(|c| c.set(ms));
+    if ms.is_none() {
+        RUNNING.with(|r| r.borrow_mut().clear());
+    }
+}
+
+/// The real-time clock, if a page is driving one.
+pub fn realtime_clock_ms() -> Option<f64> {
+    RT_CLOCK.with(|c| c.get())
+}
+
+/// Does this node currently have a real-time transition entry?
+pub fn is_running_realtime(node: NodeId) -> bool {
+    RUNNING.with(|r| r.borrow().contains_key(&node))
+}
+
+/// Real-time sampling for `node`: `before` is the held before-change style, `after` the new
+/// target. Captures the start time at the style change, samples at `clock - start`, and drops the
+/// entry once nothing is left to run. Empty result = settled (caller republishes `after`).
+///
+/// Known limit: a target that changes AGAIN mid-run keeps the original start and `before`.
+pub fn sample_realtime(
+    node: NodeId,
+    before: &ServoArc<ComputedValues>,
+    after: &ServoArc<ComputedValues>,
+) -> Vec<PropertyDeclaration> {
+    let Some(clock) = realtime_clock_ms() else {
+        return Vec::new();
+    };
+    let known = RUNNING.with(|r| r.borrow().get(&node).copied());
+    let start = match known {
+        Some(s) => s,
+        None => {
+            if same_style(before, after) {
+                return Vec::new();
+            }
+            RUNNING.with(|r| r.borrow_mut().insert(node, clock));
+            clock
+        }
+    };
+    let out = sample_at(before, after, clock - start, true);
+    if out.is_empty() {
+        RUNNING.with(|r| r.borrow_mut().remove(&node));
+    }
+    out
 }
 
 /// The style this element had when the last cascade finished, if it had one.
@@ -241,9 +304,17 @@ pub fn sample_memoized(
 /// any delay negative, i.e. has any transition been placed in the past?
 pub fn may_be_running(cv: &ComputedValues) -> bool {
     let ui = cv.get_ui();
+    let rt = realtime_clock_ms().is_some();
     (0..ui.transition_property_count()).any(|i| {
-        ui.transition_duration_mod(i).seconds() > 0. && ui.transition_delay_mod(i).seconds() < 0.
+        ui.transition_duration_mod(i).seconds() > 0.
+            && (rt || ui.transition_delay_mod(i).seconds() < 0.)
     })
+}
+
+/// Per-node gate for the caller: the negative-delay shape, a live clock with a duration, or a
+/// real-time entry (so a transition whose style no longer declares one still finishes).
+pub fn may_be_running_for(node: NodeId, cv: &ComputedValues) -> bool {
+    may_be_running(cv) || is_running_realtime(node)
 }
 
 /// **Sample every running transition on this element.**
@@ -256,8 +327,19 @@ pub fn may_be_running(cv: &ComputedValues) -> bool {
 /// An empty result means **nothing is running**, and the caller uses that to decide whether the
 /// before-change value may be replaced — see the note in `g_transition_interpolation`.
 pub fn sample(before: &ComputedValues, after: &ComputedValues) -> Vec<PropertyDeclaration> {
+    sample_at(before, after, crate::animation::time_ms(), false)
+}
+
+/// [`sample`] at an explicit time. `realtime`: `now` is ms since this element's style change, a
+/// transition is live from `elapsed >= 0` (progress 0 = the before value, held through a positive
+/// delay), and the legacy "elapsed must be > 0" guard does not apply.
+pub fn sample_at(
+    before: &ComputedValues,
+    after: &ComputedValues,
+    now: f64,
+    realtime: bool,
+) -> Vec<PropertyDeclaration> {
     SAMPLES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let now = crate::animation::time_ms();
     let ui = after.get_ui();
     let mut out = Vec::new();
     // `transition_properties()` is Stylo's own expansion: `all` becomes every longhand of the `all`
@@ -284,7 +366,7 @@ pub fn sample(before: &ComputedValues, after: &ComputedValues) -> Vec<PropertyDe
         let elapsed = now - delay;
         // ⚠⚠⚠ THE GUARD (module docs). `elapsed == 0` is NOT running — see `n1` in
         // `g_transition_interpolation`, which is the shape every real page's transition has.
-        if !(elapsed > 0.0) {
+        if !realtime && !(elapsed > 0.0) {
             continue;
         }
         // Past the end: the transition is over and the after-change value stands. There is no
@@ -314,7 +396,7 @@ pub fn sample(before: &ComputedValues, after: &ComputedValues) -> Vec<PropertyDe
             continue;
         }
         let tf = ui.transition_timing_function_mod(it.index);
-        let progress = tf.calculate_output(elapsed / dur, BeforeFlag::Unset, 1e-7);
+        let progress = tf.calculate_output((elapsed / dur).max(0.0), BeforeFlag::Unset, 1e-7);
         match a.animate(&b, Procedure::Interpolate { progress }) {
             Ok(v) if !crate::animation::is_unresolvable(&v) => out.push(v.uncompute()),
             // ⚠⚠⚠ **DISCRETENESS IS A PROPERTY OF THE VALUE PAIR, NOT ONLY OF THE PROPERTY ID.**

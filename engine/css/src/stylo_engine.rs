@@ -1035,7 +1035,7 @@ pub fn cascade_via_stylo_sized(
         let mut transitioning = false;
         // The cheap gate every element of every page pays: is any transition-delay negative? While
         // the document clock is 0 nothing else can be running (see `crate::transition`'s guard).
-        if crate::transition::may_be_running(&cv) {
+        if crate::transition::may_be_running_for(node, &cv) {
             if let Some(before) = crate::transition::prev_style(node) {
                 // Memoised on `(before, after, clock)` — see `crate::transition::MEMO`. Without
                 // it the `transition-property: all` expansion is ~200 animated-value pairs per
@@ -1049,7 +1049,11 @@ pub fn cascade_via_stylo_sized(
                 //
                 // ⚠⚠ It is a COST reduction and NOT a determinism fix; that was measured at
                 // t1312 and the first version of this comment claimed otherwise.
-                let mixed = crate::transition::sample_memoized(node, &before, &cv);
+                let mixed = if crate::transition::realtime_clock_ms().is_some() {
+                    crate::transition::sample_realtime(node, &before, &cv)
+                } else {
+                    crate::transition::sample_memoized(node, &before, &cv)
+                };
                 if !mixed.is_empty() {
                     transitioning = true;
                     // The before-change style is what this element keeps remembering until the
