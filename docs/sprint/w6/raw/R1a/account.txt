@@ -1,0 +1,15 @@
+## udriver
+alert root: div y=0 h=204; elements inside alert: 13 (manuk has 0 MuiAlert elements: 0)
+first-content y chrome=204 manuk=0 offset=204; alert height=204; alert explains 100.0% of offset
+non-alert elements paired: 79; dy within 1px of header offset: 73 (92.4%); chrome DOM total 92 manuk 81
+first viewport only (chrome y<768): paired 74, dy within 1px of offset: 69 (93.2%)
+dy histogram (top 5): [(204.4, 73), (0, 3), (220.4, 1), (432.6, 1), (202.1, 1)] 
+
+## staynb
+alert root: div y=0 h=250; elements inside alert: 13 (manuk has 0 MuiAlert elements: 0)
+first-content y chrome=250 manuk=0 offset=250; alert height=250; alert explains 100.0% of offset
+non-alert elements paired: 1892; dy within 1px of header offset: 17 (0.9%); chrome DOM total 1905 manuk 1893
+first viewport only (chrome y<768): paired 73, dy within 1px of offset: 17 (23.3%)
+dy histogram (top 5): [(-216.9, 108), (-688.9, 108), (-1160.9, 108), (-1632.9, 108), (-2104.9, 108)] 
+
+GATE GREEN (single class explains >=90% on both sites)
