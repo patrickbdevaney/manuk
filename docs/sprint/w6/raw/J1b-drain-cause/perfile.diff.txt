@@ -1,0 +1,12 @@
+css/css-transitions/non-rendered-element-001.html 3/4 2/4
+css/css-transitions/properties-value-001.html 0 0/560
+css/css-transitions/properties-value-002.html 0/18 8/18
+css/css-transitions/properties-value-003.html 0/122 5/122
+css/css-transitions/properties-value-implicit-001.html 0/60 23/60
+css/css-transitions/properties-value-inherit-001.html 0 6/560
+css/css-transitions/properties-value-inherit-002.html 0 0/560
+css/css-transitions/properties-value-inherit-003.html 0/60 20/60
+css/css-transitions/shadow-root-insertion.html 0 0/1
+css/css-transitions/starting-of-transitions-001.html 0 0/1
+css/css-transitions/transition-base-response-002.html 0/1 0
+css/css-transitions/zero-duration-multiple-transition.html 0 0/1
