@@ -184,7 +184,7 @@ EOF
       -p CPUWeight=20 -p IOWeight=20 \
       --setenv=CARGO_BUILD_JOBS=16 --setenv=WPT_DIR="$HOME/wpt" --setenv=MANUK_SPRINT_NODE="$node" \
       nice -n 10 "$CLAUDE" --model "$model" --dangerously-skip-permissions --permission-mode bypassPermissions \
-      "${session[@]}" --output-format json -p "$PROMPT" >"$AOUT" 2>&1 &
+      "${session[@]}" --output-format stream-json --verbose -p "$PROMPT" >"$AOUT" 2>&1 &
   apid=$!
   watchdog "$apid" &
   wd=$!
