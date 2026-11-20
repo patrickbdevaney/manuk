@@ -1,0 +1,19 @@
+  FILE css/zzprobe/probe-001.html  (0/4)
+    FAIL background-color
+         assert_equals: expected "" but got "PROBE background-color from=\"rgb(255, 0, 0)\" afterChange=\"rgba(0, 0, 255, 0.5)\" mid1s=\"rgba(0, 0, 255, 0.5)\" end=\"rgba(0, 0, 255, 0.5)\" nAnims=0 []"
+    FAIL padding-left
+         assert_equals: expected "" but got "PROBE padding-left from=\"10px\" afterChange=\"50px\" mid1s=\"50px\" end=\"50px\" nAnims=0 []"
+    FAIL width
+         assert_equals: expected "" but got "PROBE width from=\"100px\" afterChange=\"300px\" mid1s=\"300px\" end=\"300px\" nAnims=0 []"
+    FAIL opacity
+         assert_equals: expected "" but got "PROBE opacity from=\"1\" afterChange=\"0.2\" mid1s=\"0.2\" end=\"0.2\" nAnims=0 []"
+  FILE css/zzprobe/probe-002.html  (0/4)
+    FAIL rt-background-color
+         assert_equals: expected "" but got "REALTIME background-color from=\"rgb(255, 0, 0)\" t0=\"rgb(0, 0, 255)\" mid(1s)=\"rgb(0, 0, 255)\" end(2.6s)=\"rgb(0, 0, 255)\" transitionend=null nDocAnims=0"
+    FAIL rt-padding-left
+         assert_equals: expected "" but got "REALTIME padding-left from=\"10px\" t0=\"50px\" mid(1s)=\"50px\" end(2.6s)=\"50px\" transitionend=null nDocAnims=0"
+    FAIL rt-opacity
+         assert_equals: expected "" but got "REALTIME opacity from=\"1\" t0=\"0.2\" mid(1s)=\"0.2\" end(2.6s)=\"0.2\" transitionend=null nDocAnims=0"
+    FAIL control-animate
+         assert_equals: expected "" but got "CONTROL element.animate mid opacity=0.6 nDocAnims=0"
+  FILES  2   subtests 0/8  =  0.0%

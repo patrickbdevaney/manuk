@@ -1,0 +1,28 @@
+<!DOCTYPE html><meta charset=utf-8><title>probe</title>
+<script src="/resources/testharness.js"></script><script src="/resources/testharnessreport.js"></script>
+<style>.t{transition:all 2s linear;position:absolute;top:0;left:0}
+.a{background-color:rgb(255,0,0);padding-left:10px;width:100px;opacity:1}
+.b{background-color:rgba(0,0,255,0.5);padding-left:50px;width:300px;opacity:0.2}</style>
+<div id=log></div><div id=host></div>
+<script>
+const props=['background-color','padding-left','width','opacity'];
+const cs=(e,p)=>getComputedStyle(e).getPropertyValue(p);
+const ends=[];
+for(const p of props){
+ test(function(){
+  const e=document.createElement('div');e.className='t a';e.textContent='x';
+  document.getElementById('host').appendChild(e);
+  e.addEventListener('transitionend',ev=>ends.push(ev.propertyName));
+  const from=cs(e,p);
+  e.className='t b';
+  const n=document.getAnimations().length;
+  const anims=document.getAnimations().map(a=>a.transitionProperty).join(',');
+  const to_now=cs(e,p);
+  document.getAnimations().forEach(a=>a.currentTime=1000);
+  const mid=cs(e,p);
+  document.getAnimations().forEach(a=>a.currentTime=2000);
+  const end=cs(e,p);
+  assert_equals("PROBE "+p+" from="+JSON.stringify(from)+" afterChange="+JSON.stringify(to_now)+" mid1s="+JSON.stringify(mid)+" end="+JSON.stringify(end)+" nAnims="+n+" ["+anims+"]","");
+ },p);
+}
+</script>
