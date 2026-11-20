@@ -1,0 +1,21 @@
+WPT css/zzprobeN2: 1 runnable testharness files
+   skip     1  support file, not a test
+2026-11-20T20:35:01.869066Z  WARN manuk_page: FORCED-REFLOW BUDGET EXHAUSTED — this script round has re-laid-out the whole document for longer than its whole budget, so further geometry reads are answered from the layout already published. The alternative measured 125s in ONE task. used_ms=0 budget_ms=0 nodes=98
+2026-11-20T20:35:01.881994Z  WARN manuk_page: FORCED-REFLOW BUDGET EXHAUSTED — this script round has re-laid-out the whole document for longer than its whole budget, so further geometry reads are answered from the layout already published. The alternative measured 125s in ONE task. used_ms=0 budget_ms=0 nodes=128
+  FILE css/zzprobeN2/properties-value-001.html  (0/5)
+    FAIL DBGSUM
+         assert_equals: expected "x" but got "DBGSUM 2 A|background-color color(rgba)|conn=true|from=\"\"|to=\"\"|gpvDirect=\"\" ## A|background-position-x length(pt)|conn=true|from=\"\"|to=\"\"|gpvDirect=\"\""
+    FAIL background-color color(rgba) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL background-color color(rgba) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "background-color:2s" but got ""
+    FAIL background-position-x length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL background-position-x length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "background-position-x:2s" but got ""
+
+── WPT css/zzprobeN2 ──────────────────────────────────────────
+    0.0%      0/5      (1 files)  css/zzprobeN2
+
+  FILES  1   subtests 0/5  =  0.0%
+  NO_REPORT 0   HANG/CRASH 0 (Bar 0)   SHORT 0 (instrument)   SLOW 0 (our budget)   TH_TIMEOUT 0 (async test never completed)

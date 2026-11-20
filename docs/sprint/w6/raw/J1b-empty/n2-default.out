@@ -1,0 +1,17 @@
+WPT css/zzprobeN2: 1 runnable testharness files
+   skip     1  support file, not a test
+  FILE css/zzprobeN2/properties-value-001.html  (1/5)
+    FAIL DBGSUM
+         assert_equals: expected "x" but got "DBGSUM 3 A|background-color color(rgba)|conn=true|from=\"rgb(100, 100, 100)\"|to=\"rgba(10, 10, 10, 0.4)\"|gpvDirect=\"rgb(100, 100, 100)\" ## B|background-color color(rgba)|gpvAfterStart=\"rgb(100, 100, 100)\" ## A|background-position-x length(pt)|conn=true|from=\"\"|to=\"\"|gpvDirect=\"\""
+    FAIL background-color color(rgba) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "background-color:2s" but got ""
+    FAIL background-position-x length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL background-position-x length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "background-position-x:2s" but got ""
+
+── WPT css/zzprobeN2 ──────────────────────────────────────────
+   20.0%      1/5      (1 files)  css/zzprobeN2
+
+  FILES  1   subtests 1/5  =  20.0%
+  NO_REPORT 0   HANG/CRASH 0 (Bar 0)   SHORT 0 (instrument)   SLOW 0 (our budget)   TH_TIMEOUT 0 (async test never completed)

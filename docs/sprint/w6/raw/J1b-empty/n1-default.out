@@ -1,0 +1,13 @@
+WPT css/zzprobeN1: 1 runnable testharness files
+   skip     1  support file, not a test
+  FILE css/zzprobeN1/properties-value-001.html  (1/3)
+    FAIL DBGSUM
+         assert_equals: expected "x" but got "DBGSUM 2 A|background-color color(rgba)|conn=true|from=\"rgb(100, 100, 100)\"|to=\"rgba(10, 10, 10, 0.4)\"|gpvDirect=\"rgb(100, 100, 100)\" ## B|background-color color(rgba)|gpvAfterStart=\"rgb(100, 100, 100)\""
+    FAIL background-color color(rgba) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "background-color:2s" but got ""
+
+── WPT css/zzprobeN1 ──────────────────────────────────────────
+   33.3%      1/3      (1 files)  css/zzprobeN1
+
+  FILES  1   subtests 1/3  =  33.3%
+  NO_REPORT 0   HANG/CRASH 0 (Bar 0)   SHORT 0 (instrument)   SLOW 0 (our budget)   TH_TIMEOUT 0 (async test never completed)

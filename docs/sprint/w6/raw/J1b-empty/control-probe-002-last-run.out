@@ -1,0 +1,17 @@
+WPT css/zzprobectl: 1 runnable testharness files
+2026-11-20T20:35:12.267958Z  WARN manuk_page: FORCED-REFLOW BUDGET EXHAUSTED — this script round has re-laid-out the whole document for longer than its whole budget, so further geometry reads are answered from the layout already published. The alternative measured 125s in ONE task. used_ms=0 budget_ms=0 nodes=29
+  FILE css/zzprobectl/probe-002.html  (0/4)
+    FAIL rt-background-color
+         assert_equals: expected "" but got "REALTIME background-color from=\"\" t0=\"\" mid(1s)=\"rgb(0, 0, 255)\" end(2.6s)=\"rgb(0, 0, 255)\" transitionend=null nDocAnims=0"
+    FAIL rt-padding-left
+         assert_equals: expected "" but got "REALTIME padding-left from=\"\" t0=\"\" mid(1s)=\"50px\" end(2.6s)=\"50px\" transitionend=null nDocAnims=0"
+    FAIL rt-opacity
+         assert_equals: expected "" but got "REALTIME opacity from=\"\" t0=\"\" mid(1s)=\"0.2\" end(2.6s)=\"0.2\" transitionend=null nDocAnims=0"
+    FAIL control-animate
+         assert_equals: expected "" but got "CONTROL element.animate mid opacity= nDocAnims=0"
+
+── WPT css/zzprobectl ──────────────────────────────────────────
+    0.0%      0/4      (1 files)  css/zzprobectl
+
+  FILES  1   subtests 0/4  =  0.0%
+  NO_REPORT 0   HANG/CRASH 0 (Bar 0)   SHORT 0 (instrument)   SLOW 0 (our budget)   TH_TIMEOUT 0 (async test never completed)

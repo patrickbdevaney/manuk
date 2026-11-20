@@ -1,0 +1,16 @@
+WPT css/zzprobectl: 1 runnable testharness files
+  FILE css/zzprobectl/probe-002.html  (0/4)
+    FAIL rt-background-color
+         assert_equals: expected "" but got "REALTIME background-color from=\"rgb(255, 0, 0)\" t0=\"rgb(255, 0, 0)\" mid(1s)=\"rgb(252, 0, 3)\" end(2.6s)=\"rgb(252, 0, 3)\" transitionend=null nDocAnims=0"
+    FAIL rt-padding-left
+         assert_equals: expected "" but got "REALTIME padding-left from=\"10px\" t0=\"10px\" mid(1s)=\"10.350863px\" end(2.6s)=\"10.43181px\" transitionend=null nDocAnims=0"
+    FAIL rt-opacity
+         assert_equals: expected "" but got "REALTIME opacity from=\"1\" t0=\"1\" mid(1s)=\"0.9945655\" end(2.6s)=\"0.99294657\" transitionend=null nDocAnims=0"
+    FAIL control-animate
+         assert_equals: expected "" but got "CONTROL element.animate mid opacity=0.6 nDocAnims=0"
+
+── WPT css/zzprobectl ──────────────────────────────────────────
+    0.0%      0/4      (1 files)  css/zzprobectl
+
+  FILES  1   subtests 0/4  =  0.0%
+  NO_REPORT 0   HANG/CRASH 0 (Bar 0)   SHORT 0 (instrument)   SLOW 0 (our budget)   TH_TIMEOUT 0 (async test never completed)
