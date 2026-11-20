@@ -156,7 +156,14 @@ EOF
   fi
   model=$(model_id "${LADDER[$t]}")
 
-  PROMPT="You are the headless product-sprint agent for manuk (no user to hand back to). Your ONE job this invocation is graph node ${node} in docs/sprint/GRAPH.tsv. Read docs/research/WAVE3-SYNTHESIS.md (the NORTH STAR), docs/research/PRODUCT-SPRINT.md (the plan), docs/sprint/SUCCESS.md (the pre-registered bars — never edit its thresholds or tune tasks to results), docs/research/SYNTHESIS.md (decided facts — do not re-derive), CONSTITUTION.MD, and the node row (title, gate, notes). Steps: (1) set the node status to IN_PROGRESS (if it already is, a previous invocation crashed — inspect the tree, keep good WIP or 'git checkout -- .' and restart the node clean). (2) Do the work. A node is DONE only when its gate has been run and can go red (prove it with a mutation or a deliberately-broken input). (3) Land it: if the diff touches engine/ or tests/wpt, land via ./scripts/tick.sh (the full wall; never wrap it in 'timeout'); otherwise run cargo test for the touched crates + cargo build --release for touched binaries, then commit with an explicit pathspec (never git add -A), after checking git diff --cached, with a message starting '${node}:', using 'git commit --no-verify' (the pre-commit hook enforces the old tick journal, which sprint nodes outside the wall do not write — so the secret scan below is mandatory); push to origin main. (4) Set status DONE (or BLOCKED with the reason in notes) and append one line to docs/sprint/JOURNAL.md: '${node}: <what now works, in user-visible terms> | gate: <the check> | evidence: <numbers or transcript excerpt>'. (5) If the work revealed necessary follow-ups, APPEND new rows to GRAPH.tsv (ids like ${node}.a, deps set, a falsifiable gate each, model_floor = the CHEAPEST model you judge able to land it: haiku for mechanical runs/measurements/docs, sonnet otherwise; the loop escalates on failure, so never pick opus as a floor) — the graph grows; never delete rows. Every measurement row you write carries chrome_ver=\$MANUK_CHROME_PIN; never diff numbers taken under different chrome_ver. Rules: touch .git/sprint-working at the top of every command so the watchdog sees you alive. Builds use the CARGO_BUILD_JOBS you were given; never start a second concurrent cargo build. Never commit .env, keys or tokens; before every commit run: git diff --cached | grep -niE 'ghp_|api_key|bearer|sk-[a-z0-9]' and abort on a hit. Claims in docs must come from measurements (no 'faster'/'lighter' without a SCOREBOARD row). Do not tag releases or publish anything beyond pushing commits. A network outage is never a reason to BLOCK a node: if a push or any other network call fails, retry it; if it still fails, exit with the node left IN_PROGRESS and the loop resumes you once the network is back. When the node is DONE or BLOCKED, exit."
+  # W6.L1: the mandated reading (~115 KB of docs) is replaced by a <6k-token pack unless SPRINT_PROMPT_MODE=full
+  # (kept for the before/after token measurement; every attempt's mode is recorded in docs/sprint/LEDGER.tsv).
+  PMODE=${SPRINT_PROMPT_MODE:-pack}
+  FULLREAD="$old"
+  if [ "$PMODE" = pack ] && python3 scripts/sprint-pack.py "$node" >".git/sprint-pack-$node.md" 2>/dev/null; then
+    READ="Read ONLY .git/sprint-pack-${node}.md first: it holds the north star, the pre-registered bars (never edit their thresholds or tune tasks to results), decided facts, constitution invariants, your node row and its dependencies. Open a full doc (docs/research/WAVE3-SYNTHESIS.md, PRODUCT-SPRINT.md, SUCCESS.md, SYNTHESIS.md, CONSTITUTION.MD) only for a specific question the pack cannot answer."
+  else PMODE=full; READ="$FULLREAD"; fi
+  PROMPT="You are the headless product-sprint agent for manuk (no user to hand back to). Your ONE job this invocation is graph node ${node} in docs/sprint/GRAPH.tsv. ${READ} Edit GRAPH.tsv only through 'python3 scripts/sprint-graph.py add|set|check' (it validates the 9 columns). Steps: (1) set the node status to IN_PROGRESS (if it already is, a previous invocation crashed — inspect the tree, keep good WIP or 'git checkout -- .' and restart the node clean). (2) Do the work. A node is DONE only when its gate has been run and can go red (prove it with a mutation or a deliberately-broken input). (3) Land it: if the diff touches engine/ or tests/wpt, land via ./scripts/tick.sh (the full wall; never wrap it in 'timeout'); otherwise run cargo test for the touched crates + cargo build --release for touched binaries, then commit with an explicit pathspec (never git add -A), after checking git diff --cached, with a message starting '${node}:', using 'git commit --no-verify' (the pre-commit hook enforces the old tick journal, which sprint nodes outside the wall do not write — so the secret scan below is mandatory); push to origin main. (4) Set status DONE (or BLOCKED with the reason in notes) and append one line to docs/sprint/JOURNAL.md: '${node}: <what now works, in user-visible terms> | gate: <the check> | evidence: <numbers or transcript excerpt>'. (5) If the work revealed necessary follow-ups, APPEND new rows to GRAPH.tsv (ids like ${node}.a, deps set, a falsifiable gate each, model_floor = the CHEAPEST model you judge able to land it: haiku for mechanical runs/measurements/docs, sonnet otherwise; the loop escalates on failure, so never pick opus as a floor) — the graph grows; never delete rows. Every measurement row you write carries chrome_ver=\$MANUK_CHROME_PIN; never diff numbers taken under different chrome_ver. Rules: touch .git/sprint-working at the top of every command so the watchdog sees you alive. Builds use the CARGO_BUILD_JOBS you were given; never start a second concurrent cargo build. Never commit .env, keys or tokens; before every commit run: git diff --cached | grep -niE 'ghp_|api_key|bearer|sk-[a-z0-9]' and abort on a hit. Claims in docs must come from measurements (no 'faster'/'lighter' without a SCOREBOARD row). Do not tag releases or publish anything beyond pushing commits. A network outage is never a reason to BLOCK a node: if a push or any other network call fails, retry it; if it still fails, exit with the node left IN_PROGRESS and the loop resumes you once the network is back. When the node is DONE or BLOCKED, exit."
 
   if [ -n "$resume_sid" ]; then
     sid=$resume_sid
@@ -169,6 +176,7 @@ EOF
     say "▶ node $node on $model"
   fi
   rm -f "$NETDOWN"
+  AOUT=.git/sprint-agent-out.json
   logoff=$(stat -c %s "$LOG")
   touch "$WORKING"
   systemd-run --user --scope --quiet \
@@ -176,7 +184,7 @@ EOF
       -p CPUWeight=20 -p IOWeight=20 \
       --setenv=CARGO_BUILD_JOBS=16 --setenv=WPT_DIR="$HOME/wpt" --setenv=MANUK_SPRINT_NODE="$node" \
       nice -n 10 "$CLAUDE" --model "$model" --dangerously-skip-permissions --permission-mode bypassPermissions \
-      "${session[@]}" -p "$PROMPT" >>"$LOG" 2>&1 &
+      "${session[@]}" --output-format json -p "$PROMPT" >"$AOUT" 2>&1 &
   apid=$!
   watchdog "$apid" &
   wd=$!
@@ -184,6 +192,8 @@ EOF
   nw=$!
   wait "$apid"; rc=$?
   kill "$wd" "$nw" 2>/dev/null
+  # W6.L1: one LEDGER row per attempt (real usage from the json result); the result text still goes to loop.log
+  python3 scripts/sprint-ledger.py "$AOUT" "$node" "${LADDER[$t]}" "$t" "$rc" "${PMODE:-full}" >>"$LOG" 2>&1
   # only a FAILED attempt is logged as '■ node X exited' — that line is the escalation counter
   st=$(awk -F'\t' -v id="$node" '$1==id{print $6}' docs/sprint/GRAPH.tsv)
   tailout=$(tail -c +$((logoff + 1)) "$LOG" | tail -20)
@@ -193,6 +203,10 @@ EOF
     say "⏸ node $node stopped by the usage limit on ${LADDER[$t]} — not counted; retrying in $(( LIMIT_WAIT / 60 )) min"
     rm -f "$NETDOWN"; sleep "$LIMIT_WAIT"; continue
   elif [ "$st" = DONE ]; then say "✓ node $node DONE on ${LADDER[$t]} (rc=$rc)"; rm -f "$RESUME"
+  elif [ "$st" = BLOCKED ] && [ "$t" -lt 2 ] && [ "$(grep -c "■ node $node exited" "$LOG" 2>/dev/null || true)" -lt 2 ]; then
+    # W6.L1: an agent BLOCK on a cheaper tier is an attempt — reset to TODO and escalate one tier (opus's BLOCK is final)
+    python3 scripts/sprint-graph.py set "$node" status TODO >>"$LOG" 2>&1
+    say "■ node $node exited rc=$rc on ${LADDER[$t]} BLOCKED by the agent — counted as an attempt, next attempt escalates"; rm -f "$RESUME"
   elif [ "$st" = BLOCKED ]; then say "⛔ node $node BLOCKED by the agent on ${LADDER[$t]}"; rm -f "$RESUME"
   elif [ -n "$resume_sid" ] && [ "$rc" -ne 0 ] && grep -q 'No conversation found' <<<"$tailout"; then
     say "↻ node $node: session $sid could not be resumed — restarting it fresh on ${LADDER[$t]} (not counted)"
