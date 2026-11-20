@@ -48,4 +48,22 @@ expect short_pack_incomplete 2 "$L"
 # no ledger at all: incomplete
 expect no_ledger 2 "$T/none/LEDGER.tsv"
 
+# chrome_ver (W6.L1.a.a.a.b): a row written under MANUK_CHROME_PIN=X carries chrome_ver=X in its own cell
+chrome_cell() { python3 -c 'import csv,sys; r=list(csv.DictReader(open(sys.argv[1]),delimiter="\t")); print(r[-1].get("chrome_ver",""))' "$1"; }
+d=$T/pin; mkdir -p "$d"; L=$d/LEDGER.tsv
+MANUK_CHROME_PIN=PIN-X srow "$L" P1 pack 400
+got=$(chrome_cell "$L")
+if [ "$got" = "PIN-X" ]; then echo "ok   row_written_under_pin_X_has_chrome_ver_X"; else echo "FAIL chrome_ver cell: want PIN-X got '$got'"; fail=1; fi
+# falsifier: a live row whose chrome_ver cell is blanked is red even when the means would pass
+L=$(case_run blank_pin 400); python3 -c 'import csv,sys
+p=sys.argv[1]; rows=open(p).read().split("\n"); h=rows[0].split("\t"); i=h.index("chrome_ver")
+f=rows[-2].split("\t"); f[i]=""; rows[-2]="\t".join(f); open(p,"w").write("\n".join(rows))' "$L"
+expect live_row_empty_chrome_ver_red 1 "$L"
+# mixed pins across live rows: printed (not silent) and not by itself a fail
+d=$T/mixed; mkdir -p "$d"; L=$d/LEDGER.tsv
+for i in 1 2 3; do MANUK_CHROME_PIN=PIN-A srow "$L" "F$i" full 1000; done
+for i in 1 2 3; do MANUK_CHROME_PIN=PIN-B srow "$L" "P$i" pack 400; done
+python3 $CMP "$L" --since "2000-01-01 00:00:00" >"$T/out" 2>&1; rc=$?
+if [ "$rc" = 0 ] && grep -q "MIXED" "$T/out" && grep -q "PIN-A" "$T/out" && grep -q "PIN-B" "$T/out"; then echo "ok   mixed_pins_printed"; else echo "FAIL mixed_pins: rc=$rc"; cat "$T/out"; fail=1; fi
+
 [ "$fail" = 0 ] && echo "PASS test_ledger_first_turn" || { echo "FAILED test_ledger_first_turn"; exit 1; }

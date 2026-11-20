@@ -5,16 +5,26 @@
 
 Prints the result text (so the loop can keep appending it to loop.log and grepping it for API errors).
 If the file is not parseable JSON it is printed verbatim and a row with empty token cells is still written,
-so every attempt has a ledger row. input_total = input + cache_creation + cache_read (all prompt-side tokens).
+so every attempt has a ledger row. Every row carries chrome_ver (the Chrome pin it was measured under).
+input_total = input + cache_creation + cache_read (all prompt-side tokens).
 """
 import json
+import os
 import sys
 import time
 from pathlib import Path
 
 HDR = ["ts", "node", "model", "tier", "rc", "prompt", "input_tokens", "cache_creation", "cache_read",
        "input_total", "output_tokens", "num_turns", "cost_usd", "duration_ms", "session_id", "is_error",
-       "first_turn_input", "first_turn_cache_read"]
+       "first_turn_input", "first_turn_cache_read", "chrome_ver"]
+
+
+def chrome_ver() -> str:
+    """The pin this row was measured under: $MANUK_CHROME_PIN, else docs/sprint/CHROME_PIN, else 'unknown'."""
+    v = os.environ.get("MANUK_CHROME_PIN", "").strip()
+    if not v and (Path(__file__).resolve().parent.parent / "docs/sprint/CHROME_PIN").exists():
+        v = (Path(__file__).resolve().parent.parent / "docs/sprint/CHROME_PIN").read_text().strip()
+    return v or "unknown"
 
 
 def main(a: list[str]) -> int:
@@ -42,7 +52,8 @@ def main(a: list[str]) -> int:
     fu = next((((e.get("message") or {}).get("usage") or {}) for e in events if e.get("type") == "assistant"), {})
     u = (d or {}).get("usage") or {}
     g = lambda k: int(u.get(k) or 0)
-    cells = {"ts": time.strftime("%F %T"), "node": node, "model": model, "tier": tier, "rc": rc, "prompt": mode}
+    cells = {"ts": time.strftime("%F %T"), "node": node, "model": model, "tier": tier, "rc": rc, "prompt": mode,
+             "chrome_ver": chrome_ver()}
     if d is not None and u:
         cells.update(input_tokens=g("input_tokens"), cache_creation=g("cache_creation_input_tokens"),
                      cache_read=g("cache_read_input_tokens"), output_tokens=g("output_tokens"))
