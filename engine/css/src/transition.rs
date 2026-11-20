@@ -130,6 +130,9 @@ thread_local! {
     /// Test/host skew added to the wall clock (ms).
     static WALL_SKEW: std::cell::Cell<f64> = const { std::cell::Cell::new(0.0) };
 
+    /// Virtual (timer) clock, ms, last reported by the JS event loop.
+    static VIRT_MS: std::cell::Cell<f64> = const { std::cell::Cell::new(0.0) };
+
     /// Wall-clock origin of this thread's real-time transition clock.
     static WALL_ORIGIN: std::cell::Cell<Option<std::time::Instant>> = const { std::cell::Cell::new(None) };
 }
@@ -154,6 +157,16 @@ pub fn has_events() -> bool {
     EVENTS.with(|e| !e.borrow().is_empty())
 }
 
+/// The JS event loop's virtual clock jumps to the next due timer without sleeping; report it so
+/// the transition clock never runs behind script time. Monotonic.
+pub fn set_virtual_ms(ms: f64) {
+    VIRT_MS.with(|c| {
+        if ms > c.get() {
+            c.set(ms)
+        }
+    });
+}
+
 /// Move the real-time transition clock forward by `ms` (tests / a host that skips idle time).
 pub fn skew_realtime_ms(ms: f64) {
     WALL_SKEW.with(|c| c.set(c.get() + ms));
@@ -169,7 +182,8 @@ pub fn realtime_now_ms() -> f64 {
             i
         }
     });
-    o.elapsed().as_secs_f64() * 1000.0 + WALL_SKEW.with(|c| c.get())
+    let wall = o.elapsed().as_secs_f64() * 1000.0 + WALL_SKEW.with(|c| c.get());
+    wall.max(VIRT_MS.with(|c| c.get()))
 }
 
 /// Advance the real-time transition clock to wall time. Called by the page before every cascade it

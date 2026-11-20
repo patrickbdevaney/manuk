@@ -8465,7 +8465,19 @@ const NEXT_TASK: &str = "(function(){ \
      var t = __tasks.splice(bi, 1)[0]; \
      if (t.w > __now) { __now = t.w; } \
      try { t.f(); } catch (e) { __reportError(e); } \
-     return true; })()";
+     return __now + 1; })()";
+
+/// Interpret `NEXT_TASK`'s result: `false` = nothing ran; a number = a task ran and the number is the
+/// virtual clock + 1, which is forwarded to the CSS transition clock (virtual timers jump time, so
+/// wall time alone never reaches a transition sampled from a `setTimeout`).
+fn task_ran(v: &mozjs::jsval::JSVal) -> bool {
+    if v.is_number() {
+        manuk_css::transition::set_virtual_ms(v.to_number() - 1.0);
+        true
+    } else {
+        v.is_boolean() && v.to_boolean()
+    }
+}
 
 /// **WHO IS SPINNING** — the summary printed when a drain hits its ceiling.
 ///
@@ -8745,7 +8757,7 @@ pub fn run_deferred(rt: &mut Runtime, global: mozjs::rust::HandleObject) -> Resu
             preempted = true;
             break 'drain;
         };
-        if ran.is_boolean() && ran.to_boolean() {
+        if task_ran(&ran) {
             count += 1;
             // **A runaway task chain must not hang the browser (Bar 0).**
             //
@@ -9224,7 +9236,7 @@ where
             preempted = true;
             break 'drain;
         };
-        let ran = ran.is_boolean() && ran.to_boolean();
+        let ran = task_ran(&ran);
         // Both bounds, checked on the task boundary and before either `continue` — including the
         // `did_io` one, because "a delivered result may have scheduled more work" is precisely how a
         // polling page loops here forever.
