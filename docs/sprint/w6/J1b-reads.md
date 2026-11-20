@@ -77,3 +77,21 @@ test's `start`), so the slice does NOT finish under the gate arm. The gate arm l
 
 ## Caveat
 Scores are single-machine wall-clock under load; not a clean band. Do not diff these numbers against the parent's 20/100 (different load).
+
+## W6.J1.b.a.a.a.b.a.a.a: quiet-host re-run (BLOCKED: host not quiet)
+
+chrome_ver=145.0.7632.116 (MANUK_CHROME_PIN). Same HEAD engine binary (`target/release/manuk-wpt`), no engine change.
+Probe: `$WPT_DIR/css/zzprobeN50` (= /home/patrickd/wpt, outside this repo; n50 copy + `support/` from `css/css-transitions/support`).
+Raw + load stamps: `raw/J1b-reads-quiet/` (`load.txt`, `mutant-load.txt`).
+
+Gate requires host load (1-min) <= 8 per run. Polled for ~7 min before running: load stayed 42-50 on 24 cores
+(co-tenant processes: blender, couple-sim rustc, ai-toolkit; not killed, not ours). Samples taken under that load:
+
+| arm | env | load1 pre -> post | result |
+|---|---|---|---|
+| default baseline | none | 45.4 -> 45.5 | 10/100 (pre-registered 20/100: NOT reproduced) |
+| mutant | `MANUK_REFLOW_BUDGET_MS=1` | 45.5 -> 45.5 | 0/100, `FORCED-REFLOW BUDGET EXHAUSTED` fires (mutant goes red as designed) |
+
+Gate verdict: NOT evaluable on this host. Green needs baseline = 20/100 in >=2 of 3 runs AND mutant = 20/100 in both runs;
+under load 45 the baseline is 10/100 and the mutant 0/100. No threshold was edited. Re-run this node when 1-min load <= 8;
+the probe dir is already in place at `$WPT_DIR/css/zzprobeN50`.
