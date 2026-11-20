@@ -119,6 +119,33 @@ thread_local! {
     /// is what a style change event is. Inserted the first cascade a before/after difference is
     /// seen with the clock active; removed the first cascade whose sample is empty.
     static RUNNING: RefCell<HashMap<NodeId, f64>> = RefCell::new(HashMap::new());
+
+    /// Wall-clock origin of this thread's real-time transition clock.
+    static WALL_ORIGIN: std::cell::Cell<Option<std::time::Instant>> = const { std::cell::Cell::new(None) };
+}
+
+/// Wall time (ms) on the real-time transition clock, without advancing it.
+pub fn realtime_now_ms() -> f64 {
+    let o = WALL_ORIGIN.with(|o| match o.get() {
+        Some(i) => i,
+        None => {
+            let i = std::time::Instant::now();
+            o.set(Some(i));
+            i
+        }
+    });
+    o.elapsed().as_secs_f64() * 1000.0
+}
+
+/// Advance the real-time transition clock to wall time. Called by the page before every cascade it
+/// runs, so transitions progress with real time.
+pub fn tick_realtime() {
+    RT_CLOCK.with(|c| c.set(Some(realtime_now_ms())));
+}
+
+/// Is any real-time transition currently running? A cascade is NOT idempotent while this is true.
+pub fn any_running_realtime() -> bool {
+    RUNNING.with(|r| !r.borrow().is_empty())
 }
 
 /// Drive real-time transitions from this clock (ms since the document began). `None` turns the

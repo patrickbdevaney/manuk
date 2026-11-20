@@ -288,6 +288,7 @@ fn restyle_and_layout(
     // 21,169 ms on `bhramarah.in` and this function is all of it. Reported only when it is slow
     // enough for a human to see, so a normal pass costs two `Instant`s and no log line.
     let caller = std::panic::Location::caller();
+    manuk_css::transition::tick_realtime();
     let t_cascade = std::time::Instant::now();
     let mut styles = cascade_styles(dom, sheets, viewport_width);
     // ⚠⚠⚠ **THE ROOT ELEMENT'S SCROLLBAR COMES OUT OF THE INITIAL CONTAINING BLOCK, AND THE ONLY
@@ -2404,6 +2405,9 @@ struct ReflowCtx {
     /// and the read is already answerable — the case that must stay free, since this is consulted
     /// on *every* geometry read.
     laid_out_at: u64,
+    /// Transition clock (ms) of the cascade currently published; a running transition makes a
+    /// reflow worthwhile again once real time has moved on from it.
+    laid_out_clock: f64,
     rects: HashMap<NodeId, [f32; 4]>,
     styles: HashMap<NodeId, manuk_css::ComputedStyle>,
     /// The decoded images as of this script round — a standing layout input the cascade cannot
@@ -2556,7 +2560,13 @@ unsafe fn forced_reflow(ctx: *mut std::ffi::c_void, dom: *mut Dom) {
     // each. ⚠ The scroll term is not decoration — `el.scrollTop = n` moves no mutation counter, so
     // with the DOM term alone a same-task measurement after a scroll read the pre-scroll layout.
     let scroll_seq = manuk_js::scroll_seq();
-    if dom.mutation_seq() == c.laid_out_at && scroll_seq == c.scrolled_at {
+    // A running real-time transition makes the cascade a function of time, so "nothing mutated"
+    // no longer means "nothing changed". Costs one emptiness check when none is running.
+    if dom.mutation_seq() == c.laid_out_at
+        && scroll_seq == c.scrolled_at
+        && !(manuk_css::transition::any_running_realtime()
+            && manuk_css::transition::realtime_now_ms() - c.laid_out_clock >= 4.0)
+    {
         return;
     }
     // ── THE BUDGET. See `ReflowCtx::reflow_us_budget`: the drain's clock is only read on a task
@@ -2675,6 +2685,7 @@ unsafe fn forced_reflow(ctx: *mut std::ffi::c_void, dom: *mut Dom) {
     manuk_js::set_snap_candidates(snap_candidates_of(dom, &root_box, &c.styles, &offsets));
 
     c.laid_out_at = dom.mutation_seq();
+    c.laid_out_clock = manuk_css::transition::realtime_clock_ms().unwrap_or(0.0);
     c.scrolled_at = scroll_seq;
     c.adoptable = if adoptable { Some(root_box) } else { None };
     // Charged AFTER the work, and only here, so the accounting is of reflows that actually ran.
@@ -2748,6 +2759,7 @@ impl ReflowScope {
             fonts: fonts as *const FontContext,
             viewport_width,
             laid_out_at: dom.mutation_seq(),
+            laid_out_clock: 0.0,
             scrolled_at: manuk_js::scroll_seq(),
             scroll_offsets: scroll_offsets as *const std::collections::HashMap<NodeId, (f32, f32)>,
             sticky_scroll_y,
