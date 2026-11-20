@@ -170,11 +170,11 @@ def launch_chrome(profile):
     sys.exit("capture: chrome printed no DevTools port")
 
 
-async def capture(runs, sites):
+async def capture(runs, sites, out=RAW):
     import websockets
     if not PIN:
         sys.exit("refusing: MANUK_CHROME_PIN unset")
-    os.makedirs(RAW, exist_ok=True)
+    os.makedirs(out, exist_ok=True)
     profile = tempfile.mkdtemp(prefix="r1agf-")
     proc, port = launch_chrome(profile)
     try:
@@ -206,7 +206,7 @@ async def capture(runs, sites):
                     rec = {"site": s, "run": r, "url": url, "chrome_ver": ver, "chrome_pin": PIN,
                            "manuk_rc": mrc, "chrome_loaded": loaded, "chrome_nobox": nobox,
                            "chrome": crows, "manuk": mrows, "seconds": round(time.time() - t0, 1)}
-                    with open(os.path.join(RAW, f"{s}_r{r}.json"), "w") as f:
+                    with open(os.path.join(out, f"{s}_r{r}.json"), "w") as f:
                         json.dump(rec, f)
                     print(f"{s} r{r}: chrome={len(crows)} manuk={len(mrows)} nobox={nobox} loaded={loaded} rc={mrc}", flush=True)
     finally:
@@ -374,13 +374,14 @@ def main():
     a = sub.add_parser("capture")
     a.add_argument("--runs", type=int, default=3)
     a.add_argument("--sites", nargs="*", default=SITES)
+    a.add_argument("--out", default=RAW, help="raw capture dir (default: the W6.R1 dir; use a new dir for repeats)")
     b = sub.add_parser("analyze")
     b.add_argument("--mutate", default="none", choices=["none", "shift", "nohit"])
     b.add_argument("--out", default=RAW)
     b.add_argument("--only", nargs="*", default=None)
     args = ap.parse_args()
     if args.cmd == "capture":
-        asyncio.run(capture(args.runs, args.sites))
+        asyncio.run(capture(args.runs, args.sites, args.out))
     else:
         analyze(args.mutate, args.out, args.only)
 

@@ -1,0 +1,16 @@
+site	run	chrome_count	manuk_count	chrome_ver	chrome_pin
+fly-unified	1	49	48	Chrome/145.0.7632.116	145.0.7632.116
+fly-unified	2	49	48	Chrome/145.0.7632.116	145.0.7632.116
+fly-unified	3	49	48	Chrome/145.0.7632.116	145.0.7632.116
+fly-unified	4	49	48	Chrome/145.0.7632.116	145.0.7632.116
+fly-unified	5	49	48	Chrome/145.0.7632.116	145.0.7632.116
+opendining	1	109	10	Chrome/145.0.7632.116	145.0.7632.116
+opendining	2	109	0	Chrome/145.0.7632.116	145.0.7632.116
+opendining	3	109	10	Chrome/145.0.7632.116	145.0.7632.116
+opendining	4	109	0	Chrome/145.0.7632.116	145.0.7632.116
+opendining	5	109	0	Chrome/145.0.7632.116	145.0.7632.116
+
+site	runs	chrome_seq	modal	ref	distribution	run1_outlier
+fly-unified	5	[49, 49, 49, 49, 49]	49	49	{49: 5}	False
+opendining	5	[109, 109, 109, 109, 109]	109	None	{109: 5}	False
+VERDICT: GREEN (no site has a run-1 outlier)
