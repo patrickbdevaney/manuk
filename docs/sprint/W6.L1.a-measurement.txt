@@ -1,0 +1,34 @@
+# W6.L1.a measurement: ledger-compare.py over docs/sprint/LEDGER.tsv (first 5 full, first 5 pack rows)
+# input_total = input + cache_creation + cache_read; DONE = loop.log '✓ node <id> DONE' within 0-120 s of the row (loop.log is local-only, excluded from git)
+# chrome_ver=145.0.7632.116
+
+chrome_ver=145.0.7632.116
+full : n=5 mean_input_total=891994.6 DONE=5/5 (100%) chrome_ver=145.0.7632.116
+pack : n=5 mean_input_total=1085099.0 DONE=3/5 (60%) chrome_ver=145.0.7632.116
+pack vs full: input_total NOT lower; DONE rate LOWER -> FAIL chrome_ver=145.0.7632.116
+exit=1 (0 PASS, 1 FAIL/falsified, 2 MISSING)
+
+# rows used
+2026-11-20 10:21:18	W6.J3	sonnet	1	0	full	624422	17	sonnet
+2026-11-20 10:23:39	W6.J1.a	sonnet	1	0	full	839157	23	sonnet
+2026-11-20 10:28:39	W6.J1.b	haiku	0	0	full	1625542	33	haiku
+2026-11-20 10:49:28	W6.R1	haiku	0	0	full	171450	1	haiku
+2026-11-20 11:06:59	W6.J2.a	sonnet	1	0	full	1199402	24	sonnet
+2026-11-20 11:58:37	W6.J2.c	sonnet	1	0	pack	1907098	32	sonnet
+2026-11-20 12:06:12	W6.J2.d	sonnet	1	0	pack	421009	12	sonnet
+2026-11-20 12:09:32	W6.R1.a	sonnet	1	0	pack	1111545	24	sonnet
+2026-11-20 12:14:02	W6.V1	sonnet	1	0	pack	1752631	27	sonnet
+2026-11-20 12:14:58	W6.V1	opus	2	0	pack	233212	7	opus
+
+# DONE lines in loop.log for those nodes (2026-11-20)
+2026-11-20 10:21:18  ✓ node W6.J3 DONE on sonnet (rc=0)
+2026-11-20 10:23:39  ✓ node W6.J1.a DONE on sonnet (rc=0)
+2026-11-20 10:28:39  ✓ node W6.J1.b DONE on haiku (rc=0)
+2026-11-20 10:49:28  ✓ node W6.R1 DONE on haiku (rc=0)
+2026-11-20 11:06:59  ✓ node W6.J2.a DONE on sonnet (rc=0)
+2026-11-20 11:58:37  ✓ node W6.J2.c DONE on sonnet (rc=0)
+2026-11-20 12:06:12  ✓ node W6.J2.d DONE on sonnet (rc=0)
+2026-11-20 12:09:32  ✓ node W6.R1.a DONE on sonnet (rc=0)
+2026-11-20 12:14:02  ■ node W6.V1 exited rc=0 on sonnet without landing — next attempt escalates
+2026-11-20 12:14:59  ■ node W6.V1 exited rc=0 on opus without landing — next attempt escalates
+2026-11-20 12:16:15  ■ node W6.V1 exited rc=0 on opus without landing — next attempt escalates
