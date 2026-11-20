@@ -1,0 +1,15 @@
+{"path":"pointerevents/compat/pointerevent_touch-action-verification.html","pass":0,"total":4,"harness":"OK","ms":248}
+{"path":"pointerevents/inheritance.html","pass":0,"total":2,"harness":"OK","ms":79}
+{"path":"pointerevents/parsing/touch-action-computed.html","pass":0,"total":6,"harness":"OK","ms":77}
+{"path":"pointerevents/parsing/touch-action-invalid.html","pass":3,"total":3,"harness":"OK","ms":66}
+{"path":"pointerevents/parsing/touch-action-valid.html","pass":0,"total":6,"harness":"OK","ms":69}
+{"path":"pointerevents/persistentDeviceId/pointer-event-has-persistentdeviceid-from-pointer-event-init.tentative.html","pass":0,"total":2,"harness":"OK","ms":70}
+{"path":"pointerevents/pointerevent_constructor.html","pass":0,"total":1,"harness":"OK","ms":67}
+{"path":"pointerevents/pointerevent_constructor.https.html","pass":0,"total":1,"harness":"OK","ms":74}
+{"path":"pointerevents/pointerevent_fractional_coordinates_untrusted.html","pass":108,"total":272,"harness":"ERROR","ms":99}
+{"path":"pointerevents/pointerevent_on_event_handlers.html","pass":20,"total":30,"harness":"OK","ms":81}
+{"path":"pointerevents/pointerevent_root_computed_style.html","pass":1,"total":1,"harness":"OK","ms":66}
+{"path":"pointerevents/pointerevent_root_hit_test.html","pass":0,"total":1,"harness":"OK","ms":66}
+{"path":"pointerevents/pointerevent_tiltX_tiltY_to_azimuth_altitude.html","pass":0,"total":25,"harness":"OK","ms":73}
+{"path":"pointerevents/pointerevent_touch-action-illegal.html","pass":0,"total":3,"harness":"OK","ms":80}
+{"path":"pointerevents/pointerevent_touch-action-verification.html","pass":0,"total":37,"harness":"OK","ms":96}

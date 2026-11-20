@@ -1,0 +1,100 @@
+WPT uievents: 13 runnable testharness files
+   skip     1  generated wrapper (.any.js/.window.js — needs wptserve)
+   skip     6  manual test (needs a human)
+   skip    52  needs testdriver (synthetic input)
+   skip    44  not a testharness test
+  FILE uievents/constructors/event-getmodifierstate.html  (10/16)
+    FAIL KeyboardEvent.getModifierState('AltGraph') reflects modifierAltGraph in isolation
+         assert_true: AltGraph should be active expected true got false
+    FAIL KeyboardEvent.getModifierState('CapsLock') reflects modifierCapsLock in isolation
+         assert_true: CapsLock should be active expected true got false
+    FAIL KeyboardEvent.getModifierState() reports every modifier when all are set
+         assert_true: AltGraph should be active expected true got false
+    FAIL MouseEvent.getModifierState('AltGraph') reflects modifierAltGraph in isolation
+         assert_true: AltGraph should be active expected true got false
+    FAIL MouseEvent.getModifierState('CapsLock') reflects modifierCapsLock in isolation
+         assert_true: CapsLock should be active expected true got false
+    FAIL MouseEvent.getModifierState() reports every modifier when all are set
+         assert_true: AltGraph should be active expected true got false
+  FILE uievents/constructors/inputevent-constructor.html  (2/4)
+    FAIL InputEvent constructor without InputEventInit.
+         assert_false: .isComposing expected false got undefined
+    FAIL InputEvent construtor with InputEventInit where data is null
+         assert_true: .isComposing expected true got undefined
+  FILE uievents/interface/click-event.htm  (0/1)
+    FAIL synthetic click event is a PointerEvent
+         assert_equals: Click is a PointerEvent expected function "function (type, init) { ..."
+[2m2026-11-20T15:02:58.205188Z[0m [33m WARN[0m [2mpage.console[0m[2m:[0m uncaught (reported): Failed to execute 'dispatchEvent': the event is already being dispatched, or was not initialized
+DOMException@event_loop_prelude.js:7833:25
+globalThis.__dispatchEvent@dom_event.js:241:19
+TestEvent@http://127.0.0.1:34801/uievents/legacy-domevents-tests/approved/dispatchEvent.click.checkbox.html inline#25:50:20
+globalThis.__invokeListener@dom_event.js:198:18
+invoke@dom_event.js:339:39
+globalThis.__dispatchEvent@dom_event.js:349:15
+@dom_event.js:1:16
+window.onload@http://127.0.0.1:34801/uievents/legacy-domevents-tests/approved/dispatchEvent.click.checkbox.html inline#25:17:16
+g.__fireWindowEvent@dom_event.js:4328:32
+g.dispatchEvent@dom_event.js:4348:19
+g.__fireLoad@dom_event.js:257:21
+@dynamic.js:1:26
+
+  FILE uievents/legacy-domevents-tests/approved/dispatchEvent.click.checkbox.html  (0/1)
+    FAIL Checkbox state is unchanged before the synthetic click event is dispatched
+         e.initMouseEvent is not a function
+  FILE uievents/legacy-domevents-tests/approved/stopImmediatePropagation.effect.html  (0/1)
+    FAIL Test Description: stopImmediatePropagation() prevents other event listeners from being triggered and, unlike Event.stopPropagation(), its effect must be immediate. Once it has been called, further calls to this method have no additional effect.
+         assert_array_equals: ActualResult lengths differ, expected array [object "[object Window]", [...], Document node with 2 children, [...], Element node <html><head> <...] length 7
+  FILE uievents/legacy-domevents-tests/approved/stopPropagation.deferred.effect.html  (0/1)
+    FAIL Test Description: stopPropagation() prevents other event listeners from being triggered but its effect must be deferred until all event listeners attached on the Event.currentTarget have been triggered.
+         assert_array_equals: ActualResult lengths differ, expected array [object "[object Window]", [...], Document node with 2 children, [...], Element node <html><head> <..., [...]] length 8
+  FILE uievents/legacy-domevents-tests/submissions/Microsoft/converted/EventListener.dispatch.new.event.html  (0/1)
+    FAIL Test Description: Implementations of the DOM event model must be reentrant. Event listeners may perform actions that cause additional events to be dispatched. Such events are handled in a synchronous manner, the event propagation that causes the event listener to be triggered must resume only after the event dispatch of the new event is completed.
+         assert_array_equals: ActualResult lengths differ, expected array [object "[object Window]", Document node with 2 children, Element node <html><head> <..., [...], [...], [...], [...], [...], [...], [...]] length 14
+  FILE uievents/legacy/Event-subclasses-init.html  (0/4)
+    FAIL Call initUIEvent without parameters
+         assert_equals: expected 1 but got 2
+    FAIL Call initMouseEvent without parameters
+         assert_equals: expected 1 but got 2
+    FAIL Call initKeyboardEvent without parameters
+         assert_equals: expected 1 but got 2
+    FAIL Call initCompositionEvent without parameters
+         assert_equals: expected 1 but got 2
+  FILE uievents/order-of-events/focus-events/focus-automated-blink-webkit.html  (0/2)
+    NotRun Focus-related events should fire in the correct order (same DocumentOwner)
+    NotRun Focus-related events should fire in the correct order (different DocumentOwner)
+  FILE uievents/textInput/api.html  (0/9)
+    FAIL No constructor
+         assert_throws_js: function "() => { }" ("TypeError")
+    FAIL document.CreateEvent('TextEvent') prototype chain
+         Failed to execute 'createEvent' on 'Document': The provided event type ('TextEvent') is invalid.
+    FAIL initTextEvent() no arguments
+         Failed to execute 'createEvent' on 'Document': The provided event type ('TextEvent') is invalid.
+    FAIL initTextEvent('foo')
+         Failed to execute 'createEvent' on 'Document': The provided event type ('TextEvent') is invalid.
+    FAIL initTextEvent('foo', true, true, window, 'bar')
+         Failed to execute 'createEvent' on 'Document': The provided event type ('TextEvent') is invalid.
+    FAIL case sensitivity: textInput vs textinput
+         Failed to execute 'createEvent' on 'Document': The provided event type ('TextEvent') is invalid.
+    Timeout execCommand('insertText', false, 'a'), <input>
+    NotRun execCommand('insertText', false, 'a'), <textarea>
+    NotRun execCommand('insertText', false, 'a'), <div contenteditable="">
+  FILE uievents/ui_event_pseudo_target.html  (0/2)
+    FAIL pseudoTarget on UIEvent.prototype
+         assert_true: UIEvent.prototype should expose pseudoTarget expected true got false
+    FAIL MouseEvent inherits pseudoTarget
+         assert_true: MouseEvent.prototype should inherit pseudoTarget expected true got false
+wrote docs/sprint/w6/raw/uievents.json
+
+── WPT uievents ──────────────────────────────────────────
+   50.0%      2/4      (2 files)  uievents
+   60.0%     12/20     (2 files)  uievents/constructors
+    0.0%      0/1      (1 files)  uievents/interface
+  100.0%      1/1      (1 files)  uievents/keyboard
+    0.0%      0/4      (1 files)  uievents/legacy
+    0.0%      0/3      (3 files)  uievents/legacy-domevents-tests/approved
+    0.0%      0/1      (1 files)  uievents/legacy-domevents-tests/submissions/Microsoft/converted
+    0.0%      0/2      (1 files)  uievents/order-of-events/focus-events
+    0.0%      0/9      (1 files)  uievents/textInput
+
+  FILES  13   subtests 15/45  =  33.3%
+  NO_REPORT 0   [1mHANG/CRASH 0[0m (Bar 0)   SHORT 0 (instrument)   SLOW 0 (our budget)   TH_TIMEOUT 2 (async test never completed)

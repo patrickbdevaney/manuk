@@ -1,0 +1,13 @@
+{"path":"uievents/constructors/event-getmodifierstate.html","pass":10,"total":16,"harness":"OK","ms":133}
+{"path":"uievents/constructors/inputevent-constructor.html","pass":2,"total":4,"harness":"OK","ms":58}
+{"path":"uievents/historical.html","pass":2,"total":2,"harness":"OK","ms":70}
+{"path":"uievents/interface/click-event.htm","pass":0,"total":1,"harness":"OK","ms":67}
+{"path":"uievents/keyboard/keyboardevent-legacy.html","pass":1,"total":1,"harness":"OK","ms":68}
+{"path":"uievents/legacy-domevents-tests/approved/dispatchEvent.click.checkbox.html","pass":0,"total":1,"harness":"ERROR","ms":66}
+{"path":"uievents/legacy-domevents-tests/approved/stopImmediatePropagation.effect.html","pass":0,"total":1,"harness":"OK","ms":79}
+{"path":"uievents/legacy-domevents-tests/approved/stopPropagation.deferred.effect.html","pass":0,"total":1,"harness":"OK","ms":73}
+{"path":"uievents/legacy-domevents-tests/submissions/Microsoft/converted/EventListener.dispatch.new.event.html","pass":0,"total":1,"harness":"OK","ms":72}
+{"path":"uievents/legacy/Event-subclasses-init.html","pass":0,"total":4,"harness":"OK","ms":65}
+{"path":"uievents/order-of-events/focus-events/focus-automated-blink-webkit.html","pass":0,"total":2,"harness":"TIMEOUT","ms":65}
+{"path":"uievents/textInput/api.html","pass":0,"total":9,"harness":"TIMEOUT","ms":64}
+{"path":"uievents/ui_event_pseudo_target.html","pass":0,"total":2,"harness":"OK","ms":66}

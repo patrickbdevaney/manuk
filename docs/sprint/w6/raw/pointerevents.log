@@ -1,0 +1,552 @@
+WPT pointerevents: 15 runnable testharness files
+   skip     1  generated wrapper (.any.js/.window.js — needs wptserve)
+   skip     8  manual test (needs a human)
+   skip   169  needs testdriver (synthetic input)
+   skip     8  not a testharness test
+  FILE pointerevents/compat/pointerevent_touch-action-verification.html  (0/4)
+    FAIL explicit-pinch-zoom
+         assert_equals: expected (undefined) undefined but got (string) "pinch-zoom"
+    FAIL explicit-pinch-zoom-pan-x-pan-up
+         assert_equals: expected (undefined) undefined but got (string) "pan-x pan-up pinch-zoom"
+    FAIL explicit-pinch-zoom-pan-x-pan-y
+         assert_equals: expected (undefined) undefined but got (string) "manipulation"
+    FAIL explicit-invalid-14
+         assert_equals: expected (undefined) undefined but got (string) "auto"
+  FILE pointerevents/inheritance.html  (0/2)
+    FAIL Property touch-action has initial value auto
+         assert_true: touch-action doesn't seem to be supported in the computed style expected true got false
+    FAIL Property touch-action does not inherit
+         assert_true: expected true got false
+  FILE pointerevents/parsing/touch-action-computed.html  (0/6)
+    FAIL Property touch-action value 'auto'
+         assert_true: touch-action doesn't seem to be supported in the computed style expected true got false
+    FAIL Property touch-action value 'none'
+         assert_true: touch-action doesn't seem to be supported in the computed style expected true got false
+    FAIL Property touch-action value 'manipulation'
+         assert_true: touch-action doesn't seem to be supported in the computed style expected true got false
+    FAIL Property touch-action value 'pan-x'
+         assert_true: touch-action doesn't seem to be supported in the computed style expected true got false
+    FAIL Property touch-action value 'pan-y'
+         assert_true: touch-action doesn't seem to be supported in the computed style expected true got false
+    FAIL Property touch-action value 'pan-x pan-y'
+         assert_true: touch-action doesn't seem to be supported in the computed style expected true got false
+  FILE pointerevents/parsing/touch-action-valid.html  (0/6)
+    FAIL e.style['touch-action'] = "auto" should set the property value
+         assert_not_equals: property should be set got disallowed value ""
+    FAIL e.style['touch-action'] = "none" should set the property value
+         assert_not_equals: property should be set got disallowed value ""
+    FAIL e.style['touch-action'] = "manipulation" should set the property value
+         assert_not_equals: property should be set got disallowed value ""
+    FAIL e.style['touch-action'] = "pan-x" should set the property value
+         assert_not_equals: property should be set got disallowed value ""
+    FAIL e.style['touch-action'] = "pan-y" should set the property value
+         assert_not_equals: property should be set got disallowed value ""
+    FAIL e.style['touch-action'] = "pan-y pan-x" should set the property value
+         assert_not_equals: property should be set got disallowed value ""
+  FILE pointerevents/persistentDeviceId/pointer-event-has-persistentdeviceid-from-pointer-event-init.tentative.html  (0/2)
+    FAIL PointerEvent.persistentDeviceId via PointerEventInit
+         assert_equals: persistentDeviceId is populated expected (number) 1001 but got (undefined) undefined
+    FAIL No persistentDeviceId in PointerEventInit
+         assert_equals: expected (number) 0 but got (undefined) undefined
+  FILE pointerevents/pointerevent_constructor.html  (0/1)
+    FAIL PointerEvent: Constructor test
+         event.getPredictedEvents is not a function
+  FILE pointerevents/pointerevent_constructor.https.html  (0/1)
+    FAIL PointerEvent: Constructor test
+         event.getCoalescedEvents is not a function
+  FILE pointerevents/pointerevent_fractional_coordinates_untrusted.html  (108/272)
+    FAIL PointerEvent.pointerdown.pageX
+         assert_equals: expected 0.333333333333 but got 0
+    FAIL PointerEvent.pointerdown.pageY
+         assert_equals: expected 0.444444444444 but got 0
+    FAIL PointerEvent.pointerdown.offsetX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL PointerEvent.pointerdown.offsetY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL PointerEvent.pointerup.pageX
+         assert_equals: expected 0.333333333333 but got 0
+    FAIL PointerEvent.pointerup.pageY
+         assert_equals: expected 0.444444444444 but got 0
+    FAIL PointerEvent.pointerup.offsetX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL PointerEvent.pointerup.offsetY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL PointerEvent.pointermove.pageX
+         assert_equals: expected 0.333333333333 but got 0
+    FAIL PointerEvent.pointermove.pageY
+         assert_equals: expected 0.444444444444 but got 0
+    FAIL PointerEvent.pointermove.offsetX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL PointerEvent.pointermove.offsetY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL PointerEvent.pointercancel.pageX
+         assert_equals: expected 0.333333333333 but got 0
+    FAIL PointerEvent.pointercancel.pageY
+         assert_equals: expected 0.444444444444 but got 0
+    FAIL PointerEvent.pointercancel.offsetX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL PointerEvent.pointercancel.offsetY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL PointerEvent.gotpointercapture.pageX
+         assert_equals: expected 0.333333333333 but got 0
+    FAIL PointerEvent.gotpointercapture.pageY
+         assert_equals: expected 0.444444444444 but got 0
+    FAIL PointerEvent.gotpointercapture.offsetX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL PointerEvent.gotpointercapture.offsetY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL PointerEvent.lostpointercapture.pageX
+         assert_equals: expected 0.333333333333 but got 0
+    FAIL PointerEvent.lostpointercapture.pageY
+         assert_equals: expected 0.444444444444 but got 0
+    FAIL PointerEvent.lostpointercapture.offsetX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL PointerEvent.lostpointercapture.offsetY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL PointerEvent.pointerrawupdate.pageX
+         assert_equals: expected 0.333333333333 but got 0
+    FAIL PointerEvent.pointerrawupdate.pageY
+         assert_equals: expected 0.444444444444 but got 0
+    FAIL PointerEvent.pointerrawupdate.offsetX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL PointerEvent.pointerrawupdate.offsetY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL PointerEvent.pointerover.pageX
+         assert_equals: expected 0.333333333333 but got 0
+    FAIL PointerEvent.pointerover.pageY
+         assert_equals: expected 0.444444444444 but got 0
+    FAIL PointerEvent.pointerover.offsetX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL PointerEvent.pointerover.offsetY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL PointerEvent.pointerout.pageX
+         assert_equals: expected 0.333333333333 but got 0
+    FAIL PointerEvent.pointerout.pageY
+         assert_equals: expected 0.444444444444 but got 0
+    FAIL PointerEvent.pointerout.offsetX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL PointerEvent.pointerout.offsetY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL PointerEvent.pointerenter.pageX
+         assert_equals: expected 0.333333333333 but got 0
+    FAIL PointerEvent.pointerenter.pageY
+         assert_equals: expected 0.444444444444 but got 0
+    FAIL PointerEvent.pointerenter.offsetX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL PointerEvent.pointerenter.offsetY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL PointerEvent.pointerleave.pageX
+         assert_equals: expected 0.333333333333 but got 0
+    FAIL PointerEvent.pointerleave.pageY
+         assert_equals: expected 0.444444444444 but got 0
+    FAIL PointerEvent.pointerleave.offsetX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL PointerEvent.pointerleave.offsetY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL PointerEvent.foo.pageX
+         assert_equals: expected 0.333333333333 but got 0
+    FAIL PointerEvent.foo.pageY
+         assert_equals: expected 0.444444444444 but got 0
+    FAIL PointerEvent.foo.offsetX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL PointerEvent.foo.offsetY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL PointerEvent.click.pageX
+         assert_equals: expected 0.333333333333 but got 0
+    FAIL PointerEvent.click.pageY
+         assert_equals: expected 0.444444444444 but got 0
+    FAIL PointerEvent.click.offsetX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL PointerEvent.click.offsetY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL PointerEvent.auxclick.pageX
+         assert_equals: expected 0.333333333333 but got 0
+    FAIL PointerEvent.auxclick.pageY
+         assert_equals: expected 0.444444444444 but got 0
+    FAIL PointerEvent.auxclick.offsetX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL PointerEvent.auxclick.offsetY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL PointerEvent.contextmenu.pageX
+         assert_equals: expected 0.333333333333 but got 0
+    FAIL PointerEvent.contextmenu.pageY
+         assert_equals: expected 0.444444444444 but got 0
+    FAIL PointerEvent.contextmenu.offsetX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL PointerEvent.contextmenu.offsetY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL MouseEvent.click.pageX
+         assert_equals: expected 0.333333333333 but got 0
+    FAIL MouseEvent.click.pageY
+         assert_equals: expected 0.444444444444 but got 0
+    FAIL MouseEvent.click.offsetX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL MouseEvent.click.offsetY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL MouseEvent.auxclick.pageX
+         assert_equals: expected 0.333333333333 but got 0
+    FAIL MouseEvent.auxclick.pageY
+         assert_equals: expected 0.444444444444 but got 0
+    FAIL MouseEvent.auxclick.offsetX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL MouseEvent.auxclick.offsetY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL MouseEvent.contextmenu.pageX
+         assert_equals: expected 0.333333333333 but got 0
+    FAIL MouseEvent.contextmenu.pageY
+         assert_equals: expected 0.444444444444 but got 0
+    FAIL MouseEvent.contextmenu.offsetX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL MouseEvent.contextmenu.offsetY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL MouseEvent.mousedown.pageX
+         assert_equals: expected 0.333333333333 but got 0
+    FAIL MouseEvent.mousedown.pageY
+         assert_equals: expected 0.444444444444 but got 0
+    FAIL MouseEvent.mousedown.offsetX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL MouseEvent.mousedown.offsetY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL MouseEvent.mousemove.pageX
+         assert_equals: expected 0.333333333333 but got 0
+    FAIL MouseEvent.mousemove.pageY
+         assert_equals: expected 0.444444444444 but got 0
+    FAIL MouseEvent.mousemove.offsetX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL MouseEvent.mousemove.offsetY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL MouseEvent.mouseup.pageX
+         assert_equals: expected 0.333333333333 but got 0
+    FAIL MouseEvent.mouseup.pageY
+         assert_equals: expected 0.444444444444 but got 0
+    FAIL MouseEvent.mouseup.offsetX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL MouseEvent.mouseup.offsetY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL MouseEvent.mouseover.pageX
+         assert_equals: expected 0.333333333333 but got 0
+    FAIL MouseEvent.mouseover.pageY
+         assert_equals: expected 0.444444444444 but got 0
+    FAIL MouseEvent.mouseover.offsetX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL MouseEvent.mouseover.offsetY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL MouseEvent.mouseout.pageX
+         assert_equals: expected 0.333333333333 but got 0
+    FAIL MouseEvent.mouseout.pageY
+         assert_equals: expected 0.444444444444 but got 0
+    FAIL MouseEvent.mouseout.offsetX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL MouseEvent.mouseout.offsetY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL MouseEvent.mouseenter.pageX
+         assert_equals: expected 0.333333333333 but got 0
+    FAIL MouseEvent.mouseenter.pageY
+         assert_equals: expected 0.444444444444 but got 0
+    FAIL MouseEvent.mouseenter.offsetX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL MouseEvent.mouseenter.offsetY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL MouseEvent.mouseleave.pageX
+         assert_equals: expected 0.333333333333 but got 0
+    FAIL MouseEvent.mouseleave.pageY
+         assert_equals: expected 0.444444444444 but got 0
+    FAIL MouseEvent.mouseleave.offsetX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL MouseEvent.mouseleave.offsetY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL MouseEvent.dblclick.pageX
+         assert_equals: expected 0.333333333333 but got 0
+    FAIL MouseEvent.dblclick.pageY
+         assert_equals: expected 0.444444444444 but got 0
+    FAIL MouseEvent.dblclick.offsetX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL MouseEvent.dblclick.offsetY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL DragEvent.undefined.screenX
+         assert_equals: expected (number) 0.111111111111 but got (undefined) undefined
+    FAIL DragEvent.undefined.screenY
+         assert_equals: expected (number) 0.222222222222 but got (undefined) undefined
+    FAIL DragEvent.undefined.clientX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL DragEvent.undefined.clientY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL DragEvent.undefined.pageX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL DragEvent.undefined.pageY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL DragEvent.undefined.offsetX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL DragEvent.undefined.offsetY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL DragEvent.undefined.screenX
+         assert_equals: expected (number) 0.111111111111 but got (undefined) undefined
+    FAIL DragEvent.undefined.screenY
+         assert_equals: expected (number) 0.222222222222 but got (undefined) undefined
+    FAIL DragEvent.undefined.clientX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL DragEvent.undefined.clientY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL DragEvent.undefined.pageX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL DragEvent.undefined.pageY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL DragEvent.undefined.offsetX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL DragEvent.undefined.offsetY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL DragEvent.undefined.screenX
+         assert_equals: expected (number) 0.111111111111 but got (undefined) undefined
+    FAIL DragEvent.undefined.screenY
+         assert_equals: expected (number) 0.222222222222 but got (undefined) undefined
+    FAIL DragEvent.undefined.clientX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL DragEvent.undefined.clientY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL DragEvent.undefined.pageX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL DragEvent.undefined.pageY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL DragEvent.undefined.offsetX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL DragEvent.undefined.offsetY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL DragEvent.undefined.screenX
+         assert_equals: expected (number) 0.111111111111 but got (undefined) undefined
+    FAIL DragEvent.undefined.screenY
+         assert_equals: expected (number) 0.222222222222 but got (undefined) undefined
+    FAIL DragEvent.undefined.clientX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL DragEvent.undefined.clientY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL DragEvent.undefined.pageX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL DragEvent.undefined.pageY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL DragEvent.undefined.offsetX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL DragEvent.undefined.offsetY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL WheelEvent.wheel.pageX
+         assert_equals: expected 0.333333333333 but got 0
+    FAIL WheelEvent.wheel.pageY
+         assert_equals: expected 0.444444444444 but got 0
+    FAIL WheelEvent.wheel.offsetX
+         assert_equals: expected (number) 0.333333333333 but got (undefined) undefined
+    FAIL WheelEvent.wheel.offsetY
+         assert_equals: expected (number) 0.444444444444 but got (undefined) undefined
+    FAIL PointerEvent.pointerdown.width
+         assert_equals: expected (number) 0.111111111111 but got (undefined) undefined
+    FAIL PointerEvent.pointerdown.height
+         assert_equals: expected (number) 0.222222222222 but got (undefined) undefined
+    FAIL PointerEvent.pointerup.width
+         assert_equals: expected (number) 0.111111111111 but got (undefined) undefined
+    FAIL PointerEvent.pointerup.height
+         assert_equals: expected (number) 0.222222222222 but got (undefined) undefined
+    FAIL PointerEvent.pointermove.width
+         assert_equals: expected (number) 0.111111111111 but got (undefined) undefined
+    FAIL PointerEvent.pointermove.height
+         assert_equals: expected (number) 0.222222222222 but got (undefined) undefined
+    FAIL PointerEvent.pointercancel.width
+         assert_equals: expected (number) 0.111111111111 but got (undefined) undefined
+    FAIL PointerEvent.pointercancel.height
+         assert_equals: expected (number) 0.222222222222 but got (undefined) undefined
+    FAIL PointerEvent.gotpointercapture.width
+         assert_equals: expected (number) 0.111111111111 but got (undefined) undefined
+    FAIL PointerEvent.gotpointercapture.height
+         assert_equals: expected (number) 0.222222222222 but got (undefined) undefined
+    FAIL PointerEvent.lostpointercapture.width
+         assert_equals: expected (number) 0.111111111111 but got (undefined) undefined
+    FAIL PointerEvent.lostpointercapture.height
+         assert_equals: expected (number) 0.222222222222 but got (undefined) undefined
+    FAIL PointerEvent.pointerrawupdate.width
+         assert_equals: expected (number) 0.111111111111 but got (undefined) undefined
+    FAIL PointerEvent.pointerrawupdate.height
+         assert_equals: expected (number) 0.222222222222 but got (undefined) undefined
+    FAIL PointerEvent.pointerover.width
+         assert_equals: expected (number) 0.111111111111 but got (undefined) undefined
+    FAIL PointerEvent.pointerover.height
+         assert_equals: expected (number) 0.222222222222 but got (undefined) undefined
+    FAIL PointerEvent.pointerout.width
+         assert_equals: expected (number) 0.111111111111 but got (undefined) undefined
+    FAIL PointerEvent.pointerout.height
+         assert_equals: expected (number) 0.222222222222 but got (undefined) undefined
+    FAIL PointerEvent.pointerenter.width
+         assert_equals: expected (number) 0.111111111111 but got (undefined) undefined
+    FAIL PointerEvent.pointerenter.height
+         assert_equals: expected (number) 0.222222222222 but got (undefined) undefined
+    FAIL PointerEvent.pointerleave.width
+         assert_equals: expected (number) 0.111111111111 but got (undefined) undefined
+    FAIL PointerEvent.pointerleave.height
+         assert_equals: expected (number) 0.222222222222 but got (undefined) undefined
+    FAIL PointerEvent.foo.width
+         assert_equals: expected (number) 0.111111111111 but got (undefined) undefined
+    FAIL PointerEvent.foo.height
+         assert_equals: expected (number) 0.222222222222 but got (undefined) undefined
+  FILE pointerevents/pointerevent_on_event_handlers.html  (20/30)
+    FAIL The default value of onpointerdown is always null
+         assert_equals: The default value of the property is null for a Object instance expected (object) null but got (undefined) undefined
+    FAIL The default value of onpointerup is always null
+         assert_equals: The default value of the property is null for a Object instance expected (object) null but got (undefined) undefined
+    FAIL The default value of onpointercancel is always null
+         assert_equals: The default value of the property is null for a Object instance expected (object) null but got (undefined) undefined
+    FAIL The default value of onpointermove is always null
+         assert_equals: The default value of the property is null for a Object instance expected (object) null but got (undefined) undefined
+    FAIL The default value of onpointerover is always null
+         assert_equals: The default value of the property is null for a Object instance expected (object) null but got (undefined) undefined
+    FAIL The default value of onpointerout is always null
+         assert_equals: The default value of the property is null for a Object instance expected (object) null but got (undefined) undefined
+    FAIL The default value of onpointerenter is always null
+         assert_equals: The default value of the property is null for a Object instance expected (object) null but got (undefined) undefined
+    FAIL The default value of onpointerleave is always null
+         assert_equals: The default value of the property is null for a Object instance expected (object) null but got (undefined) undefined
+    FAIL The default value of ongotpointercapture is always null
+         assert_equals: The default value of the property is null for a Object instance expected (object) null but got (undefined) undefined
+    FAIL The default value of onlostpointercapture is always null
+         assert_equals: The default value of the property is null for a Object instance expected (object) null but got (undefined) undefined
+  FILE pointerevents/pointerevent_root_hit_test.html  (0/1)
+    FAIL pointerevent_root_hit_test
+         assert_equals: expected Element node <html><head><meta charset="utf-8"> <scrip... but got null
+  FILE pointerevents/pointerevent_tiltX_tiltY_to_azimuth_altitude.html  (0/25)
+    FAIL tiltX,tiltY to azimuth/altitude when tiltX=0 and tiltY=0
+         assert_equals: azimuth angle should be 0 expected (number) 0 but got (undefined) undefined
+    FAIL tiltX,tiltY to azimuth/altitude when tiltX=0 and tiltY=90
+         assert_equals: azimuth angle should be 1.5707963267948966 expected (number) 1.5707963267948966 but got (undefined) undefined
+    FAIL tiltX,tiltY to azimuth/altitude when tiltX=0 and tiltY=-90
+         assert_equals: azimuth angle should be 4.71238898038469 expected (number) 4.71238898038469 but got (undefined) undefined
+    FAIL tiltX,tiltY to azimuth/altitude when tiltX=90 and tiltY=0
+         assert_equals: azimuth angle should be 0 expected (number) 0 but got (undefined) undefined
+    FAIL tiltX,tiltY to azimuth/altitude when tiltX=90 and tiltY=90
+         assert_equals: azimuth angle should be 0 expected (number) 0 but got (undefined) undefined
+    FAIL tiltX,tiltY to azimuth/altitude when tiltX=90 and tiltY=-90
+         assert_equals: azimuth angle should be 0 expected (number) 0 but got (undefined) undefined
+    FAIL tiltX,tiltY to azimuth/altitude when tiltX=-90 and tiltY=0
+         assert_equals: azimuth angle should be 3.141592653589793 expected (number) 3.141592653589793 but got (undefined) undefined
+    FAIL tiltX,tiltY to azimuth/altitude when tiltX=-90 and tiltY=90
+         assert_equals: azimuth angle should be 0 expected (number) 0 but got (undefined) undefined
+    FAIL tiltX,tiltY to azimuth/altitude when tiltX=-90 and tiltY=-90
+         assert_equals: azimuth angle should be 0 expected (number) 0 but got (undefined) undefined
+    FAIL tiltX,tiltY to azimuth/altitude when tiltX=0 and tiltY=45
+         assert_equals: azimuth angle should be 1.5707963267948966 expected (number) 1.5707963267948966 but got (undefined) undefined
+    FAIL tiltX,tiltY to azimuth/altitude when tiltX=0 and tiltY=-45
+         assert_equals: azimuth angle should be 4.71238898038469 expected (number) 4.71238898038469 but got (undefined) undefined
+    FAIL tiltX,tiltY to azimuth/altitude when tiltX=45 and tiltY=0
+         assert_equals: azimuth angle should be 0 expected (number) 0 but got (undefined) undefined
+    FAIL tiltX,tiltY to azimuth/altitude when tiltX=-45 and tiltY=0
+         assert_equals: azimuth angle should be 3.141592653589793 expected (number) 3.141592653589793 but got (undefined) undefined
+    FAIL tiltX/tiltY to azimuth/altitude when tiltX/tiltY are not populated
+         assert_equals: azimuth angle should be 0 expected (number) 0 but got (undefined) undefined
+    FAIL azimuth/altitude to tiltX/tiltY when azimuth=0 and altitude=0
+         assert_equals: tiltX angle should be 90 expected (number) 90 but got (undefined) undefined
+    FAIL azimuth/altitude to tiltX/tiltY when azimuth=0 and altitude=0.7853981633974483
+         assert_equals: tiltX angle should be 45 expected (number) 45 but got (undefined) undefined
+    FAIL azimuth/altitude to tiltX/tiltY when azimuth=0 and altitude=1.5707963267948966
+         assert_equals: tiltX angle should be 0 expected (number) 0 but got (undefined) undefined
+    FAIL azimuth/altitude to tiltX/tiltY when azimuth=1.5707963267948966 and altitude=0
+         assert_equals: tiltX angle should be 0 expected (number) 0 but got (undefined) undefined
+    FAIL azimuth/altitude to tiltX/tiltY when azimuth=1.5707963267948966 and altitude=0.7853981633974483
+         assert_equals: tiltX angle should be 0 expected (number) 0 but got (undefined) undefined
+    FAIL azimuth/altitude to tiltX/tiltY when azimuth=3.141592653589793 and altitude=0
+         assert_equals: tiltX angle should be -90 expected (number) -90 but got (undefined) undefined
+    FAIL azimuth/altitude to tiltX/tiltY when azimuth=3.141592653589793 and altitude=0.7853981633974483
+         assert_equals: tiltX angle should be -45 expected (number) -45 but got (undefined) undefined
+    FAIL azimuth/altitude to tiltX/tiltY when azimuth=4.71238898038469 and altitude=0
+         assert_equals: tiltX angle should be 0 expected (number) 0 but got (undefined) undefined
+    FAIL azimuth/altitude to tiltX/tiltY when azimuth=4.71238898038469 and altitude=0.7853981633974483
+         assert_equals: tiltX angle should be 0 expected (number) 0 but got (undefined) undefined
+    FAIL If only one of the values (tiltX, tiltY) or (azimuthAngle, altitudeAngle) is available the other one is set to the default value
+         assert_equals: tiltX value should stay as initialized expected (number) 45 but got (undefined) undefined
+    FAIL If one of the values in both sets is provided, the other value in the set is initialized with the default value
+         assert_equals: tiltX value should stay as initialized expected (number) 45 but got (undefined) undefined
+  FILE pointerevents/pointerevent_touch-action-illegal.html  (0/3)
+    FAIL 'pan-x none' is corrected properly
+         assert_true: 'pan-x none' is corrected properly expected true got false
+    FAIL 'pan-y none' is corrected properly
+         assert_true: 'pan-y none' is corrected properly expected true got false
+    FAIL 'auto none' is corrected properly
+         assert_true: 'auto none' is corrected properly expected true got false
+  FILE pointerevents/pointerevent_touch-action-verification.html  (0/37)
+    FAIL default
+         assert_equals: expected (undefined) undefined but got (string) "auto"
+    FAIL stylesheet-none
+         assert_equals: expected (undefined) undefined but got (string) "none"
+    FAIL explicit-auto
+         assert_equals: expected (undefined) undefined but got (string) "auto"
+    FAIL explicit-pan-x
+         assert_equals: expected (undefined) undefined but got (string) "pan-x"
+    FAIL explicit-pan-left
+         assert_equals: expected (undefined) undefined but got (string) "pan-left"
+    FAIL explicit-pan-right
+         assert_equals: expected (undefined) undefined but got (string) "pan-right"
+    FAIL explicit-pan-y
+         assert_equals: expected (undefined) undefined but got (string) "pan-y"
+    FAIL explicit-pan-up
+         assert_equals: expected (undefined) undefined but got (string) "pan-up"
+    FAIL explicit-pan-down
+         assert_equals: expected (undefined) undefined but got (string) "pan-down"
+    FAIL explicit-pan-x-pan-y
+         assert_equals: expected (undefined) undefined but got (string) "pan-x pan-y"
+    FAIL explicit-pan-y-pan-x
+         assert_equals: expected (undefined) undefined but got (string) "pan-x pan-y"
+    FAIL explicit-pan-left-pan-up
+         assert_equals: expected (undefined) undefined but got (string) "pan-left pan-up"
+    FAIL explicit-pan-left-pan-down
+         assert_equals: expected (undefined) undefined but got (string) "pan-left pan-down"
+    FAIL explicit-pan-right-pan-up
+         assert_equals: expected (undefined) undefined but got (string) "pan-right pan-up"
+    FAIL explicit-pan-right-pan-down
+         assert_equals: expected (undefined) undefined but got (string) "pan-right pan-down"
+    FAIL explicit-pan-up-pan-left
+         assert_equals: expected (undefined) undefined but got (string) "pan-left pan-up"
+    FAIL explicit-pan-up-pan-right
+         assert_equals: expected (undefined) undefined but got (string) "pan-right pan-up"
+    FAIL explicit-pan-down-pan-left
+         assert_equals: expected (undefined) undefined but got (string) "pan-left pan-down"
+    FAIL explicit-pan-down-pan-right
+         assert_equals: expected (undefined) undefined but got (string) "pan-right pan-down"
+    FAIL explicit-manipulation
+         assert_equals: expected (undefined) undefined but got (string) "manipulation"
+    FAIL explicit-none
+         assert_equals: expected (undefined) undefined but got (string) "none"
+    FAIL explicit-invalid-1
+         assert_equals: expected (undefined) undefined but got (string) "auto"
+    FAIL explicit-invalid-2
+         assert_equals: expected (undefined) undefined but got (string) "none"
+    FAIL explicit-invalid-3
+         assert_equals: expected (undefined) undefined but got (string) "auto"
+    FAIL explicit-invalid-4
+         assert_equals: expected (undefined) undefined but got (string) "auto"
+    FAIL explicit-invalid-5
+         assert_equals: expected (undefined) undefined but got (string) "auto"
+    FAIL explicit-invalid-6
+         assert_equals: expected (undefined) undefined but got (string) "auto"
+    FAIL explicit-invalid-7
+         assert_equals: expected (undefined) undefined but got (string) "auto"
+    FAIL explicit-invalid-8
+         assert_equals: expected (undefined) undefined but got (string) "auto"
+    FAIL explicit-invalid-9
+         assert_equals: expected (undefined) undefined but got (string) "auto"
+    FAIL explicit-invalid-10
+         assert_equals: expected (undefined) undefined but got (string) "auto"
+    FAIL explicit-invalid-11
+         assert_equals: expected (undefined) undefined but got (string) "auto"
+    FAIL explicit-invalid-12
+         assert_equals: expected (undefined) undefined but got (string) "auto"
+    FAIL explicit-invalid-13
+         assert_equals: expected (undefined) undefined but got (string) "auto"
+    FAIL not-inherited
+         assert_equals: expected (undefined) undefined but got (string) "auto"
+    FAIL inherit
+         assert_equals: expected (undefined) undefined but got (string) "none"
+    FAIL initial
+         assert_equals: expected (undefined) undefined but got (string) "auto"
+wrote docs/sprint/w6/raw/pointerevents.json
+
+── WPT pointerevents ──────────────────────────────────────────
+   34.6%    129/373    (10 files)  pointerevents
+    0.0%      0/4      (1 files)  pointerevents/compat
+   20.0%      3/15     (3 files)  pointerevents/parsing
+    0.0%      0/2      (1 files)  pointerevents/persistentDeviceId
+
+  FILES  15   subtests 132/394  =  33.5%
+  NO_REPORT 0   [1mHANG/CRASH 0[0m (Bar 0)   SHORT 0 (instrument)   SLOW 0 (our budget)   TH_TIMEOUT 0 (async test never completed)
