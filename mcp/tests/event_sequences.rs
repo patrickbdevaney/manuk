@@ -12,21 +12,57 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use serde_json::{json, Value};
 
 const EVENTS: &[&str] = &[
-    "pointerover", "pointerenter", "pointerdown", "pointermove", "pointerup", "pointerout", "pointerleave",
-    "mouseover", "mouseenter", "mousedown", "mousemove", "mouseup", "mouseout", "mouseleave",
-    "click", "dblclick", "contextmenu", "auxclick",
-    "focus", "blur", "focusin", "focusout",
-    "keydown", "keypress", "keyup",
-    "beforeinput", "input", "change", "select",
-    "compositionstart", "compositionend",
-    "submit", "reset", "invalid",
-    "scroll", "wheel", "touchstart", "touchend",
-    "selectionchange", "dragstart", "cut",
+    "pointerover",
+    "pointerenter",
+    "pointerdown",
+    "pointermove",
+    "pointerup",
+    "pointerout",
+    "pointerleave",
+    "mouseover",
+    "mouseenter",
+    "mousedown",
+    "mousemove",
+    "mouseup",
+    "mouseout",
+    "mouseleave",
+    "click",
+    "dblclick",
+    "contextmenu",
+    "auxclick",
+    "focus",
+    "blur",
+    "focusin",
+    "focusout",
+    "keydown",
+    "keypress",
+    "keyup",
+    "beforeinput",
+    "input",
+    "change",
+    "select",
+    "compositionstart",
+    "compositionend",
+    "submit",
+    "reset",
+    "invalid",
+    "scroll",
+    "wheel",
+    "touchstart",
+    "touchend",
+    "selectionchange",
+    "dragstart",
+    "cut",
 ];
 
 fn page() -> String {
-    let evs = EVENTS.iter().map(|e| format!("'{e}'")).collect::<Vec<_>>().join(",");
-    format!(r#"<!doctype html><html><head><title>EvSeq</title></head><body>
+    let evs = EVENTS
+        .iter()
+        .map(|e| format!("'{e}'"))
+        .collect::<Vec<_>>()
+        .join(",");
+    format!(
+        r#"<!doctype html><html><head><title>EvSeq</title></head><body>
 <form id="fm" action="javascript:void(0)"><input id="a" type="text" aria-label="Alpha"><input id="b" type="text" aria-label="Beta"><button id="btn" type="button">Press</button></form>
 <div id="hv" role="button" tabindex="0" aria-label="Hover">hover me</div>
 <pre id="log"></pre>
@@ -38,7 +74,8 @@ function id(t){{return t===document?'doc':t===window?'win':(t.id||t.nodeName)}}
  document.addEventListener(e,function(ev){{L.push('d.'+e+'@'+id(ev.target));pre.textContent=L.join(' ');}},true);
 }});
 document.getElementById('fm').addEventListener('submit',function(ev){{ev.preventDefault()}});
-</script></body></html>"#)
+</script></body></html>"#
+    )
 }
 
 fn serve() -> String {
@@ -164,7 +201,6 @@ fn handle_of(text: &str, needle: &str) -> String {
     line[s + 1..e].to_string()
 }
 
-
 /// Event tokens (`type@target`) logged on the page so far.
 fn log_of(c: &mut Client) -> Vec<String> {
     std::thread::sleep(std::time::Duration::from_millis(300));
@@ -219,14 +255,20 @@ fn classes(m: &[String], ch: &[String]) -> Vec<String> {
         out.push("window-layer-silent".to_string());
     }
     let d = |v: &[String]| -> Vec<String> {
-        v.iter().filter(|t| t.starts_with("d.")).map(|t| ty(t).to_string()).collect()
+        v.iter()
+            .filter(|t| t.starts_with("d."))
+            .map(|t| ty(t).to_string())
+            .collect()
     };
     let (dm, dc) = (d(m), d(ch));
     let mut types: Vec<&String> = dm.iter().chain(dc.iter()).collect();
     types.sort();
     types.dedup();
     for t in types {
-        let (a, b) = (dm.iter().filter(|x| *x == t).count(), dc.iter().filter(|x| *x == t).count());
+        let (a, b) = (
+            dm.iter().filter(|x| *x == t).count(),
+            dc.iter().filter(|x| *x == t).count(),
+        );
         if a == 0 && b > 0 {
             out.push(format!("missing-on-manuk:{t}"));
         } else if b == 0 && a > 0 {
@@ -246,37 +288,73 @@ fn classes(m: &[String], ch: &[String]) -> Vec<String> {
 
 /// (action, class) pairs measured against chrome 145.0.7632.116; each class is a follow-up row.
 const KNOWN: &[(&str, &str)] = &[
-    ("click", "window-layer-silent"), ("click", "missing-on-manuk:pointerover"), ("click", "missing-on-manuk:pointerenter"),
-    ("click", "missing-on-manuk:mouseover"), ("click", "missing-on-manuk:mouseenter"), ("click", "missing-on-manuk:pointermove"),
-    ("click", "missing-on-manuk:mousemove"), ("click", "missing-on-manuk:focus"), ("click", "missing-on-manuk:focusin"),
-    ("click-input", "window-layer-silent"), ("click-input", "missing-on-manuk:pointerover"), ("click-input", "missing-on-manuk:pointerenter"),
-    ("click-input", "missing-on-manuk:mouseover"), ("click-input", "missing-on-manuk:mouseenter"), ("click-input", "missing-on-manuk:pointermove"),
-    ("click-input", "missing-on-manuk:mousemove"), ("click-input", "missing-on-manuk:selectionchange"), ("click-input", "order:focusin-before-focus"),
-    ("type", "window-layer-silent"), ("type", "extra-on-manuk:keydown"), ("type", "extra-on-manuk:keyup"), ("type", "extra-on-manuk:select"),
-    ("type", "extra-on-manuk:change"), ("type", "missing-on-manuk:selectionchange"), ("type", "count:beforeinput:2v1"), ("type", "count:input:2v1"),
+    ("click", "missing-on-manuk:pointerover"),
+    ("click", "missing-on-manuk:pointerenter"),
+    ("click", "missing-on-manuk:mouseover"),
+    ("click", "missing-on-manuk:mouseenter"),
+    ("click", "missing-on-manuk:pointermove"),
+    ("click", "missing-on-manuk:mousemove"),
+    ("click", "missing-on-manuk:focus"),
+    ("click", "missing-on-manuk:focusin"),
+    ("click-input", "missing-on-manuk:pointerover"),
+    ("click-input", "missing-on-manuk:pointerenter"),
+    ("click-input", "missing-on-manuk:mouseover"),
+    ("click-input", "missing-on-manuk:mouseenter"),
+    ("click-input", "missing-on-manuk:pointermove"),
+    ("click-input", "missing-on-manuk:mousemove"),
+    ("click-input", "missing-on-manuk:selectionchange"),
+    ("click-input", "order:focusin-before-focus"),
+    ("type", "extra-on-manuk:keydown"),
+    ("type", "extra-on-manuk:keyup"),
+    ("type", "extra-on-manuk:select"),
+    ("type", "extra-on-manuk:change"),
+    ("type", "missing-on-manuk:selectionchange"),
+    ("type", "count:beforeinput:2v1"),
+    ("type", "count:input:2v1"),
     ("type", "order:focusin-before-focus"),
-    ("enter", "window-layer-silent"), ("enter", "missing-on-manuk:focus"), ("enter", "missing-on-manuk:focusin"),
-    ("enter", "missing-on-manuk:keypress"), ("enter", "missing-on-manuk:beforeinput"),
-    ("tab", "window-layer-silent"), ("tab", "missing-on-manuk:focus"), ("tab", "missing-on-manuk:focusin"), ("tab", "missing-on-manuk:blur"),
-    ("tab", "missing-on-manuk:focusout"), ("tab", "missing-on-manuk:selectionchange"),
-    ("hover", "window-layer-silent"), ("hover", "missing-on-manuk:pointerover"), ("hover", "missing-on-manuk:pointerenter"),
-    ("hover", "missing-on-manuk:pointermove"), ("hover", "count:mouseenter:1v4"),
-    ("focus", "window-layer-silent"), ("focus", "extra-on-manuk:focus"), ("focus", "extra-on-manuk:focusin"),
-    ("focus", "missing-on-manuk:selectionchange"), ("focus", "order:focusin-before-focus"),
+    ("enter", "missing-on-manuk:focus"),
+    ("enter", "missing-on-manuk:focusin"),
+    ("enter", "missing-on-manuk:keypress"),
+    ("enter", "missing-on-manuk:beforeinput"),
+    ("tab", "missing-on-manuk:focus"),
+    ("tab", "missing-on-manuk:focusin"),
+    ("tab", "missing-on-manuk:blur"),
+    ("tab", "missing-on-manuk:focusout"),
+    ("tab", "missing-on-manuk:selectionchange"),
+    ("hover", "missing-on-manuk:pointerover"),
+    ("hover", "missing-on-manuk:pointerenter"),
+    ("hover", "missing-on-manuk:pointermove"),
+    ("hover", "count:mouseenter:1v4"),
+    ("focus", "extra-on-manuk:focus"),
+    ("focus", "extra-on-manuk:focusin"),
+    ("focus", "missing-on-manuk:selectionchange"),
+    ("focus", "order:focusin-before-focus"),
 ];
 
 #[test]
 fn event_sequences_match_chrome() {
     let url = serve();
     let mut bad = Vec::new();
-    for act in ["click", "click-input", "type", "enter", "tab", "hover", "focus"] {
+    for act in [
+        "click",
+        "click-input",
+        "type",
+        "enter",
+        "tab",
+        "hover",
+        "focus",
+    ] {
         let m = run_action(false, &url, act);
         let ch = run_action(true, &url, act);
         let cl = classes(&m, &ch);
         if m == ch {
             println!("EVSEQ {act}: same ({} events)", m.len());
         } else {
-            println!("EVSEQ {act}: DIFF classes={cl:?}\n  manuk : {}\n  chrome: {}", m.join(" "), ch.join(" "));
+            println!(
+                "EVSEQ {act}: DIFF classes={cl:?}\n  manuk : {}\n  chrome: {}",
+                m.join(" "),
+                ch.join(" ")
+            );
         }
         for c in &cl {
             if !KNOWN.contains(&(act, c.as_str())) {
@@ -289,5 +367,8 @@ fn event_sequences_match_chrome() {
             }
         }
     }
-    assert!(bad.is_empty(), "event-sequence classes changed vs the measured set: {bad:?}");
+    assert!(
+        bad.is_empty(),
+        "event-sequence classes changed vs the measured set: {bad:?}"
+    );
 }

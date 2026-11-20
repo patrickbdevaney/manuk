@@ -18530,15 +18530,24 @@ const LISTENER_PRELUDE: &str = r#"
                 }
             }
         };
-        // Capture: root → target's parent.
+        // The window is the root of the event path for any node attached to a document. Events the
+        // host already fires at BOTH document and window by hand (below) must not hop twice.
+        var __hop = path.length > 0 && path[path.length - 1].nodeType === 9 &&
+            typeof globalThis.__winHop === 'function' &&
+            !(path.length === 1 && (type === 'DOMContentLoaded' || type === 'load' || type === 'visibilitychange'));
+        // Capture: window → root → target's parent.
         ev.eventPhase = 1;
+        if (__hop) { ev.target = targets[path.length - 1]; globalThis.__winHop(type, ev, 'c'); }
         for (var i = path.length - 1; i >= 1; i--) invoke(path[i], 'c', i);
         // At target (both capture- and bubble-registered).
         ev.eventPhase = 2;
         invoke(path[0], 'c', 0); invoke(path[0], 'b', 0);
         // Bubble: target's parent → root.
         ev.eventPhase = 3;
-        if (ev.bubbles) for (var i = 1; i < path.length; i++) invoke(path[i], 'b', i);
+        if (ev.bubbles) {
+            for (var i = 1; i < path.length; i++) invoke(path[i], 'b', i);
+            if (__hop) { ev.target = targets[path.length - 1]; globalThis.__winHop(type, ev, 'b'); }
+        }
         if (supplied) ev.__dispatchFlag = false;   // clear: the event may be dispatched again later
         if (__uaActivates) __uaState.active = __uaPrevActive;   // transient activation ends with the dispatch
         return !ev.defaultPrevented;
@@ -22829,12 +22838,42 @@ const WINDOW_PRELUDE: &str = r#"
         if (typeof g.__winListeners === 'undefined') {
             g.__winListeners = {};
             var _origAdd = g.addEventListener;
+            // Capture-registered window listeners are remembered in `__winCap` (type -> fns) so the
+            // node-dispatch path (`__dispatchEvent`) can run them in the capture hop BEFORE the
+            // document and the rest in the bubble hop after it (DOM event path: window is the root).
+            g.__winCap = {};
             g.addEventListener = function (type, fn, capture) {
-                if (typeof fn === 'function') (g.__winListeners[type] = g.__winListeners[type] || []).push(fn);
+                if (typeof fn === 'function') {
+                    (g.__winListeners[type] = g.__winListeners[type] || []).push(fn);
+                    var cap = (capture === true) || (!!capture && typeof capture === 'object' && !!capture.capture);
+                    if (cap) (g.__winCap[type] = g.__winCap[type] || []).push(fn);
+                }
             };
             g.removeEventListener = function (type, fn) {
                 var a = g.__winListeners[type]; if (!a) return;
                 var i = a.indexOf(fn); if (i >= 0) a.splice(i, 1);
+                var c = g.__winCap[type]; if (c) { var j = c.indexOf(fn); if (j >= 0) c.splice(j, 1); }
+            };
+            // The window hop of a node-targeted dispatch. `phase` 'c' runs capture-registered
+            // listeners, 'b' the rest plus the `on<type>` property handler.
+            g.__winHop = function (type, ev, phase) {
+                if (ev._stop) return;
+                var all = (g.__winListeners[type] || []).slice();
+                var caps = g.__winCap[type] || [];
+                ev.currentTarget = g;
+                for (var i = 0; i < all.length && !ev._stopImmediate; i++) {
+                    var isCap = caps.indexOf(all[i]) >= 0;
+                    if ((phase === 'c') !== isCap) continue;
+                    try { all[i].call(g, ev); }
+                    catch (e) { if (typeof g.__reportError === 'function') { g.__reportError(e); } }
+                }
+                if (phase === 'b' && !ev._stopImmediate) {
+                    var on = g['on' + type];
+                    if (typeof on === 'function' && type !== 'error') {
+                        try { var r = on.call(g, ev); if (r === false && ev.cancelable) ev.defaultPrevented = true; }
+                        catch (e) { if (typeof g.__reportError === 'function') { g.__reportError(e); } }
+                    }
+                }
             };
             // ── **THE FOURTH IMPLEMENTATION, AND THE ONLY SILENT ONE** (tick 1480). ──────────
             //
