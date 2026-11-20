@@ -8464,6 +8464,10 @@ const NEXT_TASK: &str = "(function(){ \
      if (bi < 0) return false; \
      var t = __tasks.splice(bi, 1)[0]; \
      if (t.w > __now) { __now = t.w; } \
+     try { var te = document.__manukTransitionTick(__now); \
+       if (te) { te = JSON.parse(te); for (var k = 0; k < te.length; k++) { \
+         try { __dispatchEvent(te[k][0], {type: te[k][1], propertyName: te[k][2], elapsedTime: te[k][3], pseudoElement: '', bubbles: true, cancelable: false}); } catch (e2) { __reportError(e2); } } } \
+     } catch (e1) {} \
      try { t.f(); } catch (e) { __reportError(e); } \
      return __now + 1; })()";
 

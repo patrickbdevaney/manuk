@@ -5108,6 +5108,7 @@ unsafe fn define_members(
         def_guarded!(def, c"querySelectorAll", doc_query_all, 1);
         def_guarded!(def, c"elementFromPoint", doc_element_from_point, 2);
         def_guarded!(def, c"__manukSheetText", doc_manuk_sheet_text, 1);
+        def_guarded!(def, c"__manukTransitionTick", doc_manuk_transition_tick, 1);
         def_guarded!(def, c"elementsFromPoint", doc_elements_from_point, 2);
         def_guarded!(def, c"createElement", doc_create_element, 1);
         def_guarded!(def, c"createElementNS", doc_create_element_ns, 2);
@@ -5571,6 +5572,48 @@ unsafe fn stacking_layer_of(dom: &Dom, node: NodeId) -> i32 {
 /// The one primitive `<link>.sheet` needs. `link.href` is already absolute in this engine and
 /// `EXTERNAL_CSS` is keyed by resolved URL, so the lookup is direct — no URL resolution crosses this
 /// boundary, which is the only reason a string-keyed map is enough.
+/// `document.__manukTransitionTick(nowMs)` — called by the event loop before each macrotask. Moves the
+/// transition clock to the task's virtual time, re-samples running transitions (via the forced
+/// reflow), and returns the queued `transitionrun`/`transitionstart`/`transitionend` records as a JSON
+/// array `[[nodeId, type, property, elapsedSeconds], ...]` for the loop to dispatch, or `null` when
+/// there is nothing to do. One emptiness check on a page with no transition.
+unsafe fn doc_manuk_transition_tick(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    *vp = NullValue();
+    if argc >= 1 {
+        let a = *vp.add(2 + 0);
+        if a.is_number() {
+            manuk_css::transition::set_virtual_ms(a.to_number());
+        }
+    }
+    if manuk_css::transition::any_running_realtime() {
+        force_reflow_if_stale();
+    }
+    if !manuk_css::transition::has_events() {
+        return true;
+    }
+    let evs = manuk_css::transition::drain_events();
+    let mut out = String::from("[");
+    for (i, e) in evs.iter().enumerate() {
+        if i > 0 {
+            out.push(',');
+        }
+        out.push_str(&format!(
+            "[{},{},{},{}]",
+            e.node.0,
+            js_string_literal(e.ty),
+            js_string_literal(&e.property),
+            if e.elapsed_s.is_finite() {
+                e.elapsed_s
+            } else {
+                0.0
+            }
+        ));
+    }
+    out.push(']');
+    *vp = utf8_jsval(cx, &out);
+    true
+}
+
 unsafe fn doc_manuk_sheet_text(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
     if argc < 1 {
         *vp = NullValue();
