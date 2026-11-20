@@ -13,7 +13,7 @@ steps do (real_run.py), exactly as before. Cache key = sha256(HEAD commit-or-bin
 hashes, MANUK_CHROME_PIN). A job whose key already has results/<key>/DONE is a cache hit and runs nothing.
 Banded row (results/<key>/band.tsv): ts job key chrome_ver commit wall_s rows interventions auto_retries metric value band_lo band_hi in_band.
 """
-import csv, collections, glob, hashlib, json, os, shutil, subprocess, sys, time
+import csv, collections, glob, hashlib, json, os, shutil, subprocess, sys, tempfile, time
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 Q = os.path.join(ROOT, "bench-queue")
@@ -74,8 +74,28 @@ def run_step(step, log, env):
     return rc, time.time() - t
 
 
+def infra_failed(r):
+    """A row the harness broke, not the agent: is_error with 0 output tokens, or the 'Connection closed' signature
+    the Playwright roots deadlock left in the answer (observed in 17 of the 18 rows moved aside by hand for W6.Q1:
+    output_tokens>0, is_error=0, so the answer text is the only marker)."""
+    if os.environ.get("BENCHQ_MUTATE_INFRA") == "1":  # gate mutant: no infra check
+        return False
+    if r.get("output_tokens") == "0" and (r.get("is_error") or "").strip().lower() in ("1", "true"):
+        return True
+    return "Connection closed" in (r.get("answer") or "")
+
+
+def _write_tsv(path, fields, rows, append=False):
+    with open(path, "a" if append else "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=fields, delimiter="\t")
+        if not append or f.tell() == 0:
+            w.writeheader()
+        w.writerows(rows)
+
+
 def reconcile(spec, log, env):
-    """Automatic fallback-judge rework (what B2-rejudge.sh did by hand): move non-primary-judge rows aside, rerun them."""
+    """Automatic rework: move non-primary-judge rows (B2-rejudge.sh by hand) and infra-failed rows (W6.Q1 by hand)
+    aside into <tsv>.fallback-dropped / <tsv>.infra-failed, so the rerun steps refill them. Returns rows moved."""
     rc = spec.get("reconcile")
     if not rc:
         return 0
@@ -84,19 +104,18 @@ def reconcile(spec, log, env):
         rows = read_rows([tsv])
         if not rows:
             continue
-        bad = [r for r in rows if r.get("judge_model") not in ("", rc["primary_judge"])]
-        if not bad:
+        fields = list(rows[0].keys())
+        judge_bad = [r for r in rows if r.get("judge_model") not in ("", rc["primary_judge"])]
+        infra_bad = [r for r in rows if r not in judge_bad and infra_failed(r)]
+        if not judge_bad and not infra_bad:
             continue
-        keep = [r for r in rows if r not in bad]
-        with open(tsv + ".fallback-dropped", "a", newline="") as f:
-            w = csv.DictWriter(f, fieldnames=list(rows[0].keys()), delimiter="\t")
-            if f.tell() == 0:
-                w.writeheader()
-            w.writerows(bad)
-        with open(tsv, "w", newline="") as f:
-            w = csv.DictWriter(f, fieldnames=list(rows[0].keys()), delimiter="\t")
-            w.writeheader(); w.writerows(keep)
-        moved += len(bad)
+        keep = [r for r in rows if r not in judge_bad and r not in infra_bad]
+        if judge_bad:
+            _write_tsv(tsv + ".fallback-dropped", fields, judge_bad, append=True)
+        if infra_bad:
+            _write_tsv(tsv + ".infra-failed", fields, infra_bad, append=True)
+        _write_tsv(tsv, fields, keep)
+        moved += len(judge_bad) + len(infra_bad)
     return moved
 
 
@@ -176,6 +195,28 @@ def self_test():
     for name, cond in [("band counts a=2of2", t2 == 1), ("fallback-judged row is an intervention", iv == 1),
                        ("out-of-band value is red", not check_band(37, 38, 45)), ("in-band value is green", check_band(38, 38, 45))]:
         print(("ok  " if cond else "RED ") + name); ok &= cond
+    # infra-failed rows: moved aside by reconcile and counted (W6.Q1.b)
+    def row(task, pass_, judge, out_tok, err, answer):
+        return {"task": task, "run": "1", "pass": pass_, "judge_model": judge, "output_tokens": out_tok, "is_error": err, "answer": answer}
+    clean = row("a", "1", "J", "500", "0", "ok")
+    err0 = row("b", "0", "J", "0", "1", "")
+    conn = row("c", "0", "J", "569", "0", "navigation returned Connection closed")
+    fallback = row("d", "1", "fallback", "500", "0", "ok")
+    for name, cond in [("is_error with 0 tokens is infra", infra_failed(err0)), ("Connection closed answer is infra", infra_failed(conn)),
+                       ("clean row is not infra", not infra_failed(clean))]:
+        print(("ok  " if cond else "RED ") + name); ok &= cond
+    tmp = tempfile.mkdtemp(prefix="bq-selftest-")
+    fields = list(clean.keys())
+    tsv = os.path.join(tmp, "rows.tsv")
+    _write_tsv(tsv, fields, [clean, err0, conn, fallback])
+    moved = reconcile({"reconcile": {"tsv_glob": os.path.join(tmp, "*.tsv"), "primary_judge": "J"}}, os.path.join(tmp, "log"), {})
+    kept = read_rows([tsv]); infra_rows = read_rows([tsv + ".infra-failed"]); fb_rows = read_rows([tsv + ".fallback-dropped"])
+    for name, cond in [("reconcile counts 3 moved (2 infra + 1 fallback)", moved == 3),
+                       ("only the clean row stays in the TSV", [r["task"] for r in kept] == ["a"]),
+                       ("infra rows land in .infra-failed", sorted(r["task"] for r in infra_rows) == ["b", "c"]),
+                       ("fallback row lands in .fallback-dropped", [r["task"] for r in fb_rows] == ["d"])]:
+        print(("ok  " if cond else "RED ") + name); ok &= cond
+    shutil.rmtree(tmp, ignore_errors=True)
     print("SELF-TEST", "GREEN" if ok else "RED"); sys.exit(0 if ok else 1)
 
 
