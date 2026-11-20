@@ -1,0 +1,48 @@
+WPT css/css-transitions: 1 runnable testharness files
+   skip    55  manual test (needs a human)
+   skip    13  not a testharness test
+   skip     6  reftest (Bar 2 — pixel, deferred)
+   skip     5  reftest reference
+   skip     1  support file, not a test
+[2m2026-11-20T15:25:54.602214Z[0m [33m WARN[0m [2mmozjs::rust[0m[2m:[0m Warning at dom_event.js:1:9416: Script terminated by timeout at:
+globalThis.__csAlias@dom_event.js:1:9416
+@dom_event.js:1:3550
+@dom_event.js:1:3577
+root.computedStyle@http://127.0.0.1:45439/css/css-transitions/properties-value-001.html inline#28:56:10
+computedStyle@http://127.0.0.1:45439/css/css-transitions/properties-value-001.html inline#32:24:24
+start@http://127.0.0.1:45439/css/css-transitions/properties-value-001.html inline#61:65:59
+runLoop/</</<@http://127.0.0.1:45439/css/css-transitions/properties-value-001.html inline#30:118:56
+Test.prototype.step@http://127.0.0.1:45439/css/css-transitions/properties-value-001.html inline#22:2869:25
+runLoop/</<@http://127.0.0.1:45439/css/css-transitions/properties-value-001.html inline#30:117:34
+runLoop/<@http://127.0.0.1:45439/css/css-transitions/properties-value-001.html inline#30:116:19
+runLoop@http://127.0.0.1:45439/css/css-transitions/properties-value-001.html inline#30:115:15
+g.requestAnimationFrame/<@dom_event.js:4269:89
+globalThis.setTimeout/<@event_loop_prelude.js:63:55
+@event_loop_tick.js:1:344
+@event_loop_tick.js:1:398
+
+
+[2m2026-11-20T15:25:55.157063Z[0m [33m WARN[0m [2mmanuk_page[0m[2m:[0m FORCED-REFLOW BUDGET EXHAUSTED — this script round has re-laid-out the whole document for longer than its whole budget, so further geometry reads are answered from the layout already published. The alternative measured 125s in ONE task. [3mused_ms[0m[2m=[0m5009 [3mbudget_ms[0m[2m=[0m5000 [3mnodes[0m[2m=[0m3761
+[2m2026-11-20T15:25:55.418930Z[0m [33m WARN[0m [2mmanuk_js::event_loop[0m[2m:[0m event loop hit its TIME budget — the page is not converging fast enough to be worth more of the user's clock. Painting what we have. [3mcount[0m[2m=[0m3 [3melapsed_ms[0m[2m=[0m5842 [3mbudget_ms[0m[2m=[0m5000 [3mreflow_n[0m[2m=[0m12300 [3mreflow_ms[0m[2m=[0m5068
+[2m2026-11-20T15:26:00.442455Z[0m [33m WARN[0m [2mmozjs::rust[0m[2m:[0m Warning at http://127.0.0.1:45439/css/css-transitions/properties-value-001.html inline#32:136:9: Script terminated by timeout at:
+_addClass@http://127.0.0.1:45439/css/css-transitions/properties-value-001.html inline#32:136:9
+startTransition@http://127.0.0.1:45439/css/css-transitions/properties-value-001.html inline#32:155:15
+start@http://127.0.0.1:45439/css/css-transitions/properties-value-001.html inline#61:61:49
+runLoop/</</<@http://127.0.0.1:45439/css/css-transitions/properties-value-001.html inline#30:118:56
+Test.prototype.step@http://127.0.0.1:45439/css/css-transitions/properties-value-001.html inline#22:2869:25
+runLoop/</<@http://127.0.0.1:45439/css/css-transitions/properties-value-001.html inline#30:117:34
+runLoop/<@http://127.0.0.1:45439/css/css-transitions/properties-value-001.html inline#30:116:19
+runLoop@http://127.0.0.1:45439/css/css-transitions/properties-value-001.html inline#30:115:15
+g.requestAnimationFrame/<@dom_event.js:4269:89
+globalThis.setTimeout/<@event_loop_prelude.js:63:55
+@event_loop_tick.js:1:344
+@event_loop_tick.js:1:398
+
+
+[2m2026-11-20T15:26:00.442548Z[0m [33m WARN[0m [2mmanuk_js::event_loop[0m[2m:[0m event loop PREEMPTED a task that was over budget and not returning — painting what we have. The alternative is a frozen tab that no task-boundary check can reach. [3mcount[0m[2m=[0m1 [3melapsed_ms[0m[2m=[0m5006 [3mbudget_ms[0m[2m=[0m5000
+wrote docs/sprint/w6/raw/J1b/t10_r2_properties-value-001.json
+
+── WPT css/css-transitions ──────────────────────────────────────────
+
+  FILES  1   subtests 0/0  =  0.0%
+  NO_REPORT 0   [1mHANG/CRASH 0[0m (Bar 0)   SHORT 0 (instrument)   SLOW 0 (our budget)   TH_TIMEOUT 0 (async test never completed)

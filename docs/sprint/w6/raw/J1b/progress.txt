@@ -1,0 +1,13 @@
+done T=10 R=1 properties-value-001 rc=0
+done T=10 R=1 properties-value-inherit-001 rc=0
+done T=10 R=2 properties-value-001 rc=0
+done T=10 R=2 properties-value-inherit-001 rc=0
+done T=10 R=3 properties-value-001 rc=0
+done T=10 R=3 properties-value-inherit-001 rc=0
+done T=120 R=1 properties-value-001 rc=0
+done T=120 R=1 properties-value-inherit-001 rc=0
+done T=120 R=2 properties-value-001 rc=0
+done T=120 R=2 properties-value-inherit-001 rc=0
+done T=120 R=3 properties-value-001 rc=0
+done T=120 R=3 properties-value-inherit-001 rc=0
+ALLDONE
