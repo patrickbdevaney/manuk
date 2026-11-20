@@ -51,6 +51,10 @@ LIMIT_WAIT=${LIMIT_WAIT:-1800}
 export XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
 export DBUS_SESSION_BUS_ADDRESS=${DBUS_SESSION_BUS_ADDRESS:-unix:path=$XDG_RUNTIME_DIR/bus}
 
+# a node with a TODO/IN_PROGRESS follow-up (id.X...) must stay BLOCKED: resetting it to TODO would make that follow-up
+# (deps = this node) unready, so sprint-next's blocked-ancestor rule could no longer run it (W6.J1.b.a.a.a.a.e)
+open_followups() { awk -F'\t' -v id="$1" 'index($1, id".")==1 && ($6=="TODO"||$6=="IN_PROGRESS"){n++} END{print n+0}' docs/sprint/GRAPH.tsv; }
+
 model_id() { case "$1" in opus) echo claude-opus-5-5 ;; sonnet) echo claude-sonnet-5-5 ;; haiku) echo claude-haiku-5-5 ;; *) echo "$1" ;; esac; }
 
 # ── model escalation: the node's `model_floor` is the CHEAPEST model tried; every attempt that exits without
@@ -222,7 +226,7 @@ EOF
     say "⏸ node $node stopped by the usage limit on ${LADDER[$t]} — not counted; retrying in $(( LIMIT_WAIT / 60 )) min"
     rm -f "$NETDOWN"; sleep "$LIMIT_WAIT"; continue
   elif [ "$st" = DONE ]; then say "✓ node $node DONE on ${LADDER[$t]} (rc=$rc)"; rm -f "$RESUME"
-  elif [ "$st" = BLOCKED ] && [ "$t" -lt 2 ] && [ "$(grep -c "■ node $node exited" "$LOG" 2>/dev/null || true)" -lt 2 ]; then
+  elif [ "$st" = BLOCKED ] && [ "$t" -lt 2 ] && [ "$(open_followups "$node")" -eq 0 ] && [ "$(grep -c "■ node $node exited" "$LOG" 2>/dev/null || true)" -lt 2 ]; then
     # W6.L1: an agent BLOCK on a cheaper tier is an attempt — reset to TODO and escalate one tier (opus's BLOCK is final)
     python3 scripts/sprint-graph.py set "$node" status TODO >>"$LOG" 2>&1
     say "■ node $node exited rc=$rc on ${LADDER[$t]} BLOCKED by the agent — counted as an attempt, next attempt escalates"; rm -f "$RESUME"
