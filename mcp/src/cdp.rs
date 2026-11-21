@@ -1154,7 +1154,10 @@ impl Builder<'_> {
             name_of(r, i, &role)
         };
         let mut role = role;
-        let was_generic_click = matches!(role, Role::Generic) && r.clickable.contains(&i);
+        // A `role=gridcell`/`td` the page makes clickable (a calendar day) is promoted exactly like a generic one: the
+        // in-process session's `promote` turns ANY non-interactive clickable into `button [clickable]`, so without
+        // `Role::Cell` here the Chrome backend listed the day as an unactionable `cell` (RG.3.0.b.a.a.a.a.a.a.a.b.a.a.a.a.a).
+        let was_generic_click = matches!(role, Role::Generic | Role::Cell) && r.clickable.contains(&i);
         if was_generic_click && !name.is_empty() {
             role = Role::Button;
         }
