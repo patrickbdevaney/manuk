@@ -202,6 +202,7 @@ EOF
   AOUT=.git/sprint-agent-out.json
   logoff=$(stat -c %s "$LOG")
   touch "$WORKING"
+  head0=$(git rev-parse HEAD 2>/dev/null)
   systemd-run --user --scope --quiet \
       -p MemoryMax=28G -p MemoryHigh=24G -p MemorySwapMax=4G -p OOMPolicy=kill \
       -p CPUWeight=20 -p IOWeight=20 \
@@ -225,6 +226,14 @@ EOF
     printf '%s\t%s\t%s\t%s\n' "$node" "$t" "$sid" "${rn:-0}" >"$RESUME"
     say "⏸ node $node stopped by the usage limit on ${LADDER[$t]} — not counted; retrying in $(( LIMIT_WAIT / 60 )) min"
     rm -f "$NETDOWN"; sleep "$LIMIT_WAIT"; continue
+  elif [ "$st" = DONE ] && [ "$rc" -ne 0 ] && ! git log --format=%s "$head0"..HEAD 2>/dev/null | grep -qF "$node:"; then
+    # observer 2026-11-21: a KILLED agent (OOM rc=137) can write DONE to GRAPH.tsv before its commit lands;
+    # without a "$node:" commit since the attempt began, the DONE is not real — reopen so the next pick resumes it
+    python3 scripts/sprint-graph.py set "$node" status IN_PROGRESS >>"$LOG" 2>&1
+    if [ "$(grep -c "☠ node $node killed" "$LOG" 2>/dev/null || true)" -lt 3 ]; then
+      say "☠ node $node killed rc=$rc on ${LADDER[$t]} after marking DONE, no '$node:' commit landed — reopened IN_PROGRESS, not counted"
+    else say "■ node $node exited rc=$rc on ${LADDER[$t]} marked DONE without landing (kill cap reached) — reopened, next attempt escalates"; fi
+    rm -f "$RESUME"
   elif [ "$st" = DONE ]; then say "✓ node $node DONE on ${LADDER[$t]} (rc=$rc)"; rm -f "$RESUME"
   elif [ "$st" = BLOCKED ] && [ "$t" -lt 2 ] && [ "$(open_followups "$node")" -eq 0 ] && [ "$(grep -c "■ node $node exited" "$LOG" 2>/dev/null || true)" -lt 2 ]; then
     # W6.L1: an agent BLOCK on a cheaper tier is an attempt — reset to TODO and escalate one tier (opus's BLOCK is final)
@@ -238,6 +247,10 @@ EOF
     # capped at 8 resumes per node, so a flaky link cannot hide a node that fails on its own merits forever
     printf '%s\t%s\t%s\t%s\n' "$node" "$t" "$sid" "$(( ${rn:-0} + 1 ))" >"$RESUME"
     say "⇄ node $node interrupted by the network on ${LADDER[$t]} (rc=$rc) — not counted; resumes when the API is back"
+  elif [ "$rc" -eq 137 ] && [ "$(grep -c "☠ node $node killed" "$LOG" 2>/dev/null || true)" -lt 3 ]; then
+    # observer 2026-11-21: SIGKILL (host/cgroup OOM) is not the model failing the node — retry on the same tier;
+    # capped at 3 per node so a node that genuinely blows its memory budget still escalates and BLOCKs
+    say "☠ node $node killed rc=137 on ${LADDER[$t]} (likely OOM) — not counted, retries on the same tier"; rm -f "$RESUME"
   else
     say "■ node $node exited rc=$rc on ${LADDER[$t]} without landing — next attempt escalates"; rm -f "$RESUME"
   fi

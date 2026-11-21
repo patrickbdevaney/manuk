@@ -281,7 +281,10 @@ def main():
         worker("--once" in a)
     elif a[0] == "start":
         unit = "manuk-bench-worker"
+        # observer 2026-11-21 (owner-approved): the worker was host-OOM-killed 3x and once took owner work with it;
+        # cage it (worker + its Chrome/judge children share the unit cgroup) and make it the first OOM victim
         cmd = ["systemd-run", "--user", "--collect", f"--unit={unit}", f"--working-directory={ROOT}",
+               "-p", "MemoryMax=10G", "-p", "MemoryHigh=8G", "-p", "MemorySwapMax=1G", "-p", "OOMScoreAdjust=1000",
                f"--setenv=MANUK_CHROME_PIN={os.environ.get('MANUK_CHROME_PIN','')}", f"--setenv=PATH={':'.join(dict.fromkeys(os.environ['PATH'].split(':')))}",
                f"--setenv=HOME={os.environ['HOME']}", "python3", "-I", os.path.join(ROOT, "scripts/bench_queue.py"), "worker", "--once"]
         print(subprocess.run(cmd, capture_output=True, text=True))
