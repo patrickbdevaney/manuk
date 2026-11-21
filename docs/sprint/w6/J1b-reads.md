@@ -95,3 +95,6 @@ Gate requires host load (1-min) <= 8 per run. Polled for ~7 min before running: 
 Gate verdict: NOT evaluable on this host. Green needs baseline = 20/100 in >=2 of 3 runs AND mutant = 20/100 in both runs;
 under load 45 the baseline is 10/100 and the mutant 0/100. No threshold was edited. Re-run this node when 1-min load <= 8;
 the probe dir is already in place at `$WPT_DIR/css/zzprobeN50`.
+
+Re-poll 3 (2026-11-20 19:07-19:25, chrome_ver=145.0.7632.116): 1-min load sampled every 30 s for ~18 min: 27.3 -> min 19.1 -> 47.5,
+never <= 8 (co-tenant rustc for couple-sim at ~1500% CPU, not ours). No run made, no threshold edited.
