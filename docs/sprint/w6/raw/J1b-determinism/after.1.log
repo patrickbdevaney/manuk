@@ -1,0 +1,2020 @@
+WPT css/css-transitions: 120 runnable testharness files
+   skip    55  manual test (needs a human)
+   skip    13  not a testharness test
+   skip     6  reftest (Bar 2 — pixel, deferred)
+   skip     5  reftest reference
+   skip     1  support file, not a test
+  FILE css/css-transitions/AnimationEffect-getComputedTiming.tentative.html  (0/22)
+    FAIL delay of a new tranisition
+         can't access property "effect", div.getAnimations()[0] is undefined
+    FAIL Positive delay of a new transition
+         can't access property "effect", div.getAnimations()[0] is undefined
+    FAIL Negative delay of a new transition
+         can't access property "effect", div.getAnimations()[0] is undefined
+    FAIL endDelay of a new transition
+         can't access property "effect", div.getAnimations()[0] is undefined
+    FAIL fill of a new transition
+         can't access property "effect", div.getAnimations()[0] is undefined
+    FAIL iterationStart of a new transition
+         can't access property "effect", div.getAnimations()[0] is undefined
+    FAIL iterations of a new transition
+         can't access property "effect", div.getAnimations()[0] is undefined
+    FAIL duration of a new transition
+         can't access property "effect", div.getAnimations()[0] is undefined
+    FAIL direction of a new transition
+         can't access property "effect", div.getAnimations()[0] is undefined
+    FAIL easing of a new transition
+         can't access property "effect", div.getAnimations()[0] is undefined
+    FAIL non-default easing of a new transition
+         can't access property "effect", div.getAnimations()[0] is undefined
+    FAIL endTime of a new transition
+         can't access property "effect", div.getAnimations()[0] is undefined
+    FAIL activeDuration of a new transition
+         can't access property "effect", div.getAnimations()[0] is undefined
+    FAIL localTime of a new transition
+         can't access property "effect", div.getAnimations()[0] is undefined
+    FAIL localTime is always equal to currentTime
+         can't access property "currentTime", anim is undefined
+    FAIL localTime reflects playbackRate immediately
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "playbackRate", anim is undefined"
+    FAIL progress of a new transition
+         can't access property "effect", div.getAnimations()[0] is undefined
+    FAIL progress of a new transition with positive delay in before phase
+         can't access property "effect", div.getAnimations()[0] is undefined
+    FAIL progress of a finished transition
+         can't access property "finish", anim is undefined
+    FAIL currentIteration of a new transition
+         can't access property "effect", div.getAnimations()[0] is undefined
+    FAIL currentIteration of a new transition with positive delay in before phase
+         can't access property "effect", div.getAnimations()[0] is undefined
+    FAIL currentIteration of a finished transition
+         can't access property "finish", anim is undefined
+  FILE css/css-transitions/CSSTransition-canceling.tentative.html  (0/11)
+    FAIL Animated style is cleared after canceling a running CSS transition
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "ready", transition is undefined"
+    FAIL After canceling a transition, it can still be re-used
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "ready", transition is undefined"
+    FAIL After canceling a finished transition, it can still be re-used
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "ready", transition is undefined"
+    FAIL After canceling a transition, updating transition properties doesn't make it live again
+         can't access property "cancel", transition is undefined
+    FAIL Setting display:none on an element cancels its transitions
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "ready", transition is undefined"
+    FAIL Setting display:none cancels transitions on a child element
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "ready", transition is undefined"
+    FAIL Removing a property from transition-property cancels transitions on that property
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "ready", transition is undefined"
+    FAIL Setting zero combined duration
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "ready", transition is undefined"
+    FAIL Changing style to another interpolable value cancels the original transition
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "ready", transition is undefined"
+    FAIL An after-change style value can't be interpolated
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "ready", transition is undefined"
+    FAIL Reversing a running transition cancels the original transition
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "ready", transition is undefined"
+  FILE css/css-transitions/CSSTransition-currentTime.tentative.html  (0/5)
+    FAIL currentTime can be used to seek a CSS transition
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "currentTime", animation is undefined"
+    FAIL Skipping forwards through transition
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "ready", animation is undefined"
+    FAIL Skipping backwards through transition
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "ready", animation is undefined"
+    FAIL Setting currentTime to null on a CSS transition throws
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "ready", animation is undefined"
+    FAIL Transition reversing behavior respects currentTime and uses the transition's current position.
+         can't access property "currentTime", transition is undefined
+  FILE css/css-transitions/CSSTransition-effect.tentative.html  (0/10)
+    FAIL After setting a transition's effect to null, it still reports the original transition property
+         can't access property "effect", transition is undefined
+    FAIL After setting a transition's effect to null, it becomes finished
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "ready", transition is undefined"
+    FAIL After setting a transition's effect to null, style is updated
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "ready", transition is undefined"
+    FAIL After setting a transition's effect to null, a new transition can be started
+         assert_equals: expected 1 but got 0
+    FAIL After setting a transition's effect to null, it should be possible to interrupt that transition
+         assert_equals: expected 1 but got 0
+    FAIL After setting a new keyframe effect with a shorter duration, the transition becomes finished
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "ready", transition is undefined"
+    FAIL After setting a new keyframe effect targeting different properties, the transition continues to report the original transition property
+         promise_test: Unhandled rejection with value: object "ReferenceError: KeyframeEffect is not defined"
+    FAIL After setting a new keyframe effect on a play-pending transition, the transition remains pending
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "pending", transition is undefined"
+    FAIL A transition with no effect still returns the original transitionProperty
+         can't access property "effect", transition is undefined
+    FAIL A transition with a replaced effect still exhibits the regular transition reversing behavior
+         can't access property "currentTime", transition is undefined
+  FILE css/css-transitions/CSSTransition-finished.tentative.html  (0/1)
+    FAIL Restarting a finished transition rewinds playback
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "finish", animation is undefined"
+  FILE css/css-transitions/CSSTransition-not-canceling.tentative.html  (0/2)
+    FAIL Setting "display: none" with "display" set to transition using "display 100s allow-discrete" does not cancel running transitions
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "ready", transition is undefined"
+    FAIL Setting "display: none" with "display" set to transition using "display 100s, all allow-discrete 100s" does not cancel running transitions
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "ready", transition is undefined"
+  FILE css/css-transitions/CSSTransition-ready.tentative.html  (0/2)
+    FAIL ready promise is rejected when a transition is canceled by updating transition-property
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "pending", animation is undefined"
+    FAIL ready promise is rejected when a transition is canceled by changing the transition property to something not interpolable
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "pending", animation is undefined"
+  FILE css/css-transitions/CSSTransition-startTime.tentative.html  (0/5)
+    FAIL The start time of a newly-created transition is unresolved
+         can't access property "startTime", animation is undefined
+    FAIL The start time of transitions is based on when they are generated
+         assert_equals: expected 2 but got 0
+    FAIL The start time of a transition can be set
+         can't access property "timeline", animation is undefined
+    FAIL The start time can be set to seek a transition
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "ready", animation is undefined"
+    FAIL Seeking a transition using start time dispatches transition events
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "ready", animation is undefined"
+  FILE css/css-transitions/CSSTransition-transitionProperty.tentative.html  (0/1)
+    FAIL CSSTransition.transitionProperty
+         can't access property "transitionProperty", div.getAnimations()[0] is undefined
+  FILE css/css-transitions/Document-getAnimations.tentative.html  (1/7)
+    FAIL getAnimations for CSS Transitions
+         assert_equals: getAnimations returns two running CSS Transitions expected 2 but got 0
+    FAIL getAnimations for CSS Transitions sort by property name
+         assert_equals: getAnimations returns two running CSS Transitions expected 2 but got 0
+    FAIL getAnimations for CSS Transitions sort by transition generation
+         assert_equals: getAnimations returns two running CSS Transitions expected 2 but got 0
+    FAIL CSS Transitions targetting (pseudo-)elements should have correct order after sorting
+         assert_equals: CSS transition on both pseudo-elements and elements are returned expected 4 but got 0
+    FAIL CSS Transitions targetting (pseudo-)elements should have correct order after sorting (::marker)
+         assert_equals: CSS transition on both pseudo-elements and elements are returned expected 5 but got 0
+    FAIL Transitions are not returned after they have finished
+         assert_equals: Got transition expected 1 but got 0
+  FILE css/css-transitions/Element-getAnimations.tentative.html  (2/7)
+    FAIL getAnimations returns one Animation per transitioning property
+         assert_equals: expected 2 but got 0
+    FAIL getAnimations returns CSSTransition objects for CSS Transitions
+         assert_class_string: Interface of returned animation is CSSTransition expected "[object CSSTransition]" but got "[object Undefined]"
+    FAIL getAnimations does not return finished CSS Transitions
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "finished", animation is undefined"
+    FAIL getAnimations sorts simultaneous transitions by name
+         assert_equals: Generated expected number of transitions expected 6 but got 0
+    FAIL getAnimations sorts transitions by when they were generated
+         assert_equals: Initially there is only one (transform) transition expected 1 but got 0
+  FILE css/css-transitions/KeyframeEffect-getKeyframes-width-and-height-transition.tentative.html  (0/2)
+    FAIL getKeyframes() output for a width transition
+         can't access property "effect", div.getAnimations()[0] is undefined
+    FAIL getKeyframes() output for a height transition
+         can't access property "effect", div.getAnimations()[0] is undefined
+  FILE css/css-transitions/KeyframeEffect-getKeyframes.tentative.html  (0/5)
+    FAIL KeyframeEffect.getKeyframes() returns expected frames for a simple transition
+         can't access property "effect", e.getAnimations()[0] is undefined
+    FAIL KeyframeEffect.getKeyframes() returns frames unaffected by a non-default easing function
+         can't access property "effect", e.getAnimations()[0] is undefined
+    FAIL KeyframeEffect.getKeyframes() returns expected frames for a transition with a CSS variable endpoint
+         can't access property "effect", e.getAnimations()[0] is undefined
+    FAIL KeyframeEffect.getKeyframes() returns expected frames for a transition after resetting the effect target
+         can't access property "effect", anim is undefined
+    FAIL KeyframeEffect.getKeyframes() returns expected frames for a custom property transition
+         can't access property "effect", e.getAnimations()[0] is undefined
+  FILE css/css-transitions/KeyframeEffect-setKeyframes.tentative.html  (0/8)
+    FAIL Keyframes set using setKeyframes() are reflected in computed style for a running transition
+         can't access property "effect", transition is undefined
+    FAIL A transition with replaced keyframes still returns the original transitionProperty
+         can't access property "effect", transition is undefined
+    FAIL A transition with no keyframes still returns the original transitionProperty
+         can't access property "effect", transition is undefined
+    FAIL A transition with replaced keyframes animating the same property still exhibits normal reversing behavior.
+         can't access property "currentTime", transition is undefined
+    FAIL A transition with replaced keyframes animating a different property still exhibits normal reversing behavior  (reversing from the base value).
+         can't access property "currentTime", transition is undefined
+    FAIL A transition with replaced keyframes animating nothing still exhibits normal reversing behavior (reversing from the base value).
+         can't access property "currentTime", transition is undefined
+    FAIL A transition with replaced keyframes animating nothing on a property being controlled by another modified transition exhibits normal reversing behavior and reverses from the other transition's current value.
+         can't access property "transitionProperty", transitions[0] is undefined
+    FAIL A transition with replaced kefyrames and composite 'add' exhibits normal reversing behavior, and the effect is not double counted when calculating the before change style
+         can't access property "effect", transition is undefined
+  FILE css/css-transitions/KeyframeEffect-target.tentative.html  (0/3)
+    FAIL Returned CSS transitions have the correct Animation.target
+         can't access property "effect", animation is undefined
+    FAIL effect.target should return the same CSSPseudoElement object each time
+         assert_equals: Got transitions running on ::after pseudo element expected 2 but got 0
+    FAIL effect.target from the script-generated animation should return the same CSSPseudoElement object as that from the CSS generated transition
+         can't access property "effect", document.getAnimations()[0] is undefined
+  FILE css/css-transitions/after-change-style-inherited-try-fallback.html  (0/1)
+    FAIL Position fallback correctly applied to after-change style
+         assert_equals: Initially using fallback position expected 100 but got 0
+  FILE css/css-transitions/after-change-style-inherited.html  (1/6)
+    FAIL Start .inner transition based on inherited after-change color from .outer (lime)
+         assert_equals: .outer initially red expected "rgb(255, 0, 0)" but got "rgb(128, 0, 0)"
+    FAIL Start .inner transition based on inherited after-change background-color from .outer (lime)
+         assert_equals: .outer initially red expected "rgb(255, 0, 0)" but got "rgba(255, 0, 0, 0.5)"
+    FAIL Start inner transitions based on inherited after-change color and word-spacing from two different ancestors
+         assert_equals: .a3 color transitioning between black and lime expected "rgb(0, 128, 0)" but got "rgb(64, 64, 0)"
+    FAIL @starting-style rules should not apply to after-change style
+         assert_equals: .inner halfway between black and lime expected "rgb(0, 128, 0)" but got "rgb(64, 64, 0)"
+    FAIL @container rules apply to after-change style
+         assert_equals: .inner halfway between black and lime expected "rgb(0, 128, 0)" but got "rgb(64, 64, 0)"
+  FILE css/css-transitions/all-interpolates-same-as-explicit-property.html  (11/32)
+    FAIL transition:all interpolates the same as transition:the-actual-property 5
+         assert_equals: Transition should be initially 50% complete expected (string) "none" but got (undefined) undefined
+    FAIL transition:all interpolates the same as transition:the-actual-property 6
+         assert_equals: Transition should be initially 50% complete expected (string) "auto" but got (undefined) undefined
+    FAIL transition:all interpolates the same as transition:the-actual-property 8
+         assert_equals: Transition should be initially 50% complete expected (string) "125%" but got (undefined) undefined
+    FAIL transition:all interpolates the same as transition:the-actual-property 9
+         assert_equals: Transition should be initially 50% complete expected "oblique 5deg" but got "italic"
+    FAIL transition:all interpolates the same as transition:the-actual-property 10
+         assert_equals: Transition should be initially 50% complete expected (string) "none" but got (undefined) undefined
+    FAIL transition:all interpolates the same as transition:the-actual-property 11
+         assert_equals: Transition should be initially 50% complete expected (string) "small-caps" but got (undefined) undefined
+    FAIL transition:all interpolates the same as transition:the-actual-property 12
+         assert_equals: Transition should be initially 50% complete expected (string) "ruby" but got (undefined) undefined
+    FAIL transition:all interpolates the same as transition:the-actual-property 13
+         assert_equals: Transition should be initially 50% complete expected (string) "slashed-zero" but got (undefined) undefined
+    FAIL transition:all interpolates the same as transition:the-actual-property 15
+         assert_equals: Transition should be initially 50% complete expected (string) "optimizespeed" but got (undefined) undefined
+    FAIL transition:all interpolates the same as transition:the-actual-property 16
+         assert_equals: Transition should be initially 50% complete expected (string) "local" but got (undefined) undefined
+    FAIL transition:all interpolates the same as transition:the-actual-property 17
+         assert_equals: Transition should be initially 50% complete expected (string) "text" but got (undefined) undefined
+    FAIL transition:all interpolates the same as transition:the-actual-property 19
+         assert_equals: Transition should be initially 50% complete expected (string) "padding-box" but got (undefined) undefined
+    FAIL transition:all interpolates the same as transition:the-actual-property 20
+         assert_equals: Transition should be initially 50% complete expected (string) "150px" but got (undefined) undefined
+    FAIL transition:all interpolates the same as transition:the-actual-property 21
+         assert_equals: Transition should be initially 50% complete expected (string) "150px" but got (undefined) undefined
+    FAIL transition:all interpolates the same as transition:the-actual-property 22
+         assert_equals: Transition should be initially 50% complete expected "repeat-y" but got "repeat"
+    FAIL transition:all interpolates the same as transition:the-actual-property 24
+         assert_equals: Transition should be initially 50% complete expected (string) "15px" but got (undefined) undefined
+    FAIL transition:all interpolates the same as transition:the-actual-property 25
+         assert_equals: Transition should be initially 50% complete expected (string) "repeat" but got (undefined) undefined
+    FAIL transition:all interpolates the same as transition:the-actual-property 26
+         assert_equals: Transition should be initially 50% complete expected (string) "150" but got (undefined) undefined
+    FAIL transition:all interpolates the same as transition:the-actual-property 27
+         assert_equals: Transition should be initially 50% complete expected (string) "150px" but got (undefined) undefined
+    FAIL transition:all interpolates the same as transition:the-actual-property 29
+         assert_equals: Transition should be initially 50% complete expected (string) "example-counter 20" but got (undefined) undefined
+    FAIL transition:all interpolates the same as transition:the-actual-property 30
+         assert_equals: Transition should be initially 50% complete expected "15px" but got "length"
+  FILE css/css-transitions/animations/animate-with-color-mix.html  (0/6)
+    FAIL Transition from color-mix to legacy rgb
+         promise_test: Unhandled rejection with value: object "ReferenceError: waitForNextFrame is not defined"
+    FAIL Transition from legacy rgb to color-mix
+         promise_test: Unhandled rejection with value: object "ReferenceError: waitForNextFrame is not defined"
+    FAIL Transition from color-mix to srgb
+         promise_test: Unhandled rejection with value: object "ReferenceError: waitForNextFrame is not defined"
+    FAIL Transition from srgb to color-mix
+         promise_test: Unhandled rejection with value: object "ReferenceError: waitForNextFrame is not defined"
+    FAIL Transition from color-mix with transparency to legacy rgba
+         promise_test: Unhandled rejection with value: object "ReferenceError: waitForNextFrame is not defined"
+    FAIL Transition from legacy rgba to color-mix with transparency
+         promise_test: Unhandled rejection with value: object "ReferenceError: waitForNextFrame is not defined"
+  FILE css/css-transitions/animations/change-duration-during-transition.html  (0/1)
+    FAIL Transition duration change should not affect transition in progress
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "currentTime", document.timeline is undefined"
+  FILE css/css-transitions/animations/color-transition-premultiplied.html  (0/1)
+    FAIL Transition from transparent background
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "currentTime", document.timeline is undefined"
+  FILE css/css-transitions/animations/move-after-transition.html  (0/1)
+    FAIL Move after transition.
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "currentTime", document.timeline is undefined"
+  FILE css/css-transitions/animations/text-shadow-composition.html  (26/60)
+    FAIL Compositing CSS Animations: property <text-shadow> underlying [undefined] from replace [rgb(100, 100, 100) 10px 20px 30px] to add [rgb(200, 200, 200) 20px 40px 60px] at (-0.3) should be [rgb(70, 70, 70 ) 7px 14px 21px]
+         assert_equals: expected "rgb ( 70 , 70 , 70 ) 7px 14px 21px " but got "none "
+    FAIL Compositing CSS Animations: property <text-shadow> underlying [undefined] from replace [rgb(100, 100, 100) 10px 20px 30px] to add [rgb(200, 200, 200) 20px 40px 60px] at (0) should be [rgb(100, 100, 100) 10px 20px 30px]
+         assert_equals: expected "rgb ( 100 , 100 , 100 ) 10px 20px 30px " but got "none "
+    FAIL Compositing CSS Animations: property <text-shadow> underlying [undefined] from replace [rgb(100, 100, 100) 10px 20px 30px] to add [rgb(200, 200, 200) 20px 40px 60px] at (0.5) should be [rgb(150, 150, 150) 15px 30px 45px]
+         assert_equals: expected "rgb ( 150 , 150 , 150 ) 15px 30px 45px " but got "none "
+    FAIL Compositing CSS Animations: property <text-shadow> underlying [undefined] from replace [rgb(100, 100, 100) 10px 20px 30px] to add [rgb(200, 200, 200) 20px 40px 60px] at (1) should be [rgb(200, 200, 200) 20px 40px 60px]
+         assert_equals: expected "rgb ( 200 , 200 , 200 ) 20px 40px 60px " but got "none "
+    FAIL Compositing CSS Animations: property <text-shadow> underlying [undefined] from replace [rgb(100, 100, 100) 10px 20px 30px] to add [rgb(200, 200, 200) 20px 40px 60px] at (1.5) should be [rgb(250, 250, 250) 25px 50px 75px]
+         assert_equals: expected "rgb ( 250 , 250 , 250 ) 25px 50px 75px " but got "none "
+    FAIL Compositing Web Animations: property <text-shadow> underlying [undefined] from replace [rgb(100, 100, 100) 10px 20px 30px] to add [rgb(200, 200, 200) 20px 40px 60px] at (-0.3) should be [rgb(70, 70, 70 ) 7px 14px 21px]
+         assert_equals: expected "rgb ( 70 , 70 , 70 ) 7px 14px 21px " but got "none "
+    FAIL Compositing Web Animations: property <text-shadow> underlying [undefined] from replace [rgb(100, 100, 100) 10px 20px 30px] to add [rgb(200, 200, 200) 20px 40px 60px] at (0) should be [rgb(100, 100, 100) 10px 20px 30px]
+         assert_equals: expected "rgb ( 100 , 100 , 100 ) 10px 20px 30px " but got "none "
+    FAIL Compositing Web Animations: property <text-shadow> underlying [undefined] from replace [rgb(100, 100, 100) 10px 20px 30px] to add [rgb(200, 200, 200) 20px 40px 60px] at (0.5) should be [rgb(150, 150, 150) 15px 30px 45px]
+         assert_equals: expected "rgb ( 150 , 150 , 150 ) 15px 30px 45px " but got "none "
+    FAIL Compositing Web Animations: property <text-shadow> underlying [undefined] from replace [rgb(100, 100, 100) 10px 20px 30px] to add [rgb(200, 200, 200) 20px 40px 60px] at (1) should be [rgb(200, 200, 200) 20px 40px 60px]
+         assert_equals: expected "rgb ( 200 , 200 , 200 ) 20px 40px 60px " but got "none "
+    FAIL Compositing Web Animations: property <text-shadow> underlying [undefined] from replace [rgb(100, 100, 100) 10px 20px 30px] to add [rgb(200, 200, 200) 20px 40px 60px] at (1.5) should be [rgb(250, 250, 250) 25px 50px 75px]
+         assert_equals: expected "rgb ( 250 , 250 , 250 ) 25px 50px 75px " but got "none "
+    FAIL Compositing CSS Animations: property <text-shadow> underlying [rgb(10, 20, 30) 1px 2px 3px, rgb(20, 40, 60) 2px 4px 6px] from add [rgb(100, 100, 100) 10px 20px 30px] to replace [rgb(200, 200, 200) 20px 40px 60px] at (-0.3) should be [rgb(0, 0, 0) -4.7px -9.4px 0px, rgb(26, 52, 78) 2.6px 5.2px 7.8px, rgb(130, 130, 130) 13px 26px 39px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) - 4.7px - 9.4px 0px " but got "rgb ( 10 , 20 , 30 ) 1px 2px 3px "
+    FAIL Compositing CSS Animations: property <text-shadow> underlying [rgb(10, 20, 30) 1px 2px 3px, rgb(20, 40, 60) 2px 4px 6px] from add [rgb(100, 100, 100) 10px 20px 30px] to replace [rgb(200, 200, 200) 20px 40px 60px] at (0.5) should be [rgb(105, 110, 115) 10.5px 21px 31.5px, rgba(20, 40, 60, 0.5) 1px 2px 3px, rgba(100, 100, 100, 0.5) 5px 10px 15px]
+         assert_equals: expected "rgb ( 105 , 110 , 115 ) 10.5px 21px 31.5px " but got "rgb ( 10 , 20 , 30 ) 1px 2px 3px "
+    FAIL Compositing CSS Animations: property <text-shadow> underlying [rgb(10, 20, 30) 1px 2px 3px, rgb(20, 40, 60) 2px 4px 6px] from add [rgb(100, 100, 100) 10px 20px 30px] to replace [rgb(200, 200, 200) 20px 40px 60px] at (1) should be [rgb(200, 200, 200) 20px 40px 60px, rgba(0, 0, 0, 0) 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px]
+         assert_equals: expected "rgb ( 200 , 200 , 200 ) 20px 40px 60px " but got "rgb ( 10 , 20 , 30 ) 1px 2px 3px "
+    FAIL Compositing CSS Animations: property <text-shadow> underlying [rgb(10, 20, 30) 1px 2px 3px, rgb(20, 40, 60) 2px 4px 6px] from add [rgb(100, 100, 100) 10px 20px 30px] to replace [rgb(200, 200, 200) 20px 40px 60px] at (1.5) should be [rgb(255, 255, 255) 29.5px 59px 88.5px, rgba(0, 0, 0, 0) -1px -2px 0px, rgba(0, 0, 0, 0) -5px -10px 0px]
+         assert_equals: expected "rgb ( 255 , 255 , 255 ) 29.5px 59px 88.5px " but got "rgb ( 10 , 20 , 30 ) 1px 2px 3px "
+    FAIL Compositing Web Animations: property <text-shadow> underlying [rgb(10, 20, 30) 1px 2px 3px, rgb(20, 40, 60) 2px 4px 6px] from add [rgb(100, 100, 100) 10px 20px 30px] to replace [rgb(200, 200, 200) 20px 40px 60px] at (-0.3) should be [rgb(0, 0, 0) -4.7px -9.4px 0px, rgb(26, 52, 78) 2.6px 5.2px 7.8px, rgb(130, 130, 130) 13px 26px 39px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) - 4.7px - 9.4px 0px " but got "rgb ( 10 , 20 , 30 ) 1px 2px 3px "
+    FAIL Compositing Web Animations: property <text-shadow> underlying [rgb(10, 20, 30) 1px 2px 3px, rgb(20, 40, 60) 2px 4px 6px] from add [rgb(100, 100, 100) 10px 20px 30px] to replace [rgb(200, 200, 200) 20px 40px 60px] at (0.5) should be [rgb(105, 110, 115) 10.5px 21px 31.5px, rgba(20, 40, 60, 0.5) 1px 2px 3px, rgba(100, 100, 100, 0.5) 5px 10px 15px]
+         assert_equals: expected "rgb ( 105 , 110 , 115 ) 10.5px 21px 31.5px " but got "rgb ( 10 , 20 , 30 ) 1px 2px 3px "
+    FAIL Compositing Web Animations: property <text-shadow> underlying [rgb(10, 20, 30) 1px 2px 3px, rgb(20, 40, 60) 2px 4px 6px] from add [rgb(100, 100, 100) 10px 20px 30px] to replace [rgb(200, 200, 200) 20px 40px 60px] at (1) should be [rgb(200, 200, 200) 20px 40px 60px, rgba(0, 0, 0, 0) 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px]
+         assert_equals: expected "rgb ( 200 , 200 , 200 ) 20px 40px 60px " but got "rgb ( 10 , 20 , 30 ) 1px 2px 3px "
+    FAIL Compositing Web Animations: property <text-shadow> underlying [rgb(10, 20, 30) 1px 2px 3px, rgb(20, 40, 60) 2px 4px 6px] from add [rgb(100, 100, 100) 10px 20px 30px] to replace [rgb(200, 200, 200) 20px 40px 60px] at (1.5) should be [rgb(255, 255, 255) 29.5px 59px 88.5px, rgba(0, 0, 0, 0) -1px -2px 0px, rgba(0, 0, 0, 0) -5px -10px 0px]
+         assert_equals: expected "rgb ( 255 , 255 , 255 ) 29.5px 59px 88.5px " but got "rgb ( 10 , 20 , 30 ) 1px 2px 3px "
+    FAIL Compositing CSS Animations: property <text-shadow> underlying [rgb(10, 20, 30) 1px 2px 3px, rgb(20, 40, 60) 2px 4px 6px] from replace [rgb(100, 100, 100) 10px 20px 30px] to add [rgb(200, 200, 200) 20px 40px 60px] at (-0.3) should be [rgb(127, 124, 121) 12.7px 25.4px 38.1px, rgba(0, 0, 0, 0) -0.6px -1.2px 0px, rgba(0, 0, 0, 0) -6px -12px 0px]
+         assert_equals: expected "rgb ( 127 , 124 , 121 ) 12.7px 25.4px 38.1px " but got "rgb ( 10 , 20 , 30 ) 1px 2px 3px "
+    FAIL Compositing CSS Animations: property <text-shadow> underlying [rgb(10, 20, 30) 1px 2px 3px, rgb(20, 40, 60) 2px 4px 6px] from replace [rgb(100, 100, 100) 10px 20px 30px] to add [rgb(200, 200, 200) 20px 40px 60px] at (0) should be [rgb(100, 100, 100) 10px 20px 30px, rgba(0, 0, 0, 0) 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px]
+         assert_equals: expected "rgb ( 100 , 100 , 100 ) 10px 20px 30px " but got "rgb ( 10 , 20 , 30 ) 1px 2px 3px "
+    FAIL Compositing CSS Animations: property <text-shadow> underlying [rgb(10, 20, 30) 1px 2px 3px, rgb(20, 40, 60) 2px 4px 6px] from replace [rgb(100, 100, 100) 10px 20px 30px] to add [rgb(200, 200, 200) 20px 40px 60px] at (0.5) should be [rgb(55, 60, 65) 5.5px 11px 16.5px, rgba(20, 40, 60, 0.5) 1px 2px 3px, rgba(200, 200, 200, 0.5) 10px 20px 30px]
+         assert_equals: expected "rgb ( 55 , 60 , 65 ) 5.5px 11px 16.5px " but got "rgb ( 10 , 20 , 30 ) 1px 2px 3px "
+    FAIL Compositing CSS Animations: property <text-shadow> underlying [rgb(10, 20, 30) 1px 2px 3px, rgb(20, 40, 60) 2px 4px 6px] from replace [rgb(100, 100, 100) 10px 20px 30px] to add [rgb(200, 200, 200) 20px 40px 60px] at (1.5) should be [rgb(0, 0, 0) -3.5px -7px 0px, rgb(30, 60, 90) 3px 6px 9px, rgb(255, 255, 255) 30px 60px 90px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) - 3.5px - 7px 0px " but got "rgb ( 10 , 20 , 30 ) 1px 2px 3px "
+    FAIL Compositing Web Animations: property <text-shadow> underlying [rgb(10, 20, 30) 1px 2px 3px, rgb(20, 40, 60) 2px 4px 6px] from replace [rgb(100, 100, 100) 10px 20px 30px] to add [rgb(200, 200, 200) 20px 40px 60px] at (-0.3) should be [rgb(127, 124, 121) 12.7px 25.4px 38.1px, rgba(0, 0, 0, 0) -0.6px -1.2px 0px, rgba(0, 0, 0, 0) -6px -12px 0px]
+         assert_equals: expected "rgb ( 127 , 124 , 121 ) 12.7px 25.4px 38.1px " but got "rgb ( 10 , 20 , 30 ) 1px 2px 3px "
+    FAIL Compositing Web Animations: property <text-shadow> underlying [rgb(10, 20, 30) 1px 2px 3px, rgb(20, 40, 60) 2px 4px 6px] from replace [rgb(100, 100, 100) 10px 20px 30px] to add [rgb(200, 200, 200) 20px 40px 60px] at (0) should be [rgb(100, 100, 100) 10px 20px 30px, rgba(0, 0, 0, 0) 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px]
+         assert_equals: expected "rgb ( 100 , 100 , 100 ) 10px 20px 30px " but got "rgb ( 10 , 20 , 30 ) 1px 2px 3px "
+    FAIL Compositing Web Animations: property <text-shadow> underlying [rgb(10, 20, 30) 1px 2px 3px, rgb(20, 40, 60) 2px 4px 6px] from replace [rgb(100, 100, 100) 10px 20px 30px] to add [rgb(200, 200, 200) 20px 40px 60px] at (0.5) should be [rgb(55, 60, 65) 5.5px 11px 16.5px, rgba(20, 40, 60, 0.5) 1px 2px 3px, rgba(200, 200, 200, 0.5) 10px 20px 30px]
+         assert_equals: expected "rgb ( 55 , 60 , 65 ) 5.5px 11px 16.5px " but got "rgb ( 10 , 20 , 30 ) 1px 2px 3px "
+    FAIL Compositing Web Animations: property <text-shadow> underlying [rgb(10, 20, 30) 1px 2px 3px, rgb(20, 40, 60) 2px 4px 6px] from replace [rgb(100, 100, 100) 10px 20px 30px] to add [rgb(200, 200, 200) 20px 40px 60px] at (1.5) should be [rgb(0, 0, 0) -3.5px -7px 0px, rgb(30, 60, 90) 3px 6px 9px, rgb(255, 255, 255) 30px 60px 90px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) - 3.5px - 7px 0px " but got "rgb ( 10 , 20 , 30 ) 1px 2px 3px "
+    FAIL Compositing CSS Animations: property <text-shadow> underlying [rgb(10, 20, 30) 1px 2px 3px, rgb(20, 40, 60) 2px 4px 6px, rgb(40, 80, 120) 4px 8px 12px] from add [rgb(100, 100, 100) 10px 20px 30px, rgb(200, 200, 200) 20px 40px 60px] to replace [rgb(200, 200, 200) 20px 40px 60px] at (-0.3) should be [rgb(0, 0, 0) -4.7px -9.4px 0px, rgb(26, 52, 78) 2.6px 5.2px 7.8px, rgb(52, 104, 156) 5.2px 10.4px 15.6px, rgb(130, 130, 130) 13px 26px 39px, rgb(255, 255, 255) 26px 52px 78px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) - 4.7px - 9.4px 0px " but got "rgb ( 10 , 20 , 30 ) 1px 2px 3px "
+    FAIL Compositing CSS Animations: property <text-shadow> underlying [rgb(10, 20, 30) 1px 2px 3px, rgb(20, 40, 60) 2px 4px 6px, rgb(40, 80, 120) 4px 8px 12px] from add [rgb(100, 100, 100) 10px 20px 30px, rgb(200, 200, 200) 20px 40px 60px] to replace [rgb(200, 200, 200) 20px 40px 60px] at (0.5) should be [rgb(105, 110, 115) 10.5px 21px 31.5px, rgba(20, 40, 60, 0.5) 1px 2px 3px, rgba(40, 80, 120, 0.5) 2px 4px 6px, rgba(100, 100, 100, 0.5) 5px 10px 15px, rgba(200, 200, 200, 0.5) 10px 20px 30px]
+         assert_equals: expected "rgb ( 105 , 110 , 115 ) 10.5px 21px 31.5px " but got "rgb ( 10 , 20 , 30 ) 1px 2px 3px "
+    FAIL Compositing CSS Animations: property <text-shadow> underlying [rgb(10, 20, 30) 1px 2px 3px, rgb(20, 40, 60) 2px 4px 6px, rgb(40, 80, 120) 4px 8px 12px] from add [rgb(100, 100, 100) 10px 20px 30px, rgb(200, 200, 200) 20px 40px 60px] to replace [rgb(200, 200, 200) 20px 40px 60px] at (1) should be [rgb(200, 200, 200) 20px 40px 60px, rgba(0, 0, 0, 0) 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px]
+         assert_equals: expected "rgb ( 200 , 200 , 200 ) 20px 40px 60px " but got "rgb ( 10 , 20 , 30 ) 1px 2px 3px "
+    FAIL Compositing CSS Animations: property <text-shadow> underlying [rgb(10, 20, 30) 1px 2px 3px, rgb(20, 40, 60) 2px 4px 6px, rgb(40, 80, 120) 4px 8px 12px] from add [rgb(100, 100, 100) 10px 20px 30px, rgb(200, 200, 200) 20px 40px 60px] to replace [rgb(200, 200, 200) 20px 40px 60px] at (1.5) should be [rgb(255, 255, 255) 29.5px 59px 88.5px, rgba(0, 0, 0, 0) -1px -2px 0px, rgba(0, 0, 0, 0) -2px -4px 0px, rgba(0, 0, 0, 0) -5px -10px 0px, rgba(0, 0, 0, 0) -10px -20px 0px]
+         assert_equals: expected "rgb ( 255 , 255 , 255 ) 29.5px 59px 88.5px " but got "rgb ( 10 , 20 , 30 ) 1px 2px 3px "
+    FAIL Compositing Web Animations: property <text-shadow> underlying [rgb(10, 20, 30) 1px 2px 3px, rgb(20, 40, 60) 2px 4px 6px, rgb(40, 80, 120) 4px 8px 12px] from add [rgb(100, 100, 100) 10px 20px 30px, rgb(200, 200, 200) 20px 40px 60px] to replace [rgb(200, 200, 200) 20px 40px 60px] at (-0.3) should be [rgb(0, 0, 0) -4.7px -9.4px 0px, rgb(26, 52, 78) 2.6px 5.2px 7.8px, rgb(52, 104, 156) 5.2px 10.4px 15.6px, rgb(130, 130, 130) 13px 26px 39px, rgb(255, 255, 255) 26px 52px 78px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) - 4.7px - 9.4px 0px " but got "rgb ( 10 , 20 , 30 ) 1px 2px 3px "
+    FAIL Compositing Web Animations: property <text-shadow> underlying [rgb(10, 20, 30) 1px 2px 3px, rgb(20, 40, 60) 2px 4px 6px, rgb(40, 80, 120) 4px 8px 12px] from add [rgb(100, 100, 100) 10px 20px 30px, rgb(200, 200, 200) 20px 40px 60px] to replace [rgb(200, 200, 200) 20px 40px 60px] at (0.5) should be [rgb(105, 110, 115) 10.5px 21px 31.5px, rgba(20, 40, 60, 0.5) 1px 2px 3px, rgba(40, 80, 120, 0.5) 2px 4px 6px, rgba(100, 100, 100, 0.5) 5px 10px 15px, rgba(200, 200, 200, 0.5) 10px 20px 30px]
+         assert_equals: expected "rgb ( 105 , 110 , 115 ) 10.5px 21px 31.5px " but got "rgb ( 10 , 20 , 30 ) 1px 2px 3px "
+    FAIL Compositing Web Animations: property <text-shadow> underlying [rgb(10, 20, 30) 1px 2px 3px, rgb(20, 40, 60) 2px 4px 6px, rgb(40, 80, 120) 4px 8px 12px] from add [rgb(100, 100, 100) 10px 20px 30px, rgb(200, 200, 200) 20px 40px 60px] to replace [rgb(200, 200, 200) 20px 40px 60px] at (1) should be [rgb(200, 200, 200) 20px 40px 60px, rgba(0, 0, 0, 0) 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px]
+         assert_equals: expected "rgb ( 200 , 200 , 200 ) 20px 40px 60px " but got "rgb ( 10 , 20 , 30 ) 1px 2px 3px "
+    FAIL Compositing Web Animations: property <text-shadow> underlying [rgb(10, 20, 30) 1px 2px 3px, rgb(20, 40, 60) 2px 4px 6px, rgb(40, 80, 120) 4px 8px 12px] from add [rgb(100, 100, 100) 10px 20px 30px, rgb(200, 200, 200) 20px 40px 60px] to replace [rgb(200, 200, 200) 20px 40px 60px] at (1.5) should be [rgb(255, 255, 255) 29.5px 59px 88.5px, rgba(0, 0, 0, 0) -1px -2px 0px, rgba(0, 0, 0, 0) -2px -4px 0px, rgba(0, 0, 0, 0) -5px -10px 0px, rgba(0, 0, 0, 0) -10px -20px 0px]
+         assert_equals: expected "rgb ( 255 , 255 , 255 ) 29.5px 59px 88.5px " but got "rgb ( 10 , 20 , 30 ) 1px 2px 3px "
+  FILE css/css-transitions/animations/text-shadow-interpolation.html  (14/168)
+    FAIL CSS Transitions: property <text-shadow> from neutral to [green 20px 20px 20px] at (-0.3) should be [rgb(255, 176, 0) 7px 33px 7px]
+         assert_equals: expected "rgb ( 255 , 176 , 0 ) 7px 33px 7px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Transitions: property <text-shadow> from neutral to [green 20px 20px 20px] at (0) should be [rgb(255, 165, 0) 10px 30px 10px]
+         assert_equals: expected "rgb ( 255 , 165 , 0 ) 10px 30px 10px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Transitions: property <text-shadow> from neutral to [green 20px 20px 20px] at (0.3) should be [rgb(179, 154, 0) 13px 27px 13px]
+         assert_equals: expected "rgb ( 179 , 154 , 0 ) 13px 27px 13px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Transitions: property <text-shadow> from neutral to [green 20px 20px 20px] at (0.6) should be [rgb(102, 143, 0) 16px 24px 16px]
+         assert_equals: expected "rgb ( 102 , 143 , 0 ) 16px 24px 16px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Transitions: property <text-shadow> from neutral to [green 20px 20px 20px] at (1.5) should be [rgb(0, 110, 0) 25px 15px 25px]
+         assert_equals: expected "rgb ( 0 , 110 , 0 ) 25px 15px 25px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Transitions with transition: all: property <text-shadow> from neutral to [green 20px 20px 20px] at (-0.3) should be [rgb(255, 176, 0) 7px 33px 7px]
+         assert_equals: expected "rgb ( 255 , 176 , 0 ) 7px 33px 7px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Transitions with transition: all: property <text-shadow> from neutral to [green 20px 20px 20px] at (0) should be [rgb(255, 165, 0) 10px 30px 10px]
+         assert_equals: expected "rgb ( 255 , 165 , 0 ) 10px 30px 10px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Transitions with transition: all: property <text-shadow> from neutral to [green 20px 20px 20px] at (0.3) should be [rgb(179, 154, 0) 13px 27px 13px]
+         assert_equals: expected "rgb ( 179 , 154 , 0 ) 13px 27px 13px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Transitions with transition: all: property <text-shadow> from neutral to [green 20px 20px 20px] at (0.6) should be [rgb(102, 143, 0) 16px 24px 16px]
+         assert_equals: expected "rgb ( 102 , 143 , 0 ) 16px 24px 16px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Transitions with transition: all: property <text-shadow> from neutral to [green 20px 20px 20px] at (1.5) should be [rgb(0, 110, 0) 25px 15px 25px]
+         assert_equals: expected "rgb ( 0 , 110 , 0 ) 25px 15px 25px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Animations: property <text-shadow> from neutral to [green 20px 20px 20px] at (-0.3) should be [rgb(255, 176, 0) 7px 33px 7px]
+         assert_equals: expected "rgb ( 255 , 176 , 0 ) 7px 33px 7px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Animations: property <text-shadow> from neutral to [green 20px 20px 20px] at (0.3) should be [rgb(179, 154, 0) 13px 27px 13px]
+         assert_equals: expected "rgb ( 179 , 154 , 0 ) 13px 27px 13px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Animations: property <text-shadow> from neutral to [green 20px 20px 20px] at (0.6) should be [rgb(102, 143, 0) 16px 24px 16px]
+         assert_equals: expected "rgb ( 102 , 143 , 0 ) 16px 24px 16px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Animations: property <text-shadow> from neutral to [green 20px 20px 20px] at (1) should be [rgb(0, 128, 0) 20px 20px 20px]
+         assert_equals: expected "rgb ( 0 , 128 , 0 ) 20px 20px 20px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Animations: property <text-shadow> from neutral to [green 20px 20px 20px] at (1.5) should be [rgb(0, 110, 0) 25px 15px 25px]
+         assert_equals: expected "rgb ( 0 , 110 , 0 ) 25px 15px 25px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from neutral to [green 20px 20px 20px] at (-0.3) should be [rgb(255, 176, 0) 7px 33px 7px]
+         assert_equals: expected "rgb ( 255 , 176 , 0 ) 7px 33px 7px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from neutral to [green 20px 20px 20px] at (0.3) should be [rgb(179, 154, 0) 13px 27px 13px]
+         assert_equals: expected "rgb ( 179 , 154 , 0 ) 13px 27px 13px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from neutral to [green 20px 20px 20px] at (0.6) should be [rgb(102, 143, 0) 16px 24px 16px]
+         assert_equals: expected "rgb ( 102 , 143 , 0 ) 16px 24px 16px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from neutral to [green 20px 20px 20px] at (1) should be [rgb(0, 128, 0) 20px 20px 20px]
+         assert_equals: expected "rgb ( 0 , 128 , 0 ) 20px 20px 20px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from neutral to [green 20px 20px 20px] at (1.5) should be [rgb(0, 110, 0) 25px 15px 25px]
+         assert_equals: expected "rgb ( 0 , 110 , 0 ) 25px 15px 25px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Transitions: property <text-shadow> from [initial] to [green 20px 20px 20px] at (-0.3) should be [rgba(0, 0, 0, 0) -6px -6px 0px]
+         assert_equals: expected "rgba ( 0 , 0 , 0 , 0 ) - 6px - 6px 0px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Transitions: property <text-shadow> from [initial] to [green 20px 20px 20px] at (0) should be [rgba(0, 0, 0, 0) 0px 0px 0px]
+         assert_equals: expected "rgba ( 0 , 0 , 0 , 0 ) 0px 0px 0px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Transitions: property <text-shadow> from [initial] to [green 20px 20px 20px] at (0.3) should be [rgba(0, 128, 0, 0.3) 6px 6px 6px]
+         assert_equals: expected "rgba ( 0 , 128 , 0 , 0.3 ) 6px 6px 6px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Transitions: property <text-shadow> from [initial] to [green 20px 20px 20px] at (0.6) should be [rgba(0, 128, 0, 0.6) 12px 12px 12px]
+         assert_equals: expected "rgba ( 0 , 128 , 0 , 0.6 ) 12px 12px 12px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Transitions: property <text-shadow> from [initial] to [green 20px 20px 20px] at (1.5) should be [rgb(0, 192, 0) 30px 30px 30px]
+         assert_equals: expected "rgb ( 0 , 192 , 0 ) 30px 30px 30px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Transitions with transition: all: property <text-shadow> from [initial] to [green 20px 20px 20px] at (-0.3) should be [rgba(0, 0, 0, 0) -6px -6px 0px]
+         assert_equals: expected "rgba ( 0 , 0 , 0 , 0 ) - 6px - 6px 0px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Transitions with transition: all: property <text-shadow> from [initial] to [green 20px 20px 20px] at (0) should be [rgba(0, 0, 0, 0) 0px 0px 0px]
+         assert_equals: expected "rgba ( 0 , 0 , 0 , 0 ) 0px 0px 0px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Transitions with transition: all: property <text-shadow> from [initial] to [green 20px 20px 20px] at (0.3) should be [rgba(0, 128, 0, 0.3) 6px 6px 6px]
+         assert_equals: expected "rgba ( 0 , 128 , 0 , 0.3 ) 6px 6px 6px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Transitions with transition: all: property <text-shadow> from [initial] to [green 20px 20px 20px] at (0.6) should be [rgba(0, 128, 0, 0.6) 12px 12px 12px]
+         assert_equals: expected "rgba ( 0 , 128 , 0 , 0.6 ) 12px 12px 12px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Transitions with transition: all: property <text-shadow> from [initial] to [green 20px 20px 20px] at (1.5) should be [rgb(0, 192, 0) 30px 30px 30px]
+         assert_equals: expected "rgb ( 0 , 192 , 0 ) 30px 30px 30px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Animations: property <text-shadow> from [initial] to [green 20px 20px 20px] at (-0.3) should be [rgba(0, 0, 0, 0) -6px -6px 0px]
+         assert_equals: expected "rgba ( 0 , 0 , 0 , 0 ) - 6px - 6px 0px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Animations: property <text-shadow> from [initial] to [green 20px 20px 20px] at (0) should be [rgba(0, 0, 0, 0) 0px 0px 0px]
+         assert_equals: expected "rgba ( 0 , 0 , 0 , 0 ) 0px 0px 0px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Animations: property <text-shadow> from [initial] to [green 20px 20px 20px] at (0.3) should be [rgba(0, 128, 0, 0.3) 6px 6px 6px]
+         assert_equals: expected "rgba ( 0 , 128 , 0 , 0.3 ) 6px 6px 6px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Animations: property <text-shadow> from [initial] to [green 20px 20px 20px] at (0.6) should be [rgba(0, 128, 0, 0.6) 12px 12px 12px]
+         assert_equals: expected "rgba ( 0 , 128 , 0 , 0.6 ) 12px 12px 12px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Animations: property <text-shadow> from [initial] to [green 20px 20px 20px] at (1) should be [rgb(0, 128, 0) 20px 20px 20px]
+         assert_equals: expected "rgb ( 0 , 128 , 0 ) 20px 20px 20px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Animations: property <text-shadow> from [initial] to [green 20px 20px 20px] at (1.5) should be [rgb(0, 192, 0) 30px 30px 30px]
+         assert_equals: expected "rgb ( 0 , 192 , 0 ) 30px 30px 30px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from [initial] to [green 20px 20px 20px] at (-0.3) should be [rgba(0, 0, 0, 0) -6px -6px 0px]
+         assert_equals: expected "rgba ( 0 , 0 , 0 , 0 ) - 6px - 6px 0px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from [initial] to [green 20px 20px 20px] at (0) should be [rgba(0, 0, 0, 0) 0px 0px 0px]
+         assert_equals: expected "rgba ( 0 , 0 , 0 , 0 ) 0px 0px 0px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from [initial] to [green 20px 20px 20px] at (0.3) should be [rgba(0, 128, 0, 0.3) 6px 6px 6px]
+         assert_equals: expected "rgba ( 0 , 128 , 0 , 0.3 ) 6px 6px 6px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from [initial] to [green 20px 20px 20px] at (0.6) should be [rgba(0, 128, 0, 0.6) 12px 12px 12px]
+         assert_equals: expected "rgba ( 0 , 128 , 0 , 0.6 ) 12px 12px 12px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from [initial] to [green 20px 20px 20px] at (1) should be [rgb(0, 128, 0) 20px 20px 20px]
+         assert_equals: expected "rgb ( 0 , 128 , 0 ) 20px 20px 20px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from [initial] to [green 20px 20px 20px] at (1.5) should be [rgb(0, 192, 0) 30px 30px 30px]
+         assert_equals: expected "rgb ( 0 , 192 , 0 ) 30px 30px 30px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Transitions: property <text-shadow> from [inherit] to [green 20px 20px 20px] at (-0.3) should be [rgb(255, 176, 0) 33px 7px 33px]
+         assert_equals: expected "rgb ( 255 , 176 , 0 ) 33px 7px 33px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Transitions: property <text-shadow> from [inherit] to [green 20px 20px 20px] at (0) should be [rgb(255, 165, 0) 30px 10px 30px]
+         assert_equals: expected "rgb ( 255 , 165 , 0 ) 30px 10px 30px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Transitions: property <text-shadow> from [inherit] to [green 20px 20px 20px] at (0.3) should be [rgb(179, 154, 0) 27px 13px 27px]
+         assert_equals: expected "rgb ( 179 , 154 , 0 ) 27px 13px 27px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Transitions: property <text-shadow> from [inherit] to [green 20px 20px 20px] at (0.6) should be [rgb(102, 143, 0) 24px 16px 24px]
+         assert_equals: expected "rgb ( 102 , 143 , 0 ) 24px 16px 24px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Transitions: property <text-shadow> from [inherit] to [green 20px 20px 20px] at (1.5) should be [rgb(0, 110, 0) 15px 25px 15px]
+         assert_equals: expected "rgb ( 0 , 110 , 0 ) 15px 25px 15px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Transitions with transition: all: property <text-shadow> from [inherit] to [green 20px 20px 20px] at (-0.3) should be [rgb(255, 176, 0) 33px 7px 33px]
+         assert_equals: expected "rgb ( 255 , 176 , 0 ) 33px 7px 33px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Transitions with transition: all: property <text-shadow> from [inherit] to [green 20px 20px 20px] at (0) should be [rgb(255, 165, 0) 30px 10px 30px]
+         assert_equals: expected "rgb ( 255 , 165 , 0 ) 30px 10px 30px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Transitions with transition: all: property <text-shadow> from [inherit] to [green 20px 20px 20px] at (0.3) should be [rgb(179, 154, 0) 27px 13px 27px]
+         assert_equals: expected "rgb ( 179 , 154 , 0 ) 27px 13px 27px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Transitions with transition: all: property <text-shadow> from [inherit] to [green 20px 20px 20px] at (0.6) should be [rgb(102, 143, 0) 24px 16px 24px]
+         assert_equals: expected "rgb ( 102 , 143 , 0 ) 24px 16px 24px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Transitions with transition: all: property <text-shadow> from [inherit] to [green 20px 20px 20px] at (1.5) should be [rgb(0, 110, 0) 15px 25px 15px]
+         assert_equals: expected "rgb ( 0 , 110 , 0 ) 15px 25px 15px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Animations: property <text-shadow> from [inherit] to [green 20px 20px 20px] at (-0.3) should be [rgb(255, 176, 0) 33px 7px 33px]
+         assert_equals: expected "rgb ( 255 , 176 , 0 ) 33px 7px 33px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Animations: property <text-shadow> from [inherit] to [green 20px 20px 20px] at (0) should be [rgb(255, 165, 0) 30px 10px 30px]
+         assert_equals: expected "rgb ( 255 , 165 , 0 ) 30px 10px 30px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Animations: property <text-shadow> from [inherit] to [green 20px 20px 20px] at (0.3) should be [rgb(179, 154, 0) 27px 13px 27px]
+         assert_equals: expected "rgb ( 179 , 154 , 0 ) 27px 13px 27px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Animations: property <text-shadow> from [inherit] to [green 20px 20px 20px] at (0.6) should be [rgb(102, 143, 0) 24px 16px 24px]
+         assert_equals: expected "rgb ( 102 , 143 , 0 ) 24px 16px 24px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Animations: property <text-shadow> from [inherit] to [green 20px 20px 20px] at (1) should be [rgb(0, 128, 0) 20px 20px 20px]
+         assert_equals: expected "rgb ( 0 , 128 , 0 ) 20px 20px 20px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Animations: property <text-shadow> from [inherit] to [green 20px 20px 20px] at (1.5) should be [rgb(0, 110, 0) 15px 25px 15px]
+         assert_equals: expected "rgb ( 0 , 110 , 0 ) 15px 25px 15px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from [inherit] to [green 20px 20px 20px] at (-0.3) should be [rgb(255, 176, 0) 33px 7px 33px]
+         assert_equals: expected "rgb ( 255 , 176 , 0 ) 33px 7px 33px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from [inherit] to [green 20px 20px 20px] at (0) should be [rgb(255, 165, 0) 30px 10px 30px]
+         assert_equals: expected "rgb ( 255 , 165 , 0 ) 30px 10px 30px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from [inherit] to [green 20px 20px 20px] at (0.3) should be [rgb(179, 154, 0) 27px 13px 27px]
+         assert_equals: expected "rgb ( 179 , 154 , 0 ) 27px 13px 27px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from [inherit] to [green 20px 20px 20px] at (0.6) should be [rgb(102, 143, 0) 24px 16px 24px]
+         assert_equals: expected "rgb ( 102 , 143 , 0 ) 24px 16px 24px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from [inherit] to [green 20px 20px 20px] at (1) should be [rgb(0, 128, 0) 20px 20px 20px]
+         assert_equals: expected "rgb ( 0 , 128 , 0 ) 20px 20px 20px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from [inherit] to [green 20px 20px 20px] at (1.5) should be [rgb(0, 110, 0) 15px 25px 15px]
+         assert_equals: expected "rgb ( 0 , 110 , 0 ) 15px 25px 15px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Transitions: property <text-shadow> from [unset] to [green 20px 20px 20px] at (-0.3) should be [rgb(255, 176, 0) 33px 7px 33px]
+         assert_equals: expected "rgb ( 255 , 176 , 0 ) 33px 7px 33px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Transitions: property <text-shadow> from [unset] to [green 20px 20px 20px] at (0) should be [rgb(255, 165, 0) 30px 10px 30px]
+         assert_equals: expected "rgb ( 255 , 165 , 0 ) 30px 10px 30px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Transitions: property <text-shadow> from [unset] to [green 20px 20px 20px] at (0.3) should be [rgb(179, 154, 0) 27px 13px 27px]
+         assert_equals: expected "rgb ( 179 , 154 , 0 ) 27px 13px 27px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Transitions: property <text-shadow> from [unset] to [green 20px 20px 20px] at (0.6) should be [rgb(102, 143, 0) 24px 16px 24px]
+         assert_equals: expected "rgb ( 102 , 143 , 0 ) 24px 16px 24px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Transitions: property <text-shadow> from [unset] to [green 20px 20px 20px] at (1.5) should be [rgb(0, 110, 0) 15px 25px 15px]
+         assert_equals: expected "rgb ( 0 , 110 , 0 ) 15px 25px 15px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Transitions with transition: all: property <text-shadow> from [unset] to [green 20px 20px 20px] at (-0.3) should be [rgb(255, 176, 0) 33px 7px 33px]
+         assert_equals: expected "rgb ( 255 , 176 , 0 ) 33px 7px 33px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Transitions with transition: all: property <text-shadow> from [unset] to [green 20px 20px 20px] at (0) should be [rgb(255, 165, 0) 30px 10px 30px]
+         assert_equals: expected "rgb ( 255 , 165 , 0 ) 30px 10px 30px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Transitions with transition: all: property <text-shadow> from [unset] to [green 20px 20px 20px] at (0.3) should be [rgb(179, 154, 0) 27px 13px 27px]
+         assert_equals: expected "rgb ( 179 , 154 , 0 ) 27px 13px 27px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Transitions with transition: all: property <text-shadow> from [unset] to [green 20px 20px 20px] at (0.6) should be [rgb(102, 143, 0) 24px 16px 24px]
+         assert_equals: expected "rgb ( 102 , 143 , 0 ) 24px 16px 24px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Transitions with transition: all: property <text-shadow> from [unset] to [green 20px 20px 20px] at (1.5) should be [rgb(0, 110, 0) 15px 25px 15px]
+         assert_equals: expected "rgb ( 0 , 110 , 0 ) 15px 25px 15px " but got "rgb ( 0 , 128 , 0 ) 20px 20px 20px "
+    FAIL CSS Animations: property <text-shadow> from [unset] to [green 20px 20px 20px] at (-0.3) should be [rgb(255, 176, 0) 33px 7px 33px]
+         assert_equals: expected "rgb ( 255 , 176 , 0 ) 33px 7px 33px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Animations: property <text-shadow> from [unset] to [green 20px 20px 20px] at (0) should be [rgb(255, 165, 0) 30px 10px 30px]
+         assert_equals: expected "rgb ( 255 , 165 , 0 ) 30px 10px 30px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Animations: property <text-shadow> from [unset] to [green 20px 20px 20px] at (0.3) should be [rgb(179, 154, 0) 27px 13px 27px]
+         assert_equals: expected "rgb ( 179 , 154 , 0 ) 27px 13px 27px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Animations: property <text-shadow> from [unset] to [green 20px 20px 20px] at (0.6) should be [rgb(102, 143, 0) 24px 16px 24px]
+         assert_equals: expected "rgb ( 102 , 143 , 0 ) 24px 16px 24px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Animations: property <text-shadow> from [unset] to [green 20px 20px 20px] at (1) should be [rgb(0, 128, 0) 20px 20px 20px]
+         assert_equals: expected "rgb ( 0 , 128 , 0 ) 20px 20px 20px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Animations: property <text-shadow> from [unset] to [green 20px 20px 20px] at (1.5) should be [rgb(0, 110, 0) 15px 25px 15px]
+         assert_equals: expected "rgb ( 0 , 110 , 0 ) 15px 25px 15px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from [unset] to [green 20px 20px 20px] at (-0.3) should be [rgb(255, 176, 0) 33px 7px 33px]
+         assert_equals: expected "rgb ( 255 , 176 , 0 ) 33px 7px 33px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from [unset] to [green 20px 20px 20px] at (0) should be [rgb(255, 165, 0) 30px 10px 30px]
+         assert_equals: expected "rgb ( 255 , 165 , 0 ) 30px 10px 30px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from [unset] to [green 20px 20px 20px] at (0.3) should be [rgb(179, 154, 0) 27px 13px 27px]
+         assert_equals: expected "rgb ( 179 , 154 , 0 ) 27px 13px 27px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from [unset] to [green 20px 20px 20px] at (0.6) should be [rgb(102, 143, 0) 24px 16px 24px]
+         assert_equals: expected "rgb ( 102 , 143 , 0 ) 24px 16px 24px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from [unset] to [green 20px 20px 20px] at (1) should be [rgb(0, 128, 0) 20px 20px 20px]
+         assert_equals: expected "rgb ( 0 , 128 , 0 ) 20px 20px 20px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from [unset] to [green 20px 20px 20px] at (1.5) should be [rgb(0, 110, 0) 15px 25px 15px]
+         assert_equals: expected "rgb ( 0 , 110 , 0 ) 15px 25px 15px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Transitions: property <text-shadow> from [black 15px 10px 5px] to [orange -15px -10px 25px] at (-0.3) should be [rgb(0, 0, 0) 24px 16px 0px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) 24px 16px 0px " but got "rgb ( 255 , 165 , 0 ) - 15px - 10px 25px "
+    FAIL CSS Transitions: property <text-shadow> from [black 15px 10px 5px] to [orange -15px -10px 25px] at (0) should be [rgb(0, 0, 0) 15px 10px 5px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) 15px 10px 5px " but got "rgb ( 255 , 165 , 0 ) - 15px - 10px 25px "
+    FAIL CSS Transitions: property <text-shadow> from [black 15px 10px 5px] to [orange -15px -10px 25px] at (0.3) should be [rgb(77, 50, 0) 6px 4px 11px]
+         assert_equals: expected "rgb ( 77 , 50 , 0 ) 6px 4px 11px " but got "rgb ( 255 , 165 , 0 ) - 15px - 10px 25px "
+    FAIL CSS Transitions: property <text-shadow> from [black 15px 10px 5px] to [orange -15px -10px 25px] at (0.6) should be [rgb(153, 99, 0) -3px -2px 17px]
+         assert_equals: expected "rgb ( 153 , 99 , 0 ) - 3px - 2px 17px " but got "rgb ( 255 , 165 , 0 ) - 15px - 10px 25px "
+    FAIL CSS Transitions: property <text-shadow> from [black 15px 10px 5px] to [orange -15px -10px 25px] at (1.5) should be [rgb(255, 248, 0) -30px -20px 35px]
+         assert_equals: expected "rgb ( 255 , 248 , 0 ) - 30px - 20px 35px " but got "rgb ( 255 , 165 , 0 ) - 15px - 10px 25px "
+    FAIL CSS Transitions with transition: all: property <text-shadow> from [black 15px 10px 5px] to [orange -15px -10px 25px] at (-0.3) should be [rgb(0, 0, 0) 24px 16px 0px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) 24px 16px 0px " but got "rgb ( 255 , 165 , 0 ) - 15px - 10px 25px "
+    FAIL CSS Transitions with transition: all: property <text-shadow> from [black 15px 10px 5px] to [orange -15px -10px 25px] at (0) should be [rgb(0, 0, 0) 15px 10px 5px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) 15px 10px 5px " but got "rgb ( 255 , 165 , 0 ) - 15px - 10px 25px "
+    FAIL CSS Transitions with transition: all: property <text-shadow> from [black 15px 10px 5px] to [orange -15px -10px 25px] at (0.3) should be [rgb(77, 50, 0) 6px 4px 11px]
+         assert_equals: expected "rgb ( 77 , 50 , 0 ) 6px 4px 11px " but got "rgb ( 255 , 165 , 0 ) - 15px - 10px 25px "
+    FAIL CSS Transitions with transition: all: property <text-shadow> from [black 15px 10px 5px] to [orange -15px -10px 25px] at (0.6) should be [rgb(153, 99, 0) -3px -2px 17px]
+         assert_equals: expected "rgb ( 153 , 99 , 0 ) - 3px - 2px 17px " but got "rgb ( 255 , 165 , 0 ) - 15px - 10px 25px "
+    FAIL CSS Transitions with transition: all: property <text-shadow> from [black 15px 10px 5px] to [orange -15px -10px 25px] at (1.5) should be [rgb(255, 248, 0) -30px -20px 35px]
+         assert_equals: expected "rgb ( 255 , 248 , 0 ) - 30px - 20px 35px " but got "rgb ( 255 , 165 , 0 ) - 15px - 10px 25px "
+    FAIL CSS Animations: property <text-shadow> from [black 15px 10px 5px] to [orange -15px -10px 25px] at (-0.3) should be [rgb(0, 0, 0) 24px 16px 0px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) 24px 16px 0px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Animations: property <text-shadow> from [black 15px 10px 5px] to [orange -15px -10px 25px] at (0) should be [rgb(0, 0, 0) 15px 10px 5px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) 15px 10px 5px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Animations: property <text-shadow> from [black 15px 10px 5px] to [orange -15px -10px 25px] at (0.3) should be [rgb(77, 50, 0) 6px 4px 11px]
+         assert_equals: expected "rgb ( 77 , 50 , 0 ) 6px 4px 11px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Animations: property <text-shadow> from [black 15px 10px 5px] to [orange -15px -10px 25px] at (0.6) should be [rgb(153, 99, 0) -3px -2px 17px]
+         assert_equals: expected "rgb ( 153 , 99 , 0 ) - 3px - 2px 17px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Animations: property <text-shadow> from [black 15px 10px 5px] to [orange -15px -10px 25px] at (1) should be [rgb(255, 165, 0) -15px -10px 25px]
+         assert_equals: expected "rgb ( 255 , 165 , 0 ) - 15px - 10px 25px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Animations: property <text-shadow> from [black 15px 10px 5px] to [orange -15px -10px 25px] at (1.5) should be [rgb(255, 248, 0) -30px -20px 35px]
+         assert_equals: expected "rgb ( 255 , 248 , 0 ) - 30px - 20px 35px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from [black 15px 10px 5px] to [orange -15px -10px 25px] at (-0.3) should be [rgb(0, 0, 0) 24px 16px 0px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) 24px 16px 0px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from [black 15px 10px 5px] to [orange -15px -10px 25px] at (0) should be [rgb(0, 0, 0) 15px 10px 5px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) 15px 10px 5px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from [black 15px 10px 5px] to [orange -15px -10px 25px] at (0.3) should be [rgb(77, 50, 0) 6px 4px 11px]
+         assert_equals: expected "rgb ( 77 , 50 , 0 ) 6px 4px 11px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from [black 15px 10px 5px] to [orange -15px -10px 25px] at (0.6) should be [rgb(153, 99, 0) -3px -2px 17px]
+         assert_equals: expected "rgb ( 153 , 99 , 0 ) - 3px - 2px 17px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from [black 15px 10px 5px] to [orange -15px -10px 25px] at (1) should be [rgb(255, 165, 0) -15px -10px 25px]
+         assert_equals: expected "rgb ( 255 , 165 , 0 ) - 15px - 10px 25px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from [black 15px 10px 5px] to [orange -15px -10px 25px] at (1.5) should be [rgb(255, 248, 0) -30px -20px 35px]
+         assert_equals: expected "rgb ( 255 , 248 , 0 ) - 30px - 20px 35px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Transitions: property <text-shadow> from [black 10px 10px 10px] to [currentColor 10px 10px 10px] at (-0.3) should be [rgb(0, 0, 0) 10px 10px 10px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) 10px 10px 10px " but got "rgba ( 0 , 0 , 0 , 0.5 ) 10px 10px 10px "
+    FAIL CSS Transitions: property <text-shadow> from [black 10px 10px 10px] to [currentColor 10px 10px 10px] at (0) should be [rgb(0, 0, 0) 10px 10px 10px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) 10px 10px 10px " but got "rgba ( 0 , 0 , 0 , 0.5 ) 10px 10px 10px "
+    FAIL CSS Transitions: property <text-shadow> from [black 10px 10px 10px] to [currentColor 10px 10px 10px] at (0.3) should be [rgb(0, 38, 0) 10px 10px 10px]
+         assert_equals: expected "rgb ( 0 , 38 , 0 ) 10px 10px 10px " but got "rgba ( 0 , 0 , 0 , 0.5 ) 10px 10px 10px "
+    FAIL CSS Transitions: property <text-shadow> from [black 10px 10px 10px] to [currentColor 10px 10px 10px] at (0.6) should be [rgb(0, 77, 0) 10px 10px 10px]
+         assert_equals: expected "rgb ( 0 , 77 , 0 ) 10px 10px 10px " but got "rgba ( 0 , 0 , 0 , 0.5 ) 10px 10px 10px "
+    FAIL CSS Transitions: property <text-shadow> from [black 10px 10px 10px] to [currentColor 10px 10px 10px] at (1) should be [rgb(0, 128, 0) 10px 10px 10px]
+         assert_equals: expected "rgb ( 0 , 128 , 0 ) 10px 10px 10px " but got "rgba ( 0 , 0 , 0 , 0.5 ) 10px 10px 10px "
+    FAIL CSS Transitions: property <text-shadow> from [black 10px 10px 10px] to [currentColor 10px 10px 10px] at (1.5) should be [rgb(0, 192, 0) 10px 10px 10px]
+         assert_equals: expected "rgb ( 0 , 192 , 0 ) 10px 10px 10px " but got "rgba ( 0 , 0 , 0 , 0.5 ) 10px 10px 10px "
+    FAIL CSS Transitions with transition: all: property <text-shadow> from [black 10px 10px 10px] to [currentColor 10px 10px 10px] at (-0.3) should be [rgb(0, 0, 0) 10px 10px 10px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) 10px 10px 10px " but got "rgba ( 0 , 0 , 0 , 0.5 ) 10px 10px 10px "
+    FAIL CSS Transitions with transition: all: property <text-shadow> from [black 10px 10px 10px] to [currentColor 10px 10px 10px] at (0) should be [rgb(0, 0, 0) 10px 10px 10px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) 10px 10px 10px " but got "rgba ( 0 , 0 , 0 , 0.5 ) 10px 10px 10px "
+    FAIL CSS Transitions with transition: all: property <text-shadow> from [black 10px 10px 10px] to [currentColor 10px 10px 10px] at (0.3) should be [rgb(0, 38, 0) 10px 10px 10px]
+         assert_equals: expected "rgb ( 0 , 38 , 0 ) 10px 10px 10px " but got "rgba ( 0 , 0 , 0 , 0.5 ) 10px 10px 10px "
+    FAIL CSS Transitions with transition: all: property <text-shadow> from [black 10px 10px 10px] to [currentColor 10px 10px 10px] at (0.6) should be [rgb(0, 77, 0) 10px 10px 10px]
+         assert_equals: expected "rgb ( 0 , 77 , 0 ) 10px 10px 10px " but got "rgba ( 0 , 0 , 0 , 0.5 ) 10px 10px 10px "
+    FAIL CSS Transitions with transition: all: property <text-shadow> from [black 10px 10px 10px] to [currentColor 10px 10px 10px] at (1) should be [rgb(0, 128, 0) 10px 10px 10px]
+         assert_equals: expected "rgb ( 0 , 128 , 0 ) 10px 10px 10px " but got "rgba ( 0 , 0 , 0 , 0.5 ) 10px 10px 10px "
+    FAIL CSS Transitions with transition: all: property <text-shadow> from [black 10px 10px 10px] to [currentColor 10px 10px 10px] at (1.5) should be [rgb(0, 192, 0) 10px 10px 10px]
+         assert_equals: expected "rgb ( 0 , 192 , 0 ) 10px 10px 10px " but got "rgba ( 0 , 0 , 0 , 0.5 ) 10px 10px 10px "
+    FAIL CSS Animations: property <text-shadow> from [black 10px 10px 10px] to [currentColor 10px 10px 10px] at (-0.3) should be [rgb(0, 0, 0) 10px 10px 10px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) 10px 10px 10px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Animations: property <text-shadow> from [black 10px 10px 10px] to [currentColor 10px 10px 10px] at (0) should be [rgb(0, 0, 0) 10px 10px 10px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) 10px 10px 10px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Animations: property <text-shadow> from [black 10px 10px 10px] to [currentColor 10px 10px 10px] at (0.3) should be [rgb(0, 38, 0) 10px 10px 10px]
+         assert_equals: expected "rgb ( 0 , 38 , 0 ) 10px 10px 10px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Animations: property <text-shadow> from [black 10px 10px 10px] to [currentColor 10px 10px 10px] at (0.6) should be [rgb(0, 77, 0) 10px 10px 10px]
+         assert_equals: expected "rgb ( 0 , 77 , 0 ) 10px 10px 10px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Animations: property <text-shadow> from [black 10px 10px 10px] to [currentColor 10px 10px 10px] at (1) should be [rgb(0, 128, 0) 10px 10px 10px]
+         assert_equals: expected "rgb ( 0 , 128 , 0 ) 10px 10px 10px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Animations: property <text-shadow> from [black 10px 10px 10px] to [currentColor 10px 10px 10px] at (1.5) should be [rgb(0, 192, 0) 10px 10px 10px]
+         assert_equals: expected "rgb ( 0 , 192 , 0 ) 10px 10px 10px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from [black 10px 10px 10px] to [currentColor 10px 10px 10px] at (-0.3) should be [rgb(0, 0, 0) 10px 10px 10px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) 10px 10px 10px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from [black 10px 10px 10px] to [currentColor 10px 10px 10px] at (0) should be [rgb(0, 0, 0) 10px 10px 10px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) 10px 10px 10px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from [black 10px 10px 10px] to [currentColor 10px 10px 10px] at (0.3) should be [rgb(0, 38, 0) 10px 10px 10px]
+         assert_equals: expected "rgb ( 0 , 38 , 0 ) 10px 10px 10px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from [black 10px 10px 10px] to [currentColor 10px 10px 10px] at (0.6) should be [rgb(0, 77, 0) 10px 10px 10px]
+         assert_equals: expected "rgb ( 0 , 77 , 0 ) 10px 10px 10px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from [black 10px 10px 10px] to [currentColor 10px 10px 10px] at (1) should be [rgb(0, 128, 0) 10px 10px 10px]
+         assert_equals: expected "rgb ( 0 , 128 , 0 ) 10px 10px 10px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from [black 10px 10px 10px] to [currentColor 10px 10px 10px] at (1.5) should be [rgb(0, 192, 0) 10px 10px 10px]
+         assert_equals: expected "rgb ( 0 , 192 , 0 ) 10px 10px 10px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Transitions: property <text-shadow> from [black 0px 0px 0px] to [black 1px 1px 1px] at (-0.3) should be [rgb(0, 0, 0) -0.3px -0.3px 0px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) - 0.3px - 0.3px 0px " but got "rgb ( 0 , 0 , 0 ) 1px 1px 1px "
+    FAIL CSS Transitions: property <text-shadow> from [black 0px 0px 0px] to [black 1px 1px 1px] at (0) should be [rgb(0, 0, 0) 0px 0px 0px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) 0px 0px 0px " but got "rgb ( 0 , 0 , 0 ) 1px 1px 1px "
+    FAIL CSS Transitions: property <text-shadow> from [black 0px 0px 0px] to [black 1px 1px 1px] at (0.3) should be [rgb(0, 0, 0) 0.3px 0.3px 0.3px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) 0.3px 0.3px 0.3px " but got "rgb ( 0 , 0 , 0 ) 1px 1px 1px "
+    FAIL CSS Transitions: property <text-shadow> from [black 0px 0px 0px] to [black 1px 1px 1px] at (0.6) should be [rgb(0, 0, 0) 0.6px 0.6px 0.6px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) 0.6px 0.6px 0.6px " but got "rgb ( 0 , 0 , 0 ) 1px 1px 1px "
+    FAIL CSS Transitions: property <text-shadow> from [black 0px 0px 0px] to [black 1px 1px 1px] at (1.5) should be [rgb(0, 0, 0) 1.5px 1.5px 1.5px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) 1.5px 1.5px 1.5px " but got "rgb ( 0 , 0 , 0 ) 1px 1px 1px "
+    FAIL CSS Transitions with transition: all: property <text-shadow> from [black 0px 0px 0px] to [black 1px 1px 1px] at (-0.3) should be [rgb(0, 0, 0) -0.3px -0.3px 0px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) - 0.3px - 0.3px 0px " but got "rgb ( 0 , 0 , 0 ) 1px 1px 1px "
+    FAIL CSS Transitions with transition: all: property <text-shadow> from [black 0px 0px 0px] to [black 1px 1px 1px] at (0) should be [rgb(0, 0, 0) 0px 0px 0px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) 0px 0px 0px " but got "rgb ( 0 , 0 , 0 ) 1px 1px 1px "
+    FAIL CSS Transitions with transition: all: property <text-shadow> from [black 0px 0px 0px] to [black 1px 1px 1px] at (0.3) should be [rgb(0, 0, 0) 0.3px 0.3px 0.3px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) 0.3px 0.3px 0.3px " but got "rgb ( 0 , 0 , 0 ) 1px 1px 1px "
+    FAIL CSS Transitions with transition: all: property <text-shadow> from [black 0px 0px 0px] to [black 1px 1px 1px] at (0.6) should be [rgb(0, 0, 0) 0.6px 0.6px 0.6px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) 0.6px 0.6px 0.6px " but got "rgb ( 0 , 0 , 0 ) 1px 1px 1px "
+    FAIL CSS Transitions with transition: all: property <text-shadow> from [black 0px 0px 0px] to [black 1px 1px 1px] at (1.5) should be [rgb(0, 0, 0) 1.5px 1.5px 1.5px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) 1.5px 1.5px 1.5px " but got "rgb ( 0 , 0 , 0 ) 1px 1px 1px "
+    FAIL CSS Animations: property <text-shadow> from [black 0px 0px 0px] to [black 1px 1px 1px] at (-0.3) should be [rgb(0, 0, 0) -0.3px -0.3px 0px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) - 0.3px - 0.3px 0px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Animations: property <text-shadow> from [black 0px 0px 0px] to [black 1px 1px 1px] at (0) should be [rgb(0, 0, 0) 0px 0px 0px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) 0px 0px 0px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Animations: property <text-shadow> from [black 0px 0px 0px] to [black 1px 1px 1px] at (0.3) should be [rgb(0, 0, 0) 0.3px 0.3px 0.3px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) 0.3px 0.3px 0.3px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Animations: property <text-shadow> from [black 0px 0px 0px] to [black 1px 1px 1px] at (0.6) should be [rgb(0, 0, 0) 0.6px 0.6px 0.6px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) 0.6px 0.6px 0.6px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Animations: property <text-shadow> from [black 0px 0px 0px] to [black 1px 1px 1px] at (1) should be [rgb(0, 0, 0) 1px 1px 1px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) 1px 1px 1px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL CSS Animations: property <text-shadow> from [black 0px 0px 0px] to [black 1px 1px 1px] at (1.5) should be [rgb(0, 0, 0) 1.5px 1.5px 1.5px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) 1.5px 1.5px 1.5px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from [black 0px 0px 0px] to [black 1px 1px 1px] at (-0.3) should be [rgb(0, 0, 0) -0.3px -0.3px 0px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) - 0.3px - 0.3px 0px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from [black 0px 0px 0px] to [black 1px 1px 1px] at (0) should be [rgb(0, 0, 0) 0px 0px 0px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) 0px 0px 0px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from [black 0px 0px 0px] to [black 1px 1px 1px] at (0.3) should be [rgb(0, 0, 0) 0.3px 0.3px 0.3px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) 0.3px 0.3px 0.3px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from [black 0px 0px 0px] to [black 1px 1px 1px] at (0.6) should be [rgb(0, 0, 0) 0.6px 0.6px 0.6px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) 0.6px 0.6px 0.6px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from [black 0px 0px 0px] to [black 1px 1px 1px] at (1) should be [rgb(0, 0, 0) 1px 1px 1px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) 1px 1px 1px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+    FAIL Web Animations: property <text-shadow> from [black 0px 0px 0px] to [black 1px 1px 1px] at (1.5) should be [rgb(0, 0, 0) 1.5px 1.5px 1.5px]
+         assert_equals: expected "rgb ( 0 , 0 , 0 ) 1.5px 1.5px 1.5px " but got "rgb ( 255 , 165 , 0 ) 10px 30px 10px "
+  FILE css/css-transitions/animations/transition-end-event-shorthands.html  (0/1)
+    FAIL Transition end events generated for transition on shorthand property
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "currentTime", document.timeline is undefined"
+  FILE css/css-transitions/animations/transition-timing-function.html  (0/1)
+    FAIL Ensure that transition easing functions are properly applied.
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "currentTime", document.timeline is undefined"
+  FILE css/css-transitions/animations/vertical-align-composition.html  (32/40)
+    FAIL Compositing CSS Animations: property <vertical-align> underlying [10%] from add [100px] to add [20%] at (-0.3) should be [calc(130px + 4%)]
+         assert_equals: expected "baseline " but got "length "
+    FAIL Compositing CSS Animations: property <vertical-align> underlying [10%] from add [100px] to add [20%] at (0) should be [calc(100px + 10%)]
+         assert_equals: expected "baseline " but got "length "
+    FAIL Compositing CSS Animations: property <vertical-align> underlying [10%] from add [100px] to add [20%] at (0.5) should be [calc(50px + 20%)]
+         assert_equals: expected "baseline " but got "length "
+    FAIL Compositing CSS Animations: property <vertical-align> underlying [10%] from add [100px] to add [20%] at (1.5) should be [calc(-50px + 40%)]
+         assert_equals: expected "baseline " but got "length "
+    FAIL Compositing Web Animations: property <vertical-align> underlying [10%] from add [100px] to add [20%] at (-0.3) should be [calc(130px + 4%)]
+         assert_equals: expected "baseline " but got "length "
+    FAIL Compositing Web Animations: property <vertical-align> underlying [10%] from add [100px] to add [20%] at (0) should be [calc(100px + 10%)]
+         assert_equals: expected "baseline " but got "length "
+    FAIL Compositing Web Animations: property <vertical-align> underlying [10%] from add [100px] to add [20%] at (0.5) should be [calc(50px + 20%)]
+         assert_equals: expected "baseline " but got "length "
+    FAIL Compositing Web Animations: property <vertical-align> underlying [10%] from add [100px] to add [20%] at (1.5) should be [calc(-50px + 40%)]
+         assert_equals: expected "baseline " but got "length "
+  FILE css/css-transitions/animations/vertical-align-interpolation.html  (154/182)
+    FAIL CSS Transitions: property <vertical-align> from [40px] to [40%] at (-0.5) should be [calc(60px - 20%)]
+         assert_equals: expected "baseline " but got "length "
+    FAIL CSS Transitions: property <vertical-align> from [40px] to [40%] at (0) should be [calc(40px + 0%)]
+         assert_equals: expected "baseline " but got "length "
+    FAIL CSS Transitions: property <vertical-align> from [40px] to [40%] at (0.3) should be [calc(28px + 12%)]
+         assert_equals: expected "baseline " but got "length "
+    FAIL CSS Transitions: property <vertical-align> from [40px] to [40%] at (1.5) should be [calc(-20px + 60%)]
+         assert_equals: expected "baseline " but got "length "
+    FAIL CSS Transitions with transition: all: property <vertical-align> from [40px] to [40%] at (-0.5) should be [calc(60px - 20%)]
+         assert_equals: expected "baseline " but got "length "
+    FAIL CSS Transitions with transition: all: property <vertical-align> from [40px] to [40%] at (0) should be [calc(40px + 0%)]
+         assert_equals: expected "baseline " but got "length "
+    FAIL CSS Transitions with transition: all: property <vertical-align> from [40px] to [40%] at (0.3) should be [calc(28px + 12%)]
+         assert_equals: expected "baseline " but got "length "
+    FAIL CSS Transitions with transition: all: property <vertical-align> from [40px] to [40%] at (1.5) should be [calc(-20px + 60%)]
+         assert_equals: expected "baseline " but got "length "
+    FAIL CSS Animations: property <vertical-align> from [40px] to [40%] at (-0.5) should be [calc(60px - 20%)]
+         assert_equals: expected "baseline " but got "length "
+    FAIL CSS Animations: property <vertical-align> from [40px] to [40%] at (0) should be [calc(40px + 0%)]
+         assert_equals: expected "baseline " but got "length "
+    FAIL CSS Animations: property <vertical-align> from [40px] to [40%] at (0.3) should be [calc(28px + 12%)]
+         assert_equals: expected "baseline " but got "length "
+    FAIL CSS Animations: property <vertical-align> from [40px] to [40%] at (1.5) should be [calc(-20px + 60%)]
+         assert_equals: expected "baseline " but got "length "
+    FAIL Web Animations: property <vertical-align> from [40px] to [40%] at (-0.5) should be [calc(60px - 20%)]
+         assert_equals: expected "baseline " but got "length "
+    FAIL Web Animations: property <vertical-align> from [40px] to [40%] at (0) should be [calc(40px + 0%)]
+         assert_equals: expected "baseline " but got "length "
+    FAIL Web Animations: property <vertical-align> from [40px] to [40%] at (0.3) should be [calc(28px + 12%)]
+         assert_equals: expected "baseline " but got "length "
+    FAIL Web Animations: property <vertical-align> from [40px] to [40%] at (1.5) should be [calc(-20px + 60%)]
+         assert_equals: expected "baseline " but got "length "
+    FAIL CSS Transitions with transition-behavior:allow-discrete: property <vertical-align> from [super] to [40%] at (-0.3) should be [super]
+         assert_equals: expected "super " but got "length "
+    FAIL CSS Transitions with transition-behavior:allow-discrete: property <vertical-align> from [super] to [40%] at (0) should be [super]
+         assert_equals: expected "super " but got "length "
+    FAIL CSS Transitions with transition-behavior:allow-discrete: property <vertical-align> from [super] to [40%] at (0.3) should be [super]
+         assert_equals: expected "super " but got "length "
+    FAIL CSS Transitions with transition-property:all and transition-behavor:allow-discrete: property <vertical-align> from [super] to [40%] at (-0.3) should be [super]
+         assert_equals: expected "super " but got "length "
+    FAIL CSS Transitions with transition-property:all and transition-behavor:allow-discrete: property <vertical-align> from [super] to [40%] at (0) should be [super]
+         assert_equals: expected "super " but got "length "
+    FAIL CSS Transitions with transition-property:all and transition-behavor:allow-discrete: property <vertical-align> from [super] to [40%] at (0.3) should be [super]
+         assert_equals: expected "super " but got "length "
+    FAIL CSS Animations: property <vertical-align> from [super] to [40%] at (-0.3) should be [super]
+         assert_equals: expected "super " but got "length "
+    FAIL CSS Animations: property <vertical-align> from [super] to [40%] at (0) should be [super]
+         assert_equals: expected "super " but got "length "
+    FAIL CSS Animations: property <vertical-align> from [super] to [40%] at (0.3) should be [super]
+         assert_equals: expected "super " but got "length "
+    FAIL Web Animations: property <vertical-align> from [super] to [40%] at (-0.3) should be [super]
+         assert_equals: expected "super " but got "length "
+    FAIL Web Animations: property <vertical-align> from [super] to [40%] at (0) should be [super]
+         assert_equals: expected "super " but got "length "
+    FAIL Web Animations: property <vertical-align> from [super] to [40%] at (0.3) should be [super]
+         assert_equals: expected "super " but got "length "
+  FILE css/css-transitions/animations/z-index-interpolation.html  (250/250)
+  FILE css/css-transitions/before-load-001.html  (0/1)
+    Timeout CSS Transitions Test: Transitioning before load event
+  FILE css/css-transitions/changing-while-transition-001.html  (0/1)
+    FAIL Changes to transition-duration should not affect in-flight transitions
+         assert_equals: Even after updating the transition-duration, the transition should be 50% complete expected "50px" but got "25.000618px"
+  FILE css/css-transitions/changing-while-transition-002.html  (0/1)
+    FAIL Changes to transition-timing-function should not affect in-flight transitions
+         assert_equals: Transition should be initially 50% complete expected "50px" but got "50.044464px"
+  FILE css/css-transitions/changing-while-transition-003.html  (0/1)
+    FAIL Changes to transition-delay should not affect in-flight transitions
+         assert_equals: Transition should be initially 50% complete expected "50px" but got "50.048542px"
+  FILE css/css-transitions/changing-while-transition-004.html  (0/1)
+    FAIL Unsetting transition should not affect in-flight transitions
+         assert_equals: Transition should be initially 50% complete expected "50px" but got "50.152554px"
+  FILE css/css-transitions/currentcolor-animation-001.html  (0/1)
+    FAIL Transition does not occur when the value is currentcolor and color changes
+         assert_true: expected true got false
+  FILE css/css-transitions/custom-property-and-allow-discrete.html  (0/2)
+    FAIL It is possible to transition an unregistered custom property using "transition-behavior: allows-discrete"
+         assert_equals: exactly one transition is running expected 1 but got 0
+    FAIL It is possible to transition an unregistered custom property using "transition-behavior: allows-discrete" when setting "transition-property" in the style change that yields the transition
+         assert_equals: exactly one transition is running expected 1 but got 0
+  FILE css/css-transitions/disconnected-element-001.html  (3/6)
+    Timeout Transitions are canceled when an element is removed from the document
+    NotRun Transitions are canceled when an element is re-parented
+    NotRun Transitions are canceled when an element is re-parented to the same node
+  FILE css/css-transitions/display-none-no-animations.html  (1/1)
+  FILE css/css-transitions/dynamic-root-element.html  (0/1)
+    FAIL Transitions don't incorrectly start on dynamic document element insertion
+         doc.open is not a function
+  [33mACCUM[0m css/css-transitions/event-dispatch.tentative.html (SIGSEGV in-batch, PASSES alone → cross-file runtime-reuse artifact, not a per-page Bar 0)
+  FILE css/css-transitions/events-001.html  (0/9)
+    Timeout transition:all changing padding-left
+    NotRun transition:all changing padding
+    NotRun transition:all changing padding but not padding-bottom
+    NotRun transition:padding changing padding-left
+    NotRun transition:padding changing padding
+    NotRun transition:padding changing padding but not padding-bottom
+    NotRun transition:padding-left changing padding-left
+    NotRun transition:padding-left changing padding
+    NotRun transition:padding-left changing padding but not padding-bottom
+  FILE css/css-transitions/events-002.html  (0/2)
+    Timeout transition:all changing padding-left from nothing
+    NotRun transition:all changing padding from nothing
+  FILE css/css-transitions/events-003.html  (0/1)
+    Timeout duration: 0.02s, delay: -0.01s
+  FILE css/css-transitions/events-004.html  (0/2)
+    Timeout repeating lists
+    NotRun truncating lists
+  FILE css/css-transitions/events-005.html  (0/3)
+    Timeout property repetition
+    NotRun padding, padding-left
+    NotRun padding-left, padding
+  FILE css/css-transitions/events-006.html  (0/2)
+    Timeout transition padding-left on ::before
+    NotRun transition padding-left on ::after
+  FILE css/css-transitions/events-007.html  (1/1)
+  FILE css/css-transitions/events-008.html  (0/3)
+    Timeout transitionrun event has animation property and its value is the corresponding CSSTransition object
+    Timeout transitionstart event has animation property and its value is the corresponding CSSTransition object
+    Timeout transitionend event has animation property and its value is the corresponding CSSTransition object
+  FILE css/css-transitions/historical.html  (1/1)
+  FILE css/css-transitions/idlharness-2.html  (0/1)
+    Timeout idl_test setup
+  FILE css/css-transitions/idlharness.html  (0/1)
+    Timeout idl_test setup
+  FILE css/css-transitions/inert-while-transitioning-to-display-none.html  (0/1)
+    FAIL Elements which are transitioning to display:none should be inert.
+         assert_not_equals: Inert elements should not be focusable. got disallowed value Element node <button>button</button>
+  FILE css/css-transitions/inherit-height-transition.html  (0/1)
+    Timeout Transitioned height, explicitly inherited down two DOM levels, should inherit correctly
+  FILE css/css-transitions/inheritance.html  (0/8)
+    FAIL Property transition-delay has initial value 0s
+         assert_true: transition-delay doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition-delay does not inherit
+         assert_true: expected true got false
+    FAIL Property transition-duration has initial value 0s
+         assert_true: transition-duration doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition-duration does not inherit
+         assert_true: expected true got false
+    FAIL Property transition-property has initial value all
+         assert_true: transition-property doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition-property does not inherit
+         assert_true: expected true got false
+    FAIL Property transition-timing-function has initial value ease
+         assert_true: transition-timing-function doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition-timing-function does not inherit
+         assert_true: expected true got false
+  FILE css/css-transitions/non-rendered-element-001.html  (2/4)
+    FAIL Transitions do not run for an element newly rendered
+         assert_equals: No transition should run expected "rgb(0, 128, 0)" but got "rgb(255, 0, 0)"
+    Timeout Transitions are canceled when an element is no longer rendered
+  FILE css/css-transitions/non-rendered-element-002.html  (0/1)
+    Timeout Transitions on ::before/::after pseudo-elements are canceled when the content property is cleared
+  FILE css/css-transitions/non-rendered-element-004.tentative.html  (0/1)
+    Timeout Transitions on ::marker pseudo-elements are canceled when the parent display type is no longer list-item
+  FILE css/css-transitions/parsing/starting-style-parsing.html  (0/5)
+    FAIL @starting-style is valid
+         assert_equals: expected "@starting-style {\n}" but got "@starting-style{}"
+    FAIL @starting-style div is not valid
+         assert_equals: expected 0 but got 1
+    FAIL @starting-style () is not valid
+         assert_equals: expected 0 but got 1
+    FAIL @starting-style ( {} is not valid
+         assert_equals: expected 0 but got 2
+    FAIL @starting-style } is not valid
+         assert_equals: expected 0 but got 1
+  FILE css/css-transitions/parsing/transition-behavior.html  (15/28)
+    FAIL Property transition-behavior value 'normal'
+         assert_true: transition-behavior doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition-behavior value 'allow-discrete'
+         assert_true: transition-behavior doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition value 'allow-discrete display'
+         assert_true: transition doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition value 'allow-discrete display 3s'
+         assert_true: transition doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition value 'allow-discrete display 3s 1s'
+         assert_true: transition doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition value 'allow-discrete display 3s ease-in-out'
+         assert_true: transition doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition value 'allow-discrete display 3s ease-in-out 1s'
+         assert_true: transition doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition value 'display allow-discrete 3s ease-in-out 1s'
+         assert_true: transition doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition value 'display 3s allow-discrete ease-in-out 1s'
+         assert_true: transition doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition value 'display 3s ease-in-out allow-discrete 1s'
+         assert_true: transition doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition value 'display 3s ease-in-out 1s allow-discrete'
+         assert_true: transition doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition value 'allow-discrete display, normal opacity, color'
+         assert_true: transition doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition value 'normal opacity, color, allow-discrete display'
+         assert_true: transition doesn't seem to be supported in the computed style expected true got false
+  FILE css/css-transitions/parsing/transition-computed.html  (0/10)
+    FAIL Default transition value
+         assert_equals: expected (string) "all" but got (undefined) undefined
+    FAIL Property transition value '1s'
+         assert_true: transition doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition value 'cubic-bezier(0, -2, 1, 3)'
+         assert_true: transition doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition value '1s -3s'
+         assert_true: transition doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition value 'none'
+         assert_true: transition doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition value 'top'
+         assert_true: transition doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition value '1s -3s cubic-bezier(0, -2, 1, 3) top'
+         assert_true: transition doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition value '1s -3s, cubic-bezier(0, -2, 1, 3) top'
+         assert_true: transition doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition value 'all, all'
+         assert_true: transition doesn't seem to be supported in the computed style expected true got false
+    FAIL Transition with a delay but no duration
+         assert_equals: expected (string) "0s 1s" but got (undefined) undefined
+  FILE css/css-transitions/parsing/transition-delay-computed.html  (0/1)
+    FAIL Property transition-delay value '-500ms, calc(2 * 3s)'
+         assert_true: transition-delay doesn't seem to be supported in the computed style expected true got false
+  FILE css/css-transitions/parsing/transition-delay-invalid.html  (5/5)
+  FILE css/css-transitions/parsing/transition-delay-valid.html  (4/4)
+  FILE css/css-transitions/parsing/transition-duration-computed.html  (0/3)
+    FAIL Property transition-duration value '500ms'
+         assert_true: transition-duration doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition-duration value 'calc(2 * 3s)'
+         assert_true: transition-duration doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition-duration value '20s, 10s'
+         assert_true: transition-duration doesn't seem to be supported in the computed style expected true got false
+  FILE css/css-transitions/parsing/transition-duration-invalid.html  (5/5)
+  FILE css/css-transitions/parsing/transition-duration-valid.html  (3/3)
+  FILE css/css-transitions/parsing/transition-invalid.html  (5/5)
+  FILE css/css-transitions/parsing/transition-property-computed.html  (0/2)
+    FAIL Property transition-property value 'left, top, right, bottom'
+         assert_true: transition-property doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition-property value 'one, two, three'
+         assert_true: transition-property doesn't seem to be supported in the computed style expected true got false
+  FILE css/css-transitions/parsing/transition-property-invalid.html  (15/15)
+  FILE css/css-transitions/parsing/transition-property-valid.html  (7/7)
+  FILE css/css-transitions/parsing/transition-shorthand.html  (15/18)
+    FAIL e.style['transition'] = "1s -3s cubic-bezier(0, -2, 1, 3) top" should not set unrelated longhands
+         assert_equals: expected 0 but got 1
+    FAIL e.style['transition'] = "1s -3s, cubic-bezier(0, -2, 1, 3) top" should not set unrelated longhands
+         assert_equals: expected 0 but got 1
+    FAIL e.style['transition'] = "cubic-bezier(0, -2, 1, 3) top, 1s -3s" should not set unrelated longhands
+         assert_equals: expected 0 but got 1
+  FILE css/css-transitions/parsing/transition-timing-function-computed.html  (0/22)
+    FAIL Property transition-timing-function value 'linear'
+         assert_true: transition-timing-function doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition-timing-function value 'ease'
+         assert_true: transition-timing-function doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition-timing-function value 'ease-in'
+         assert_true: transition-timing-function doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition-timing-function value 'ease-out'
+         assert_true: transition-timing-function doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition-timing-function value 'ease-in-out'
+         assert_true: transition-timing-function doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition-timing-function value 'cubic-bezier(0.1, 0.2, 0.8, 0.9)'
+         assert_true: transition-timing-function doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition-timing-function value 'cubic-bezier(0, -2, 1, 3)'
+         assert_true: transition-timing-function doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition-timing-function value 'cubic-bezier(0, 0.7, 1, 1.3)'
+         assert_true: transition-timing-function doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition-timing-function value 'step-start'
+         assert_true: transition-timing-function doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition-timing-function value 'step-end'
+         assert_true: transition-timing-function doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition-timing-function value 'steps(4)'
+         assert_true: transition-timing-function doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition-timing-function value 'steps(4, start)'
+         assert_true: transition-timing-function doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition-timing-function value 'steps(2, end)'
+         assert_true: transition-timing-function doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition-timing-function value 'steps(2, jump-start)'
+         assert_true: transition-timing-function doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition-timing-function value 'steps(2, jump-end)'
+         assert_true: transition-timing-function doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition-timing-function value 'steps(2, jump-both)'
+         assert_true: transition-timing-function doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition-timing-function value 'steps(2, jump-none)'
+         assert_true: transition-timing-function doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition-timing-function value 'steps(calc(2 * sibling-index()), jump-none)'
+         assert_true: transition-timing-function doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition-timing-function value 'steps(sibling-index(), jump-none)'
+         assert_true: transition-timing-function doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition-timing-function value 'steps(calc(2 * sign(1em - 1000px)), jump-none)'
+         assert_true: transition-timing-function doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition-timing-function value 'steps(calc(2 * sign(1em - 1000px)), start)'
+         assert_true: transition-timing-function doesn't seem to be supported in the computed style expected true got false
+    FAIL Property transition-timing-function value 'linear, ease, linear'
+         assert_true: transition-timing-function doesn't seem to be supported in the computed style expected true got false
+  FILE css/css-transitions/parsing/transition-timing-function-invalid.html  (25/25)
+  FILE css/css-transitions/parsing/transition-timing-function-valid.html  (21/22)
+    FAIL e.style['transition-timing-function'] = "steps(sibling-index(), jump-none)" should set the property value
+         assert_not_equals: property should be set got disallowed value ""
+  FILE css/css-transitions/parsing/transition-valid.html  (10/10)
+[2m2026-11-21T01:10:02.276343Z[0m [33m WARN[0m [2mmozjs::rust[0m[2m:[0m Warning at dom_event.js:1:9416: Script terminated by timeout at:
+globalThis.__csAlias@dom_event.js:1:9416
+@dom_event.js:1:3565
+@dom_event.js:1:3592
+root.computedStyle@http://127.0.0.1:33009/css/css-transitions/properties-value-001.html inline#28:56:10
+computedStyle@http://127.0.0.1:33009/css/css-transitions/properties-value-001.html inline#32:24:24
+start@http://127.0.0.1:33009/css/css-transitions/properties-value-001.html inline#61:65:59
+runLoop/</</<@http://127.0.0.1:33009/css/css-transitions/properties-value-001.html inline#30:118:56
+Test.prototype.step@http://127.0.0.1:33009/css/css-transitions/properties-value-001.html inline#22:2869:25
+runLoop/</<@http://127.0.0.1:33009/css/css-transitions/properties-value-001.html inline#30:117:34
+runLoop/<@http://127.0.0.1:33009/css/css-transitions/properties-value-001.html inline#30:116:19
+runLoop@http://127.0.0.1:33009/css/css-transitions/properties-value-001.html inline#30:115:15
+
+
+[2m2026-11-21T01:10:13.075033Z[0m [33m WARN[0m [2mmozjs::rust[0m[2m:[0m Warning at dom_event.js:1:9416: Script terminated by timeout at:
+globalThis.__csAlias@dom_event.js:1:9416
+@dom_event.js:1:3579
+@dom_event.js:1:3606
+root.computedStyle@http://127.0.0.1:33009/css/css-transitions/properties-value-001.html inline#28:56:10
+computedStyle@http://127.0.0.1:33009/css/css-transitions/properties-value-001.html inline#32:24:24
+start@http://127.0.0.1:33009/css/css-transitions/properties-value-001.html inline#61:65:59
+runLoop/</</<@http://127.0.0.1:33009/css/css-transitions/properties-value-001.html inline#30:118:56
+Test.prototype.step@http://127.0.0.1:33009/css/css-transitions/properties-value-001.html inline#22:2869:25
+runLoop/</<@http://127.0.0.1:33009/css/css-transitions/properties-value-001.html inline#30:117:34
+runLoop/<@http://127.0.0.1:33009/css/css-transitions/properties-value-001.html inline#30:116:19
+runLoop@http://127.0.0.1:33009/css/css-transitions/properties-value-001.html inline#30:115:15
+g.requestAnimationFrame/<@dom_event.js:4269:89
+globalThis.setTimeout/<@event_loop_prelude.js:63:55
+@event_loop_tick.js:1:344
+@event_loop_tick.js:1:398
+
+
+[2m2026-11-21T01:10:28.244339Z[0m [33m WARN[0m [2mmanuk_js::event_loop[0m[2m:[0m event loop hit its TIME budget — the page is not converging fast enough to be worth more of the user's clock. Painting what we have. [3mcount[0m[2m=[0m2 [3melapsed_ms[0m[2m=[0m20217 [3mbudget_ms[0m[2m=[0m5000 [3mreflow_n[0m[2m=[0m5200 [3mreflow_ms[0m[2m=[0m19814
+[2m2026-11-21T01:10:33.294418Z[0m [33m WARN[0m [2mmozjs::rust[0m[2m:[0m Warning at dom_event.js:1:9416: Script terminated by timeout at:
+globalThis.__csAlias@dom_event.js:1:9416
+@dom_event.js:1:3569
+@dom_event.js:1:3596
+root.computedStyle@http://127.0.0.1:33009/css/css-transitions/properties-value-001.html inline#28:56:10
+computedStyle@http://127.0.0.1:33009/css/css-transitions/properties-value-001.html inline#32:24:24
+_getStyleFor@http://127.0.0.1:33009/css/css-transitions/properties-value-001.html inline#32:129:48
+getStyle@http://127.0.0.1:33009/css/css-transitions/properties-value-001.html inline#32:111:15
+start@http://127.0.0.1:33009/css/css-transitions/properties-value-001.html inline#61:57:49
+runLoop/</</<@http://127.0.0.1:33009/css/css-transitions/properties-value-001.html inline#30:118:56
+Test.prototype.step@http://127.0.0.1:33009/css/css-transitions/properties-value-001.html inline#22:2869:25
+runLoop/</<@http://127.0.0.1:33009/css/css-transitions/properties-value-001.html inline#30:117:34
+runLoop/<@http://127.0.0.1:33009/css/css-transitions/properties-value-001.html inline#30:116:19
+runLoop@http://127.0.0.1:33009/css/css-transitions/properties-value-001.html inline#30:115:15
+g.requestAnimationFrame/<@dom_event.js:4269:89
+globalThis.setTimeout/<@event_loop_prelude.js:63:55
+@event_loop_tick.js:1:344
+@event_loop_tick.js:1:398
+
+
+[2m2026-11-21T01:10:50.337159Z[0m [33m WARN[0m [2mmanuk_js::event_loop[0m[2m:[0m event loop hit its TIME budget — the page is not converging fast enough to be worth more of the user's clock. Painting what we have. [3mcount[0m[2m=[0m1 [3melapsed_ms[0m[2m=[0m22072 [3mbudget_ms[0m[2m=[0m5000 [3mreflow_n[0m[2m=[0m7185 [3mreflow_ms[0m[2m=[0m21624
+[2m2026-11-21T01:10:55.387329Z[0m [33m WARN[0m [2mmozjs::rust[0m[2m:[0m Warning at http://127.0.0.1:33009/css/css-transitions/properties-value-001.html inline#22:1504:32: Script terminated by timeout at:
+assert_wrapper@http://127.0.0.1:33009/css/css-transitions/properties-value-001.html inline#22:1504:32
+start@http://127.0.0.1:33009/css/css-transitions/properties-value-001.html inline#61:59:46
+runLoop/</</<@http://127.0.0.1:33009/css/css-transitions/properties-value-001.html inline#30:118:56
+Test.prototype.step@http://127.0.0.1:33009/css/css-transitions/properties-value-001.html inline#22:2869:25
+runLoop/</<@http://127.0.0.1:33009/css/css-transitions/properties-value-001.html inline#30:117:34
+runLoop/<@http://127.0.0.1:33009/css/css-transitions/properties-value-001.html inline#30:116:19
+runLoop@http://127.0.0.1:33009/css/css-transitions/properties-value-001.html inline#30:115:15
+g.requestAnimationFrame/<@dom_event.js:4269:89
+globalThis.setTimeout/<@event_loop_prelude.js:63:55
+@event_loop_tick.js:1:344
+@event_loop_tick.js:1:398
+
+
+[2m2026-11-21T01:10:55.387403Z[0m [33m WARN[0m [2mmanuk_js::event_loop[0m[2m:[0m event loop PREEMPTED a task that was over budget and not returning — painting what we have. The alternative is a frozen tab that no task-boundary check can reach. [3mcount[0m[2m=[0m0 [3melapsed_ms[0m[2m=[0m5022 [3mbudget_ms[0m[2m=[0m5000
+  FILE css/css-transitions/properties-value-002.html  (8/18)
+    FAIL margin-bottom percentage(%) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-bottom:2s" but got ""
+    FAIL margin-left percentage(%) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-left:2s" but got ""
+    FAIL margin-right percentage(%) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-right:2s" but got ""
+    FAIL margin-top percentage(%) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-top:2s" but got ""
+    FAIL padding-bottom percentage(%) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-bottom:2s" but got ""
+    FAIL padding-left percentage(%) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-left:2s" but got ""
+    FAIL padding-right percentage(%) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-right:2s" but got ""
+    FAIL padding-top percentage(%) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-top:2s" but got ""
+    FAIL vertical-align vertical(keyword) / values
+         assert_not_equals: must not be target value after start got disallowed value "bottom"
+    FAIL vertical-align vertical(keyword) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "vertical-align:2s" but got ""
+[2m2026-11-21T01:11:01.112148Z[0m [33m WARN[0m [2mmozjs::rust[0m[2m:[0m Warning at dom_event.js:1:9416: Script terminated by timeout at:
+globalThis.__csAlias@dom_event.js:1:9416
+@dom_event.js:1:3577
+@dom_event.js:1:3604
+root.computedStyle@http://127.0.0.1:33009/css/css-transitions/properties-value-003.html inline#28:56:10
+computedStyle@http://127.0.0.1:33009/css/css-transitions/properties-value-003.html inline#32:24:24
+_getStyleFor@http://127.0.0.1:33009/css/css-transitions/properties-value-003.html inline#32:129:48
+getStyle@http://127.0.0.1:33009/css/css-transitions/properties-value-003.html inline#32:111:15
+start@http://127.0.0.1:33009/css/css-transitions/properties-value-003.html inline#61:61:49
+runLoop/</</<@http://127.0.0.1:33009/css/css-transitions/properties-value-003.html inline#30:118:56
+Test.prototype.step@http://127.0.0.1:33009/css/css-transitions/properties-value-003.html inline#22:2869:25
+runLoop/</<@http://127.0.0.1:33009/css/css-transitions/properties-value-003.html inline#30:117:34
+runLoop/<@http://127.0.0.1:33009/css/css-transitions/properties-value-003.html inline#30:116:19
+runLoop@http://127.0.0.1:33009/css/css-transitions/properties-value-003.html inline#30:115:15
+
+
+  FILE css/css-transitions/properties-value-003.html  (12/122)
+    FAIL border-top-left-radius border-radius(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-top-left-radius:2s" but got ""
+    FAIL border-top-left-radius border-radius(px-px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-top-left-radius:2s" but got ""
+    FAIL border-top-right-radius border-radius(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value "0px"
+    FAIL border-top-right-radius border-radius(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-top-right-radius:2s" but got ""
+    FAIL border-top-right-radius border-radius(px-px) / values
+         assert_not_equals: initial and target values may not match got disallowed value "0px"
+    FAIL border-top-right-radius border-radius(px-px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-top-right-radius:2s" but got ""
+    FAIL border-bottom-left-radius border-radius(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value "0px"
+    FAIL border-bottom-left-radius border-radius(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-bottom-left-radius:2s" but got ""
+    FAIL border-bottom-left-radius border-radius(px-px) / values
+         assert_not_equals: initial and target values may not match got disallowed value "0px"
+    FAIL border-bottom-left-radius border-radius(px-px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-bottom-left-radius:2s" but got ""
+    FAIL border-bottom-right-radius border-radius(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value "0px"
+    FAIL border-bottom-right-radius border-radius(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-bottom-right-radius:2s" but got ""
+    FAIL border-bottom-right-radius border-radius(px-px) / values
+         assert_not_equals: initial and target values may not match got disallowed value "0px"
+    FAIL border-bottom-right-radius border-radius(px-px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-bottom-right-radius:2s" but got ""
+    FAIL background-image image(url) / values
+         assert_not_equals: must not be target value after start got disallowed value "url(\"support/two.gif\")"
+    FAIL background-image image(url) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "background-image:2s" but got ""
+    FAIL background-image image(data) / values
+         assert_not_equals: must not be target value after start got disallowed value "url(\"data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==\")"
+    FAIL background-image image(data) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "background-image:2s" but got ""
+    FAIL background-image image(gradient) / values
+         assert_not_equals: initial and target values may not match got disallowed value "none"
+    FAIL background-image image(gradient) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "background-image:2s" but got ""
+    FAIL background-size background-size(keyword) / values
+         assert_not_equals: must not be target value after start got disallowed value "contain"
+    FAIL background-size background-size(keyword) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "background-size:2s" but got ""
+    FAIL box-shadow box-shadow(shadow) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "box-shadow:2s" but got ""
+    FAIL font-size-adjust number(integer) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL font-size-adjust number(integer) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "font-size-adjust:2s" but got ""
+    FAIL font-size-adjust number(decimal) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL font-size-adjust number(decimal) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "font-size-adjust:2s" but got ""
+    FAIL font-stretch font-stretch(keyword) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL font-stretch font-stretch(keyword) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "font-stretch:2s" but got ""
+    FAIL text-decoration-color color(rgba) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL text-decoration-color color(rgba) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "text-decoration-color:2s" but got ""
+    FAIL column-count integer(integer) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL column-count integer(integer) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "column-count:2s" but got ""
+    FAIL column-gap length(pt) / values
+         can't access property "getPropertyValue", window.getComputedStyle(...) is null
+    FAIL column-gap length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "column-gap:2s" but got ""
+    FAIL column-gap length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "column-gap:2s" but got ""
+    FAIL column-gap length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "column-gap:2s" but got ""
+    FAIL column-gap length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "column-gap:2s" but got ""
+    FAIL column-gap length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "column-gap:2s" but got ""
+    FAIL column-gap length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "column-gap:2s" but got ""
+    FAIL column-gap length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "column-gap:2s" but got ""
+    FAIL column-gap length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "column-gap:2s" but got ""
+    FAIL column-rule-color color(rgba) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL column-rule-color color(rgba) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "column-rule-color:2s" but got ""
+    FAIL column-rule-width length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL column-rule-width length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "column-rule-width:2s" but got ""
+    FAIL column-rule-width length(pc) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL column-rule-width length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "column-rule-width:2s" but got ""
+    FAIL column-rule-width length(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL column-rule-width length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "column-rule-width:2s" but got ""
+    FAIL column-rule-width length(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL column-rule-width length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "column-rule-width:2s" but got ""
+    FAIL column-rule-width length(ex) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL column-rule-width length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "column-rule-width:2s" but got ""
+    FAIL column-rule-width length(mm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL column-rule-width length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "column-rule-width:2s" but got ""
+    FAIL column-rule-width length(cm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL column-rule-width length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "column-rule-width:2s" but got ""
+    FAIL column-rule-width length(in) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL column-rule-width length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "column-rule-width:2s" but got ""
+    FAIL column-width length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL column-width length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "column-width:2s" but got ""
+    FAIL column-width length(pc) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL column-width length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "column-width:2s" but got ""
+    FAIL column-width length(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL column-width length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "column-width:2s" but got ""
+    FAIL column-width length(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL column-width length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "column-width:2s" but got ""
+    FAIL column-width length(ex) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL column-width length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "column-width:2s" but got ""
+    FAIL column-width length(mm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL column-width length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "column-width:2s" but got ""
+    FAIL column-width length(cm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL column-width length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "column-width:2s" but got ""
+    FAIL column-width length(in) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL column-width length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "column-width:2s" but got ""
+    FAIL column-height length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL column-height length(pt) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "column-height:2s" but got ""
+    FAIL column-height length(pc) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL column-height length(pc) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "column-height:2s" but got ""
+    FAIL column-height length(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL column-height length(px) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "column-height:2s" but got ""
+    FAIL column-height length(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL column-height length(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "column-height:2s" but got ""
+    FAIL column-height length(ex) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL column-height length(ex) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "column-height:2s" but got ""
+    FAIL column-height length(mm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL column-height length(mm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "column-height:2s" but got ""
+    FAIL column-height length(cm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL column-height length(cm) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "column-height:2s" but got ""
+    FAIL column-height length(in) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL column-height length(in) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "column-height:2s" but got ""
+    FAIL transform transform(rotate) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "transform:2s" but got ""
+    FAIL transform-origin horizontal(keyword) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "transform-origin:2s" but got ""
+    FAIL display display(static to absolute) / values
+         assert_not_equals: must not be target value after start got disallowed value "block"
+    FAIL display display(static to absolute) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "display:2s" but got ""
+    FAIL display display(block to inline-block) / values
+         assert_not_equals: must not be target value after start got disallowed value "inline-block"
+    FAIL display display(block to inline-block) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "display:2s" but got ""
+    FAIL position position(static to absolute) / values
+         assert_not_equals: must not be target value after start got disallowed value "absolute"
+    FAIL position position(static to absolute) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "position:2s" but got ""
+    FAIL position position(relative to absolute) / values
+         assert_not_equals: must not be target value after start got disallowed value "absolute"
+    FAIL position position(relative to absolute) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "position:2s" but got ""
+    FAIL position position(absolute to fixed) / values
+         assert_not_equals: must not be target value after start got disallowed value "fixed"
+    FAIL position position(absolute to fixed) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "position:2s" but got ""
+    FAIL object-view-box object-view-box(inset) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL object-view-box object-view-box(inset) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "object-view-box:2s" but got ""
+    FAIL object-view-box object-view-box(rect) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL object-view-box object-view-box(rect) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "object-view-box:2s" but got ""
+    FAIL object-view-box object-view-box(xywh) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL object-view-box object-view-box(xywh) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "object-view-box:2s" but got ""
+  FILE css/css-transitions/properties-value-implicit-001.html  (7/60)
+    FAIL background-position-x length-em(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL background-position-x length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "background-position-x:2s" but got ""
+    FAIL border-top-width length-em(em) / values
+         assert_not_equals: may not be target value while transitioning on .transition got disallowed value "33px"
+    FAIL border-top-width length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-top-width:2s" but got ""
+    FAIL border-right-width length-em(em) / values
+         assert_not_equals: may not be target value while transitioning on .transition got disallowed value "33px"
+    FAIL border-right-width length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-right-width:2s" but got ""
+    FAIL border-bottom-width length-em(em) / values
+         assert_not_equals: may not be target value while transitioning on .transition got disallowed value "33px"
+    FAIL border-bottom-width length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-bottom-width:2s" but got ""
+    FAIL border-left-width length-em(em) / values
+         assert_not_equals: may not be target value while transitioning on .transition got disallowed value "33px"
+    FAIL border-left-width length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "border-left-width:2s" but got ""
+    FAIL padding-bottom length-em(em) / values
+         assert_not_equals: may not be target value while transitioning on .transition got disallowed value "33px"
+    FAIL padding-bottom length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-bottom:2s" but got ""
+    FAIL padding-left length-em(em) / values
+         assert_not_equals: may not be target value while transitioning on .transition got disallowed value "33px"
+    FAIL padding-left length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-left:2s" but got ""
+    FAIL padding-right length-em(em) / values
+         assert_not_equals: may not be target value while transitioning on .transition got disallowed value "33px"
+    FAIL padding-right length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-right:2s" but got ""
+    FAIL padding-top length-em(em) / values
+         assert_not_equals: may not be target value while transitioning on .transition got disallowed value "33px"
+    FAIL padding-top length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "padding-top:2s" but got ""
+    FAIL margin-bottom length-em(em) / values
+         assert_not_equals: may not be target value while transitioning on .transition got disallowed value "33px"
+    FAIL margin-bottom length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-bottom:2s" but got ""
+    FAIL margin-left length-em(em) / values
+         assert_not_equals: may not be target value while transitioning on .transition got disallowed value "33px"
+    FAIL margin-left length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-left:2s" but got ""
+    FAIL margin-right length-em(em) / values
+         assert_not_equals: may not be target value while transitioning on .transition got disallowed value "33px"
+    FAIL margin-right length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-right:2s" but got ""
+    FAIL margin-top length-em(em) / values
+         assert_not_equals: may not be target value while transitioning on .transition got disallowed value "33px"
+    FAIL margin-top length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "margin-top:2s" but got ""
+    FAIL height length-em(em) / values
+         assert_not_equals: may not be target value while transitioning on .transition got disallowed value "33px"
+    FAIL height length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "height:2s" but got ""
+    FAIL width length-em(em) / values
+         assert_not_equals: may not be target value while transitioning on .transition got disallowed value "33px"
+    FAIL width length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "width:2s" but got ""
+    FAIL min-height length-em(em) / values
+         assert_not_equals: may not be target value while transitioning on .transition got disallowed value "33px"
+    FAIL min-height length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "min-height:2s" but got ""
+    FAIL min-width length-em(em) / values
+         assert_not_equals: may not be target value while transitioning on .transition got disallowed value "33px"
+    FAIL min-width length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "min-width:2s" but got ""
+    FAIL max-height length-em(em) / values
+         assert_not_equals: may not be target value while transitioning on .transition got disallowed value "33px"
+    FAIL max-height length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "max-height:2s" but got ""
+    FAIL max-width length-em(em) / values
+         assert_not_equals: may not be target value while transitioning on .transition got disallowed value "33px"
+    FAIL max-width length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "max-width:2s" but got ""
+    FAIL top length-em(em) / values
+         assert_not_equals: may not be target value while transitioning on .transition got disallowed value "33px"
+    FAIL top length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "top:2s" but got ""
+    FAIL right length-em(em) / values
+         assert_not_equals: may not be target value while transitioning on .transition got disallowed value "33px"
+    FAIL right length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "right:2s" but got ""
+    FAIL bottom length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "bottom:2s" but got ""
+    FAIL left length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "left:2s" but got ""
+    FAIL line-height length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "line-height:2s" but got ""
+    FAIL letter-spacing length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "letter-spacing:2s" but got ""
+    FAIL word-spacing length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "word-spacing:2s" but got ""
+    FAIL text-indent length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "text-indent:2s" but got ""
+    FAIL outline-offset length-em(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL outline-offset length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "outline-offset:2s" but got ""
+    FAIL outline-width length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "outline-width:2s" but got ""
+    FAIL vertical-align length-em(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value "length"
+    FAIL vertical-align length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .transition expected "vertical-align:2s" but got ""
+[2m2026-11-21T01:11:40.653898Z[0m [33m WARN[0m [2mmozjs::rust[0m[2m:[0m Warning at dom_event.js:1:9416: Script terminated by timeout at:
+globalThis.__csAlias@dom_event.js:1:9416
+@dom_event.js:1:3564
+@dom_event.js:1:3591
+root.computedStyle@http://127.0.0.1:33009/css/css-transitions/properties-value-inherit-001.html inline#26:56:10
+computedStyle@http://127.0.0.1:33009/css/css-transitions/properties-value-inherit-001.html inline#30:24:24
+_getStyleFor@http://127.0.0.1:33009/css/css-transitions/properties-value-inherit-001.html inline#30:129:48
+getStyle@http://127.0.0.1:33009/css/css-transitions/properties-value-inherit-001.html inline#30:115:15
+start@http://127.0.0.1:33009/css/css-transitions/properties-value-inherit-001.html inline#59:68:49
+runLoop/</</<@http://127.0.0.1:33009/css/css-transitions/properties-value-inherit-001.html inline#28:118:56
+Test.prototype.step@http://127.0.0.1:33009/css/css-transitions/properties-value-inherit-001.html inline#20:2869:25
+runLoop/</<@http://127.0.0.1:33009/css/css-transitions/properties-value-inherit-001.html inline#28:117:34
+runLoop/<@http://127.0.0.1:33009/css/css-transitions/properties-value-inherit-001.html inline#28:116:19
+runLoop@http://127.0.0.1:33009/css/css-transitions/properties-value-inherit-001.html inline#28:115:15
+
+
+[2m2026-11-21T01:12:36.701335Z[0m [33m WARN[0m [2mmozjs::rust[0m[2m:[0m Warning at dom_event.js:1:9416: Script terminated by timeout at:
+globalThis.__csAlias@dom_event.js:1:9416
+@dom_event.js:1:3561
+@dom_event.js:1:3588
+root.computedStyle@http://127.0.0.1:33009/css/css-transitions/properties-value-inherit-001.html inline#26:56:10
+computedStyle@http://127.0.0.1:33009/css/css-transitions/properties-value-inherit-001.html inline#30:34:24
+_getStyleFor@http://127.0.0.1:33009/css/css-transitions/properties-value-inherit-001.html inline#30:128:46
+getStyle@http://127.0.0.1:33009/css/css-transitions/properties-value-inherit-001.html inline#30:111:15
+start@http://127.0.0.1:33009/css/css-transitions/properties-value-inherit-001.html inline#59:68:49
+runLoop/</</<@http://127.0.0.1:33009/css/css-transitions/properties-value-inherit-001.html inline#28:118:56
+Test.prototype.step@http://127.0.0.1:33009/css/css-transitions/properties-value-inherit-001.html inline#20:2869:25
+runLoop/</<@http://127.0.0.1:33009/css/css-transitions/properties-value-inherit-001.html inline#28:117:34
+runLoop/<@http://127.0.0.1:33009/css/css-transitions/properties-value-inherit-001.html inline#28:116:19
+runLoop@http://127.0.0.1:33009/css/css-transitions/properties-value-inherit-001.html inline#28:115:15
+g.requestAnimationFrame/<@dom_event.js:4269:89
+globalThis.setTimeout/<@event_loop_prelude.js:63:55
+@event_loop_tick.js:1:344
+@event_loop_tick.js:1:398
+
+
+[2m2026-11-21T01:13:33.243291Z[0m [33m WARN[0m [2mmanuk_page[0m[2m:[0m FORCED-REFLOW BUDGET EXHAUSTED — this script round has re-laid-out the whole document for longer than its whole budget, so further geometry reads are answered from the layout already published. The alternative measured 125s in ONE task. [3mused_ms[0m[2m=[0m60009 [3mbudget_ms[0m[2m=[0m60000 [3mnodes[0m[2m=[0m3220
+[2m2026-11-21T01:13:33.313549Z[0m [33m WARN[0m [2mmanuk_js::event_loop[0m[2m:[0m event loop hit its TIME budget — the page is not converging fast enough to be worth more of the user's clock. Painting what we have. [3mcount[0m[2m=[0m2 [3melapsed_ms[0m[2m=[0m61635 [3mbudget_ms[0m[2m=[0m5000 [3mreflow_n[0m[2m=[0m5181 [3mreflow_ms[0m[2m=[0m61026
+[2m2026-11-21T01:13:38.392616Z[0m [33m WARN[0m [2mmozjs::rust[0m[2m:[0m Warning at dom_event.js:1:9416: Script terminated by timeout at:
+globalThis.__csAlias@dom_event.js:1:9416
+@dom_event.js:1:3552
+@dom_event.js:1:3579
+root.computedStyle@http://127.0.0.1:33009/css/css-transitions/properties-value-inherit-001.html inline#26:56:10
+computedStyle@http://127.0.0.1:33009/css/css-transitions/properties-value-inherit-001.html inline#30:24:24
+start@http://127.0.0.1:33009/css/css-transitions/properties-value-inherit-001.html inline#59:76:59
+runLoop/</</<@http://127.0.0.1:33009/css/css-transitions/properties-value-inherit-001.html inline#28:118:56
+Test.prototype.step@http://127.0.0.1:33009/css/css-transitions/properties-value-inherit-001.html inline#20:2869:25
+runLoop/</<@http://127.0.0.1:33009/css/css-transitions/properties-value-inherit-001.html inline#28:117:34
+runLoop/<@http://127.0.0.1:33009/css/css-transitions/properties-value-inherit-001.html inline#28:116:19
+runLoop@http://127.0.0.1:33009/css/css-transitions/properties-value-inherit-001.html inline#28:115:15
+g.requestAnimationFrame/<@dom_event.js:4269:89
+globalThis.setTimeout/<@event_loop_prelude.js:63:55
+@event_loop_tick.js:1:344
+@event_loop_tick.js:1:398
+
+
+  [31mHANG[0m  css/css-transitions/properties-value-inherit-001.html
+[2m2026-11-21T01:13:55.906772Z[0m [33m WARN[0m [2mmozjs::rust[0m[2m:[0m Warning at dom_event.js:1:9416: Script terminated by timeout at:
+globalThis.__csAlias@dom_event.js:1:9416
+@dom_event.js:1:3560
+@dom_event.js:1:3587
+root.computedStyle@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-002.html inline#26:56:10
+computedStyle@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-002.html inline#30:24:24
+start@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-002.html inline#59:77:59
+runLoop/</</<@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-002.html inline#28:118:56
+Test.prototype.step@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-002.html inline#20:2869:25
+runLoop/</<@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-002.html inline#28:117:34
+runLoop/<@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-002.html inline#28:116:19
+runLoop@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-002.html inline#28:115:15
+
+
+[2m2026-11-21T01:14:15.457278Z[0m [33m WARN[0m [2mmozjs::rust[0m[2m:[0m Warning at dom_event.js:1:9416: Script terminated by timeout at:
+globalThis.__csAlias@dom_event.js:1:9416
+@dom_event.js:1:3559
+@dom_event.js:1:3586
+root.computedStyle@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-002.html inline#26:56:10
+computedStyle@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-002.html inline#30:34:24
+_getStyleFor@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-002.html inline#30:128:46
+getStyle@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-002.html inline#30:111:15
+start@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-002.html inline#59:69:49
+runLoop/</</<@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-002.html inline#28:118:56
+Test.prototype.step@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-002.html inline#20:2869:25
+runLoop/</<@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-002.html inline#28:117:34
+runLoop/<@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-002.html inline#28:116:19
+runLoop@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-002.html inline#28:115:15
+g.requestAnimationFrame/<@dom_event.js:4269:89
+globalThis.setTimeout/<@event_loop_prelude.js:63:55
+@event_loop_tick.js:1:344
+@event_loop_tick.js:1:398
+
+
+[2m2026-11-21T01:14:32.751097Z[0m [33m WARN[0m [2mmanuk_js::event_loop[0m[2m:[0m event loop hit its TIME budget — the page is not converging fast enough to be worth more of the user's clock. Painting what we have. [3mcount[0m[2m=[0m2 [3melapsed_ms[0m[2m=[0m22330 [3mbudget_ms[0m[2m=[0m5000 [3mreflow_n[0m[2m=[0m5181 [3mreflow_ms[0m[2m=[0m21926
+[2m2026-11-21T01:14:37.810950Z[0m [33m WARN[0m [2mmozjs::rust[0m[2m:[0m Warning at dom_event.js:1:9416: Script terminated by timeout at:
+globalThis.__csAlias@dom_event.js:1:9416
+@dom_event.js:1:3569
+@dom_event.js:1:3596
+root.computedStyle@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-002.html inline#26:56:10
+computedStyle@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-002.html inline#30:24:24
+_getStyleFor@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-002.html inline#30:129:48
+getStyle@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-002.html inline#30:111:15
+start@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-002.html inline#59:69:49
+runLoop/</</<@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-002.html inline#28:118:56
+Test.prototype.step@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-002.html inline#20:2869:25
+runLoop/</<@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-002.html inline#28:117:34
+runLoop/<@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-002.html inline#28:116:19
+runLoop@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-002.html inline#28:115:15
+g.requestAnimationFrame/<@dom_event.js:4269:89
+globalThis.setTimeout/<@event_loop_prelude.js:63:55
+@event_loop_tick.js:1:344
+@event_loop_tick.js:1:398
+
+
+[2m2026-11-21T01:14:51.231702Z[0m [33m WARN[0m [2mmanuk_js::event_loop[0m[2m:[0m event loop hit its TIME budget — the page is not converging fast enough to be worth more of the user's clock. Painting what we have. [3mcount[0m[2m=[0m1 [3melapsed_ms[0m[2m=[0m18464 [3mbudget_ms[0m[2m=[0m5000 [3mreflow_n[0m[2m=[0m7185 [3mreflow_ms[0m[2m=[0m18139
+[2m2026-11-21T01:14:56.306097Z[0m [33m WARN[0m [2mmozjs::rust[0m[2m:[0m Warning at dom_event.js:1:9416: Script terminated by timeout at:
+globalThis.__csAlias@dom_event.js:1:9416
+@dom_event.js:1:3625
+@dom_event.js:1:3652
+root.computedStyle@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-002.html inline#26:56:10
+computedStyle@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-002.html inline#30:24:24
+start@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-002.html inline#59:77:59
+runLoop/</</<@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-002.html inline#28:118:56
+Test.prototype.step@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-002.html inline#20:2869:25
+runLoop/</<@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-002.html inline#28:117:34
+runLoop/<@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-002.html inline#28:116:19
+runLoop@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-002.html inline#28:115:15
+g.requestAnimationFrame/<@dom_event.js:4269:89
+globalThis.setTimeout/<@event_loop_prelude.js:63:55
+@event_loop_tick.js:1:344
+@event_loop_tick.js:1:398
+
+
+[2m2026-11-21T01:15:12.382550Z[0m [33m WARN[0m [2mmanuk_js::event_loop[0m[2m:[0m event loop hit its TIME budget — the page is not converging fast enough to be worth more of the user's clock. Painting what we have. [3mcount[0m[2m=[0m1 [3melapsed_ms[0m[2m=[0m21133 [3mbudget_ms[0m[2m=[0m5000 [3mreflow_n[0m[2m=[0m10820 [3mreflow_ms[0m[2m=[0m20763
+[2m2026-11-21T01:15:17.518477Z[0m [33m WARN[0m [2mmozjs::rust[0m[2m:[0m Warning at dom_event.js:1:9416: Script terminated by timeout at:
+globalThis.__csAlias@dom_event.js:1:9416
+@dom_event.js:1:3560
+@dom_event.js:1:3587
+root.computedStyle@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-003.html inline#24:56:10
+computedStyle@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-003.html inline#28:34:24
+_getStyleFor@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-003.html inline#28:128:46
+getStyle@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-003.html inline#28:115:15
+start@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-003.html inline#57:69:49
+runLoop/</</<@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-003.html inline#26:118:56
+Test.prototype.step@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-003.html inline#18:2869:25
+runLoop/</<@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-003.html inline#26:117:34
+runLoop/<@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-003.html inline#26:116:19
+runLoop@http://127.0.0.1:38129/css/css-transitions/properties-value-inherit-003.html inline#26:115:15
+
+
+  FILE css/css-transitions/properties-value-inherit-003.html  (26/60)
+    FAIL background-position-x length-em(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL background-position-x length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "font-size:2s" but got ""
+    FAIL border-top-width length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "font-size:2s" but got ""
+    FAIL border-right-width length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "font-size:2s" but got ""
+    FAIL border-bottom-width length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "font-size:2s" but got ""
+    FAIL border-left-width length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "font-size:2s" but got ""
+    FAIL padding-bottom length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "font-size:2s" but got ""
+    FAIL padding-left length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "font-size:2s" but got ""
+    FAIL padding-right length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "font-size:2s" but got ""
+    FAIL padding-top length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "font-size:2s" but got ""
+    FAIL margin-bottom length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "font-size:2s" but got ""
+    FAIL margin-left length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "font-size:2s" but got ""
+    FAIL margin-right length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "font-size:2s" but got ""
+    FAIL margin-top length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "font-size:2s" but got ""
+    FAIL height length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "font-size:2s" but got ""
+    FAIL width length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "font-size:2s" but got ""
+    FAIL min-height length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "font-size:2s" but got ""
+    FAIL min-width length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "font-size:2s" but got ""
+    FAIL max-height length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "font-size:2s" but got ""
+    FAIL max-width length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "font-size:2s" but got ""
+    FAIL top length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "font-size:2s" but got ""
+    FAIL right length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "font-size:2s" but got ""
+    FAIL bottom length-em(em) / values
+         can't access property "getPropertyValue", window.getComputedStyle(...) is null
+    FAIL bottom length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "font-size:2s" but got ""
+    FAIL left length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "font-size:2s" but got ""
+    FAIL line-height length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "font-size:2s" but got ""
+    FAIL letter-spacing length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "font-size:2s" but got ""
+    FAIL word-spacing length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "font-size:2s" but got ""
+    FAIL text-indent length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "font-size:2s" but got ""
+    FAIL outline-offset length-em(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    FAIL outline-offset length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "font-size:2s" but got ""
+    FAIL outline-width length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "font-size:2s" but got ""
+    FAIL vertical-align length-em(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value "length"
+    FAIL vertical-align length-em(em) / events
+         assert_equals: Expected TransitionEnd events triggered on .container expected "font-size:2s" but got ""
+  FILE css/css-transitions/pseudo-elements-001.html  (0/4)
+    FAIL transition padding-left on :before / values
+         assert_not_equals: must not be target value after start got disallowed value "10px"
+    FAIL transition padding-left on :after / values
+         assert_not_equals: must not be target value after start got disallowed value "10px"
+    FAIL transition padding-left on :before, changing content / values
+         assert_not_equals: must not be target value after start got disallowed value "10px"
+    FAIL transition padding-left on :after, changing content / values
+         assert_not_equals: must not be target value after start got disallowed value "10px"
+  FILE css/css-transitions/pseudo-elements-002.html  (0/1)
+    FAIL Check that transitions run on a pseudo element whose ancestor changes display type.
+         assert_equals: expected "200px" but got "300px"
+  FILE css/css-transitions/retargetted-transition-with-box-sizing.html  (0/1)
+    FAIL Retargeting transitions on box size relative transitions should work.
+         assert_equals: expected "matrix3d(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 37.5, 75, 50, 1)" but got "matrix(1, 0, 0, 1, 25.120434, 50.240868)"
+  FILE css/css-transitions/shadow-root-insertion.html  (0/1)
+    FAIL addition of a shadow root should not cancel in-flight transitions
+         assert_equals: Transition should not have been canceled expected "50px" but got "50.002476px"
+  FILE css/css-transitions/starting-of-transitions-001.html  (0/1)
+    FAIL changes to transition-property should cancel in-flight transitions
+         assert_equals: Transition should be initially 50% complete expected "50px" but got "50.069164px"
+  FILE css/css-transitions/starting-style-adjustment.html  (0/1)
+    FAIL The display property in <legend> @starting-style should be blockified so no transition should start
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "currentTime", document.timeline is undefined"
+  FILE css/css-transitions/starting-style-cascade.html  (0/6)
+    FAIL Overridden @starting-style - order of appearance
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "currentTime", document.timeline is undefined"
+    FAIL @starting-style with higher specificity
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "currentTime", document.timeline is undefined"
+    FAIL Starting style does not inherit from parent starting style
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "currentTime", document.timeline is undefined"
+    FAIL Starting style inheriting from parent's after-change style
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "currentTime", document.timeline is undefined"
+    FAIL Starting style inheriting from parent's after-change style while parent transitioning
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "currentTime", document.timeline is undefined"
+    FAIL Starting style inheriting from parent's after-change style while ancestor is transitioning
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "currentTime", document.timeline is undefined"
+  FILE css/css-transitions/starting-style-name-defining-rules.html  (0/2)
+    FAIL @keyframes and @layer in @starting-style apply
+         assert_equals: @keyframes applied expected "rgb(0, 128, 0)" but got "rgb(0, 0, 0)"
+    FAIL Load @font-face from @starting-style rule
+         promise_test: Unhandled rejection with value: object "SyntaxError: Failed to parse font: 20px/1 web-font"
+  FILE css/css-transitions/starting-style-rule-basic.html  (0/3)
+    FAIL Triggered transition from first style update
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "currentTime", document.timeline is undefined"
+    FAIL Triggered transition from display:none to display:block
+         assert_equals: Overridden with red. No transition while display:none expected "rgb(255, 0, 0)" but got "rgba(255, 0, 0, 0.5)"
+    FAIL Triggered transition on DOM insertion
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "currentTime", document.timeline is undefined"
+  FILE css/css-transitions/starting-style-rule-none.html  (0/1)
+    FAIL @starting-style with display:none
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "currentTime", document.timeline is undefined"
+  FILE css/css-transitions/starting-style-rule-pseudo-elements.html  (0/3)
+    FAIL Triggered transition from first style update
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "currentTime", document.timeline is undefined"
+    FAIL Triggered transition from display:none to display:block
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "currentTime", document.timeline is undefined"
+    FAIL Triggered transition on DOM insertion
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "currentTime", document.timeline is undefined"
+  FILE css/css-transitions/starting-style-size-container.html  (0/2)
+    FAIL Triggered transition from first style update based on up-to-date container query
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "currentTime", document.timeline is undefined"
+    FAIL Triggered transition from the display change inside the up-to-date container query
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "currentTime", document.timeline is undefined"
+  FILE css/css-transitions/transition-001.html  (0/13)
+    FAIL parse '1s'
+         assert_equals: transition-property expected "all" but got ""
+    FAIL parse '1s 2s'
+         assert_equals: transition-property expected "all" but got ""
+    FAIL parse '1s 2s ease-in'
+         assert_equals: transition-property expected "all" but got ""
+    FAIL parse '1s ease-in 2s'
+         assert_equals: transition-property expected "all" but got ""
+    FAIL parse 'ease-in 1s 2s'
+         assert_equals: transition-property expected "all" but got ""
+    FAIL parse '1s width'
+         assert_equals: transition-property expected "width" but got ""
+    FAIL parse 'width 1s'
+         assert_equals: transition-property expected "width" but got ""
+    FAIL parse '1s width 2s'
+         assert_equals: transition-property expected "width" but got ""
+    FAIL parse '1s 2s width ease-in'
+         assert_equals: transition-property expected "width" but got ""
+    FAIL parse '1s ease-in 2s width'
+         assert_equals: transition-property expected "width" but got ""
+    FAIL parse 'width ease-in 1s 2s'
+         assert_equals: transition-property expected "width" but got ""
+    FAIL parse 'width .1s ease-in .2s'
+         assert_equals: transition-property expected "width" but got ""
+    FAIL parse '1s width linear(0, .5 10% 20%, 1, .5 50%, 1) 2s'
+         assert_equals: transition-property expected "width" but got ""
+  FILE css/css-transitions/transition-after-animation-001.html  (0/1)
+    Timeout Starting transition after animation has ended
+  FILE css/css-transitions/transition-background-position-with-edge-offset.html  (1/1)
+  FILE css/css-transitions/transition-base-response-001.html  (1/3)
+    FAIL em units respond to font-size transition
+         assert_equals: expected "15px" but got "18px"
+    FAIL ex units respond to font-size transition
+         assert_equals: expected "6.8847656px" but got "8.261719px"
+  FILE css/css-transitions/transition-base-response-002.html  (1/1)
+  FILE css/css-transitions/transition-base-response-003.html  (0/1)
+    FAIL Identical elements are all responsive to font-size transition
+         assert_equals: expected "15px" but got "22.5px"
+  FILE css/css-transitions/transition-behavior-events.html  (0/2)
+    FAIL transitionrun events
+         assert_array_equals: Should only get transitionrun event on #width2 lengths differ, expected array ["width2"] length 1, got [] length 0
+    FAIL transitionstart events
+         assert_array_equals: Should only get transitionstart event on #width2 lengths differ, expected array ["width2"] length 1, got [] length 0
+  FILE css/css-transitions/transition-behavior.html  (1/6)
+    FAIL transition-behavior:allow-discrete should animate discrete properties.
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "currentTime", document.timeline is undefined"
+    FAIL transition-behavior:allow-discrete overlaps the previous normal value.
+         assert_equals: Should start a discrete property transition expected 1 but got 0
+    FAIL transition-behavior changed to normal should stop the running discrete transitions.
+         assert_equals: Should start a discrete property transition expected 1 but got 0
+    FAIL transition-behavior:allow-discrete should animate for values fallback to discrete animations.
+         assert_equals: expected "circle(farthest-side)" but got "circle(farthest-side at 50% 50%)"
+    FAIL transition-behavior:normal should cancel the running transitions whose animation values are not interpolatable
+         assert_equals: expected "circle(50px)" but got "circle(50px at 50% 50%)"
+  FILE css/css-transitions/transition-delay-001.html  (0/21)
+    FAIL parse '10.2s'
+         assert_equals: Expected computed value expected "10.2s" but got ""
+    FAIL parse '1s'
+         assert_equals: Expected computed value expected "1s" but got ""
+    FAIL parse '0.1s'
+         assert_equals: Expected computed value expected "0.1s" but got ""
+    FAIL parse '0.01s'
+         assert_equals: Expected computed value expected "0.01s" but got ""
+    FAIL parse '0.001s'
+         assert_equals: Expected computed value expected "0.001s" but got ""
+    FAIL parse '0.009s'
+         assert_equals: Expected computed value expected "0.009s" but got ""
+    FAIL parse '0s'
+         assert_equals: Expected computed value expected "0s" but got ""
+    FAIL parse '.0s'
+         assert_equals: Expected computed value expected "0s" but got ""
+    FAIL parse '0.0s'
+         assert_equals: Expected computed value expected "0s" but got ""
+    FAIL parse '.3s'
+         assert_equals: Expected computed value expected "0.3s" but got ""
+    FAIL parse '-5s'
+         assert_equals: Expected computed value expected "-5s" but got ""
+    FAIL parse '10200ms'
+         assert_equals: Expected computed value expected "10.2s" but got ""
+    FAIL parse '1000ms'
+         assert_equals: Expected computed value expected "1s" but got ""
+    FAIL parse '100ms'
+         assert_equals: Expected computed value expected "0.1s" but got ""
+    FAIL parse '10ms'
+         assert_equals: Expected computed value expected "0.01s" but got ""
+    FAIL parse '9ms'
+         assert_equals: Expected computed value expected "0.009s" but got ""
+    FAIL parse '1ms'
+         assert_equals: Expected computed value expected "0.001s" but got ""
+    FAIL parse '0ms'
+         assert_equals: Expected computed value expected "0s" but got ""
+    FAIL parse '-500ms'
+         assert_equals: Expected computed value expected "-0.5s" but got ""
+    FAIL parse '1s, 0.1s, 10ms'
+         assert_equals: Expected computed value expected "1s, 0.1s, 0.01s" but got ""
+    FAIL parse 'foobar'
+         assert_equals: Expected computed value expected "0s" but got ""
+  FILE css/css-transitions/transition-duration-001.html  (0/21)
+    FAIL parse '10.2s'
+         assert_equals: Expected computed value expected "10.2s" but got ""
+    FAIL parse '1s'
+         assert_equals: Expected computed value expected "1s" but got ""
+    FAIL parse '0.1s'
+         assert_equals: Expected computed value expected "0.1s" but got ""
+    FAIL parse '0.01s'
+         assert_equals: Expected computed value expected "0.01s" but got ""
+    FAIL parse '0.001s'
+         assert_equals: Expected computed value expected "0.001s" but got ""
+    FAIL parse '0.009s'
+         assert_equals: Expected computed value expected "0.009s" but got ""
+    FAIL parse '0s'
+         assert_equals: Expected computed value expected "0s" but got ""
+    FAIL parse '.0s'
+         assert_equals: Expected computed value expected "0s" but got ""
+    FAIL parse '0.0s'
+         assert_equals: Expected computed value expected "0s" but got ""
+    FAIL parse '.3s'
+         assert_equals: Expected computed value expected "0.3s" but got ""
+    FAIL parse '-5s'
+         assert_equals: Expected computed value expected "0s" but got ""
+    FAIL parse '10200ms'
+         assert_equals: Expected computed value expected "10.2s" but got ""
+    FAIL parse '1000ms'
+         assert_equals: Expected computed value expected "1s" but got ""
+    FAIL parse '100ms'
+         assert_equals: Expected computed value expected "0.1s" but got ""
+    FAIL parse '10ms'
+         assert_equals: Expected computed value expected "0.01s" but got ""
+    FAIL parse '9ms'
+         assert_equals: Expected computed value expected "0.009s" but got ""
+    FAIL parse '1ms'
+         assert_equals: Expected computed value expected "0.001s" but got ""
+    FAIL parse '0ms'
+         assert_equals: Expected computed value expected "0s" but got ""
+    FAIL parse '-500ms'
+         assert_equals: Expected computed value expected "0s" but got ""
+    FAIL parse '1s, 0.1s, 10ms'
+         assert_equals: Expected computed value expected "1s, 0.1s, 0.01s" but got ""
+    FAIL parse 'foobar'
+         assert_equals: Expected computed value expected "0s" but got ""
+  FILE css/css-transitions/transition-duration-shorthand.html  (0/1)
+    FAIL transition-duration when looking at shorthand properties should be correct
+         assert_equals: Height should have advanced to the end of the transition right away expected "200px" but got "100px"
+  FILE css/css-transitions/transition-events-with-document-change.html  (0/1)
+    FAIL transition events for an element changing document
+         promise_test: Unhandled rejection with value: object "TypeError: can't access property "ready", target.getAnimations()[0] is undefined"
+  [33mACCUM[0m css/css-transitions/transition-important.html (SIGSEGV in-batch, PASSES alone → cross-file runtime-reuse artifact, not a per-page Bar 0)
+  FILE css/css-transitions/transition-in-iframe-001.html  (0/1)
+    Timeout Transitions: Transition in <iframe> on page with empty rAF finishes
+
+thread 'main' (3232184) panicked at engine/dom/src/lib.rs:904:19:
+index out of bounds: the len is 2 but the index is 749906848
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'main' (3232184) panicked at /rustc/58cf8f9c35b355199727627d07ae34a4e2846d67/library/core/src/panicking.rs:225:5:
+panic in a function that cannot unwind
+stack backtrace:
+   0:     0x5d7805785615 - <unknown>
+   1:     0x5d780500fdb4 - <unknown>
+   2:     0x5d7805784bdb - <unknown>
+   3:     0x5d78057848fc - <unknown>
+   4:     0x5d78057aa012 - <unknown>
+   5:     0x5d78057a9f99 - <unknown>
+   6:     0x5d78057aa49c - <unknown>
+   7:     0x5d78050154fc - <unknown>
+   8:     0x5d78050154c7 - <unknown>
+   9:     0x5d7805015513 - <unknown>
+  10:     0x5d78054cf21f - <unknown>
+  11:     0x5d78052a7ffb - <unknown>
+  12:     0x5d780529e594 - <unknown>
+  13:     0x5d78062d14f7 - <unknown>
+  14:     0x5d78062c1e1e - <unknown>
+  15:     0x5d78062d0ccf - <unknown>
+  16:     0x5d78062d1368 - <unknown>
+  17:     0x5d78062d17ad - <unknown>
+  18:     0x5d7806438ca8 - <unknown>
+  19:     0x5d78062d14f7 - <unknown>
+  20:     0x5d78062c1e1e - <unknown>
+  21:     0x5d78062d0ccf - <unknown>
+  22:     0x5d78062d34cc - <unknown>
+  23:     0x5d78063de74a - <unknown>
+  24:     0x5d78063df0ef - <unknown>
+  25:     0x5d78055bc7c8 - <unknown>
+  26:     0x5d7805247afa - <unknown>
+  27:     0x5d7805243312 - <unknown>
+  28:     0x5d78054c93fc - <unknown>
+  29:     0x5d78055a11c3 - <unknown>
+  30:     0x5d7804f8a99d - <unknown>
+  31:     0x5d7804fa9aea - <unknown>
+  32:     0x5d7804fd6c70 - <unknown>
+  33:     0x5d7804fecb9e - <unknown>
+  34:     0x5d7804f7f1e4 - <unknown>
+  35:     0x5d7804ff63fa - <unknown>
+  36:     0x7bba5aa2a3b8 - __libc_start_call_main
+                               at ./csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+  37:     0x7bba5aa2a47b - __libc_start_main_impl
+                               at ./csu/../csu/libc-start.c:360:3
+  38:     0x5d7804f75865 - <unknown>
+  39:                0x0 - <unknown>
+thread caused non-unwinding panic. aborting.
+Redirecting call to abort() to mozalloc_abort
+
+  [33mACCUM[0m css/css-transitions/transition-property-001.html (SIGSEGV in-batch, PASSES alone → cross-file runtime-reuse artifact, not a per-page Bar 0)
+  FILE css/css-transitions/transition-property-002.html  (0/7)
+    FAIL parse 'none, all'
+         assert_equals: expected "all" but got ""
+    FAIL parse 'all, none'
+         assert_equals: expected "all" but got ""
+    FAIL parse 'foobar'
+         assert_equals: expected "foobar" but got ""
+    FAIL parse 'all, foobar'
+         assert_equals: expected "all, foobar" but got ""
+    FAIL parse 'foobar, all'
+         assert_equals: expected "foobar, all" but got ""
+    FAIL parse 'inherit'
+         assert_equals: expected "padding" but got ""
+    FAIL parse 'initial'
+         assert_equals: expected "all" but got ""
+  FILE css/css-transitions/transition-remove-and-change-immediate.html  (0/1)
+    Timeout Removing transition and changing width applies change immediately
+  FILE css/css-transitions/transition-reparented.html  (0/1)
+    FAIL When an element is reparented, any CSS Transition on it should be cancelled
+         assert_equals: expected "100px" but got "54.608707px"
+  FILE css/css-transitions/transition-zero-duration-with-delay.html  (0/1)
+    Timeout 0-duration transition with delay applies change after delay period
+  FILE css/css-transitions/transitioncancel-001.html  (0/1)
+    FAIL transitioncancel should be fired if the element is made display:none during the transition
+         assert_true: transitioncancel event did fire expected true got false
+  FILE css/css-transitions/transitioncancel-002.html  (0/1)
+    Timeout Removing a transitioning property from transition-property should trigger transitioncancel
+  FILE css/css-transitions/transitioncancel-003.html  (0/1)
+    Timeout Mid-transition transition changes affect subsequent transitions
+  FILE css/css-transitions/transitionevent-interface.html  (2/42)
+    FAIL the event inherts from Event
+         assert_true: expected true got false
+    FAIL Missing type argument
+         assert_throws_js: First argument is required, so was expecting a TypeError. function "function() { }" did not throw
+    FAIL type argument is string
+         assert_equals: expected (string) "test" but got (undefined) undefined
+    FAIL type argument is null
+         assert_equals: expected (string) "null" but got (undefined) undefined
+    FAIL event type set to undefined
+         assert_equals: expected (string) "undefined" but got (undefined) undefined
+    FAIL propertyName has default value of empty string
+         assert_equals: expected (string) "" but got (undefined) undefined
+    FAIL elapsedTime has default value of 0.0
+         assert_equals: expected (number) 0 but got (undefined) undefined
+    FAIL propertyName is readonly
+         assert_readonly: readonly attribute value property "propertyName" not found
+    FAIL elapsedTime is readonly
+         assert_readonly: readonly attribute value property "elapsedTime" not found
+    FAIL animationEventInit argument is null
+         assert_equals: expected (string) "" but got (undefined) undefined
+    FAIL animationEventInit argument is undefined
+         assert_equals: expected (string) "" but got (undefined) undefined
+    FAIL animationEventInit argument is empty dictionary
+         assert_equals: expected (string) "" but got (undefined) undefined
+    FAIL TransitionEvent.pseudoElement initialized from the dictionary
+         assert_equals: expected (string) "::testPseudo" but got (undefined) undefined
+    FAIL propertyName set to 'sample'
+         assert_equals: expected (string) "sample" but got (undefined) undefined
+    FAIL propertyName set to undefined
+         assert_equals: expected (string) "" but got (undefined) undefined
+    FAIL propertyName set to null
+         assert_equals: expected (string) "null" but got (undefined) undefined
+    FAIL propertyName set to false
+         assert_equals: expected (string) "false" but got (undefined) undefined
+    FAIL propertyName set to true
+         assert_equals: expected (string) "true" but got (undefined) undefined
+    FAIL propertyName set to a number
+         assert_equals: expected (string) "0.5" but got (undefined) undefined
+    FAIL propertyName set to []
+         assert_equals: expected (string) "" but got (undefined) undefined
+    FAIL propertyName set to [1, 2, 3]
+         assert_equals: expected (string) "1,2,3" but got (undefined) undefined
+    FAIL propertyName set to an object
+         assert_equals: expected (string) "[object Object]" but got (undefined) undefined
+    FAIL propertyName set to an object with a valueOf function
+         assert_equals: expected (string) "[object Object]" but got (undefined) undefined
+    FAIL elapsedTime set to 0.5
+         assert_equals: expected (number) 0.5 but got (undefined) undefined
+    FAIL elapsedTime set to -0.5
+         assert_equals: expected (number) -0.5 but got (undefined) undefined
+    FAIL elapsedTime set to undefined
+         assert_equals: expected (number) 0 but got (undefined) undefined
+    FAIL elapsedTime set to null
+         assert_equals: expected (number) 0 but got (undefined) undefined
+    FAIL elapsedTime set to false
+         assert_equals: expected (number) 0 but got (undefined) undefined
+    FAIL elapsedTime set to true
+         assert_equals: expected (number) 1 but got (undefined) undefined
+    FAIL elapsedTime set to ''
+         assert_equals: expected (number) 0 but got (undefined) undefined
+    FAIL elapsedTime set to []
+         assert_equals: expected (number) 0 but got (undefined) undefined
+    FAIL elapsedTime set to [0.5]
+         assert_equals: expected (number) 0.5 but got (undefined) undefined
+    FAIL elapsedTime set to an object with a valueOf function
+         assert_equals: expected (number) 0.5 but got (undefined) undefined
+    FAIL elapsedTime cannot be set to NaN
+         assert_throws_js: elapsedTime cannot be NaN so was expecting a TypeError function "function() { }" did not throw
+    FAIL elapsedTime cannot be set to Infinity
+         assert_throws_js: elapsedTime cannot be Infinity so was expecting a TypeError function "function() { }" did not throw
+    FAIL elapsedTime cannot be set to -Infinity
+         assert_throws_js: elapsedTime cannot be -Infinity so was expecting a TypeError function "function() { }" did not throw
+    FAIL elapsedTime cannot be set to 'sample'
+         assert_throws_js: elapsedTime cannot be a string so was expecting a TypeError function "function() { }" did not throw
+    FAIL elapsedTime cannot be set to [0.5, 1.0]
+         assert_throws_js: elapsedTime cannot be a multi-element array so was expecting a TypeError function "function() { }" did not throw
+    FAIL elapsedTime cannot be set to an object
+         assert_throws_js: elapsedTime cannot be an object so was expecting a TypeError function "function() { }" did not throw
+    FAIL TransitionEventInit properties set value
+         assert_equals: expected (string) "sample" but got (undefined) undefined
+  FILE css/css-transitions/transitions-retarget.html  (0/1)
+    FAIL Retargeting a transition should cause the old transition to be cancelled
+         assert_equals: Transition creates an animation expected 1 but got 0
+  FILE css/css-transitions/unregistered-custom-property-transition.html  (0/3)
+    FAIL unset -> first value transition with allow-discrete
+         assert_equals: exactly one transition is running expected 1 but got 0
+    FAIL first value -> unset transition with allow-discrete
+         assert_equals: exactly one transition is running expected 1 but got 0
+    FAIL retargeting a running transition with allow-discrete
+         assert_equals: exactly one transition is running expected 1 but got 0
+  FILE css/css-transitions/zero-duration-multiple-transition.html  (0/1)
+    FAIL transition-duration of 0 prevents earlier transitions with the same property from starting.
+         assert_equals: expected "rgb(255, 0, 0)" but got "rgb(12, 0, 0)"
+
+── WPT css/css-transitions ──────────────────────────────────────────
+   12.8%     82/643    (91 files)  css/css-transitions
+   66.9%    476/711    (11 files)  css/css-transitions/animations
+   68.4%    130/190    (18 files)  css/css-transitions/parsing
+
+  FILES  120   subtests 688/1544  =  44.6%
+  NO_REPORT 0   [1mHANG/CRASH 1[0m (Bar 0)   SHORT 0 (instrument)   SLOW 0 (our budget)   TH_TIMEOUT 21 (async test never completed)
+  ACCUM 3 (SIGSEGV'd the shared batch runtime but PASS in a fresh one — a cross-file runtime-reuse artifact, recovered in isolation; the underlying UAF is a tracked Bar-0 to FIX, see docs/wiki/js-engine.md)
