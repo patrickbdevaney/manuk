@@ -1,0 +1,5 @@
+  run1: chrome #13 transcript [h8] combobox [collapsed] | live [h5] combobox [expanded]
+  run2: chrome #13 transcript [h8] combobox [collapsed] | live [h5] combobox [expanded]
+  run3: chrome #13 transcript [h8] combobox [collapsed] | live [h5] combobox [expanded]
+  transcript step 9: act h7 click -> 'no change\nurl: unchanged   verified: target was topmost at dispatch; dispatched click (no '
+GATE PASS: chrome #13 is [expanded] in all 3 runs at chrome_ver=145.0.7632.116; transcript recorded [collapsed] and its Select-time click did nothing
