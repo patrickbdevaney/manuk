@@ -34,9 +34,16 @@ async fn main() -> Result<()> {
     let tree = browser.a11y_tree()?;
     // W6.R1.b.a: diagnostics on stderr (stdout stays the TSV the capture parses).
     let errs = manuk_js::script_errors();
-    eprintln!("DIAG script_error_count\t{}", manuk_js::script_error_count());
+    eprintln!(
+        "DIAG script_error_count\t{}",
+        manuk_js::script_error_count()
+    );
     for e in errs.iter().take(20) {
-        eprintln!("DIAG script_error\t{}\t{}", e.phase, e.message.lines().next().unwrap_or(""));
+        eprintln!(
+            "DIAG script_error\t{}\t{}",
+            e.phase,
+            e.message.lines().next().unwrap_or("")
+        );
     }
     if let Ok(n) = browser.eval_value("document.getElementsByTagName('*').length+' elements; body.text='+(document.body?document.body.innerText.length:-1)+' chars; root#='+document.querySelectorAll('#__next,#root,#app').length").await {
         eprintln!("DIAG dom\t{n}");

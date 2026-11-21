@@ -2962,6 +2962,9 @@ pub struct Page {
     /// **after** the script runs, so the post-run document is byte-identical to before — the only
     /// thing that changed is what the script itself can see while it is running.
     dyn_scripts_ran: std::collections::HashSet<manuk_dom::NodeId>,
+    /// `<link rel=stylesheet>` nodes whose `load`/`error` event has been dispatched (once each).
+    /// React 19's stylesheet-precedence commit waits on that event (W6.R1.b.a.a.a).
+    sheet_link_events_done: std::collections::HashSet<manuk_dom::NodeId>,
     /// **The pre-fetched ES-module import graph (B3b)** — resolved-url → source for every module the
     /// page's `<script type=module>` roots reach. Filled by the async pre-fetch pass (`load_async` /
     /// `prepare_prefetched`) and seeded into the JS layer by [`run_deferred_scripts`] at the instant the
@@ -7442,6 +7445,10 @@ impl Page {
         // else eventually leaks and silently stops a healthy page from running its scripts.
         manuk_js::event_loop::clear_convergence_state();
         for _ in 0..max_rounds {
+            // Links a script inserted since the last round: fetch them, then tell the page.
+            self.fetch_and_apply_stylesheets(fonts, viewport_width)
+                .await;
+            let notified = self.fire_stylesheet_link_events(fonts, viewport_width);
             let csp = &self.csp;
             let pending: Vec<(manuk_dom::NodeId, String)> = self
                 .dom
@@ -7471,7 +7478,7 @@ impl Page {
                     Err(_) => true,
                 })
                 .collect();
-            if pending.is_empty() {
+            if pending.is_empty() && notified == 0 {
                 break;
             }
             let fetched =
@@ -7597,6 +7604,66 @@ impl Page {
             self.fetch_and_apply_masks().await;
         }
         ran
+    }
+
+    /// **Tell the page its `<link rel=stylesheet>` arrived (or failed).** React 19 inserts
+    /// `<link rel=stylesheet data-precedence>` and holds the whole commit until that link's `load`/`error`;
+    /// with no event the commit waits for its 60 s timer (opendining: 0 targets inside a 4 s settle,
+    /// W6.R1.b.a.a). Fires once per link, after the stylesheet fetch phase has settled it.
+    #[cfg(feature = "spidermonkey")]
+    fn fire_stylesheet_link_events(&mut self, fonts: &FontContext, viewport_width: f32) -> usize {
+        if self.js.is_none() {
+            return 0;
+        }
+        let base = self.final_url.clone();
+        let links: Vec<(manuk_dom::NodeId, bool)> = self
+            .dom
+            .descendants(self.dom.root())
+            .filter(|n| self.dom.tag_name(*n) == Some("link"))
+            .filter(|n| !self.sheet_link_events_done.contains(n))
+            .filter_map(|n| {
+                let el = self.dom.element(n)?;
+                let is_sheet = el.attr("rel").is_some_and(|r| {
+                    r.split_ascii_whitespace()
+                        .any(|t| t.eq_ignore_ascii_case("stylesheet"))
+                });
+                let href = el.attr("href").map(str::trim).filter(|h| !h.is_empty())?;
+                if !is_sheet {
+                    return None;
+                }
+                let url = resolve_url(&base, href);
+                let loaded = self.external_css.contains_key(&url);
+                let settled =
+                    loaded || self.failed_css.contains(&url) || self.absent_css.contains(&url);
+                settled.then_some((n, loaded))
+            })
+            .collect();
+        let mut n_fired = 0;
+        for (node, loaded) in links {
+            self.sheet_link_events_done.insert(node);
+            let _reflow = ReflowScope::install(
+                &self.dom,
+                fonts,
+                viewport_width,
+                &self.images,
+                &self.final_url,
+                &self.external_css,
+                &self.scroll_offsets,
+                self.sticky_scroll_y,
+                self.has_sticky,
+            );
+            let rects: HashMap<manuk_dom::NodeId, [f32; 4]> = self
+                .root_box
+                .node_rects(&self.dom)
+                .into_iter()
+                .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
+                .collect();
+            let ty = if loaded { "load" } else { "error" };
+            let Some(ctx) = &self.js else { break };
+            let _ = manuk_js::dispatch_event(ctx, &mut self.dom, node, ty, &rects, &self.styles);
+            n_fired += 1;
+        }
+        n_fired
     }
 
     /// Type `text` into a field: set its value, then fire `input` and `change` — which is the part
@@ -9853,6 +9920,7 @@ impl Page {
             sticky_applied: std::collections::HashMap::new(),
             sticky_scroll_y: 0.0,
             dyn_scripts_ran: inlined_scripts,
+            sheet_link_events_done: Default::default(),
             // Empty by default; the async pre-fetch pass on the caller's path sets this before the
             // deferred (module) scripts run (`load_async`, `from_prefetched_inner`).
             module_graph_sources: std::collections::HashMap::new(),
