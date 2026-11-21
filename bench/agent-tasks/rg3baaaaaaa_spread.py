@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
-"""RG.3.0.b.a.a.a.a.a.a.a.a: run-to-run spread of the RG.3.0.b.a.a.a.a.a.a.a ordinal match count.
+"""RG.3.0.b.a.a.a.a.a.a.a.b.a.a: run-to-run spread of the expanded (fill_form -> type/click) ordinal match count.
 
 Reads the three unmutated runs docs/sprint/rg/RG3baaaaaaa-match-runN.json (+ .md for resolved counts), checks each
 carries chrome_ver == $MANUK_CHROME_PIN, and writes docs/sprint/rg/RG3baaaaaaa-spread.md with per-run counts and the
-min and max of manuk/chrome match and resolved counts.
-  rg3baaaaaaa_spread.py [--dir DIR]   exit 0 = GATE PASS, 1 = GATE FAIL (missing run, wrong or missing chrome_ver,
-                                      counts not readable from the run's table)
+min and max of manuk/chrome match and resolved counts. Denominator is EXPECT (13 ordinal steps per backend).
+Gate (red on any of these): a run below MIN_MANUK=9/13 manuk or MIN_CHROME=12/13 chrome; an opendining-7 ordinal
+step not matching; the runs disagreeing on match counts; wrong chrome_ver; missing or unreadable run.
+  rg3baaaaaaa_spread.py [--dir DIR]   exit 0 = GATE PASS, 1 = GATE FAIL
 Run with `python3 -I`; needs MANUK_CHROME_PIN."""
 import argparse, json, os, re, sys
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+EXPECT, MIN_MANUK, MIN_CHROME = 13, 9, 12
 ROW = re.compile(r"^\| (\S+) \| (manuk|chrome) \| #(\d+) \| `[^`]*` \| `([^`]*)` \| (yes|no) \|$", re.M)
 
 
@@ -31,16 +33,27 @@ def read_run(d, n, pin, errs):
     res = {"manuk": 0, "chrome": 0}
     tot = {"manuk": 0, "chrome": 0}
     match = {"manuk": 0, "chrome": 0}
-    for _, side, _, live, m in rows:
+    ord7 = {"manuk": 0, "chrome": 0}  # opendining-7 steps that match
+    ord7_tot = {"manuk": 0, "chrome": 0}
+    for task, side, _, live, m in rows:
         tot[side] += 1
         if live != "-":
             res[side] += 1
         match[side] += m == "yes"
+        if task == "opendining-7":
+            ord7_tot[side] += 1
+            ord7[side] += m == "yes"
     for s in ("manuk", "chrome"):
-        if tot[s] != 12:
-            errs.append(f"run{n}: {s} has {tot[s]} table rows, expected 12")
+        if tot[s] != EXPECT:
+            errs.append(f"run{n}: {s} has {tot[s]} table rows, expected {EXPECT}")
         if match[s] != counts[s]:
             errs.append(f"run{n}: {s} table shows {match[s]} matches, json says {counts[s]}")
+        if ord7[s] != ord7_tot[s] or ord7_tot[s] == 0:
+            errs.append(f"run{n}: {s} opendining-7 {ord7[s]}/{ord7_tot[s]} match, expected all")
+    if counts["manuk"] < MIN_MANUK:
+        errs.append(f"run{n}: manuk {counts['manuk']}/{EXPECT} < {MIN_MANUK}")
+    if counts["chrome"] < MIN_CHROME:
+        errs.append(f"run{n}: chrome {counts['chrome']}/{EXPECT} < {MIN_CHROME}")
     return {"chrome_ver": cv, "match": {s: counts[s] for s in ("manuk", "chrome")}, "resolved": res}
 
 
@@ -54,21 +67,25 @@ def main():
         r = read_run(a.dir, n, pin, errs)
         if r is not None:
             runs.append((n, r))
+    if runs and len({tuple(r["match"][s] for s in ("manuk", "chrome")) for _, r in runs}) > 1:
+        errs.append("runs disagree on match counts: " + ", ".join(f"run{n} {r['match']}" for n, r in runs))
+    if len(runs) != 3:
+        errs.append(f"only {len(runs)} of 3 runs readable")
     if errs:
         print("GATE FAIL:"); [print("  " + e) for e in errs]
         sys.exit(1)
-    md = ["## RG.3.0.b.a.a.a.a.a.a.a.a", "",
+    md = ["## RG.3.0.b.a.a.a.a.a.a.a.b.a.a", "",
           f"chrome_ver={pin}. Three unmutated runs of `bench/agent-tasks/rg3baaaaaaa_match.py` (same chrome_ver, "
           "each run's output copied before the next run overwrote it). Resolved = ordinal steps whose handle resolved "
-          "(live line not `-`), out of 12 per backend. Match = role and state/value agree.", "",
+          f"(live line not `-`), out of {EXPECT} per backend. Match = role and state/value agree.", "",
           "| run | manuk match | manuk resolved | chrome match | chrome resolved |", "|---|---|---|---|---|"]
     for n, r in runs:
-        md.append(f"| run{n} | {r['match']['manuk']}/12 | {r['resolved']['manuk']}/12 | {r['match']['chrome']}/12 | {r['resolved']['chrome']}/12 |")
+        md.append(f"| run{n} | {r['match']['manuk']}/{EXPECT} | {r['resolved']['manuk']}/{EXPECT} | {r['match']['chrome']}/{EXPECT} | {r['resolved']['chrome']}/{EXPECT} |")
     mn = lambda k, s: min(r[k][s] for _, r in runs)
     mx = lambda k, s: max(r[k][s] for _, r in runs)
     md += ["", "| count | min manuk | max manuk | min chrome | max chrome |", "|---|---|---|---|---|",
-           f"| match | {mn('match','manuk')}/12 | {mx('match','manuk')}/12 | {mn('match','chrome')}/12 | {mx('match','chrome')}/12 |",
-           f"| resolved | {mn('resolved','manuk')}/12 | {mx('resolved','manuk')}/12 | {mn('resolved','chrome')}/12 | {mx('resolved','chrome')}/12 |",
+           f"| match | {mn('match','manuk')}/{EXPECT} | {mx('match','manuk')}/{EXPECT} | {mn('match','chrome')}/{EXPECT} | {mx('match','chrome')}/{EXPECT} |",
+           f"| resolved | {mn('resolved','manuk')}/{EXPECT} | {mx('resolved','manuk')}/{EXPECT} | {mn('resolved','chrome')}/{EXPECT} | {mx('resolved','chrome')}/{EXPECT} |",
            ""]
     out = os.path.join(a.dir, "RG3baaaaaaa-spread.md")
     open(out, "w").write("\n".join(md) + "\n")
