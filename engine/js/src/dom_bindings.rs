@@ -13269,9 +13269,39 @@ unsafe fn el_scroll_into_view(cx: *mut RawJSContext, argc: u32, vp: *mut Value) 
 
 /// `element.focus()` / `.blur()` — a request; the host owns the focus ring and the caret.
 unsafe fn el_focus(cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
-    if let Some((_, node)) = this_node(vp) {
+    if let Some((dom, node)) = this_node(vp) {
         PENDING_FOCUS.with(|q| q.borrow_mut().push(Some(node)));
         ACTIVE_ELEMENT.with(|c| c.set(Some(node)));
+        // HTML focusing steps scroll the target into view, and a script reads `scrollTop` on the very
+        // next line (MUI MenuList autoFocusItem then measures). Mirror `Page::reveal_in_scrollers`
+        // here — centre the target in each scroll container that has clipped it wholly away — so the
+        // mirror and the queued host scroll agree before the host drains the focus request.
+        if std::env::var_os("MANUK_REVEAL_MUTATE").is_none() {
+            let mut cur = (*dom).parent(node);
+            while let Some(anc) = cur {
+                cur = (*dom).parent(anc);
+                let g = scroll_geom(anc);
+                if g[4] <= 0.0 || g[2] <= g[4] {
+                    continue;
+                }
+                let (Some(t), Some(c)) = (layout_rect(node), layout_rect(anc)) else {
+                    continue;
+                };
+                let (top, bottom) = (c[1], c[1] + g[4]);
+                if t[1] + t[3] > top && t[1] < bottom {
+                    continue;
+                }
+                let dy = (t[1] + t[3] / 2.0) - (top + g[4] / 2.0);
+                let want = (g[0] + dy).clamp(0.0, (g[2] - g[4]).max(0.0));
+                SCROLL_GEOM.with(|m| {
+                    if let Some(e) = m.borrow_mut().get_mut(&anc) {
+                        e[0] = want;
+                    }
+                });
+                PENDING_ELEM_SCROLLS.with(|q| q.borrow_mut().push((anc, g[1], want)));
+                SCROLL_SEQ.with(|c| c.set(c.get().wrapping_add(1)));
+            }
+        }
     }
     let _ = cx;
     *vp = UndefinedValue();

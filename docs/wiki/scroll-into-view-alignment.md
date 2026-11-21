@@ -44,3 +44,16 @@ away the reader's context**.
 The result is a REQUEST, exactly as `window.scrollTo` is — the host owns the viewport and clamps —
 with the same optimistic `SCROLL` write and `SCROLL_SEQ` bump, so `window.scrollY` reads back
 synchronously on the next line and the next geometry read lays out against it.
+
+## `focus()` scrolls too (RG.3.0.b.a.a.a.a.a.a.a.b.a.a.a.a.a.a.a.b.a / .b.b)
+
+HTML focusing steps scroll the focused element into view. `el_focus` now mirrors `Page::reveal_in_scrollers`:
+for each scroll container that has clipped the target wholly away it centres the target, writes the optimistic
+`SCROLL_GEOM` scrollTop and queues the element scroll, so `scrollTop` reads back on the next script line (MUI
+MenuList `autoFocusItem` measures right after focusing). `Page::set_focus` calls `reveal_in_scrollers` for the
+host side. A 400px list of 48 x 36px options, focus option 26: scrollTop 754 on manuk and Chrome. Gate:
+`engine/page/tests/g_focus_scrolls_into_view.rs`, red with `MANUK_REVEAL_MUTATE=1`.
+
+Observation contract that goes with it: content a scroll container has scrolled out of its view (above or below)
+stays listed on both backends; the `offscreen` taint is judged on the unscrolled position (the Chrome backend adds
+clipping ancestors' `scrollRects` offsets back). See docs/sprint/rg/RG3baaaaaaaaaaaaaaabb-contract.md.

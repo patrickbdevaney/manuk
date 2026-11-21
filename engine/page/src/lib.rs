@@ -12068,6 +12068,10 @@ impl Page {
             if self.dom.is_dirty(root) || self.dom.has_dirty_descendants(root) {
                 self.relayout(fonts, viewport_width);
             }
+            // HTML focusing steps: the focused element is scrolled into view (Chrome centres it in any
+            // scroll container that had clipped it away). MUI's MenuList autoFocusItem relies on this to
+            // show the selected option; without it a long listbox stays at scrollTop 0.
+            self.reveal_in_scrollers(n);
         }
         true
     }

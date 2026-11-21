@@ -3187,6 +3187,7 @@
 
   - L7 · The defect
   - L22 · Why the no-argument form could not be right by accident
+  - L48 · focus() scrolls too (RG.3.0.b.a.a.a.a.a.a.a.b.a.a.a.a.a.a.a.b.a / .b.b)
 
 ## The scrollable overflow region has TWO terms, and `width:0` hides one of them
 `docs/wiki/scroll-overflow-the-empty-box-corner.md`
@@ -3813,4 +3814,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3104 sections across 176 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3105 sections across 176 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

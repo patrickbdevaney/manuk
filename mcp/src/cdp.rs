@@ -436,6 +436,8 @@ struct Style {
     clips: bool,
     /// border widths (top, right, bottom, left): the clip is the padding box.
     border: [f32; 4],
+    /// The box's own scroll offset (scrollLeft, scrollTop), from the snapshot's `scrollRects`.
+    scroll: [f32; 2],
 }
 
 struct Raw {
@@ -523,11 +525,12 @@ fn parse_snapshot(snap: &Value, doc: usize, tag: u64) -> Result<(Raw, f32, f32)>
         }
     }
     let lay = &d["layout"];
-    let (ni, bounds, styles, po) = (
+    let (ni, bounds, styles, po, sr) = (
         arr(&lay["nodeIndex"]),
         arr(&lay["bounds"]),
         arr(&lay["styles"]),
         arr(&lay["paintOrders"]),
+        arr(&lay["scrollRects"]),
     );
     let mut layout = HashMap::new();
     for (k, i) in ni.iter().enumerate() {
@@ -565,6 +568,10 @@ fn parse_snapshot(snap: &Value, doc: usize, tag: u64) -> Result<(Raw, f32, f32)>
                 "border-left-width",
             ]
             .map(|n| g(n).trim_end_matches("px").parse().unwrap_or(0.0)),
+            scroll: {
+                let r = sr.get(k).map(|v| arr(v)).unwrap_or_default();
+                [0, 1].map(|j| r.get(j).and_then(Value::as_f64).unwrap_or(0.0) as f32)
+            },
         };
         layout
             .entry(i)
@@ -1157,7 +1164,8 @@ impl Builder<'_> {
         // A `role=gridcell`/`td` the page makes clickable (a calendar day) is promoted exactly like a generic one: the
         // in-process session's `promote` turns ANY non-interactive clickable into `button [clickable]`, so without
         // `Role::Cell` here the Chrome backend listed the day as an unactionable `cell` (RG.3.0.b.a.a.a.a.a.a.a.b.a.a.a.a.a).
-        let was_generic_click = matches!(role, Role::Generic | Role::Cell) && r.clickable.contains(&i);
+        let was_generic_click =
+            matches!(role, Role::Generic | Role::Cell) && r.clickable.contains(&i);
         if was_generic_click && !name.is_empty() {
             role = Role::Button;
         }
@@ -1304,10 +1312,24 @@ fn shield_of(r: &Raw, ids: &Idents, viewport_w: f32) -> Shield {
         let mut bg = manuk_css::Rgba::WHITE;
         let mut bg_found = false;
         let mut opacity = 1.0f32;
+        // Scroll offsets of the scroll containers above the run: "offscreen" is judged where the run sits with
+        // every container unscrolled, as the in-process shield does over its layout fragments. A listbox option
+        // scrolled above its list's view is reachable by scrolling (a click scrolls it in), not hidden text;
+        // judging the scrolled position withheld every option above the view but none below it
+        // (RG.3.0.b.a.a.a.a.a.a.a.b.a.a.a.a.a.a.a.b.b).
+        let mut unscroll = [0.0f32; 2];
         let mut p = r.parent[i];
         while p >= 0 {
             let pu = p as usize;
             if let Some((pb, _, ps)) = r.layout.get(&pu) {
+                if ps.clips
+                    && r.kind[pu] == 1
+                    && !matches!(r.tag(pu).as_str(), "html" | "body")
+                    && !mutated("scrolled-offscreen")
+                {
+                    unscroll[0] += ps.scroll[0];
+                    unscroll[1] += ps.scroll[1];
+                }
                 opacity *= ps.opacity;
                 if reason.is_none() && opacity <= 0.01 {
                     reason = Some("opacity");
@@ -1338,7 +1360,10 @@ fn shield_of(r: &Raw, ids: &Idents, viewport_w: f32) -> Shield {
         let reason = reason.or_else(|| {
             if st.font_size <= MIN_FONT_PX {
                 Some("tiny-font")
-            } else if b[0] + b[2] <= 0.0 || b[1] + b[3] <= 0.0 || b[0] >= viewport_w {
+            } else if {
+                let (x, y) = (b[0] + unscroll[0], b[1] + unscroll[1]);
+                x + b[2] <= 0.0 || y + b[3] <= 0.0 || x >= viewport_w
+            } {
                 Some("offscreen")
             } else if color.a <= 0.0 {
                 Some("transparent")
@@ -3166,7 +3191,10 @@ mod pointer_flag_tests {
     #[test]
     fn headless_reports_fine_pointer_and_hover() {
         let a = chrome_args(false);
-        let f = a.iter().find(|x| x.starts_with("--blink-settings=")).expect("blink-settings");
+        let f = a
+            .iter()
+            .find(|x| x.starts_with("--blink-settings="))
+            .expect("blink-settings");
         assert!(f.contains("primaryPointerType=4") && f.contains("primaryHoverType=2"));
     }
 }

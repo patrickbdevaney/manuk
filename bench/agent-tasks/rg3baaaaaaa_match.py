@@ -20,6 +20,7 @@ DOC = os.path.join(r.ROOT, "docs/sprint/rg/RG3baaaaaaa-match.md")
 BASE = os.path.join(r.ROOT, "docs/sprint/rg/RG3baaaaaaa-match.json")
 NODE_LINE = re.compile(r'^\s*\[(h\d+)\] (\w+)(.*)$', re.M)
 NAME = re.compile(r'^ "[^"]*"')
+STALE_RULE = os.environ.get("RG_STALE_RULE", "1") != "0"  # decision doc RG3baaaaaaaaaaaaaaaaca-decision.md
 REC = []  # (handle, observation) for each successful ordinal resolution, in call order
 
 
@@ -37,7 +38,7 @@ def flatten_ref(st, shift):
     """r.flatten with each nameless step tagged: (tool, args, rn, ref) where rn is the resolution key (ordinal moved by
     `shift`) and ref is the transcript node (unmoved) the handle was recorded against."""
     base = r.flatten(st)
-    seen, k, out = {}, 0, []
+    seen, k, out, stale = {}, 0, [], False
     for n, tool, inp, res in st:
         try:
             a = json.loads(inp)
@@ -49,10 +50,11 @@ def flatten_ref(st, shift):
                 h = args.get("handle")
                 ref = None
                 if h and rn is None and h in seen:
-                    ref = seen[h]
+                    ref = dict(seen[h], stale=stale)
                     rn = (o.ORD, ref["role"], ref["n"] + shift)
                 out.append((bt, ba, rn, ref))
         seen.update(node_lines(res))
+        stale = stale or "NO EFFECT" in res
     assert k == len(base)
     return out
 
@@ -73,6 +75,7 @@ def main():
     r.resolve = rec_resolve
     shift = 1 if a.mutate else 0
     detail, counts, n_ord = [], {"manuk": 0, "chrome": 0}, 0
+    strict = {"manuk": 0, "chrome": 0}
     for t in TASKS:
         st = r.lg.steps(os.path.join(r.TR, f"manuk_{t}_r1.jsonl"))[0]
         seq = flatten_ref(st, shift)
@@ -88,8 +91,12 @@ def main():
             for i, (h, obs) in zip(ok, REC):
                 live = node_lines(obs)[h]; want = ref_nodes[i]
                 m = live["role"] == want["role"] and live["sv"] == want["sv"]
+                strict[side] += m
+                tol = (not m and STALE_RULE and want.get("stale") and want["role"] == "combobox"
+                       and want["sv"] == "[collapsed]" and live["role"] == "combobox" and live["sv"] == "[expanded]")
+                m = m or tol
                 counts[side] += m
-                detail.append({"task": t, "side": side, "step": i, "transcript": want["line"], "live": live["line"], "match": bool(m)})
+                detail.append({"task": t, "side": side, "step": i, "transcript": want["line"], "live": live["line"], "match": bool(m), "stale_ref": bool(tol)})
                 print(("MATCH " if m else "DIFF  ") + f"{t} {side} #{i}\n   transcript: {want['line']}\n   live:       {live['line']}", flush=True)
             for i in idx:
                 if i in gaps:
@@ -98,16 +105,17 @@ def main():
     tot = {s: sum(1 for d in detail if d["side"] == s) for s in counts}
     assert all(v == n_ord for v in tot.values()), (tot, n_ord)
     summary = f"manuk {counts['manuk']}/{n_ord} match, chrome {counts['chrome']}/{n_ord} match (of {n_ord} ordinal steps each)"
-    print(summary)
+    print(summary, f"[strict (rule off): manuk {strict['manuk']}, chrome {strict['chrome']}]")
     if a.mutate is None:
-        json.dump({"chrome_ver": pin, "counts": counts}, open(BASE, "w"), indent=1)
+        json.dump({"chrome_ver": pin, "counts": counts, "strict_counts": strict}, open(BASE, "w"), indent=1)
         md = ["## RG.3.0.b.a.a.a.a.a.a.a", "", f"chrome_ver={pin}. For each ordinal step of the RG.3.0.b.a.a.a.a.a.a replay "
               "(settle 2 s, wait 2 s): the live line of the resolved handle beside the transcript line of the node it was "
               "recorded against. Match = same role and same state/value (name excluded).", "",
               "| task | backend | step | transcript line | live line | match |", "|---|---|---|---|---|---|"]
         for d in detail:
             md.append(f"| {d['task']} | {d['side']} | #{d['step']} | `{d['transcript']}` | `{d['live'] or '-'}` | {'yes' if d['match'] else 'no'} |")
-        md += ["", f"**{summary}**", ""]
+        md += ["", "Rows scored by the stale-reference tolerance (strictly a miss): " + (", ".join(f"{d['task']} {d['side']} #{d['step']}" for d in detail if d.get("stale_ref")) or "none"), ""]
+        md += ["", f"**{summary}**", "", f"Strict count (stale-reference tolerance off): manuk {strict['manuk']}/{n_ord}, chrome {strict['chrome']}/{n_ord}.", ""]
         open(DOC, "w").write("\n".join(md) + "\n")
         sys.exit(0)
     base = json.load(open(BASE))["counts"]

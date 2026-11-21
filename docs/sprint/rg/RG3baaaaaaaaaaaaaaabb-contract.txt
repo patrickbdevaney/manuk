@@ -1,0 +1,29 @@
+manuk  none      scrollTop=0 listed=48 first=opt 0 last=opt 47  chrome_ver=145.0.7632.116
+manuk  scrolltop scrollTop=504 listed=48 first=opt 0 last=opt 47  chrome_ver=145.0.7632.116
+manuk  focus     scrollTop=754 listed=48 first=opt 0 last=opt 47  chrome_ver=145.0.7632.116
+chrome none      scrollTop=0 listed=48 first=opt 0 last=opt 47  chrome_ver=145.0.7632.116
+chrome scrolltop scrollTop=504 listed=48 first=opt 0 last=opt 47  chrome_ver=145.0.7632.116
+chrome focus     scrollTop=754 listed=48 first=opt 0 last=opt 47  chrome_ver=145.0.7632.116
+modes where the listing differs: none
+GATE OK (same count/first/last in every mode)
+# MANUK_CDP_MUTATE=scrolled-offscreen (change reverted)
+manuk  none      scrollTop=0 listed=48 first=opt 0 last=opt 47  chrome_ver=145.0.7632.116
+manuk  scrolltop scrollTop=504 listed=48 first=opt 0 last=opt 47  chrome_ver=145.0.7632.116
+manuk  focus     scrollTop=754 listed=48 first=opt 0 last=opt 47  chrome_ver=145.0.7632.116
+chrome none      scrollTop=0 listed=48 first=opt 0 last=opt 47  chrome_ver=145.0.7632.116
+chrome scrolltop scrollTop=504 listed=35 first=opt 13 last=opt 47  chrome_ver=145.0.7632.116
+chrome focus     scrollTop=754 listed=28 first=opt 20 last=opt 47  chrome_ver=145.0.7632.116
+modes where the listing differs: ['scrolltop', 'focus']
+GATE RED (listing differs in ['scrolltop', 'focus'])
+# --mutate drop-above (broken input)
+modes where the listing differs: ['scrolltop', 'focus']
+GATE RED (listing differs in ['scrolltop', 'focus'])
+# rg3baaaaaaaaaaaaaaab_clock.py with the change
+== manuk chrome_ver=145.0.7632.116
+  first options after step #7: ['12:00 AM', '12:30 AM', '1:00 AM']
+  options listed after step #7: 48 (12:00 AM .. 11:30 PM)
+== chrome chrome_ver=145.0.7632.116
+  first options after step #7: ['12:00 AM', '12:30 AM', '1:00 AM']
+  options listed after step #7: 48 (12:00 AM .. 11:30 PM)
+clock/TZ/locale identical: True | first options identical: True
+GATE OK
