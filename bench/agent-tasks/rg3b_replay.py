@@ -25,6 +25,20 @@ MARK = "## RG.3.0.b"
 EXPECT = {"zilloft-2": "not comparable"}
 
 
+def items_of(tool, a):
+    """One call -> [(tool, args)] replay steps. A batch (`steps`) is expanded; `fill_form` (fields + submit) becomes one
+    `type` per field (value -> text) then a `click` on submit. Other calls pass through unchanged."""
+    subs = a.get("steps") if isinstance(a.get("steps"), list) else None
+    if subs:
+        return [("act" if s.get("tool") == "click" else s.get("tool"), {k: v for k, v in s.items() if k != "tool"}) for s in subs]
+    if tool == "fill_form":
+        items = [("type", {"handle": f["handle"], "text": f["value"]}) for f in a.get("fields", [])]
+        if a.get("submit"):
+            items.append(("act", {"handle": a["submit"], "action": "click"}))
+        return items
+    return [(tool, a)]
+
+
 def flatten(st):
     """-> [(tool, args)] with act/fill_form batches expanded; handle->(role,name) as last seen before each step."""
     seen, out = {}, []
@@ -33,15 +47,7 @@ def flatten(st):
             a = json.loads(inp)
         except ValueError:
             a = {}
-        subs = a.get("steps") if isinstance(a.get("steps"), list) else None
-        items = []
-        if subs:
-            for s in subs:
-                t = s.get("tool"); t = "act" if t == "click" else t
-                items.append((t, {k: v for k, v in s.items() if k != "tool"}))
-        else:
-            items.append((tool, a))
-        for t, args in items:
+        for t, args in items_of(tool, a):
             if t in ("act", "type", "key", "navigate", "scroll", "select", "check", "press", "commit", "back"):
                 h = args.get("handle")
                 out.append((t, args, seen.get(h) if h else None))

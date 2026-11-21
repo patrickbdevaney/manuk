@@ -2,7 +2,8 @@
 """RG.3.0.b.a.a.a.a.a.a.a: for the 12 ordinal steps per backend of the RG.3.0.b.a.a.a.a.a.a replay, print the live
 observation line of the handle each step resolved to beside the transcript line of the node it was recorded against,
 and count a match when role and state/value agree. The accessible name is not compared: an ordinal step has no name.
-Unresolved ordinal steps count as non-matches.
+Unresolved ordinal steps count as non-matches. The denominator is the number of ordinal steps the replay produces
+(13 per backend once fill_form is expanded; 12 before).
   rg3baaaaaaa_match.py [--mutate shift-ordinal]
   Unmutated run: measures, writes docs/sprint/rg/RG3baaaaaaa-match.md and the baseline counts
   docs/sprint/rg/RG3baaaaaaa-match.json, exit 0.
@@ -42,9 +43,7 @@ def flatten_ref(st, shift):
             a = json.loads(inp)
         except ValueError:
             a = {}
-        subs = a.get("steps") if isinstance(a.get("steps"), list) else None
-        items = [("act" if s.get("tool") == "click" else s.get("tool"), s) for s in subs] if subs else [(tool, a)]
-        for t, args in items:
+        for t, args in r.items_of(tool, a):
             if t in ("act", "type", "key", "navigate", "scroll", "select", "check", "press", "commit", "back"):
                 bt, ba, rn = base[k]; k += 1
                 h = args.get("handle")
@@ -73,12 +72,13 @@ def main():
         sys.exit("refusing: no baseline at " + BASE + "; run the unmutated gate first")
     r.resolve = rec_resolve
     shift = 1 if a.mutate else 0
-    detail, counts = [], {"manuk": 0, "chrome": 0}
+    detail, counts, n_ord = [], {"manuk": 0, "chrome": 0}, 0
     for t in TASKS:
         st = r.lg.steps(os.path.join(r.TR, f"manuk_{t}_r1.jsonl"))[0]
         seq = flatten_ref(st, shift)
         ref_nodes = {i: seq[i][3] for i in range(len(seq))}
         idx = [i for i, (_, _, rn, _) in enumerate(seq) if rn and rn[0] == o.ORD]
+        n_ord += len(idx)
         for side in ("manuk", "chrome"):
             REC.clear(); raw = []
             r.replay(side, [x[:3] for x in seq], a.wait, settle=2.0, raw=raw)
@@ -96,8 +96,8 @@ def main():
                     detail.append({"task": t, "side": side, "step": i, "transcript": ref_nodes[i]["line"], "live": None, "match": False})
                     print(f"UNRESOLVED {t} {side} #{i}  transcript: {ref_nodes[i]['line']}", flush=True)
     tot = {s: sum(1 for d in detail if d["side"] == s) for s in counts}
-    assert all(v == 12 for v in tot.values()), tot
-    summary = f"manuk {counts['manuk']}/12 match, chrome {counts['chrome']}/12 match (of 12 ordinal steps each)"
+    assert all(v == n_ord for v in tot.values()), (tot, n_ord)
+    summary = f"manuk {counts['manuk']}/{n_ord} match, chrome {counts['chrome']}/{n_ord} match (of {n_ord} ordinal steps each)"
     print(summary)
     if a.mutate is None:
         json.dump({"chrome_ver": pin, "counts": counts}, open(BASE, "w"), indent=1)
