@@ -1,0 +1,4 @@
+chrome_ver=145.0.7632.116 gocalendar-2 #6: transcript line `[h76] button [clickable] ↑offscreen` (role button, ordinal 47 among same-role nodes, sv '[clickable] ↑offscreen')
+manuk: DIFFERENT; live `[h269] button "Event color indicator Team Brainstorming Session 3pm - 5pm"`; 51 button nodes live, nameless `[clickable] ↑offscreen` buttons at ordinal(s) [50]; neighbours: #46 [h265] button "Event color indicator Client Call 12pm - 1pm" | #47 [h269] button "Event color indicator Team Brainstorming Sess | #48 [h273] button "Event color indicator Coffee with Mentor 6pm 
+chrome: DIFFERENT; live `[h126] button "30"`; 123 button nodes live, nameless `[clickable] ↑offscreen` buttons at ordinal(s) []; neighbours: #46 [h49] button | #47 [h126] button "30" | #48 [h128] button "01" in row "30"
+self-test: transcript line classifies SAME against itself
