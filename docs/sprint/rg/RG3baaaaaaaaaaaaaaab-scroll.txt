@@ -1,0 +1,9 @@
+manuk  none      scrollTop=0 listed=48 first=opt 0 last=opt 47  chrome_ver=145.0.7632.116
+manuk  scrolltop scrollTop=504 listed=48 first=opt 0 last=opt 47  chrome_ver=145.0.7632.116
+manuk  focus     scrollTop=0 listed=48 first=opt 0 last=opt 47  chrome_ver=145.0.7632.116
+chrome none      scrollTop=0 listed=48 first=opt 0 last=opt 47  chrome_ver=145.0.7632.116
+chrome scrolltop scrollTop=504 listed=35 first=opt 13 last=opt 47  chrome_ver=145.0.7632.116
+chrome focus     scrollTop=754 listed=28 first=opt 20 last=opt 47  chrome_ver=145.0.7632.116
+modes where the first listed option differs: ['scrolltop', 'focus']
+GATE OK (scroll position explains a first-option difference)
+exit 0

@@ -1,0 +1,13 @@
+== manuk chrome_ver=145.0.7632.116
+  now=1795266733417 local='2026-11-21T8:12' offset=300 tz='America/New_York' locale='en-US' lang='en-US' str='Sat Nov 21 2026 08:12:13 GMT-0500 (Eastern Standard Time)' tls='8:12:13 AM'
+  page clock - host clock at navigate: +0 s
+  first options after step #7: ['12:00 AM', '12:30 AM', '1:00 AM']
+  options listed after step #7: 48 (12:00 AM .. 11:30 PM)
+== chrome chrome_ver=145.0.7632.116
+  now=1795266808750 local='2026-11-21T8:13' offset=300 tz='America/New_York' locale='en-US' lang='en-US' str='Sat Nov 21 2026 08:13:28 GMT-0500 (Eastern Standard Time)' tls='8:13:28 AM'
+  page clock - host clock at navigate: +0 s
+  first options after step #7: ['7:00 AM', '7:30 AM', '8:00 AM']
+  options listed after step #7: 34 (7:00 AM .. 11:30 PM)
+clock/TZ/locale identical: True | first options identical: False
+GATE RED (identical clock/TZ/locale, different first option: unexplained)
+exit 1
