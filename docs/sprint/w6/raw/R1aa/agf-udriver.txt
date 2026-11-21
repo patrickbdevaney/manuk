@@ -1,0 +1,6 @@
+W6.R1 baseline udriver_r1.json scored 12 ok 0 geom 10 hit 0 missing 2 agf 0.0 chrome_ver Chrome/145.0.7632.116
+W6.R1 baseline udriver_r2.json scored 12 ok 0 geom 10 hit 0 missing 2 agf 0.0 chrome_ver Chrome/145.0.7632.116
+W6.R1 baseline udriver_r3.json scored 12 ok 0 geom 10 hit 0 missing 2 agf 0.0 chrome_ver Chrome/145.0.7632.116
+W6.R1.a.a rerun udriver_r1.json scored 12 ok 0 geom 10 hit 0 missing 2 agf 0.0 chrome_ver Chrome/145.0.7632.116
+W6.R1.a.a rerun udriver_r2.json scored 12 ok 0 geom 10 hit 0 missing 2 agf 0.0 chrome_ver Chrome/145.0.7632.116
+W6.R1.a.a rerun udriver_r3.json scored 12 ok 0 geom 10 hit 0 missing 2 agf 0.0 chrome_ver Chrome/145.0.7632.116
