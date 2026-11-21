@@ -98,3 +98,8 @@ the probe dir is already in place at `$WPT_DIR/css/zzprobeN50`.
 
 Re-poll 3 (2026-11-20 19:07-19:25, chrome_ver=145.0.7632.116): 1-min load sampled every 30 s for ~18 min: 27.3 -> min 19.1 -> 47.5,
 never <= 8 (co-tenant rustc for couple-sim at ~1500% CPU, not ours). No run made, no threshold edited.
+
+Re-poll 4 (W6.J1.b.a.a.a.b.a.a, 2026-11-20 19:19-19:51, chrome_ver=145.0.7632.116): 1-min load sampled every 30 s for ~32 min
+(background watcher capped at 20 min, then re-polled). Samples: 41.2, 42.5, 41.0, 39.8 at dispatch (19:19-19:24), 40.5-40.6 at 19:36,
+falling to a floor of 24.3 at 19:46, 26-29 at 19:51. Never <= 8 on 24 cores (co-tenant rustc for couple-sim, not ours). No run made,
+no threshold edited. Gate stays BLOCKED until the host is quiet; the probe dir `$WPT_DIR/css/zzprobeN50` is still in place.
