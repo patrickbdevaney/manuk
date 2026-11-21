@@ -18924,7 +18924,10 @@ const WINDOW_PRELUDE: &str = r#"
             // reach it the WPT suite reports TIMEOUT on every async file — the exact catastrophe the
             // `Infinity` was introduced to fix (see `__timeBudget` in event_loop.rs). 60s clears that
             // by 6×, and is still 1,440× short of one day.
-            g.__VCLOCK_HORIZON_MS = 60000;
+            // W6.R1.a.a.a: only a testharness page needs the 60s reach (its 10s harness timeout).
+            // An ordinary page gets Chrome-oracle's own 6s virtual budget, so a UI auto-dismiss
+            // timer (udriver's 10s MuiAlert) does not fire before an agent can snapshot it.
+            g.__VCLOCK_HORIZON_MS = (typeof g.add_completion_callback === 'function') ? 60000 : 6000;
             g.__timeBudget = (g.__now || 0) + g.__VCLOCK_HORIZON_MS;
         };
 

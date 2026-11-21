@@ -1,0 +1,1 @@
+(function(){var a=document.querySelector('.MuiAlert-root');var h=document.querySelector('header');return JSON.stringify({hasAlert:!!a,headerY:h?Math.round(h.getBoundingClientRect().top*10)/10:null,alertH:a?Math.round(a.getBoundingClientRect().height*10)/10:null});})()

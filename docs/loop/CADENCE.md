@@ -15,7 +15,7 @@
 | median tick cycle | **33m** | 1186 intervals |
 | median, last 10 | **32m** | 10 intervals |
 | fastest / slowest | 5s / 70.2d | |
-| **ticks per hour** | **0.37** | 3185.2h elapsed |
+| **ticks per hour** | **0.37** | 3186.2h elapsed |
 | median verify wall | **67s** | 1126 ticks |
 | wall trend | 39s → 8m — getting slower ⚠️ | first 3 vs last 3 |
 
@@ -27,8 +27,8 @@ it, and a wall that grows taxes every future tick, so it is tracked separately f
 ### Near — the daily driver (doc / app / platform web)
 
 * **capabilities asserted** (`G_CAPABILITY`): 48 → **81**
-* **live gates**: 27 → **627**
-* **✅ rows in the capability ledger**: 144 → **642**
+* **live gates**: 27 → **628**
+* **✅ rows in the capability ledger**: 144 → **643**
 * **Bar 0 — oracle hangs**: 0 of 265 sites
 
 **542 of 1187 ticks** (46%) moved a
@@ -1283,6 +1283,6 @@ platform — and moved WPT by **zero subtests**, A/B'd on the same tree. Two hor
 | **1513** | 2026-09-11 17:03 | 29m | instrument | 8m | +241/−42 | 583 | 81 | 56.0% · | the oracle renders every site from `file://`, so a self-hosted webfont is CORS-blocked (20 |
 | **1514** | 2026-09-11 17:31 | 28m | instrument | 8m | +273/−42 | 583 | 81 | 56.0% · | one flag, and two refusal cohorts stop existing (2026-09-11) |
 | **1515** | 2026-09-11 17:54 | 23m | instrument | 8m | +363/−44 | 583 | 81 | 56.0% · | the reference got honest in both directions (2026-09-11) |
-| **1516** | 2026-11-20 21:13 | 70.2d | instrument | 87s | +1738/−204 | 627 | 81 | 56.0% · | the loop re-derived a rule it had already banked (2026-09-11) |
+| **1516** | 2026-11-20 22:12 | 70.2d | instrument | 87s | +144/−44 | 628 | 81 | 56.0% · | the loop re-derived a rule it had already banked (2026-09-11) |
 
 *`·` after a WPT figure means **carried forward**, not measured this tick.*
