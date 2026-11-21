@@ -1,0 +1,8 @@
+log agf run1: 0 target lines
+log agf run2: 0 target lines
+log agf run3: 0 target lines
+log dump: {"now":662,"text":0,"els":86,"tl":["to|60000|309||function(){if(e.stylesheets&&cL(e,e.stylesheets),e.unsuspend){var t=e.unsuspend;e.unsuspen"]}
+log+short:60000 agf run1: 10 target lines
+log+short:60000 agf run2: 10 target lines
+log+short:60000 agf run3: 10 target lines
+log+short:60000 dump: {"now":1551,"text":1381,"els":260,"tl":["to|60000|315|315|function(){if(e.stylesheets&&cL(e,e.stylesheets),e.unsuspend){var t=e.unsuspend;e.unsuspen","to|10000|425||()=>{t(!1)}"]}

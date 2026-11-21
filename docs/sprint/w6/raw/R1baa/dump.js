@@ -1,0 +1,1 @@
+JSON.stringify({now:Math.round(performance.now()),text:document.body.innerText.length,els:document.getElementsByTagName('*').length,tl:(window.__tl||[]).filter(function(r){return r[1]>=1000||r[0]==="ev"}).map(function(r){return r.join('|')})})
