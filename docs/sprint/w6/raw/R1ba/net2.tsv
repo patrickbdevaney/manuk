@@ -1,0 +1,102 @@
+0	epoch	1795233788220230
+30897	dns	evals-opendining.vercel.app	30858
+442009	connect	evals-opendining.vercel.app	441980
+512500	req	https://evals-opendining.vercel.app/	0	512494	200	HTTP/2.0	-	GET
+513679	body	https://evals-opendining.vercel.app/	143180	200
+514297	q	https://evals-opendining.vercel.app/_next/static/media/4f05ba3a6752a328-s.p.woff2
+514306	q	https://evals-opendining.vercel.app/_next/static/media/e4af272ccee01ff0-s.p.woff2
+514331	q	https://evals-opendining.vercel.app/_next/static/chunks/webpack-b8252d6032dad7df.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD
+514326	q	https://evals-opendining.vercel.app/_next/static/css/09a6c8321e7bfbc2.css?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD
+514411	q	https://evals-opendining.vercel.app/_next/static/css/d5c6c0e01463ba90.css?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD
+515123	phase	html parse	1325
+515254	q	https://evals-opendining.vercel.app/_next/static/chunks/f14ca715-6166aae250427437.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD
+515275	q	https://evals-opendining.vercel.app/_next/static/chunks/465-52e3cfa93f11acb1.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD
+515292	q	https://evals-opendining.vercel.app/_next/static/chunks/main-app-aaa254f98be52b9d.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD
+515305	q	https://evals-opendining.vercel.app/_next/static/chunks/101-9aada87fb8362ed0.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD
+515318	q	https://evals-opendining.vercel.app/_next/static/chunks/555-5d49d436d57134aa.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD
+515342	q	https://evals-opendining.vercel.app/_next/static/chunks/845-32beca1c5c042dc6.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD
+515360	q	https://evals-opendining.vercel.app/_next/static/chunks/261-7e5e3f09ea13d1f9.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD
+515374	q	https://evals-opendining.vercel.app/_next/static/chunks/645-a9903cd6ccf17204.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD
+515388	q	https://evals-opendining.vercel.app/_next/static/chunks/120-b234e381bf9a058e.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD
+515415	q	https://evals-opendining.vercel.app/_next/static/chunks/759-7d934801e0bbcf39.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD
+515429	q	https://evals-opendining.vercel.app/_next/static/chunks/681-740b671cd7eb02b8.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD
+515442	q	https://evals-opendining.vercel.app/_next/static/chunks/137-8048955923005f6c.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD
+515456	q	https://evals-opendining.vercel.app/_next/static/chunks/app/(main)/page-765ea8f5b6890574.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD
+515470	q	https://evals-opendining.vercel.app/_next/static/chunks/155-e00abcedf5a5bb29.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD
+515483	q	https://evals-opendining.vercel.app/_next/static/chunks/801-0c31fd9c79589671.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD
+515495	q	https://evals-opendining.vercel.app/_next/static/chunks/537-d21f1593ebb5fa83.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD
+515509	q	https://evals-opendining.vercel.app/_next/static/chunks/app/(main)/layout-2292622b45bc76fb.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD
+554016	req	https://evals-opendining.vercel.app/_next/static/media/4f05ba3a6752a328-s.p.woff2	514363	39647	200	HTTP/2.0	35468	GET
+554294	body	https://evals-opendining.vercel.app/_next/static/media/4f05ba3a6752a328-s.p.woff2	35468	200
+588220	req	https://evals-opendining.vercel.app/_next/static/css/d5c6c0e01463ba90.css?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	554440	33774	200	HTTP/2.0	996	GET
+588383	body	https://evals-opendining.vercel.app/_next/static/css/d5c6c0e01463ba90.css?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	11461	200
+589651	req	https://evals-opendining.vercel.app/_next/static/chunks/845-32beca1c5c042dc6.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	554558	35091	200	HTTP/2.0	5498	GET
+589892	body	https://evals-opendining.vercel.app/_next/static/chunks/845-32beca1c5c042dc6.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	14015	200
+589936	req	https://evals-opendining.vercel.app/_next/static/chunks/681-740b671cd7eb02b8.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	554668	35266	200	HTTP/2.0	8024	GET
+590141	body	https://evals-opendining.vercel.app/_next/static/chunks/681-740b671cd7eb02b8.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	26979	200
+590183	req	https://evals-opendining.vercel.app/_next/static/chunks/app/(main)/page-765ea8f5b6890574.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	554714	35467	200	HTTP/2.0	5035	GET
+590242	req	https://evals-opendining.vercel.app/_next/static/css/09a6c8321e7bfbc2.css?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	556492	33748	200	HTTP/2.0	819	GET
+590327	body	https://evals-opendining.vercel.app/_next/static/chunks/app/(main)/page-765ea8f5b6890574.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	16378	200
+590372	body	https://evals-opendining.vercel.app/_next/static/css/09a6c8321e7bfbc2.css?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	2403	200
+591065	req	https://evals-opendining.vercel.app/_next/static/chunks/261-7e5e3f09ea13d1f9.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	554575	36489	200	HTTP/2.0	4245	GET
+591213	body	https://evals-opendining.vercel.app/_next/static/chunks/261-7e5e3f09ea13d1f9.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	12927	200
+591250	req	https://evals-opendining.vercel.app/_next/static/chunks/465-52e3cfa93f11acb1.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	554475	36774	200	HTTP/2.0	33021	GET
+593545	req	https://evals-opendining.vercel.app/_next/static/media/e4af272ccee01ff0-s.p.woff2	554440	39104	200	HTTP/2.0	48432	GET
+594168	body	https://evals-opendining.vercel.app/_next/static/chunks/465-52e3cfa93f11acb1.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	124107	200
+611350	body	https://evals-opendining.vercel.app/_next/static/media/e4af272ccee01ff0-s.p.woff2	48432	200
+611371	req	https://evals-opendining.vercel.app/_next/static/chunks/120-b234e381bf9a058e.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	554625	56742	200	HTTP/2.0	72948	GET
+611585	req	https://evals-opendining.vercel.app/_next/static/chunks/537-d21f1593ebb5fa83.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	554774	56810	200	HTTP/2.0	6248	GET
+611767	body	https://evals-opendining.vercel.app/_next/static/chunks/537-d21f1593ebb5fa83.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	14589	200
+611811	req	https://evals-opendining.vercel.app/_next/static/chunks/app/(main)/layout-2292622b45bc76fb.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	554794	57015	200	HTTP/2.0	3083	GET
+611915	body	https://evals-opendining.vercel.app/_next/static/chunks/app/(main)/layout-2292622b45bc76fb.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	7720	200
+613053	req	https://evals-opendining.vercel.app/_next/static/chunks/webpack-b8252d6032dad7df.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	554489	58562	200	HTTP/2.0	1973	GET
+613369	body	https://evals-opendining.vercel.app/_next/static/chunks/webpack-b8252d6032dad7df.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	4021	200
+614117	body	https://evals-opendining.vercel.app/_next/static/chunks/120-b234e381bf9a058e.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	239462	200
+614152	req	https://evals-opendining.vercel.app/_next/static/chunks/155-e00abcedf5a5bb29.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	554733	59419	200	HTTP/2.0	2659	GET
+614232	body	https://evals-opendining.vercel.app/_next/static/chunks/155-e00abcedf5a5bb29.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	6578	200
+614270	req	https://evals-opendining.vercel.app/_next/static/chunks/f14ca715-6166aae250427437.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	554447	59822	200	HTTP/2.0	55135	GET
+614386	req	https://evals-opendining.vercel.app/_next/static/chunks/main-app-aaa254f98be52b9d.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	554494	59891	200	HTTP/2.0	214	GET
+614431	body	https://evals-opendining.vercel.app/_next/static/chunks/main-app-aaa254f98be52b9d.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	472	200
+614458	req	https://evals-opendining.vercel.app/_next/static/chunks/101-9aada87fb8362ed0.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	554513	59944	200	HTTP/2.0	24935	GET
+614614	req	https://evals-opendining.vercel.app/_next/static/chunks/555-5d49d436d57134aa.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	554537	60076	200	HTTP/2.0	9639	GET
+614743	req	https://evals-opendining.vercel.app/_next/static/chunks/645-a9903cd6ccf17204.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	554597	60145	200	HTTP/2.0	28700	GET
+616710	req	https://evals-opendining.vercel.app/_next/static/chunks/137-8048955923005f6c.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	554687	62021	200	HTTP/2.0	11451	GET
+632397	body	https://evals-opendining.vercel.app/_next/static/chunks/101-9aada87fb8362ed0.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	67055	200
+632630	body	https://evals-opendining.vercel.app/_next/static/chunks/555-5d49d436d57134aa.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	27727	200
+632923	body	https://evals-opendining.vercel.app/_next/static/chunks/645-a9903cd6ccf17204.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	93187	200
+633219	body	https://evals-opendining.vercel.app/_next/static/chunks/137-8048955923005f6c.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	45231	200
+633253	req	https://evals-opendining.vercel.app/_next/static/chunks/801-0c31fd9c79589671.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	554752	78499	200	HTTP/2.0	2600	GET
+633349	body	https://evals-opendining.vercel.app/_next/static/chunks/801-0c31fd9c79589671.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	6814	200
+634565	body	https://evals-opendining.vercel.app/_next/static/chunks/f14ca715-6166aae250427437.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	172834	200
+634601	req	https://evals-opendining.vercel.app/_next/static/chunks/759-7d934801e0bbcf39.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	554647	79953	200	HTTP/2.0	2306	GET
+634686	body	https://evals-opendining.vercel.app/_next/static/chunks/759-7d934801e0bbcf39.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	5864	200
+635179	phase	external scripts	120043
+635212	phase	module graph prefetch	22
+635247	phase	blocking stylesheets	27
+636507	cascade	804
+636747	layout	217
+665324	cascade	541
+665446	layout	72
+665701	phase	cascade+layout+blocking scripts	30443
+963409	cascade	923
+963539	layout	91
+963723	phase	deferred scripts	298012
+965392	phase	DOMContentLoaded	1658
+991743	q	https://evals-opendining.vercel.app/_next/static/media/revicons.ff59b316.woff
+1028228	req	https://evals-opendining.vercel.app/_next/static/media/revicons.ff59b316.woff	991825	36399	200	HTTP/2.0	7536	GET
+1028309	body	https://evals-opendining.vercel.app/_next/static/media/revicons.ff59b316.woff	7536	200
+1030032	cascade	785
+1030145	layout	93
+1030319	phase	subframes (pre-load)	64909
+1030363	phase	initial images+masks	33
+1031418	phase	load event	1041
+1053316	phase	finish_loading: external CSS	21870
+1053401	q	https://evals-opendining.vercel.app/_next/static/chunks/polyfills-78c92fac7aa8fdd8.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD
+1083923	req	https://evals-opendining.vercel.app/_next/static/chunks/polyfills-78c92fac7aa8fdd8.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	1053450	30469	200	HTTP/2.0	32669	GET
+1084731	body	https://evals-opendining.vercel.app/_next/static/chunks/polyfills-78c92fac7aa8fdd8.js?dpl=dpl_FtBFjuEjZ3s7c9vuYEmKayrtW3yD	91381	200
+1129939	phase	finish_loading: dynamic scripts	76577
+1130003	phase	finish_loading: subframes	24
+1130169	phase	finish_loading: page fetches	155
+1130205	phase	finish_loading: images	25
+1130217	phase	finish_loading: icon masks	2
+1130232	phase	finish_loading: background images	6

@@ -1,0 +1,2 @@
+DIAG script_error_count	0
+DIAG dom	85 elements; body.text=0 chars; root#=0
