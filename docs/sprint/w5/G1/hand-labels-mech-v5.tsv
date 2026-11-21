@@ -1,0 +1,11 @@
+arm	task	run	hand_label	evidence
+cdp-layer+pwfmt-v5	opendining-10	1	stop-by-choice	Last click navigated fine and the agent ended with "I did not make a reservation. The menus on the restaurants I checked are empty... I stopped after three".
+cdp-layer+pwfmt-v5	fly-unified-6	1	stop-by-choice	Last actions (Tab press, screenshot) succeeded; agent ended "I did not reserve the seat... the back arrow appears disabled" and offered the user choices instead of continuing.
+cdp-layer+pwfmt-v5	fly-unified-6	3	refusal-seen	After UNREACHABLE on h61 (previous-month arrow) the last click on h53 returned "Please enter a valid departure date." and the agent ended with "date picker won't go back to December 2024" unrecovered.
+cdp-layer+pwfmt-v5	gomail-3	1	stop-by-choice	Compose succeeded (type ok) and agent ended "composed but not sent. I stopped short of clicking Send because sending is outward-facing" with no browser refusal at the end.
+cdp-layer+pwfmt-v5	opendining-10	2	stop-by-choice	Last wait_for and extract succeeded; agent ended "I did not make a reservation. The restaurant menus on this site appear to be empty" after checking 4 restaurants.
+cdp-layer+pwfmt-v5	dashdish-7	3	refusal-seen	Final calls returned "h418 refused focus (inert or disabled)" and scroll "nothing new in view", and agent ended "could not add the Mushroom Swiss Burger... no clickable area".
+cdp-layer+pwfmt-v5	staynb-2	3	refusal-seen	Last act returned "h636 is still off-screen after scrolling; nothing was clicked" (United States country option) and the run ended "blocked on the checkout page".
+cdp-layer+pwfmt-v5	opendining-10	3	stop-by-choice	Last back/click/find all succeeded; agent ended "I stopped after three because the empty menus... suggest menus are not populated" without making a reservation.
+cdp-layer+pwfmt-v5	dashdish-10	1	stop-by-choice	Order completed with no refusal ("Order Successful! ORD-1795297451692-565") and agent ended believing it was done; transcript has no task text to show a grader mismatch.
+cdp-layer+pwfmt-v5	gomail-8	3	stop-by-choice	No refusal; agent ended "I didn't trash anything, because no email in the inbox is from a sender named GitHub" and asked "Should I trash only the one labeled..."
