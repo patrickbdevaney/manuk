@@ -18500,7 +18500,11 @@ const LISTENER_PRELUDE: &str = r#"
         try { ev.__composedPath = path.slice(); } catch (e) {}
         ev.currentTarget = null;
         ev.eventPhase = 0;
-        if (ev.bubbles === undefined) ev.bubbles = !(type === 'focus' || type === 'blur');
+        // `load`/`error`/`abort` on a resource element (script, img, iframe, link) do NOT bubble (HTML). A host
+        // string-dispatch of them defaulted to bubbling, so a `<script src>`'s own `load` reached the Window
+        // bubble hop and ran every window `load` handler (`<body onload>`) once per external script, before
+        // the page's scripts had run — zeroing the WPT encoding area (W6.J3.a.b).
+        if (ev.bubbles === undefined) ev.bubbles = !(type === 'focus' || type === 'blur' || type === 'load' || type === 'error' || type === 'abort');
         if (ev.cancelable === undefined) ev.cancelable = !(type === 'focus' || type === 'blur' || type === 'focusin' || type === 'focusout');
         if (ev.isTrusted === undefined) ev.isTrusted = !supplied;
         // ── USER ACTIVATION (navigator.userActivation) ──────────────────────────────────────────
