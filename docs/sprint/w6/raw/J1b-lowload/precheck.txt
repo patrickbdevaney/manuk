@@ -6,3 +6,9 @@ proc=24.
 21:16:42 45.46 54.59 53.96 52/1890
 21:16:58 46.38 54.35 53.89 52/1911
 RESULT: FAIL (every sample 44.8-46.4 >> 4). No run performed.
+# later samples from the background sampler (same loadavg fields, sampled 30 s apart):
+21:17:12 45.85 53.84 53.73 50/1889
+21:17:42 43.37 52.42 53.26 51/1878
+21:18:12 42.68 51.43 52.90 27/1826
+21:18:42 43.13 50.60 52.57 52/1871
+# all 9 samples 21:16:38-21:18:42 are 42.68-46.38; none below 4.
