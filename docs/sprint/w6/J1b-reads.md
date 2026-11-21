@@ -109,3 +109,24 @@ not ours). No run made, no threshold edited. Not re-polling: five prior dispatch
 scale. The root cause is that both cut-offs (reflow budget, drain budget) are wall-clock, so the pre-registered 20/100 cannot reproduce
 under load at all. Follow-up W6.J1.b.a.a.a.b.a.a.b proposes a load-independent (work-count) reflow budget so the number stops moving with
 host load; until it lands or the host is quiet, this node stays BLOCKED.
+
+
+## W6.J1.b.a.a.a.b.a.a.b: load-independent relayout-count budget
+
+chrome_ver=145.0.7632.116 (MANUK_CHROME_PIN). New knob `MANUK_REFLOW_BUDGET_RELAYOUTS=N` (engine/page/src/lib.rs): when set it REPLACES the
+wall-clock reflow bound for the round with "N forced relayouts"; unset = wall-clock behaviour byte-for-byte unchanged. Unit gate:
+`engine/page/tests/g_forced_reflow_count_budget.rs` (count 100 -> 8 distinct fresh heights, count 3 -> exactly 3). Probe: n50 copy at
+`$WPT_DIR/css/zzprobeN50`, `manuk-wpt wpt css/zzprobeN50 --timeout 300 --show-failures`, raw in `raw/J1b-count/`.
+All runs use `MANUK_MAX_DRAIN_MS=300000`: the JS ScriptDeadline is derived from the drain budget and is a second wall-clock cut-off
+(runs `quiet1-3` left it at default: 40/0/40 at load 42-47, `Script terminated by timeout` in the 0 run, so the reflow count alone is not enough).
+
+| arm | env | load1 at end | subtests (3 runs) | budget-exhausted warn |
+|---|---|---|---|---|
+| current load | RELAYOUTS=2000, DRAIN=300000 | 47.7 / 51.0 / 50.4 | 41/100 x3 | no |
+| synthetic hog (48 busy python procs on 24 cores) | same, `--timeout 300` | 95.9 / 99.4 / 99.1 | 41/100 x3 | no |
+| mutant | RELAYOUTS=1 | 99.1 | 0/100 | yes (`FORCED-REFLOW BUDGET EXHAUSTED (relayout count)`) |
+
+Identical count (41) in all 6 gate runs across load 48-99; mutant drops to 0 and fires the warn. Caveats: (1) the harness per-file
+stall watchdog (`--timeout`, default 30 s) reports HANG under the hog (first attempt: 0/0), so it must be raised for loaded runs;
+(2) the pre-registered 20/100 baseline is a default-budget (wall-clock) number and is NOT reproduced here — this arm scores 41/100 because
+the slice is no longer cut off; (3) `g_forced_reflow_budget` (wall-clock, 150 ms) flaked once at load ~29 (distinct:5), passed 4 of 5 — that is the load sensitivity this knob removes, not a regression (passes at base too).

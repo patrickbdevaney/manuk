@@ -1,0 +1,129 @@
+WPT css/zzprobeN50: 1 runnable testharness files
+   skip     1  support file, not a test
+[2m2026-11-21T01:56:40.295591Z[0m [33m WARN[0m [2mmozjs::rust[0m[2m:[0m Warning at http://127.0.0.1:39681/css/zzprobeN50/properties-value-001.html inline#32:128:9: Script terminated by timeout at:
+_getStyleFor@http://127.0.0.1:39681/css/zzprobeN50/properties-value-001.html inline#32:128:9
+getStyle@http://127.0.0.1:39681/css/zzprobeN50/properties-value-001.html inline#32:115:15
+start@http://127.0.0.1:39681/css/zzprobeN50/properties-value-001.html inline#61:57:49
+runLoop/</</<@http://127.0.0.1:39681/css/zzprobeN50/properties-value-001.html inline#30:118:56
+Test.prototype.step@http://127.0.0.1:39681/css/zzprobeN50/properties-value-001.html inline#22:2869:25
+runLoop/</<@http://127.0.0.1:39681/css/zzprobeN50/properties-value-001.html inline#30:117:34
+runLoop/<@http://127.0.0.1:39681/css/zzprobeN50/properties-value-001.html inline#30:116:19
+runLoop@http://127.0.0.1:39681/css/zzprobeN50/properties-value-001.html inline#30:115:15
+
+
+  FILE css/zzprobeN50/properties-value-001.html  (0/100)
+    Timeout background-color color(rgba) / values
+    Timeout background-color color(rgba) / events
+    FAIL background-position-x length(pt) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    Timeout background-position-x length(pt) / events
+    FAIL background-position-x length(pc) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    Timeout background-position-x length(pc) / events
+    FAIL background-position-x length(px) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    Timeout background-position-x length(px) / events
+    FAIL background-position-x length(em) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    Timeout background-position-x length(em) / events
+    FAIL background-position-x length(ex) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    Timeout background-position-x length(ex) / events
+    FAIL background-position-x length(mm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    Timeout background-position-x length(mm) / events
+    FAIL background-position-x length(cm) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    Timeout background-position-x length(cm) / events
+    FAIL background-position-x length(in) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    Timeout background-position-x length(in) / events
+    FAIL background-position-x percentage(%) / values
+         assert_not_equals: initial and target values may not match got disallowed value ""
+    Timeout background-position-x percentage(%) / events
+    Timeout border-top-width length(pt) / values
+    Timeout border-top-width length(pt) / events
+    Timeout border-top-width length(pc) / values
+    Timeout border-top-width length(pc) / events
+    Timeout border-top-width length(px) / values
+    Timeout border-top-width length(px) / events
+    Timeout border-top-width length(em) / values
+    Timeout border-top-width length(em) / events
+    Timeout border-top-width length(ex) / values
+    Timeout border-top-width length(ex) / events
+    Timeout border-top-width length(mm) / values
+    Timeout border-top-width length(mm) / events
+    Timeout border-top-width length(cm) / values
+    Timeout border-top-width length(cm) / events
+    Timeout border-top-width length(in) / values
+    Timeout border-top-width length(in) / events
+    Timeout border-right-width length(pt) / values
+    Timeout border-right-width length(pt) / events
+    Timeout border-right-width length(pc) / values
+    NotRun border-right-width length(pc) / events
+    NotRun border-right-width length(px) / values
+    NotRun border-right-width length(px) / events
+    NotRun border-right-width length(em) / values
+    NotRun border-right-width length(em) / events
+    NotRun border-right-width length(ex) / values
+    NotRun border-right-width length(ex) / events
+    NotRun border-right-width length(mm) / values
+    NotRun border-right-width length(mm) / events
+    NotRun border-right-width length(cm) / values
+    NotRun border-right-width length(cm) / events
+    NotRun border-right-width length(in) / values
+    NotRun border-right-width length(in) / events
+    NotRun border-bottom-width length(pt) / values
+    NotRun border-bottom-width length(pt) / events
+    NotRun border-bottom-width length(pc) / values
+    NotRun border-bottom-width length(pc) / events
+    NotRun border-bottom-width length(px) / values
+    NotRun border-bottom-width length(px) / events
+    NotRun border-bottom-width length(em) / values
+    NotRun border-bottom-width length(em) / events
+    NotRun border-bottom-width length(ex) / values
+    NotRun border-bottom-width length(ex) / events
+    NotRun border-bottom-width length(mm) / values
+    NotRun border-bottom-width length(mm) / events
+    NotRun border-bottom-width length(cm) / values
+    NotRun border-bottom-width length(cm) / events
+    NotRun border-bottom-width length(in) / values
+    NotRun border-bottom-width length(in) / events
+    NotRun border-left-width length(pt) / values
+    NotRun border-left-width length(pt) / events
+    NotRun border-left-width length(pc) / values
+    NotRun border-left-width length(pc) / events
+    NotRun border-left-width length(px) / values
+    NotRun border-left-width length(px) / events
+    NotRun border-left-width length(em) / values
+    NotRun border-left-width length(em) / events
+    NotRun border-left-width length(ex) / values
+    NotRun border-left-width length(ex) / events
+    NotRun border-left-width length(mm) / values
+    NotRun border-left-width length(mm) / events
+    NotRun border-left-width length(cm) / values
+    NotRun border-left-width length(cm) / events
+    NotRun border-left-width length(in) / values
+    NotRun border-left-width length(in) / events
+    NotRun border-top-color color(rgba) / values
+    NotRun border-top-color color(rgba) / events
+    NotRun border-right-color color(rgba) / values
+    NotRun border-right-color color(rgba) / events
+    NotRun border-bottom-color color(rgba) / values
+    NotRun border-bottom-color color(rgba) / events
+    NotRun border-left-color color(rgba) / values
+    NotRun border-left-color color(rgba) / events
+    NotRun padding-bottom length(pt) / values
+    NotRun padding-bottom length(pt) / events
+    NotRun padding-bottom length(pc) / values
+    NotRun padding-bottom length(pc) / events
+    NotRun padding-bottom length(px) / values
+    NotRun padding-bottom length(px) / events
+    NotRun padding-bottom length(em) / values
+    NotRun padding-bottom length(em) / events
+
+── WPT css/zzprobeN50 ──────────────────────────────────────────
+    0.0%      0/100    (1 files)  css/zzprobeN50
+
+  FILES  1   subtests 0/100  =  0.0%
+  NO_REPORT 0   [1mHANG/CRASH 0[0m (Bar 0)   SHORT 0 (instrument)   SLOW 0 (our budget)   TH_TIMEOUT 1 (async test never completed)

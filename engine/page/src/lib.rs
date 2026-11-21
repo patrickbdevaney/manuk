@@ -2474,6 +2474,10 @@ struct ReflowCtx {
     /// bit-identical.
     reflow_us_used: u64,
     reflow_us_budget: u64,
+    /// Optional load-independent bound: relayouts run so far / allowed (`MANUK_REFLOW_BUDGET_RELAYOUTS`).
+    /// When `Some`, it REPLACES the wall-clock bound for this round so the answer cannot move with host load.
+    reflow_count_used: u64,
+    reflow_count_budget: Option<u64>,
     /// The box tree of the LAST reflow, kept only when it is exactly what `Page` would have built
     /// itself: nothing scrolled (committed or pending) and no sticky box, because those two passes
     /// are applied to the reflow's tree in ways `Page` redoes. `None` otherwise. See
@@ -2553,6 +2557,14 @@ fn reflow_budget_us() -> u64 {
     (manuk_js::drain_budget_ms() as u64).saturating_mul(1000)
 }
 
+/// `MANUK_REFLOW_BUDGET_RELAYOUTS=N`: allow N forced relayouts per script round instead of a wall-clock
+/// budget. Unset (default) = wall-clock behaviour unchanged.
+fn reflow_budget_relayouts() -> Option<u64> {
+    std::env::var("MANUK_REFLOW_BUDGET_RELAYOUTS")
+        .ok()
+        .and_then(|v| v.trim().parse::<u64>().ok())
+}
+
 unsafe fn forced_reflow(ctx: *mut std::ffi::c_void, dom: *mut Dom) {
     let c = unsafe { &mut *(ctx as *mut ReflowCtx) };
     let dom = unsafe { &*dom };
@@ -2573,7 +2585,22 @@ unsafe fn forced_reflow(ctx: *mut std::ffi::c_void, dom: *mut Dom) {
     // boundary, so one task forcing a thousand reflows is unbounded, and the script watchdog cannot
     // see it because the time is spent in Rust. Reported ONCE per round, at the crossing, because
     // the interesting event is the crossing and not the thousand reads after it.
-    if c.reflow_us_used >= c.reflow_us_budget {
+    if let Some(n) = c.reflow_count_budget {
+        if c.reflow_count_used >= n {
+            if c.reflow_count_used != u64::MAX {
+                tracing::warn!(
+                    relayouts = c.reflow_count_used,
+                    budget_relayouts = n,
+                    nodes = dom.len(),
+                    "FORCED-REFLOW BUDGET EXHAUSTED (relayout count) — further geometry reads are \
+                     answered from the layout already published."
+                );
+                c.reflow_count_used = u64::MAX;
+            }
+            return;
+        }
+        c.reflow_count_used += 1;
+    } else if c.reflow_us_used >= c.reflow_us_budget {
         if c.reflow_us_used != u64::MAX {
             tracing::warn!(
                 used_ms = c.reflow_us_used / 1000,
@@ -2780,6 +2807,8 @@ impl ReflowScope {
             // engine's existing statement of *"how long this page is worth"*, and a forced reflow
             // that has used all of it has, by that statement, used the round.
             reflow_us_budget: reflow_budget_us(),
+            reflow_count_used: 0,
+            reflow_count_budget: reflow_budget_relayouts(),
         });
         let p = &mut *ctx as *mut ReflowCtx as *mut std::ffi::c_void;
         let prev_maps = manuk_js::view_maps();
