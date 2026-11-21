@@ -1604,6 +1604,9 @@ fn chrome_args(unsafe_no_sandbox: bool) -> Vec<&'static str> {
         "--mute-audio",
         "--disable-background-networking",
         "--remote-debugging-port=0",
+        // Headless has no pointing device, so `(pointer: none)`/`(hover: none)` make pages (MUI) serve the mobile
+        // modal pickers. manuk and desktop Chrome answer fine/hover; match them (RG.3.0.b...a.a.a.a.a.a).
+        "--blink-settings=primaryPointerType=4,availablePointerTypes=4,primaryHoverType=2,availableHoverTypes=2",
     ]);
     a
 }
@@ -3153,5 +3156,17 @@ impl Backend for CdpBackend {
             json!({"source": ws_secret_guard()}),
         );
         let _ = self.eval(&format!("{};0", ws_secret_guard()));
+    }
+}
+
+#[cfg(test)]
+mod pointer_flag_tests {
+    use super::chrome_args;
+
+    #[test]
+    fn headless_reports_fine_pointer_and_hover() {
+        let a = chrome_args(false);
+        let f = a.iter().find(|x| x.starts_with("--blink-settings=")).expect("blink-settings");
+        assert!(f.contains("primaryPointerType=4") && f.contains("primaryHoverType=2"));
     }
 }
