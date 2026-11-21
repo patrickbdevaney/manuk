@@ -66,7 +66,10 @@ def one_run(n, d):
 
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("--check", action="store_true")
-    ap.add_argument("--dir", default=os.path.join(RG, "RG3baaaaaaaaaaaaaa")); a = ap.parse_args()
+    ap.add_argument("--dir", default=os.path.join(RG, "RG3baaaaaaaaaaaaaa"))
+    ap.add_argument("--label", default="RG.3.0.b.a.a.a.a.a.a.a.b.a.a.a.a.a.a.a")
+    ap.add_argument("--baseline", default="Prior baseline (before the fix): manuk 9/13 match 10/13 resolved, chrome 12/13 match 13/13.")
+    ap.add_argument("--what", default="after the Chrome backend pointer:fine fix"); a = ap.parse_args()
     pin = os.environ.get("MANUK_CHROME_PIN") or sys.exit("refusing: MANUK_CHROME_PIN unset")
     os.makedirs(a.dir, exist_ok=True)
     if not a.check:
@@ -97,9 +100,9 @@ def main():
         print("GATE FAIL:"); [print("  " + e) for e in errs]; sys.exit(1)
     sp = subprocess.run([sys.executable, "-I", os.path.join(HERE, "rg3baaaaaaa_spread.py"), "--dir", a.dir],
                         capture_output=True, text=True)
-    out = ["## RG.3.0.b.a.a.a.a.a.a.a.b.a.a.a.a.a.a.a", "",
-           f"chrome_ver={pin}. Three runs of `rg3baaaaaaa_match.py` after the Chrome backend pointer:fine fix (13 ordinal "
-           "steps per backend). Prior baseline (before the fix): manuk 9/13 match 10/13 resolved, chrome 12/13 match 13/13.", "",
+    out = ["## " + a.label, "",
+           f"chrome_ver={pin}. Three runs of `rg3baaaaaaa_match.py` {a.what} (13 ordinal "
+           f"steps per backend). {a.baseline}", "",
            "| run | manuk match | manuk resolved | chrome match | chrome resolved |", "|---|---|---|---|---|"]
     for n, c in sums:
         out.append(f"| run{n} | {c['manuk'][0]}/13 | {c['manuk'][1]}/13 | {c['chrome'][0]}/13 | {c['chrome'][1]}/13 |")

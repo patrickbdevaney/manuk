@@ -25,10 +25,10 @@ chrome_ver=145.0.7632.116. For each ordinal step of the RG.3.0.b.a.a.a.a.a.a rep
 | gocalendar-2 | manuk | #6 | `[h76] button [clickable] ↑offscreen` | `[h269] button "Event color indicator Team Brainstorming Session 3pm - 5pm"` | no |
 | gocalendar-2 | manuk | #7 | `[h47] combobox [collapsed]` | `[h46] combobox [collapsed]` | yes |
 | gocalendar-2 | manuk | #14 | `[h403] combobox [collapsed]` | `[h428] combobox [collapsed]` | yes |
-| gocalendar-2 | chrome | #1 | `[h47] combobox [collapsed]` | `[h46] combobox [collapsed]` | yes |
-| gocalendar-2 | chrome | #4 | `[h47] combobox [collapsed]` | `[h46] combobox [collapsed]` | yes |
+| gocalendar-2 | chrome | #1 | `[h47] combobox [collapsed]` | `[h48] combobox [collapsed]` | yes |
+| gocalendar-2 | chrome | #4 | `[h47] combobox [collapsed]` | `[h48] combobox [collapsed]` | yes |
 | gocalendar-2 | chrome | #6 | `[h76] button [clickable] ↑offscreen` | `[h126] button "30"` | no |
-| gocalendar-2 | chrome | #7 | `[h47] combobox [collapsed]` | `[h46] combobox [collapsed]` | yes |
+| gocalendar-2 | chrome | #7 | `[h47] combobox [collapsed]` | `[h48] combobox [collapsed]` | yes |
 | gocalendar-2 | chrome | #14 | `[h403] combobox [collapsed]` | `[h344] combobox [collapsed]` | yes |
 
 Rows scored by the stale-reference tolerance (strictly a miss): opendining-4 chrome #13
