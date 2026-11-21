@@ -12,3 +12,4 @@ RESULT: FAIL (every sample 44.8-46.4 >> 4). No run performed.
 21:18:12 42.68 51.43 52.90 27/1826
 21:18:42 43.13 50.60 52.57 52/1871
 # all 9 samples 21:16:38-21:18:42 are 42.68-46.38; none below 4.
+# re-dispatch 21:20:05-21:22:05 (5 samples, 30 s apart, 1-min): 45.61 46.38 47.47 43.18 42.02 -> FAIL, no run performed. chrome_ver=145.0.7632.116
