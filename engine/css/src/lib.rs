@@ -1738,6 +1738,10 @@ pub struct ComputedStyle {
     /// ascent/descent/lineGap rather than a multiple of the font size. A 1.2× guess is not what any
     /// browser does, and it makes every line box the wrong height on every page.
     pub line_height_normal: bool,
+    /// W6.R1.a.a.a.a: a unitless `line-height: 1.43` is a MULTIPLIER that inherits as a number and is
+    /// re-applied to each element's final `font-size` (a later `font-size` in the same rule, or a child's
+    /// own, re-derives it). `None` when `normal` or a length was authored.
+    pub line_height_num: Option<f32>,
     /// `mask-image` / `-webkit-mask-image` `url(...)`. The modern web draws **icons** as an empty
     /// element with a `background-color` shaped by a mask. Ignoring the mask paints the raw
     /// background — a solid black square where every icon should be.
@@ -2164,6 +2168,7 @@ impl ComputedStyle {
             display_in_flow: Display::Inline,
             order: 0,
             line_height_normal: true,
+            line_height_num: None,
             mask_image: None,
             background_images: Vec::new(),
             background_size: BackgroundSize::Auto,
@@ -2320,6 +2325,10 @@ impl ComputedStyle {
         // means a child re-derives its line box from the font while its parent uses the author's —
         // two different line heights for the same inherited property.
         s.line_height_normal = parent.line_height_normal;
+        s.line_height_num = parent.line_height_num;
+        if let Some(n) = s.line_height_num {
+            s.line_height = s.font_size * n;
+        }
         s.text_align = parent.text_align;
         s.text_indent = parent.text_indent;
         s.white_space = parent.white_space;
@@ -6016,6 +6025,8 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
         // not re-author the leading.
         if s.line_height_normal {
             s.line_height = s.font_size * 1.2;
+        } else if let Some(n) = s.line_height_num {
+            s.line_height = s.font_size * n;
         }
     }
     if tag == "body" {
@@ -6495,6 +6506,8 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
             // to be designed out of the fixture instead of fixed here.
             if s.line_height_normal {
                 s.line_height = s.font_size * 1.2;
+            } else if let Some(n) = s.line_height_num {
+                s.line_height = s.font_size * n;
             }
         }
         "font-weight" => {
@@ -6576,14 +6589,17 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                 // An omitted `line-height` is `normal`, not the inherited value — see the table.
                 None => {
                     s.line_height_normal = true;
+                    s.line_height_num = None;
                     s.line_height = s.font_size * 1.2;
                 }
                 Some(l) if l.trim().eq_ignore_ascii_case("normal") => {
+                    s.line_height_num = None;
                     s.line_height_normal = true;
                     s.line_height = s.font_size * 1.2;
                 }
                 Some(l) => {
                     s.line_height_normal = false;
+                    s.line_height_num = l.trim().parse::<f32>().ok();
                     s.line_height = l
                         .trim()
                         .parse::<f32>()
@@ -6605,6 +6621,7 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
             // this or they disagree about every line box on the page — MinimalCascade left the
             // `normal` flag set, so an explicit `line-height: 20px` was silently overridden by the
             // face's ascent+descent.
+            s.line_height_num = None;
             if v.trim().eq_ignore_ascii_case("normal") {
                 s.line_height_normal = true;
                 s.line_height = s.font_size * 1.2;
@@ -6612,6 +6629,7 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
             }
             s.line_height_normal = false;
             if let Ok(n) = v.parse::<f32>() {
+                s.line_height_num = Some(n);
                 s.line_height = n * s.font_size; // unitless multiplier
             } else if let Some(px) = values::parse_length_px(v, s.font_size) {
                 s.line_height = px;
@@ -9292,6 +9310,36 @@ mod tests {
     /// future system font whose name happens to contain a length-like token cannot be shredded —
     /// and the row is kept as a CONTROL. Neither is evidence about the other, and calling that
     /// mutation a proof would be the vacuous-gate shape this project keeps catching.
+    /// W6.R1.a.a.a.a: a unitless `line-height` is a multiplier applied to the element's FINAL
+    /// `font-size`. udriver's MuiAlert declares `font-size:.875rem; line-height:1.43; font-size:16px`
+    /// (emotion merge), and the alert was 188.1 px tall vs Chrome's 204 because 1.43 was multiplied by
+    /// the earlier 14 px. Mutation: drop the `line_height_num` re-derive in the `font-size` arm ->
+    /// first assertion reads 20.02, and a child's own font-size keeps its parent's px.
+    #[test]
+    fn unitless_line_height_follows_the_final_font_size() {
+        let lh = |css: &str| -> (f32, f32) {
+            let dom = build_dom();
+            let map = MinimalCascade.cascade(&dom, &[Stylesheet::parse(css)]);
+            let p = dom
+                .descendants(dom.root())
+                .find(|&n| dom.tag_name(n) == Some("p"))
+                .expect("VACUOUS: no <p>");
+            (map[&p].font_size, map[&p].line_height)
+        };
+        let (fs, l) = lh("p{font-size:14px;line-height:1.43;font-size:16px}");
+        assert_eq!(fs, 16.0);
+        assert!(
+            (l - 22.88).abs() < 0.01,
+            "later font-size must re-derive a numeric line-height: {l}"
+        );
+        // inherited as a number: the child's own font-size scales it
+        let (fs, l) = lh("body{font-size:16px;line-height:1.5} p{font-size:40px}");
+        assert_eq!((fs, l), (40.0, 60.0));
+        // control: an authored length is NOT re-derived
+        let (_, l) = lh("body{line-height:24px} p{font-size:40px}");
+        assert_eq!(l, 24.0);
+    }
+
     #[test]
     fn font_size_keeps_an_inherited_line_height_and_the_font_shorthand_sets_one() {
         // `p` inherits from `body`; the declaration under test goes on `p`.

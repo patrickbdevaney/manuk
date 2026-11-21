@@ -26,3 +26,25 @@ Engine test `engine/page/tests/g_vclock_ui_horizon.rs`: a 3 s timer runs during 
 ("early"); a testharness page still reaches its 10 s timer. Mutant (60 s): fails with left "dismissed", right "early".
 
 Not fixed: alert height 188.1 vs Chrome 204 (follow-up W6.R1.a.a.a.a).
+
+## W6.R1.a.a.a.a — the 16 px alert-height gap (188.1 vs 204)
+
+chrome_ver=145.0.7632.116. Per-box dump: `bench/agent-tasks/r1aaaa_boxes.js` (manuk via dom-eval, Chrome via CDP, same page, wait ~4 s).
+
+Per-box diff, `.MuiAlert-root` children (manuk | Chrome): root 188.1 | 204.4; message div 116.1 | 130.4 (5 lines);
+`<br>` 17 | 22; line-height 20.02 px | 22.88 px. Cause: the rule is emotion-merged to
+`font-size:.875rem; line-height:1.43; …; font-size:16px`. manuk's MinimalCascade (the agent build has no Stylo)
+turned the unitless `1.43` into px at the declaration (1.43 x 14 = 20.02) and never re-derived it when the later
+`font-size:16px` arrived (nor for a child's own font-size). Chrome applies the number to the final font-size
+(1.43 x 16 = 22.88). Not font metrics, wrapping or padding.
+
+Fix: `ComputedStyle.line_height_num` (inherited multiplier) re-applied in the `font-size` arm, the UA scale, and
+inheritance (`engine/css/src/lib.rs`). Test `unitless_line_height_follows_the_final_font_size`; mutant (drop the
+re-derive in the font-size arm) fails with 20.019999.
+
+| build | hasAlert | alertH (3 runs) | Chrome (same run) |
+|---|---|---|---|
+| before | true | 188.1 | 204.4 |
+| fix | true | 202.4, 202.4, 202.4 | 204.4 |
+
+Residual 2.0 px (inside the gate's 2 px): the 24 px icon box is 22 px tall in manuk (svg display block in Chrome, inline-block in manuk) — not chased.
