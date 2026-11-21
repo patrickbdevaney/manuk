@@ -7,8 +7,10 @@
 //! `--confirm=submit,download,navigate-new-origin` makes those actions need an explicit
 //! `confirm=true` on the call. Credential fields are never typed by the agent: that is a HANDOFF.
 //!
-//! Not covered here (named, not faked): subresource loads and redirects the page itself issues
-//! (needs enforcement in manuk_net / a CDP interceptor), and frames outside the set in `observe`.
+//! Page-side enforcement (subresources, redirect hops, WebSocket) lives in `manuk_net` on the manuk
+//! backend and in a `Fetch.requestPaused` interceptor on the chrome backend (W3.9.a). Residual gaps
+//! are named in docs/sprint/BACKENDS.md "Grants" (chrome blocked-iframe bare socket, frames in `observe`
+//! outside the read set, name-based click judgement).
 
 use std::collections::HashSet;
 
