@@ -153,3 +153,21 @@ d.c.a.a logs (`raw/J1b-determinism/{before,after}.{1,2,3}.log`, `MANUK_REFLOW_BU
 `attribute-subtest-split.py` exit 0, residual 0; dTotal is -1120 (1 pairing), -560 (4), 0 (4); never +1620. Mutant: deleting the
 `display-none-no-animations.html (1/1)` header from after.2.log gives attributed -1, residual +1, exit 1. `--selftest` GREEN.
 So the splitter half of the gate holds; the "attributed = 1620" half is falsified by every pairing. The closing run is node d.c.c.
+
+## 4f. W6.J1.b.a.a.a.a.d.c.c precheck: load < 4 not reachable (BLOCKED, no run)
+
+chrome_ver=145.0.7632.116 (MANUK_CHROME_PIN). Host has 24 cores. Gate precheck: `/proc/loadavg` 1-min field < 4 over
+5 samples across 2 min, else BLOCK with no run. Samples in `raw/J1b-lowload/precheck.txt`:
+
+| time | 1-min load |
+|---|---|
+| 21:16:38 | 44.80 |
+| 21:16:39 | 44.80 |
+| 21:16:39 | 44.80 |
+| 21:16:42 | 45.46 |
+| 21:16:58 | 46.38 |
+
+Result: FAIL, every sample is more than 10x the threshold. Processes driving the load belong to other projects
+(blender, several `rustc --crate-name ... crates/couple-game/tests` jobs, `cuda_server`, a `cargo test --workspace --release`
+from another checkout). No binary was built and no WPT run was made for d.c.c. The 4f clause (per-file totals at load<4)
+is therefore unmeasured; dTotal is not reported for d.c.c.
