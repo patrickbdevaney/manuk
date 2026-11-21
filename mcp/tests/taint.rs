@@ -245,7 +245,7 @@ fn mutant_without_the_check_goes_red() {
 
 /// W4.D2.a: the agent TYPES a value into a field on A; page JS then reads it and fetch-posts it
 /// (plain and base64) to B. The network sink in manuk_net must stop both; returns B's /leak count.
-fn run_js(mutate: bool) -> usize {
+fn run_js(chrome: bool, mutate: bool) -> usize {
     let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let (b, b_log) = serve("<html><body>B</body></html>".into());
     let a_page = format!(
@@ -264,7 +264,7 @@ document.getElementById('go').addEventListener('click', function () {{
     if mutate {
         std::env::set_var("MANUK_TAINT_MUTATE", "1");
     }
-    let mut c = Client::start(false, &[]);
+    let mut c = Client::start(chrome, &[]);
     std::env::remove_var("MANUK_TAINT_MUTATE");
     let _ = c.ok("navigate", json!({"url": format!("{a}/")}));
     let obs = c.ok("observe", json!({}));
@@ -289,7 +289,7 @@ document.getElementById('go').addEventListener('click', function () {{
 #[test]
 fn page_js_cannot_post_a_typed_value_to_b() {
     assert_eq!(
-        run_js(false),
+        run_js(false, false),
         0,
         "page-JS fetch carried the typed value to B"
     );
@@ -297,5 +297,24 @@ fn page_js_cannot_post_a_typed_value_to_b() {
 
 #[test]
 fn page_js_mutant_goes_red() {
-    assert!(run_js(true) > 0, "mutant stayed green: nothing reached B");
+    assert!(run_js(false, true) > 0, "mutant stayed green: nothing reached B");
+}
+
+/// W4.D2.a.a: the same page-JS exfiltration with `--backend chrome`; the Fetch.requestPaused judge
+/// consults the shared taint registry. chrome_ver=145.0.7632.116
+#[test]
+fn chrome_page_js_cannot_post_a_typed_value_to_b() {
+    assert_eq!(
+        run_js(true, false),
+        0,
+        "chrome page-JS fetch carried the typed value to B"
+    );
+}
+
+#[test]
+fn chrome_page_js_mutant_goes_red() {
+    assert!(
+        run_js(true, true) > 0,
+        "chrome mutant stayed green: nothing reached B"
+    );
 }

@@ -165,7 +165,21 @@ impl Cdp {
             t
         };
         let verdict = manuk_net::scope::check(method, url)
-            .and_then(|()| manuk_net::secrets::check(&payload, url, "page request"));
+            .and_then(|()| manuk_net::secrets::check(&payload, url, "page request"))
+            // W4.D2.a.a: value-flow taint (agent-typed/read values) on the URL + body, as in manuk_net.
+            .and_then(|()| {
+                let mut t = format!("{url}\n{}", p["request"]["postData"].as_str().unwrap_or(""));
+                for e in p["request"]["postDataEntries"].as_array().into_iter().flatten() {
+                    use base64::Engine;
+                    if let Some(b) = e["bytes"]
+                        .as_str()
+                        .and_then(|b| base64::engine::general_purpose::STANDARD.decode(b).ok())
+                    {
+                        t.push_str(&String::from_utf8_lossy(&b));
+                    }
+                }
+                manuk_net::taint::check_egress(&t, url, "page request")
+            });
         let _ = match verdict {
             Ok(()) => self.send("Fetch.continueRequest", continue_params(rid, p)),
             Err(_) => self.send(
@@ -184,7 +198,7 @@ impl Cdp {
         else {
             return;
         };
-        let ok = manuk_net::secrets::check(
+        let ok = manuk_net::taint::check_egress(
             f["d"].as_str().unwrap_or(""),
             f["u"].as_str().unwrap_or(""),
             "WebSocket frame",

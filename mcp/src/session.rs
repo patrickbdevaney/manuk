@@ -2598,6 +2598,8 @@ impl<B: Backend> Session<B> {
             let page = self.b.url();
             self.taint.record(&page, text);
             manuk_net::taint::record_global(&page, text);
+            // W4.D2.a.a: a backend that only sees requests once armed (chrome Fetch) starts judging now.
+            self.b.arm_egress();
         }
         let before = self.snapshot(&tree);
         let url_before = self.b.url();
