@@ -94,7 +94,7 @@ def settled(m, secs, cap=None, step=0.5):
     return obs
 
 
-def replay(backend, seq, wait, force=False, settle=0.0, raw=None, defer=0.0):
+def replay(backend, seq, wait, force=False, settle=0.0, raw=None, defer=0.0, after=None):
     """raw (optional list): one (step, rn, observation text, gap) per step; gap=True when the step was unresolved and
     `observation text` is the fresh observation it failed against, else the observation after the step ran."""
     env, args = dict(os.environ), []
@@ -131,6 +131,8 @@ def replay(backend, seq, wait, force=False, settle=0.0, raw=None, defer=0.0):
             if raw is not None:
                 raw.append((i, rn, obs, False))
             log.append((i, f"{t} {rn[0] + ' ' + repr(rn[1]) if rn else ''}".strip(), r[:260].replace("\n", " "), dd.norm(obs)))
+        if after:
+            after(m)  # probe hook: the live session after the last step, before it is killed
         return log
     finally:
         m.p.kill()
