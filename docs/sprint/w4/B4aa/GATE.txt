@@ -1,0 +1,8 @@
+chrome_ver=145.0.7632.116 runs lean=120 legacy=120
+navigate bytes/task lean=4303 legacy=6821 cut=36.9% B4a-baseline=7035
+passes lean=117/120 legacy=116/120
+VERDICT PASS
+chrome_ver=145.0.7632.116 runs lean=120 legacy=120
+navigate bytes/task lean=6821 legacy=4303 cut=-58.5% B4a-baseline=7035
+passes lean=116/120 legacy=117/120
+VERDICT FAIL
