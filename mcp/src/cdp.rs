@@ -1065,6 +1065,8 @@ struct Builder<'a> {
     ord: HashMap<String, usize>,
     idents: Idents,
     claimed: HashSet<u64>,
+    /// `aria-hidden="true"` elements (main document) holding the focused node: Chrome ignores the attribute there.
+    retained: HashSet<usize>,
 }
 
 impl Builder<'_> {
@@ -1139,6 +1141,15 @@ impl Builder<'_> {
         let tag = r.tag(i);
         let is_iframe = tag == "iframe";
         if depth > 400 || is_skipped_tag(&tag) || (tag == "input" && r.input_type(i) == "hidden") {
+            return None;
+        }
+        // Chrome's AX tree drops an `aria-hidden="true"` subtree (MUI sets it on the app root while a Select
+        // popup is open) unless the element holds focus; the in-process a11y builder does the same.
+        if !mutated("aria-hidden-ignore")
+            && r.attr(i, "aria-hidden")
+                .is_some_and(|v| v.eq_ignore_ascii_case("true"))
+            && !(self.d == 0 && self.retained.contains(&i))
+        {
             return None;
         }
         let in_select = tag == "option";
@@ -1461,8 +1472,17 @@ fn build(
     alias: &mut HashMap<u64, u64>,
     prev: &Idents,
     viewport_w: f32,
+    focused: Option<u64>,
 ) -> Result<Built> {
     let raw = &docs[0];
+    let mut retained = HashSet::new();
+    if let Some(f) = focused {
+        let mut cur = raw.backend.iter().position(|&b| b == f).map(|i| i as i64);
+        while let Some(i) = cur.filter(|&i| i >= 0) {
+            retained.insert(i as usize);
+            cur = Some(raw.parent[i as usize]);
+        }
+    }
     let live: HashSet<u64> = docs
         .iter()
         .flat_map(|d| d.backend.iter().copied())
@@ -1494,6 +1514,7 @@ fn build(
         ord: HashMap::new(),
         idents: Idents::default(),
         claimed: HashSet::new(),
+        retained,
     };
     let mut root = b
         .node(html, false, None, 0)
@@ -2050,6 +2071,20 @@ impl CdpBackend {
         }
     }
 
+    /// Backend node id of `document.activeElement` (None when it is `<body>` or unreadable).
+    fn focused_backend(&mut self) -> Option<u64> {
+        let r = self
+            .cdp
+            .call("Runtime.evaluate", json!({"expression": "document.activeElement"}))
+            .ok()?;
+        let obj = r["result"]["objectId"].as_str()?.to_string();
+        let d = self
+            .cdp
+            .call("DOM.describeNode", json!({"objectId": obj}))
+            .ok()?;
+        d["node"]["backendNodeId"].as_u64()
+    }
+
     fn eval(&mut self, expr: &str) -> Result<Value> {
         let r = self.cdp.call(
             "Runtime.evaluate",
@@ -2104,7 +2139,8 @@ impl CdpBackend {
             .unwrap_or_default();
         let before = self.alias.len();
         let docs = self.frame_docs(&snap)?;
-        let built = build(&docs, &mut self.alias, &prev, self.width)?;
+        let focused = self.focused_backend();
+        let built = build(&docs, &mut self.alias, &prev, self.width, focused)?;
         // Accumulates until the next click takes it: act() snapshots the page before the click's own refresh,
         // so the re-mount can happen in an earlier refresh than the one the click reads.
         self.remounted += (self.alias.len() - before.min(self.alias.len())) as u32;
