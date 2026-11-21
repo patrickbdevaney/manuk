@@ -147,3 +147,9 @@ of the same binary moves by hundreds between runs (before 2664 vs 2104, after 15
 properties-value files and the interpolation files report a different number of subtests when the run is cut off by the drain
 deadline under load. So "+1620" was a load artefact of one pair of runs, not a property of the two commits. Gate clause
 "attributed = 1620" cannot be met; BLOCKED with follow-up .a.
+
+Re-dispatch 2026-11-20 (chrome_ver=145.0.7632.116, no new run: host 1-min load 21-24 on 24 cores). Cross-check on the
+d.c.a.a logs (`raw/J1b-determinism/{before,after}.{1,2,3}.log`, `MANUK_REFLOW_BUDGET_MS=60000`): all 9 before×after pairings give
+`attribute-subtest-split.py` exit 0, residual 0; dTotal is -1120 (1 pairing), -560 (4), 0 (4); never +1620. Mutant: deleting the
+`display-none-no-animations.html (1/1)` header from after.2.log gives attributed -1, residual +1, exit 1. `--selftest` GREEN.
+So the splitter half of the gate holds; the "attributed = 1620" half is falsified by every pairing. The closing run is node d.c.c.
