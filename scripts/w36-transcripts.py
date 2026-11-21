@@ -3,6 +3,8 @@
 and write the transcripts to docs/sprint/w36/transcripts/<task>_r<run>.txt. The hand labels in
 docs/sprint/w36/hand-labels.tsv were written from each page's design BEFORE the classifier was run.
 Usage: python3 -I scripts/w36-transcripts.py   (needs target/release/manuk-mcp; MANUK_CHROME_PIN is recorded)
+       python3 -I scripts/w36-transcripts.py --backend chrome   (W3.6.a.a: same fixtures through `manuk-mcp --backend
+       chrome`, written to docs/sprint/w36/transcripts-chrome/; needs Chrome for Testing at MANUK_CHROME_PIN)
 """
 import http.server, json, os, select, subprocess, sys, tempfile, threading
 
@@ -11,6 +13,7 @@ REPO = os.path.abspath(os.path.join(HERE, ".."))
 BIN = os.path.join(REPO, "target", "release", "manuk-mcp")
 OUT = os.path.join(REPO, "docs", "sprint", "w36", "transcripts")
 CHROME = os.environ.get("MANUK_CHROME_PIN", "")
+BACKEND = "manuk"  # set by --backend (W3.6.a.a)
 
 # task -> (element label, element html)
 PAGES = {
@@ -35,7 +38,8 @@ def page(body):
 class Mcp:
     def __init__(s, logdir):
         env = dict(os.environ, MANUK_ACTLOG_DIR=logdir)
-        s.p = subprocess.Popen([BIN], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+        args = [BIN] + (["--backend", "chrome"] if BACKEND == "chrome" else [])
+        s.p = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                stderr=subprocess.DEVNULL, text=True, bufsize=1, env=env)
         s.id, s.buf = 0, b""  # buf: bytes read from the pipe but not yet split into lines (see line)
         s.rpc("initialize", {"protocolVersion": "2025-03-26", "capabilities": {},
@@ -99,6 +103,11 @@ class Quiet(http.server.BaseHTTPRequestHandler):
 
 
 def main():
+    global OUT, BACKEND
+    if "--backend" in sys.argv:
+        BACKEND = sys.argv[sys.argv.index("--backend") + 1]
+        assert BACKEND == "chrome", "--backend takes `chrome`"
+        OUT = os.path.join(REPO, "docs", "sprint", "w36", "transcripts-chrome")
     os.makedirs(OUT, exist_ok=True)
     logdir = tempfile.mkdtemp(prefix="w36-actlog-")
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Quiet)
@@ -111,12 +120,17 @@ def main():
         m = Mcp(logdir)
         try:
             nav = m.tool("navigate", url=base)
-            h = handle_of(nav, label)
+            try:
+                h = handle_of(nav, label)
+            except RuntimeError:
+                # W3.6.a.a: navigate's compact observe at HEAD gives plain headings no handle on either backend;
+                # `find` ranks them with one. The element and the act are unchanged.
+                h = handle_of(m.tool("find", query=label), label)
             acts = [m.tool("act", handle=h, action="click") for _ in range(2)]
         finally:
             m.close()
         with open(os.path.join(OUT, f"{task}_r1.txt"), "w") as f:
-            f.write(f"# task={task} run=1 chrome_ver={CHROME} head_at_run={commit} backend=manuk\n")
+            f.write(f"# task={task} run=1 chrome_ver={CHROME} head_at_run={commit} backend={BACKEND}\n")
             f.write(f"# element: {html}\n")
             for i, a in enumerate(acts, 1):
                 f.write(f"--- act {i} (click {h})\n{a}\n")
