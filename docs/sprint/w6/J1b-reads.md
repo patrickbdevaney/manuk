@@ -103,3 +103,9 @@ Re-poll 4 (W6.J1.b.a.a.a.b.a.a, 2026-11-20 19:19-19:51, chrome_ver=145.0.7632.11
 (background watcher capped at 20 min, then re-polled). Samples: 41.2, 42.5, 41.0, 39.8 at dispatch (19:19-19:24), 40.5-40.6 at 19:36,
 falling to a floor of 24.3 at 19:46, 26-29 at 19:51. Never <= 8 on 24 cores (co-tenant rustc for couple-sim, not ours). No run made,
 no threshold edited. Gate stays BLOCKED until the host is quiet; the probe dir `$WPT_DIR/css/zzprobeN50` is still in place.
+
+Dispatch 6 (W6.J1.b.a.a.a.b.a.a, 2026-11-20 19:58-20:01, chrome_ver=145.0.7632.116): 1-min load 26.7, 27.6, 27.9 on 24 cores (co-tenant rustc/python,
+not ours). No run made, no threshold edited. Not re-polling: five prior dispatches showed the host does not go quiet on the loop's time
+scale. The root cause is that both cut-offs (reflow budget, drain budget) are wall-clock, so the pre-registered 20/100 cannot reproduce
+under load at all. Follow-up W6.J1.b.a.a.a.b.a.a.b proposes a load-independent (work-count) reflow budget so the number stops moving with
+host load; until it lands or the host is quiet, this node stays BLOCKED.
