@@ -211,15 +211,25 @@ impl ManukMcp {
     }
 }
 
+static BACKEND_NAME: std::sync::OnceLock<&'static str> = std::sync::OnceLock::new();
+
+/// W6.D1.a: which backend this process serves; reported as `serverInfo.title` on `initialize`.
+pub fn set_backend_name(n: &'static str) {
+    let _ = BACKEND_NAME.set(n);
+}
+
 impl ServerHandler for ManukMcp {
     #[allow(deprecated)]
     fn get_info(&self) -> ServerConfig {
+        let mut info = rmcp::model::Implementation::from_build_env();
+        info.title = Some(format!("backend={}", BACKEND_NAME.get().unwrap_or(&"engine")));
         ServerConfig::new(
             ServerCapabilities::builder()
                 .enable_tools()
                 .enable_tool_list_changed()
                 .build(),
         )
+        .with_server_info(info)
     }
 
     async fn list_tools(
@@ -396,6 +406,7 @@ pub fn run_stdio_preloaded(
 
 /// R4.1: the same tool surface over Chrome (CDP) instead of the in-process engine.
 pub fn run_stdio_chrome(width: u32, height: u32, grants: crate::policy::Grants) -> Result<()> {
+    set_backend_name("chrome");
     let log_dir = std::env::var_os("MANUK_ACTLOG_DIR").map(std::path::PathBuf::from);
     let tx = spawn_session(
         move || {

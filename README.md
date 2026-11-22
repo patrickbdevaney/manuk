@@ -14,11 +14,11 @@ written in Rust (deterministic and forkable, with no Chrome dependency, but behi
 ```bash
 ./scripts/mozjs-fetch.sh                      # once: pinned SpiderMonkey prebuilt (a clean-clone build needs it)
 cargo auditable build --release -p manuk-mcp  # or: cargo build --release -p manuk-mcp
-claude mcp add manuk -- manuk-mcp --backend chrome
+claude mcp add manuk -- manuk-mcp
 ```
 
-`--backend chrome` drives the pinned Chrome for Testing (under `~/.local/chrome-cft/<pin>/`, or `MANUK_CHROME`) with
-its sandbox on. Without the flag, `manuk-mcp` runs the in-process engine. Thin stdio clients:
+The default backend drives the pinned Chrome for Testing (under `~/.local/chrome-cft/<pin>/`, or `MANUK_CHROME`) with
+its sandbox on. `--backend engine` opts in to the in-process engine (`--backend chrome` is still accepted); `initialize` reports the backend as `serverInfo.title`. Thin stdio clients:
 [`python/manuk_client.py`](python/manuk_client.py) (standard library) and [`ts/manuk.ts`](ts/manuk.ts) (Node
 built-ins). Tool-by-backend behaviour: [`docs/sprint/BACKENDS.md`](docs/sprint/BACKENDS.md). Security policy and SBOM:
 [`SECURITY.md`](SECURITY.md).

@@ -82,19 +82,19 @@ def arm_config(arm, tmp):
             cfg = {"mcpServers": {"browser": {"command": exe, "args": ["--backend", "chrome"],
                                               "env": {"MANUK_CHROME": pinned_chrome(), "MANUK_NO_RECEIPTS": "1"}}}}
         else:
-            cfg = {"mcpServers": {"browser": {"command": exe, "args": [], "env": {"MANUK_NO_RECEIPTS": "1"}}}}
+            cfg = {"mcpServers": {"browser": {"command": exe, "args": ["--backend", "engine"], "env": {"MANUK_NO_RECEIPTS": "1"}}}}
         allowed = "mcp__browser"
     elif arm == "manuk-noretry":  # W4.C2.c: same binary, layer-applied retry off (MANUK_NO_RETRY)
         exe = mcp_bin()
         if not os.path.exists(exe):
             return None, None
-        cfg = {"mcpServers": {"browser": {"command": exe, "args": [], "env": {"MANUK_NO_RETRY": "1"}}}}
+        cfg = {"mcpServers": {"browser": {"command": exe, "args": ["--backend", "engine"], "env": {"MANUK_NO_RETRY": "1"}}}}
         allowed = "mcp__browser"
     elif arm in ("manuk", "manuk+preload", "manuk+rollback", "manuk+rollback.v2", "manuk-prealwaysload", "manuk-lean", "manuk-noquery", "manuk-legacy-observe", "manuk-diffview-off", "manuk-navcut", "manuk-textoff"):  # W4.B1 before-arm: MANUK_MCP_BIN
         exe = mcp_bin()
         if not os.path.exists(exe):
             return None, None
-        cfg = {"mcpServers": {"browser": {"command": exe, "args": []}}}
+        cfg = {"mcpServers": {"browser": {"command": exe, "args": ["--backend", "engine"]}}}
         if arm == "manuk-noquery":  # W4.B4.q mutant: navigate/extract ignore `query` (the pre-W4.B3 behaviour)
             cfg["mcpServers"]["browser"]["env"] = {"MANUK_QUERY_MUTATE": "ignore"}
         if arm == "manuk-lean":  # W4.E2.a: same binary, lean agent profile (deferred image bodies, tracker hosts refused)

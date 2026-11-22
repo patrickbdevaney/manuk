@@ -52,3 +52,7 @@ rustflags = ["-C", "target-feature=+crt-static"]
 [env]
 MOZJS_ATTESTATION = "strict"
 MOZJS_ARCHIVE = { value = "target/mozjs-verified/libmozjs-x86_64-unknown-linux-gnu.tar.gz", relative = true }
+
+# W6.D1.a: manuk-mcp defaults to Chrome; the repo's engine test suites spawn it with no flag and mean the
+# engine, so cargo test/run opts in here. tests/default_backend.rs clears this to test the real default.
+MANUK_BACKEND = "engine"

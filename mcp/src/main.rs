@@ -146,13 +146,23 @@ fn real_main(mut args: Vec<String>) -> anyhow::Result<()> {
         args.remove(i);
         manuk_mcp::cdp::allow_unsafe_no_sandbox();
     }
+    // W6.D1.a: Chrome (cdp-layer) is the default backend; the in-process engine is opt-in via
+    // `--backend engine`. Precedence: the flag, then MANUK_BACKEND (the repo's own test config sets it
+    // to `engine` so the engine suites keep exercising the engine), then Chrome.
+    let mut backend = std::env::var("MANUK_BACKEND").unwrap_or_else(|_| "chrome".into());
     if let Some(i) = args.iter().position(|a| a == "--backend") {
-        anyhow::ensure!(
-            args.get(i + 1).map(String::as_str) == Some("chrome"),
-            "--backend takes `chrome`"
-        );
+        anyhow::ensure!(i + 1 < args.len(), "--backend takes `chrome` or `engine`");
+        backend = args.remove(i + 1);
+        args.remove(i);
+    }
+    anyhow::ensure!(
+        backend == "chrome" || backend == "engine",
+        "--backend takes `chrome` or `engine`, got `{backend}`"
+    );
+    if backend == "chrome" {
         return manuk_mcp::server::run_stdio_chrome(1280, 800, grants);
     }
+    manuk_mcp::server::set_backend_name("engine");
     let before = args.len();
     args.retain(|a| a != "--deterministic");
     if args.len() != before {
