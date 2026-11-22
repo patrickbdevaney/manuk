@@ -1,0 +1,2 @@
+ts	arm	suite	chrome_ver	task	site	run	model	pass	evals_ok	evals_vec	evals_n	state_ok	checkpoints	restores	forks	input_tokens	output_tokens	cache_read_tokens	cache_create_tokens	cost_usd	seconds	turns	is_error	answer	llm_ok	llm_n	judge_model
+2026-11-21T23:44:15	cdp-layer	real-judge-gptoss120b	145.0.7632.116	gocalendar-5	gocalendar	2	haiku	0	0	[0, 0, 0, 0]	4	0	0	0	0	0	0	0	0	0	420.1		1	TIMEOUT	0	1	openai/gpt-oss-120b
