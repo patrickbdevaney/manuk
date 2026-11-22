@@ -95,6 +95,8 @@ pub struct Session<B: Backend> {
     grants: crate::policy::Grants,
     /// This call carried `confirm=true`.
     confirmed: bool,
+    /// W6.C2: this `act` carries `force=true`.
+    force: bool,
     /// W4.A4: filled by every `tree()`: clickable non-semantic nodes, and each node's container context.
     click: RefCell<HashSet<NodeId>>,
     wh: RefCell<HashMap<NodeId, Where>>,
@@ -535,6 +537,7 @@ impl<B: Backend> Session<B> {
             taint: Default::default(),
             grants: Default::default(),
             confirmed: false,
+            force: false,
             click: Default::default(),
             wh: Default::default(),
             grp: Default::default(),
@@ -1347,6 +1350,8 @@ impl<B: Backend> Session<B> {
             .unwrap_or(false);
         self.plain_observe = tool == "observe" && !self.include_hidden;
         self.exposes = tool != "extract";
+        self.force = a.get("force").and_then(Value::as_bool).unwrap_or(false);
+        self.b.set_force(self.force && tool == "act");
         self.confirmed = a.get("confirm").and_then(Value::as_bool).unwrap_or(false);
         // Follow-up requests a handler, scroll listener or interval queued run before any read, so
         // an idle wait (observe again) sees the page the user would.
@@ -1434,9 +1439,20 @@ impl<B: Backend> Session<B> {
             "recall" => self.recall(arg_str(a, "site")).map(Output::Text),
             "back" => self.back().await.map(Output::Text),
             "wait_for" => self.wait_for(a).await.map(Output::Text),
+            "evaluate" => self
+                .evaluate(arg_str(a, "expression").ok_or_else(|| anyhow!("evaluate needs `expression`"))?)
+                .await
+                .map(Output::Text),
+            "act" if a.get("at").is_some() && a.get("handle").is_none() => {
+                let at = &a["at"];
+                let (Some(x), Some(y)) = (at["x"].as_f64(), at["y"].as_f64()) else {
+                    bail!("act `at` needs {{\"x\": number, \"y\": number}} (viewport CSS px)");
+                };
+                self.act_at(x as f32, y as f32).await.map(Output::Text)
+            }
             "act" => self
                 .act(
-                    arg_str(a, "handle").ok_or_else(|| anyhow!("act needs `handle`"))?,
+                    arg_str(a, "handle").ok_or_else(|| anyhow!("act needs `handle` (or `at`)"))?,
                     arg_str(a, "action").unwrap_or("click"),
                     arg_str(a, "value"),
                 )
@@ -1961,6 +1977,9 @@ impl<B: Backend> Session<B> {
     /// `MANUK_TYPE_COVER_MUTATE=1` restores the pointer-style refusal for the red run.
     fn verify_reach(&mut self, h: u32, node: NodeId, focus_only: bool) -> Result<()> {
         self.b.reveal(node);
+        if self.force {
+            return Ok(());
+        }
         for _ in 0..2 {
             let tree = self.tree()?;
             let vp = self.b.viewport();
@@ -2119,6 +2138,33 @@ impl<B: Backend> Session<B> {
         } else {
             Ok(format!("{r}\nwrites:\n  {}", lines.join("\n  ")))
         }
+    }
+
+    /// W6.C2: `evaluate(expression)`: a read-only script in the page; the page's value comes back as
+    /// untrusted data (capped), after the secret redaction every result gets.
+    async fn evaluate(&mut self, expr: &str) -> Result<String> {
+        if !self.grants.may_eval() {
+            bail!("DENIED: evaluate is not granted (origin/confirm limits are set; start with --allow-eval)");
+        }
+        const CAP: usize = 8000;
+        let v = self.b.page_eval_readonly(expr).await?;
+        let n = v.chars().count();
+        let v: String = v.chars().take(CAP).collect();
+        let more = if n > CAP { format!("\n[truncated: {n} chars, showing {CAP}]") } else { String::new() };
+        Ok(format!("{UNTRUSTED}\n{v}{more}"))
+    }
+
+    /// W6.C2: `act at={x,y}`: a pointer click at viewport coordinates, no handle (canvas, custom
+    /// widgets, anything the tree does not name). Judged as a click by the grant policy; no hit-test.
+    async fn act_at(&mut self, x: f32, y: f32) -> Result<String> {
+        self.gate(crate::policy::Op::Click, None, "at-coordinates")?;
+        let tree = self.tree()?;
+        let before = self.snapshot(&tree);
+        let url_before = self.b.url();
+        self.b.begin_act();
+        let outcome = self.b.click_at(x, y).await?;
+        let _ = self.settled().await;
+        self.effect(before, &url_before, &format!("unverified: {outcome}"))
     }
 
     async fn act_inner(&mut self, hs: &str, action: &str, value: Option<&str>) -> Result<String> {
@@ -2713,6 +2759,20 @@ impl<B: Backend> Session<B> {
         self.b.page_text()
     }
 
+    /// W6.C2: like `page_text`, but withheld runs leave a `[withheld: reason]` marker in place (the
+    /// words stay out), so extract shows where text was dropped instead of silently closing the gap.
+    fn page_text_marked(&self) -> Result<String> {
+        if !self.include_hidden {
+            if let Some(sh) = self.b.shield()? {
+                if !sh.marked.is_empty() {
+                    return Ok(sh.marked);
+                }
+                return Ok(sh.text);
+            }
+        }
+        self.b.page_text()
+    }
+
     /// Page links minus those whose text is a withheld run.
     fn links(&self) -> Result<Vec<(String, String)>> {
         let links = self.b.links()?;
@@ -2814,7 +2874,7 @@ impl<B: Backend> Session<B> {
         let root = scoped.unwrap_or(&tree);
         let out = match format {
             "text" => match scoped {
-                None => weave_label_only(&self.page_text()?, &tree),
+                None => weave_label_only(&self.page_text_marked()?, &tree),
                 Some(s) => s
                     .iter()
                     .filter(|n| !n.name.is_empty())
@@ -2838,7 +2898,7 @@ impl<B: Backend> Session<B> {
                 }
                 match scoped {
                     None => {
-                        md.push_str(&weave_label_only(&self.page_text()?, &tree));
+                        md.push_str(&weave_label_only(&self.page_text_marked()?, &tree));
                         let links = self.links()?;
                         if !links.is_empty() {
                             md.push_str("\n\nLinks:\n");

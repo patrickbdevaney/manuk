@@ -117,12 +117,12 @@ pub fn tools() -> Vec<Tool> {
             if matches!(n, "navigate" | "act" | "type" | "fill_form") {
                 p.insert(
                     "confirm".into(),
-                    json!({"type": "boolean", "description": "user approved CONFIRM REQUIRED"}),
+                    json!({"type": "boolean", "description": "approved CONFIRM REQUIRED"}),
                 );
             }
             p.insert(
                 "page".into(),
-                json!({"type": "string", "description": "page handle (or \"new\")"}),
+                json!({"type": "string", "description": "page id or new"}),
             );
         }
         let (ro, destructive) = crate::policy::annotations(n);
@@ -136,7 +136,7 @@ pub fn tools() -> Vec<Tool> {
         // R-B1/W5.T3: the six core tools load upfront (Claude Code otherwise defers every MCP tool behind a ToolSearch turn).
         if matches!(
             n,
-            "navigate" | "observe" | "act" | "fill_form" | "extract" | "type"
+            "navigate" | "observe" | "act" | "fill_form" | "extract" | "type" | "evaluate"
         ) {
             let Value::Object(m) = json!({"anthropic/alwaysLoad": true}) else {
                 unreachable!()
@@ -149,7 +149,8 @@ pub fn tools() -> Vec<Tool> {
     vec![
         t("navigate", "Load a URL; one line per node: `[hN] role \"name\" [state]`. `query` keeps matching passages. E.g. navigate(url=\"https://a.com\", query=\"shipping cost\")", schema(json!({"url": {"type": "string"}, "query": {"type": "string"}}), &["url"])),
         t("observe", "Re-read the page; mode: full (default), diff (changes only), viewport, interactive, content (text). E.g. observe(mode=\"diff\")", schema(json!({"mode": {"type": "string", "enum": ["full", "diff", "viewport", "interactive", "content"]}, "budget_tokens": {"type": "integer"}, "include_hidden": {"type": "boolean", "description": "include invisible text"}}), &[])),
-        t("act", "Click, check, select, focus or hover a handle, or run `steps` in one call (stops at first failure). E.g. act(handle=\"h5\", action=\"click\")", schema(json!({"handle": {"type": "string"}, "action": {"type": "string", "enum": ["click", "check", "select", "focus", "hover", "dismiss"]}, "value": {"type": "string", "description": "option; false unchecks"}, "steps": {"type": "array", "description": "instead of handle: [{\"tool\":\"type\",\"handle\":\"h3\",\"text\":\"x\"}]", "items": {"type": "object"}}}), &[])),
+        t("act", "Click, check, select, focus or hover a handle, or run `steps` in one call (stops at first failure). E.g. act(handle=\"h5\", action=\"click\")", schema(json!({"handle": {"type": "string"}, "at": {"type": "object", "description": "click px {x,y}"}, "force": {"type": "boolean"}, "action": {"type": "string", "enum": ["click", "check", "select", "focus", "hover", "dismiss"]}, "value": {"type": "string", "description": "option; false unchecks"}, "steps": {"type": "array", "description": "instead of handle: [{\"tool\":\"type\",\"handle\":\"h3\",\"text\":\"x\"}]", "items": {"type": "object"}}}), &[])),
+        t("evaluate", "Read-only JS in the page; returns its value.", schema(json!({"expression": {"type": "string"}}), &["expression"])),
         t("fill_form", "Fill several fields, optionally submit, in one call. E.g. fill_form(fields=[{\"handle\":\"h3\",\"value\":\"A\"}], submit=\"h9\")", schema(json!({"fields": {"type": "array", "items": {"type": "object", "properties": {"handle": {"type": "string"}, "value": {}, "action": {"type": "string", "enum": ["type", "check", "select"]}}, "required": ["handle", "value"]}}, "submit": {"type": "string", "description": "handle clicked last"}}), &["fields"])),
         t("back", "Go back one history entry.", schema(json!({}), &[])),
         t("wait_for", "Wait for `text` or `handle` (`timeout` s, default 10).", schema(json!({"text": {"type": "string"}, "handle": {"type": "string"}, "timeout": {"type": "number"}}), &[])),
@@ -283,6 +284,7 @@ impl ServerHandler for ManukMcp {
             tool.as_str(),
             "observe"
                 | "extract"
+                | "evaluate"
                 | "page_data"
                 | "find"
                 | "screenshot"
@@ -452,7 +454,7 @@ mod tests {
                 .and_then(|v| v.as_bool());
             let core = matches!(
                 t.name.as_ref(),
-                "navigate" | "observe" | "act" | "fill_form" | "extract" | "type"
+                "navigate" | "observe" | "act" | "fill_form" | "extract" | "type" | "evaluate"
             );
             assert_eq!(
                 always == Some(true),

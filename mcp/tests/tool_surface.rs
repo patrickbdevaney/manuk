@@ -10,7 +10,12 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
 use serde_json::{json, Value};
 
-const CORE: [&str; 6] = ["navigate", "observe", "act", "fill_form", "type", "extract"];
+const CORE: [&str; 7] = ["navigate", "observe", "act", "fill_form", "type", "extract", "evaluate"];
+/// W6.C2: `evaluate` is a new always-loaded capability, not a description of the W5.T3 surface; the 40% bar
+/// guards the verbosity of the tools that existed then, so it is measured without `evaluate`, and
+/// `evaluate_costs_little` caps what the new tool itself may weigh.
+const NEW: &str = "evaluate";
+const EVALUATE_MAX: usize = 400;
 const BASE_TOTAL: usize = 18246;
 const BASE_CORE: usize = 7032;
 
@@ -88,10 +93,10 @@ fn size(t: &Value) -> usize {
 #[test]
 fn surface_is_40_percent_smaller() {
     let tools = Client::start().list();
-    let total: usize = tools.iter().map(size).sum();
+    let total: usize = tools.iter().filter(|t| t["name"] != NEW).map(size).sum();
     let core: usize = tools
         .iter()
-        .filter(|t| CORE.contains(&t["name"].as_str().unwrap()))
+        .filter(|t| t["name"] != NEW && CORE.contains(&t["name"].as_str().unwrap()))
         .map(size)
         .sum();
     println!("surface total={total} (base {BASE_TOTAL}) core={core} (base {BASE_CORE})");
@@ -168,4 +173,12 @@ fn deferred_tools_are_callable() {
 fn manual_checkpoint_is_not_listed() {
     let mut c = Client::start();
     assert!(!c.list().iter().any(|t| t["name"] == "checkpoint"));
+}
+
+#[test]
+fn evaluate_costs_little() {
+    let tools = Client::start().list();
+    let e = tools.iter().find(|t| t["name"] == NEW).expect("evaluate is listed");
+    assert!(size(e) <= EVALUATE_MAX, "evaluate is {} B (> {EVALUATE_MAX})", size(e));
+    assert_eq!(e["_meta"]["anthropic/alwaysLoad"], json!(true));
 }

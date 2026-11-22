@@ -27,6 +27,9 @@ pub const MIN_FONT_PX: f32 = 2.0;
 pub struct Shield {
     /// The page text with every withheld fragment removed (same joining rule as `visible_text`).
     pub text: String,
+    /// W6.C2: `text` with a `[withheld: reason]` marker where withheld runs sat (the withheld words
+    /// themselves are never in it), so a reader sees that something was dropped and where.
+    pub marked: String,
     /// `(reason, text)` for each withheld fragment, in document order.
     pub withheld: Vec<(&'static str, String)>,
     /// Elements all of whose text is withheld, with the reason — the a11y tree drops these.
@@ -208,7 +211,13 @@ fn walk(b: &LayoutBox, mut ctx: Ctx, w: &mut Walk<'_>) {
                         if let Some(n) = f.node.or(b.node) {
                             w.hidden_nodes.entry(n).or_insert(r);
                         }
-                        w.out.push((r, f.clone()));
+                        w.out.push((
+                            r,
+                            TextFragment {
+                                node: f.node.or(b.node),
+                                ..f.clone()
+                            },
+                        ));
                     }
                     None => {
                         if let Some(n) = f.node.or(b.node) {
@@ -281,21 +290,50 @@ pub fn analyze(
             last
         })
         .collect();
-    let mut idx: Vec<usize> = (0..w.seen.len()).collect();
-    idx.sort_by_key(|&i| keys[i]);
+    // Withheld runs join the same DOM-ordered stream, as marker items.
+    let mut items: Vec<(usize, Option<&'static str>, &TextFragment)> = Vec::new();
+    for (i, f) in w.seen.iter().enumerate() {
+        items.push((keys[i], None, f));
+    }
+    let mut wl = 0usize;
+    for (r, f) in &w.out {
+        if let Some(k) = f.node.and_then(dom_pos) {
+            wl = k;
+        }
+        items.push((wl, Some(*r), f));
+    }
+    items.sort_by_key(|i| i.0);
     let mut text = String::new();
+    let mut marked = String::new();
     let mut prev: Option<&TextFragment> = None;
-    for f in idx.into_iter().map(|i| &w.seen[i]) {
+    let mut pending: Vec<&'static str> = Vec::new();
+    let flush = |marked: &mut String, pending: &mut Vec<&'static str>| {
+        if !pending.is_empty() {
+            pending.dedup();
+            marked.push_str(&format!(" [withheld: {}] ", pending.join(", ")));
+            pending.clear();
+        }
+    };
+    for (_, why, f) in items {
+        if let Some(r) = why {
+            pending.push(r);
+            continue;
+        }
         if f.text.is_empty() {
             continue;
         }
+        flush(&mut marked, &mut pending);
         if prev.is_some_and(|p| !f.continues(p)) {
             text.push(' ');
+            marked.push(' ');
         }
         text.push_str(&f.text);
+        marked.push_str(&f.text);
         prev = Some(f);
     }
+    flush(&mut marked, &mut pending);
     let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let marked = marked.split_whitespace().collect::<Vec<_>>().join(" ");
     let nodes = w
         .hidden_nodes
         .into_iter()
@@ -303,6 +341,7 @@ pub fn analyze(
         .collect();
     Shield {
         text,
+        marked,
         withheld: w.out.into_iter().map(|(r, f)| (r, f.text)).collect(),
         nodes,
     }

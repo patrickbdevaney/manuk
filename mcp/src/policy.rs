@@ -21,6 +21,8 @@ pub struct Grants {
     pub read: Vec<String>,
     pub write: Vec<String>,
     pub confirm: HashSet<String>,
+    /// W6.C2: `--allow-eval`: read-only `evaluate` is allowed even under origin/confirm limits.
+    pub eval: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -85,6 +87,13 @@ const RISKY_NAMES: &[&str] = &[
 impl Grants {
     pub fn is_open(&self) -> bool {
         self.read.is_empty() && self.write.is_empty() && self.confirm.is_empty()
+    }
+
+    /// W6.C2: may the agent run a read-only script in the page? Yes when no limits are set (the
+    /// headless default) or the operator granted `--allow-eval`; under origin/confirm limits a script
+    /// could read what the policy fences, so it is refused unless granted.
+    pub fn may_eval(&self) -> bool {
+        self.eval || self.is_open()
     }
 
     fn needs(&self, kind: &str) -> bool {
@@ -205,6 +214,11 @@ pub fn parse_grants(args: &mut Vec<String>) -> Result<Grants, String> {
     let mut g = Grants::default();
     let mut i = 0;
     while i < args.len() {
+        if args[i] == "--allow-eval" {
+            args.remove(i);
+            g.eval = true;
+            continue;
+        }
         let a = args[i].clone();
         let (key, inline) = match a.split_once('=') {
             Some((k, v)) => (k.to_string(), Some(v.to_string())),
@@ -298,7 +312,7 @@ pub fn nav_ask(text: &str, page_url: &str) -> Option<String> {
 /// vocabulary: what a client may auto-approve versus what can leave the machine.
 pub fn annotations(tool: &str) -> (bool, bool) {
     match tool {
-        "observe" | "extract" | "page_data" | "find" | "screenshot" | "checkpoint" | "recall"
+        "observe" | "extract" | "evaluate" | "page_data" | "find" | "screenshot" | "checkpoint" | "recall"
         | "scroll" | "wait_for" => (true, false),
         "act" | "fill_form" | "type" | "commit" | "key" | "upload" | "drag" | "download" => {
             (false, true)

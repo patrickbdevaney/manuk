@@ -103,6 +103,17 @@ pub trait Backend {
             "this backend cannot read a script's value back (WebMCP needs the chrome backend)"
         )
     }
+    /// W6.C2: evaluate `js` read-only (the browser throws on any side effect) and return its value as
+    /// a string (JSON for non-strings). Only a backend that can enforce read-only has it.
+    async fn page_eval_readonly(&mut self, _js: &str) -> Result<String> {
+        anyhow::bail!("evaluate needs the chrome backend (read-only evaluation cannot be enforced here)")
+    }
+    /// W6.C2: `act force=true`: the next click skips the dispatch-time occlusion refusal.
+    fn set_force(&mut self, _on: bool) {}
+    /// W6.C2: click viewport coordinates (CSS px) with no element handle.
+    async fn click_at(&mut self, _x: f32, _y: f32) -> Result<String> {
+        anyhow::bail!("act at={{x,y}} needs the chrome backend (this backend has no pixel pointer)")
+    }
     /// The injection shield's verdict (R1.4); `None` for a backend that cannot compute paint truth.
     fn shield(&self) -> Result<Option<manuk_agent::shield::Shield>> {
         Ok(None)

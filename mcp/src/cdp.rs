@@ -1328,6 +1328,8 @@ fn shield_of(r: &Raw, ids: &Idents, viewport_w: f32) -> Shield {
     let n = r.kind.len();
     let mut sh = Shield::default();
     let mut seen_runs: Vec<(f32, String)> = vec![];
+    // W6.C2: every run in DOM order (`None` = seen), for the in-place withheld markers.
+    let mut all_runs: Vec<(f32, Option<&'static str>, String)> = vec![];
     let mut text_state: HashMap<usize, bool> = HashMap::new(); // text node → withheld?
     for i in 0..n {
         if r.kind[i] != 3 || r.value[i].trim().is_empty() {
@@ -1405,10 +1407,12 @@ fn shield_of(r: &Raw, ids: &Idents, viewport_w: f32) -> Shield {
         let text = norm(&r.value[i]);
         match reason {
             Some(why) => {
+                all_runs.push((b[1], Some(why), String::new()));
                 sh.withheld.push((why, text));
                 text_state.insert(i, true);
             }
             None => {
+                all_runs.push((b[1], None, text.clone()));
                 seen_runs.push((b[1], text));
                 text_state.insert(i, false);
             }
@@ -1425,6 +1429,30 @@ fn shield_of(r: &Raw, ids: &Idents, viewport_w: f32) -> Shield {
         last_y = *y;
     }
     sh.text = out;
+    let mut marked = String::new();
+    let mut last_y = f32::MIN;
+    let mut pend: Vec<&'static str> = vec![];
+    for (y, why, t) in &all_runs {
+        if let Some(w) = why {
+            pend.push(w);
+            continue;
+        }
+        if !pend.is_empty() {
+            pend.dedup();
+            marked.push_str(&format!(" [withheld: {}] ", pend.join(", ")));
+            pend.clear();
+        }
+        if !marked.is_empty() {
+            marked.push(if (y - last_y).abs() > 6.0 { '\n' } else { ' ' });
+        }
+        marked.push_str(t);
+        last_y = *y;
+    }
+    if !pend.is_empty() {
+        pend.dedup();
+        marked.push_str(&format!(" [withheld: {}]", pend.join(", ")));
+    }
+    sh.marked = marked;
     // Elements all of whose text is withheld (and invisible boxes) are dropped from the tree.
     let mut hidden_below = vec![0u32; n];
     let mut seen_below = vec![0u32; n];
@@ -1579,6 +1607,8 @@ pub struct CdpBackend {
     text: String,
     /// Elements re-mounted by identity since the last click, for the tool result.
     pub remounted: u32,
+    /// W6.C2: `act force`: skip the dispatch-time occlusion refusal.
+    pub force: bool,
     /// W3.8: page targets in the order the agent met them, and the one it is attached to.
     tabs: Vec<String>,
     cur: String,
@@ -2048,6 +2078,7 @@ impl CdpBackend {
             content_h: 0.0,
             text: String::new(),
             remounted: 0,
+            force: false,
             tabs: vec![tid.clone()],
             cur: tid,
             tab_notes: Vec::new(),
@@ -2528,7 +2559,12 @@ impl CdpBackend {
                 && self
                     .page_hit(cx, cy)
                     .is_ok_and(|h| h == be || self.within(h, be));
-            if hit == be || self.within(hit, be) || page_agrees || mutated("no-revalidate") {
+            if hit == be
+                || self.within(hit, be)
+                || page_agrees
+                || self.force
+                || mutated("no-revalidate")
+            {
                 return Ok((cx, cy, be));
             }
             cover.get_or_insert(hit);
@@ -2968,6 +3004,39 @@ impl Backend for CdpBackend {
             );
         }
         Ok(r["result"]["value"].as_str().unwrap_or("").to_string())
+    }
+    async fn page_eval_readonly(&mut self, js: &str) -> Result<String> {
+        let r = self.cdp.call(
+            "Runtime.evaluate",
+            json!({"expression": js, "returnByValue": true, "awaitPromise": true, "throwOnSideEffect": true}),
+        )?;
+        if let Some(e) = r.get("exceptionDetails") {
+            bail!(
+                "evaluate refused or failed (read-only: no assignments, no DOM writes, no calls with side effects): {}",
+                e["exception"]["description"]
+                    .as_str()
+                    .or(e["text"].as_str())
+                    .unwrap_or("exception")
+            );
+        }
+        let v = &r["result"];
+        Ok(match v.get("value") {
+            Some(Value::String(s)) => s.clone(),
+            Some(x) => x.to_string(),
+            None => v["description"].as_str().unwrap_or("undefined").to_string(),
+        })
+    }
+    fn set_force(&mut self, on: bool) {
+        self.force = on;
+    }
+    async fn click_at(&mut self, x: f32, y: f32) -> Result<String> {
+        self.cdp.events.clear();
+        self.cdp.exc.clear();
+        for (t, cc) in [("mouseMoved", 0), ("mousePressed", 1), ("mouseReleased", 1)] {
+            self.cdp.call("Input.dispatchMouseEvent", json!({"type": t, "x": x, "y": y, "button": "left", "buttons": if t == "mousePressed" { 1 } else { 0 }, "clickCount": cc}))?;
+        }
+        self.after_action()?;
+        Ok(format!("dispatched click at viewport ({x:.0},{y:.0}); no hit-test (at=)"))
     }
     fn arm_dialog(&mut self, accept: bool, text: Option<String>) -> Result<()> {
         self.cdp.dialog_arm = Some((accept, text));
