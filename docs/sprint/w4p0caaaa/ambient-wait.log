@@ -1,1 +1,3 @@
 # quiet wait: waited 600s, load1 now 8.80
+# attempt3 start 2026-11-22T08:37:27-05:00 load 7.71 8.00 8.50 9/1298 1986252
+# attempt3 end 2026-11-22T09:07:28-05:00 elapsed 1801s rows=0 min_load1=6.51 last=11.01
