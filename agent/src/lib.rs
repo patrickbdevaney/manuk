@@ -833,6 +833,9 @@ impl AgentBrowser {
                                 _ => u.to_string(),
                             })
                             .unwrap_or(url);
+                        let page_origin = url::Url::parse(&base)
+                            .ok()
+                            .map(|b| b.origin().ascii_serialization());
                         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
                         self.ws_send.insert(id, tx);
                         let (gen, ev) = (self.ws_gen, self.ws_events.0.clone());
@@ -840,15 +843,17 @@ impl AgentBrowser {
                             let send = |event| {
                                 let _ = ev.send((gen, id, event));
                             };
-                            let mut conn = match manuk_net::websocket::WebSocketConn::connect(
-                                &abs, &protocols,
+                            let mut conn = match manuk_net::websocket::WebSocketConn::connect_from(
+                                &abs,
+                                &protocols,
+                                page_origin.as_deref(),
                             )
                             .await
                             {
                                 Ok(c) => c,
                                 Err(e) => {
                                     send(manuk_page::WsEvent::Error {
-                                        message: e.to_string(),
+                                        message: format!("{e:#}"),
                                     });
                                     send(manuk_page::WsEvent::Close {
                                         code: 1006,

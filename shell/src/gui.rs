@@ -3070,6 +3070,9 @@ impl App {
                         .and_then(|b| b.join(&url).ok())
                         .map(|u| u.to_string())
                         .unwrap_or(url);
+                    let page_origin = url::Url::parse(&base)
+                        .ok()
+                        .map(|b| b.origin().ascii_serialization());
                     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
                     self.ws_send.insert(id, tx);
                     let (gen, proxy) = (self.nav_gen, self.proxy.clone());
@@ -3078,8 +3081,12 @@ impl App {
                             let _ = proxy.send_event(NavEvent::PageWebSocket { gen, id, event });
                         };
                         let mut conn =
-                            match manuk_net::websocket::WebSocketConn::connect(&abs, &protocols)
-                                .await
+                            match manuk_net::websocket::WebSocketConn::connect_from(
+                                &abs,
+                                &protocols,
+                                page_origin.as_deref(),
+                            )
+                            .await
                             {
                                 Ok(c) => c,
                                 Err(e) => {

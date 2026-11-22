@@ -61,6 +61,17 @@ impl WebSocketConn {
 
     /// Open a connection to `url` (`ws://` or `wss://`), offering `protocols`.
     pub async fn connect(url: &str, protocols: &[String]) -> Result<Self> {
+        Self::connect_from(url, protocols, None).await
+    }
+
+    /// W4.P0.c.a.a: like [`Self::connect`], but sends the opening page's `Origin` as every browser
+    /// does on a WebSocket handshake (the Wolfram|Alpha gateway answers 403 without it), plus the
+    /// honest `User-Agent` and `Accept-Language` the HTTP path already sends.
+    pub async fn connect_from(
+        url: &str,
+        protocols: &[String],
+        page_origin: Option<&str>,
+    ) -> Result<Self> {
         let u = Url::parse(url).with_context(|| format!("invalid WebSocket URL: {url}"))?;
         let secure = match u.scheme() {
             "wss" => true,
@@ -104,6 +115,12 @@ impl WebSocketConn {
                 "Sec-WebSocket-Key",
                 tokio_tungstenite::tungstenite::handshake::client::generate_key(),
             );
+        req = req
+            .header("User-Agent", crate::user_agent())
+            .header("Accept-Language", "en-US,en;q=0.9");
+        if let Some(o) = page_origin.filter(|o| !o.is_empty() && *o != "null") {
+            req = req.header("Origin", o);
+        }
         if !protocols.is_empty() {
             req = req.header("Sec-WebSocket-Protocol", protocols.join(", "));
         }

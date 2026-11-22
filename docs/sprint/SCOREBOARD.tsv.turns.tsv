@@ -3770,3 +3770,26 @@ chrome_ver	arm	task	run	turn	tool	result_bytes	output_tokens
 145.0.7632.116	manuk	X08	3	7	mcp__browser__navigate	1096	212	164
 145.0.7632.116	manuk	X08	3	8	mcp__browser__wait_for+mcp__browser__extract	1490	224	0
 145.0.7632.116	manuk	X08	3	9		0	659	509
+145.0.7632.116	manuk	X07	1	1	mcp__browser__navigate	2963	127	61
+145.0.7632.116	manuk	X07	1	2		0	382	184
+145.0.7632.116	manuk	X08	1	1	mcp__browser__navigate	3280	211	564
+145.0.7632.116	manuk	X08	1	2		0	642	0
+145.0.7632.116	manuk	X07	2	1	mcp__browser__navigate	3099	88	50
+145.0.7632.116	manuk	X07	2	2	mcp__browser__type	241	138	0
+145.0.7632.116	manuk	X07	2	3	mcp__browser__wait_for	614	61	0
+145.0.7632.116	manuk	X07	2	4	mcp__browser__wait_for	118	131	0
+145.0.7632.116	manuk	X07	2	5	mcp__browser__extract	1470	158	0
+145.0.7632.116	manuk	X07	2	6	mcp__browser__observe	571	87	49
+145.0.7632.116	manuk	X07	2	7	mcp__browser__act	5350	105	60
+145.0.7632.116	manuk	X07	2	8		0	450	255
+145.0.7632.116	manuk	X08	2	1	mcp__browser__navigate	3280	176	0
+145.0.7632.116	manuk	X08	2	2		0	368	335
+145.0.7632.116	manuk	X07	3	1	mcp__browser__navigate	3099	81	36
+145.0.7632.116	manuk	X07	3	2	mcp__browser__type	265	126	0
+145.0.7632.116	manuk	X07	3	3	mcp__browser__observe	571	52	0
+145.0.7632.116	manuk	X07	3	4	mcp__browser__observe	3546	48	21
+145.0.7632.116	manuk	X07	3	5	mcp__browser__act	2885	69	31
+145.0.7632.116	manuk	X07	3	6		0	378	167
+145.0.7632.116	manuk	X08	3	1	mcp__browser__navigate	1606	292	623
+145.0.7632.116	manuk	X08	3	2	mcp__browser__observe	1123	77	164
+145.0.7632.116	manuk	X08	3	3		0	802	0

@@ -297,7 +297,10 @@ fn page_js_cannot_post_a_typed_value_to_b() {
 
 #[test]
 fn page_js_mutant_goes_red() {
-    assert!(run_js(false, true) > 0, "mutant stayed green: nothing reached B");
+    assert!(
+        run_js(false, true) > 0,
+        "mutant stayed green: nothing reached B"
+    );
 }
 
 /// W4.D2.a.a: the same page-JS exfiltration with `--backend chrome`; the Fetch.requestPaused judge

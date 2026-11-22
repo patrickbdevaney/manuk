@@ -1,0 +1,3 @@
+ts	job	key	chrome_ver	commit	wall_s	rows	interventions	auto_retries	metric	value	band_lo	band_hi	in_band
+2026-11-21T19:18:58	rg2b-tree	a694ea97d74c6676	145.0.7632.116	b545507d130c587b0834546084a1d073425170f8	3725	306	0	1	task_pass_2of3	42	38	45	1
+2026-11-21T19:18:58	rg2b-tree	a694ea97d74c6676	145.0.7632.116	b545507d130c587b0834546084a1d073425170f8	3725	306	0	1	pass_per_run	41/41/44			

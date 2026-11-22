@@ -169,7 +169,11 @@ impl Cdp {
             // W4.D2.a.a: value-flow taint (agent-typed/read values) on the URL + body, as in manuk_net.
             .and_then(|()| {
                 let mut t = format!("{url}\n{}", p["request"]["postData"].as_str().unwrap_or(""));
-                for e in p["request"]["postDataEntries"].as_array().into_iter().flatten() {
+                for e in p["request"]["postDataEntries"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                {
                     use base64::Engine;
                     if let Some(b) = e["bytes"]
                         .as_str()
@@ -2089,7 +2093,10 @@ impl CdpBackend {
     fn focused_backend(&mut self) -> Option<u64> {
         let r = self
             .cdp
-            .call("Runtime.evaluate", json!({"expression": "document.activeElement"}))
+            .call(
+                "Runtime.evaluate",
+                json!({"expression": "document.activeElement"}),
+            )
             .ok()?;
         let obj = r["result"]["objectId"].as_str()?.to_string();
         let d = self
