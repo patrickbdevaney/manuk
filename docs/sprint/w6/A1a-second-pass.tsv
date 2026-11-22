@@ -1,0 +1,11 @@
+arm	task	run	cause	basis
+cdp-layer	dashdish-4	2	click_no_effect	Choose a time click and Enter returned "no change"; handle existed, picker never appeared
+manuk	gomail-6	3	stopped_early	Chose not to open email; could not confirm read state, names no site fault or control failure
+manuk	staynb-5	3	task_data_missing	Stopped at payment form because no card details were supplied
+manuk	topwork-5	1	widget_unreachable	Send button offscreen; click returned "no clickable area"
+cdp-layer	gocalendar-5	3	dialog_modal	Final answer and last result cite a modal overlay with no close control blocking the pickers
+playwright	dashdish-8	1	tool_surface_gap	Snapshot exceeded token limit; agent substituted Read of the saved file for the page tool
+manuk	topwork-2	1	state_not_persisted	Post submitted and redirected without error but absent from Your jobs list
+cdp-layer	opendining-2	1	app_error	Final answer attributes missing description/menu/reviews to the site rendering only headings
+cdp-layer	fly-unified-7	3	widget_unreachable	Day cells and year dropdown have no handle (not exposed); date could not be set
+cdp-layer	zilloft-10	2	app_error	Final answer attributes the result to the site location search ignoring the filter
