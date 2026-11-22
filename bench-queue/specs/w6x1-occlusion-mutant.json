@@ -1,0 +1,128 @@
+{
+ "id": "w6x1-occlusion-mutant",
+ "note": "W6.X1: no-code occlusion test. cdp-layer arm x3 over the 15 dialog_modal tasks with BOTH overlay guards off: MANUK_LANDING_MUTATE=1 (session landing check skipped) and MANUK_CDP_MUTATE=no-revalidate (backend dispatch-time revalidation skipped). Same binary as W6.B0 (HEAD 6a7acb8f, /home/patrickd/manuk-w6b0-target), so unmutated comparison rows are the W6.B0 rows for the same 15 tasks. Verdict is computed in docs/sprint/w6/X1.md, not by this band.",
+ "inputs": [
+  "/home/patrickd/manuk-w6b0-target/release/manuk-mcp",
+  "bench/agent-tasks/real_run.py",
+  "bench/agent-tasks/run_arm.py"
+ ],
+ "steps": [
+  {
+   "name": "cdp-layer occlusion-mutant run1",
+   "argv": [
+    "env",
+    "MANUK_MCP_BIN=/home/patrickd/manuk-w6b0-target/release/manuk-mcp",
+    "MANUK_LANDING_MUTATE=1",
+    "MANUK_CDP_MUTATE=no-revalidate",
+    "python3",
+    "-I",
+    "bench/agent-tasks/real_run.py",
+    "run",
+    "--arm",
+    "cdp-layer",
+    "--runs",
+    "1",
+    "--run-base",
+    "0",
+    "--judge",
+    "--jobs",
+    "2",
+    "--tasks",
+    "topwork-1,topwork-2,topwork-3,topwork-4,fly-unified-2,fly-unified-4,fly-unified-5,fly-unified-9,dashdish-2,dashdish-4,dashdish-5,staynb-6,staynb-8,zilloft-3,zilloft-6",
+    "--out",
+    "bench-queue/out/w6x1-occlusion-mutant.tsv",
+    "--transcripts",
+    "/home/patrickd/.cache/manuk-bq/transcripts-w6x1"
+   ]
+  },
+  {
+   "name": "cdp-layer occlusion-mutant run2",
+   "argv": [
+    "env",
+    "MANUK_MCP_BIN=/home/patrickd/manuk-w6b0-target/release/manuk-mcp",
+    "MANUK_LANDING_MUTATE=1",
+    "MANUK_CDP_MUTATE=no-revalidate",
+    "python3",
+    "-I",
+    "bench/agent-tasks/real_run.py",
+    "run",
+    "--arm",
+    "cdp-layer",
+    "--runs",
+    "1",
+    "--run-base",
+    "1",
+    "--judge",
+    "--jobs",
+    "2",
+    "--tasks",
+    "topwork-1,topwork-2,topwork-3,topwork-4,fly-unified-2,fly-unified-4,fly-unified-5,fly-unified-9,dashdish-2,dashdish-4,dashdish-5,staynb-6,staynb-8,zilloft-3,zilloft-6",
+    "--out",
+    "bench-queue/out/w6x1-occlusion-mutant.tsv",
+    "--transcripts",
+    "/home/patrickd/.cache/manuk-bq/transcripts-w6x1"
+   ]
+  },
+  {
+   "name": "cdp-layer occlusion-mutant run3",
+   "argv": [
+    "env",
+    "MANUK_MCP_BIN=/home/patrickd/manuk-w6b0-target/release/manuk-mcp",
+    "MANUK_LANDING_MUTATE=1",
+    "MANUK_CDP_MUTATE=no-revalidate",
+    "python3",
+    "-I",
+    "bench/agent-tasks/real_run.py",
+    "run",
+    "--arm",
+    "cdp-layer",
+    "--runs",
+    "1",
+    "--run-base",
+    "2",
+    "--judge",
+    "--jobs",
+    "2",
+    "--tasks",
+    "topwork-1,topwork-2,topwork-3,topwork-4,fly-unified-2,fly-unified-4,fly-unified-5,fly-unified-9,dashdish-2,dashdish-4,dashdish-5,staynb-6,staynb-8,zilloft-3,zilloft-6",
+    "--out",
+    "bench-queue/out/w6x1-occlusion-mutant.tsv",
+    "--transcripts",
+    "/home/patrickd/.cache/manuk-bq/transcripts-w6x1"
+   ]
+  }
+ ],
+ "reconcile": {
+  "tsv_glob": "bench-queue/out/w6x1-occlusion-mutant*.tsv",
+  "primary_judge": "openai/gpt-oss-120b"
+ },
+ "band": {
+  "tsv_glob": "bench-queue/out/w6x1-occlusion-mutant.tsv",
+  "runs": 3,
+  "tasks": [
+   "dashdish-2",
+   "dashdish-4",
+   "dashdish-5",
+   "fly-unified-2",
+   "fly-unified-4",
+   "fly-unified-5",
+   "fly-unified-9",
+   "staynb-6",
+   "staynb-8",
+   "topwork-1",
+   "topwork-2",
+   "topwork-3",
+   "topwork-4",
+   "zilloft-3",
+   "zilloft-6"
+  ],
+  "task_pass_2of3": [
+   0,
+   15
+  ],
+  "per_run": [
+   0,
+   15
+  ]
+ }
+}
