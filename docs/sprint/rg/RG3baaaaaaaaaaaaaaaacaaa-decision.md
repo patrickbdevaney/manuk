@@ -52,4 +52,26 @@ Rule, applied identically to manuk and chrome, to the 13 ordinal steps of the re
 - Mutant (the contract-hidden rows scored as matches): must raise the count; if it does not, the rule is not scoring them.
 
 ## Outcome
-(filled in after the 3 re-runs; see the section below)
+Measured after this doc was committed (commit 15107b73, before any re-run), chrome_ver=145.0.7632.116:
+
+| run | manuk match | chrome match | strict manuk / chrome | contract-hidden rows (#13, #14) |
+|---|---|---|---|---|
+| run1 | 10/13 | 10/13 | 10 / 10 | manuk 2, chrome 2 |
+| run2 | 10/13 | 10/13 | 10 / 10 | manuk 2, chrome 2 |
+| run3 | 10/13 | 10/13 | 10 / 10 | manuk 2, chrome 2 |
+
+- Every prediction above held: 10/13 on both backends in all three runs, strict equal to tolerant (the stale-reference tolerance
+  scored 0 rows), and the 2 contract-hidden steps per backend are opendining-4 #13 and #14 (`[h8]` and `[h10]` combobox
+  [collapsed], unresolved). Scoring code and `MIN_*`/`EXPECT` unedited; `rg3baaaaaaa_spread.py` byte-identical to HEAD.
+- `rg3baaaaaaa_spread.py` exit 1 with `chrome 10/13 < 12` on all three runs: the bar stays RED. It is not relaxed. The
+  raw data is in `docs/sprint/rg/RG3baaaaaaa-match-run{1,2,3}.{json,md}` (overwritten from the fresh runs; the previous
+  files were the pre-contract 9/13 manuk, 12/13 chrome runs, recoverable from git history).
+- Gate sensitivity: the spread gate is red on the real runs above; with a wrong `MANUK_CHROME_PIN` it exits 1, and with a
+  missing run directory it exits 1 (both deliberately broken inputs).
+
+## Verdict
+Node DONE. The scoring rule is pre-registered and applied; the outcome is the honest one: with the aria-hidden contract
+honored on both backends, opendining-4 #13/#14 cannot resolve on either, so the replay matches 10/13 each and the chrome
+bar (12) that the earlier 12/13 satisfied is not reachable through this transcript. The bar stays red by design of the
+contract; moving it would be the tuning SUCCESS.md forbids. Follow-up (new graph row): decide whether the replay transcript
+is still a valid frozen input for the aria-hidden contract (a re-recording is a new, separately pre-registered node).
