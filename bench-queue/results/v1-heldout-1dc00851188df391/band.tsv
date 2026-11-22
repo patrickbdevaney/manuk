@@ -1,0 +1,3 @@
+ts	job	key	chrome_ver	commit	wall_s	rows	interventions	auto_retries	metric	value	band_lo	band_hi	in_band
+2026-11-21T20:19:51	v1-heldout	1dc00851188df391	145.0.7632.116	e9e063ac807c78121627871498a9781fcc8bbcae	3654	90	0	0	task_pass_2of3	28	0	30	1
+2026-11-21T20:19:51	v1-heldout	1dc00851188df391	145.0.7632.116	e9e063ac807c78121627871498a9781fcc8bbcae	3654	90	0	0	pass_per_run	29/26/28			

@@ -1,0 +1,387 @@
+chrome_ver	arm	task	run	turn	tool	result_bytes	output_tokens	thinking_tokens
+145.0.7632.116	playwright	H01	1	1	ToolSearch	0	87	28
+145.0.7632.116	playwright	H01	1	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1708	89	0
+145.0.7632.116	playwright	H01	1	3		0	403	130
+145.0.7632.116	playwright	H02	1	1	ToolSearch	0	89	42
+145.0.7632.116	playwright	H02	1	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1730	90	0
+145.0.7632.116	playwright	H02	1	3	Read	2631	154	74
+145.0.7632.116	playwright	H02	1	4	Read	3843	166	0
+145.0.7632.116	playwright	H02	1	5		0	350	0
+145.0.7632.116	playwright	H03	1	1	ToolSearch	0	99	36
+145.0.7632.116	playwright	H03	1	2	mcp__browser__browser_navigate	283	71	0
+145.0.7632.116	playwright	H03	1	3		0	312	112
+145.0.7632.116	playwright	H04	1	1	ToolSearch	0	130	60
+145.0.7632.116	playwright	H04	1	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	7323	110	0
+145.0.7632.116	playwright	H04	1	3		0	126	59
+145.0.7632.116	playwright	H05	1	1	ToolSearch	0	128	38
+145.0.7632.116	playwright	H05	1	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	7323	86	0
+145.0.7632.116	playwright	H05	1	3	mcp__browser__browser_click+mcp__browser__browser_snapshot	7541	104	0
+145.0.7632.116	playwright	H05	1	4		0	151	0
+145.0.7632.116	playwright	H06	1	1	ToolSearch	0	117	55
+145.0.7632.116	playwright	H06	1	2	mcp__browser__browser_navigate+mcp__browser__browser_evaluate	646	236	0
+145.0.7632.116	playwright	H06	1	3		0	228	108
+145.0.7632.116	playwright	H07	1	1	ToolSearch+mcp__browser__browser_navigate	315	132	0
+145.0.7632.116	playwright	H07	1	2	mcp__browser__browser_snapshot	32528	21	0
+145.0.7632.116	playwright	H07	1	3		0	139	0
+145.0.7632.116	playwright	H08	1	1	ToolSearch	0	90	76
+145.0.7632.116	playwright	H08	1	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	879	97	0
+145.0.7632.116	playwright	H08	1	3		0	196	0
+145.0.7632.116	playwright	H09	1	1	ToolSearch+ToolSearch	0	211	125
+145.0.7632.116	playwright	H09	1	2	mcp__browser__browser_navigate	241	82	0
+145.0.7632.116	playwright	H09	1	3	mcp__browser__browser_snapshot	638	31	0
+145.0.7632.116	playwright	H09	1	4		0	199	0
+145.0.7632.116	playwright	H10	1	1	ToolSearch	0	104	84
+145.0.7632.116	playwright	H10	1	2	mcp__browser__browser_navigate	241	81	0
+145.0.7632.116	playwright	H10	1	3	mcp__browser__browser_snapshot	252	31	0
+145.0.7632.116	playwright	H10	1	4		0	147	0
+145.0.7632.116	playwright	H11	1	1	ToolSearch	0	156	103
+145.0.7632.116	playwright	H11	1	2	mcp__browser__browser_navigate+mcp__browser__browser_find	1215	143	0
+145.0.7632.116	playwright	H11	1	3	mcp__browser__browser_find	17974	59	39
+145.0.7632.116	playwright	H11	1	4		0	142	0
+145.0.7632.116	playwright	H12	1	1	ToolSearch	0	132	106
+145.0.7632.116	playwright	H12	1	2	mcp__browser__browser_navigate+mcp__browser__browser_find	1148	123	0
+145.0.7632.116	playwright	H12	1	3	mcp__browser__browser_snapshot	437	47	38
+145.0.7632.116	playwright	H12	1	4		0	245	0
+145.0.7632.116	playwright	H13	1	1	ToolSearch	0	140	0
+145.0.7632.116	playwright	H13	1	2	mcp__browser__browser_navigate+mcp__browser__browser_find	16395	134	0
+145.0.7632.116	playwright	H13	1	3		0	110	86
+145.0.7632.116	playwright	H14	1	1	ToolSearch	0	82	35
+145.0.7632.116	playwright	H14	1	2	mcp__browser__browser_navigate	255	58	0
+145.0.7632.116	playwright	H14	1	3	mcp__browser__browser_snapshot	1332	24	0
+145.0.7632.116	playwright	H14	1	4	mcp__browser__browser_evaluate	379	214	92
+145.0.7632.116	playwright	H14	1	5		0	241	0
+145.0.7632.116	playwright	H15	1	1	ToolSearch	0	87	19
+145.0.7632.116	playwright	H15	1	2	mcp__browser__browser_navigate	267	63	0
+145.0.7632.116	playwright	H15	1	3	mcp__browser__browser_snapshot	1332	25	0
+145.0.7632.116	playwright	H15	1	4	Read	3490	151	33
+145.0.7632.116	playwright	H15	1	5	Bash	643	237	51
+145.0.7632.116	playwright	H15	1	6	Read	2332	163	0
+145.0.7632.116	playwright	H15	1	7		0	276	0
+145.0.7632.116	playwright	H16	1	1	ToolSearch	0	58	45
+145.0.7632.116	playwright	H16	1	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	6714	58	0
+145.0.7632.116	playwright	H16	1	3		0	318	0
+145.0.7632.116	playwright	H17	1	1	ToolSearch	0	112	121
+145.0.7632.116	playwright	H17	1	2	mcp__browser__browser_navigate	353	83	0
+145.0.7632.116	playwright	H17	1	3	mcp__browser__browser_snapshot	43272	33	0
+145.0.7632.116	playwright	H17	1	4		0	186	0
+145.0.7632.116	playwright	H18	1	1	ToolSearch	0	89	131
+145.0.7632.116	playwright	H18	1	2	mcp__browser__browser_navigate	267	67	0
+145.0.7632.116	playwright	H18	1	3	mcp__browser__browser_evaluate	550	217	0
+145.0.7632.116	playwright	H18	1	4		0	174	0
+145.0.7632.116	playwright	H19	1	1	ToolSearch	0	117	51
+145.0.7632.116	playwright	H19	1	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1359	98	0
+145.0.7632.116	playwright	H19	1	3	mcp__browser__browser_hover	302	70	0
+145.0.7632.116	playwright	H19	1	4	mcp__browser__browser_snapshot	1175	27	0
+145.0.7632.116	playwright	H19	1	5		0	137	0
+145.0.7632.116	playwright	H20	1	1	ToolSearch	0	169	0
+145.0.7632.116	playwright	H20	1	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1452	125	0
+145.0.7632.116	playwright	H20	1	3	mcp__browser__browser_click	392	71	0
+145.0.7632.116	playwright	H20	1	4	mcp__browser__browser_wait_for	404	66	0
+145.0.7632.116	playwright	H20	1	5		0	78	75
+145.0.7632.116	playwright	H21	1	1	ToolSearch	0	147	175
+145.0.7632.116	playwright	H21	1	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	3125	135	0
+145.0.7632.116	playwright	H21	1	3	mcp__browser__browser_click+mcp__browser__browser_snapshot	3134	112	0
+145.0.7632.116	playwright	H21	1	4	mcp__browser__browser_snapshot	5630	34	41
+145.0.7632.116	playwright	H21	1	5	mcp__browser__browser_take_screenshot	329	42	50
+145.0.7632.116	playwright	H21	1	6		0	344	0
+145.0.7632.116	playwright	H22	1	1	ToolSearch	0	106	44
+145.0.7632.116	playwright	H22	1	2	mcp__browser__browser_navigate+mcp__browser__browser_tabs	397	105	0
+145.0.7632.116	playwright	H22	1	3		0	158	0
+145.0.7632.116	playwright	H23	1	1	ToolSearch	0	96	58
+145.0.7632.116	playwright	H23	1	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	689	90	0
+145.0.7632.116	playwright	H23	1	3		0	157	0
+145.0.7632.116	playwright	H24	1	1	ToolSearch	0	191	95
+145.0.7632.116	playwright	H24	1	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	2013	74	0
+145.0.7632.116	playwright	H24	1	3	mcp__browser__browser_fill_form	225	191	0
+145.0.7632.116	playwright	H24	1	4	mcp__browser__browser_click	222	56	0
+145.0.7632.116	playwright	H24	1	5	mcp__browser__browser_evaluate	1588	54	0
+145.0.7632.116	playwright	H24	1	6		0	212	0
+145.0.7632.116	playwright	H25	1	1	ToolSearch	0	105	48
+145.0.7632.116	playwright	H25	1	2	mcp__browser__browser_navigate	396	68	0
+145.0.7632.116	playwright	H25	1	3	mcp__browser__browser_snapshot	1936	25	0
+145.0.7632.116	playwright	H25	1	4	mcp__browser__browser_click	409	55	0
+145.0.7632.116	playwright	H25	1	5	mcp__browser__browser_snapshot	1071	24	0
+145.0.7632.116	playwright	H25	1	6		0	202	0
+145.0.7632.116	playwright	H26	1	1	ToolSearch	0	105	44
+145.0.7632.116	playwright	H26	1	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1336	114	0
+145.0.7632.116	playwright	H26	1	3		0	212	90
+145.0.7632.116	playwright	H27	1	1	ToolSearch	0	139	79
+145.0.7632.116	playwright	H27	1	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1398	106	0
+145.0.7632.116	playwright	H27	1	3	mcp__browser__browser_click	401	64	0
+145.0.7632.116	playwright	H27	1	4	mcp__browser__browser_click	311	63	0
+145.0.7632.116	playwright	H27	1	5	mcp__browser__browser_click+mcp__browser__browser_evaluate	508	173	0
+145.0.7632.116	playwright	H27	1	6		0	195	0
+145.0.7632.116	playwright	H28	1	1	ToolSearch	0	93	83
+145.0.7632.116	playwright	H28	1	2	mcp__browser__browser_navigate	241	73	0
+145.0.7632.116	playwright	H28	1	3	mcp__browser__browser_snapshot	421	27	0
+145.0.7632.116	playwright	H28	1	4		0	208	0
+145.0.7632.116	playwright	H29	1	1	ToolSearch+mcp__browser__browser_navigate	279	139	0
+145.0.7632.116	playwright	H29	1	2	mcp__browser__browser_snapshot	1333	23	9
+145.0.7632.116	playwright	H29	1	3	mcp__browser__browser_evaluate	196	199	75
+145.0.7632.116	playwright	H29	1	4	mcp__browser__browser_evaluate	2680	169	0
+145.0.7632.116	playwright	H29	1	5	mcp__browser__browser_evaluate	1359	265	100
+145.0.7632.116	playwright	H29	1	6		0	521	198
+145.0.7632.116	playwright	H30	1	1	ToolSearch	0	94	99
+145.0.7632.116	playwright	H30	1	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1730	95	0
+145.0.7632.116	playwright	H30	1	3	ToolSearch	0	67	70
+145.0.7632.116	playwright	H30	1	4	mcp__browser__browser_evaluate	1946	283	0
+145.0.7632.116	playwright	H30	1	5		0	202	0
+145.0.7632.116	playwright	H01	2	1	ToolSearch	0	99	39
+145.0.7632.116	playwright	H01	2	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1708	100	0
+145.0.7632.116	playwright	H01	2	3		0	379	148
+145.0.7632.116	playwright	H02	2	1	ToolSearch	0	128	61
+145.0.7632.116	playwright	H02	2	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1730	130	0
+145.0.7632.116	playwright	H02	2	3	Read	3489	223	106
+145.0.7632.116	playwright	H02	2	4		0	317	151
+145.0.7632.116	playwright	H03	2	1	ToolSearch	0	114	50
+145.0.7632.116	playwright	H03	2	2	mcp__browser__browser_navigate	373	82	0
+145.0.7632.116	playwright	H03	2	3		0	218	96
+145.0.7632.116	playwright	H04	2	1	ToolSearch	0	111	41
+145.0.7632.116	playwright	H04	2	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	7323	94	0
+145.0.7632.116	playwright	H04	2	3		0	180	66
+145.0.7632.116	playwright	H05	2	1	ToolSearch+ToolSearch	0	237	55
+145.0.7632.116	playwright	H05	2	2	mcp__browser__browser_navigate	227	52	0
+145.0.7632.116	playwright	H05	2	3	mcp__browser__browser_snapshot	7096	27	0
+145.0.7632.116	playwright	H05	2	4	mcp__browser__browser_click+mcp__browser__browser_snapshot	7541	88	0
+145.0.7632.116	playwright	H05	2	5		0	193	0
+145.0.7632.116	playwright	H06	2	1	ToolSearch	0	87	120
+145.0.7632.116	playwright	H06	2	2	mcp__browser__browser_navigate+mcp__browser__browser_evaluate	570	203	0
+145.0.7632.116	playwright	H06	2	3		0	219	0
+145.0.7632.116	playwright	H07	2	1	ToolSearch+ToolSearch	0	155	0
+145.0.7632.116	playwright	H07	2	2	mcp__browser__browser_navigate	315	67	15
+145.0.7632.116	playwright	H07	2	3	mcp__browser__browser_snapshot	32528	23	0
+145.0.7632.116	playwright	H07	2	4		0	188	0
+145.0.7632.116	playwright	H08	2	1	ToolSearch+mcp__browser__browser_navigate	241	147	43
+145.0.7632.116	playwright	H08	2	2	mcp__browser__browser_snapshot	638	24	0
+145.0.7632.116	playwright	H08	2	3		0	163	0
+145.0.7632.116	playwright	H09	2	1	ToolSearch	0	99	88
+145.0.7632.116	playwright	H09	2	2	mcp__browser__browser_navigate	241	77	0
+145.0.7632.116	playwright	H09	2	3	mcp__browser__browser_snapshot	638	29	0
+145.0.7632.116	playwright	H09	2	4		0	178	0
+145.0.7632.116	playwright	H10	2	1	ToolSearch	0	91	78
+145.0.7632.116	playwright	H10	2	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	493	97	0
+145.0.7632.116	playwright	H10	2	3		0	199	0
+145.0.7632.116	playwright	H11	2	1	ToolSearch	0	153	96
+145.0.7632.116	playwright	H11	2	2	mcp__browser__browser_navigate+mcp__browser__browser_find	1212	141	0
+145.0.7632.116	playwright	H11	2	3	mcp__browser__browser_find	16959	58	36
+145.0.7632.116	playwright	H11	2	4		0	139	0
+145.0.7632.116	playwright	H12	2	1	ToolSearch	0	141	0
+145.0.7632.116	playwright	H12	2	2	mcp__browser__browser_navigate+mcp__browser__browser_find	1148	131	0
+145.0.7632.116	playwright	H12	2	3	mcp__browser__browser_find	766	58	88
+145.0.7632.116	playwright	H12	2	4	mcp__browser__browser_snapshot	437	50	76
+145.0.7632.116	playwright	H12	2	5		0	232	0
+145.0.7632.116	playwright	H13	2	1	ToolSearch	0	135	51
+145.0.7632.116	playwright	H13	2	2	mcp__browser__browser_navigate+mcp__browser__browser_find	16395	131	0
+145.0.7632.116	playwright	H13	2	3		0	177	66
+145.0.7632.116	playwright	H14	2	1	ToolSearch	0	89	56
+145.0.7632.116	playwright	H14	2	2	mcp__browser__browser_navigate	255	62	0
+145.0.7632.116	playwright	H14	2	3	mcp__browser__browser_snapshot	1332	26	0
+145.0.7632.116	playwright	H14	2	4	Bash	260	235	148
+145.0.7632.116	playwright	H14	2	5		0	326	0
+145.0.7632.116	playwright	H15	2	1	ToolSearch	0	125	40
+145.0.7632.116	playwright	H15	2	2	mcp__browser__browser_navigate+mcp__browser__browser_find	2629	119	0
+145.0.7632.116	playwright	H15	2	3		0	171	54
+145.0.7632.116	playwright	H16	2	1	ToolSearch	0	77	57
+145.0.7632.116	playwright	H16	2	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	6714	77	0
+145.0.7632.116	playwright	H16	2	3		0	199	0
+145.0.7632.116	playwright	H17	2	1	ToolSearch	0	122	146
+145.0.7632.116	playwright	H17	2	2	mcp__browser__browser_navigate	263	90	0
+145.0.7632.116	playwright	H17	2	3	mcp__browser__browser_snapshot	43362	36	0
+145.0.7632.116	playwright	H17	2	4		0	192	0
+145.0.7632.116	playwright	H18	2	1	ToolSearch	0	104	136
+145.0.7632.116	playwright	H18	2	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1708	108	0
+145.0.7632.116	playwright	H18	2	3	ToolSearch	0	74	97
+145.0.7632.116	playwright	H18	2	4	mcp__browser__browser_evaluate	475	262	0
+145.0.7632.116	playwright	H18	2	5		0	263	0
+145.0.7632.116	playwright	H19	2	1	ToolSearch	0	147	62
+145.0.7632.116	playwright	H19	2	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1356	101	0
+145.0.7632.116	playwright	H19	2	3	mcp__browser__browser_hover	392	73	0
+145.0.7632.116	playwright	H19	2	4	mcp__browser__browser_snapshot	1175	28	12
+145.0.7632.116	playwright	H19	2	5		0	132	0
+145.0.7632.116	playwright	H20	2	1	ToolSearch	0	141	0
+145.0.7632.116	playwright	H20	2	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1362	104	0
+145.0.7632.116	playwright	H20	2	3	mcp__browser__browser_click+mcp__browser__browser_wait_for	799	115	0
+145.0.7632.116	playwright	H20	2	4	mcp__browser__browser_snapshot	957	27	47
+145.0.7632.116	playwright	H20	2	5		0	174	0
+145.0.7632.116	playwright	H21	2	1	ToolSearch	0	150	102
+145.0.7632.116	playwright	H21	2	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	3125	137	0
+145.0.7632.116	playwright	H21	2	3	mcp__browser__browser_click+mcp__browser__browser_snapshot	3134	115	0
+145.0.7632.116	playwright	H21	2	4	mcp__browser__browser_wait_for+mcp__browser__browser_snapshot	6020	80	55
+145.0.7632.116	playwright	H21	2	5	mcp__browser__browser_evaluate	682	152	104
+145.0.7632.116	playwright	H21	2	6	mcp__browser__browser_evaluate	254	226	154
+145.0.7632.116	playwright	H21	2	7		0	343	0
+145.0.7632.116	playwright	H22	2	1	ToolSearch	0	91	76
+145.0.7632.116	playwright	H22	2	2	mcp__browser__browser_navigate+mcp__browser__browser_evaluate	410	130	0
+145.0.7632.116	playwright	H22	2	3		0	175	0
+145.0.7632.116	playwright	H23	2	1	ToolSearch+ToolSearch	0	162	0
+145.0.7632.116	playwright	H23	2	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	689	77	0
+145.0.7632.116	playwright	H23	2	3		0	149	0
+145.0.7632.116	playwright	H24	2	1	ToolSearch	0	206	54
+145.0.7632.116	playwright	H24	2	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	2045	73	0
+145.0.7632.116	playwright	H24	2	3	mcp__browser__browser_fill_form	225	187	0
+145.0.7632.116	playwright	H24	2	4	mcp__browser__browser_click	222	55	0
+145.0.7632.116	playwright	H24	2	5	mcp__browser__browser_find+mcp__browser__browser_find	2791	65	0
+145.0.7632.116	playwright	H24	2	6		0	216	0
+145.0.7632.116	playwright	H25	2	1	ToolSearch	0	126	80
+145.0.7632.116	playwright	H25	2	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	2245	110	0
+145.0.7632.116	playwright	H25	2	3	mcp__browser__browser_click	409	65	0
+145.0.7632.116	playwright	H25	2	4	mcp__browser__browser_snapshot	1071	29	18
+145.0.7632.116	playwright	H25	2	5		0	181	0
+145.0.7632.116	playwright	H26	2	1	ToolSearch+ToolSearch	0	154	0
+145.0.7632.116	playwright	H26	2	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1426	97	0
+145.0.7632.116	playwright	H26	2	3		0	95	0
+145.0.7632.116	playwright	H27	2	1	ToolSearch	0	122	63
+145.0.7632.116	playwright	H27	2	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1308	114	0
+145.0.7632.116	playwright	H27	2	3	mcp__browser__browser_click	404	69	0
+145.0.7632.116	playwright	H27	2	4	mcp__browser__browser_click	311	68	0
+145.0.7632.116	playwright	H27	2	5	mcp__browser__browser_click+mcp__browser__browser_snapshot	1393	97	0
+145.0.7632.116	playwright	H27	2	6		0	166	0
+145.0.7632.116	playwright	H28	2	1	ToolSearch	0	90	94
+145.0.7632.116	playwright	H28	2	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	662	96	0
+145.0.7632.116	playwright	H28	2	3		0	229	0
+145.0.7632.116	playwright	H29	2	1	ToolSearch	0	122	51
+145.0.7632.116	playwright	H29	2	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1612	130	0
+145.0.7632.116	playwright	H29	2	3	Read	5229	214	90
+145.0.7632.116	playwright	H29	2	4	Bash	2782	336	141
+145.0.7632.116	playwright	H29	2	5	Bash	727	449	189
+145.0.7632.116	playwright	H29	2	6	Read	8163	231	97
+145.0.7632.116	playwright	H29	2	7	Read	3252	230	97
+145.0.7632.116	playwright	H29	2	8		0	577	243
+145.0.7632.116	playwright	H30	2	1	ToolSearch	0	101	56
+145.0.7632.116	playwright	H30	2	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1730	102	0
+145.0.7632.116	playwright	H30	2	3	Read	1692	175	96
+145.0.7632.116	playwright	H30	2	4	Read	3767	188	0
+145.0.7632.116	playwright	H30	2	5		0	300	0
+145.0.7632.116	playwright	H01	3	1	ToolSearch+mcp__browser__browser_navigate	373	191	0
+145.0.7632.116	playwright	H01	3	2	mcp__browser__browser_snapshot	1335	32	15
+145.0.7632.116	playwright	H01	3	3	Read	1283	193	89
+145.0.7632.116	playwright	H01	3	4		0	384	177
+145.0.7632.116	playwright	H02	3	1	ToolSearch	0	106	89
+145.0.7632.116	playwright	H02	3	2	mcp__browser__browser_navigate	308	76	0
+145.0.7632.116	playwright	H02	3	3	mcp__browser__browser_snapshot	1332	31	26
+145.0.7632.116	playwright	H02	3	4	Read	3489	184	154
+145.0.7632.116	playwright	H02	3	5		0	415	0
+145.0.7632.116	playwright	H03	3	1	ToolSearch+ToolSearch	0	228	0
+145.0.7632.116	playwright	H03	3	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1702	115	0
+145.0.7632.116	playwright	H03	3	3		0	319	238
+145.0.7632.116	playwright	H04	3	1	ToolSearch	0	119	49
+145.0.7632.116	playwright	H04	3	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	7323	100	0
+145.0.7632.116	playwright	H04	3	3		0	158	64
+145.0.7632.116	playwright	H05	3	1	ToolSearch	0	124	69
+145.0.7632.116	playwright	H05	3	2	mcp__browser__browser_navigate	227	55	0
+145.0.7632.116	playwright	H05	3	3	mcp__browser__browser_snapshot	7096	29	0
+145.0.7632.116	playwright	H05	3	4	mcp__browser__browser_click	258	64	0
+145.0.7632.116	playwright	H05	3	5		0	203	0
+145.0.7632.116	playwright	H06	3	1	ToolSearch	0	116	57
+145.0.7632.116	playwright	H06	3	2	mcp__browser__browser_navigate+mcp__browser__browser_evaluate	666	250	0
+145.0.7632.116	playwright	H06	3	3		0	227	112
+145.0.7632.116	playwright	H07	3	1	ToolSearch+ToolSearch	0	163	0
+145.0.7632.116	playwright	H07	3	2	mcp__browser__browser_navigate	315	70	15
+145.0.7632.116	playwright	H07	3	3	mcp__browser__browser_snapshot	32528	24	0
+145.0.7632.116	playwright	H07	3	4		0	150	0
+145.0.7632.116	playwright	H08	3	1	ToolSearch	0	83	43
+145.0.7632.116	playwright	H08	3	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	879	89	0
+145.0.7632.116	playwright	H08	3	3		0	162	0
+145.0.7632.116	playwright	H09	3	1	ToolSearch	0	92	80
+145.0.7632.116	playwright	H09	3	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	879	98	0
+145.0.7632.116	playwright	H09	3	3		0	187	0
+145.0.7632.116	playwright	H10	3	1	ToolSearch	0	113	129
+145.0.7632.116	playwright	H10	3	2	mcp__browser__browser_navigate	241	88	0
+145.0.7632.116	playwright	H10	3	3	mcp__browser__browser_snapshot	252	33	0
+145.0.7632.116	playwright	H10	3	4		0	183	0
+145.0.7632.116	playwright	H11	3	1	ToolSearch	0	146	81
+145.0.7632.116	playwright	H11	3	2	mcp__browser__browser_navigate+mcp__browser__browser_find	1215	135	0
+145.0.7632.116	playwright	H11	3	3	mcp__browser__browser_find	17974	55	31
+145.0.7632.116	playwright	H11	3	4		0	136	0
+145.0.7632.116	playwright	H12	3	1	ToolSearch	0	154	107
+145.0.7632.116	playwright	H12	3	2	mcp__browser__browser_navigate+mcp__browser__browser_find	1151	143	0
+145.0.7632.116	playwright	H12	3	3	mcp__browser__browser_snapshot	437	55	38
+145.0.7632.116	playwright	H12	3	4		0	153	0
+145.0.7632.116	playwright	H13	3	1	ToolSearch+ToolSearch	0	265	65
+145.0.7632.116	playwright	H13	3	2	mcp__browser__browser_navigate	279	82	0
+145.0.7632.116	playwright	H13	3	3	mcp__browser__browser_find	16116	46	0
+145.0.7632.116	playwright	H13	3	4		0	122	30
+145.0.7632.116	playwright	H14	3	1	ToolSearch	0	97	106
+145.0.7632.116	playwright	H14	3	2	mcp__browser__browser_navigate	255	68	0
+145.0.7632.116	playwright	H14	3	3	mcp__browser__browser_snapshot	1332	38	0
+145.0.7632.116	playwright	H14	3	4	ToolSearch	0	93	101
+145.0.7632.116	playwright	H14	3	5	mcp__browser__browser_evaluate	381	250	0
+145.0.7632.116	playwright	H14	3	6		0	260	0
+145.0.7632.116	playwright	H15	3	1	ToolSearch	0	91	52
+145.0.7632.116	playwright	H15	3	2	mcp__browser__browser_navigate	267	66	0
+145.0.7632.116	playwright	H15	3	3	mcp__browser__browser_snapshot	1332	26	0
+145.0.7632.116	playwright	H15	3	4	Bash	714	248	142
+145.0.7632.116	playwright	H15	3	5	Bash	1136	219	0
+145.0.7632.116	playwright	H15	3	6		0	273	0
+145.0.7632.116	playwright	H16	3	1	ToolSearch+ToolSearch	0	98	0
+145.0.7632.116	playwright	H16	3	2	mcp__browser__browser_navigate	258	46	0
+145.0.7632.116	playwright	H16	3	3	mcp__browser__browser_snapshot	6456	19	0
+145.0.7632.116	playwright	H16	3	4		0	253	0
+145.0.7632.116	playwright	H17	3	1	ToolSearch	0	123	128
+145.0.7632.116	playwright	H17	3	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	43625	126	0
+145.0.7632.116	playwright	H17	3	3		0	166	0
+145.0.7632.116	playwright	H18	3	1	ToolSearch	0	107	151
+145.0.7632.116	playwright	H18	3	2	mcp__browser__browser_navigate	267	81	0
+145.0.7632.116	playwright	H18	3	3	mcp__browser__browser_evaluate	206	89	0
+145.0.7632.116	playwright	H18	3	4		0	216	0
+145.0.7632.116	playwright	H19	3	1	ToolSearch	0	123	61
+145.0.7632.116	playwright	H19	3	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1359	103	0
+145.0.7632.116	playwright	H19	3	3	mcp__browser__browser_hover	302	74	0
+145.0.7632.116	playwright	H19	3	4	mcp__browser__browser_snapshot	1175	29	0
+145.0.7632.116	playwright	H19	3	5		0	123	0
+145.0.7632.116	playwright	H20	3	1	ToolSearch	0	134	0
+145.0.7632.116	playwright	H20	3	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1452	100	0
+145.0.7632.116	playwright	H20	3	3	mcp__browser__browser_click+mcp__browser__browser_wait_for	796	109	0
+145.0.7632.116	playwright	H20	3	4	mcp__browser__browser_snapshot	957	25	43
+145.0.7632.116	playwright	H20	3	5		0	207	0
+145.0.7632.116	playwright	H21	3	1	ToolSearch	0	153	117
+145.0.7632.116	playwright	H21	3	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	3125	141	0
+145.0.7632.116	playwright	H21	3	3	mcp__browser__browser_click+mcp__browser__browser_snapshot	3134	117	0
+145.0.7632.116	playwright	H21	3	4	mcp__browser__browser_snapshot	675	53	40
+145.0.7632.116	playwright	H21	3	5	mcp__browser__browser_wait_for+mcp__browser__browser_snapshot	6020	82	62
+145.0.7632.116	playwright	H21	3	6	mcp__browser__browser_take_screenshot	329	210	160
+145.0.7632.116	playwright	H21	3	7		0	311	0
+145.0.7632.116	playwright	H22	3	1	ToolSearch	0	100	97
+145.0.7632.116	playwright	H22	3	2	mcp__browser__browser_navigate	292	82	0
+145.0.7632.116	playwright	H22	3	3		0	163	0
+145.0.7632.116	playwright	H23	3	1	ToolSearch+ToolSearch	0	155	0
+145.0.7632.116	playwright	H23	3	2	mcp__browser__browser_navigate	354	51	0
+145.0.7632.116	playwright	H23	3	3	mcp__browser__browser_snapshot	335	23	0
+145.0.7632.116	playwright	H23	3	4		0	175	0
+145.0.7632.116	playwright	H24	3	1	ToolSearch	0	200	89
+145.0.7632.116	playwright	H24	3	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	2045	75	0
+145.0.7632.116	playwright	H24	3	3	mcp__browser__browser_fill_form	225	192	0
+145.0.7632.116	playwright	H24	3	4	mcp__browser__browser_click+mcp__browser__browser_wait_for	459	86	0
+145.0.7632.116	playwright	H24	3	5	mcp__browser__browser_snapshot	1425	23	0
+145.0.7632.116	playwright	H24	3	6		0	250	0
+145.0.7632.116	playwright	H25	3	1	ToolSearch	0	121	82
+145.0.7632.116	playwright	H25	3	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	2242	106	0
+145.0.7632.116	playwright	H25	3	3	mcp__browser__browser_click	409	62	0
+145.0.7632.116	playwright	H25	3	4	mcp__browser__browser_snapshot	1071	28	19
+145.0.7632.116	playwright	H25	3	5		0	211	0
+145.0.7632.116	playwright	H26	3	1	ToolSearch+ToolSearch	0	154	0
+145.0.7632.116	playwright	H26	3	2	mcp__browser__browser_navigate	395	71	31
+145.0.7632.116	playwright	H26	3	3	mcp__browser__browser_snapshot	944	26	0
+145.0.7632.116	playwright	H26	3	4		0	166	0
+145.0.7632.116	playwright	H27	3	1	ToolSearch	0	140	73
+145.0.7632.116	playwright	H27	3	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1308	107	0
+145.0.7632.116	playwright	H27	3	3	mcp__browser__browser_click	404	64	0
+145.0.7632.116	playwright	H27	3	4	mcp__browser__browser_click	311	64	0
+145.0.7632.116	playwright	H27	3	5	mcp__browser__browser_click+mcp__browser__browser_evaluate	515	181	0
+145.0.7632.116	playwright	H27	3	6		0	160	0
+145.0.7632.116	playwright	H28	3	1	ToolSearch	0	89	81
+145.0.7632.116	playwright	H28	3	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	662	95	0
+145.0.7632.116	playwright	H28	3	3		0	219	0
+145.0.7632.116	playwright	H29	3	1	ToolSearch	0	128	64
+145.0.7632.116	playwright	H29	3	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1612	136	0
+145.0.7632.116	playwright	H29	3	3	Read	3493	223	111
+145.0.7632.116	playwright	H29	3	4	Bash	2835	374	187
+145.0.7632.116	playwright	H29	3	5	Read	3605	241	120
+145.0.7632.116	playwright	H29	3	6	Bash	1244	614	306
+145.0.7632.116	playwright	H29	3	7	Read	6867	243	0
+145.0.7632.116	playwright	H29	3	8		0	531	265
+145.0.7632.116	playwright	H30	3	1	ToolSearch+ToolSearch	0	168	55
+145.0.7632.116	playwright	H30	3	2	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1640	85	0
+145.0.7632.116	playwright	H30	3	3	Read	2493	146	48
+145.0.7632.116	playwright	H30	3	4	Read	2679	157	0
+145.0.7632.116	playwright	H30	3	5		0	430	0
