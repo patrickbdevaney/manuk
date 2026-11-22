@@ -22,6 +22,9 @@ struct Client {
 
 impl Client {
     fn start(chrome: bool, det: bool, log: &std::path::Path) -> Client {
+        Client::start_dir(chrome, det, log, !det)
+    }
+    fn start_dir(chrome: bool, det: bool, log: &std::path::Path, persist: bool) -> Client {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_manuk-mcp"));
         if chrome {
             cmd.args(["--backend", "chrome"]);
@@ -31,7 +34,7 @@ impl Client {
         }
         // `--deterministic` page ids (a fork's entropy is derived from its id) are process-independent
         // only when nothing is persisted, so the det runs get no log dir.
-        if !det {
+        if persist {
             cmd.env("MANUK_ACTLOG_DIR", log);
         }
         let mut child = cmd
@@ -258,4 +261,61 @@ fn chrome_forks_of_one_checkpoint_roll_distinct_dice() {
         3,
         "chrome forks rolled the same dice: {rolls:?}"
     );
+}
+
+/// W4.C3.b.a.a: a fork's post-fork log survives a lazy resume. Process 1 forks, rolls in the fork
+/// (the roll is recorded in the fork's persisted log); process 2 (same log dir, so the page is not in
+/// memory) resumes the fork by its page handle and observes. The resume must replay the roll on the
+/// fork's own stream (no REPLAY DIVERGED) and show the same value.
+/// The number following the last `Roll: ` in a result (0.xxx).
+fn num_after_roll(t: &str) -> String {
+    let i = t.rfind("Roll: ").unwrap_or_else(|| panic!("no roll in {t}")) + 6;
+    let n: String = t[i..].chars().take_while(|c| c.is_ascii_digit() || *c == '.').collect();
+    assert!(n.starts_with("0."), "no rolled number in {t}");
+    n
+}
+
+fn resume_after_roll(mutate: Option<&str>, tag: &str) -> (bool, String, String) {
+    let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(m) = mutate {
+        std::env::set_var("MANUK_MUTATE", m);
+    } else {
+        std::env::remove_var("MANUK_MUTATE");
+    }
+    let dir = tmp(tag);
+    let mut c = Client::start_dir(false, true, &dir, true);
+    let (e, nav) = c.tool("navigate", json!({"url": fixture("dice.html")}));
+    assert!(!e, "{nav}");
+    let (e, ck) = c.tool("checkpoint", json!({"page": page_of(&nav)}));
+    assert!(!e, "{ck}");
+    let (e, f) = c.tool("fork", json!({"checkpoint": ckpt_of(&ck)}));
+    assert!(!e, "{f}");
+    let (_, obs) = c.tool("observe", json!({"mode": "full", "page": page_of(&f)}));
+    let h = handle_of(&obs, "Roll");
+    let (e, act) = c.tool(
+        "act",
+        json!({"handle": h, "action": "click", "detail": true, "page": page_of(&obs)}),
+    );
+    assert!(!e, "{act}");
+    let rolled = num_after_roll(&act);
+    let handle = page_of(&act);
+    drop(c);
+    let mut c2 = Client::start_dir(false, true, &dir, true);
+    let (err, text) = c2.tool("observe", json!({"mode": "full", "page": handle}));
+    std::env::remove_var("MANUK_MUTATE");
+    (err, text, rolled)
+}
+
+#[test]
+fn a_resumed_fork_replays_its_post_fork_roll_without_diverging() {
+    let (err, text, rolled) = resume_after_roll(None, "resume");
+    assert!(!err && !text.contains("REPLAY DIVERGED"), "{text}");
+    assert_eq!(num_after_roll(&text), rolled, "{text}");
+}
+
+/// Red proof: a resume that replays at salt 0 (the pre-fix behaviour) diverges.
+#[test]
+fn mutant_that_resumes_at_salt_zero_diverges() {
+    let (err, text, _) = resume_after_roll(Some("resume-salt-zero"), "resume-mut");
+    assert!(err && text.contains("REPLAY DIVERGED"), "{text}");
 }

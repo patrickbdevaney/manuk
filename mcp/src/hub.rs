@@ -21,6 +21,10 @@ const NOTE_VALUE_MAX: usize = 500;
 
 /// FNV-1a 64: stable across builds and platforms (unlike `DefaultHasher`).
 /// Test-only mutant (`MANUK_MUTATE=fork-salt-parent`): forks reseed from the parent, as before W4.C3.b.a.
+/// Test-only mutant (`MANUK_MUTATE=resume-salt-zero`): resume replays a fork's suffix at salt 0.
+fn mutated_resume_salt() -> bool {
+    std::env::var("MANUK_MUTATE").is_ok_and(|v| v == "resume-salt-zero")
+}
 fn mutated_fork_salt() -> bool {
     std::env::var("MANUK_MUTATE").is_ok_and(|v| v == "fork-salt-parent")
 }
@@ -257,14 +261,44 @@ impl<B: Backend> Hub<B> {
             ));
         }
         log.truncate(seq as usize);
+        // W4.C3.b.a.a: a fork's log is a recorded prefix (salt 0) plus a suffix rolled on the fork's own
+        // stream; `{id}.fork` holds where the prefix ends.
+        let fork_at = self
+            .path(id)
+            .and_then(|p| std::fs::read_to_string(p.with_extension("fork")).ok())
+            .and_then(|t| t.trim().parse::<usize>().ok())
+            .filter(|_| manuk_js::determinism::enabled() && !mutated_resume_salt());
         let mut s = self.new_session();
-        for e in &log {
+        let mut salt = 0;
+        for (i, e) in log.iter().enumerate() {
+            if Some(i) == fork_at {
+                salt = fnv(id.as_bytes()) | 1;
+                manuk_js::determinism::set_page_salt(salt);
+                manuk_js::determinism::reset();
+                let _ = s
+                    .backend_mut()
+                    .page_eval(&manuk_js::determinism::rekey_js(salt))
+                    .await;
+            }
             let (_, h) = Self::run(&mut s, &e.tool, &e.args).await;
             if h != e.diff_hash || Self::storage_hash(&mut s) != e.storage_hash {
                 return Err(format!("REPLAY DIVERGED at {id}:{} ({}): the page no longer reproduces what was recorded; start a new page", e.seq, e.tool));
             }
         }
-        self.pages.insert(id.to_string(), Page::new(s, log));
+        if fork_at.is_some_and(|n| n >= log.len()) {
+            // Nothing after the fork point was replayed: the page still needs its own stream.
+            salt = fnv(id.as_bytes()) | 1;
+            manuk_js::determinism::set_page_salt(salt);
+            manuk_js::determinism::reset();
+            let _ = s
+                .backend_mut()
+                .page_eval(&manuk_js::determinism::rekey_js(salt))
+                .await;
+        }
+        let mut page = Page::new(s, log);
+        page.salt = salt;
+        page.fenced = false;
+        self.pages.insert(id.to_string(), page);
         Ok(())
     }
 
@@ -448,7 +482,10 @@ impl<B: Backend> Hub<B> {
                 .iter()
                 .map(|e| format!("{}\n", e.to_json(&id)))
                 .collect();
-            let _ = std::fs::write(p, text);
+            let _ = std::fs::write(&p, text);
+            if !make_default && manuk_js::determinism::enabled() && !mutated_fork_salt() {
+                let _ = std::fs::write(p.with_extension("fork"), c.log.len().to_string());
+            }
         }
         // The replay rebuilt the page; the snapshot is the authority for the rest of the partition.
         manuk_net::partition::restore(&c.snap)
