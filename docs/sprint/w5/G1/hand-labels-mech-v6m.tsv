@@ -1,0 +1,11 @@
+arm	task	run	hand_label	evidence
+cdp-layer+pwfmt-v6m	opendining-10	2	stop-by-choice	last success act click h645 'navigated: .../s?date=...'; then extract, final answer; no failure result after it
+cdp-layer+pwfmt-v6m	opendining-10	1	stop-by-choice	last success act click h566 'navigated'; after it only wait_for (first call schema error, second 'found text Menu') and final answer; wait_for not action-class
+cdp-layer+pwfmt-v6m	fly-unified-6	3	stop-by-choice	only action call navigate https://evals-fly-unified.vercel.app succeeded; no failure after; agent stopped citing budget (not tool-choice since navigate is an action tool)
+cdp-layer+pwfmt-v6m	opendining-10	3	stop-by-choice	last success act click h700 'navigated'; then extract and final answer; no failure after
+cdp-layer+pwfmt-v6m	gomail-8	2	grader-issue	gomail-8 evals_vec [1, 1, 0]
+cdp-layer+pwfmt-v6m	staynb-4	3	stop-by-choice	last success act click h684 'navigated: .../stay/3?...'; then screenshot and final answer (stopped at payment); no failure after
+cdp-layer+pwfmt-v6m	dashdish-7	1	stop-by-choice	last success navigate to store page, then observe, then act click h565 'UNREACHABLE: h565 has no clickable area; nothing was clicked' (single, not in the counting list) then final answer
+cdp-layer+pwfmt-v6m	staynb-4	2	stop-by-choice	last success act click h536 'ok: dispatched click at. +0 ~0 -20 text changed'; after it one act click h536 'no change | url: unchanged ... NO EFFECT handler threw TypeError' (only one no-change) then final answer
+cdp-layer+pwfmt-v6m	gomail-3	2	stop-by-choice	last success type h158 'ok: typed 39 chars'; earlier fill_form step 3 UNREACHABLE was before it (recovered); then final answer
+cdp-layer+pwfmt-v6m	staynb-4	1	stop-by-choice	last success act h314 'ran 1 of 1 steps (it navigated)'; then screenshot and final answer (stopped before paying); no failure after
