@@ -1,0 +1,11 @@
+arm	task	run	cause	basis
+playwright	zilloft-1	1	other	Answer is partial/odd: location filter not restricted and title mismatch, no listed failure category.
+cdp-layer	gomail-3	1	declined_action	Drafted the email and chose not to click Send, asking for confirmation.
+manuk	fly-unified-12	3	other	Site date picker lacked the needed date so the agent did not book; site limitation, last click was accepted.
+manuk	networkin-10	3	declined_action	Agent drafted a follow-up message but did not send it.
+manuk	udriver-9	1	other	Booked on the wrong date (site default), a wrong answer with no tool failure.
+manuk	dashdish-8	1	other	Answered from visible content only, possibly wrong or partial with 1424 hidden fragments unread.
+manuk	zilloft-3	2	task_data_missing	Tour form needed answers to buy-timeline questions the task did not supply.
+manuk	staynb-8	3	task_data_missing	Agent stopped at payment because no card details were supplied.
+manuk	gocalendar-2	1	other	Calendar left in day view and the answer is partial or unreliable, no listed cause.
+cdp-layer	staynb-6	2	other	Agent invented test card details and booked; no listed failure cause fits.
