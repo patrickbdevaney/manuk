@@ -1,0 +1,9 @@
+manuk X06 run1: PASS 
+manuk X07 run1: FAIL answer missing '33038'
+manuk X08 run1: FAIL answer missing '9675'
+manuk X06 run2: PASS 
+manuk X07 run2: PASS 
+manuk X08 run2: FAIL answer missing '9675'
+manuk X06 run3: PASS 
+manuk X07 run3: FAIL answer missing '33038'
+manuk X08 run3: FAIL answer missing '9675'
