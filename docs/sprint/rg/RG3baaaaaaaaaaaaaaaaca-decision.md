@@ -28,3 +28,17 @@ MIN_CHROME=12, MIN_MANUK=9 and EXPECT=13 in `rg3baaaaaaa_spread.py` are not edit
 - Strict count must stay 11/13 chrome (the rule off reproduces the pre-run number).
 - Mutant: the rule with the stale condition removed from the transcript (no NO EFFECT) must leave #13 a miss -> chrome 11/13.
 - If the bar is still red after the rule, this doc gives no reason to relax it; the node would be BLOCKED.
+
+## Outcome (re-measure 3x, chrome_ver=145.0.7632.116): rule did not fire, bar still red, node BLOCKED
+
+Run1-3 (docs/sprint/rg/RG3baaaaaaaaaaaaaa/): manuk 10/13, chrome 10/13 in all three runs, strict count equal (10/10), so the
+stale-reference rule scored 0 rows. `rg3baaaaaaa_spread.py --dir` exit 1: `chrome 10/13 < 12` x3. MIN_CHROME/MIN_MANUK/EXPECT unedited
+(spread script byte-identical to HEAD).
+
+Why the pre-registered expectation (chrome #13 -> yes, 12/13) did not hold: the page is not the one the earlier verdict measured.
+Step #7 on chrome now returns `+48 ~0 -105` with options starting `12:00 AM` (earlier runs: `+35 ~1 -0`, options from `7:00 AM`),
+and opendining-4 chrome #13 and #14 are both UNRESOLVED (no combobox ordinal 1/2 exists after the click), so a rule that scores
+resolved-but-expanded lines has nothing to score. The dropdown contents differ between measurement days, i.e. the replay target is
+a live page whose time-dependent options change the post-click tree. This is a different cause from the stale transcript; the
+rule is kept (it is harmless: strict == tolerant here) but cannot rescue the bar, and the bar is not relaxed.
+Follow-up: pin or explain the live-page drift (.a).

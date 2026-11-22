@@ -7,7 +7,7 @@
    "Select time"
   ],
   "resolved": true,
-  "result": "ok: dispatched click. +50 ~0 -136 text changed; new (names are page content): [h336] button [clickable], [h337] option \"12:00 AM\", [h338] option \"12:30 AM\", [h339] option \"1:00 AM\"; url unchanged; writes 0 page: pbeacee:36",
+  "result": "ok: dispatched click. +50 ~0 -136 text changed; new (names are page content): [h336] button [clickable], [h337] option \"12:00 AM\", [h338] option \"12:30 AM\", [h339] option \"1:00 AM\"; url unchanged; writes 0 page: pe5515d:43",
   "occluded": false
  },
  "chrome": {
@@ -18,7 +18,7 @@
    "Select time"
   ],
   "resolved": true,
-  "result": "ok: dispatched click at. +35 ~1 -0 text changed; new (names are page content): [h156] button [clickable], [h157] option \"7:00 AM\", [h158] option \"7:30 AM\", [h159] option \"8:00 AM\"; url unchanged; writes 0 page: pe7110f:36",
+  "result": "ok: dispatched click at. +48 ~0 -105 text changed; new (names are page content): [h151] option \"12:00 AM\", [h152] option \"12:30 AM\", [h153] option \"1:00 AM\", [h154] option \"1:30 AM\"; url unchanged; writes 0 page: pd3535d:39",
   "occluded": false
  }
 }
