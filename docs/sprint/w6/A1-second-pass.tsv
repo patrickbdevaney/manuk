@@ -1,0 +1,11 @@
+arm	task	run	cause	basis
+cdp-layer	fly-unified-6	1	widget_unreachable	prev-month control has no clickable area
+manuk	zilloft-1	2	app_error	site location filter ignored; no control failure named
+playwright	dashdish-3	1	click_no_effect	See all click did not open a list
+cdp-layer	dashdish-8	3	wrong_answer	completed answer; no failure named
+cdp-layer	zilloft-1	2	app_error	site location matching unreliable
+manuk	zilloft-10	3	app_error	location filter does not restrict results
+cdp-layer	fly-unified-3	2	widget_unreachable	calendar day cells not exposed to tools
+manuk	topwork-8	1	app_error	Messages page 404
+playwright	staynb-6	1	wrong_answer	booked; no failure named
+cdp-layer	staynb-8	1	task_data_missing	card details not supplied

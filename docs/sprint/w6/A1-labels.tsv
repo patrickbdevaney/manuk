@@ -1,0 +1,400 @@
+arm	task	run	cause	basis	chrome_ver
+manuk	dashdish-11	3	declined_action	Stopped before placing order over account-mismatch concern, no tool failure.	145.0.7632.116
+playwright	dashdish-3	1	click_no_effect	See all click did not open a list.	145.0.7632.116
+cdp-layer	dashdish-4	1	click_no_effect	Choose a time clicks and Enter did nothing.	145.0.7632.116
+manuk	dashdish-4	1	click_no_effect	Choose a time control never opened; NO EFFECT results.	145.0.7632.116
+playwright	dashdish-4	1	click_no_effect	Clicking Choose a time opened no picker.	145.0.7632.116
+cdp-layer	dashdish-4	2	click_no_effect	Choose a time click and Enter did nothing visible.	145.0.7632.116
+manuk	dashdish-4	2	click_no_effect	Clicks on Choose a time opened no picker.	145.0.7632.116
+cdp-layer	dashdish-4	3	click_no_effect	Clicks on time control produced no change (NO EFFECT).	145.0.7632.116
+manuk	dashdish-4	3	click_no_effect	Choose a time clicks and Enter had no visible effect.	145.0.7632.116
+cdp-layer	dashdish-5	1	declined_action	Did not place order; cart/pickup done, overlay was worked around.	145.0.7632.116
+manuk	dashdish-5	1	declined_action	Stopped at checkout without placing order by choice.	145.0.7632.116
+playwright	dashdish-5	1	declined_action	Chose not to click Place Order.	145.0.7632.116
+cdp-layer	dashdish-5	2	declined_action	Order not placed, no failure named.	145.0.7632.116
+manuk	dashdish-5	2	declined_action	Stopped at checkout without placing order.	145.0.7632.116
+cdp-layer	dashdish-5	3	declined_action	Chose not to place order; modal was dismissed with Escape.	145.0.7632.116
+manuk	dashdish-5	3	declined_action	Explicitly declined to place order, offered to do so on request.	145.0.7632.116
+cdp-layer	dashdish-7	2	click_no_effect	Clicking the Mushroom Swiss card heading did nothing; no Add button.	145.0.7632.116
+cdp-layer	dashdish-8	1	wrong_answer	Completed answer, no failure named.	145.0.7632.116
+manuk	dashdish-8	1	wrong_answer	Completed answer, no failure named.	145.0.7632.116
+playwright	dashdish-8	1	wrong_answer	Gave different categories, no failure named.	145.0.7632.116
+cdp-layer	dashdish-8	2	wrong_answer	Completed answer, no failure named.	145.0.7632.116
+manuk	dashdish-8	2	wrong_answer	Completed answer, no failure named.	145.0.7632.116
+cdp-layer	dashdish-8	3	wrong_answer	Completed answer, no failure named.	145.0.7632.116
+manuk	dashdish-8	3	wrong_answer	Completed answer, no failure named.	145.0.7632.116
+cdp-layer	dashdish-9	1	wrong_answer	Concluded item absent; modal was a side issue, not the stated reason.	145.0.7632.116
+playwright	dashdish-9	1	wrong_answer	Concluded item absent from menu; no control failure named.	145.0.7632.116
+cdp-layer	dashdish-9	2	click_no_effect	Clicking the Classic Cheeseburger name opened no options (NO EFFECT).	145.0.7632.116
+manuk	dashdish-9	2	wrong_answer	Concluded item absent; no control failure named.	145.0.7632.116
+manuk	dashdish-9	3	wrong_answer	Concluded item absent; no control failure named.	145.0.7632.116
+cdp-layer	fly-unified-1	1	widget_unreachable	Previous-month button has no clickable area (UNREACHABLE).	145.0.7632.116
+cdp-layer	fly-unified-1	2	tool_surface_gap	Month/year dropdowns not exposed to browser tools.	145.0.7632.116
+cdp-layer	fly-unified-1	3	widget_unreachable	Previous Month has no clickable area and refused focus (inert).	145.0.7632.116
+cdp-layer	fly-unified-10	1	dialog_modal	Next-month clicks blocked by an overlay.	145.0.7632.116
+manuk	fly-unified-10	1	task_data_missing	Stopped at card security code not provided.	145.0.7632.116
+playwright	fly-unified-10	1	declined_action	Reached checkout and chose not to buy.	145.0.7632.116
+cdp-layer	fly-unified-10	2	tool_surface_gap	Date dropdowns not reachable with browser tools.	145.0.7632.116
+manuk	fly-unified-10	2	declined_action	Reached checkout and stopped before paying by choice.	145.0.7632.116
+cdp-layer	fly-unified-10	3	tool_surface_gap	Native select dropdowns cannot be addressed by tools.	145.0.7632.116
+manuk	fly-unified-10	3	declined_action	Stopped at checkout rather than clicking Buy now.	145.0.7632.116
+cdp-layer	fly-unified-11	1	tool_surface_gap	Year dropdown not reachable from tools; prev arrow disabled.	145.0.7632.116
+cdp-layer	fly-unified-12	1	tool_surface_gap	Native date dropdowns could not be reached by browser tools.	145.0.7632.116
+manuk	fly-unified-12	1	declined_action	No 10:00 flight; stopped to ask which to book.	145.0.7632.116
+playwright	fly-unified-12	1	app_error	Site calendar disables all dates from Jan 2026 onward.	145.0.7632.116
+cdp-layer	fly-unified-12	2	tool_surface_gap	Could not reach month/year dropdowns with tools.	145.0.7632.116
+cdp-layer	fly-unified-12	3	widget_unreachable	Prev-month arrow inert; h65 refused focus.	145.0.7632.116
+manuk	fly-unified-12	3	app_error	Site date picker only offers up to 2025.	145.0.7632.116
+cdp-layer	fly-unified-13	1	widget_unreachable	Previous Month unreachable and refused focus (inert).	145.0.7632.116
+manuk	fly-unified-13	1	wrong_answer	Completed answer, no failure named.	145.0.7632.116
+playwright	fly-unified-13	1	wrong_answer	Completed answer, no failure named.	145.0.7632.116
+cdp-layer	fly-unified-13	2	widget_unreachable	Picker controls had no clickable area.	145.0.7632.116
+manuk	fly-unified-13	2	wrong_answer	Completed-looking answer with no failure named.	145.0.7632.116
+cdp-layer	fly-unified-13	3	click_no_effect	Date picker clicks/keys did not move it.	145.0.7632.116
+manuk	fly-unified-13	3	wrong_answer	Completed-looking answer with no failure named.	145.0.7632.116
+cdp-layer	fly-unified-14	1	widget_unreachable	Previous-month control disabled so Dec 2024 unreachable.	145.0.7632.116
+manuk	fly-unified-14	1	task_data_missing	Traveler name/DOB/gender not supplied.	145.0.7632.116
+playwright	fly-unified-14	1	task_data_missing	Traveler details required but not given.	145.0.7632.116
+cdp-layer	fly-unified-14	2	widget_unreachable	h63 refused focus (inert or disabled).	145.0.7632.116
+manuk	fly-unified-14	2	task_data_missing	Traveler details required but not given.	145.0.7632.116
+cdp-layer	fly-unified-14	3	widget_unreachable	h64 refused focus (inert or disabled).	145.0.7632.116
+manuk	fly-unified-14	3	task_data_missing	Traveler details required but not given.	145.0.7632.116
+cdp-layer	fly-unified-2	1	widget_unreachable	Previous-month arrow disabled; 2024 out of reach.	145.0.7632.116
+manuk	fly-unified-2	1	payment_rejected	Site rejected card expiry.	145.0.7632.116
+playwright	fly-unified-2	1	payment_rejected	Checkout showed expiry validation error.	145.0.7632.116
+cdp-layer	fly-unified-2	2	widget_unreachable	Previous-month arrow disabled.	145.0.7632.116
+manuk	fly-unified-2	2	payment_rejected	Site rejected card expiry.	145.0.7632.116
+cdp-layer	fly-unified-2	3	widget_unreachable	Previous-month arrow disabled.	145.0.7632.116
+manuk	fly-unified-2	3	payment_rejected	Site rejected card expiry.	145.0.7632.116
+cdp-layer	fly-unified-3	1	click_no_effect	Day cells/Tab/arrows did not respond in picker.	145.0.7632.116
+manuk	fly-unified-3	1	wrong_answer	Answered from Dec 2025 search, no failure named.	145.0.7632.116
+playwright	fly-unified-3	1	wrong_answer	Answered with completed result, no failure named.	145.0.7632.116
+cdp-layer	fly-unified-3	2	click_no_effect	Day cells unclickable; Tab no change.	145.0.7632.116
+manuk	fly-unified-3	2	wrong_answer	Answered with completed result, no failure named.	145.0.7632.116
+cdp-layer	fly-unified-3	3	widget_unreachable	h257 refused focus (inert or disabled); day cells not exposed.	145.0.7632.116
+manuk	fly-unified-3	3	wrong_answer	Answered with completed result, no failure named.	145.0.7632.116
+cdp-layer	fly-unified-4	1	widget_unreachable	UNREACHABLE: no clickable area.	145.0.7632.116
+manuk	fly-unified-4	1	payment_rejected	Site rejected card expiry.	145.0.7632.116
+playwright	fly-unified-4	1	payment_rejected	Checkout rejected card expiry.	145.0.7632.116
+cdp-layer	fly-unified-4	2	widget_unreachable	UNREACHABLE: no clickable area.	145.0.7632.116
+manuk	fly-unified-4	2	payment_rejected	Site rejected card expiry.	145.0.7632.116
+cdp-layer	fly-unified-4	3	widget_unreachable	Previous-month control disabled.	145.0.7632.116
+manuk	fly-unified-4	3	payment_rejected	Checkout expiry validation errors at end (insurance click also ineffective).	145.0.7632.116
+cdp-layer	fly-unified-5	1	widget_unreachable	Previous arrow disabled and date field read-only.	145.0.7632.116
+manuk	fly-unified-5	1	payment_rejected	Site rejected card expiry.	145.0.7632.116
+playwright	fly-unified-5	1	payment_rejected	Checkout rejected card expiry.	145.0.7632.116
+cdp-layer	fly-unified-5	2	widget_unreachable	UNREACHABLE: no clickable area.	145.0.7632.116
+manuk	fly-unified-5	2	payment_rejected	Site rejected card expiry.	145.0.7632.116
+cdp-layer	fly-unified-5	3	widget_unreachable	Previous Month control disabled.	145.0.7632.116
+manuk	fly-unified-5	3	payment_rejected	Site rejected card expiry.	145.0.7632.116
+cdp-layer	fly-unified-6	1	widget_unreachable	Previous-month control has no clickable area.	145.0.7632.116
+cdp-layer	fly-unified-6	2	widget_unreachable	Previous-month arrow disabled.	145.0.7632.116
+cdp-layer	fly-unified-6	3	widget_unreachable	UNREACHABLE: no clickable area.	145.0.7632.116
+cdp-layer	fly-unified-7	1	click_no_effect	Day cells unclickable; keys did nothing.	145.0.7632.116
+manuk	fly-unified-7	1	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+playwright	fly-unified-7	1	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+cdp-layer	fly-unified-7	2	click_no_effect	Day cells unreachable by click/keys; date not set.	145.0.7632.116
+manuk	fly-unified-7	2	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+cdp-layer	fly-unified-7	3	click_no_effect	Tab/Enter did not reach day cells.	145.0.7632.116
+manuk	fly-unified-7	3	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+cdp-layer	fly-unified-8	1	typed_not_registered	Depart field read-only; nothing typed.	145.0.7632.116
+manuk	fly-unified-8	1	payment_rejected	Site rejected card number.	145.0.7632.116
+playwright	fly-unified-8	1	payment_rejected	Final says card number rejected by site.	145.0.7632.116
+cdp-layer	fly-unified-8	2	wrong_answer	Completed answer with no failure named; did not book per 12:51 PM.	145.0.7632.116
+manuk	fly-unified-8	2	payment_rejected	Final says site rejected card number.	145.0.7632.116
+cdp-layer	fly-unified-8	3	widget_unreachable	Calendar day cells not exposed; focus refused as inert.	145.0.7632.116
+manuk	fly-unified-8	3	click_no_effect	Buy now did not respond to clicks.	145.0.7632.116
+cdp-layer	fly-unified-9	1	stopped_early	Stopped because date picker could not offer Dec 2026.	145.0.7632.116
+manuk	fly-unified-9	1	declined_action	Asked for confirmation instead of booking; no failure.	145.0.7632.116
+playwright	fly-unified-9	1	stopped_early	Stopped at date picker with no forward navigation.	145.0.7632.116
+cdp-layer	fly-unified-9	2	widget_unreachable	No next-month control exposed and date field read-only.	145.0.7632.116
+manuk	fly-unified-9	2	declined_action	Waiting on user's call before booking different time.	145.0.7632.116
+cdp-layer	fly-unified-9	3	stopped_early	Stopped because no control reaches 2026.	145.0.7632.116
+manuk	fly-unified-9	3	stopped_early	Year selector has no 2026 option; stopped.	145.0.7632.116
+cdp-layer	gocalendar-1	1	dialog_modal	Modal overlay with no close control blocked dialog.	145.0.7632.116
+cdp-layer	gocalendar-1	2	dialog_modal	Modal overlay with no close control; close occluded.	145.0.7632.116
+cdp-layer	gocalendar-10	1	widget_unreachable	Personal delete controls not exposed to tools.	145.0.7632.116
+manuk	gocalendar-10	1	click_no_effect	Clicking options only toggles visibility; no delete menu.	145.0.7632.116
+playwright	gocalendar-10	1	wrong_answer	Completed-looking answer, names no failure.	145.0.7632.116
+cdp-layer	gocalendar-10	2	widget_unreachable	Options menu not exposed to browser tools.	145.0.7632.116
+manuk	gocalendar-10	2	click_no_effect	Calendar options click only toggles visibility.	145.0.7632.116
+cdp-layer	gocalendar-10	3	widget_unreachable	Options menu not exposed; Tab skips it.	145.0.7632.116
+manuk	gocalendar-10	3	widget_unreachable	Options element not clickable or in accessibility tree.	145.0.7632.116
+cdp-layer	gocalendar-2	1	dialog_modal	Overlay covered +2 more button, could not click.	145.0.7632.116
+manuk	gocalendar-2	1	wrong_answer	Gave event list with admitted view mixups; no control failure.	145.0.7632.116
+cdp-layer	gocalendar-2	2	dialog_modal	Overlay covered +2 more button.	145.0.7632.116
+manuk	gocalendar-2	2	wrong_answer	Gave counts with unverified day assignment; no failure named.	145.0.7632.116
+cdp-layer	gocalendar-2	3	wrong_answer	Listed events with partly hidden ones; no failure named.	145.0.7632.116
+cdp-layer	gocalendar-5	1	dialog_modal	Modal overlay with no close control blocked page.	145.0.7632.116
+playwright	gocalendar-5	1	state_not_persisted	Guests saved but missing after reload.	145.0.7632.116
+cdp-layer	gocalendar-5	2	wrong_answer	Completed event; guests unverified, no failure named.	145.0.7632.116
+cdp-layer	gocalendar-5	3	dialog_modal	Modal overlay with no close control after time picker.	145.0.7632.116
+cdp-layer	gocalendar-6	1	widget_unreachable	Options button not in accessibility tree.	145.0.7632.116
+manuk	gocalendar-6	1	click_no_effect	Click/hover/Enter on options control had no effect.	145.0.7632.116
+cdp-layer	gocalendar-6	2	click_no_effect	Clicking container only toggles visibility or does nothing.	145.0.7632.116
+manuk	gocalendar-6	2	widget_unreachable	Options elements not clickable; no menu.	145.0.7632.116
+cdp-layer	gocalendar-6	3	widget_unreachable	Kebab button never appears in accessibility tree.	145.0.7632.116
+manuk	gocalendar-6	3	click_no_effect	Sidebar entries only toggle visibility; swatch only collapses.	145.0.7632.116
+cdp-layer	gocalendar-7	1	wrong_answer	Claimed move done; no failure named.	145.0.7632.116
+manuk	gocalendar-7	1	tool_surface_gap	Tools cannot target empty grid cell; drops cancelled.	145.0.7632.116
+playwright	gocalendar-7	1	wrong_answer	Claimed move done; no failure named.	145.0.7632.116
+cdp-layer	gocalendar-7	2	wrong_answer	Claimed move done; no failure named.	145.0.7632.116
+manuk	gocalendar-7	2	tool_surface_gap	Drag tool cannot target empty grid cell.	145.0.7632.116
+cdp-layer	gocalendar-7	3	wrong_answer	Claimed move done; no failure named.	145.0.7632.116
+manuk	gocalendar-7	3	tool_surface_gap	Tool cannot target empty time-grid cells.	145.0.7632.116
+cdp-layer	gocalendar-8	1	wrong_answer	Completed-looking counts; no failure named.	145.0.7632.116
+manuk	gocalendar-8	1	wrong_answer	Completed-looking counts; no failure named.	145.0.7632.116
+playwright	gocalendar-8	1	wrong_answer	Completed-looking counts; no failure named.	145.0.7632.116
+cdp-layer	gocalendar-8	2	wrong_answer	Completed-looking counts; no failure named.	145.0.7632.116
+manuk	gocalendar-8	2	wrong_answer	Completed-looking counts; no failure named.	145.0.7632.116
+cdp-layer	gocalendar-8	3	wrong_answer	Completed-looking counts; no failure named.	145.0.7632.116
+manuk	gocalendar-8	3	wrong_answer	Completed-looking counts; no failure named.	145.0.7632.116
+cdp-layer	gocalendar-9	1	wrong_answer	Finished with completed-looking answer, names no control failure.	145.0.7632.116
+manuk	gocalendar-9	1	click_no_effect	Final says the Other calendars toggle did not respond.	145.0.7632.116
+playwright	gocalendar-9	1	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+cdp-layer	gocalendar-9	2	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+manuk	gocalendar-9	2	wrong_answer	Edited a Daily Standup instance, no failure named.	145.0.7632.116
+cdp-layer	gocalendar-9	3	typed_not_registered	Final says time picker was unreliable and end time could not be set.	145.0.7632.116
+manuk	gocalendar-9	3	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+cdp-layer	gomail-3	1	declined_action	Composed email but chose not to click Send.	145.0.7632.116
+playwright	gomail-3	1	declined_action	Composed email but left Send undone by choice.	145.0.7632.116
+cdp-layer	gomail-3	2	declined_action	Stopped before Send by choice; overlay not cited in final.	145.0.7632.116
+cdp-layer	gomail-3	3	declined_action	Stopped before Send by choice; overlay not cited in final.	145.0.7632.116
+cdp-layer	gomail-6	1	wrong_answer	Gave a definite read/unread answer, no failure named.	145.0.7632.116
+manuk	gomail-6	1	wrong_answer	Gave an unread answer, no control failure named.	145.0.7632.116
+playwright	gomail-6	1	wrong_answer	Gave a read answer, no failure named.	145.0.7632.116
+manuk	gomail-6	2	stopped_early	Could not confirm read state and stopped without a firm answer.	145.0.7632.116
+manuk	gomail-6	3	wrong_answer	Gave a likely-read answer, no control failure named.	145.0.7632.116
+playwright	gomail-8	1	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+cdp-layer	gomail-8	2	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+cdp-layer	gomail-8	3	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+cdp-layer	networkin-10	1	declined_action	Drafted follow-up but did not send.	145.0.7632.116
+manuk	networkin-10	1	declined_action	Drafted follow-up but did not send.	145.0.7632.116
+playwright	networkin-10	1	declined_action	Drafted follow-up and did not send or type it.	145.0.7632.116
+cdp-layer	networkin-10	2	declined_action	Suggested follow-up but did not send.	145.0.7632.116
+manuk	networkin-10	2	declined_action	Drafted follow-up, did not send.	145.0.7632.116
+cdp-layer	networkin-10	3	declined_action	Drafted follow-up, did not send.	145.0.7632.116
+manuk	networkin-10	3	declined_action	Drafted follow-up, did not send.	145.0.7632.116
+cdp-layer	networkin-3	1	declined_action	Drafted post but chose not to click Post.	145.0.7632.116
+playwright	networkin-3	1	wrong_answer	Published post with invented details, no failure named.	145.0.7632.116
+manuk	networkin-3	2	wrong_answer	Published post with invented details, no failure named.	145.0.7632.116
+cdp-layer	networkin-3	3	wrong_answer	Published post with invented details, no failure named.	145.0.7632.116
+manuk	networkin-3	3	declined_action	Drafted post but chose not to publish.	145.0.7632.116
+manuk	networkin-4	1	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+cdp-layer	networkin-4	2	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+cdp-layer	networkin-4	3	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+cdp-layer	networkin-6	1	stopped_early	Stopped because messaging not allowed until connection accepted.	145.0.7632.116
+manuk	networkin-6	1	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+playwright	networkin-6	1	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+cdp-layer	networkin-6	2	wrong_answer	Sent request with note, no failure named.	145.0.7632.116
+manuk	networkin-6	2	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+cdp-layer	networkin-6	3	widget_unreachable	Last tool result says OCCLUDED; no overlay cited in final.	145.0.7632.116
+manuk	networkin-6	3	click_no_effect	Final says Sent invitations tab did not respond to clicks.	145.0.7632.116
+cdp-layer	networkin-7	1	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+cdp-layer	networkin-9	1	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+manuk	networkin-9	1	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+playwright	networkin-9	1	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+cdp-layer	networkin-9	2	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+manuk	networkin-9	2	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+cdp-layer	networkin-9	3	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+manuk	networkin-9	3	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+cdp-layer	opendining-1	1	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+cdp-layer	opendining-1	3	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+cdp-layer	opendining-10	1	app_error	Menu sections render empty on the site.	145.0.7632.116
+manuk	opendining-10	1	wrong_answer	Booked a restaurant, names no failure.	145.0.7632.116
+cdp-layer	opendining-10	2	app_error	Menu sections render empty on the site.	145.0.7632.116
+manuk	opendining-10	2	wrong_answer	Booked a restaurant, names no failure.	145.0.7632.116
+cdp-layer	opendining-10	3	app_error	Menu sections render empty on the site.	145.0.7632.116
+manuk	opendining-10	3	wrong_answer	Booked a restaurant, names no failure.	145.0.7632.116
+cdp-layer	opendining-2	1	app_error	Detail page sections render only as headings.	145.0.7632.116
+playwright	opendining-2	1	app_error	Description/menu not rendered on the page.	145.0.7632.116
+cdp-layer	opendining-2	2	app_error	Detail page sections render only as headings.	145.0.7632.116
+cdp-layer	opendining-2	3	app_error	Detail page sections not rendered, possibly loading.	145.0.7632.116
+cdp-layer	opendining-4	1	app_error	Booking page ignores search date and party size.	145.0.7632.116
+cdp-layer	opendining-4	3	app_error	Booking page ignores search date and party size.	145.0.7632.116
+manuk	opendining-4	3	app_error	Booking page ignores search date and party size.	145.0.7632.116
+playwright	opendining-6	1	app_error	Booking panel stuck as loading placeholder, no error shown.	145.0.7632.116
+manuk	opendining-8	3	wrong_answer	Booked lowest-rated restaurant, names no failure.	145.0.7632.116
+cdp-layer	opendining-9	1	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+manuk	opendining-9	1	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+cdp-layer	opendining-9	2	app_error	Menu sections render empty on the site.	145.0.7632.116
+cdp-layer	opendining-9	3	stopped_early	Agent says it stopped after running out of ideas.	145.0.7632.116
+cdp-layer	staynb-1	1	task_data_missing	Stopped because card details were not supplied.	145.0.7632.116
+manuk	staynb-1	1	declined_action	Chose not to click Reserve, asked for confirmation.	145.0.7632.116
+cdp-layer	staynb-1	2	task_data_missing	Stopped because card details were not supplied.	145.0.7632.116
+manuk	staynb-1	2	task_data_missing	Stopped at payment needing card details.	145.0.7632.116
+manuk	staynb-1	3	declined_action	Chose not to click Reserve, asked for confirmation.	145.0.7632.116
+manuk	staynb-4	1	task_data_missing	Stopped at payment needing card details.	145.0.7632.116
+cdp-layer	staynb-4	2	dialog_modal	Invisible overlay occluded Reserve stay.	145.0.7632.116
+manuk	staynb-4	2	task_data_missing	Stopped at payment needing card details.	145.0.7632.116
+manuk	staynb-4	3	dialog_modal	Region overlay without close control blocked fields.	145.0.7632.116
+cdp-layer	staynb-5	1	task_data_missing	Stopped at payment needing card details.	145.0.7632.116
+manuk	staynb-5	1	task_data_missing	Stopped at payment needing card details.	145.0.7632.116
+playwright	staynb-5	1	task_data_missing	Stopped at payment needing card details.	145.0.7632.116
+cdp-layer	staynb-5	2	task_data_missing	Stopped at payment needing card details.	145.0.7632.116
+manuk	staynb-5	2	dialog_modal	Modal overlay with no close control blocked dates.	145.0.7632.116
+cdp-layer	staynb-5	3	task_data_missing	Stopped at payment needing card details.	145.0.7632.116
+manuk	staynb-5	3	task_data_missing	Stopped at payment needing card details.	145.0.7632.116
+cdp-layer	staynb-6	1	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+manuk	staynb-6	1	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+playwright	staynb-6	1	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+cdp-layer	staynb-6	2	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+manuk	staynb-6	2	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+cdp-layer	staynb-6	3	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+manuk	staynb-6	3	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+cdp-layer	staynb-7	1	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+manuk	staynb-7	1	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+playwright	staynb-7	1	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+cdp-layer	staynb-7	2	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+manuk	staynb-7	2	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+cdp-layer	staynb-7	3	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+manuk	staynb-7	3	wrong_answer	Completed-looking answer, no failure named.	145.0.7632.116
+cdp-layer	staynb-8	1	task_data_missing	Stopped because the task supplied no card details.	145.0.7632.116
+manuk	staynb-8	1	task_data_missing	Stopped because the task supplied no card details.	145.0.7632.116
+playwright	staynb-8	1	task_data_missing	Stopped because the task supplied no card details.	145.0.7632.116
+cdp-layer	staynb-8	2	task_data_missing	Stopped because the task supplied no card details.	145.0.7632.116
+manuk	staynb-8	2	task_data_missing	Stopped because the task supplied no card details.	145.0.7632.116
+cdp-layer	staynb-8	3	task_data_missing	Stopped because the task supplied no card details.	145.0.7632.116
+manuk	staynb-8	3	task_data_missing	Stopped because the task supplied no card details.	145.0.7632.116
+cdp-layer	staynb-9	1	wrong_answer	Finished with a completed-looking answer and names no control or layer failure.	145.0.7632.116
+manuk	staynb-9	1	wrong_answer	Finished with a completed-looking answer and names no control or layer failure.	145.0.7632.116
+playwright	staynb-9	1	wrong_answer	Finished with a completed-looking answer and names no control or layer failure.	145.0.7632.116
+cdp-layer	staynb-9	2	dialog_modal	Final answer cites an overlay that blocked a click or the target.	145.0.7632.116
+manuk	staynb-9	2	wrong_answer	Finished with a completed-looking answer and names no control or layer failure.	145.0.7632.116
+cdp-layer	staynb-9	3	wrong_answer	Finished with a completed-looking answer and names no control or layer failure.	145.0.7632.116
+manuk	staynb-9	3	wrong_answer	Finished with a completed-looking answer and names no control or layer failure.	145.0.7632.116
+cdp-layer	topwork-1	1	state_not_persisted	Submitted with redirect/no error but post not visible in Your jobs list.	145.0.7632.116
+manuk	topwork-1	1	state_not_persisted	Submitted with redirect/no error but post not visible in Your jobs list.	145.0.7632.116
+playwright	topwork-1	1	state_not_persisted	Submitted with redirect/no error but post not visible in Your jobs list.	145.0.7632.116
+cdp-layer	topwork-1	2	state_not_persisted	Submitted with redirect/no error but post not visible in Your jobs list.	145.0.7632.116
+manuk	topwork-1	2	state_not_persisted	Submitted with redirect/no error but post not visible in Your jobs list.	145.0.7632.116
+cdp-layer	topwork-1	3	state_not_persisted	Submitted with redirect/no error but post not visible in Your jobs list.	145.0.7632.116
+manuk	topwork-1	3	state_not_persisted	Submitted with redirect/no error but post not visible in Your jobs list.	145.0.7632.116
+cdp-layer	topwork-2	1	state_not_persisted	Submitted with redirect/no error but post not visible in Your jobs list.	145.0.7632.116
+manuk	topwork-2	1	dialog_modal	Final answer cites an overlay that blocked a click or the target.	145.0.7632.116
+playwright	topwork-2	1	state_not_persisted	Submitted with redirect/no error but post not visible in Your jobs list.	145.0.7632.116
+cdp-layer	topwork-2	2	state_not_persisted	Submitted with redirect/no error but post not visible in Your jobs list.	145.0.7632.116
+manuk	topwork-2	2	state_not_persisted	Submitted with redirect/no error but post not visible in Your jobs list.	145.0.7632.116
+cdp-layer	topwork-2	3	state_not_persisted	Submitted with redirect/no error but post not visible in Your jobs list.	145.0.7632.116
+manuk	topwork-2	3	state_not_persisted	Submitted with redirect/no error but post not visible in Your jobs list.	145.0.7632.116
+cdp-layer	topwork-3	1	state_not_persisted	Submitted with redirect/no error but post not visible in Your jobs list.	145.0.7632.116
+manuk	topwork-3	1	dialog_modal	Final answer cites an overlay that blocked a click or the target.	145.0.7632.116
+playwright	topwork-3	1	state_not_persisted	Submitted with redirect/no error but post not visible in Your jobs list.	145.0.7632.116
+cdp-layer	topwork-3	2	state_not_persisted	Submitted with redirect/no error but post not visible in Your jobs list.	145.0.7632.116
+manuk	topwork-3	2	state_not_persisted	Submitted with redirect/no error but post not visible in Your jobs list.	145.0.7632.116
+cdp-layer	topwork-3	3	state_not_persisted	Submitted with redirect/no error but post not visible in Your jobs list.	145.0.7632.116
+manuk	topwork-3	3	dialog_modal	Final answer cites an overlay that blocked a click or the target.	145.0.7632.116
+cdp-layer	topwork-4	1	state_not_persisted	Submitted with redirect/no error but post not visible in Your jobs list.	145.0.7632.116
+manuk	topwork-4	1	state_not_persisted	Submitted with redirect/no error but post not visible in Your jobs list.	145.0.7632.116
+playwright	topwork-4	1	state_not_persisted	Submitted with redirect/no error but post not visible in Your jobs list.	145.0.7632.116
+cdp-layer	topwork-4	2	state_not_persisted	Submitted with redirect/no error but post not visible in Your jobs list.	145.0.7632.116
+manuk	topwork-4	2	state_not_persisted	Submitted with redirect/no error but post not visible in Your jobs list.	145.0.7632.116
+cdp-layer	topwork-4	3	dialog_modal	Final answer cites an overlay that blocked a click or the target.	145.0.7632.116
+manuk	topwork-4	3	state_not_persisted	Submitted with redirect/no error but post not visible in Your jobs list.	145.0.7632.116
+cdp-layer	topwork-5	1	dialog_modal	Final answer cites an overlay that blocked a click or the target.	145.0.7632.116
+manuk	topwork-5	1	widget_unreachable	Send button reported no clickable area, off-viewport.	145.0.7632.116
+playwright	topwork-5	1	wrong_answer	Finished with a completed-looking answer and names no control or layer failure.	145.0.7632.116
+cdp-layer	topwork-5	2	wrong_answer	Finished with a completed-looking answer and names no control or layer failure.	145.0.7632.116
+manuk	topwork-5	2	widget_unreachable	Send button reported no clickable area, off-viewport.	145.0.7632.116
+cdp-layer	topwork-5	3	dialog_modal	Final answer cites an overlay that blocked a click or the target.	145.0.7632.116
+manuk	topwork-5	3	widget_unreachable	Send button reported no clickable area, off-viewport.	145.0.7632.116
+cdp-layer	topwork-6	1	wrong_answer	Finished with a completed-looking answer and names no control or layer failure.	145.0.7632.116
+manuk	topwork-6	1	wrong_answer	Completed answer with hedges, no failure named.	145.0.7632.116
+playwright	topwork-6	1	wrong_answer	Completed answer noting data mismatches only.	145.0.7632.116
+cdp-layer	topwork-6	2	wrong_answer	Completed answer, no failure named.	145.0.7632.116
+manuk	topwork-6	2	wrong_answer	Completed answer, no failure named.	145.0.7632.116
+cdp-layer	topwork-6	3	wrong_answer	Completed answer, no failure named.	145.0.7632.116
+manuk	topwork-6	3	wrong_answer	Completed answer, no failure named.	145.0.7632.116
+manuk	topwork-7	1	click_no_effect	Says the Talent button does nothing.	145.0.7632.116
+cdp-layer	topwork-7	3	widget_unreachable	Could not reach profile pages; last result OCCLUDED.	145.0.7632.116
+manuk	topwork-7	3	wrong_answer	Completed comparison, no failure named.	145.0.7632.116
+cdp-layer	topwork-8	1	app_error	Messages page returns 404.	145.0.7632.116
+manuk	topwork-8	1	app_error	Messages page returns 404.	145.0.7632.116
+playwright	topwork-8	1	app_error	Messages page returns 404.	145.0.7632.116
+cdp-layer	topwork-8	2	app_error	Messages page returns 404.	145.0.7632.116
+manuk	topwork-8	2	app_error	Messages page returns 404.	145.0.7632.116
+cdp-layer	topwork-8	3	app_error	Messages page returns 404.	145.0.7632.116
+manuk	topwork-8	3	app_error	Messages page returns 404.	145.0.7632.116
+cdp-layer	topwork-9	1	app_error	Messages 404 so could not send; drafted only due to site failure.	145.0.7632.116
+manuk	topwork-9	1	widget_unreachable	Send button has no clickable area.	145.0.7632.116
+playwright	topwork-9	1	wrong_answer	Claims message sent, no failure named.	145.0.7632.116
+cdp-layer	topwork-9	2	wrong_answer	Claims message sent, no failure named.	145.0.7632.116
+manuk	topwork-9	2	wrong_answer	Claims sent via Enter, no failure named.	145.0.7632.116
+cdp-layer	topwork-9	3	app_error	Messages page 404 on every route.	145.0.7632.116
+manuk	topwork-9	3	widget_unreachable	Send button off-screen and unreachable.	145.0.7632.116
+cdp-layer	udriver-10	2	click_no_effect	Clicking Comfort card did not change anything.	145.0.7632.116
+manuk	udriver-10	2	app_error	Date picker only allows July 2024 (site limitation).	145.0.7632.116
+cdp-layer	udriver-10	3	widget_unreachable	Date picker button covered (OCCLUDED) and time option off-screen.	145.0.7632.116
+cdp-layer	udriver-11	2	widget_unreachable	Ride cards have no clickable elements reachable.	145.0.7632.116
+cdp-layer	udriver-5	1	click_no_effect	Details link did nothing when clicked.	145.0.7632.116
+cdp-layer	udriver-5	2	click_no_effect	Details link did nothing when clicked.	145.0.7632.116
+manuk	udriver-5	2	widget_unreachable	Details link has no clickable area.	145.0.7632.116
+cdp-layer	udriver-5	3	click_no_effect	Details and Rebook links did nothing.	145.0.7632.116
+manuk	udriver-7	1	wrong_answer	Completed answer, no failure named.	145.0.7632.116
+manuk	udriver-7	2	wrong_answer	Completed answer, no failure named.	145.0.7632.116
+manuk	udriver-7	3	wrong_answer	Completed answer, no failure named.	145.0.7632.116
+cdp-layer	udriver-9	1	state_not_persisted	Reserve ride reloaded with no error and no upcoming trip shown.	145.0.7632.116
+manuk	udriver-9	1	wrong_answer	Booked wrong date, no control failure named.	145.0.7632.116
+playwright	udriver-9	1	wrong_answer	Booked wrong date, no control failure named.	145.0.7632.116
+cdp-layer	udriver-9	2	app_error	Date picker only permits July 18 2024; overlay not cited as blocker.	145.0.7632.116
+manuk	udriver-9	2	app_error	Calendar only offers July 2024.	145.0.7632.116
+cdp-layer	udriver-9	3	state_not_persisted	Confirmation shown but My Trips lists no upcoming trip.	145.0.7632.116
+manuk	udriver-9	3	wrong_answer	Booked wrong date, no control failure named.	145.0.7632.116
+cdp-layer	zilloft-1	1	app_error	Location search does not restrict to San Francisco; title conflicts with count.	145.0.7632.116
+manuk	zilloft-1	1	typed_not_registered	Typed location never took effect.	145.0.7632.116
+playwright	zilloft-1	1	app_error	Location search does not restrict results to the city.	145.0.7632.116
+cdp-layer	zilloft-1	2	app_error	Site location matching unreliable, non-SF results.	145.0.7632.116
+manuk	zilloft-1	2	app_error	Site location filter appears ignored.	145.0.7632.116
+cdp-layer	zilloft-1	3	app_error	Search does not limit results to the city.	145.0.7632.116
+manuk	zilloft-1	3	app_error	Site appears to ignore the city in search.	145.0.7632.116
+cdp-layer	zilloft-10	1	wrong_answer	Gave answer 0 with caveats, no control failure named.	145.0.7632.116
+manuk	zilloft-10	1	wrong_answer	Gave answer 0, no failure named.	145.0.7632.116
+playwright	zilloft-10	1	wrong_answer	Completed answer 0 after scanning all pages; names no failure.	145.0.7632.116
+cdp-layer	zilloft-10	2	wrong_answer	Gave 0 with caveat about ignored location search; no control failure.	145.0.7632.116
+manuk	zilloft-10	2	wrong_answer	Gave 0 with caveat; no control failure named.	145.0.7632.116
+cdp-layer	zilloft-10	3	wrong_answer	Gave 0 with ZIP check caveat; no control failure.	145.0.7632.116
+manuk	zilloft-10	3	stopped_early	Gave no count; could not confirm full list of 160 was read.	145.0.7632.116
+cdp-layer	zilloft-2	1	stopped_early	Declined to give count because location filter not enforced and not all cards checked.	145.0.7632.116
+manuk	zilloft-2	1	wrong_answer	Gave 16 with caveats; no failure named.	145.0.7632.116
+playwright	zilloft-2	1	click_no_effect	Exact-match toggle turned on but chip still shows 2+ ba; unconfirmed it took.	145.0.7632.116
+manuk	zilloft-2	2	wrong_answer	Gave 16; exact-match label caveat but results consistent.	145.0.7632.116
+cdp-layer	zilloft-3	1	task_data_missing	Stopped at follow-up questions the task gave no answers for.	145.0.7632.116
+manuk	zilloft-3	1	task_data_missing	Left follow-up questions blank; no answers supplied.	145.0.7632.116
+playwright	zilloft-3	1	task_data_missing	Blocked by buy-timeline and agent questions with no supplied answers.	145.0.7632.116
+cdp-layer	zilloft-3	2	task_data_missing	Stopped because Done disabled until unsupplied answers given.	145.0.7632.116
+manuk	zilloft-3	2	task_data_missing	Stopped at two questions the task did not answer.	145.0.7632.116
+cdp-layer	zilloft-3	3	click_no_effect	Date clicks showed no visible change so selection unconfirmed.	145.0.7632.116
+manuk	zilloft-3	3	task_data_missing	Stopped before submitting; two unanswered questions block Done.	145.0.7632.116
+cdp-layer	zilloft-4	1	widget_unreachable	Pagination intermittently off-screen (tool result offscreen) so listings missed.	145.0.7632.116
+manuk	zilloft-4	1	stopped_early	Did not page through remaining 192 results.	145.0.7632.116
+playwright	zilloft-4	1	wrong_answer	Completed answer no 4+ bed SF home; no failure named.	145.0.7632.116
+cdp-layer	zilloft-4	2	stopped_early	Could not determine price; location search matched nothing and gave up.	145.0.7632.116
+manuk	zilloft-4	2	stopped_early	Did not scan all 192 lazily loaded results.	145.0.7632.116
+cdp-layer	zilloft-4	3	wrong_answer	Concluded none found; no control failure named.	145.0.7632.116
+manuk	zilloft-4	3	wrong_answer	Concluded none found; checked only first page but names no control failure.	145.0.7632.116
+manuk	zilloft-5	1	wrong_answer	Reported 3 results; no failure named.	145.0.7632.116
+manuk	zilloft-5	2	click_no_effect	Home Type Deselect All click had no visible effect.	145.0.7632.116
+manuk	zilloft-5	3	wrong_answer	Reported 1 result; no failure named.	145.0.7632.116
+cdp-layer	zilloft-6	1	wrong_answer	No qualifying condo found; no control failure named.	145.0.7632.116
+manuk	zilloft-6	1	wrong_answer	No qualifying condo found; no control failure named.	145.0.7632.116
+playwright	zilloft-6	1	task_data_missing	Stopped at Tell us about yourself step needing unsupplied answers.	145.0.7632.116
+cdp-layer	zilloft-6	2	wrong_answer	No SF condo under 300K found; no failure named.	145.0.7632.116
+manuk	zilloft-6	2	wrong_answer	No qualifying property; no control failure named.	145.0.7632.116
+cdp-layer	zilloft-6	3	wrong_answer	No qualifying property; no control failure named.	145.0.7632.116
+manuk	zilloft-6	3	declined_action	Asked user to confirm before booking Oakland alternative.	145.0.7632.116
+cdp-layer	zilloft-7	1	click_no_effect	Home Type and location filters did not narrow results.	145.0.7632.116
+playwright	zilloft-7	1	click_no_effect	Manufactured filter applied but count stayed 304.	145.0.7632.116
+cdp-layer	zilloft-7	2	click_no_effect	Filters applied but count stayed 400.	145.0.7632.116
+manuk	zilloft-7	2	click_no_effect	Filters did not narrow results; unreliable zero.	145.0.7632.116
+cdp-layer	zilloft-7	3	click_no_effect	Home Type filter did not change count.	145.0.7632.116
+manuk	zilloft-7	3	click_no_effect	Filters do not apply to results.	145.0.7632.116
+cdp-layer	zilloft-8	1	wrong_answer	Answered 1 result; exact-match count unchecked, no failure named.	145.0.7632.116
+cdp-layer	zilloft-8	2	click_no_effect	Exact match toggle did not take.	145.0.7632.116
+manuk	zilloft-8	2	click_no_effect	Clicked exact match but no visible effect.	145.0.7632.116
+cdp-layer	zilloft-9	1	wrong_answer	Found no 4+ bed SF home; no failure named in answer.	145.0.7632.116
+manuk	zilloft-9	1	stopped_early	Did not page through all results.	145.0.7632.116
+playwright	zilloft-9	1	wrong_answer	No qualifying home; no failure named.	145.0.7632.116
+cdp-layer	zilloft-9	2	wrong_answer	No qualifying listing; no failure named.	145.0.7632.116
+manuk	zilloft-9	2	click_no_effect	Pagination clicks had no effect.	145.0.7632.116
+cdp-layer	zilloft-9	3	widget_unreachable	Page 2 pagination off-screen, could not reach.	145.0.7632.116
+manuk	zilloft-9	3	declined_action	Asked user to confirm booking a 3-bed instead.	145.0.7632.116
