@@ -387,7 +387,7 @@ def one(arm, task, run, pin, tdir, timeout, judge_env=None, trdir=TRANSCRIPTS):
     tc = tool_counts(out)
     unavailable = judge_env is not None and judged_by == "judge_unavailable"
     return {"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "arm": arm, "suite": JUDGE_SUITE if judge_env is not None else SUITE, "chrome_ver": pin, "task": task["id"],
-            "site": task["website"]["id"], "run": run, "model": "haiku", "pass": "judge_unavailable" if unavailable else int(ok and llm_ok == len(llm) and not j.get("is_error")), "evals_ok": k, "evals_vec": json.dumps(vec),
+            "site": task["website"]["id"], "run": run, "model": run_arm.driver_model(), "pass": "judge_unavailable" if unavailable else int(ok and llm_ok == len(llm) and not j.get("is_error")), "evals_ok": k, "evals_vec": json.dumps(vec),
             "evals_n": n, "state_ok": int(bool(st and st["ok"])), "checkpoints": tc["checkpoint"], "restores": tc["restore"],
             "forks": tc["fork"], "input_tokens": u.get("input_tokens", 0), "output_tokens": u.get("output_tokens", 0),
             "cache_read_tokens": u.get("cache_read_input_tokens", 0), "cache_create_tokens": u.get("cache_creation_input_tokens", 0),

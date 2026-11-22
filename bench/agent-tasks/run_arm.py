@@ -142,10 +142,16 @@ def tree_rss_mb(pid):
     return tot / 1048576
 
 
+def driver_model():
+    """W6.B1: the model that drives the agent. Default haiku (every pre-W6.B1 row); MANUK_DRIVER_MODEL=claude-sonnet-5-5
+    runs the Sonnet driver arm. real_run.py writes this value into every row's model column, so arms never mix."""
+    return os.environ.get("MANUK_DRIVER_MODEL") or "haiku"
+
+
 def run_claude(prompt, cfg, allowed, timeout, claude=None, cwd=None, sys_hint=None, env=None):
     fmt = ["--output-format", "stream-json", "--verbose"]
     hint = ["--append-system-prompt", sys_hint] if sys_hint else []
-    cmd = [claude or CLAUDE, "-p", "--model", "haiku", *fmt, *hint, "--mcp-config", cfg,
+    cmd = [claude or CLAUDE, "-p", "--model", driver_model(), *fmt, *hint, "--mcp-config", cfg,
            "--strict-mcp-config", "--allowedTools", allowed, "--permission-mode", "dontAsk",
            "--no-session-persistence", "--max-budget-usd", "1.00", prompt]
     t0 = time.time()
