@@ -69,43 +69,63 @@ def boot_ci(per_task, n=2000, seed=7):
 
 
 def main():
-    ap = argparse.ArgumentParser(); ap.add_argument("runs"); ap.add_argument("--out"); ap.add_argument("--judged")
+    ap = argparse.ArgumentParser(); ap.add_argument("runs", nargs="+"); ap.add_argument("--out"); ap.add_argument("--judged")
+    ap.add_argument("--group", default="1,2,3", help="W4.C3.a.a: the 3 run numbers that form one BoN-3 group; single = the first")
     a = ap.parse_args()
     pin = os.environ.get("MANUK_CHROME_PIN") or sys.exit("refusing: MANUK_CHROME_PIN unset")
-    import real_run  # the TSV's header line can land mid-file (parallel arms share it): read by COLS, skip header lines
-    rows = [dict(zip(real_run.COLS, l.split("\t"))) for l in open(a.runs).read().splitlines() if l and not l.startswith("ts\t")]
+    group = tuple(int(x) for x in a.group.split(","))
+    if len(group) != 3:
+        sys.exit("refusing: --group needs exactly 3 run numbers")
+    import real_run
+    rows = []
+    for f in a.runs:  # each file is read by its own header: the W4.C3.a TSV was written under an older COLS (no evals_vec/evals_n),
+        lines = open(f).read().splitlines()  # and a header line can land mid-file (parallel arms share it)
+        cols = next((l.split("\t") for l in lines if l.startswith("ts\t")), real_run.COLS)
+        for l in lines:
+            if not l or l.startswith("#"):
+                continue
+            if l.startswith("ts\t"):
+                cols = l.split("\t")
+                continue
+            rows.append(dict(zip(cols, l.split("\t"))))
     bad = {r["chrome_ver"] for r in rows} - {pin}
     bad and sys.exit(f"refusing: rows under chrome_ver {bad}, pin is {pin}")
     tasks, _ = load_tasks()
     out, jl = [], ["chrome_ver\tarm\ttask\tpick\tpicked_pass\tsingle_pass\toracle\tcand_pass\tjudge_usd\tjudge_s"]
-    print("arm\tn_tasks\tper-run pass (band)\tsingle(run1)\tBoN-3\tBoN CI95\toracle\tjudge-correct%\ttok/task single\ttok/task BoN\twall_s per success single\twall_s per success BoN")
-    summ = {}
+    print("arm\tgroup\tn_tasks\tper-run pass (band)\tsingle(run1)\tBoN-3\tBoN CI95\toracle\tjudge-correct%\ttok/task single\ttok/task BoN\twall_s per success single\twall_s per success BoN"
+          "\tpaired BoN-single\tpaired diff CI95\tCI excludes 0")
     for arm in ["manuk", "cdp-layer", "playwright"]:
         R = [r for r in rows if r["arm"] == arm]
         by = {}
         for r in R:
             by.setdefault(r["task"], {})[int(r["run"])] = r
-        full = {t: v for t, v in by.items() if len(v) == 3}
+        full = {t: {k: v[k] for k in group} for t, v in by.items() if all(k in v for k in group)}
         if not full:
             continue
-        per_run = [sum(int(v[k]["pass"]) for v in full.values()) for k in (1, 2, 3)]
+        per_run = [sum(int(v[k]["pass"]) for v in full.values()) for k in group]
         sing, bon, orc, jc, jusd, jsec = [], [], [], 0, 0.0, 0.0
         for t, v in sorted(full.items()):
-            cs = [candidate(arm, t, k) for k in (1, 2, 3)]
-            ps = [int(v[k]["pass"]) for k in (1, 2, 3)]
+            cs = [candidate(arm, t, k) for k in group]
+            ps = [int(v[k]["pass"]) for k in group]
             pick, usd, sec = judge(tasks[t]["goal"], cs)
             jusd += usd; jsec += sec
             sing.append(ps[0]); bon.append(ps[pick]); orc.append(int(any(ps)))
             jc += int(ps[pick] == int(any(ps)))
             jl.append(f"{pin}\t{arm}\t{t}\t{pick+1}\t{ps[pick]}\t{ps[0]}\t{int(any(ps))}\t{''.join(map(str, ps))}\t{usd:.4f}\t{sec:.1f}")
         n = len(full)
-        tok1 = statistics.mean(int(v[1]["input_tokens"]) + int(v[1]["output_tokens"]) for v in full.values())
+        g0 = group[0]
+        tok1 = statistics.mean(int(v[g0]["input_tokens"]) + int(v[g0]["output_tokens"]) for v in full.values())
         tok3 = 3 * statistics.mean(int(x["input_tokens"]) + int(x["output_tokens"]) for v in full.values() for x in v.values())
-        w1 = sum(float(v[1]["seconds"]) for v in full.values()); w3 = sum(float(x["seconds"]) for v in full.values() for x in v.values()) + jsec
+        w1 = sum(float(v[g0]["seconds"]) for v in full.values()); w3 = sum(float(x["seconds"]) for v in full.values() for x in v.values()) + jsec
         lo, hi = boot_ci(bon)
+        # paired: per task, BoN minus single (same task, same group); the CI is a task bootstrap of the summed difference
+        diff = [b - s for b, s in zip(bon, sing)]
+        dlo, dhi = boot_ci(diff)
         ws = lambda w, s: f"{w/max(1,s):.0f}" if s else "n/a"
-        line = (f"{arm}\t{n}\t{per_run} ({min(per_run)}-{max(per_run)})\t{sum(sing)}\t{sum(bon)}\t{lo}-{hi}\t{sum(orc)}\t{100*jc/n:.0f}\t{tok1:.0f}\t{tok3:.0f}"
-                f"\t{ws(w1, sum(sing))}\t{ws(w3, sum(bon))}\tjudge ${jusd:.2f}")
+        excl = "yes" if dlo > 0 or dhi < 0 else "no"
+        gname = ",".join(map(str, group))
+        line = (f"{arm}\t{gname}\t{n}\t{per_run} ({min(per_run)}-{max(per_run)})\t{sum(sing)}\t{sum(bon)}\t{lo}-{hi}\t{sum(orc)}\t{100*jc/n:.0f}\t{tok1:.0f}\t{tok3:.0f}"
+                f"\t{ws(w1, sum(sing))}\t{ws(w3, sum(bon))}\tjudge ${jusd:.2f}\t{sum(diff):+d}\t{dlo:+d}..{dhi:+d}\t{excl}")
         print(line); out.append(line)
     if a.judged:
         open(a.judged, "w").write("\n".join(jl) + "\n")
