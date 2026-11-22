@@ -1,0 +1,414 @@
+chrome_ver	arm	task	run	turn	tool	result_bytes	output_tokens	thinking_tokens
+145.0.7632.116	playwright+preload	L01	1	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	32421	100	37
+145.0.7632.116	playwright+preload	L01	1	2		0	170	64
+145.0.7632.116	playwright+preload	L02	1	1	mcp__browser__browser_navigate+mcp__browser__browser_find	1757	93	0
+145.0.7632.116	playwright+preload	L02	1	2		0	75	0
+145.0.7632.116	playwright+preload	L03	1	1	mcp__browser__browser_navigate+mcp__browser__browser_find	1150	101	48
+145.0.7632.116	playwright+preload	L03	1	2	mcp__browser__browser_click+mcp__browser__browser_find	877	146	0
+145.0.7632.116	playwright+preload	L03	1	3		0	134	0
+145.0.7632.116	playwright+preload	L04	1	1	mcp__browser__browser_navigate+mcp__browser__browser_find	1032	87	0
+145.0.7632.116	playwright+preload	L04	1	2	mcp__browser__browser_navigate+mcp__browser__browser_find	862	106	0
+145.0.7632.116	playwright+preload	L04	1	3		0	167	0
+145.0.7632.116	playwright+preload	L05	1	1	mcp__browser__browser_navigate+mcp__browser__browser_find	1032	89	0
+145.0.7632.116	playwright+preload	L05	1	2	mcp__browser__browser_navigate+mcp__browser__browser_find	1433	113	0
+145.0.7632.116	playwright+preload	L05	1	3		0	115	0
+145.0.7632.116	playwright+preload	L06	1	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	31937	124	0
+145.0.7632.116	playwright+preload	L06	1	2		0	187	119
+145.0.7632.116	playwright+preload	L07	1	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	32421	112	57
+145.0.7632.116	playwright+preload	L07	1	2		0	297	152
+145.0.7632.116	playwright+preload	L08	1	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	9276	77	99
+145.0.7632.116	playwright+preload	L08	1	2		0	216	0
+145.0.7632.116	playwright+preload	L09	1	1	mcp__browser__browser_navigate+mcp__browser__browser_find	2118	96	71
+145.0.7632.116	playwright+preload	L09	1	2	mcp__browser__browser_click	263	76	0
+145.0.7632.116	playwright+preload	L09	1	3	mcp__browser__browser_evaluate	122	81	0
+145.0.7632.116	playwright+preload	L09	1	4		0	189	0
+145.0.7632.116	playwright+preload	L10	1	1	mcp__browser__browser_navigate+mcp__browser__browser_find	958	79	0
+145.0.7632.116	playwright+preload	L10	1	2	mcp__browser__browser_click+mcp__browser__browser_find	808	91	0
+145.0.7632.116	playwright+preload	L10	1	3		0	206	0
+145.0.7632.116	playwright+preload	L11	1	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	3901	66	51
+145.0.7632.116	playwright+preload	L11	1	2		0	175	0
+145.0.7632.116	playwright+preload	L12	1	1	mcp__browser__browser_navigate+mcp__browser__browser_evaluate	583	103	55
+145.0.7632.116	playwright+preload	L12	1	2	mcp__browser__browser_evaluate	537	232	0
+145.0.7632.116	playwright+preload	L12	1	3	mcp__browser__browser_evaluate	1410	140	0
+145.0.7632.116	playwright+preload	L12	1	4		0	136	0
+145.0.7632.116	playwright+preload	L13	1	1	mcp__browser__browser_navigate+mcp__browser__browser_navigate	584	107	0
+145.0.7632.116	playwright+preload	L13	1	2	mcp__browser__browser_snapshot	11804	23	33
+145.0.7632.116	playwright+preload	L13	1	3		0	164	0
+145.0.7632.116	playwright+preload	L14	1	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1878	99	0
+145.0.7632.116	playwright+preload	L14	1	2		0	367	256
+145.0.7632.116	playwright+preload	L15	1	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	4076	79	34
+145.0.7632.116	playwright+preload	L15	1	2		0	114	0
+145.0.7632.116	playwright+preload	L16	1	1	mcp__browser__browser_navigate+mcp__browser__browser_find	2013	116	66
+145.0.7632.116	playwright+preload	L16	1	2	mcp__browser__browser_find	8499	43	25
+145.0.7632.116	playwright+preload	L16	1	3		0	237	0
+145.0.7632.116	playwright+preload	L17	1	1	mcp__browser__browser_navigate+mcp__browser__browser_find	1002	108	32
+145.0.7632.116	playwright+preload	L17	1	2	mcp__browser__browser_evaluate	380	233	68
+145.0.7632.116	playwright+preload	L17	1	3	mcp__browser__browser_evaluate	1501	186	0
+145.0.7632.116	playwright+preload	L17	1	4		0	189	55
+145.0.7632.116	playwright+preload	L18	1	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1653	104	54
+145.0.7632.116	playwright+preload	L18	1	2	mcp__browser__browser_evaluate	194	132	69
+145.0.7632.116	playwright+preload	L18	1	3	mcp__browser__browser_evaluate	1375	138	0
+145.0.7632.116	playwright+preload	L18	1	4		0	160	0
+145.0.7632.116	playwright+preload	L19	1	1	mcp__browser__browser_navigate+mcp__browser__browser_find	5809	87	0
+145.0.7632.116	playwright+preload	L19	1	2		0	124	0
+145.0.7632.116	playwright+preload	L20	1	1	mcp__browser__browser_navigate+mcp__browser__browser_find	13159	114	55
+145.0.7632.116	playwright+preload	L20	1	2	mcp__browser__browser_evaluate	367	241	116
+145.0.7632.116	playwright+preload	L20	1	3		0	180	0
+145.0.7632.116	playwright+preload	L21	1	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	2531	102	42
+145.0.7632.116	playwright+preload	L21	1	2	mcp__browser__browser_click+mcp__browser__browser_type	383	189	0
+145.0.7632.116	playwright+preload	L21	1	3	mcp__browser__browser_type	64	124	0
+145.0.7632.116	playwright+preload	L21	1	4	mcp__browser__browser_snapshot	6782	38	0
+145.0.7632.116	playwright+preload	L21	1	5	mcp__browser__browser_type	374	183	0
+145.0.7632.116	playwright+preload	L21	1	6	mcp__browser__browser_find	13206	38	0
+145.0.7632.116	playwright+preload	L21	1	7		0	216	0
+145.0.7632.116	playwright+preload	L22	1	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1692	94	41
+145.0.7632.116	playwright+preload	L22	1	2	mcp__browser__browser_evaluate	281	144	64
+145.0.7632.116	playwright+preload	L22	1	3		0	171	0
+145.0.7632.116	playwright+preload	L23	1	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	32421	87	69
+145.0.7632.116	playwright+preload	L23	1	2	mcp__browser__browser_click+mcp__browser__browser_find	839	107	0
+145.0.7632.116	playwright+preload	L23	1	3		0	185	0
+145.0.7632.116	playwright+preload	L24	1	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1692	78	33
+145.0.7632.116	playwright+preload	L24	1	2	mcp__browser__browser_evaluate	481	169	71
+145.0.7632.116	playwright+preload	L24	1	3		0	232	0
+145.0.7632.116	playwright+preload	L25	1	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	31937	129	59
+145.0.7632.116	playwright+preload	L25	1	2		0	196	90
+145.0.7632.116	playwright+preload	F01	1	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	766	74	35
+145.0.7632.116	playwright+preload	F01	1	2	mcp__browser__browser_fill_form+mcp__browser__browser_click	431	195	0
+145.0.7632.116	playwright+preload	F01	1	3	mcp__browser__browser_snapshot	317	23	0
+145.0.7632.116	playwright+preload	F01	1	4		0	183	0
+145.0.7632.116	playwright+preload	F02	1	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	766	78	26
+145.0.7632.116	playwright+preload	F02	1	2	mcp__browser__browser_fill_form+mcp__browser__browser_click+mcp__browser__browser_snapshot	748	230	0
+145.0.7632.116	playwright+preload	F02	1	3	mcp__browser__browser_click	333	57	0
+145.0.7632.116	playwright+preload	F02	1	4	mcp__browser__browser_snapshot	394	25	0
+145.0.7632.116	playwright+preload	F02	1	5	mcp__browser__browser_fill_form+mcp__browser__browser_click+mcp__browser__browser_snapshot	733	231	0
+145.0.7632.116	playwright+preload	F02	1	6		0	213	0
+145.0.7632.116	playwright+preload	F03	1	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	798	77	0
+145.0.7632.116	playwright+preload	F03	1	2	mcp__browser__browser_fill_form+mcp__browser__browser_click	432	206	0
+145.0.7632.116	playwright+preload	F03	1	3	mcp__browser__browser_snapshot	492	24	0
+145.0.7632.116	playwright+preload	F03	1	4	mcp__browser__browser_click	250	53	0
+145.0.7632.116	playwright+preload	F03	1	5	mcp__browser__browser_click	253	54	0
+145.0.7632.116	playwright+preload	F03	1	6	mcp__browser__browser_snapshot	304	24	0
+145.0.7632.116	playwright+preload	F03	1	7	mcp__browser__browser_click	257	136	0
+145.0.7632.116	playwright+preload	F03	1	8	mcp__browser__browser_snapshot	233	24	0
+145.0.7632.116	playwright+preload	F03	1	9		0	196	0
+145.0.7632.116	playwright+preload	F04	1	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1310	89	65
+145.0.7632.116	playwright+preload	F04	1	2	mcp__browser__browser_fill_form+mcp__browser__browser_fill_form	298	219	0
+145.0.7632.116	playwright+preload	F04	1	3	mcp__browser__browser_click+mcp__browser__browser_click	386	147	0
+145.0.7632.116	playwright+preload	F04	1	4	mcp__browser__browser_snapshot	360	28	21
+145.0.7632.116	playwright+preload	F04	1	5	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1196	138	101
+145.0.7632.116	playwright+preload	F04	1	6	mcp__browser__browser_click	294	75	0
+145.0.7632.116	playwright+preload	F04	1	7	mcp__browser__browser_snapshot	401	28	0
+145.0.7632.116	playwright+preload	F04	1	8	mcp__browser__browser_click+mcp__browser__browser_snapshot	499	155	0
+145.0.7632.116	playwright+preload	F04	1	9		0	396	0
+145.0.7632.116	playwright+preload	F05	1	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1532	85	47
+145.0.7632.116	playwright+preload	F05	1	2	mcp__browser__browser_click+mcp__browser__browser_snapshot	651	147	0
+145.0.7632.116	playwright+preload	F05	1	3	mcp__browser__browser_click+mcp__browser__browser_snapshot	499	138	0
+145.0.7632.116	playwright+preload	F05	1	4		0	138	0
+145.0.7632.116	playwright+preload	F06	1	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	577	89	26
+145.0.7632.116	playwright+preload	F06	1	2	mcp__browser__browser_click+mcp__browser__browser_snapshot	631	93	0
+145.0.7632.116	playwright+preload	F06	1	3	mcp__browser__browser_fill_form	112	112	0
+145.0.7632.116	playwright+preload	F06	1	4	mcp__browser__browser_click+mcp__browser__browser_snapshot	557	91	0
+145.0.7632.116	playwright+preload	F06	1	5		0	218	64
+145.0.7632.116	playwright+preload	F07	1	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	751	86	0
+145.0.7632.116	playwright+preload	F07	1	2	mcp__browser__browser_click	282	63	0
+145.0.7632.116	playwright+preload	F07	1	3	mcp__browser__browser_snapshot	259	27	0
+145.0.7632.116	playwright+preload	F07	1	4		0	95	0
+145.0.7632.116	playwright+preload	F08	1	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	972	63	12
+145.0.7632.116	playwright+preload	F08	1	2	mcp__browser__browser_run_code_unsafe	1483	295	56
+145.0.7632.116	playwright+preload	F08	1	3		0	120	0
+145.0.7632.116	playwright+preload	F09	1	1	mcp__browser__browser_navigate+mcp__browser__browser_find	409	158	69
+145.0.7632.116	playwright+preload	F09	1	2	mcp__browser__browser_snapshot	1265	44	0
+145.0.7632.116	playwright+preload	F09	1	3	mcp__browser__browser_navigate	261	108	47
+145.0.7632.116	playwright+preload	F09	1	4	mcp__browser__browser_snapshot	1312	44	0
+145.0.7632.116	playwright+preload	F09	1	5		0	200	87
+145.0.7632.116	playwright+preload	F10	1	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	733	69	0
+145.0.7632.116	playwright+preload	F10	1	2	mcp__browser__browser_click	281	47	0
+145.0.7632.116	playwright+preload	F10	1	3	mcp__browser__browser_snapshot	374	21	0
+145.0.7632.116	playwright+preload	F10	1	4		0	190	0
+145.0.7632.116	playwright+preload	F11	1	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1221	83	0
+145.0.7632.116	playwright+preload	F11	1	2	mcp__browser__browser_select_option+mcp__browser__browser_click+mcp__browser__browser_snapshot	1218	138	0
+145.0.7632.116	playwright+preload	F11	1	3		0	168	0
+145.0.7632.116	playwright+preload	F12	1	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	661	112	0
+145.0.7632.116	playwright+preload	F12	1	2		0	219	130
+145.0.7632.116	playwright+preload	F13	1	1	mcp__browser__browser_navigate	377	104	68
+145.0.7632.116	playwright+preload	F13	1	2	mcp__browser__browser_snapshot	432	43	0
+145.0.7632.116	playwright+preload	F13	1	3		0	407	265
+145.0.7632.116	playwright+preload	F14	1	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	816	130	0
+145.0.7632.116	playwright+preload	F14	1	2		0	330	257
+145.0.7632.116	playwright+preload	F15	1	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	646	96	0
+145.0.7632.116	playwright+preload	F15	1	2		0	119	61
+145.0.7632.116	playwright+preload	L01	2	1	mcp__browser__browser_navigate+mcp__browser__browser_find	1032	136	59
+145.0.7632.116	playwright+preload	L01	2	2		0	226	99
+145.0.7632.116	playwright+preload	L02	2	1	mcp__browser__browser_navigate+mcp__browser__browser_find	1757	122	46
+145.0.7632.116	playwright+preload	L02	2	2		0	193	74
+145.0.7632.116	playwright+preload	L03	2	1	mcp__browser__browser_navigate+mcp__browser__browser_find	1150	109	36
+145.0.7632.116	playwright+preload	L03	2	2	mcp__browser__browser_click+mcp__browser__browser_find	843	120	0
+145.0.7632.116	playwright+preload	L03	2	3		0	203	68
+145.0.7632.116	playwright+preload	L04	2	1	mcp__browser__browser_navigate+mcp__browser__browser_find	1032	89	0
+145.0.7632.116	playwright+preload	L04	2	2	mcp__browser__browser_navigate+mcp__browser__browser_find	862	109	0
+145.0.7632.116	playwright+preload	L04	2	3		0	136	0
+145.0.7632.116	playwright+preload	L05	2	1	mcp__browser__browser_navigate+mcp__browser__browser_find	1032	97	40
+145.0.7632.116	playwright+preload	L05	2	2	mcp__browser__browser_navigate+mcp__browser__browser_find	1433	124	0
+145.0.7632.116	playwright+preload	L05	2	3		0	151	0
+145.0.7632.116	playwright+preload	L06	2	1	mcp__browser__browser_navigate+mcp__browser__browser_find	817	144	86
+145.0.7632.116	playwright+preload	L06	2	2	mcp__browser__browser_click	416	90	0
+145.0.7632.116	playwright+preload	L06	2	3	mcp__browser__browser_find	16673	80	0
+145.0.7632.116	playwright+preload	L06	2	4		0	269	161
+145.0.7632.116	playwright+preload	L07	2	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	32421	115	57
+145.0.7632.116	playwright+preload	L07	2	2		0	210	105
+145.0.7632.116	playwright+preload	L08	2	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	9244	72	49
+145.0.7632.116	playwright+preload	L08	2	2		0	152	0
+145.0.7632.116	playwright+preload	L09	2	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	9276	82	43
+145.0.7632.116	playwright+preload	L09	2	2	mcp__browser__browser_click	263	59	0
+145.0.7632.116	playwright+preload	L09	2	3	mcp__browser__browser_evaluate	122	77	0
+145.0.7632.116	playwright+preload	L09	2	4		0	158	0
+145.0.7632.116	playwright+preload	L10	2	1	mcp__browser__browser_navigate+mcp__browser__browser_find	958	78	0
+145.0.7632.116	playwright+preload	L10	2	2	mcp__browser__browser_navigate+mcp__browser__browser_find	678	89	0
+145.0.7632.116	playwright+preload	L10	2	3		0	202	0
+145.0.7632.116	playwright+preload	L11	2	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	3901	68	66
+145.0.7632.116	playwright+preload	L11	2	2		0	213	0
+145.0.7632.116	playwright+preload	L12	2	1	mcp__browser__browser_navigate+mcp__browser__browser_evaluate	496	108	72
+145.0.7632.116	playwright+preload	L12	2	2	mcp__browser__browser_evaluate	536	244	0
+145.0.7632.116	playwright+preload	L12	2	3	mcp__browser__browser_evaluate	666	114	0
+145.0.7632.116	playwright+preload	L12	2	4		0	175	0
+145.0.7632.116	playwright+preload	L13	2	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	11974	100	0
+145.0.7632.116	playwright+preload	L13	2	2		0	289	181
+145.0.7632.116	playwright+preload	L14	2	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1878	71	0
+145.0.7632.116	playwright+preload	L14	2	2	mcp__browser__browser_evaluate	247	242	170
+145.0.7632.116	playwright+preload	L14	2	3		0	241	0
+145.0.7632.116	playwright+preload	L15	2	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	4108	113	131
+145.0.7632.116	playwright+preload	L15	2	2		0	184	0
+145.0.7632.116	playwright+preload	L16	2	1	mcp__browser__browser_navigate+mcp__browser__browser_find	2013	139	102
+145.0.7632.116	playwright+preload	L16	2	2	mcp__browser__browser_snapshot	356	47	35
+145.0.7632.116	playwright+preload	L16	2	3		0	237	0
+145.0.7632.116	playwright+preload	L17	2	1	mcp__browser__browser_navigate+mcp__browser__browser_find	1002	128	40
+145.0.7632.116	playwright+preload	L17	2	2	mcp__browser__browser_find	50	45	14
+145.0.7632.116	playwright+preload	L17	2	3	mcp__browser__browser_snapshot	1332	36	0
+145.0.7632.116	playwright+preload	L17	2	4	mcp__browser__browser_evaluate	445	250	77
+145.0.7632.116	playwright+preload	L17	2	5	mcp__browser__browser_evaluate	1126	191	59
+145.0.7632.116	playwright+preload	L17	2	6		0	190	0
+145.0.7632.116	playwright+preload	L18	2	1	mcp__browser__browser_navigate+mcp__browser__browser_find	5171	119	49
+145.0.7632.116	playwright+preload	L18	2	2		0	314	129
+145.0.7632.116	playwright+preload	L19	2	1	mcp__browser__browser_navigate+mcp__browser__browser_find	5809	85	45
+145.0.7632.116	playwright+preload	L19	2	2		0	212	0
+145.0.7632.116	playwright+preload	L20	2	1	mcp__browser__browser_navigate+mcp__browser__browser_find	13159	133	89
+145.0.7632.116	playwright+preload	L20	2	2	mcp__browser__browser_evaluate	1137	155	104
+145.0.7632.116	playwright+preload	L20	2	3		0	212	0
+145.0.7632.116	playwright+preload	L21	2	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	2531	104	52
+145.0.7632.116	playwright+preload	L21	2	2	mcp__browser__browser_click+mcp__browser__browser_type	383	192	0
+145.0.7632.116	playwright+preload	L21	2	3	mcp__browser__browser_type	950	131	0
+145.0.7632.116	playwright+preload	L21	2	4	mcp__browser__browser_type	364	147	0
+145.0.7632.116	playwright+preload	L21	2	5	mcp__browser__browser_find	13206	39	20
+145.0.7632.116	playwright+preload	L21	2	6		0	240	0
+145.0.7632.116	playwright+preload	L22	2	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1692	79	80
+145.0.7632.116	playwright+preload	L22	2	2	mcp__browser__browser_find	1323	30	30
+145.0.7632.116	playwright+preload	L22	2	3	mcp__browser__browser_evaluate	278	186	0
+145.0.7632.116	playwright+preload	L22	2	4		0	253	0
+145.0.7632.116	playwright+preload	L23	2	1	mcp__browser__browser_navigate+mcp__browser__browser_find	1073	110	40
+145.0.7632.116	playwright+preload	L23	2	2	mcp__browser__browser_click+mcp__browser__browser_find	839	121	0
+145.0.7632.116	playwright+preload	L23	2	3		0	240	86
+145.0.7632.116	playwright+preload	L24	2	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1692	78	32
+145.0.7632.116	playwright+preload	L24	2	2	mcp__browser__browser_evaluate	486	172	72
+145.0.7632.116	playwright+preload	L24	2	3		0	237	0
+145.0.7632.116	playwright+preload	L25	2	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	31940	140	57
+145.0.7632.116	playwright+preload	L25	2	2		0	116	48
+145.0.7632.116	playwright+preload	F01	2	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	766	77	48
+145.0.7632.116	playwright+preload	F01	2	2	mcp__browser__browser_fill_form+mcp__browser__browser_click	431	202	0
+145.0.7632.116	playwright+preload	F01	2	3	mcp__browser__browser_snapshot	317	24	0
+145.0.7632.116	playwright+preload	F01	2	4		0	178	0
+145.0.7632.116	playwright+preload	F02	2	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	766	78	30
+145.0.7632.116	playwright+preload	F02	2	2	mcp__browser__browser_fill_form+mcp__browser__browser_click+mcp__browser__browser_snapshot	748	229	0
+145.0.7632.116	playwright+preload	F02	2	3	mcp__browser__browser_click+mcp__browser__browser_snapshot	727	109	0
+145.0.7632.116	playwright+preload	F02	2	4	mcp__browser__browser_fill_form+mcp__browser__browser_click+mcp__browser__browser_snapshot	733	230	0
+145.0.7632.116	playwright+preload	F02	2	5		0	197	0
+145.0.7632.116	playwright+preload	F03	2	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	798	79	0
+145.0.7632.116	playwright+preload	F03	2	2	mcp__browser__browser_fill_form+mcp__browser__browser_click	432	210	0
+145.0.7632.116	playwright+preload	F03	2	3	mcp__browser__browser_snapshot	492	25	0
+145.0.7632.116	playwright+preload	F03	2	4	mcp__browser__browser_click	250	54	0
+145.0.7632.116	playwright+preload	F03	2	5	mcp__browser__browser_click	253	55	0
+145.0.7632.116	playwright+preload	F03	2	6	mcp__browser__browser_snapshot	304	25	0
+145.0.7632.116	playwright+preload	F03	2	7	mcp__browser__browser_click	257	142	0
+145.0.7632.116	playwright+preload	F03	2	8	mcp__browser__browser_snapshot	233	25	0
+145.0.7632.116	playwright+preload	F03	2	9		0	170	0
+145.0.7632.116	playwright+preload	F04	2	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1310	92	53
+145.0.7632.116	playwright+preload	F04	2	2	mcp__browser__browser_fill_form+mcp__browser__browser_click	443	185	0
+145.0.7632.116	playwright+preload	F04	2	3	mcp__browser__browser_snapshot	360	29	17
+145.0.7632.116	playwright+preload	F04	2	4	mcp__browser__browser_click+mcp__browser__browser_snapshot	1213	171	0
+145.0.7632.116	playwright+preload	F04	2	5	mcp__browser__browser_click+mcp__browser__browser_snapshot	695	108	0
+145.0.7632.116	playwright+preload	F04	2	6	mcp__browser__browser_click+mcp__browser__browser_snapshot	499	157	0
+145.0.7632.116	playwright+preload	F04	2	7		0	143	0
+145.0.7632.116	playwright+preload	F05	2	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1532	90	31
+145.0.7632.116	playwright+preload	F05	2	2	mcp__browser__browser_click	290	141	48
+145.0.7632.116	playwright+preload	F05	2	3	mcp__browser__browser_snapshot	361	29	0
+145.0.7632.116	playwright+preload	F05	2	4	mcp__browser__browser_click+mcp__browser__browser_snapshot	499	146	0
+145.0.7632.116	playwright+preload	F05	2	5		0	138	0
+145.0.7632.116	playwright+preload	F06	2	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	577	89	21
+145.0.7632.116	playwright+preload	F06	2	2	mcp__browser__browser_click	275	65	0
+145.0.7632.116	playwright+preload	F06	2	3	mcp__browser__browser_snapshot	356	28	0
+145.0.7632.116	playwright+preload	F06	2	4	mcp__browser__browser_fill_form	112	112	0
+145.0.7632.116	playwright+preload	F06	2	5	mcp__browser__browser_click+mcp__browser__browser_snapshot	557	91	0
+145.0.7632.116	playwright+preload	F06	2	6		0	120	0
+145.0.7632.116	playwright+preload	F07	2	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	751	81	0
+145.0.7632.116	playwright+preload	F07	2	2	mcp__browser__browser_click	282	60	0
+145.0.7632.116	playwright+preload	F07	2	3	mcp__browser__browser_snapshot	259	26	0
+145.0.7632.116	playwright+preload	F07	2	4		0	116	0
+145.0.7632.116	playwright+preload	F08	2	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	972	61	0
+145.0.7632.116	playwright+preload	F08	2	2	mcp__browser__browser_evaluate	338	231	28
+145.0.7632.116	playwright+preload	F08	2	3	mcp__browser__browser_evaluate	249	97	0
+145.0.7632.116	playwright+preload	F08	2	4		0	107	0
+145.0.7632.116	playwright+preload	F09	2	1	mcp__browser__browser_navigate+mcp__browser__browser_find	409	176	82
+145.0.7632.116	playwright+preload	F09	2	2	mcp__browser__browser_snapshot	1265	50	23
+145.0.7632.116	playwright+preload	F09	2	3	mcp__browser__browser_navigate	261	120	56
+145.0.7632.116	playwright+preload	F09	2	4	mcp__browser__browser_snapshot	1312	49	0
+145.0.7632.116	playwright+preload	F09	2	5		0	216	101
+145.0.7632.116	playwright+preload	F10	2	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	733	79	0
+145.0.7632.116	playwright+preload	F10	2	2	mcp__browser__browser_click+mcp__browser__browser_snapshot	655	79	0
+145.0.7632.116	playwright+preload	F10	2	3		0	130	0
+145.0.7632.116	playwright+preload	F11	2	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1221	85	0
+145.0.7632.116	playwright+preload	F11	2	2	mcp__browser__browser_select_option+mcp__browser__browser_click+mcp__browser__browser_snapshot	1218	118	0
+145.0.7632.116	playwright+preload	F11	2	3		0	156	0
+145.0.7632.116	playwright+preload	F12	2	1	mcp__browser__browser_navigate	370	99	0
+145.0.7632.116	playwright+preload	F12	2	2	mcp__browser__browser_snapshot	291	43	0
+145.0.7632.116	playwright+preload	F12	2	3		0	103	99
+145.0.7632.116	playwright+preload	F13	2	1	mcp__browser__browser_navigate	377	124	0
+145.0.7632.116	playwright+preload	F13	2	2	mcp__browser__browser_snapshot	432	52	0
+145.0.7632.116	playwright+preload	F13	2	3		0	393	378
+145.0.7632.116	playwright+preload	F14	2	1	mcp__browser__browser_navigate	374	219	0
+145.0.7632.116	playwright+preload	F14	2	2	mcp__browser__browser_snapshot	442	97	0
+145.0.7632.116	playwright+preload	F14	2	3		0	241	409
+145.0.7632.116	playwright+preload	F15	2	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	646	98	0
+145.0.7632.116	playwright+preload	F15	2	2		0	131	66
+145.0.7632.116	playwright+preload	L01	3	1	mcp__browser__browser_navigate+mcp__browser__browser_find	1032	136	56
+145.0.7632.116	playwright+preload	L01	3	2		0	201	82
+145.0.7632.116	playwright+preload	L02	3	1	mcp__browser__browser_navigate+mcp__browser__browser_find	1757	127	49
+145.0.7632.116	playwright+preload	L02	3	2		0	183	70
+145.0.7632.116	playwright+preload	L03	3	1	mcp__browser__browser_navigate+mcp__browser__browser_find	1150	102	53
+145.0.7632.116	playwright+preload	L03	3	2	mcp__browser__browser_click+mcp__browser__browser_find	862	134	0
+145.0.7632.116	playwright+preload	L03	3	3		0	143	0
+145.0.7632.116	playwright+preload	L04	3	1	mcp__browser__browser_navigate+mcp__browser__browser_find	1032	96	31
+145.0.7632.116	playwright+preload	L04	3	2	mcp__browser__browser_navigate+mcp__browser__browser_find	862	118	0
+145.0.7632.116	playwright+preload	L04	3	3		0	155	0
+145.0.7632.116	playwright+preload	L05	3	1	mcp__browser__browser_navigate+mcp__browser__browser_find	1032	91	45
+145.0.7632.116	playwright+preload	L05	3	2	mcp__browser__browser_navigate+mcp__browser__browser_find	1433	116	0
+145.0.7632.116	playwright+preload	L05	3	3		0	188	0
+145.0.7632.116	playwright+preload	L06	3	1	mcp__browser__browser_navigate+mcp__browser__browser_find	16454	150	69
+145.0.7632.116	playwright+preload	L06	3	2		0	226	105
+145.0.7632.116	playwright+preload	L07	3	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	32421	74	59
+145.0.7632.116	playwright+preload	L07	3	2		0	176	0
+145.0.7632.116	playwright+preload	L08	3	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	9154	69	41
+145.0.7632.116	playwright+preload	L08	3	2		0	147	0
+145.0.7632.116	playwright+preload	L09	3	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	9244	112	54
+145.0.7632.116	playwright+preload	L09	3	2	mcp__browser__browser_click+mcp__browser__browser_snapshot	11610	115	0
+145.0.7632.116	playwright+preload	L09	3	3		0	318	155
+145.0.7632.116	playwright+preload	L10	3	1	mcp__browser__browser_navigate+mcp__browser__browser_find	874	83	0
+145.0.7632.116	playwright+preload	L10	3	2	mcp__browser__browser_find+mcp__browser__browser_navigate	315	90	0
+145.0.7632.116	playwright+preload	L10	3	3	mcp__browser__browser_snapshot	3220	22	0
+145.0.7632.116	playwright+preload	L10	3	4		0	207	0
+145.0.7632.116	playwright+preload	L11	3	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	3901	66	51
+145.0.7632.116	playwright+preload	L11	3	2		0	194	0
+145.0.7632.116	playwright+preload	L12	3	1	mcp__browser__browser_navigate+mcp__browser__browser_evaluate	763	193	54
+145.0.7632.116	playwright+preload	L12	3	2	mcp__browser__browser_evaluate	1825	210	58
+145.0.7632.116	playwright+preload	L12	3	3		0	250	0
+145.0.7632.116	playwright+preload	L13	3	1	mcp__browser__browser_navigate+mcp__browser__browser_navigate	494	115	0
+145.0.7632.116	playwright+preload	L13	3	2	mcp__browser__browser_snapshot	11804	25	53
+145.0.7632.116	playwright+preload	L13	3	3		0	167	0
+145.0.7632.116	playwright+preload	L14	3	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1878	69	0
+145.0.7632.116	playwright+preload	L14	3	2	mcp__browser__browser_evaluate	198	184	64
+145.0.7632.116	playwright+preload	L14	3	3		0	297	102
+145.0.7632.116	playwright+preload	L15	3	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	4108	89	48
+145.0.7632.116	playwright+preload	L15	3	2		0	108	0
+145.0.7632.116	playwright+preload	L16	3	1	mcp__browser__browser_navigate+mcp__browser__browser_find	2013	95	30
+145.0.7632.116	playwright+preload	L16	3	2	mcp__browser__browser_evaluate	329	185	57
+145.0.7632.116	playwright+preload	L16	3	3	mcp__browser__browser_evaluate	373	202	0
+145.0.7632.116	playwright+preload	L16	3	4		0	144	0
+145.0.7632.116	playwright+preload	L17	3	1	mcp__browser__browser_navigate+mcp__browser__browser_find	1173	114	45
+145.0.7632.116	playwright+preload	L17	3	2		0	130	0
+145.0.7632.116	playwright+preload	L18	3	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1653	93	35
+145.0.7632.116	playwright+preload	L18	3	2	mcp__browser__browser_evaluate	248	156	59
+145.0.7632.116	playwright+preload	L18	3	3	mcp__browser__browser_evaluate	1392	135	0
+145.0.7632.116	playwright+preload	L18	3	4		0	151	0
+145.0.7632.116	playwright+preload	L19	3	1	mcp__browser__browser_navigate+mcp__browser__browser_find	5809	93	0
+145.0.7632.116	playwright+preload	L19	3	2		0	102	0
+145.0.7632.116	playwright+preload	L20	3	1	mcp__browser__browser_navigate+mcp__browser__browser_find	13159	116	62
+145.0.7632.116	playwright+preload	L20	3	2	mcp__browser__browser_evaluate	381	259	137
+145.0.7632.116	playwright+preload	L20	3	3		0	192	0
+145.0.7632.116	playwright+preload	L21	3	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	2531	98	41
+145.0.7632.116	playwright+preload	L21	3	2	mcp__browser__browser_type	376	71	0
+145.0.7632.116	playwright+preload	L21	3	3	mcp__browser__browser_find	13206	37	16
+145.0.7632.116	playwright+preload	L21	3	4		0	226	0
+145.0.7632.116	playwright+preload	L22	3	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1692	80	0
+145.0.7632.116	playwright+preload	L22	3	2	mcp__browser__browser_evaluate	278	189	79
+145.0.7632.116	playwright+preload	L22	3	3		0	130	0
+145.0.7632.116	playwright+preload	L23	3	1	mcp__browser__browser_navigate+mcp__browser__browser_find	1073	99	51
+145.0.7632.116	playwright+preload	L23	3	2	mcp__browser__browser_click+mcp__browser__browser_find	839	110	0
+145.0.7632.116	playwright+preload	L23	3	3		0	160	0
+145.0.7632.116	playwright+preload	L24	3	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1785	81	31
+145.0.7632.116	playwright+preload	L24	3	2	mcp__browser__browser_evaluate	418	173	67
+145.0.7632.116	playwright+preload	L24	3	3		0	194	0
+145.0.7632.116	playwright+preload	L25	3	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	31937	119	44
+145.0.7632.116	playwright+preload	L25	3	2		0	147	54
+145.0.7632.116	playwright+preload	F01	3	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	766	77	40
+145.0.7632.116	playwright+preload	F01	3	2	mcp__browser__browser_fill_form+mcp__browser__browser_click	431	203	0
+145.0.7632.116	playwright+preload	F01	3	3	mcp__browser__browser_snapshot	317	24	0
+145.0.7632.116	playwright+preload	F01	3	4		0	148	0
+145.0.7632.116	playwright+preload	F02	3	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	766	81	30
+145.0.7632.116	playwright+preload	F02	3	2	mcp__browser__browser_fill_form+mcp__browser__browser_click+mcp__browser__browser_snapshot	748	240	0
+145.0.7632.116	playwright+preload	F02	3	3	mcp__browser__browser_click	333	60	0
+145.0.7632.116	playwright+preload	F02	3	4	mcp__browser__browser_snapshot	394	26	0
+145.0.7632.116	playwright+preload	F02	3	5	mcp__browser__browser_fill_form+mcp__browser__browser_click+mcp__browser__browser_snapshot	733	242	0
+145.0.7632.116	playwright+preload	F02	3	6		0	168	0
+145.0.7632.116	playwright+preload	F03	3	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	798	81	33
+145.0.7632.116	playwright+preload	F03	3	2	mcp__browser__browser_fill_form+mcp__browser__browser_click	432	215	0
+145.0.7632.116	playwright+preload	F03	3	3	mcp__browser__browser_snapshot	492	25	0
+145.0.7632.116	playwright+preload	F03	3	4	mcp__browser__browser_click	250	55	0
+145.0.7632.116	playwright+preload	F03	3	5	mcp__browser__browser_click	253	57	0
+145.0.7632.116	playwright+preload	F03	3	6	mcp__browser__browser_snapshot	304	25	0
+145.0.7632.116	playwright+preload	F03	3	7	mcp__browser__browser_click	257	143	0
+145.0.7632.116	playwright+preload	F03	3	8	mcp__browser__browser_snapshot	233	25	0
+145.0.7632.116	playwright+preload	F03	3	9		0	203	0
+145.0.7632.116	playwright+preload	F04	3	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1310	88	23
+145.0.7632.116	playwright+preload	F04	3	2	mcp__browser__browser_fill_form+mcp__browser__browser_click	443	181	0
+145.0.7632.116	playwright+preload	F04	3	3	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1196	169	44
+145.0.7632.116	playwright+preload	F04	3	4	mcp__browser__browser_fill_form+mcp__browser__browser_click+mcp__browser__browser_snapshot	844	215	57
+145.0.7632.116	playwright+preload	F04	3	5	mcp__browser__browser_click+mcp__browser__browser_snapshot	499	157	0
+145.0.7632.116	playwright+preload	F04	3	6		0	209	0
+145.0.7632.116	playwright+preload	F05	3	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1532	85	24
+145.0.7632.116	playwright+preload	F05	3	2	mcp__browser__browser_click	290	131	38
+145.0.7632.116	playwright+preload	F05	3	3	mcp__browser__browser_snapshot	361	27	0
+145.0.7632.116	playwright+preload	F05	3	4	mcp__browser__browser_click+mcp__browser__browser_snapshot	499	138	0
+145.0.7632.116	playwright+preload	F05	3	5		0	154	0
+145.0.7632.116	playwright+preload	F06	3	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	577	88	27
+145.0.7632.116	playwright+preload	F06	3	2	mcp__browser__browser_click+mcp__browser__browser_snapshot	631	93	0
+145.0.7632.116	playwright+preload	F06	3	3	mcp__browser__browser_fill_form	112	112	0
+145.0.7632.116	playwright+preload	F06	3	4	mcp__browser__browser_click+mcp__browser__browser_snapshot	557	91	0
+145.0.7632.116	playwright+preload	F06	3	5		0	244	73
+145.0.7632.116	playwright+preload	F07	3	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	751	84	0
+145.0.7632.116	playwright+preload	F07	3	2	mcp__browser__browser_click	282	62	0
+145.0.7632.116	playwright+preload	F07	3	3	mcp__browser__browser_snapshot	259	26	0
+145.0.7632.116	playwright+preload	F07	3	4		0	104	0
+145.0.7632.116	playwright+preload	F08	3	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	972	66	18
+145.0.7632.116	playwright+preload	F08	3	2	mcp__browser__browser_run_code_unsafe	1369	231	63
+145.0.7632.116	playwright+preload	F08	3	3		0	174	0
+145.0.7632.116	playwright+preload	F09	3	1	Bash	727	98	56
+145.0.7632.116	playwright+preload	F09	3	2	Agent	1773	458	260
+145.0.7632.116	playwright+preload	F09	3	3	WebFetch	731	203	0
+145.0.7632.116	playwright+preload	F09	3	4		0	495	282
+145.0.7632.116	playwright+preload	F10	3	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	733	71	0
+145.0.7632.116	playwright+preload	F10	3	2	mcp__browser__browser_click	281	49	0
+145.0.7632.116	playwright+preload	F10	3	3	mcp__browser__browser_snapshot	374	22	0
+145.0.7632.116	playwright+preload	F10	3	4		0	169	0
+145.0.7632.116	playwright+preload	F11	3	1	mcp__browser__browser_navigate+mcp__browser__browser_snapshot	1221	81	0
+145.0.7632.116	playwright+preload	F11	3	2	mcp__browser__browser_select_option+mcp__browser__browser_click+mcp__browser__browser_snapshot	1218	113	0
+145.0.7632.116	playwright+preload	F11	3	3		0	181	0
+145.0.7632.116	playwright+preload	F12	3	1	mcp__browser__browser_navigate	370	65	0
+145.0.7632.116	playwright+preload	F12	3	2	mcp__browser__browser_snapshot	291	28	0
+145.0.7632.116	playwright+preload	F12	3	3		0	201	95
+145.0.7632.116	playwright+preload	F13	3	1	mcp__browser__browser_navigate	377	96	0
+145.0.7632.116	playwright+preload	F13	3	2	mcp__browser__browser_snapshot+mcp__browser__browser_find	760	96	0
+145.0.7632.116	playwright+preload	F13	3	3		0	367	290
+145.0.7632.116	playwright+preload	F14	3	1	mcp__browser__browser_navigate	374	124	0
+145.0.7632.116	playwright+preload	F14	3	2	mcp__browser__browser_snapshot	442	55	0
+145.0.7632.116	playwright+preload	F14	3	3		0	435	415
+145.0.7632.116	playwright+preload	F15	3	1	mcp__browser__browser_navigate	369	90	50
+145.0.7632.116	playwright+preload	F15	3	2	mcp__browser__browser_snapshot	277	38	0
+145.0.7632.116	playwright+preload	F15	3	3		0	208	114

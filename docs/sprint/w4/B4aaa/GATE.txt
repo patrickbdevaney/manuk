@@ -1,0 +1,15 @@
+chrome_ver=145.0.7632.116 own suite x3 haiku
+| arm | pass per run (of 40) | in+out/task per run | mean in+out | out/task mean |
+|---|---|---|---|---|
+| manuk | [39, 38, 39] | [576, 492, 521] | 529 | 522 |
+| playwright+preload | [39, 39, 38] | [459, 473, 467] | 466 | 459 |
+gap in+out manuk/playwright+preload = +13.6% (B4 reference +40%); out gap +13.7%; manuk band 492-576 vs playwright+preload band 459-473
+VERDICT VALID
+chrome_ver=145.0.7632.116 own suite x3 haiku
+| arm | pass per run (of 40) | in+out/task per run | mean in+out | out/task mean |
+|---|---|---|---|---|
+| manuk | [39, 39, 38] | [459, 473, 467] | 466 | 459 |
+| playwright+preload | [39, 38, 39] | [576, 492, 521] | 529 | 522 |
+FAIL manuk: file holds rows of another arm
+FAIL playwright+preload: file holds rows of another arm
+VERDICT FAIL
