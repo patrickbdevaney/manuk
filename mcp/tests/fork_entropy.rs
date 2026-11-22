@@ -29,8 +29,12 @@ impl Client {
         if det {
             cmd.arg("--deterministic");
         }
+        // `--deterministic` page ids (a fork's entropy is derived from its id) are process-independent
+        // only when nothing is persisted, so the det runs get no log dir.
+        if !det {
+            cmd.env("MANUK_ACTLOG_DIR", log);
+        }
         let mut child = cmd
-            .env("MANUK_ACTLOG_DIR", log)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
@@ -190,16 +194,48 @@ fn manuk_forks_of_one_checkpoint_roll_distinct_dice() {
     assert_eq!(seen.len(), 3, "manuk forks rolled the same dice: {rolls:?}");
 }
 
-/// The gap, recorded: `--deterministic` seeds `Math.random` per page install, so every fork of a
-/// checkpoint draws the same first value. Red if that ever stops holding (it is then a gap closed).
+/// W4.C3.b.a (closes the gap recorded by W4.C3.b): under `--deterministic` each fork draws from a
+/// stream derived from its own page id, so 3 forks roll 3 distinct values, and the same fork (same id
+/// in an identical session) rolls the same value again.
+fn det_rolls(mutate: Option<&str>, tag: &str) -> Vec<(String, String)> {
+    if let Some(m) = mutate {
+        std::env::set_var("MANUK_MUTATE", m);
+    } else {
+        std::env::remove_var("MANUK_MUTATE");
+    }
+    let r = roll_in_forks(false, true, 3, tag);
+    std::env::remove_var("MANUK_MUTATE");
+    r
+}
+
+static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 #[test]
-fn manuk_deterministic_forks_roll_the_same_dice_the_recorded_gap() {
-    let rolls = roll_in_forks(false, true, 3, "manuk-det");
-    eprintln!("manuk --deterministic forks: {rolls:?}");
-    let first = &rolls[0].0;
+fn manuk_deterministic_forks_roll_distinct_dice_and_each_reproduces() {
+    let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let a = det_rolls(None, "det-a");
+    let b = det_rolls(None, "det-b");
+    eprintln!("manuk --deterministic forks: {a:?} / rerun {b:?}");
+    let mut seen: Vec<&String> = a.iter().map(|r| &r.0).collect();
+    seen.sort();
+    seen.dedup();
+    assert_eq!(
+        seen.len(),
+        3,
+        "deterministic forks rolled the same dice: {a:?}"
+    );
+    assert_eq!(a, b, "a fork id must re-roll exactly its own value");
+}
+
+/// Red proof: the pre-W4.C3.b.a behaviour (forks reseed from the parent) gives identical rolls.
+#[test]
+fn mutant_that_reseeds_forks_from_the_parent_gives_identical_rolls() {
+    let _g = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let rolls = det_rolls(Some("fork-salt-parent"), "det-mut");
+    eprintln!("mutant forks: {rolls:?}");
     assert!(
-        rolls.iter().all(|r| &r.0 == first),
-        "deterministic forks diverged: {rolls:?}"
+        rolls.iter().all(|r| r.0 == rolls[0].0),
+        "mutant should roll identically: {rolls:?}"
     );
 }
 

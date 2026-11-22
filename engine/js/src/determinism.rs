@@ -52,9 +52,45 @@ pub fn seed() -> u64 {
         .unwrap_or(DEFAULT_SEED)
 }
 
+/// W4.C3.b.a: 0 = the page draws from the process seed; non-zero = the page is a fork branch and
+/// draws from a stream derived from (seed, this salt). Set by the host around every call on a page.
+static PAGE_SALT: AtomicU64 = AtomicU64::new(0);
+
+pub fn set_page_salt(salt: u64) {
+    PAGE_SALT.store(salt, Ordering::SeqCst);
+}
+
+fn mix(mut z: u64) -> u64 {
+    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    z ^ (z >> 31)
+}
+
+/// The entropy seed for a page with `salt` (0 = the plain process seed, unchanged).
+pub fn seed_for(salt: u64) -> u64 {
+    if salt == 0 {
+        seed()
+    } else {
+        mix(seed() ^ mix(salt))
+    }
+}
+
+/// JS that moves a live page's `Math.random` (and the Rust `crypto` stream, via [`set_page_salt`] +
+/// [`reset`]) onto the fork stream for `salt`. Run once after a fork's prefix replay, so the replay
+/// itself still sees the recorded stream and stays verifiable. In place: a cached `Math.random`
+/// reference moves too.
+pub fn rekey_js(salt: u64) -> String {
+    let s = seed_for(salt);
+    format!(
+        "(globalThis.__rekeyRandom&&globalThis.__rekeyRandom({},{}),0)",
+        (s & 0xffff_ffff) as u32 | 1,
+        (s >> 32) as u32 ^ 0x9e37_79b9
+    )
+}
+
 /// Called per page install: each page starts from the same stream position.
 pub fn reset() {
-    CRYPTO_STATE.store(seed(), Ordering::SeqCst);
+    CRYPTO_STATE.store(seed_for(PAGE_SALT.load(Ordering::SeqCst)), Ordering::SeqCst);
 }
 
 /// splitmix64 over an atomic counter. Not a CSPRNG, and it must not be one: this mode trades
@@ -114,6 +150,7 @@ pub fn prelude_js() -> String {
   F.parse = D.parse; F.UTC = D.UTC;
   globalThis.Date = F;
   var s0 = {s0}, s1 = {s1}, s2 = {s2}, s3 = {s3};
+  Object.defineProperty(globalThis, '__rekeyRandom', {{ value: function (a, b) {{ s0 = a; s1 = b; s2 = 0x85ebca6b; s3 = 0xc2b2ae35; }}, enumerable: false, configurable: true, writable: true }});
   Math.random = function random() {{
     var t = s1 << 9, r = s0 * 5; r = ((r << 7) | (r >>> 25)) * 9;
     s2 ^= s0; s3 ^= s1; s1 ^= s2; s0 ^= s3; s2 ^= t; s3 = (s3 << 11) | (s3 >>> 21);
@@ -121,8 +158,8 @@ pub fn prelude_js() -> String {
   }};
 }})();"#,
         epoch = EPOCH_MS,
-        s0 = (seed() & 0xffff_ffff) as u32 | 1,
-        s1 = (seed() >> 32) as u32 ^ 0x9e37_79b9,
+        s0 = (seed_for(PAGE_SALT.load(Ordering::SeqCst)) & 0xffff_ffff) as u32 | 1,
+        s1 = (seed_for(PAGE_SALT.load(Ordering::SeqCst)) >> 32) as u32 ^ 0x9e37_79b9,
         s2 = 0x85eb_ca6b_u32,
         s3 = 0xc2b2_ae35_u32,
     )

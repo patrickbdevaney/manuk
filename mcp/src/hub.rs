@@ -20,6 +20,11 @@ const NOTES_HEADER_MAX: usize = 200;
 const NOTE_VALUE_MAX: usize = 500;
 
 /// FNV-1a 64: stable across builds and platforms (unlike `DefaultHasher`).
+/// Test-only mutant (`MANUK_MUTATE=fork-salt-parent`): forks reseed from the parent, as before W4.C3.b.a.
+fn mutated_fork_salt() -> bool {
+    std::env::var("MANUK_MUTATE").is_ok_and(|v| v == "fork-salt-parent")
+}
+
 pub fn fnv(bytes: &[u8]) -> u64 {
     let mut h = 0xcbf29ce484222325u64;
     for b in bytes {
@@ -90,6 +95,9 @@ struct Page<B: Backend> {
     /// A forked branch: non-safe sends are held, not sent, until `commit`.
     fenced: bool,
     held: Vec<manuk_net::ledger::Held>,
+    /// W4.C3.b.a: non-zero on a `fork` branch under `--deterministic`: its entropy stream is derived
+    /// from the fork's own page id, so sibling forks diverge and the same fork id re-rolls the same.
+    salt: u64,
 }
 
 impl<B: Backend> Page<B> {
@@ -99,6 +107,7 @@ impl<B: Backend> Page<B> {
             log,
             fenced: false,
             held: Vec::new(),
+            salt: 0,
         }
     }
 }
@@ -239,6 +248,7 @@ impl<B: Backend> Hub<B> {
 
     /// Rebuild page `id` at position `seq` by replaying its persisted log, verifying every hash.
     async fn resume(&mut self, id: &str, seq: u64) -> Result<(), String> {
+        manuk_js::determinism::set_page_salt(0);
         let mut log = self.load(id)?;
         if (log.len() as u64) < seq {
             return Err(format!(
@@ -422,6 +432,8 @@ impl<B: Backend> Hub<B> {
             self.notes.entry(k.clone()).or_insert_with(|| v.clone());
         }
         let id = self.fresh_id();
+        // The replay runs on the recorded stream (salt 0) so it stays verifiable.
+        manuk_js::determinism::set_page_salt(0);
         let mut s = self.new_session();
         s.backend_mut().reset_storage();
         for e in &c.log {
@@ -444,6 +456,17 @@ impl<B: Backend> Hub<B> {
         let n = c.log.len();
         let mut page = Page::new(s, c.log);
         page.fenced = !make_default;
+        // A fork (not a restore) leaves the recorded stream here and draws its own from now on.
+        if !make_default && manuk_js::determinism::enabled() && !mutated_fork_salt() {
+            page.salt = fnv(id.as_bytes()) | 1;
+            manuk_js::determinism::set_page_salt(page.salt);
+            manuk_js::determinism::reset();
+            let _ = page
+                .s
+                .backend_mut()
+                .page_eval(&manuk_js::determinism::rekey_js(page.salt))
+                .await;
+        }
         self.pages.insert(id.clone(), page);
         if make_default {
             self.default = Some(id.clone());
@@ -611,6 +634,7 @@ impl<B: Backend> Hub<B> {
             None
         };
         let page = self.pages.get_mut(&id).unwrap();
+        manuk_js::determinism::set_page_salt(page.salt);
         // Take-since around the call: ids issued before it belong to someone else.
         let _ = manuk_net::take_request_ids();
         manuk_net::ledger::set_fence(page.fenced);
