@@ -86,9 +86,12 @@
 
   window.__manukWebmcp = {
     list() {
-      const hidden = hiddenTexts();
+      // W4.C4.b.a.a: the paint-truth walk costs a computed style per text node (~1 s on a 2000-row page), so it
+      // runs only once there is a tool whose text it must judge, not on every list() of a page with none.
+      let hidden = null;
       const tools = [];
       const push = (name, description, inputSchema, source, annotations) => {
+        if (hidden === null) hidden = hiddenTexts();
         const why = taintOf(description, hidden) || taintOf(name, hidden);
         tools.push({ name, description: why ? '' : description, inputSchema, source, annotations: annotations || {}, withheld: why || undefined });
       };

@@ -1,0 +1,121 @@
+chrome_ver	arm	run	act	ms	first_line
+145.0.7632.116	parent	1	1	298.0	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	1	2	205.3	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	1	3	221.4	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	1	4	243.9	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	1	5	232.7	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	1	6	236.7	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	1	7	202.8	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	1	8	203.7	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	1	9	200.3	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	1	10	210.1	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	1	11	204.1	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	1	12	205.8	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	1	13	198.9	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	1	14	195.0	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	1	15	225.8	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	1	16	227.1	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	1	17	234.0	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	1	18	203.5	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	1	19	213.2	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	1	20	206.3	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	head	1	1	375.8	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	1	2	292.2	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	1	3	235.8	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	1	4	215.7	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	1	5	221.8	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	1	6	217.8	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	1	7	204.3	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	1	8	195.6	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	1	9	209.7	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	1	10	212.5	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	1	11	221.0	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	1	12	257.8	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	1	13	233.2	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	1	14	227.4	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	1	15	217.0	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	1	16	211.2	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	1	17	203.5	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	1	18	223.1	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	1	19	221.8	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	1	20	242.8	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	2	1	298.9	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	2	2	210.9	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	2	3	216.3	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	2	4	216.1	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	2	5	217.5	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	2	6	244.4	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	2	7	234.4	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	2	8	243.4	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	2	9	229.0	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	2	10	211.3	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	2	11	209.2	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	2	12	209.9	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	2	13	228.8	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	2	14	220.4	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	2	15	257.9	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	2	16	230.6	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	2	17	249.4	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	2	18	228.4	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	2	19	205.8	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	2	20	208.4	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	parent	2	1	281.3	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	2	2	215.8	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	2	3	234.4	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	2	4	205.2	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	2	5	213.6	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	2	6	203.3	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	2	7	212.1	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	2	8	209.1	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	2	9	198.4	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	2	10	196.8	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	2	11	235.0	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	2	12	226.1	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	2	13	246.9	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	2	14	217.8	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	2	15	204.2	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	2	16	179.8	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	2	17	182.9	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	2	18	181.2	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	2	19	192.2	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	2	20	184.6	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	3	1	281.4	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	3	2	203.4	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	3	3	200.0	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	3	4	198.5	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	3	5	203.7	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	3	6	188.4	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	3	7	210.8	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	3	8	228.4	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	3	9	239.6	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	3	10	220.5	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	3	11	222.9	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	3	12	204.7	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	3	13	203.5	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	3	14	208.5	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	3	15	202.0	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	3	16	181.6	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	3	17	188.1	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	3	18	202.0	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	3	19	245.1	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	parent	3	20	259.3	ok: dispatched click. +0 ~1 -0; url unchanged; writes 0
+145.0.7632.116	head	3	1	272.0	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	3	2	196.9	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	3	3	190.6	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	3	4	191.7	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	3	5	220.7	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	3	6	276.6	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	3	7	278.6	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	3	8	225.9	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	3	9	215.4	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	3	10	193.2	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	3	11	215.2	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	3	12	199.8	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	3	13	225.3	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	3	14	246.8	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	3	15	246.3	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	3	16	261.3	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	3	17	227.8	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	3	18	206.3	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	3	19	223.7	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
+145.0.7632.116	head	3	20	210.4	ok: dispatched click. +0 ~1 -0 text changed; url unchanged; writes 0
