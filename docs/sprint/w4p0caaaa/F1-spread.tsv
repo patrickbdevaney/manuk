@@ -1,0 +1,11 @@
+label	run	load1	load5	load15	runnable	large_cascade_ms	mid_total_ms	large_total_ms	cascade_over_mid	verdict_vs_0.55	chrome
+ambient-load8.8	1	8.80	8.55	9.09	12/1467	16.64	33.10	224.38	0.50	PASS	chrome_ver=145.0.7632.116
+ambient-load8.8	2	8.80	8.55	9.09	9/1465	20.31	32.79	228.59	0.62	EXCEEDS	chrome_ver=145.0.7632.116
+ambient-load8.8	3	8.82	8.55	9.09	14/1474	15.21	35.16	227.08	0.43	PASS	chrome_ver=145.0.7632.116
+ambient-load8.8	4	8.82	8.55	9.09	8/1480	16.27	31.48	230.47	0.52	PASS	chrome_ver=145.0.7632.116
+ambient-load8.8	5	8.82	8.55	9.09	8/1445	25.77	31.77	237.84	0.81	EXCEEDS	chrome_ver=145.0.7632.116
+loaded-busy24	1	10.93	9.01	9.23	34/1478	36.66	89.95	464.14	0.41	PASS	chrome_ver=145.0.7632.116
+loaded-busy24	2	13.33	9.54	9.40	33/1482	38.25	163.57	736.97	0.23	PASS	chrome_ver=145.0.7632.116
+loaded-busy24	3	14.83	9.91	9.52	35/1472	40.77	75.32	702.12	0.54	PASS	chrome_ver=145.0.7632.116
+loaded-busy24	4	16.20	10.28	9.64	35/1481	24.11	91.37	372.88	0.26	PASS	chrome_ver=145.0.7632.116
+loaded-busy24	5	17.79	10.71	9.78	35/1475	42.43	56.32	653.34	0.75	EXCEEDS	chrome_ver=145.0.7632.116
