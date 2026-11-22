@@ -35,6 +35,14 @@ class T(unittest.TestCase):
         p = transcript([("act", NC), ("act", NC), ("act", "clicked; url: /next")])
         self.assertNotEqual(r.classify(p), "refusal-seen")
 
+    def test_refusal_then_successful_scroll_is_stop_by_choice(self):
+        # stated rule (W5.G1.b.d.a): any successful ACTS result (a scroll counts) after a refusal recovers it; this is
+        # the dashdish-7 r3 / staynb-2 r3 shape that the hand reader labelled refusal-seen
+        p = transcript([("act", "ok clicked"), ("act", "h418 refused focus (inert or disabled); nothing was focused"), ("scroll", "scrolled to y=929 of 2417 nothing new in view")])
+        self.assertEqual(r.classify(p), "stop-by-choice")
+        p = transcript([("act", "ok clicked"), ("act", "h418 refused focus (inert or disabled); nothing was focused"), ("find", "- button x")])
+        self.assertEqual(r.classify(p), "refusal-seen")
+
     def test_unrecovered_nochange_is_act(self):
         self.assertEqual(r.classify(transcript([("act", NC), ("act", NC)])), "refusal-seen")
 
