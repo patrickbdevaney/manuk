@@ -1,0 +1,4 @@
+arm	group	n_tasks	per-run pass (band)	single(run1)	BoN-3	BoN CI95	oracle	judge-correct%	tok/task single	tok/task BoN	wall_s per success single	wall_s per success BoN	paired BoN-single	paired diff CI95	CI excludes 0
+manuk	1,2,3	47	[12, 11, 11] (11-12)	12	12	6-18	13	98	5381	15850	395	1245	judge $0.03	+0	-3..+3	no
+cdp-layer	1,2,3	47	[19, 18, 18] (18-19)	19	18	12-25	22	91	6244	18144	237	831	judge $0.03	-1	-5..+2	no
+playwright	1,2,3	47	[24, 23, 23] (23-24)	24	20	13-27	27	85	4767	14960	287	1041	judge $0.03	-4	-8..-1	yes

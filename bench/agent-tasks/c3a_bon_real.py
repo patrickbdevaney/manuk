@@ -44,7 +44,10 @@ def candidate(arm, task, run):
 
 def judge(goal, cands):
     """-> (index, usd, seconds). Haiku sees the goal and the 3 candidates, nothing about grading."""
-    if os.environ.get("MANUK_C3A_MUTATE"):
+    mode = os.environ.get("MANUK_C3A_MUTATE")
+    if mode == "random":  # W4.C3.a.a.a red-proof: an unseeded coin-flip judge, must show a spread >= 4 pt somewhere
+        return random.randrange(3), 0.0, 0.0
+    if mode:
         return 0, 0.0, 0.0
     body = "\n\n".join(f"Candidate {i+1}\nAgent's final message: {a or '(none)'}\nChange the site recorded (state diff): {d}"
                        for i, (a, d) in enumerate(cands))
