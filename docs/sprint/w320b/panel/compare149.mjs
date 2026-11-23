@@ -35,7 +35,9 @@ const asObj = (s) => {
 // ---- reference: pinned Chrome over --remote-debugging-pipe (fd3 in, fd4 out, NUL-terminated JSON) ----
 const profile = mkdtempSync(join(tmpdir(), 'wmc-ref-'));
 const chrome = spawn(CHROME, ['--headless=new', '--no-sandbox', '--disable-gpu', '--password-store=basic', `--user-data-dir=${profile}`,
-  '--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport','--enable-webmcp-testing', '--remote-debugging-pipe', 'about:blank'], { stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'] });
+  '--enable-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport','--enable-webmcp-testing', '--enable-experimental-web-platform-features', '--enable-blink-features=WebMCP,WebMCPTesting,DevToolsWebMCPSupport', '--remote-debugging-pipe', 'about:blank'], { stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'] });
+// W3.20.b.c.b: a Chrome that cannot start (bad MANUK_CHROME) must fail the run, not hang or pass.
+chrome.on('error', (e) => { console.error('reference chrome failed to start: ' + e.message); process.exit(2); });
 let nextId = 1, buf = '';
 const pending = new Map(), listeners = [];
 chrome.stdio[4].setEncoding('utf8');
@@ -59,7 +61,9 @@ const cdp = (method, params = {}, sessionId) => new Promise((res, rej) => {
 
 const NATIVE_EXPR = `(async () => {
   const out = { modelContext: typeof document.modelContext, testing: typeof navigator.modelContextTesting };
-  out.tools = (await document.modelContext.getTools()).map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema }));
+  // 149: only some demos define document.modelContext (pizza-maker, french-bistro polyfill); the rest only have
+  // navigator.modelContextTesting, whose listTools() is the same native registry.
+  out.tools = (document.modelContext ? await document.modelContext.getTools() : await navigator.modelContextTesting.listTools()).map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema }));
   return JSON.stringify(out);
 })()`;
 
@@ -149,6 +153,8 @@ const pagesPass = Object.values(transcript).filter((r) => r.pass).length;
 writeFileSync(join(OUT, 'RESULT.tsv'), [header, ...rows].join('\n') + `\n# pages_pass=${pagesPass} of ${DEMOS.length} chrome_ver=${PIN} browser=${version.product || 'n/a'}\n`);
 writeFileSync(join(OUT, 'transcript.json'), JSON.stringify({ chrome_ver: PIN, browser: version.product, transcript }, null, 2) + '\n');
 console.error(`pages_pass=${pagesPass}`);
+const errRows = Object.entries(transcript).filter(([, r]) => r.error).map(([d]) => d);
+console.error(`error_rows=${errRows.length} ${errRows.join(',')}`);
 mcp.kill();
 chrome.kill();
-process.exit(0);
+process.exit(errRows.length ? 1 : 0);

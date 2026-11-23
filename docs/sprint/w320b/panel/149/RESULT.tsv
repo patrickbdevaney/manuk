@@ -1,0 +1,8 @@
+demo	verdict	native_n	manuk_n	native_names	manuk_names	missing_in_manuk	extra_in_manuk	schema_diff	error	chrome_ver
+pizza-maker	FAIL	7	1	add_topping,manage_pizza,remove_topping,set_pizza_size,set_pizza_style,share_pizza,toggle_layer	set_pizza_size	add_topping,manage_pizza,remove_topping,set_pizza_style,share_pizza,toggle_layer	-	-	-	149.0.7827.155
+coffee-shop	FAIL	0	4		get_machine_specifications,get_order_history,reorder_product,search_catalog	-	get_machine_specifications,get_order_history,reorder_product,search_catalog	-	-	149.0.7827.155
+ticket-booking	FAIL	0	3		query_content,select_showtime,update_location	-	query_content,select_showtime,update_location	-	-	149.0.7827.155
+smart-home	FAIL	0	6		getGuestMessages,getPlaylistQueue,lockFrontDoor,rearrangeDOMComponents,setLivingRoomLights,unlockFrontDoor	-	getGuestMessages,getPlaylistQueue,lockFrontDoor,rearrangeDOMComponents,setLivingRoomLights,unlockFrontDoor	-	-	149.0.7827.155
+doors	FAIL	3	0	openDoor1,openDoor2,openDoor3		openDoor1,openDoor2,openDoor3	-	-	-	149.0.7827.155
+french-bistro	PASS	1	1	book_table_le_petit_bistro	book_table_le_petit_bistro	-	-	-	-	149.0.7827.155
+# pages_pass=1 of 6 chrome_ver=149.0.7827.155 browser=Chrome/149.0.7827.155

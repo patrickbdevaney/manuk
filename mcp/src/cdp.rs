@@ -1733,6 +1733,8 @@ fn chrome_args(unsafe_no_sandbox: bool) -> Vec<&'static str> {
         "--no-first-run",
         "--no-default-browser-check",
         "--mute-audio",
+        // Chrome 149 blocks Page.navigate on a keyring lookup without this (W3.20.b.c.b); 145 is unaffected.
+        "--password-store=basic",
         "--disable-background-networking",
         "--remote-debugging-port=0",
         // Headless has no pointing device, so `(pointer: none)`/`(hover: none)` make pages (MUI) serve the mobile
