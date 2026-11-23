@@ -1,0 +1,53 @@
+chrome_ver	arm	task	run	turn	tool	result_bytes	output_tokens	thinking_tokens
+145.0.7632.116	cdp-layer	L02	2	1	ToolSearch	0	136	84
+145.0.7632.116	cdp-layer	L02	2	2	mcp__browser__navigate	1330	137	0
+145.0.7632.116	cdp-layer	L02	2	3		0	272	168
+145.0.7632.116	cdp-layer	L03	2	1	mcp__browser__navigate	9856	65	33
+145.0.7632.116	cdp-layer	L03	2	2	mcp__browser__act	10393	56	0
+145.0.7632.116	cdp-layer	L03	2	3		0	302	153
+145.0.7632.116	cdp-layer	L07	2	1	ToolSearch	0	99	52
+145.0.7632.116	cdp-layer	L07	2	2	mcp__browser__navigate	9856	65	0
+145.0.7632.116	cdp-layer	L07	2	3		0	328	171
+145.0.7632.116	cdp-layer	L08	2	1	mcp__browser__navigate	256	81	89
+145.0.7632.116	cdp-layer	L08	2	2	mcp__browser__extract	1780	34	0
+145.0.7632.116	cdp-layer	L08	2	3		0	191	0
+145.0.7632.116	cdp-layer	L11	2	1	mcp__browser__navigate	259	72	77
+145.0.7632.116	cdp-layer	L11	2	2	mcp__browser__extract	1611	29	0
+145.0.7632.116	cdp-layer	L11	2	3		0	213	0
+145.0.7632.116	cdp-layer	L13	2	1	mcp__browser__navigate	3637	72	224
+145.0.7632.116	cdp-layer	L13	2	2	mcp__browser__act	4415	63	0
+145.0.7632.116	cdp-layer	L13	2	3		0	340	0
+145.0.7632.116	cdp-layer	L22	2	1	mcp__browser__navigate	819	86	77
+145.0.7632.116	cdp-layer	L22	2	2		0	178	0
+145.0.7632.116	cdp-layer	L24	2	1	ToolSearch	0	102	56
+145.0.7632.116	cdp-layer	L24	2	2	mcp__browser__navigate	32129	86	0
+145.0.7632.116	cdp-layer	L24	2	3		0	280	155
+145.0.7632.116	cdp-layer	F01	2	1	mcp__browser__navigate	326	52	68
+145.0.7632.116	cdp-layer	F01	2	2	mcp__browser__fill_form	668	108	0
+145.0.7632.116	cdp-layer	F01	2	3		0	172	0
+145.0.7632.116	cdp-layer	F06	2	1	mcp__browser__navigate	189	64	93
+145.0.7632.116	cdp-layer	F06	2	2	mcp__browser__act	185	54	0
+145.0.7632.116	cdp-layer	F06	2	3	mcp__browser__type	69	89	0
+145.0.7632.116	cdp-layer	F06	2	4	mcp__browser__act	146	76	0
+145.0.7632.116	cdp-layer	F06	2	5		0	258	0
+145.0.7632.116	cdp-layer	F07	2	1	mcp__browser__navigate	295	85	44
+145.0.7632.116	cdp-layer	F07	2	2	mcp__browser__act	87	71	0
+145.0.7632.116	cdp-layer	F07	2	3	mcp__browser__observe	182	51	0
+145.0.7632.116	cdp-layer	F07	2	4		0	192	99
+145.0.7632.116	cdp-layer	F08	2	1	mcp__browser__navigate	2080	128	93
+145.0.7632.116	cdp-layer	F08	2	2		0	377	275
+145.0.7632.116	cdp-layer	F10	2	1	mcp__browser__navigate	279	55	90
+145.0.7632.116	cdp-layer	F10	2	2	mcp__browser__act+mcp__browser__extract	277	80	0
+145.0.7632.116	cdp-layer	F10	2	3		0	257	0
+145.0.7632.116	cdp-layer	F11	2	1	mcp__browser__navigate	681	55	47
+145.0.7632.116	cdp-layer	F11	2	2	mcp__browser__fill_form	931	91	77
+145.0.7632.116	cdp-layer	F11	2	3		0	266	0
+145.0.7632.116	cdp-layer	F12	2	1	mcp__browser__navigate	289	170	90
+145.0.7632.116	cdp-layer	F12	2	2		0	124	66
+145.0.7632.116	cdp-layer	F13	2	1	ToolSearch	0	95	50
+145.0.7632.116	cdp-layer	F13	2	2	mcp__browser__navigate	403	107	0
+145.0.7632.116	cdp-layer	F13	2	3		0	313	165
+145.0.7632.116	cdp-layer	F14	2	1	mcp__browser__navigate	396	90	53
+145.0.7632.116	cdp-layer	F14	2	2		0	261	154
+145.0.7632.116	cdp-layer	F15	2	1	mcp__browser__navigate	367	83	52
+145.0.7632.116	cdp-layer	F15	2	2		0	378	236

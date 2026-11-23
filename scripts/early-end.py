@@ -1,48 +1,51 @@
 #!/usr/bin/env python3
-"""W4.P0.g.b.a: how the cdp-layer arm ended on every own (task,run) where manuk makes a further call.
+"""W4.P0.g.b.a.a: how the cdp-layer arm ended on every own (task,run) where manuk makes a further call.
 
-Input rows: docs/sprint/w4p0g/DIVERGENCE.tsv rows with slice=own and kind=manuk_extra (cdp-layer's flattened tool
-sequence ended first). For each, the cdp-layer turn log in docs/sprint/SCOREBOARD.tsv.turns.tsv (arm=cdp-layer,
-same chrome_ver, task, run) is read in full, text-only turns included. Those turns are kept in the turns file;
-trajectory-agree.py only drops them in the comparison.
+W4.P0.g.b.a read the ending from the turn log, which has no per-call error flag, so tool_error could not be assigned.
+This node re-runs those 56 own (task,run) pairs for cdp-layer at the pin with run_arm.py --transcripts
+(docs/sprint/w4p0g/rerun-cdp-layer/, run1..3.tsv + run1..3.turns.tsv + transcripts/cdp-layer_<task>_r<run>.jsonl), and
+classifies each ending from the raw stream-json, where tool results carry is_error.
+
+Input rows: docs/sprint/w4p0g/DIVERGENCE.tsv rows with slice=own and kind=manuk_extra (the 56 (task,run) keys). Their
+transcripts are read in full. Each transcript is one `claude -p` stream-json run: assistant messages are turns (deduped
+by message id, as in run_arm.py turn_log), tool_use blocks are calls, user tool_result blocks carry is_error.
 
 Output: docs/sprint/w4p0g/EARLY-END.tsv, one row per manuk_extra own (task,run):
-  cdp_last_turn      text_answer  the last turn of the cdp-layer run is text-only (tool empty): it answered
-                     tool_error   reserved: the turn log has no per-call error flag and the raw stream-json for
-                                  these pin-145 own cdp-layer runs is not in the repo, so this class is never
-                                  assigned here (the run-level is_error column of SCOREBOARD.tsv is 0 on all 360
-                                  cdp-layer own rows at pin 145)
-                     other        the last turn carries a tool call (run stopped on a tool result, budget or
-                                  timeout; cannot be told apart from the log)
-  cdp_last_turn_no   turn number of that last turn
-  cdp_last_output_tokens  output_tokens of that last turn
+  cdp_last_turn      tool_error  the last tool_result of the run has is_error=true: the arm's last call failed. This
+                                 takes precedence over a text answer that follows it (the arm answered after an error).
+                     text_answer the run's final assistant turn is text-only and its last tool_result is not an error
+                     other       the final turn carries a tool call whose result is ok or missing (budget, timeout)
+  cdp_last_turn_no   turn number of the final assistant turn
+  cdp_calls          flattened tool_use count of the rerun (parallel calls counted individually)
+  cdp_is_error_results  number of tool_result blocks with is_error=true anywhere in the rerun (the tool_error count)
+  orig_cdp_len       len_cdp_layer of the original DIVERGENCE row (the turn-log run the pair came from)
 
-Every row is also checked against the turn log: the number of flattened tool calls in the cdp-layer turns (parallel
-'+' calls split, as in trajectory-agree) must equal len_cdp_layer in DIVERGENCE.tsv.
+The rerun is a new cdp-layer sample under the same (task,run) label; its call count can differ from orig_cdp_len. That is
+recorded, not forced: the class is computed from the rerun transcript only.
 
 Usage:
-  python3 -I scripts/early-end.py                  # write EARLY-END.tsv (exit 1 on any mismatch)
-  python3 -I scripts/early-end.py --check [PATH]   # exit 1 unless PATH matches DIVERGENCE + turns exactly
-  python3 -I scripts/early-end.py --selftest       # red controls on temp copies: a dropped row and a changed
-                                                   # class must each make --check fail; exit 0 if both do
+  python3 -I scripts/early-end.py                  # write EARLY-END.tsv (exit 1 on any missing transcript)
+  python3 -I scripts/early-end.py --check [PATH]   # exit 1 unless PATH matches the transcripts exactly
+  python3 -I scripts/early-end.py --selftest       # red controls on temp copies: a dropped row, a changed class and
+                                                   # one flipped is_error flag must each make --check fail
 """
 import argparse
 import csv
+import json
 import os
 import shutil
 import sys
 import tempfile
-from collections import defaultdict
+from collections import Counter
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 DIV = os.path.join(ROOT, "docs/sprint/w4p0g/DIVERGENCE.tsv")
-TURNS = os.path.join(ROOT, "docs/sprint/SCOREBOARD.tsv.turns.tsv")
+TRANS = os.path.join(ROOT, "docs/sprint/w4p0g/rerun-cdp-layer/transcripts")
 OUT = os.path.join(ROOT, "docs/sprint/w4p0g/EARLY-END.tsv")
 PIN = "145.0.7632.116"  # same pin as trajectory-agree.py; MANUK_CHROME_PIN is checked against it when set
-COLS = ["chrome_ver", "task", "run", "first_diff_index", "cdp_len", "cdp_last_turn_no", "cdp_last_turn",
-        "cdp_last_output_tokens"]
+COLS = ["chrome_ver", "task", "run", "orig_cdp_len", "cdp_calls", "cdp_last_turn_no", "cdp_last_turn",
+        "cdp_is_error_results"]
 CLASSES = {"text_answer", "tool_error", "other"}
-ARM_B = "cdp-layer"
 
 
 def read_tsv(path):
@@ -50,62 +53,86 @@ def read_tsv(path):
         return list(csv.reader(f, delimiter="\t"))
 
 
-def cdp_turns(turns_path=TURNS):
-    """(chrome_ver, task, run) -> [(turn_no, tool, output_tokens)] for arm=cdp-layer, pin only."""
-    out = defaultdict(list)
-    with open(turns_path, newline="") as f:
-        for r in csv.DictReader(f, delimiter="\t"):
-            if r["arm"] != ARM_B or r["chrome_ver"] != PIN:
+def trans_name(task, run):
+    return f"cdp-layer_{task}_r{run}.jsonl"
+
+
+def parse_run(path):
+    """Read one stream-json transcript in full. Returns a dict (see module docstring for the fields)."""
+    turns = []          # per assistant message id: list of tool_use ids
+    seen = {}
+    results = []       # (tool_use_id, is_error) in stream order
+    run_is_error = None
+    with open(path) as f:
+        for line in f:
+            if not line.startswith("{"):
                 continue
-            out[(r["chrome_ver"], r["task"], int(r["run"]))].append(
-                (int(r["turn"]), r["tool"], int(r["output_tokens"])))
-    return out
+            e = json.loads(line)
+            m = e.get("message") or {}
+            if e.get("type") == "assistant":
+                mid = m.get("id") or f"anon{len(turns)}"
+                if mid not in seen:
+                    seen[mid] = len(turns)
+                    turns.append([])
+                for b in m.get("content") or []:
+                    if b.get("type") == "tool_use" and b.get("id") not in [x for t in turns for x in t]:
+                        turns[seen[mid]].append(b.get("id"))
+            elif e.get("type") == "user" and isinstance(m.get("content"), list):
+                for b in m["content"]:
+                    if b.get("type") == "tool_result":
+                        results.append((b.get("tool_use_id"), b.get("is_error") is True))
+            elif e.get("type") == "result":
+                run_is_error = bool(e.get("is_error"))
+    if not turns:
+        return {"calls": 0, "turns": 0, "last_turn_no": 0, "cls": "text_answer", "errs": 0, "run_is_error": run_is_error}
+    calls = sum(len(t) for t in turns)
+    errs = sum(1 for _, x in results if x)
+    last_tools = turns[-1]
+    if results and results[-1][1]:
+        cls = "tool_error"
+    elif last_tools:
+        cls = "other"
+    else:
+        cls = "text_answer"
+    return {"calls": calls, "turns": len(turns), "last_turn_no": len(turns), "cls": cls, "errs": errs,
+            "run_is_error": run_is_error}
 
 
-def flat_calls(turns):
-    n = 0
-    for _, tool, _ in turns:
-        n += len([t for t in tool.split("+") if t.strip()])
-    return n
-
-
-def expected_rows(div_path=DIV, turns_path=TURNS):
-    """Rebuild EARLY-END rows from DIVERGENCE + turns. Returns (rows, errs)."""
-    errs = []
+def pair_rows(div_path=DIV):
+    """The 56 own manuk_extra (chrome_ver, task, run, len_cdp_layer) keys from DIVERGENCE."""
     if not os.path.exists(div_path):
-        return [], [f"{div_path} missing; run scripts/first-divergence.py first"]
+        return None, [f"{div_path} missing; run scripts/first-divergence.py first"]
     div = read_tsv(div_path)
     head, body = div[0], div[1:]
     ix = {c: i for i, c in enumerate(head)}
     want = [r for r in body if r[ix["slice"]] == "own" and r[ix["kind"]] == "manuk_extra"]
-    turns = cdp_turns(turns_path)
+    return [(r[ix["chrome_ver"]], r[ix["task"]], int(r[ix["run"]]), r[ix["len_cdp_layer"]]) for r in want], []
+
+
+def expected_rows(div_path=DIV, trans_dir=TRANS):
+    """Rebuild EARLY-END rows from DIVERGENCE + the transcripts. Returns (rows, errs)."""
+    pairs, errs = pair_rows(div_path)
+    if pairs is None:
+        return [], errs
     rows = []
-    for r in want:
-        cv, task, run = r[ix["chrome_ver"]], r[ix["task"]], int(r[ix["run"]])
-        key = (cv, task, run)
-        if key not in turns:
-            errs.append(f"own {task} run {run}: no cdp-layer turns at {cv}")
+    for cv, task, run, orig in pairs:
+        path = os.path.join(trans_dir, trans_name(task, run))
+        if not os.path.exists(path):
+            errs.append(f"own {task} run {run}: transcript {trans_name(task, run)} missing")
             continue
-        seq = sorted(turns[key])
-        if flat_calls(seq) != int(r[ix["len_cdp_layer"]]):
-            errs.append(f"own {task} run {run}: cdp-layer has {flat_calls(seq)} calls, DIVERGENCE says "
-                        f"{r[ix['len_cdp_layer']]}")
-            continue
-        last_no, last_tool, last_out = seq[-1]
-        cls = "other" if last_tool.strip() else "text_answer"
-        rows.append([cv, task, str(run), r[ix["first_diff_index"]], str(len(seq)), str(last_no), cls,
-                     str(last_out)])
+        p = parse_run(path)
+        rows.append([cv, task, str(run), orig, str(p["calls"]), str(p["last_turn_no"]), p["cls"], str(p["errs"])])
     return rows, errs
 
 
-def check(path, div_path=DIV, turns_path=TURNS):
+def check(path, div_path=DIV, trans_dir=TRANS):
     """Returns a list of problems (empty = pass)."""
     if not os.path.exists(path):
         return [f"{path} missing"]
     got = read_tsv(path)
     if not got or got[0] != COLS:
         return [f"header must be {COLS}"]
-    want, errs = expected_rows(div_path, turns_path)
+    want, errs = expected_rows(div_path, trans_dir)
     problems = list(errs)
     if len(got) - 1 != len(want):
         problems.append(f"row count {len(got) - 1} != manuk_extra own rows {len(want)}")
@@ -119,7 +146,7 @@ def check(path, div_path=DIV, turns_path=TURNS):
     for k in sorted(set(got_by) & set(want_by)):
         if got_by[k] != want_by[k]:
             diff = [c for c, a, b in zip(COLS, got_by[k], want_by[k]) if a != b]
-            problems.append(f"row {k} disagrees with turns on {diff}: got {got_by[k]} want {want_by[k]}")
+            problems.append(f"row {k} disagrees with transcript on {diff}: got {got_by[k]} want {want_by[k]}")
     for r in got[1:]:
         if len(r) == len(COLS) and r[COLS.index("cdp_last_turn")] not in CLASSES:
             problems.append(f"class {r[COLS.index('cdp_last_turn')]!r} not in {sorted(CLASSES)}")
@@ -143,6 +170,7 @@ def selftest():
         p1 = check(mut)
         print(f"  red control dropped row: {'FAILS as required' if p1 else 'PASSES (FAIL)'}")
         ok = ok and bool(p1)
+
         mut2 = os.path.join(tmp, "reclassed.tsv")
         rows = [list(r) for r in base]
         i = next(j for j in range(1, len(rows)) if rows[j][COLS.index("cdp_last_turn")] == "text_answer")
@@ -152,6 +180,35 @@ def selftest():
         p2 = check(mut2)
         print(f"  red control changed class (row {i}): {'FAILS as required' if p2 else 'PASSES (FAIL)'}")
         ok = ok and bool(p2)
+
+        # the gate's mutation: flip one is_error flag in one transcript; exactly one class must change
+        tdir = os.path.join(tmp, "transcripts")
+        shutil.copytree(TRANS, tdir)
+        target = os.path.join(tdir, trans_name(base[1][1], int(base[1][2])))
+        lines = open(target).read().split("\n")
+        flipped = False
+        for n in range(len(lines) - 1, -1, -1):
+            if not lines[n].startswith("{"):
+                continue
+            e = json.loads(lines[n])
+            if e.get("type") != "user" or not isinstance(e.get("message", {}).get("content"), list):
+                continue
+            for b in e["message"]["content"]:
+                if b.get("type") == "tool_result" and not flipped and not b.get("is_error"):
+                    b["is_error"] = True
+                    flipped = True
+            if flipped:
+                lines[n] = json.dumps(e, separators=(",", ":"))
+                break
+        open(target, "w").write("\n".join(lines))
+        probs = check(OUT, trans_dir=tdir)
+        changed = [p for p in probs if p.startswith("row ")]
+        p3 = flipped and len(changed) == 1
+        print(f"  mutation flipped is_error in {os.path.basename(target)}: "
+              f"{len(changed)} row(s) disagree -> {'ONE CLASS CHANGED as required' if p3 else 'FAIL'}")
+        if changed:
+            print("    " + changed[0][:200])
+        ok = ok and p3
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     print("SELFTEST " + ("PASS" if ok else "FAIL"))
@@ -181,8 +238,8 @@ def main():
         w = csv.writer(f, delimiter="\t", lineterminator="\n")
         w.writerow(COLS)
         w.writerows(rows)
-    from collections import Counter
-    print(f"wrote {os.path.relpath(OUT, ROOT)} ({len(rows)} rows) classes={dict(Counter(r[6] for r in rows))}")
+    print(f"wrote {os.path.relpath(OUT, ROOT)} ({len(rows)} rows) classes={dict(Counter(r[6] for r in rows))} "
+          f"is_error_results={sum(int(r[7]) for r in rows)}")
     return 0
 
 
