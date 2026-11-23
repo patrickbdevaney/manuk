@@ -1,0 +1,44 @@
+1	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app"}
+2	mcp__browser__find	{"query": "Ocean Breeze"}
+3	mcp__browser__extract	{"include_hidden": true, "query": "Ocean Breeze"}
+4	mcp__browser__observe	{"mode": "interactive"}
+5	mcp__browser__act	{"action": "click", "handle": "h40"}
+6	mcp__browser__act	{"action": "click", "handle": "h72"}
+7	mcp__browser__find	{"query": "Ocean Breeze"}
+8	mcp__browser__observe	{"mode": "viewport"}
+9	mcp__browser__act	{"action": "click", "handle": "h72"}
+10	mcp__browser__find	{"query": "Ocean Breeze restaurant card"}
+11	mcp__browser__observe	{"mode": "interactive"}
+12	mcp__browser__act	{"action": "click", "handle": "h72"}
+13	mcp__browser__extract	{"query": "Ocean Breeze"}
+14	mcp__browser__act	{"action": "click", "handle": "h72"}
+15	mcp__browser__extract	{"include_hidden": true, "query": "Ocean Breeze"}
+16	mcp__browser__evaluate	{"expression": "(() => { const els=[...document.querySelectorAll('*')].filter(e=>e.children.length===0 && /Ocean Breeze/.test(e.textContent)); return els.map(e=>{const li=e.closest('li'); const r=e.getBoundingClientRect(); return {tag:e.tagName, text:e.textContent.trim().slice(0,60), top:Math.round(r.top), left:Math.round(r.left), w:Math.round(r.width), liText: li? li.textContent.slice(0,80):null, inCarouselHidden: !!e.closest('[aria-hidden=\"true\"]')}; }); })()"}
+17	mcp__browser__evaluate	{"expression": "[...document.querySelectorAll('li')].filter(li => /Ocean Breeze/.test(li.textContent)).map(li => ({text: li.textContent.slice(0,120), top: Math.round(li.getBoundingClientRect().top), left: Math.round(li.getBoundingClientRect().left), w: Math.round(li.getBoundingClientRect().width), hidden: li.closest('[aria-hidden=\"true\"]') !== null, parentClass: li.parentElement && li.parentElement.className}))"}
+18	mcp__browser__act	{"action": "click", "handle": "h72"}
+19	mcp__browser__find	{"query": "Ocean Breeze"}
+20	mcp__browser__observe	{"mode": "viewport"}
+21	mcp__browser__act	{"action": "click", "handle": "h72"}
+22	mcp__browser__find	{"query": "Ocean Breeze restaurant name heading"}
+23	mcp__browser__act	{"action": "click", "handle": "h72"}
+24	mcp__browser__extract	{"include_hidden": true, "query": "Ocean Breeze"}
+25	mcp__browser__find	{"query": "Ocean Breeze time slot buttons (1:30 PM, 2:00 PM, 2:30 PM)"}
+26	mcp__browser__observe	{"mode": "viewport"}
+27	mcp__browser__act	{"action": "click", "handle": "h232"}
+28	mcp__browser__act	{"action": "click", "handle": "h231"}
+29	mcp__browser__scroll	{}
+30	mcp__browser__scroll	{"to": "h232"}
+31	mcp__browser__find	{"query": "button \"2:00 PM\" in listitem \"Ocean Breeze 15 reviews\""}
+32	mcp__browser__scroll	{"to": "h231"}
+33	mcp__browser__act	{"action": "click", "handle": "h231"}
+34	mcp__browser__screenshot	{}
+35	mcp__browser__act	{"action": "click", "at": {"x": 1212, "y": 126}}
+36	mcp__browser__screenshot	{}
+37	mcp__browser__act	{"action": "click", "at": {"x": 895, "y": 283}}
+38	mcp__browser__type	{"handle": "h3", "text": "4155550123"}
+39	mcp__browser__act	{"action": "click", "handle": "h278"}
+40	mcp__browser__observe	{"mode": "interactive"}
+41	mcp__browser__type	{"handle": "h3", "text": "+1 415 555 0123"}
+42	mcp__browser__observe	{"mode": "interactive"}
+43	mcp__browser__act	{"action": "click", "handle": "h278"}
+44	mcp__browser__extract	{"query": "booking confirmation restaurant time party"}

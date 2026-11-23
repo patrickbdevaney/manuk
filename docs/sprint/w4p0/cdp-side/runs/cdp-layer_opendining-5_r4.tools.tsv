@@ -1,0 +1,83 @@
+1	ToolSearch	{"max_results": 4, "query": "select:mcp__browser__scroll,mcp__browser__find,mcp__browser__wait_for,mcp__browser__screenshot"}
+2	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app"}
+3	mcp__browser__find	{"page": "pf4ad00:3", "query": "Ocean Breeze"}
+4	mcp__browser__find	{"page": "pf4ad00:4", "query": "Next slide button carousel"}
+5	mcp__browser__act	{"action": "click", "handle": "h40", "page": "pf4ad00:5"}
+6	mcp__browser__find	{"page": "pf4ad00:6", "query": "Ocean Breeze restaurant card"}
+7	mcp__browser__find	{"page": "pf4ad00:7", "query": "Next slide button"}
+8	mcp__browser__act	{"action": "click", "handle": "h40", "page": "pf4ad00:8"}
+9	mcp__browser__find	{"page": "pf4ad00:9", "query": "Ocean Breeze"}
+10	mcp__browser__find	{"page": "pf4ad00:10", "query": "Next slide button"}
+11	mcp__browser__act	{"action": "click", "handle": "h40", "page": "pf4ad00:11"}
+12	mcp__browser__find	{"page": "pf4ad00:12", "query": "Ocean Breeze"}
+13	mcp__browser__find	{"page": "pf4ad00:13", "query": "Next slide button"}
+14	mcp__browser__scroll	{"page": "pf4ad00:14", "to": "h103"}
+15	mcp__browser__find	{"page": "pf4ad00:15", "query": "Breeze"}
+16	mcp__browser__act	{"action": "click", "handle": "h103", "page": "pf4ad00:16"}
+17	mcp__browser__find	{"page": "pf4ad00:17", "query": "Ocean Breeze"}
+18	mcp__browser__extract	{"page": "pf4ad00:18", "query": "Ocean Breeze"}
+19	mcp__browser__extract	{"format": "text", "page": "pf4ad00:19"}
+20	mcp__browser__find	{"page": "pf4ad00:20", "query": "Next slide button in first carousel"}
+21	mcp__browser__navigate	{"query": "Ocean Breeze", "url": "https://evals-opendining.vercel.app"}
+22	mcp__browser__extract	{"format": "text", "include_hidden": true, "page": "pf4ad00:22", "query": "Ocean"}
+23	mcp__browser__find	{"page": "pf4ad00:23", "query": "Ocean Breeze restaurant link or button"}
+24	mcp__browser__find	{"page": "pf4ad00:24", "query": "Ocean Breeze 15 reviews"}
+25	mcp__browser__find	{"page": "pf4ad00:25", "query": "Next slide button"}
+26	mcp__browser__act	{"action": "click", "handle": "h239", "page": "pf4ad00:26"}
+27	mcp__browser__extract	{"format": "text", "page": "pf4ad00:27", "query": "Ocean Breeze"}
+28	mcp__browser__find	{"page": "pf4ad00:28", "query": "Next slide button"}
+29	mcp__browser__act	{"action": "click", "handle": "h239", "page": "pf4ad00:29"}
+30	mcp__browser__extract	{"format": "text", "page": "pf4ad00:30", "query": "Ocean Breeze"}
+31	mcp__browser__find	{"page": "pf4ad00:31", "query": "View details for Ocean Breeze"}
+32	mcp__browser__find	{"page": "pf4ad00:32", "query": "Next slide button"}
+33	mcp__browser__act	{"action": "click", "handle": "h239", "page": "pf4ad00:33"}
+34	mcp__browser__find	{"page": "pf4ad00:34", "query": "Ocean Breeze"}
+35	mcp__browser__find	{"page": "pf4ad00:35", "query": "Next slide button"}
+36	mcp__browser__scroll	{"page": "pf4ad00:36", "to": "h239"}
+37	mcp__browser__observe	{"mode": "viewport", "page": "pf4ad00:37"}
+38	mcp__browser__act	{"action": "click", "handle": "h239", "page": "pf4ad00:38"}
+39	mcp__browser__extract	{"format": "text", "include_hidden": true, "page": "pf4ad00:38", "query": "Ocean Breeze"}
+40	mcp__browser__find	{"page": "pf4ad00:40", "query": "Next slide button"}
+41	mcp__browser__act	{"action": "click", "handle": "h239", "page": "pf4ad00:41"}
+42	mcp__browser__observe	{"mode": "viewport", "page": "pf4ad00:41"}
+43	mcp__browser__act	{"action": "click", "handle": "h239", "page": "pf4ad00:43"}
+44	mcp__browser__extract	{"format": "text", "include_hidden": true, "page": "pf4ad00:43", "query": "Ocean Breeze"}
+45	mcp__browser__find	{"page": "pf4ad00:45", "query": "Next slide button"}
+46	mcp__browser__act	{"action": "click", "handle": "h239", "page": "pf4ad00:46"}
+47	mcp__browser__find	{"page": "pf4ad00:46", "query": "Ocean Breeze restaurant name in carousel"}
+48	mcp__browser__scroll	{"page": "pf4ad00:48", "to": "h422"}
+49	mcp__browser__find	{"page": "pf4ad00:49", "query": "Ocean Breeze time slot buttons 1:30 PM 2:00 PM"}
+50	mcp__browser__find	{"page": "pf4ad00:50", "query": "Book for 2:00 PM in listitem Ocean Breeze"}
+51	mcp__browser__scroll	{"page": "pf4ad00:51", "to": "h420"}
+52	mcp__browser__observe	{"mode": "viewport", "page": "pf4ad00:52"}
+53	mcp__browser__act	{"action": "click", "handle": "h430", "page": "pf4ad00:53"}
+54	mcp__browser__find	{"page": "pf4ad00:54", "query": "2:00 PM button in Ocean Breeze listitem"}
+55	mcp__browser__scroll	{"page": "pf4ad00:55", "to": "h430"}
+56	mcp__browser__find	{"page": "pf4ad00:56", "query": "button 2:00 PM listitem Ocean Breeze Seafood"}
+57	mcp__browser__act	{"action": "click", "handle": "h430", "page": "pf4ad00:57"}
+58	mcp__browser__find	{"page": "pf4ad00:58", "query": "View details for Ocean Breeze"}
+59	mcp__browser__act	{"action": "click", "handle": "h421", "page": "pf4ad00:59"}
+60	mcp__browser__find	{"page": "pf4ad00:60", "query": "time slot buttons 1:30 PM 2:00 PM 2:30 PM Book"}
+61	mcp__browser__extract	{"format": "text", "include_hidden": true, "page": "pf4ad00:61", "query": "reserve book time slot"}
+62	mcp__browser__observe	{"mode": "interactive", "page": "pf4ad00:62"}
+63	mcp__browser__observe	{"mode": "full", "page": "pf4ad00:63"}
+64	mcp__browser__back	{"page": "pf4ad00:64"}
+65	mcp__browser__navigate	{"page": "new", "url": "https://evals-opendining.vercel.app"}
+66	mcp__browser__act	{"page": "pf4b219:1", "steps": [{"handle": "h40", "tool": "click"}, {"handle": "h40", "tool": "click"}, {"handle": "h40", "tool": "click"}, {"handle": "h40", "tool": "click"}, {"handle": "h40", "tool": "click"}, {"handle": "h40", "tool": "click"}, {"handle": "h40", "tool": "click"}]}
+67	mcp__browser__act	{"page": "pf4b219:2", "steps": [{"action": "click", "handle": "h40", "tool": "act"}, {"action": "click", "handle": "h40", "tool": "act"}, {"action": "click", "handle": "h40", "tool": "act"}, {"action": "click", "handle": "h40", "tool": "act"}, {"action": "click", "handle": "h40", "tool": "act"}]}
+68	mcp__browser__find	{"page": "pf4b219:3", "query": "Ocean Breeze 2:00 PM button"}
+69	mcp__browser__find	{"page": "pf4b219:4", "query": "Ocean Breeze card 2:00 PM"}
+70	mcp__browser__extract	{"format": "text", "page": "pf4b219:5", "query": "Ocean Breeze"}
+71	mcp__browser__find	{"page": "pf4b219:6", "query": "Next slide button"}
+72	mcp__browser__act	{"page": "pf4b219:7", "steps": [{"action": "click", "handle": "h40", "tool": "act"}, {"action": "click", "handle": "h40", "tool": "act"}, {"action": "click", "handle": "h40", "tool": "act"}]}
+73	mcp__browser__extract	{"format": "text", "include_hidden": true, "page": "pf4b219:7", "query": "Ocean Breeze"}
+74	mcp__browser__scroll	{"page": "pf4b219:9", "to": "h216"}
+75	mcp__browser__observe	{"mode": "viewport", "page": "pf4b219:10"}
+76	mcp__browser__act	{"action": "click", "handle": "h212", "page": "pf4b219:11"}
+77	mcp__browser__type	{"handle": "h3", "page": "pf4b219:12", "text": "4155550123"}
+78	mcp__browser__act	{"action": "click", "handle": "h260", "page": "pf4b219:13"}
+79	mcp__browser__observe	{"mode": "interactive", "page": "pf4b219:14"}
+80	mcp__browser__type	{"handle": "h3", "page": "pf4b219:15", "text": "+1 415 555 0123"}
+81	mcp__browser__observe	{"mode": "interactive", "page": "pf4b219:16"}
+82	mcp__browser__act	{"action": "click", "handle": "h260", "page": "pf4b219:17"}
+83	mcp__browser__extract	{"format": "text", "page": "pf4b219:18"}

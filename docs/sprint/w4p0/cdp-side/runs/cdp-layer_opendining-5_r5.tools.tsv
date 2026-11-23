@@ -1,0 +1,27 @@
+1	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app"}
+2	mcp__browser__find	{"page": "p0908ab:3", "query": "Ocean Breeze restaurant card in homepage carousel"}
+3	mcp__browser__observe	{"mode": "interactive", "page": "p0908ab:4"}
+4	mcp__browser__act	{"action": "click", "handle": "h40", "page": "p0908ab:5"}
+5	mcp__browser__find	{"page": "p0908ab:6", "query": "Ocean Breeze"}
+6	mcp__browser__observe	{"mode": "interactive", "page": "p0908ab:7"}
+7	mcp__browser__evaluate	{"expression": "(() => { const names = [...document.querySelectorAll('li, [role=listitem], article, [class*=card]')].map(e => (e.querySelector('h1,h2,h3,h4,h5,h6,img')?.alt || e.querySelector('h1,h2,h3,h4,h5,h6')?.textContent || '').trim()).filter(Boolean); return { ocean: document.body.innerText.includes('Ocean Breeze'), names: [...new Set(names)].slice(0,60) }; })()", "page": "p0908ab:8"}
+8	mcp__browser__find	{"page": "p0908ab:9", "query": "Ocean Breeze card time slot buttons"}
+9	mcp__browser__act	{"action": "click", "handle": "h40", "page": "p0908ab:10"}
+10	mcp__browser__evaluate	{"expression": "(() => { const el = [...document.querySelectorAll('*')].filter(e => e.children.length===0 && e.textContent.trim()==='Ocean Breeze'); if(!el.length) return 'not found'; const r = el[0].getBoundingClientRect(); return {x:r.x,y:r.y,w:r.width,h:r.height,vh:innerHeight,vw:innerWidth}; })()", "page": "p0908ab:11"}
+11	mcp__browser__act	{"action": "click", "handle": "h40", "page": "p0908ab:12"}
+12	mcp__browser__act	{"action": "click", "handle": "h40", "page": "p0908ab:12"}
+13	mcp__browser__evaluate	{"expression": "(() => { const el = [...document.querySelectorAll('*')].filter(e => e.children.length===0 && e.textContent.trim()==='Ocean Breeze'); if(!el.length) return 'not found'; const r = el[0].getBoundingClientRect(); return {x:r.x,y:r.y}; })()", "page": "p0908ab:14"}
+14	mcp__browser__act	{"action": "click", "handle": "h40", "page": "p0908ab:15"}
+15	mcp__browser__act	{"action": "click", "handle": "h40", "page": "p0908ab:15"}
+16	mcp__browser__act	{"action": "click", "handle": "h40", "page": "p0908ab:15"}
+17	mcp__browser__evaluate	{"expression": "(() => { const el = [...document.querySelectorAll('*')].filter(e => e.children.length===0 && e.textContent.trim()==='Ocean Breeze'); if(!el.length) return 'not found'; const r = el[0].getBoundingClientRect(); const card = el[0].closest('li,article,[role=listitem]') || el[0].parentElement; const btns=[...card.querySelectorAll('button,a')].map(b=>({t:b.textContent.trim(),x:Math.round(b.getBoundingClientRect().x),y:Math.round(b.getBoundingClientRect().y)})); return {x:r.x,y:r.y,btns}; })()", "page": "p0908ab:18"}
+18	mcp__browser__evaluate	{"expression": "(() => { const el = [...document.querySelectorAll('*')].filter(e => e.children.length===0 && e.textContent.trim()==='Ocean Breeze'); if(!el.length) return 'not found'; const r = el[0].getBoundingClientRect(); return {x:r.x,y:r.y}; })()", "page": "p0908ab:19"}
+19	mcp__browser__act	{"action": "click", "handle": "h40", "page": "p0908ab:20"}
+20	mcp__browser__observe	{"mode": "viewport", "page": "p0908ab:21"}
+21	mcp__browser__act	{"action": "click", "handle": "h215", "page": "p0908ab:22"}
+22	mcp__browser__type	{"handle": "h3", "page": "p0908ab:23", "text": "5555550123"}
+23	mcp__browser__act	{"action": "click", "handle": "h243", "page": "p0908ab:24"}
+24	mcp__browser__observe	{"mode": "interactive", "page": "p0908ab:25"}
+25	mcp__browser__type	{"handle": "h3", "page": "p0908ab:26", "text": "+1 202 555 0123"}
+26	mcp__browser__observe	{"mode": "interactive", "page": "p0908ab:27"}
+27	mcp__browser__act	{"action": "click", "handle": "h243", "page": "p0908ab:28"}

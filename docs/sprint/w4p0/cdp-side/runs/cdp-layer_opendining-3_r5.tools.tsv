@@ -1,0 +1,62 @@
+1	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app"}
+2	mcp__browser__fill_form	{"fields": [{"action": "type", "handle": "h8", "value": "The Royal Dine"}, {"action": "select", "handle": "h4", "value": "7:00 PM"}, {"action": "select", "handle": "h6", "value": "4"}], "page": "pd1eac4:3"}
+3	mcp__browser__observe	{"mode": "interactive", "page": "pd1eac4:4"}
+4	mcp__browser__act	{"action": "select", "handle": "h107", "page": "pd1eac4:5"}
+5	mcp__browser__act	{"action": "select", "handle": "h107", "page": "pd1eac4:6", "value": "7:00 PM"}
+6	mcp__browser__observe	{"mode": "viewport", "page": "pd1eac4:7"}
+7	mcp__browser__observe	{"mode": "interactive", "page": "pd1eac4:8"}
+8	ToolSearch	{"max_results": 3, "query": "select:mcp__browser__scroll,mcp__browser__key,mcp__browser__screenshot"}
+9	mcp__browser__scroll	{"page": "pd1eac4:9", "to": "h107"}
+10	mcp__browser__act	{"action": "click", "handle": "h107", "page": "pd1eac4:10"}
+11	mcp__browser__observe	{"mode": "viewport", "page": "pd1eac4:11"}
+12	mcp__browser__key	{"key": "Escape", "page": "pd1eac4:12"}
+13	mcp__browser__act	{"action": "select", "handle": "h4", "page": "pd1eac4:13", "value": "7:00 PM"}
+14	mcp__browser__act	{"action": "select", "handle": "h6", "page": "pd1eac4:13", "value": "4"}
+15	mcp__browser__observe	{"mode": "viewport", "page": "pd1eac4:15"}
+16	mcp__browser__act	{"action": "focus", "handle": "h4", "page": "pd1eac4:16"}
+17	mcp__browser__observe	{"mode": "interactive", "page": "pd1eac4:17"}
+18	mcp__browser__scroll	{"page": "pd1eac4:18", "to": "h267"}
+19	mcp__browser__act	{"action": "click", "handle": "h267", "page": "pd1eac4:19"}
+20	mcp__browser__key	{"handle": "h280", "key": "ArrowDown", "page": "pd1eac4:20"}
+21	mcp__browser__key	{"key": "Escape", "page": "pd1eac4:21"}
+22	mcp__browser__type	{"handle": "h4", "page": "pd1eac4:22", "text": "7:00 PM"}
+23	mcp__browser__extract	{"format": "text", "page": "pd1eac4:23", "query": "Select time 7:00 PM selected Select number of guests Jul 18"}
+24	mcp__browser__screenshot	{"page": "pd1eac4:24"}
+25	mcp__browser__type	{"handle": "h8", "page": "pd1eac4:24", "text": "The Royal Dine"}
+26	mcp__browser__act	{"action": "click", "at": {"x": 370, "y": 129}, "page": "pd1eac4:25"}
+27	mcp__browser__screenshot	{"page": "pd1eac4:26"}
+28	mcp__browser__scroll	{"dy": 300, "page": "pd1eac4:26"}
+29	mcp__browser__screenshot	{"page": "pd1eac4:27"}
+30	mcp__browser__key	{"key": "ArrowDown", "page": "pd1eac4:27"}
+31	mcp__browser__screenshot	{"page": "pd1eac4:28"}
+32	mcp__browser__key	{"key": "ArrowDown", "page": "pd1eac4:28"}
+33	mcp__browser__key	{"key": "ArrowDown", "page": "pd1eac4:28"}
+34	mcp__browser__key	{"key": "ArrowDown", "page": "pd1eac4:28"}
+35	mcp__browser__key	{"key": "ArrowDown", "page": "pd1eac4:28"}
+36	mcp__browser__screenshot	{"page": "pd1eac4:32"}
+37	mcp__browser__key	{"key": "ArrowDown", "page": "pd1eac4:32"}
+38	mcp__browser__key	{"key": "ArrowDown", "page": "pd1eac4:32"}
+39	mcp__browser__key	{"key": "ArrowDown", "page": "pd1eac4:32"}
+40	mcp__browser__key	{"key": "ArrowDown", "page": "pd1eac4:32"}
+41	mcp__browser__key	{"key": "ArrowDown", "page": "pd1eac4:32"}
+42	mcp__browser__key	{"key": "ArrowDown", "page": "pd1eac4:32"}
+43	mcp__browser__key	{"key": "ArrowDown", "page": "pd1eac4:32"}
+44	mcp__browser__screenshot	{"page": "pd1eac4:39"}
+45	mcp__browser__key	{"key": "Enter", "page": "pd1eac4:39"}
+46	mcp__browser__act	{"action": "click", "at": {"x": 537, "y": 129}, "page": "pd1eac4:40"}
+47	mcp__browser__act	{"action": "click", "handle": "h366", "page": "pd1eac4:41"}
+48	mcp__browser__act	{"action": "click", "at": {"x": 200, "y": 129}, "page": "pd1eac4:42"}
+49	mcp__browser__screenshot	{"page": "pd1eac4:43"}
+50	mcp__browser__act	{"action": "click", "at": {"x": 404, "y": 341}, "page": "pd1eac4:43"}
+51	mcp__browser__act	{"action": "click", "at": {"x": 1060, "y": 129}, "page": "pd1eac4:44"}
+52	mcp__browser__act	{"action": "click", "handle": "h436", "page": "pd1eac4:45"}
+53	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app/booking?index=e83c1c2b-9f5b-4a7c-bd54-b165a86a0f3d&guests=4%20people&date=Sat,%2020%20Jul%202024%2007:00:00%20GMT&time=7:00%20PM"}
+54	mcp__browser__type	{"handle": "h458", "page": "pd1eac4:47", "text": "5555550123"}
+55	mcp__browser__act	{"action": "click", "handle": "h463", "page": "pd1eac4:48"}
+56	mcp__browser__type	{"handle": "h458", "page": "pd1eac4:49", "text": "4152345678"}
+57	mcp__browser__act	{"action": "click", "handle": "h463", "page": "pd1eac4:49"}
+58	mcp__browser__screenshot	{"page": "pd1eac4:51"}
+59	mcp__browser__type	{"handle": "h458", "page": "pd1eac4:51", "text": "+1 4152345678"}
+60	mcp__browser__screenshot	{"page": "pd1eac4:52"}
+61	mcp__browser__act	{"action": "click", "at": {"x": 455, "y": 511}, "page": "pd1eac4:52"}
+62	mcp__browser__extract	{"format": "text", "page": "pd1eac4:53", "query": "booking complete confirmation restaurant date time party"}
