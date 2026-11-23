@@ -1,0 +1,117 @@
+chrome_ver	slice	task	run	first_diff_index	kind	turn_manuk	tool_manuk	turn_cdp_layer	tool_cdp_layer	len_manuk	len_cdp_layer
+145.0.7632.116	own	F01	1	2	substitute	2	mcp__browser__type	2	mcp__browser__act	6	2
+145.0.7632.116	own	F02	1	2	substitute	2	mcp__browser__type	2	mcp__browser__fill_form	10	7
+145.0.7632.116	own	F03	1	4	substitute	3	mcp__browser__type	3	mcp__browser__act	10	7
+145.0.7632.116	own	F04	1	2	substitute	2	mcp__browser__extract	2	mcp__browser__type	13	7
+145.0.7632.116	own	F05	1	2	substitute	2	mcp__browser__extract	2	mcp__browser__act	5	3
+145.0.7632.116	own	F06	1	5	manuk_extra	5	mcp__browser__extract		<end>	5	4
+145.0.7632.116	own	F07	1	3	manuk_extra	3	mcp__browser__extract		<end>	3	2
+145.0.7632.116	own	F08	1	2	manuk_extra	2	mcp__browser__scroll		<end>	6	1
+145.0.7632.116	own	F09	1	2	substitute	2	mcp__browser__extract	2	mcp__browser__act	6	3
+145.0.7632.116	own	F10	1	3	manuk_extra	3	mcp__browser__extract		<end>	3	2
+145.0.7632.116	own	F11	1	4	substitute	4	mcp__browser__extract	3	mcp__browser__act	6	4
+145.0.7632.116	own	F12	1	2	manuk_extra	2	mcp__browser__extract		<end>	2	1
+145.0.7632.116	own	F13	1	2	manuk_extra	2	mcp__browser__extract		<end>	2	1
+145.0.7632.116	own	F14	1	2	manuk_extra	2	mcp__browser__extract		<end>	2	1
+145.0.7632.116	own	F15	1	2	manuk_extra	2	mcp__browser__extract		<end>	2	1
+145.0.7632.116	own	L02	1	2	manuk_extra	2	mcp__browser__act		<end>	2	1
+145.0.7632.116	own	L03	1	3	manuk_extra	3	mcp__browser__extract		<end>	3	2
+145.0.7632.116	own	L07	1	2	manuk_extra	2	mcp__browser__extract		<end>	4	1
+145.0.7632.116	own	L08	1	2	manuk_extra	2	mcp__browser__extract		<end>	2	1
+145.0.7632.116	own	L10	1	2	substitute	2	mcp__browser__extract	2	mcp__browser__act	6	2
+145.0.7632.116	own	L11	1	2	manuk_extra	2	mcp__browser__extract		<end>	2	1
+145.0.7632.116	own	L12	1	3	substitute	2	mcp__browser__extract	3	mcp__browser__scroll	27	6
+145.0.7632.116	own	L13	1	2	manuk_extra	2	mcp__browser__extract		<end>	2	1
+145.0.7632.116	own	L17	1	4	cdp_extra		<end>	4	mcp__browser__extract	3	5
+145.0.7632.116	own	L19	1	2	substitute	2	mcp__browser__find	2	mcp__browser__extract	4	2
+145.0.7632.116	own	L20	1	2	manuk_extra	2	mcp__browser__find		<end>	4	1
+145.0.7632.116	own	L21	1	4	manuk_extra	4	mcp__browser__extract		<end>	4	3
+145.0.7632.116	own	L22	1	2	manuk_extra	2	mcp__browser__extract		<end>	2	1
+145.0.7632.116	own	L23	1	3	manuk_extra	3	mcp__browser__extract		<end>	3	2
+145.0.7632.116	own	L24	1	2	manuk_extra	2	mcp__browser__extract		<end>	2	1
+145.0.7632.116	own	F01	2	5	manuk_extra	5	mcp__browser__extract		<end>	5	4
+145.0.7632.116	own	F02	2	2	substitute	2	mcp__browser__fill_form	2	mcp__browser__act	9	14
+145.0.7632.116	own	F03	2	3	substitute	3	mcp__browser__act	3	mcp__browser__fill_form	7	6
+145.0.7632.116	own	F04	2	2	substitute	2	mcp__browser__extract	2	mcp__browser__act	12	8
+145.0.7632.116	own	F05	2	2	substitute	2	mcp__browser__extract	2	mcp__browser__act	5	3
+145.0.7632.116	own	F06	2	5	manuk_extra	5	mcp__browser__extract		<end>	5	4
+145.0.7632.116	own	F07	2	3	manuk_extra	3	mcp__browser__extract		<end>	3	2
+145.0.7632.116	own	F08	2	2	manuk_extra	2	mcp__browser__scroll		<end>	6	1
+145.0.7632.116	own	F09	2	2	substitute	2	mcp__browser__extract	2	mcp__browser__act	6	3
+145.0.7632.116	own	F10	2	3	manuk_extra	3	mcp__browser__extract		<end>	4	2
+145.0.7632.116	own	F11	2	5	manuk_extra	4	mcp__browser__act		<end>	7	4
+145.0.7632.116	own	F12	2	2	manuk_extra	2	mcp__browser__extract		<end>	2	1
+145.0.7632.116	own	F13	2	2	manuk_extra	2	mcp__browser__extract		<end>	2	1
+145.0.7632.116	own	F14	2	2	manuk_extra	2	mcp__browser__extract		<end>	2	1
+145.0.7632.116	own	F15	2	2	manuk_extra	2	mcp__browser__extract		<end>	2	1
+145.0.7632.116	own	L02	2	2	manuk_extra	2	mcp__browser__act		<end>	2	1
+145.0.7632.116	own	L03	2	3	manuk_extra	3	mcp__browser__find		<end>	4	2
+145.0.7632.116	own	L07	2	2	manuk_extra	2	mcp__browser__extract		<end>	2	1
+145.0.7632.116	own	L08	2	2	manuk_extra	2	mcp__browser__extract		<end>	2	1
+145.0.7632.116	own	L10	2	2	substitute	2	mcp__browser__navigate	2	mcp__browser__act	3	2
+145.0.7632.116	own	L11	2	2	manuk_extra	2	mcp__browser__extract		<end>	2	1
+145.0.7632.116	own	L12	2	3	substitute	2	mcp__browser__extract	2	mcp__browser__wait_for	20	5
+145.0.7632.116	own	L13	2	2	manuk_extra	2	mcp__browser__extract		<end>	2	1
+145.0.7632.116	own	L17	2	4	substitute	4	mcp__browser__extract	4	mcp__browser__find	4	7
+145.0.7632.116	own	L20	2	3	substitute	3	mcp__browser__extract	3	mcp__browser__find	3	3
+145.0.7632.116	own	L21	2	2	substitute	2	mcp__browser__type	2	mcp__browser__act	4	7
+145.0.7632.116	own	L22	2	2	manuk_extra	2	mcp__browser__extract		<end>	2	1
+145.0.7632.116	own	L24	2	2	manuk_extra	2	mcp__browser__extract		<end>	2	1
+145.0.7632.116	own	F01	3	2	substitute	2	mcp__browser__fill_form	2	mcp__browser__act	5	2
+145.0.7632.116	own	F02	3	2	substitute	2	mcp__browser__fill_form	2	mcp__browser__act	6	4
+145.0.7632.116	own	F03	3	3	substitute	3	mcp__browser__type	3	mcp__browser__act	11	5
+145.0.7632.116	own	F04	3	2	substitute	2	mcp__browser__extract	2	mcp__browser__type	9	7
+145.0.7632.116	own	F05	3	2	substitute	2	mcp__browser__extract	2	mcp__browser__act	6	3
+145.0.7632.116	own	F06	3	5	manuk_extra	5	mcp__browser__extract		<end>	5	4
+145.0.7632.116	own	F08	3	2	manuk_extra	2	mcp__browser__extract		<end>	2	1
+145.0.7632.116	own	F09	3	2	substitute	2	mcp__browser__extract	2	mcp__browser__act	6	3
+145.0.7632.116	own	F10	3	3	manuk_extra	3	mcp__browser__extract		<end>	3	2
+145.0.7632.116	own	F11	3	4	manuk_extra	3	mcp__browser__extract		<end>	9	3
+145.0.7632.116	own	F12	3	2	manuk_extra	2	mcp__browser__extract		<end>	2	1
+145.0.7632.116	own	F13	3	2	manuk_extra	2	mcp__browser__extract		<end>	2	1
+145.0.7632.116	own	F14	3	2	manuk_extra	2	mcp__browser__extract		<end>	2	1
+145.0.7632.116	own	F15	3	2	manuk_extra	2	mcp__browser__extract		<end>	2	1
+145.0.7632.116	own	L02	3	2	manuk_extra	2	mcp__browser__extract		<end>	5	1
+145.0.7632.116	own	L03	3	3	manuk_extra	3	mcp__browser__find		<end>	4	2
+145.0.7632.116	own	L07	3	2	manuk_extra	2	mcp__browser__extract		<end>	2	1
+145.0.7632.116	own	L08	3	2	manuk_extra	2	mcp__browser__extract		<end>	2	1
+145.0.7632.116	own	L10	3	2	substitute	2	mcp__browser__find	2	mcp__browser__act	5	2
+145.0.7632.116	own	L11	3	2	manuk_extra	2	mcp__browser__extract		<end>	2	1
+145.0.7632.116	own	L12	3	3	substitute	2	mcp__browser__extract	2	mcp__browser__wait_for	29	7
+145.0.7632.116	own	L13	3	2	manuk_extra	2	mcp__browser__extract		<end>	2	1
+145.0.7632.116	own	L17	3	3	substitute	3	mcp__browser__find	3	mcp__browser__extract	5	4
+145.0.7632.116	own	L20	3	3	manuk_extra	3	mcp__browser__extract		<end>	3	2
+145.0.7632.116	own	L21	3	4	manuk_extra	4	mcp__browser__extract		<end>	4	3
+145.0.7632.116	own	L22	3	2	manuk_extra	2	mcp__browser__extract		<end>	2	1
+145.0.7632.116	own	L23	3	3	manuk_extra	3	mcp__browser__extract		<end>	3	2
+145.0.7632.116	own	L24	3	2	manuk_extra	2	mcp__browser__extract		<end>	2	1
+145.0.7632.116	external	X01	1	2	substitute	2	mcp__browser__observe	2	mcp__browser__navigate	17	7
+145.0.7632.116	external	X02	1	2	substitute	2	mcp__browser__observe	2	mcp__browser__act	15	8
+145.0.7632.116	external	X03	1	2	substitute	2	mcp__browser__observe	2	mcp__browser__type	19	7
+145.0.7632.116	external	X04	1	2	manuk_extra	2	mcp__browser__navigate		<end>	4	1
+145.0.7632.116	external	X05	1	2	cdp_extra		<end>	2	mcp__browser__type	1	2
+145.0.7632.116	external	X06	1	2	substitute	2	mcp__browser__type	2	mcp__browser__extract	5	6
+145.0.7632.116	external	X07	1	2	substitute	2	mcp__browser__type	2	mcp__browser__observe	11	2
+145.0.7632.116	external	X08	1	2	cdp_extra		<end>	2	mcp__browser__type	1	2
+145.0.7632.116	external	X09	1	2	cdp_extra		<end>	2	mcp__browser__extract	1	4
+145.0.7632.116	external	X10	1	1	substitute	1	mcp__browser__navigate	1	ToolSearch	6	3
+145.0.7632.116	external	X01	2	2	substitute	2	mcp__browser__observe	2	mcp__browser__act	15	8
+145.0.7632.116	external	X02	2	1	substitute	1	mcp__browser__navigate	1	ToolSearch	14	8
+145.0.7632.116	external	X03	2	2	substitute	2	mcp__browser__observe	2	mcp__browser__type	19	8
+145.0.7632.116	external	X04	2	2	substitute	2	mcp__browser__extract	2	mcp__browser__navigate	2	2
+145.0.7632.116	external	X05	2	2	cdp_extra		<end>	2	mcp__browser__wait_for	1	4
+145.0.7632.116	external	X06	2	2	cdp_extra		<end>	2	mcp__browser__observe	1	4
+145.0.7632.116	external	X07	2	2	cdp_extra		<end>	2	mcp__browser__observe	1	2
+145.0.7632.116	external	X08	2	2	cdp_extra		<end>	2	mcp__browser__extract	1	4
+145.0.7632.116	external	X09	2	2	cdp_extra		<end>	2	mcp__browser__extract	1	4
+145.0.7632.116	external	X10	2	2	substitute	2	mcp__browser__extract	2	mcp__browser__type	4	6
+145.0.7632.116	external	X01	3	2	substitute	2	mcp__browser__observe	2	mcp__browser__act	13	8
+145.0.7632.116	external	X02	3	2	substitute	2	mcp__browser__observe	2	mcp__browser__act	15	8
+145.0.7632.116	external	X03	3	1	substitute	1	mcp__browser__navigate	1	ToolSearch	22	9
+145.0.7632.116	external	X04	3	2	substitute	2	mcp__browser__navigate	2	mcp__browser__extract	2	2
+145.0.7632.116	external	X05	3	2	cdp_extra		<end>	2	mcp__browser__type	1	2
+145.0.7632.116	external	X06	3	1	substitute	1	ToolSearch	1	mcp__browser__navigate	2	2
+145.0.7632.116	external	X07	3	2	cdp_extra		<end>	2	mcp__browser__act	1	3
+145.0.7632.116	external	X08	3	1	substitute	1	mcp__browser__navigate	1	ToolSearch	1	4
+145.0.7632.116	external	X09	3	2	cdp_extra		<end>	2	mcp__browser__type	1	2
+145.0.7632.116	external	X10	3	2	substitute	2	mcp__browser__extract	2	mcp__browser__observe	2	4
