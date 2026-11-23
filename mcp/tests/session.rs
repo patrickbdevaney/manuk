@@ -262,28 +262,14 @@ impl Client {
 }
 
 #[test]
-fn modal_over_a_button_is_occluded_until_dismissed() {
+fn modal_over_a_button_is_dismissed_by_the_ladder_then_clicks() {
     let mut c = Client::start();
     let (_, nav) = c.tool("navigate", json!({"url": fixture("modal.html")}));
     let buy = handle_of(&nav, "button \"Buy now\"");
     let name = handle_of(&nav, "textbox");
-    let (err, msg) = c.tool("act", json!({"handle": buy}));
-    assert!(
-        err && msg.contains("OCCLUDED")
-            && msg.contains("covered by [h")
-            && msg.contains("Sign up dialog"),
-        "{msg}"
-    );
-    // typing into a covered field is refused too, and nothing was changed
-    let (err, msg) = c.tool("type", json!({"handle": name, "text": "x"}));
-    assert!(
-        err && msg.contains("OCCLUDED") && msg.contains("nothing was typed"),
-        "{msg}"
-    );
-    // dismiss the dialog, and the same handle now clicks
+    // W6.C1: the ladder's dismiss rung closes the covering dialog (its own Dismiss control), then the click lands.
+    // (Before the ladder this was an OCCLUDED refusal; mcp/tests/ladder.rs covers the refusal text and rungs.)
     let close = handle_of(&nav, "Dismiss");
-    let (err, eff) = c.tool("act", json!({"handle": close}));
-    assert!(!err, "{eff}");
     let (err, eff) = c.tool("act", json!({"handle": buy}));
     assert!(
         !err && eff.contains("verified: target was topmost") && eff.contains("bought"),
@@ -292,6 +278,9 @@ fn modal_over_a_button_is_occluded_until_dismissed() {
     // the dismissed dialog's own button is gone: stale, loudly
     let (err, msg) = c.tool("act", json!({"handle": close}));
     assert!(err && msg.contains("STALE"), "{msg}");
+    // the field that was covered is usable now
+    let (err, eff) = c.tool("type", json!({"handle": name, "text": "x"}));
+    assert!(!err, "{eff}");
 }
 
 /// R1.4 gate: text a human cannot see never reaches observe/extract by default.
