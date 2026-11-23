@@ -1,0 +1,70 @@
+1	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app"}
+2	mcp__browser__act	{"action": "click", "handle": "h3"}
+3	mcp__browser__observe	{"mode": "interactive"}
+4	mcp__browser__act	{"action": "click", "handle": "h138"}
+5	mcp__browser__observe	{"mode": "interactive"}
+6	mcp__browser__fill_form	{"fields": [{"action": "select", "handle": "h4", "value": "7:00 PM"}, {"action": "select", "handle": "h6", "value": "4"}, {"action": "type", "handle": "h8", "value": "The Royal Dine"}]}
+7	mcp__browser__observe	{"mode": "viewport"}
+8	mcp__browser__observe	{"mode": "interactive"}
+9	mcp__browser__act	{"action": "click", "force": true, "handle": "h151"}
+10	mcp__browser__type	{"handle": "h4", "text": "7:00 PM"}
+11	mcp__browser__observe	{"mode": "interactive"}
+12	ToolSearch	{"max_results": 2, "query": "select:mcp__browser__scroll,mcp__browser__key"}
+13	mcp__browser__scroll	{"to": "h151"}
+14	mcp__browser__act	{"action": "click", "handle": "h151"}
+15	mcp__browser__key	{"handle": "h164", "key": "ArrowDown"}
+16	mcp__browser__observe	{"mode": "interactive"}
+17	mcp__browser__evaluate	{"expression": "(() => { const opts=[...document.querySelectorAll('[role=option]')].filter(o=>o.textContent.trim()==='7:00 PM'); return opts.map(o=>{const r=o.getBoundingClientRect(); let p=o.parentElement; let chain=[]; for(let i=0;i<4&&p;i++){chain.push(p.tagName+'.'+p.className+' sh='+p.scrollHeight+' ch='+p.clientHeight+' st='+p.scrollTop); p=p.parentElement;} return {top:r.top,vis:window.innerHeight,chain}}); })()"}
+18	mcp__browser__scroll	{"dy": 300}
+19	mcp__browser__act	{"action": "click", "handle": "h151"}
+20	mcp__browser__key	{"handle": "h174", "key": "End"}
+21	mcp__browser__act	{"action": "click", "handle": "h174"}
+22	mcp__browser__observe	{"mode": "interactive"}
+23	mcp__browser__act	{"action": "click", "handle": "h14"}
+24	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app"}
+25	mcp__browser__act	{"action": "click", "handle": "h329"}
+26	mcp__browser__act	{"action": "click", "handle": "h332"}
+27	mcp__browser__act	{"action": "click", "handle": "h479"}
+28	mcp__browser__observe	{"mode": "viewport"}
+29	mcp__browser__act	{"action": "click", "handle": "h329"}
+30	mcp__browser__observe	{"mode": "interactive"}
+31	mcp__browser__act	{"action": "click", "handle": "h640"}
+32	mcp__browser__act	{"action": "click", "handle": "h332"}
+33	mcp__browser__observe	{"mode": "viewport"}
+34	mcp__browser__act	{"action": "click", "handle": "h656"}
+35	mcp__browser__observe	{"mode": "viewport"}
+36	mcp__browser__act	{"action": "click", "handle": "h330"}
+37	mcp__browser__evaluate	{"expression": "(() => [...document.querySelectorAll('[role=option]')].filter(o=>/^(6:00|6:30|7:00) PM$/.test(o.textContent.trim())).map(o=>{const r=o.getBoundingClientRect(); return o.textContent.trim()+' top='+Math.round(r.top)+' sel='+o.getAttribute('aria-selected')}))()"}
+38	mcp__browser__observe	{"mode": "interactive"}
+39	mcp__browser__act	{"action": "click", "handle": "h710"}
+40	mcp__browser__act	{"action": "click", "handle": "h330"}
+41	mcp__browser__observe	{"mode": "interactive"}
+42	mcp__browser__act	{"action": "click", "handle": "h760"}
+43	mcp__browser__observe	{"mode": "interactive"}
+44	mcp__browser__act	{"action": "click", "handle": "h330"}
+45	mcp__browser__observe	{"mode": "interactive"}
+46	mcp__browser__act	{"action": "click", "handle": "h806"}
+47	mcp__browser__observe	{"mode": "viewport"}
+48	mcp__browser__act	{"action": "click", "handle": "h340"}
+49	mcp__browser__observe	{"mode": "viewport"}
+50	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app"}
+51	mcp__browser__act	{"action": "click", "handle": "h836"}
+52	mcp__browser__observe	{"mode": "viewport"}
+53	mcp__browser__act	{"action": "click", "handle": "h971"}
+54	mcp__browser__act	{"action": "click", "handle": "h839"}
+55	mcp__browser__observe	{"mode": "viewport"}
+56	mcp__browser__act	{"action": "click", "handle": "h987"}
+57	mcp__browser__act	{"action": "click", "handle": "h837"}
+58	mcp__browser__observe	{"mode": "interactive"}
+59	mcp__browser__act	{"action": "click", "handle": "h1153"}
+60	mcp__browser__observe	{"mode": "interactive"}
+61	mcp__browser__act	{"action": "click", "handle": "h847"}
+62	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app/booking?index=e83c1c2b-9f5b-4a7c-bd54-b165a86a0f3d&guests=4%20people&date=Sat,%2020%20Jul%202024%2007:00:00%20GMT&time=7:00%20PM"}
+63	mcp__browser__type	{"handle": "h1184", "text": "5555550100"}
+64	mcp__browser__act	{"action": "click", "handle": "h1189"}
+65	mcp__browser__type	{"handle": "h1184", "text": "(415) 555-0100"}
+66	mcp__browser__observe	{"mode": "viewport"}
+67	mcp__browser__type	{"handle": "h1184", "text": "+1 415 555 0100"}
+68	mcp__browser__observe	{"mode": "viewport"}
+69	mcp__browser__act	{"action": "click", "handle": "h1189"}
+70	mcp__browser__observe	{"mode": "viewport"}

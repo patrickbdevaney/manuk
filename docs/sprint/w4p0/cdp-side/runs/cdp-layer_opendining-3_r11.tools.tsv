@@ -1,0 +1,45 @@
+1	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app"}
+2	mcp__browser__type	{"handle": "h8", "text": "The Royal Dine"}
+3	mcp__browser__act	{"action": "click", "handle": "h3"}
+4	mcp__browser__observe	{"mode": "interactive"}
+5	mcp__browser__act	{"action": "click", "handle": "h138"}
+6	mcp__browser__observe	{"mode": "interactive"}
+7	mcp__browser__act	{"action": "click", "handle": "h4"}
+8	mcp__browser__observe	{"mode": "viewport"}
+9	mcp__browser__act	{"action": "select", "handle": "h4", "value": "7:00 PM"}
+10	mcp__browser__observe	{"mode": "interactive"}
+11	mcp__browser__act	{"action": "click", "handle": "h189"}
+12	mcp__browser__act	{"action": "select", "handle": "h189", "value": "7:00 PM"}
+13	mcp__browser__observe	{"budget_tokens": 3000, "mode": "full"}
+14	mcp__browser__evaluate	{"expression": "(()=>{const s=[...document.querySelectorAll('select')].map(x=>({name:x.name,id:x.id,aria:x.getAttribute('aria-label'),val:x.value,n:x.options.length}));return JSON.stringify(s)})()"}
+15	mcp__browser__evaluate	{"expression": "(()=>{const o=[...document.querySelectorAll('[role=option]')].map(x=>x.textContent.trim()+'|'+x.getAttribute('aria-selected')+'|'+x.tagName);const c=[...document.querySelectorAll('[role=combobox],[role=listbox],input')].map(x=>x.tagName+':'+(x.getAttribute('aria-label')||x.textContent.trim().slice(0,30))+':'+x.getAttribute('aria-expanded'));return JSON.stringify({o:o.slice(0,40),c})})()"}
+16	ToolSearch	{"max_results": 2, "query": "select:mcp__browser__key,mcp__browser__scroll"}
+17	mcp__browser__scroll	{"to": "h189"}
+18	mcp__browser__observe	{"mode": "viewport"}
+19	mcp__browser__observe	{"mode": "interactive"}
+20	mcp__browser__key	{"handle": "h177", "key": "ArrowDown"}
+21	mcp__browser__act	{"action": "click", "force": true, "handle": "h189"}
+22	mcp__browser__scroll	{"dy": -200}
+23	mcp__browser__observe	{"mode": "viewport"}
+24	mcp__browser__act	{"action": "click", "handle": "h187"}
+25	mcp__browser__observe	{"mode": "interactive"}
+26	mcp__browser__act	{"action": "click", "handle": "h4"}
+27	mcp__browser__observe	{"mode": "interactive"}
+28	mcp__browser__act	{"action": "click", "handle": "h349"}
+29	mcp__browser__observe	{"mode": "interactive"}
+30	mcp__browser__act	{"action": "click", "handle": "h6"}
+31	mcp__browser__act	{"action": "click", "handle": "h362"}
+32	mcp__browser__act	{"action": "click", "handle": "h9"}
+33	mcp__browser__act	{"action": "click", "handle": "h388"}
+34	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app/s?date=Sat,%2020%20Jul%202024%2007:00:00%20GMT&guests=4%20people&time=7:00%20PM&query=The%20Royal%20Dine"}
+35	mcp__browser__act	{"action": "click", "handle": "h419"}
+36	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app/booking?index=e83c1c2b-9f5b-4a7c-bd54-b165a86a0f3d&guests=4%20people&date=Sat,%2020%20Jul%202024%2007:00:00%20GMT&time=7:00%20PM"}
+37	mcp__browser__type	{"handle": "h448", "text": "4155550123"}
+38	mcp__browser__act	{"action": "click", "handle": "h453"}
+39	mcp__browser__type	{"handle": "h448", "text": "4152345678"}
+40	mcp__browser__act	{"action": "click", "handle": "h453"}
+41	mcp__browser__observe	{"mode": "interactive"}
+42	mcp__browser__type	{"handle": "h448", "text": "+1 415 234 5678"}
+43	mcp__browser__observe	{"mode": "interactive"}
+44	mcp__browser__act	{"action": "click", "handle": "h453"}
+45	mcp__browser__extract	{"format": "text"}

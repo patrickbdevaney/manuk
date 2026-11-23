@@ -1,0 +1,47 @@
+{
+ "bookingDetailsDiff": {
+  "added": {
+   "0": {
+    "date": "2024-07-20T07:00:00.000Z",
+    "guests": "4 people",
+    "optionals": {
+     "occasion": "placeholder",
+     "request": ""
+    },
+    "restaurant": {
+     "adjectives": [
+      "luxurious",
+      "romantic",
+      "elegant"
+     ],
+     "description": "An upscale dining establishment offering a lavish experience with gourmet cuisine and a majestic ambiance. Perfect for those seeking an elegant night out or a special celebration.",
+     "food_type": "French",
+     "id": "e83c1c2b-9f5b-4a7c-bd54-b165a86a0f3d",
+     "name": "The Royal Dine",
+     "price_range": "$25 to $50",
+     "rating": "4.02"
+    },
+    "tel": "+1 415 555 2671",
+    "time": "7:00 PM"
+   }
+  },
+  "deleted": {},
+  "updated": {}
+ },
+ "config": {
+  "open_dining": {
+   "error_booking": false,
+   "hide_aria_labels": false,
+   "latency": 0,
+   "no_available_slots": false,
+   "removePopup": false,
+   "run_id": "0",
+   "task_id": "opendining-3"
+  }
+ },
+ "reviewDetailsDiff": {
+  "added": {},
+  "deleted": {},
+  "updated": {}
+ }
+}

@@ -1,0 +1,72 @@
+1	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app"}
+2	mcp__browser__act	{"action": "click", "handle": "h3"}
+3	mcp__browser__act	{"action": "click", "handle": "h4"}
+4	mcp__browser__observe	{"mode": "interactive"}
+5	mcp__browser__act	{"action": "click", "handle": "h188"}
+6	mcp__browser__act	{"action": "select", "handle": "h188", "value": "7:00 PM"}
+7	mcp__browser__act	{"action": "select", "handle": "h4", "value": "7:00 PM"}
+8	mcp__browser__observe	{"mode": "interactive"}
+9	mcp__browser__screenshot	{}
+10	ToolSearch	{"max_results": 1, "query": "select:mcp__browser__scroll"}
+11	mcp__browser__scroll	{"to": "h188"}
+12	mcp__browser__screenshot	{}
+13	ToolSearch	{"max_results": 1, "query": "select:mcp__browser__key"}
+14	mcp__browser__key	{"key": "ArrowDown"}
+15	mcp__browser__key	{"key": "ArrowDown"}
+16	mcp__browser__key	{"key": "ArrowDown"}
+17	mcp__browser__key	{"key": "ArrowDown"}
+18	mcp__browser__key	{"key": "ArrowDown"}
+19	mcp__browser__key	{"key": "ArrowDown"}
+20	mcp__browser__key	{"key": "ArrowDown"}
+21	mcp__browser__key	{"key": "ArrowDown"}
+22	mcp__browser__key	{"key": "ArrowDown"}
+23	mcp__browser__key	{"key": "ArrowDown"}
+24	mcp__browser__key	{"key": "ArrowDown"}
+25	mcp__browser__key	{"key": "ArrowDown"}
+26	mcp__browser__key	{"key": "ArrowDown"}
+27	mcp__browser__key	{"key": "Enter"}
+28	mcp__browser__screenshot	{}
+29	mcp__browser__act	{"action": "click", "at": {"x": 338, "y": 433}}
+30	mcp__browser__screenshot	{}
+31	mcp__browser__act	{"action": "click", "at": {"x": 203, "y": 129}}
+32	mcp__browser__act	{"action": "click", "at": {"x": 537, "y": 129}}
+33	mcp__browser__screenshot	{}
+34	mcp__browser__act	{"action": "click", "at": {"x": 508, "y": 213}}
+35	mcp__browser__observe	{"mode": "interactive"}
+36	mcp__browser__act	{"action": "click", "at": {"x": 203, "y": 129}}
+37	mcp__browser__screenshot	{}
+38	mcp__browser__act	{"action": "click", "at": {"x": 405, "y": 341}}
+39	mcp__browser__screenshot	{}
+40	mcp__browser__act	{"action": "click", "at": {"x": 805, "y": 129}}
+41	mcp__browser__type	{"handle": "h8", "text": "The Royal Dine"}
+42	mcp__browser__act	{"action": "click", "at": {"x": 1060, "y": 129}}
+43	mcp__browser__screenshot	{}
+44	mcp__browser__act	{"action": "click", "handle": "h426"}
+45	mcp__browser__observe	{"mode": "interactive"}
+46	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app/booking?index=e83c1c2b-9f5b-4a7c-bd54-b165a86a0f3d&guests=4%20people&date=Sat,%2020%20Jul%202024%2007:00:00%20GMT&time=7:00%20PM"}
+47	mcp__browser__type	{"handle": "h448", "text": "5555550100"}
+48	mcp__browser__act	{"action": "click", "handle": "h453"}
+49	mcp__browser__observe	{"mode": "content"}
+50	mcp__browser__observe	{"mode": "interactive"}
+51	mcp__browser__act	{"action": "focus", "handle": "h448"}
+52	mcp__browser__key	{"handle": "h448", "key": "Control+a"}
+53	mcp__browser__type	{"handle": "h448", "text": "4155550100"}
+54	mcp__browser__observe	{"mode": "interactive"}
+55	mcp__browser__act	{"action": "click", "handle": "h447"}
+56	mcp__browser__observe	{"mode": "interactive"}
+57	mcp__browser__act	{"action": "click", "handle": "h1389"}
+58	mcp__browser__scroll	{"to": "h1389"}
+59	mcp__browser__screenshot	{}
+60	mcp__browser__act	{"action": "click", "at": {"x": 340, "y": 758}}
+61	mcp__browser__observe	{"mode": "interactive"}
+62	mcp__browser__act	{"action": "click", "handle": "h447"}
+63	mcp__browser__screenshot	{}
+64	mcp__browser__act	{"action": "click", "at": {"x": 330, "y": 400}}
+65	mcp__browser__scroll	{"dy": 200}
+66	mcp__browser__screenshot	{}
+67	mcp__browser__act	{"action": "focus", "handle": "h448"}
+68	mcp__browser__key	{"handle": "h448", "key": "Control+a"}
+69	mcp__browser__type	{"handle": "h448", "text": "+14155550100"}
+70	mcp__browser__screenshot	{}
+71	mcp__browser__act	{"action": "click", "at": {"x": 455, "y": 511}}
+72	mcp__browser__observe	{"mode": "content"}

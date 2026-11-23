@@ -1,0 +1,48 @@
+1	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app"}
+2	mcp__browser__act	{"action": "click", "handle": "h3"}
+3	mcp__browser__act	{"action": "click", "handle": "h4"}
+4	mcp__browser__observe	{"mode": "interactive"}
+5	mcp__browser__act	{"action": "click", "handle": "h188"}
+6	mcp__browser__act	{"action": "select", "handle": "h188", "value": "7:00 PM"}
+7	mcp__browser__observe	{"mode": "viewport"}
+8	mcp__browser__act	{"action": "select", "handle": "h4", "value": "7:00 PM"}
+9	mcp__browser__observe	{"mode": "full"}
+10	mcp__browser__screenshot	{}
+11	mcp__browser__scroll	{"at": "{\"x\":370,\"y\":500}", "page": "pe5c75c:11"}
+12	mcp__browser__scroll	{"dy": 200, "page": "pe5c75c:11"}
+13	mcp__browser__screenshot	{}
+14	mcp__browser__evaluate	{"expression": "(() => { const el=[...document.querySelectorAll('*')].find(e=>e.textContent.trim()==='7:00 PM' && e.children.length===0); if(!el) return 'none'; el.scrollIntoView({block:'center'}); const r=el.getBoundingClientRect(); return JSON.stringify({x:r.x+r.width/2,y:r.y+r.height/2,tag:el.tagName,cls:el.className}); })()", "page": "pe5c75c:13"}
+15	ToolSearch	{"max_results": 1, "query": "select:mcp__browser__key"}
+16	mcp__browser__key	{"handle": "h176", "key": "ArrowDown"}
+17	mcp__browser__act	{"action": "click", "at": {"x": 370, "y": 600}}
+18	mcp__browser__screenshot	{}
+19	mcp__browser__act	{"action": "click", "at": {"x": 370, "y": 129}}
+20	mcp__browser__screenshot	{}
+21	mcp__browser__act	{"action": "click", "at": {"x": 340, "y": 683}}
+22	mcp__browser__act	{"action": "click", "at": {"x": 540, "y": 129}}
+23	mcp__browser__screenshot	{}
+24	mcp__browser__act	{"action": "click", "at": {"x": 508, "y": 213}}
+25	mcp__browser__act	{"action": "click", "at": {"x": 200, "y": 129}}
+26	mcp__browser__screenshot	{}
+27	mcp__browser__act	{"action": "click", "at": {"x": 405, "y": 341}}
+28	mcp__browser__act	{"action": "click", "at": {"x": 790, "y": 129}}
+29	mcp__browser__type	{"handle": "h8", "text": "The Royal Dine"}
+30	mcp__browser__screenshot	{}
+31	mcp__browser__act	{"action": "click", "at": {"x": 1060, "y": 129}}
+32	mcp__browser__screenshot	{}
+33	mcp__browser__act	{"action": "click", "handle": "h431"}
+34	mcp__browser__screenshot	{}
+35	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app/s?date=Sat,%2020%20Jul%202024%2007:00:00%20GMT&guests=4%20people&time=7:00%20PM&query=The%20Royal%20Dine"}
+36	mcp__browser__act	{"action": "click", "handle": "h461"}
+37	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app/booking?index=e83c1c2b-9f5b-4a7c-bd54-b165a86a0f3d&guests=4%20people&date=Sat,%2020%20Jul%202024%2007:00:00%20GMT&time=7:00%20PM"}
+38	mcp__browser__type	{"handle": "h490", "text": "5555550123"}
+39	mcp__browser__act	{"action": "click", "handle": "h495"}
+40	mcp__browser__screenshot	{}
+41	mcp__browser__type	{"handle": "h490", "text": "4155550123"}
+42	mcp__browser__screenshot	{}
+43	mcp__browser__act	{"action": "focus", "handle": "h490"}
+44	mcp__browser__key	{"handle": "h490", "key": "Control+a"}
+45	mcp__browser__type	{"handle": "h490", "text": "+14155550123"}
+46	mcp__browser__screenshot	{}
+47	mcp__browser__act	{"action": "click", "handle": "h495"}
+48	mcp__browser__screenshot	{}

@@ -1,0 +1,40 @@
+1	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app"}
+2	mcp__browser__act	{"action": "click", "handle": "h3"}
+3	mcp__browser__act	{"action": "focus", "handle": "h8"}
+4	mcp__browser__observe	{"mode": "interactive"}
+5	mcp__browser__act	{"action": "click", "handle": "h138"}
+6	mcp__browser__observe	{"mode": "interactive"}
+7	mcp__browser__fill_form	{"fields": [{"handle": "h8", "value": "The Royal Dine"}, {"handle": "h6", "value": "4"}]}
+8	mcp__browser__act	{"action": "click", "handle": "h4"}
+9	mcp__browser__observe	{"mode": "viewport"}
+10	mcp__browser__find	{"page": "p3a8c50:11", "query": "option \"7:00 PM\""}
+11	mcp__browser__observe	{"include_hidden": false, "mode": "interactive"}
+12	mcp__browser__act	{"action": "click", "handle": "h189"}
+13	mcp__browser__fill_form	{"fields": [{"action": "select", "handle": "h4", "value": "7:00 PM"}]}
+14	mcp__browser__observe	{"mode": "interactive"}
+15	ToolSearch	{"max_results": 2, "query": "select:mcp__browser__scroll,mcp__browser__key"}
+16	mcp__browser__scroll	{"to": "h189"}
+17	mcp__browser__observe	{"mode": "interactive"}
+18	mcp__browser__observe	{"budget_tokens": 1500, "mode": "full"}
+19	mcp__browser__key	{"handle": "h187", "key": "ArrowDown"}
+20	mcp__browser__key	{"handle": "h187", "key": "Enter"}
+21	mcp__browser__fill_form	{"fields": [{"handle": "h8", "value": "The Royal Dine"}]}
+22	mcp__browser__act	{"action": "click", "handle": "h6"}
+23	mcp__browser__act	{"action": "click", "handle": "h314"}
+24	mcp__browser__act	{"action": "click", "handle": "h4"}
+25	mcp__browser__find	{"page": "p3a8c50:25", "query": "option \"7:00 PM\" or option \"6:00 PM\" or option \"6:30 PM\""}
+26	mcp__browser__key	{"handle": "h4", "key": "ArrowDown"}
+27	mcp__browser__key	{"handle": "h4", "key": "ArrowDown"}
+28	mcp__browser__key	{"handle": "h4", "key": "Enter"}
+29	mcp__browser__observe	{"mode": "interactive"}
+30	mcp__browser__act	{"action": "click", "handle": "h370"}
+31	mcp__browser__observe	{"mode": "viewport"}
+32	mcp__browser__evaluate	{"expression": "Array.from(document.querySelectorAll('select, [role=combobox], input')).map(e => ({tag: e.tagName, name: e.getAttribute('aria-label') || e.name, value: e.value, text: (e.innerText||'').slice(0,40)}))"}
+33	mcp__browser__act	{"action": "click", "handle": "h9"}
+34	mcp__browser__act	{"action": "click", "handle": "h388"}
+35	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app/booking?index=e83c1c2b-9f5b-4a7c-bd54-b165a86a0f3d&guests=4%20people&date=Sat,%2020%20Jul%202024%2007:00:00%20GMT&time=7:00%20PM"}
+36	mcp__browser__fill_form	{"fields": [{"handle": "h411", "value": "5555550123"}], "submit": "h416"}
+37	mcp__browser__fill_form	{"fields": [{"handle": "h411", "value": "4155552671"}], "submit": "h416"}
+38	mcp__browser__observe	{"mode": "interactive"}
+39	mcp__browser__fill_form	{"fields": [{"handle": "h411", "value": "+14155552671"}], "submit": "h416"}
+40	mcp__browser__observe	{"mode": "content"}
