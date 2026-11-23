@@ -4,8 +4,10 @@
 Reads the per-turn action logs and compares the tool sequence of the manuk arm against the cdp-layer arm,
 task by task and run by run, per slice:
   own       docs/sprint/SCOREBOARD.tsv.turns.tsv                       (manuk + cdp-layer, own suite)
-  external  docs/sprint/w4e2a-default-ext.tsv.turns.tsv (manuk)        +
+  external  docs/sprint/w4p0ga/manuk-external.turns.tsv (manuk, X01..X10, W4.P0.g.a.a; same-day)  +
             docs/sprint/w4p0ga/cdp-layer-external.turns.tsv (cdp-layer, X01..X10, W4.P0.g.a)
+            (the 2026-10-31 manuk file docs/sprint/w4e2a-default-ext.tsv.turns.tsv is still readable via
+             --manuk-external for the before/after comparison)
 
 A '+' in the tool column is a parallel call in one turn; it is flattened in order.
 Text-only turns (empty tool) are dropped.
@@ -22,6 +24,8 @@ Usage:
   python3 -I scripts/trajectory-agree.py                    # write TSV + print summary (both slices)
   python3 -I scripts/trajectory-agree.py --mutate shuffle   # shuffle manuk turn order (red control, no write)
   python3 -I scripts/trajectory-agree.py --cdp-external PATH  # override the cdp-layer external turns file
+  python3 -I scripts/trajectory-agree.py --manuk-external PATH  # override the manuk external turns file (a missing
+                                                            # file makes the external slice UNPAIRED)
   python3 -I scripts/trajectory-agree.py --selftest         # exit 1 unless shuffle lowers the rates on every
                                                             # paired slice and a removed external file is UNPAIRED
 """
@@ -34,7 +38,7 @@ from collections import defaultdict
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 OWN_TURNS = os.path.join(ROOT, "docs/sprint/SCOREBOARD.tsv.turns.tsv")
-EXT_MANUK_TURNS = os.path.join(ROOT, "docs/sprint/w4e2a-default-ext.tsv.turns.tsv")
+EXT_MANUK_TURNS = os.path.join(ROOT, "docs/sprint/w4p0ga/manuk-external.turns.tsv")
 EXT_CDP_TURNS = os.path.join(ROOT, "docs/sprint/w4p0ga/cdp-layer-external.turns.tsv")
 OUT = os.path.join(ROOT, "docs/sprint/w4p0g/TRAJECTORY.tsv")
 ARM_A, ARM_B = "manuk", "cdp-layer"
@@ -155,9 +159,9 @@ def own_ids():
     return {t["id"] for t in json.load(open(OWN_SUITE))["tasks"]}
 
 
-def slices(cdp_external):
+def slices(cdp_external, manuk_external=EXT_MANUK_TURNS):
     own = load_slice("own", [OWN_TURNS], keep=own_ids())
-    ext = load_slice("external", [EXT_MANUK_TURNS, cdp_external])
+    ext = load_slice("external", [manuk_external, cdp_external])
     return {"own": own, "external": ext}
 
 
@@ -168,9 +172,11 @@ def main():
     ap.add_argument("--no-write", action="store_true")
     ap.add_argument("--cdp-external", default=EXT_CDP_TURNS,
                     help="cdp-layer external turns file (a missing file makes the external slice UNPAIRED)")
+    ap.add_argument("--manuk-external", default=EXT_MANUK_TURNS,
+                    help="manuk external turns file (a missing file makes the external slice UNPAIRED)")
     args = ap.parse_args()
 
-    loaded = slices(args.cdp_external)
+    loaded = slices(args.cdp_external, args.manuk_external)
 
     if args.selftest:
         # Red control 1: shuffling manuk's turn order must lower the rates on EVERY run index, on every paired slice.
@@ -193,10 +199,14 @@ def main():
             ok = ok and all(s_per[r][2] < r_per[r][2] for r in RUNS)
             ok = ok and all((s_per[r][1] < r_per[r][1]) if r_per[r][1] > 0 else (s_per[r][1] == 0) for r in RUNS)
         # Red control 2: a removed external cdp-layer turns file must report the slice UNPAIRED, not zero.
-        dropped = slices(os.path.join(ROOT, "docs/sprint/w4p0ga/__removed__.turns.tsv"))["external"]
-        unpaired = dropped is None
-        print("  removed external turns file -> " + ("UNPAIRED" if unpaired else "PAIRED (FAIL)"))
-        ok = ok and unpaired
+        # Red control 3 (W4.P0.g.a.a): a missing manuk external file must also report UNPAIRED.
+        for which, kw in (("cdp-layer", {"cdp_external": os.path.join(ROOT, "docs/sprint/w4p0ga/__removed__.turns.tsv")}),
+                          ("manuk", {"cdp_external": EXT_CDP_TURNS,
+                                     "manuk_external": os.path.join(ROOT, "docs/sprint/w4p0ga/__removed__.turns.tsv")})):
+            dropped = slices(**kw)["external"]
+            unpaired = dropped is None
+            print(f"  removed {which} external turns file -> " + ("UNPAIRED" if unpaired else "PAIRED (FAIL)"))
+            ok = ok and unpaired
         print("SELFTEST " + ("PASS" if ok else "FAIL"))
         return 0 if ok else 1
 
