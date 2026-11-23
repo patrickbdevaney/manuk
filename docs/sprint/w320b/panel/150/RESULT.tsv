@@ -1,0 +1,3 @@
+run	page	chrome_ver	webmcp_toolsAdded_events	tool_names	verdict
+probe-150	demos/pizza-maker	150.0.7871.124	16 (7 distinct pizza tools, repeats from re-enable; +zz from probe self-test excluded)	set_pizza_size,set_pizza_style,toggle_layer,add_topping,remove_topping,manage_pizza,share_pizza	PASS (7/7 expected)
+control-nomcp	data:text/html no-tools page	150.0.7871.124	0	-	RED as designed (0 events, gate fails)
