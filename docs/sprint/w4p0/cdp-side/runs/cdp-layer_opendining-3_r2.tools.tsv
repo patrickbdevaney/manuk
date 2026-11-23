@@ -1,0 +1,71 @@
+1	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app"}
+2	mcp__browser__act	{"action": "click", "handle": "h3"}
+3	mcp__browser__act	{"action": "click", "handle": "h6"}
+4	mcp__browser__observe	{"mode": "interactive"}
+5	mcp__browser__act	{"action": "select", "handle": "h153"}
+6	mcp__browser__observe	{"mode": "full"}
+7	mcp__browser__act	{"action": "select", "handle": "h6", "value": "4 people"}
+8	mcp__browser__observe	{"mode": "interactive"}
+9	mcp__browser__act	{"action": "click", "handle": "h153"}
+10	mcp__browser__observe	{"budget_tokens": 3000, "mode": "full"}
+11	mcp__browser__act	{"action": "click", "handle": "h10"}
+12	mcp__browser__observe	{"mode": "interactive"}
+13	mcp__browser__find	{"query": "booking form date time party size Book button"}
+14	mcp__browser__observe	{"budget_tokens": 4000, "include_hidden": true, "mode": "full"}
+15	mcp__browser__tabs	{"action": "switch", "index": 0}
+16	mcp__browser__tabs	{"action": "switch", "index": 1}
+17	mcp__browser__act	{"action": "click", "handle": "h3"}
+18	mcp__browser__find	{"query": "calendar day 20 July 2024"}
+19	mcp__browser__observe	{"mode": "interactive"}
+20	mcp__browser__act	{"action": "click", "handle": "h294"}
+21	mcp__browser__find	{"query": "day cell 20 in July 2024 calendar grid"}
+22	mcp__browser__observe	{"mode": "viewport"}
+23	mcp__browser__act	{"action": "click", "handle": "h421"}
+24	mcp__browser__observe	{"mode": "interactive"}
+25	mcp__browser__act	{"action": "click", "handle": "h295"}
+26	mcp__browser__find	{"query": "option \"7:00 PM\" in time list"}
+27	mcp__browser__find	{"query": "7:00 PM"}
+28	mcp__browser__act	{"action": "click", "handle": "h472"}
+29	mcp__browser__observe	{"mode": "viewport"}
+30	mcp__browser__act	{"action": "hover", "handle": "h470"}
+31	mcp__browser__find	{"query": "option 7:00 PM or 6:30 PM"}
+32	mcp__browser__act	{"action": "select", "handle": "h295", "value": "7:00 PM"}
+33	mcp__browser__observe	{"mode": "interactive"}
+34	ToolSearch	{"max_results": 2, "query": "select:mcp__browser__scroll,mcp__browser__key"}
+35	mcp__browser__scroll	{"to": "h472"}
+36	mcp__browser__act	{"action": "click", "handle": "h472"}
+37	mcp__browser__observe	{"mode": "viewport"}
+38	mcp__browser__key	{"handle": "h460", "key": "ArrowDown"}
+39	mcp__browser__key	{"key": "Escape"}
+40	mcp__browser__observe	{"budget_tokens": 800, "mode": "full"}
+41	mcp__browser__act	{"action": "click", "handle": "h295"}
+42	mcp__browser__key	{"key": "End"}
+43	mcp__browser__find	{"query": "option 7:00 PM"}
+44	mcp__browser__act	{"action": "click", "handle": "h632"}
+45	mcp__browser__observe	{"budget_tokens": 300, "mode": "interactive"}
+46	mcp__browser__act	{"action": "click", "handle": "h297"}
+47	mcp__browser__find	{"query": "option \"4 people\""}
+48	mcp__browser__act	{"action": "click", "handle": "h645"}
+49	mcp__browser__find	{"query": "Select time combobox and selected time value; The Royal Dine 7:00 PM book link"}
+50	mcp__browser__act	{"action": "click", "handle": "h299"}
+51	mcp__browser__type	{"handle": "h299", "text": "The Royal Dine"}
+52	mcp__browser__act	{"action": "click", "handle": "h300"}
+53	mcp__browser__act	{"action": "click", "handle": "h671"}
+54	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app/booking?index=e83c1c2b-9f5b-4a7c-bd54-b165a86a0f3d&guests=4%20people&date=Sat,%2020%20Jul%202024%2007:00:00%20GMT&time=7:00%20PM"}
+55	mcp__browser__type	{"handle": "h694", "text": "5555550100"}
+56	mcp__browser__act	{"action": "click", "handle": "h699"}
+57	mcp__browser__type	{"handle": "h694", "text": "4155550123"}
+58	mcp__browser__observe	{"budget_tokens": 400, "mode": "interactive"}
+59	mcp__browser__act	{"action": "click", "handle": "h693"}
+60	mcp__browser__find	{"query": "option United States (+1)"}
+61	mcp__browser__act	{"action": "click", "handle": "h1635"}
+62	mcp__browser__scroll	{"to": "h1635"}
+63	mcp__browser__observe	{"budget_tokens": 600, "mode": "viewport"}
+64	mcp__browser__find	{"query": "option \"United States + 1\" in country listbox"}
+65	mcp__browser__act	{"action": "click", "handle": "h1635"}
+66	mcp__browser__type	{"handle": "h694", "text": "+14155550123"}
+67	mcp__browser__observe	{"budget_tokens": 400, "mode": "interactive"}
+68	mcp__browser__key	{"key": "Escape"}
+69	mcp__browser__type	{"handle": "h694", "text": "+1 415 555 0123"}
+70	mcp__browser__observe	{"budget_tokens": 300, "mode": "interactive"}
+71	mcp__browser__act	{"action": "click", "handle": "h699"}

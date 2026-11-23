@@ -1,0 +1,56 @@
+1	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app"}
+2	mcp__browser__act	{"action": "click", "handle": "h5"}
+3	mcp__browser__act	{"action": "click", "handle": "h7"}
+4	mcp__browser__observe	{"mode": "interactive"}
+5	mcp__browser__act	{"action": "click", "handle": "h145"}
+6	mcp__browser__act	{"action": "select", "handle": "h4", "value": "7:00 PM"}
+7	mcp__browser__observe	{"mode": "interactive"}
+8	mcp__browser__act	{"action": "select", "handle": "h145"}
+9	mcp__browser__act	{"action": "select", "handle": "h145", "value": "7:00 PM"}
+10	mcp__browser__observe	{"mode": "viewport"}
+11	ToolSearch	{"max_results": 2, "query": "select:mcp__browser__key,mcp__browser__scroll"}
+12	mcp__browser__scroll	{"to": "h145"}
+13	mcp__browser__act	{"action": "click", "handle": "h145"}
+14	mcp__browser__observe	{"mode": "full"}
+15	mcp__browser__evaluate	{"expression": "Array.from(document.querySelectorAll('select,input,[role=combobox],[role=listbox]')).map(e=>({tag:e.tagName,role:e.getAttribute('role'),name:e.getAttribute('aria-label')||e.name||e.id,val:e.value,cls:e.className,vis:e.getBoundingClientRect().top})).slice(0,30)"}
+16	mcp__browser__key	{"key": "ArrowDown"}
+17	mcp__browser__evaluate	{"expression": "(()=>{const a=document.activeElement;const m=document.querySelector('[role=listbox]');const sel=m&&m.querySelector('[aria-selected=true]');return {active:a&&a.outerHTML.slice(0,200), focusedText:a&&a.textContent, selected:sel&&sel.textContent, count:m&&m.children.length}})()"}
+18	mcp__browser__key	{"key": "ArrowDown"}
+19	mcp__browser__key	{"key": "ArrowDown"}
+20	mcp__browser__key	{"key": "ArrowDown"}
+21	mcp__browser__key	{"key": "ArrowDown"}
+22	mcp__browser__key	{"key": "ArrowDown"}
+23	mcp__browser__key	{"key": "ArrowDown"}
+24	mcp__browser__key	{"key": "ArrowDown"}
+25	mcp__browser__key	{"key": "ArrowDown"}
+26	mcp__browser__key	{"key": "ArrowDown"}
+27	mcp__browser__key	{"key": "ArrowDown"}
+28	mcp__browser__key	{"key": "ArrowDown"}
+29	mcp__browser__evaluate	{"expression": "(()=>{const a=document.activeElement;return {focusedText:a&&a.textContent, dv:a&&a.getAttribute('data-value')}})()"}
+30	mcp__browser__key	{"key": "Enter"}
+31	mcp__browser__act	{"action": "click", "handle": "h6"}
+32	mcp__browser__act	{"action": "click", "handle": "h270"}
+33	mcp__browser__evaluate	{"expression": "Array.from(document.querySelectorAll('[role=combobox],input')).map(e=>(e.getAttribute('aria-label')||e.name||'')+'='+(e.textContent||e.value||'')).join(' | ')"}
+34	mcp__browser__act	{"action": "click", "handle": "h3"}
+35	mcp__browser__observe	{"mode": "interactive"}
+36	mcp__browser__act	{"action": "click", "handle": "h319"}
+37	mcp__browser__evaluate	{"expression": "Array.from(document.querySelectorAll('[role=combobox],input')).map(e=>(e.getAttribute('aria-label')||e.name||'')+'='+(e.textContent||e.value||'')).join(' | ') + ' || dialog:' + !!document.querySelector('[role=dialog]')"}
+38	mcp__browser__act	{"steps": [{"handle": "h8", "text": "The Royal Dine", "tool": "type"}, {"handle": "h9", "tool": "click"}]}
+39	mcp__browser__act	{"action": "click", "handle": "h9"}
+40	mcp__browser__act	{"action": "click", "handle": "h340"}
+41	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app/booking?index=e83c1c2b-9f5b-4a7c-bd54-b165a86a0f3d&guests=4%20people&date=Sat,%2020%20Jul%202024%2007:00:00%20GMT&time=7:00%20PM"}
+42	mcp__browser__act	{"action": "focus", "handle": "h363"}
+43	mcp__browser__type	{"handle": "h363", "text": "4155550123"}
+44	mcp__browser__act	{"action": "click", "handle": "h368"}
+45	mcp__browser__evaluate	{"expression": "Array.from(document.querySelectorAll('input')).map(e=>e.name+'|'+e.type+'|'+e.value+'|'+e.placeholder).join(' ; ')"}
+46	mcp__browser__act	{"action": "focus", "handle": "h363"}
+47	mcp__browser__key	{"key": "Control+a"}
+48	mcp__browser__key	{"key": "Delete"}
+49	mcp__browser__type	{"handle": "h363", "text": "4155550123"}
+50	mcp__browser__evaluate	{"expression": "Array.from(document.querySelectorAll('input')).map(e=>e.type+'|'+e.value).join(' ; ') + ' || country: ' + (document.querySelector('[aria-label*=country i]')||{}).textContent"}
+51	mcp__browser__key	{"key": "Control+a"}
+52	mcp__browser__key	{"key": "Delete"}
+53	mcp__browser__type	{"handle": "h363", "text": "+14155550123"}
+54	mcp__browser__evaluate	{"expression": "Array.from(document.querySelectorAll('input')).map(e=>e.type+'|'+e.value).join(' ; ')"}
+55	mcp__browser__act	{"action": "click", "handle": "h368"}
+56	mcp__browser__extract	{"format": "text"}

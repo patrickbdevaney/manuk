@@ -1,0 +1,83 @@
+1	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app"}
+2	mcp__browser__evaluate	{"expression": "Array.from(document.querySelectorAll('a[href]')).map(a=>a.href+' | '+a.textContent.trim().slice(0,60)).filter(s=>/restaurant|details|menu|\\/r\\//i.test(s)).slice(0,80).join('\\n')"}
+3	mcp__browser__evaluate	{"expression": "Array.from(new Set(Array.from(document.querySelectorAll('a[href*=\"/r/\"]')).map(a=>a.href))).join('\\n')"}
+4	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app/r/e83c1c2b-9f5b-4a7c-bd54-b165a86a0f3d"}
+5	mcp__browser__extract	{"format": "text", "query": "menu vegetarian"}
+6	mcp__browser__evaluate	{"expression": "(()=>{const t=document.body.innerText; const i=t.indexOf('Menu'); return t.slice(0,3000);})()"}
+7	mcp__browser__observe	{"mode": "interactive"}
+8	mcp__browser__find	{"query": "Menu section tab or button"}
+9	mcp__browser__act	{"action": "click", "handle": "h110"}
+10	mcp__browser__observe	{"mode": "content"}
+11	mcp__browser__evaluate	{"expression": "(()=>{const el=Array.from(document.querySelectorAll('*')).find(e=>e.children.length===0 && e.textContent.trim()==='Menu'); let p=el; for(let k=0;k<3&&p.parentElement;k++) p=p.parentElement; return p.outerHTML.slice(0,4000);})()"}
+12	mcp__browser__observe	{"mode": "viewport"}
+13	mcp__browser__evaluate	{"expression": "(async()=>{await new Promise(r=>setTimeout(r,3000)); const el=Array.from(document.querySelectorAll('p')).find(e=>e.textContent.trim()==='Menu'); el.scrollIntoView(); await new Promise(r=>setTimeout(r,2000)); const sec=el.closest('div').parentElement; return document.body.innerText.split('Menu')[1]?.slice(0,1500) || 'none';})()"}
+14	mcp__browser__extract	{"format": "text", "include_hidden": true, "query": "menu dish vegetarian vegan"}
+15	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app/r/3f1d4cc8-d8c7-4138-bbc8-754f7736b82d"}
+16	mcp__browser__extract	{"format": "text", "include_hidden": true, "query": "menu"}
+17	mcp__browser__observe	{"mode": "full"}
+18	mcp__browser__evaluate	{"expression": "Array.from(document.querySelectorAll('a,button,[role=tab]')).map(e=>(e.tagName+' '+(e.getAttribute('href')||'')+' '+e.textContent.trim().slice(0,40))).filter(s=>/menu|tab/i.test(s)).join('\\n') + '\\nSKEL:' + document.querySelectorAll('.MuiSkeleton-root').length"}
+19	ToolSearch	{"max_results": 2, "query": "select:mcp__browser__wait_for,mcp__browser__scroll"}
+20	mcp__browser__scroll	{"to": "h116"}
+21	mcp__browser__wait_for	{"text": "Menu", "timeout": 5}
+22	mcp__browser__act	{"action": "click", "handle": "h122"}
+23	mcp__browser__observe	{"mode": "diff"}
+24	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app/r/c028c2f7-1d94-4a5f-9084-f1e8e7ac71f9"}
+25	mcp__browser__wait_for	{"text": "Write a Review", "timeout": 8}
+26	mcp__browser__extract	{"format": "text", "include_hidden": true}
+27	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app/r/c028c2f7-1d94-4a5f-9084-f1e8e7ac71f9/menu"}
+28	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app/r/c028c2f7-1d94-4a5f-9084-f1e8e7ac71f9"}
+29	mcp__browser__find	{"query": "Menu heading paragraph and any menu item or dish"}
+30	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app/r/fe378ed1-e4e5-431f-8ef9-3bcbabbf31fa"}
+31	mcp__browser__navigate	{"page": "new", "url": "https://evals-opendining.vercel.app/r/6a80b14f-bb93-4c9f-9d61-93f75d40b21c"}
+32	mcp__browser__act	{"action": "click", "handle": "h3", "page": "pb23961:1"}
+33	mcp__browser__extract	{"format": "text", "include_hidden": true, "page": "pb23961:2", "query": "Dish name, Dish description, vegetarian, veggie, vegan"}
+34	mcp__browser__extract	{"format": "text", "include_hidden": true, "page": "pb23961:3", "query": "Menu category Appetizers Pizzas Desserts Salads Pasta Drinks dish"}
+35	mcp__browser__evaluate	{"expression": "(()=>{const h=Array.from(document.querySelectorAll('*')).find(e=>e.children.length===0&&e.textContent.trim()==='Main Menu'); let p=h; for(let i=0;i<3&&p.parentElement;i++)p=p.parentElement; return p.innerText;})()", "page": "pb23961:4"}
+36	mcp__browser__navigate	{"page": "pb23961:1", "url": "https://evals-opendining.vercel.app/r/c028c2f7-1d94-4a5f-9084-f1e8e7ac71f9"}
+37	mcp__browser__navigate	{"page": "pb23961:6", "url": "https://evals-opendining.vercel.app/r/e83c1c2b-9f5b-4a7c-bd54-b165a86a0f3d"}
+38	mcp__browser__wait_for	{"page": "pb23961:6", "text": "Main Menu", "timeout": 6}
+39	mcp__browser__navigate	{"page": "pb23961:8", "query": "Main Menu dish names and prices", "url": "https://evals-opendining.vercel.app/r/72eabc38-0f6c-4f56-bf2f-09b9b8e04f7c"}
+40	mcp__browser__extract	{"format": "text", "include_hidden": true, "page": "pb23961:9", "query": "Dish name Dish Price Menu category"}
+41	mcp__browser__evaluate	{"expression": "(()=>{const t=document.body.innerText; const a=t.indexOf('Main Menu'); if(a<0) return 'NO MENU'; const b=t.indexOf('What ',a); return t.slice(a,b);})()", "page": "pb23961:10"}
+42	mcp__browser__navigate	{"page": "pb23961:11", "query": "Main Menu", "url": "https://evals-opendining.vercel.app/r/81c94d5b-47b1-4d3f-bc48-e2cbebbc2d0f"}
+43	mcp__browser__wait_for	{"page": "pb23961:11", "text": "Main Menu", "timeout": 6}
+44	mcp__browser__evaluate	{"expression": "(()=>{const t=document.body.innerText; const a=t.indexOf('Main Menu'); if(a<0) return 'NO MENU'; const b=t.indexOf('What ',a); return t.slice(a,b).replace(/\\n\\n+/g,' | ');})()", "page": "pb23961:13"}
+45	mcp__browser__navigate	{"page": "pb23961:14", "query": "Main Menu", "url": "https://evals-opendining.vercel.app/r/cd4f81d3-3c75-4c67-b47b-e7f013f6ae9d"}
+46	mcp__browser__wait_for	{"page": "pb23961:14", "text": "Main Menu", "timeout": 6}
+47	mcp__browser__evaluate	{"expression": "(()=>{const t=document.body.innerText; const a=t.indexOf('Main Menu'); if(a<0) return 'NO MENU'; const b=t.indexOf('What ',a); return t.slice(a,b).replace(/\\n\\n+/g,' | ');})()", "page": "pb23961:16"}
+48	mcp__browser__navigate	{"page": "pb23961:17", "query": "Main Menu", "url": "https://evals-opendining.vercel.app/r/6d5099e8-4d93-4cbb-9b5b-85c24e2a2828"}
+49	mcp__browser__wait_for	{"page": "pb23961:17", "text": "Main Menu", "timeout": 6}
+50	mcp__browser__evaluate	{"expression": "(()=>{const t=document.body.innerText; const a=t.indexOf('Main Menu'); if(a<0) return 'NO MENU'; const b=t.indexOf('What ',a); return t.slice(a,b).replace(/\\n\\n+/g,' | ');})()", "page": "pb23961:19"}
+51	mcp__browser__navigate	{"page": "pb23961:20", "query": "Main Menu", "url": "https://evals-opendining.vercel.app/r/9f1a1d57-80ff-459c-9f63-0ffed453243b"}
+52	mcp__browser__evaluate	{"expression": "(()=>{const t=document.body.innerText; const a=t.indexOf('Main Menu'); if(a<0) return 'NO MENU'; const b=t.indexOf('What ',a); return t.slice(a,b).replace(/\\n\\n+/g,' | ');})()", "page": "pb23961:21"}
+53	mcp__browser__navigate	{"page": "pb23961:22", "query": "Main Menu", "url": "https://evals-opendining.vercel.app/r/f3a81451-ec9d-471e-a765-8075159b43f4"}
+54	mcp__browser__evaluate	{"expression": "(()=>{const t=document.body.innerText; const a=t.indexOf('Main Menu'); if(a<0) return 'NO MENU'; const b=t.indexOf('What ',a); return t.slice(a,b).replace(/\\n\\n+/g,' | ');})()", "page": "pb23961:23"}
+55	mcp__browser__navigate	{"page": "pb23961:24", "query": "Main Menu", "url": "https://evals-opendining.vercel.app/r/3e6327ae-fb7f-4744-8c6f-f5426b3fc7a5"}
+56	mcp__browser__evaluate	{"expression": "(()=>{const t=document.body.innerText; const a=t.indexOf('Main Menu'); if(a<0) return 'NO MENU'; const b=t.indexOf('What ',a); return t.slice(a,b).replace(/\\n\\n+/g,' | ');})()", "page": "pb23961:25"}
+57	mcp__browser__navigate	{"page": "pb23961:26", "query": "Main Menu", "url": "https://evals-opendining.vercel.app/r/37b0a33d-5a93-413b-b9f2-1b1b7e88a0f7"}
+58	mcp__browser__evaluate	{"expression": "(()=>{const t=document.body.innerText; const a=t.indexOf('Main Menu'); if(a<0) return 'NO MENU'; const b=t.indexOf('What ',a); return t.slice(a,b).replace(/\\n\\n+/g,' | ');})()", "page": "pb23961:27"}
+59	mcp__browser__navigate	{"page": "pb23961:28", "query": "Main Menu", "url": "https://evals-opendining.vercel.app/r/3f1d4cc8-d8c7-4138-bbc8-754f7736b82d"}
+60	mcp__browser__evaluate	{"expression": "(()=>{const t=document.body.innerText; const a=t.indexOf('Main Menu'); if(a<0) return 'NO MENU'; const b=t.indexOf('What ',a); return t.slice(a,b).replace(/\\n\\n+/g,' | ');})()", "page": "pb23961:29"}
+61	mcp__browser__navigate	{"page": "pb23961:30", "query": "Main Menu", "url": "https://evals-opendining.vercel.app/r/4be91a74-c7ff-4673-b60a-2c83d53a3052"}
+62	mcp__browser__evaluate	{"expression": "(()=>{const t=document.body.innerText; const a=t.indexOf('Main Menu'); if(a<0) return 'NO MENU'; const b=t.indexOf('What ',a); return t.slice(a,b).replace(/\\n\\n+/g,' | ');})()", "page": "pb23961:31"}
+63	mcp__browser__navigate	{"page": "pb23961:32", "query": "Main Menu", "url": "https://evals-opendining.vercel.app/r/4c7ae764-6ae7-4b37-9eb4-5300d1638702"}
+64	mcp__browser__evaluate	{"expression": "(()=>{const t=document.body.innerText; const a=t.indexOf('Main Menu'); if(a<0) return 'NO MENU'; const b=t.indexOf('What ',a); return t.slice(a,b).replace(/\\n\\n+/g,' | ');})()", "page": "pb23961:33"}
+65	mcp__browser__navigate	{"page": "pb23961:34", "query": "Main Menu", "url": "https://evals-opendining.vercel.app/r/1d558d65-9f70-4aa0-a4d2-f1e6b3e6b80f"}
+66	mcp__browser__evaluate	{"expression": "(()=>{const t=document.body.innerText; const a=t.indexOf('Main Menu'); if(a<0) return 'NO MENU'; const b=t.indexOf('What ',a); return t.slice(a,b).replace(/\\n\\n+/g,' | ');})()", "page": "pb23961:35"}
+67	mcp__browser__navigate	{"page": "pb23961:36", "query": "Main Menu", "url": "https://evals-opendining.vercel.app/r/16973c27-108b-414e-ae2e-f68c22a8c04f"}
+68	mcp__browser__evaluate	{"expression": "(()=>{const t=document.body.innerText; const a=t.indexOf('Main Menu'); if(a<0) return 'NO MENU'; const b=t.indexOf('What ',a); return t.slice(a,b).replace(/\\n\\n+/g,' | ');})()", "page": "pb23961:37"}
+69	mcp__browser__navigate	{"page": "pb23961:38", "query": "Main Menu", "url": "https://evals-opendining.vercel.app/r/bd2e1c6c-9534-40f8-b7b0-7e5c4bc5c2ed"}
+70	mcp__browser__evaluate	{"expression": "(()=>{const t=document.body.innerText; const a=t.indexOf('Main Menu'); if(a<0) return 'NO MENU'; const b=t.indexOf('What ',a); return t.slice(a,b).replace(/\\n\\n+/g,' | ');})()", "page": "pb23961:39"}
+71	mcp__browser__navigate	{"page": "pb23961:40", "query": "Main Menu", "url": "https://evals-opendining.vercel.app/r/fe378ed1-e4e5-431f-8ef9-3bcbabbf31fa"}
+72	mcp__browser__evaluate	{"expression": "(()=>{const t=document.body.innerText; const a=t.indexOf('Main Menu'); if(a<0) return 'NO MENU'; const b=t.indexOf('What ',a); return t.slice(a,b).replace(/\\n\\n+/g,' | ');})()", "page": "pb23961:41"}
+73	mcp__browser__navigate	{"page": "pb23961:42", "query": "Main Menu", "url": "https://evals-opendining.vercel.app/r/91cb4e63-2f2f-4bde-8e0b-c12d2ec8a672"}
+74	mcp__browser__evaluate	{"expression": "(()=>{const t=document.body.innerText; const a=t.indexOf('Main Menu'); if(a<0) return 'NO MENU'; const b=t.indexOf('What ',a); return t.slice(a,b).replace(/\\n\\n+/g,' | ');})()", "page": "pb23961:43"}
+75	mcp__browser__navigate	{"page": "pb23961:44", "query": "Main Menu", "url": "https://evals-opendining.vercel.app/r/5c72ec92-0c9f-442c-83e4-3f5f12391e79"}
+76	mcp__browser__evaluate	{"expression": "(()=>{const t=document.body.innerText; const a=t.indexOf('Main Menu'); if(a<0) return 'NO MENU'; const b=t.indexOf('What ',a); return t.slice(a,b).replace(/\\n\\n+/g,' | ');})()", "page": "pb23961:45"}
+77	mcp__browser__navigate	{"page": "pb23961:46", "url": "https://evals-opendining.vercel.app/r/3f1d4cc8-d8c7-4138-bbc8-754f7736b82d"}
+78	mcp__browser__act	{"action": "click", "handle": "h87", "page": "pb23961:47"}
+79	mcp__browser__fill_form	{"fields": [{"handle": "h84", "value": "5555550123"}], "page": "pb23961:48", "submit": "h109"}
+80	mcp__browser__type	{"handle": "h84", "page": "pb23961:49", "text": "(415) 555-0123"}
+81	mcp__browser__observe	{"mode": "interactive", "page": "pb23961:50"}
+82	mcp__browser__type	{"handle": "h84", "page": "pb23961:51", "text": "+1 4155550123"}
+83	mcp__browser__act	{"action": "click", "handle": "h109", "page": "pb23961:52"}

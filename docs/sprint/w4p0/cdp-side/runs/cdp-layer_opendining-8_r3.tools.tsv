@@ -1,0 +1,26 @@
+1	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app"}
+2	mcp__browser__extract	{"format": "text", "query": "restaurant rating"}
+3	mcp__browser__observe	{"mode": "content"}
+4	mcp__browser__act	{"action": "click", "handle": "h34"}
+5	mcp__browser__evaluate	{"expression": "[...document.querySelectorAll('[aria-label], a, h2, h3, h4, li, p, span')].map(e=>e.innerText||'').filter(t=>/Rating|\\d\\.\\d\\d\\s*\\(|^[A-Z][\\w' \u00e9]+$/.test(t.trim()) && t.length<60).filter((v,i,a)=>a.indexOf(v)===i).slice(0,200).join(' | ')"}
+6	mcp__browser__extract	{"format": "text", "include_hidden": false, "query": "overall rating based on recent ratings"}
+7	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app"}
+8	mcp__browser__act	{"action": "click", "handle": "h12"}
+9	mcp__browser__act	{"action": "click", "handle": "h120"}
+10	mcp__browser__fill_form	{"fields": [{"handle": "h111", "value": "5555550123"}, {"handle": "h226", "value": "None"}], "submit": "h227"}
+11	mcp__browser__observe	{"mode": "interactive"}
+12	mcp__browser__type	{"handle": "h111", "text": "4155550123"}
+13	mcp__browser__observe	{"mode": "interactive"}
+14	mcp__browser__act	{"action": "click", "handle": "h222"}
+15	mcp__browser__act	{"steps": [{"handle": "h232", "text": "United States", "tool": "type"}]}
+16	mcp__browser__observe	{"mode": "interactive"}
+17	mcp__browser__act	{"action": "click", "handle": "h1165"}
+18	mcp__browser__act	{"action": "select", "handle": "h232", "value": "United States"}
+19	mcp__browser__act	{"action": "click", "handle": "h227"}
+20	mcp__browser__observe	{"mode": "interactive"}
+21	mcp__browser__act	{"action": "dismiss"}
+22	mcp__browser__key	{"key": "Escape", "page": "p4a1aa4:23"}
+23	mcp__browser__act	{"action": "click", "handle": "h227"}
+24	mcp__browser__type	{"handle": "h111", "text": "+1 415 555 0123"}
+25	mcp__browser__observe	{"mode": "interactive"}
+26	mcp__browser__act	{"action": "click", "handle": "h227"}

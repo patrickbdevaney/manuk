@@ -1,0 +1,32 @@
+1	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app"}
+2	mcp__browser__act	{"action": "click", "handle": "h9"}
+3	mcp__browser__extract	{"format": "table", "query": "restaurant names and Rating values"}
+4	mcp__browser__find	{"query": "Rating for Dim Sum Delight, Pizza Palace, BBQ Haven and any restaurants after them"}
+5	mcp__browser__evaluate	{"expression": "JSON.stringify([...document.querySelectorAll('[class*=rating], [aria-label*=Rating], [role=listitem]')].map(e=>(e.innerText||e.getAttribute('aria-label')||'').replace(/\\s+/g,' ').slice(0,120)))"}
+6	mcp__browser__evaluate	{"expression": "JSON.stringify({cards:[...document.querySelectorAll('[aria-label]')].filter(e=>/Rating/.test(e.parentElement?.innerText||'')||/Excellent|Good|Awesome/.test(e.getAttribute('aria-label')||'')).map(e=>e.getAttribute('aria-label').slice(0,60)), more:[...document.querySelectorAll('button,a')].map(b=>b.innerText).filter(t=>/more|next|load/i.test(t||'')).slice(0,10)})"}
+7	mcp__browser__evaluate	{"expression": "JSON.stringify([...document.querySelectorAll('h2,h3,h4,img[alt]')].map(e=>(e.alt||e.innerText)).filter(Boolean).slice(0,60))"}
+8	mcp__browser__act	{"action": "click", "handle": "h171"}
+9	mcp__browser__fill_form	{"fields": [{"handle": "h3", "value": "5555550123"}], "submit": "h443"}
+10	mcp__browser__observe	{"mode": "interactive"}
+11	mcp__browser__type	{"handle": "h3", "text": "4155550123"}
+12	mcp__browser__observe	{"mode": "interactive"}
+13	mcp__browser__act	{"action": "click", "handle": "h438"}
+14	mcp__browser__observe	{"mode": "interactive"}
+15	mcp__browser__act	{"action": "click", "handle": "h1381"}
+16	mcp__browser__observe	{"mode": "interactive"}
+17	mcp__browser__act	{"action": "dismiss"}
+18	mcp__browser__observe	{"mode": "interactive"}
+19	mcp__browser__fill_form	{"fields": [{"action": "select", "handle": "h448", "value": "United States + 1"}]}
+20	mcp__browser__type	{"handle": "h3", "text": "+14155550123"}
+21	mcp__browser__find	{"query": "phone number input value and country button, error message"}
+22	mcp__browser__navigate	{"query": "phone number field, country selector, complete reservation button", "url": "https://evals-opendining.vercel.app/booking?index=6d5099e8-4d93-4cbb-9b5b-85c24e2a2828&guests=2%20people&date=Thu,%2018%20Jul%202024%2007:00:00%20GMT&time=1:00%20PM"}
+23	mcp__browser__observe	{"mode": "viewport"}
+24	mcp__browser__type	{"handle": "h1433", "text": "4155550123"}
+25	mcp__browser__act	{"action": "click", "handle": "h1429"}
+26	mcp__browser__find	{"query": "phone number textbox current value"}
+27	mcp__browser__type	{"handle": "h1433", "text": "2025550123"}
+28	mcp__browser__find	{"query": "phone number textbox current value and validation message"}
+29	mcp__browser__act	{"action": "click", "handle": "h1429"}
+30	mcp__browser__type	{"handle": "h1433", "text": "+1 202 555 0123"}
+31	mcp__browser__find	{"query": "phone number textbox current value and validation message"}
+32	mcp__browser__act	{"action": "click", "handle": "h1429"}

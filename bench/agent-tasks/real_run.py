@@ -334,7 +334,59 @@ def archive_prior(tmp, trdir, name):
         os.rename(cp, os.path.join(trdir, f"{name}.{stamp}" + (f"-{n}" if n else "") + ".jsonl"))
 
 
-def one(arm, task, run, pin, tdir, timeout, judge_env=None, trdir=TRANSCRIPTS):
+CAPTURE_LOCK = threading.Lock()
+CAP_COLS = ["arm", "task", "run", "pass", "state_ok", "evals_ok", "evals_n", "tool_calls", "chrome_ver",
+            "finish_file", "finish_sha256", "tools_file", "tools_sha256"]
+
+
+def tool_list(stream):
+    """W4.P0.f.a: the agent's tool calls in order, (name, input) -- what the run did, whether or not the state was read."""
+    rows = []
+    for l in stream.splitlines():
+        if not l.startswith("{"):
+            continue
+        try:
+            e = json.loads(l)
+        except ValueError:
+            continue
+        if e.get("type") == "assistant":
+            for b in (e.get("message") or {}).get("content", []):
+                if b.get("type") == "tool_use":
+                    rows.append((b.get("name", ""), json.dumps(b.get("input", {}), sort_keys=True)))
+    return rows
+
+
+def capture(capdir, r, state, stream):
+    """W4.P0.f.a: keep the RAW /finish read and the tool-call list of every run (the TSV keeps only state_ok and counts).
+    Files: <arm>_<task>_r<run>.finish.json (the full read the shim saw) and .tools.tsv; one MANIFEST.tsv row per run
+    (last row for a key wins on a re-run). cdp_side_check.py reads the manifest and hashes every file it names."""
+    import hashlib
+    os.makedirs(capdir, exist_ok=True)
+    stem = f"{r['arm']}_{r['task']}_r{r['run']}"
+    if os.path.exists(state + ".full"):
+        fin = open(state + ".full").read()
+    elif os.path.exists(state):
+        s = json.load(open(state))
+        fin = json.dumps(s["state"], sort_keys=True, indent=1) if s.get("ok") else json.dumps({"shim_raw": s.get("raw")})
+    else:
+        fin = json.dumps({"shim_raw": "no state file: the shim never wrote /finish"})
+    tl = tool_list(stream)
+    tools = "".join(f"{i}\t{n}\t{inp}\n" for i, (n, inp) in enumerate(tl, 1))
+    ff, tf = f"{stem}.finish.json", f"{stem}.tools.tsv"
+    open(os.path.join(capdir, ff), "w").write(fin)
+    open(os.path.join(capdir, tf), "w").write(tools)
+    sha = lambda t: hashlib.sha256(t.encode()).hexdigest()
+    row = {"arm": r["arm"], "task": r["task"], "run": r["run"], "pass": r["pass"], "state_ok": r["state_ok"],
+           "evals_ok": r["evals_ok"], "evals_n": r["evals_n"], "tool_calls": len(tl), "chrome_ver": r["chrome_ver"],
+           "finish_file": ff, "finish_sha256": sha(fin), "tools_file": tf, "tools_sha256": sha(tools)}
+    with CAPTURE_LOCK:
+        mp = os.path.join(capdir, "MANIFEST.tsv")
+        if not os.path.exists(mp):
+            open(mp, "w").write("\t".join(CAP_COLS) + "\n")
+        open(mp, "a").write("\t".join(str(row[c]) for c in CAP_COLS) + "\n")
+
+
+def one(arm, task, run, pin, tdir, timeout, judge_env=None, trdir=TRANSCRIPTS, capdir=None):
     sys.path.insert(0, HERE)
     import run_arm
     tmp = os.path.join(tdir, f"{arm}_{task['id']}_r{run}")
@@ -386,7 +438,7 @@ def one(arm, task, run, pin, tdir, timeout, judge_env=None, trdir=TRANSCRIPTS):
             judged_by = "judge_unavailable"
     tc = tool_counts(out)
     unavailable = judge_env is not None and judged_by == "judge_unavailable"
-    return {"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "arm": arm, "suite": JUDGE_SUITE if judge_env is not None else SUITE, "chrome_ver": pin, "task": task["id"],
+    res = {"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "arm": arm, "suite": JUDGE_SUITE if judge_env is not None else SUITE, "chrome_ver": pin, "task": task["id"],
             "site": task["website"]["id"], "run": run, "model": run_arm.driver_model(), "pass": "judge_unavailable" if unavailable else int(ok and llm_ok == len(llm) and not j.get("is_error")), "evals_ok": k, "evals_vec": json.dumps(vec),
             "evals_n": n, "state_ok": int(bool(st and st["ok"])), "checkpoints": tc["checkpoint"], "restores": tc["restore"],
             "forks": tc["fork"], "input_tokens": u.get("input_tokens", 0), "output_tokens": u.get("output_tokens", 0),
@@ -394,6 +446,9 @@ def one(arm, task, run, pin, tdir, timeout, judge_env=None, trdir=TRANSCRIPTS):
             "cost_usd": j.get("total_cost_usd", 0), "seconds": f"{secs:.1f}", "turns": j.get("num_turns", ""),
             "is_error": int(bool(j.get("is_error")) or "result" not in j),
             "answer": final, "llm_ok": llm_ok, "llm_n": len(llm), "judge_model": judged_by if judge_env else ""}
+    if capdir:
+        capture(capdir, res, state, out)
+    return res
 
 
 def real_judge_env():
@@ -413,6 +468,7 @@ def main():
     ap.add_argument("--judge", action="store_true", help="W3.18.a.a.b: score llm_boolean evals with the owner judge (suite real-judge-gptoss120b)")
     ap.add_argument("--timeout", type=int, default=420); ap.add_argument("--run-base", type=int, default=0, help="first run number - 1 (to interleave arms per run)")
     ap.add_argument("--transcripts", default=TRANSCRIPTS, help="W5.T0.b: per-run stream-json, one <arm>_<task>_r<run>.jsonl each (outside the repo)")
+    ap.add_argument("--capture", default=None, help="W4.P0.f.a: dir for each run's raw /finish read + tool-call list + MANIFEST.tsv")
     ap.add_argument("--site"); ap.add_argument("--task"); ap.add_argument("--state")
     a, extra = ap.parse_known_args()
     if a.cmd == "proxy":
@@ -465,7 +521,7 @@ def main():
 
         def job(rt):
             run, t = rt
-            r = one(a.arm, t, run, pin, tdir, a.timeout, judge_env, a.transcripts)
+            r = one(a.arm, t, run, pin, tdir, a.timeout, judge_env, a.transcripts, a.capture)
             with lock:
                 f.write("\t".join(str(r.get(c, "")) for c in cols) + "\n"); f.flush()
                 print(f"{a.arm} {t['id']} r{run}: {r['pass'] if r['pass'] == 'judge_unavailable' else 'PASS' if r['pass'] else 'FAIL'} {r['evals_ok']}/{r['evals_n']} state_ok={r['state_ok']} restores={r['restores']}", flush=True)

@@ -1,0 +1,29 @@
+1	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app"}
+2	mcp__browser__extract	{"format": "text", "query": "restaurant rating list, all restaurant names with Rating values"}
+3	mcp__browser__evaluate	{"expression": "JSON.stringify([...document.querySelectorAll('[class*=\"rating\"], [aria-label*=\"Rating\"], li')].map(e=>e.innerText.replace(/\\s+/g,' ').slice(0,160)).filter(t=>/Rating|\\d\\.\\d\\d/.test(t)))"}
+4	mcp__browser__evaluate	{"expression": "JSON.stringify([...document.querySelectorAll('li')].map(e=>e.innerText.replace(/\\s+/g,' ').slice(0,120)))"}
+5	mcp__browser__evaluate	{"expression": "JSON.stringify([...new Set([...document.querySelectorAll('li')].map(li=>{const n=li.querySelector('img')?.alt||''; const r=[...li.querySelectorAll('*')].map(x=>x.childNodes.length===1&&x.textContent.trim().startsWith('Rating')?x.textContent.trim():null).filter(Boolean)[0]||''; return n+' | '+r;}))])"}
+6	mcp__browser__evaluate	{"expression": "JSON.stringify([...new Set([...document.querySelectorAll('li')].map(li=>{const n=li.querySelector('img')?.alt||''; const m=li.innerText.match(/Rating:?\\s*([\\d.]+)/i)||li.outerHTML.match(/Rating:?\\s*([\\d.]+)/i); const a=li.querySelector('[aria-label*=\"ating\"]')?.getAttribute('aria-label')||''; return n+' | '+(m?m[1]:'-')+' | '+a;}))])"}
+7	mcp__browser__find	{"query": "Book for 1:30 PM link in Bar Central listing"}
+8	mcp__browser__evaluate	{"expression": "JSON.stringify([...document.querySelectorAll('a')].filter(a=>/Bar Central/.test(a.getAttribute('aria-label')||a.textContent)).map(a=>[a.href,a.getAttribute('aria-label')||a.textContent.trim()]))"}
+9	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app/r/6d5099e8-4d93-4cbb-9b5b-85c24e2a2828"}
+10	mcp__browser__observe	{"mode": "interactive"}
+11	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app"}
+12	mcp__browser__evaluate	{"expression": "JSON.stringify([...document.querySelectorAll('a,button')].filter(a=>/Bar Central/.test(a.getAttribute('aria-label')||'')||/Bar Central/.test(a.textContent)).map(a=>[a.tagName,a.getAttribute('aria-label')||a.textContent.trim().slice(0,60),a.href||'']))"}
+13	mcp__browser__type	{"handle": "h116", "submit": true, "text": "Bar Central"}
+14	mcp__browser__find	{"query": "Book for 1:30 PM link in Bar Central listitem"}
+15	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app/r/6d5099e8-4d93-4cbb-9b5b-85c24e2a2828"}
+16	mcp__browser__evaluate	{"expression": "JSON.stringify([...document.querySelectorAll('a,button')].map(a=>(a.getAttribute('aria-label')||a.textContent.trim()).slice(0,60)).filter(t=>/Book|PM|AM|Reserve|time/i.test(t)))"}
+17	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app"}
+18	mcp__browser__evaluate	{"expression": "JSON.stringify([...document.querySelectorAll('li')].filter(li=>li.innerText.startsWith('Bar Central')).map(li=>[...li.querySelectorAll('a,button')].map(a=>[a.tagName,a.getAttribute('aria-label')||a.textContent.trim(),a.href||''])))"}
+19	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app/booking?index=6d5099e8-4d93-4cbb-9b5b-85c24e2a2828&guests=2%20people&date=Thu,%2018%20Jul%202024%2007:00:00%20GMT&time=1:30%20PM"}
+20	mcp__browser__fill_form	{"fields": [{"handle": "h326", "value": "5555550123"}], "submit": "h331"}
+21	mcp__browser__fill_form	{"fields": [{"handle": "h326", "value": "4155550123"}], "submit": "h331"}
+22	mcp__browser__observe	{"mode": "interactive"}
+23	mcp__browser__type	{"handle": "h326", "text": "415-555-0123"}
+24	mcp__browser__act	{"action": "click", "handle": "h331"}
+25	mcp__browser__observe	{"mode": "interactive"}
+26	mcp__browser__evaluate	{"expression": "JSON.stringify([...document.querySelectorAll('input')].map(i=>[i.type,i.name,i.value,i.inputMode,i.maxLength,i.placeholder]))"}
+27	mcp__browser__type	{"handle": "h326", "text": "+14155550123"}
+28	mcp__browser__evaluate	{"expression": "JSON.stringify([...document.querySelectorAll('input[type=tel]')].map(i=>i.value))"}
+29	mcp__browser__act	{"action": "click", "handle": "h331"}

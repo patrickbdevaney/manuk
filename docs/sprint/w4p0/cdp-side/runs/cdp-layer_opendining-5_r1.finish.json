@@ -1,0 +1,47 @@
+{
+ "bookingDetailsDiff": {
+  "added": {
+   "0": {
+    "date": "2024-07-18T07:00:00.000Z",
+    "guests": "2 people",
+    "optionals": {
+     "occasion": "placeholder",
+     "request": ""
+    },
+    "restaurant": {
+     "adjectives": [
+      "scenic",
+      "relaxing",
+      "fresh"
+     ],
+     "description": "A serene seafood restaurant with stunning bay views.",
+     "food_type": "Seafood",
+     "id": "4be91a74-c7ff-4673-b60a-2c83d53a3052",
+     "name": "Ocean Breeze",
+     "price_range": "$10 to $20",
+     "rating": "4.47"
+    },
+    "tel": "+1 212 555 0123",
+    "time": "2:00 PM"
+   }
+  },
+  "deleted": {},
+  "updated": {}
+ },
+ "config": {
+  "open_dining": {
+   "error_booking": false,
+   "hide_aria_labels": false,
+   "latency": 0,
+   "no_available_slots": false,
+   "removePopup": false,
+   "run_id": "0",
+   "task_id": "opendining-5"
+  }
+ },
+ "reviewDetailsDiff": {
+  "added": {},
+  "deleted": {},
+  "updated": {}
+ }
+}

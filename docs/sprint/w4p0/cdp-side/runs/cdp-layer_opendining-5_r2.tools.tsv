@@ -1,0 +1,60 @@
+1	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app"}
+2	mcp__browser__extract	{"query": "Ocean Breeze"}
+3	mcp__browser__act	{"action": "click", "handle": "h40"}
+4	mcp__browser__extract	{"query": "Ocean Breeze"}
+5	mcp__browser__find	{"query": "Next slide button in homepage carousel"}
+6	mcp__browser__act	{"steps": [{"handle": "h40", "tool": "click"}, {"handle": "h40", "tool": "click"}, {"handle": "h40", "tool": "click"}]}
+7	mcp__browser__extract	{"include_hidden": true, "query": "Ocean Breeze"}
+8	mcp__browser__find	{"query": "Ocean Breeze restaurant card and its time slot buttons"}
+9	mcp__browser__act	{"action": "click", "handle": "h40"}
+10	mcp__browser__extract	{"query": "Ocean Breeze"}
+11	mcp__browser__observe	{"mode": "viewport"}
+12	mcp__browser__find	{"query": "Ocean Breeze"}
+13	mcp__browser__act	{"action": "click", "handle": "h40"}
+14	mcp__browser__extract	{"include_hidden": true, "query": "Ocean Breeze restaurant name and 2:30 PM button"}
+15	mcp__browser__evaluate	{"expression": "(() => { const out = []; const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); let n; while ((n = walker.nextNode())) { if (n.textContent.includes('Ocean Breeze')) { const el = n.parentElement; const r = el.getBoundingClientRect(); out.push({tag: el.tagName, cls: el.className && String(el.className).slice(0,80), top: Math.round(r.top), left: Math.round(r.left), w: Math.round(r.width), h: Math.round(r.height), text: n.textContent.trim().slice(0,60), inCarousel: !!el.closest('[class*=carousel],[class*=slider],[class*=swiper]')}); } } return JSON.stringify(out); })()"}
+16	mcp__browser__act	{"action": "click", "handle": "h40"}
+17	mcp__browser__extract	{"query": "Ocean Breeze"}
+18	mcp__browser__act	{"action": "click", "handle": "h40"}
+19	mcp__browser__extract	{"query": "Ocean Breeze"}
+20	mcp__browser__act	{"action": "click", "handle": "h40"}
+21	mcp__browser__extract	{"query": "Ocean Breeze"}
+22	mcp__browser__act	{"action": "click", "handle": "h40"}
+23	mcp__browser__extract	{"query": "Ocean Breeze"}
+24	mcp__browser__find	{"query": "Ocean Breeze restaurant card (Seafood, Embarcadero) time slot buttons"}
+25	mcp__browser__find	{"query": "time slot buttons inside Ocean Breeze listitem (1:30 PM, 2:00 PM, 2:30 PM)"}
+26	mcp__browser__act	{"action": "focus", "handle": "h209"}
+27	mcp__browser__observe	{"mode": "viewport"}
+28	mcp__browser__act	{"action": "click", "handle": "h217"}
+29	mcp__browser__observe	{"mode": "interactive"}
+30	mcp__browser__act	{"action": "click", "handle": "h216"}
+31	ToolSearch	{"max_results": 2, "query": "select:mcp__browser__scroll,mcp__browser__screenshot"}
+32	mcp__browser__scroll	{"to": "h217"}
+33	mcp__browser__act	{"action": "click", "handle": "h217"}
+34	mcp__browser__screenshot	{"handle": "h217"}
+35	mcp__browser__act	{"action": "click", "handle": "h40"}
+36	mcp__browser__screenshot	{}
+37	mcp__browser__find	{"query": "2:00 PM button inside Ocean Breeze card"}
+38	mcp__browser__act	{"action": "click", "handle": "h217"}
+39	mcp__browser__type	{"handle": "h3", "text": "5555550123"}
+40	mcp__browser__act	{"action": "click", "handle": "h266"}
+41	mcp__browser__type	{"handle": "h3", "text": "4155552671"}
+42	mcp__browser__act	{"action": "click", "handle": "h266"}
+43	mcp__browser__observe	{"mode": "interactive"}
+44	mcp__browser__act	{"action": "click", "handle": "h261"}
+45	mcp__browser__find	{"query": "United States option in country listbox"}
+46	mcp__browser__act	{"action": "click", "handle": "h1205"}
+47	mcp__browser__scroll	{"to": "h1205"}
+48	mcp__browser__act	{"action": "click", "handle": "h1205"}
+49	mcp__browser__type	{"handle": "h3", "text": "+1 4155552671"}
+50	mcp__browser__act	{"action": "click", "handle": "h266"}
+51	mcp__browser__observe	{"mode": "interactive"}
+52	mcp__browser__act	{"action": "click", "handle": "h1205"}
+53	mcp__browser__act	{"action": "dismiss"}
+54	mcp__browser__observe	{"budget_tokens": 1500, "include_hidden": false, "mode": "interactive"}
+55	mcp__browser__act	{"action": "click", "handle": "h261"}
+56	ToolSearch	{"max_results": 1, "query": "select:mcp__browser__key"}
+57	mcp__browser__key	{"key": "Escape"}
+58	mcp__browser__type	{"handle": "h3", "text": "+1 4155552671"}
+59	mcp__browser__observe	{"budget_tokens": 800, "mode": "interactive"}
+60	mcp__browser__act	{"action": "click", "handle": "h266"}

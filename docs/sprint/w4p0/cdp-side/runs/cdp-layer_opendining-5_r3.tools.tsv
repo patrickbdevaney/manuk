@@ -1,0 +1,60 @@
+1	ToolSearch	{"max_results": 10, "query": "select:mcp__browser__navigate,mcp__browser__observe,mcp__browser__act,mcp__browser__type,mcp__browser__fill_form,mcp__browser__scroll,mcp__browser__find,mcp__browser__extract"}
+2	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app"}
+3	mcp__browser__find	{"page": "pcd4eec:3", "query": "Ocean Breeze restaurant carousel"}
+4	mcp__browser__scroll	{"dy": 800, "page": "pcd4eec:4"}
+5	mcp__browser__extract	{"page": "pcd4eec:4", "query": "Ocean Breeze"}
+6	mcp__browser__act	{"action": "click", "handle": "h103", "page": "pcd4eec:6"}
+7	mcp__browser__extract	{"page": "pcd4eec:6", "query": "Ocean Breeze"}
+8	mcp__browser__find	{"page": "pcd4eec:8", "query": "Next slide button in restaurant carousel"}
+9	mcp__browser__act	{"action": "click", "handle": "h103", "page": "pcd4eec:9"}
+10	mcp__browser__find	{"page": "pcd4eec:9", "query": "Ocean Breeze"}
+11	mcp__browser__act	{"action": "click", "handle": "h103", "page": "pcd4eec:11"}
+12	mcp__browser__find	{"page": "pcd4eec:11", "query": "Ocean Breeze"}
+13	mcp__browser__act	{"action": "click", "handle": "h103", "page": "pcd4eec:13"}
+14	mcp__browser__find	{"page": "pcd4eec:13", "query": "Ocean Breeze"}
+15	mcp__browser__act	{"action": "click", "handle": "h103", "page": "pcd4eec:15"}
+16	mcp__browser__find	{"page": "pcd4eec:15", "query": "Ocean Breeze"}
+17	mcp__browser__act	{"action": "click", "handle": "h103", "page": "pcd4eec:17"}
+18	mcp__browser__find	{"page": "pcd4eec:17", "query": "Ocean Breeze"}
+19	mcp__browser__act	{"action": "click", "handle": "h103", "page": "pcd4eec:19"}
+20	mcp__browser__find	{"page": "pcd4eec:19", "query": "Ocean Breeze"}
+21	mcp__browser__scroll	{"page": "pcd4eec:21", "to": "h250"}
+22	mcp__browser__find	{"page": "pcd4eec:21", "query": "Book for time slot links in Ocean Breeze listing"}
+23	mcp__browser__act	{"action": "click", "handle": "h255", "page": "pcd4eec:23"}
+24	mcp__browser__find	{"page": "pcd4eec:24", "query": "Book for 2:00 PM link in Ocean Breeze listing"}
+25	mcp__browser__find	{"page": "pcd4eec:25", "query": "Ocean Breeze 2:00 PM booking"}
+26	mcp__browser__scroll	{"page": "pcd4eec:26", "to": "h255"}
+27	mcp__browser__observe	{"mode": "viewport", "page": "pcd4eec:27"}
+28	mcp__browser__act	{"action": "click", "handle": "h255", "page": "pcd4eec:28"}
+29	mcp__browser__find	{"page": "pcd4eec:29", "query": "close button overlay banner or cookie dialog"}
+30	mcp__browser__act	{"action": "click", "handle": "h256", "page": "pcd4eec:30"}
+31	mcp__browser__act	{"action": "click", "handle": "h1", "page": "pcd4eec:31"}
+32	mcp__browser__observe	{"mode": "interactive", "page": "pcd4eec:32"}
+33	mcp__browser__scroll	{"page": "pcd4eec:33", "to": "h255"}
+34	mcp__browser__act	{"action": "click", "handle": "h255", "page": "pcd4eec:34"}
+35	mcp__browser__screenshot	{"page": "pcd4eec:35"}
+36	mcp__browser__act	{"action": "click", "at": {"x": 1228, "y": 229}, "page": "pcd4eec:35"}
+37	mcp__browser__screenshot	{"page": "pcd4eec:35"}
+38	mcp__browser__act	{"action": "click", "at": {"x": 900, "y": 387}, "page": "pcd4eec:36"}
+39	mcp__browser__fill_form	{"fields": [{"handle": "h3", "value": "5555550123"}], "page": "pcd4eec:37", "submit": "h300"}
+40	mcp__browser__type	{"handle": "h3", "page": "pcd4eec:38", "text": "4155550123"}
+41	mcp__browser__act	{"action": "click", "handle": "h300", "page": "pcd4eec:39"}
+42	mcp__browser__observe	{"mode": "interactive", "page": "pcd4eec:40"}
+43	mcp__browser__act	{"action": "click", "handle": "h295", "page": "pcd4eec:41"}
+44	mcp__browser__find	{"page": "pcd4eec:42", "query": "United States +1 option in country listbox"}
+45	mcp__browser__act	{"action": "click", "handle": "h1239", "page": "pcd4eec:43"}
+46	mcp__browser__act	{"action": "select", "handle": "h306", "page": "pcd4eec:44", "value": "United States + 1"}
+47	mcp__browser__observe	{"mode": "viewport", "page": "pcd4eec:45"}
+48	mcp__browser__type	{"handle": "h3", "page": "pcd4eec:46", "text": "+1 415 555 0123"}
+49	mcp__browser__find	{"page": "pcd4eec:47", "query": "phone number textbox and country selector button"}
+50	mcp__browser__act	{"action": "dismiss", "page": "pcd4eec:48"}
+51	mcp__browser__observe	{"mode": "interactive", "page": "pcd4eec:49"}
+52	mcp__browser__scroll	{"page": "pcd4eec:50", "to": "h1239"}
+53	mcp__browser__screenshot	{"page": "pcd4eec:51"}
+54	mcp__browser__scroll	{"dy": 600, "page": "pcd4eec:51"}
+55	mcp__browser__act	{"action": "click", "at": {"x": 350, "y": 600}, "page": "pcd4eec:52"}
+56	mcp__browser__screenshot	{"page": "pcd4eec:52"}
+57	mcp__browser__find	{"page": "pcd4eec:53", "query": "phone number textbox"}
+58	mcp__browser__type	{"handle": "h3", "page": "pcd4eec:54", "text": "+14155550123"}
+59	mcp__browser__screenshot	{"page": "pcd4eec:55"}
+60	mcp__browser__act	{"action": "click", "at": {"x": 455, "y": 511}, "page": "pcd4eec:55"}

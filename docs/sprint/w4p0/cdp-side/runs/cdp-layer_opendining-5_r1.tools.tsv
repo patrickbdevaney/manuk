@@ -1,0 +1,54 @@
+1	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app"}
+2	ToolSearch	{"max_results": 3, "query": "select:mcp__browser__find,mcp__browser__scroll,mcp__browser__screenshot"}
+3	mcp__browser__find	{"query": "Ocean Breeze restaurant in carousel"}
+4	mcp__browser__act	{"action": "click", "handle": "h40"}
+5	mcp__browser__find	{"query": "Ocean Breeze"}
+6	mcp__browser__observe	{"mode": "content"}
+7	mcp__browser__find	{"query": "Next slide button in restaurant carousel"}
+8	mcp__browser__act	{"action": "click", "handle": "h40"}
+9	mcp__browser__find	{"query": "Ocean Breeze"}
+10	mcp__browser__act	{"action": "click", "handle": "h40"}
+11	mcp__browser__find	{"query": "Ocean Breeze"}
+12	mcp__browser__act	{"action": "click", "handle": "h40"}
+13	mcp__browser__find	{"query": "Ocean Breeze"}
+14	mcp__browser__extract	{"query": "Ocean Breeze"}
+15	mcp__browser__act	{"action": "click", "handle": "h40"}
+16	mcp__browser__find	{"query": "Ocean Breeze"}
+17	mcp__browser__act	{"action": "click", "handle": "h40"}
+18	mcp__browser__find	{"query": "Ocean Breeze"}
+19	mcp__browser__act	{"action": "click", "handle": "h40"}
+20	mcp__browser__find	{"query": "Ocean Breeze"}
+21	mcp__browser__scroll	{"to": "h205"}
+22	mcp__browser__find	{"query": "time slot buttons in Ocean Breeze listing"}
+23	mcp__browser__observe	{"mode": "viewport"}
+24	mcp__browser__act	{"action": "click", "handle": "h215"}
+25	mcp__browser__screenshot	{}
+26	mcp__browser__scroll	{"to": "h215"}
+27	mcp__browser__act	{"action": "click", "handle": "h215"}
+28	mcp__browser__find	{"query": "Ocean Breeze 2:00 PM book button"}
+29	mcp__browser__act	{"action": "click", "handle": "h40"}
+30	mcp__browser__screenshot	{}
+31	mcp__browser__act	{"action": "click", "at": {"x": 906, "y": 284}}
+32	mcp__browser__find	{"query": "phone number text input field"}
+33	mcp__browser__observe	{"mode": "interactive"}
+34	mcp__browser__type	{"handle": "h3", "text": "+1 555 555 0123"}
+35	mcp__browser__act	{"action": "click", "handle": "h261"}
+36	mcp__browser__type	{"handle": "h3", "text": "5555550123"}
+37	mcp__browser__act	{"action": "click", "handle": "h261"}
+38	mcp__browser__screenshot	{}
+39	mcp__browser__act	{"action": "click", "handle": "h256"}
+40	mcp__browser__find	{"query": "United States option in country list"}
+41	mcp__browser__act	{"action": "click", "handle": "h1200"}
+42	mcp__browser__observe	{"mode": "interactive"}
+43	mcp__browser__scroll	{"to": "h1200"}
+44	mcp__browser__act	{"action": "click", "handle": "h1200"}
+45	mcp__browser__act	{"action": "click", "handle": "h420"}
+46	mcp__browser__screenshot	{}
+47	mcp__browser__find	{"query": "phone number textbox"}
+48	mcp__browser__type	{"handle": "h3", "text": "5555550123"}
+49	mcp__browser__screenshot	{}
+50	mcp__browser__type	{"handle": "h3", "text": "2125550123"}
+51	mcp__browser__screenshot	{}
+52	mcp__browser__type	{"handle": "h3", "text": "+12125550123"}
+53	mcp__browser__screenshot	{}
+54	mcp__browser__act	{"action": "click", "handle": "h261"}

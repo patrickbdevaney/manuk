@@ -1,0 +1,47 @@
+{
+ "bookingDetailsDiff": {
+  "added": {
+   "0": {
+    "date": "2024-07-18T07:00:00.000Z",
+    "guests": "2 people",
+    "optionals": {
+     "occasion": "placeholder",
+     "request": ""
+    },
+    "restaurant": {
+     "adjectives": [
+      "lively",
+      "casual",
+      "trendy"
+     ],
+     "description": "A vibrant and lively bar in the heart of the city, offering an extensive drink menu and casual food options. A great spot for after-work drinks or a night out with friends.",
+     "food_type": "Bar",
+     "id": "6d5099e8-4d93-4cbb-9b5b-85c24e2a2828",
+     "name": "Bar Central",
+     "price_range": "$20 to $40",
+     "rating": "3.74"
+    },
+    "tel": "+1 415 555 0123",
+    "time": "1:30 PM"
+   }
+  },
+  "deleted": {},
+  "updated": {}
+ },
+ "config": {
+  "open_dining": {
+   "error_booking": false,
+   "hide_aria_labels": false,
+   "latency": 0,
+   "no_available_slots": false,
+   "removePopup": false,
+   "run_id": "0",
+   "task_id": "opendining-8"
+  }
+ },
+ "reviewDetailsDiff": {
+  "added": {},
+  "deleted": {},
+  "updated": {}
+ }
+}

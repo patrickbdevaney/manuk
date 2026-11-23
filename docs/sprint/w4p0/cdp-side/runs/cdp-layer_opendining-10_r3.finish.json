@@ -1,0 +1,47 @@
+{
+ "bookingDetailsDiff": {
+  "added": {
+   "0": {
+    "date": "2024-07-18T07:00:00.000Z",
+    "guests": "2 people",
+    "optionals": {
+     "occasion": "placeholder",
+     "request": ""
+    },
+    "restaurant": {
+     "adjectives": [
+      "healthy",
+      "sustainable",
+      "delicious"
+     ],
+     "description": "A plant-based restaurant serving creative, healthy dishes.",
+     "food_type": "Vegan",
+     "id": "3f1d4cc8-d8c7-4138-bbc8-754f7736b82d",
+     "name": "The Vegan Table",
+     "price_range": "$35 to $75",
+     "rating": "4.35"
+    },
+    "tel": "+1 415 555 0123",
+    "time": "1:30 PM"
+   }
+  },
+  "deleted": {},
+  "updated": {}
+ },
+ "config": {
+  "open_dining": {
+   "error_booking": false,
+   "hide_aria_labels": false,
+   "latency": 0,
+   "no_available_slots": false,
+   "removePopup": false,
+   "run_id": "0",
+   "task_id": "opendining-10"
+  }
+ },
+ "reviewDetailsDiff": {
+  "added": {},
+  "deleted": {},
+  "updated": {}
+ }
+}

@@ -1,0 +1,30 @@
+1	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app"}
+2	mcp__browser__extract	{"format": "text", "query": "restaurant list all restaurants menu vegetarian"}
+3	mcp__browser__act	{"action": "click", "handle": "h10"}
+4	mcp__browser__act	{"action": "click", "handle": "h9"}
+5	mcp__browser__extract	{"format": "text", "include_hidden": true, "query": "Menu vegetarian dishes"}
+6	mcp__browser__observe	{"mode": "full"}
+7	mcp__browser__evaluate	{"expression": "(() => { const m = [...document.querySelectorAll('*')].find(e => e.children.length===0 && /^\\s*Menu\\s*$/.test(e.textContent)); const root = m ? (m.closest('section,div[class*=menu],article') || m.parentElement) : document.body; return (root.innerText || '').slice(0, 4000); })()"}
+8	mcp__browser__extract	{"format": "markdown", "include_hidden": true}
+9	mcp__browser__observe	{"mode": "interactive"}
+10	mcp__browser__scroll	{"page": "p569093:11"}
+11	mcp__browser__observe	{"include_hidden": true, "mode": "full"}
+12	mcp__browser__scroll	{"dy": 1200, "page": "p569093:13"}
+13	mcp__browser__screenshot	{"page": "p569093:13"}
+14	mcp__browser__navigate	{"query": "Vintage Bites Evening Delight River View Caf\u00e9 Fancy Lights Bistro menu", "url": "https://evals-opendining.vercel.app"}
+15	mcp__browser__observe	{"include_hidden": true, "mode": "interactive"}
+16	mcp__browser__act	{"action": "click", "handle": "h151"}
+17	mcp__browser__extract	{"format": "text", "include_hidden": true, "query": "vegetarian veggie vegan salad pasta dish menu price $"}
+18	mcp__browser__observe	{"include_hidden": true, "mode": "full"}
+19	mcp__browser__scroll	{"dy": 800, "page": "p569093:19"}
+20	mcp__browser__screenshot	{"page": "p569093:19"}
+21	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app"}
+22	mcp__browser__act	{"action": "click", "handle": "h292"}
+23	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app/r/81c94d5b-47b1-4d3f-bc48-e2cbebbc2d0f"}
+24	mcp__browser__navigate	{"query": "River View Caf\u00e9 View details", "url": "https://evals-opendining.vercel.app"}
+25	mcp__browser__observe	{"include_hidden": true, "mode": "interactive"}
+26	mcp__browser__act	{"action": "click", "handle": "h410"}
+27	mcp__browser__navigate	{"query": "Fancy Lights Bistro details page link", "url": "https://evals-opendining.vercel.app"}
+28	mcp__browser__act	{"action": "click", "handle": "h486"}
+29	mcp__browser__observe	{"include_hidden": true, "mode": "interactive"}
+30	mcp__browser__act	{"action": "click", "handle": "h600"}
