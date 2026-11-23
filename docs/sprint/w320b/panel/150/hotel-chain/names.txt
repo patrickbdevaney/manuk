@@ -1,0 +1,3 @@
+lookup_amenity
+search_location
+view_hotel

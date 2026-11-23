@@ -1,3 +1,6 @@
 run	page	chrome_ver	webmcp_toolsAdded_events	tool_names	verdict
 probe-150	demos/pizza-maker	150.0.7871.124	16 (7 distinct pizza tools, repeats from re-enable; +zz from probe self-test excluded)	set_pizza_size,set_pizza_style,toggle_layer,add_topping,remove_topping,manage_pizza,share_pizza	PASS (7/7 expected)
 control-nomcp	data:text/html no-tools page	150.0.7871.124	0	-	RED as designed (0 events, gate fails)
+probe-150	demos/french-bistro	150.0.7871.124	4 events (1 distinct: book_table_le_petit_bistro; zz self-test excluded)	book_table_le_petit_bistro	PANEL (names saved french-bistro/names.txt)
+probe-150	demos/hotel-chain	150.0.7871.124	8 events (3 distinct: lookup_amenity, search_location, view_hotel; zz self-test excluded)	lookup_amenity,search_location,view_hotel	PANEL (names saved hotel-chain/names.txt)
+control-nomcp-150-redcheck	data:text/html no-tools page	150.0.7871.124	0	-	NO-PANEL, check-page.py exit 1 (red)
