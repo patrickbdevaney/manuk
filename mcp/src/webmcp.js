@@ -8,7 +8,15 @@
   const hook = (mc) => {
     const o = { r: mc.registerTool, u: mc.unregisterTool, p: mc.provideContext, c: mc.clearContext };
     const put = (t) => { if (t && typeof t.name === 'string') reg.set(t.name, t); };
-    mc.registerTool = function (t) { put(t); return o.r ? o.r.apply(this, arguments) : undefined; };
+    // W3.20.b.c.b.a: capture first, then let the native call fail soft. Chrome 149's native registerTool throws
+    // synchronously (SecurityError on a non-HTTPS exposedTo), which aborted the demo's script after its first
+    // registration (pizza-maker: 1 of 7 tools); the page's own polyfill rejects asynchronously instead.
+    mc.registerTool = function (t) {
+      put(t);
+      if (!o.r) return undefined;
+      if (window.__manukHardThrow) return o.r.apply(this, arguments);
+      try { return o.r.apply(this, arguments); } catch (e) { return Promise.reject(e); }
+    };
     mc.unregisterTool = function (n) { reg.delete(typeof n === 'string' ? n : n && n.name); return o.u ? o.u.apply(this, arguments) : undefined; };
     mc.provideContext = function (c) { reg.clear(); ((c && c.tools) || []).forEach(put); return o.p ? o.p.apply(this, arguments) : undefined; };
     mc.clearContext = function () { reg.clear(); return o.c ? o.c.apply(this, arguments) : undefined; };
@@ -105,7 +113,12 @@
         if (reg.has(name)) return;
         const declared = form.hasAttribute('toolname');
         const schema = formSchema(form);
-        if (!Object.keys(schema.properties).length) return;
+        // A declared form with no fields (doors: three buttons) is still a tool; native lists it with no schema.
+        if (!Object.keys(schema.properties).length) {
+          if (!declared) return;
+          push(name, form.getAttribute('tooldescription') || 'Fill and submit the form', { type: 'object', properties: {} }, 'declarative', {});
+          return;
+        }
         schema.properties.submit = { type: 'boolean', description: 'also submit the form after filling (default false)' };
         push(name, declared ? (form.getAttribute('tooldescription') || 'Fill and submit the form') : ('Fill the fields of the form' + (form.id ? ' #' + form.id : ' #' + (i + 1)) + (form.getAttribute('action') ? ' (action ' + form.getAttribute('action') + ')' : '')), schema, declared ? 'declarative' : 'synthesized', {});
       });
@@ -142,7 +155,7 @@
         done.push(k);
       }
       let sub = '';
-      if (args.submit === true) { if (form.requestSubmit) form.requestSubmit(); else form.submit(); sub = '; submitted'; }
+      if (args.submit === true || !formFields(form).length) { if (form.requestSubmit) form.requestSubmit(); else form.submit(); sub = '; submitted'; }
       return 'filled ' + done.length + ' field(s) [' + done.join(', ') + ']' + (missing.length ? '; could not set [' + missing.join(', ') + ']' : '') + sub;
     },
   };

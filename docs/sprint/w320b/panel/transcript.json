@@ -176,40 +176,548 @@
           "description": "Control pizza layers (sauce, cheese). Use \"add\", \"remove\", or \"toggle\"."
         }
       ],
-      "manuk": null,
-      "error": "manuk navigate failed: {\"content\":[{\"type\":\"text\",\"text\":\"CDP Page.navigate timed out\\npage: p47dc76:1\"}],\"isError\":true}",
+      "manuk": [
+        {
+          "name": "add_topping",
+          "schema": {
+            "properties": {
+              "count": {
+                "description": "Number of toppings to add",
+                "maximum": 50,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "size": {
+                "enum": [
+                  "Small",
+                  "Medium",
+                  "Large",
+                  "Extra Large"
+                ],
+                "type": "string"
+              },
+              "topping": {
+                "enum": [
+                  "🍕",
+                  "🍄",
+                  "🌿",
+                  "🍍",
+                  "🫑",
+                  "🥓",
+                  "🧅",
+                  "🫒",
+                  "🌽",
+                  "🌶️",
+                  "🐑"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "topping"
+            ],
+            "type": "object"
+          },
+          "description": "Add one or more toppings to the pizza",
+          "source": "registerTool"
+        },
+        {
+          "name": "manage_pizza",
+          "schema": {
+            "properties": {
+              "action": {
+                "enum": [
+                  "remove_last",
+                  "reset"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "action"
+            ],
+            "type": "object"
+          },
+          "description": "Manage pizza state",
+          "source": "registerTool"
+        },
+        {
+          "name": "remove_topping",
+          "schema": {
+            "properties": {
+              "all": {
+                "description": "Remove all toppings of this type",
+                "type": "boolean"
+              },
+              "topping": {
+                "enum": [
+                  "🍕",
+                  "🍄",
+                  "🌿",
+                  "🍍",
+                  "🫑",
+                  "🥓",
+                  "🧅",
+                  "🫒",
+                  "🌽",
+                  "🌶️",
+                  "🐑"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "topping"
+            ],
+            "type": "object"
+          },
+          "description": "Remove a specific topping from the pizza",
+          "source": "registerTool"
+        },
+        {
+          "name": "set_pizza_size",
+          "schema": {
+            "properties": {
+              "number_of_persons": {
+                "description": "The number of people eating to help infer the correct size.",
+                "type": "number"
+              },
+              "size": {
+                "description": "The specific size name.",
+                "enum": [
+                  "Small",
+                  "Medium",
+                  "Large",
+                  "Extra Large"
+                ],
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "description": "Set the pizza size directly or infer it based on the number of people.",
+          "source": "registerTool"
+        },
+        {
+          "name": "set_pizza_style",
+          "schema": {
+            "properties": {
+              "style": {
+                "enum": [
+                  "Classic",
+                  "Bianca",
+                  "BBQ",
+                  "Pesto",
+                  "Wales"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "style"
+            ],
+            "type": "object"
+          },
+          "description": "Set the style of the pizza (colors/theme)",
+          "source": "registerTool"
+        },
+        {
+          "name": "share_pizza",
+          "schema": {
+            "properties": {},
+            "type": "object"
+          },
+          "description": "Get a shareable URL for the current pizza creation",
+          "source": "registerTool"
+        },
+        {
+          "name": "toggle_layer",
+          "schema": {
+            "properties": {
+              "action": {
+                "enum": [
+                  "add",
+                  "remove",
+                  "toggle"
+                ],
+                "type": "string"
+              },
+              "layer": {
+                "enum": [
+                  "sauce-layer",
+                  "cheese-layer"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "layer"
+            ],
+            "type": "object"
+          },
+          "description": "Control pizza layers (sauce, cheese). Use \"add\", \"remove\", or \"toggle\".",
+          "source": "registerTool"
+        }
+      ],
+      "error": null,
       "nativeMeta": {
         "modelContext": "object",
         "testing": "object"
       },
-      "pass": false
+      "missing": [],
+      "extra": [],
+      "schemaDiff": [],
+      "srcWrong": [],
+      "pass": true
     },
     "coffee-shop": {
       "url": "https://googlechromelabs.github.io/webmcp-tools/demos/coffee-shop/",
-      "native": null,
-      "manuk": null,
-      "error": "native eval threw: {\"exceptionId\":1,\"text\":\"Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'getTools')\",\"lineNumber\":0,\"columnNumber\":0,\"exception\":{\"type\":\"object\",\"subtype\":\"error\",\"className\":\"TypeError\",\"description\":\"TypeError: Cannot read properties of undefined (reading 'getTools'",
+      "native": [],
+      "manuk": [
+        {
+          "name": "get_machine_specifications",
+          "schema": {
+            "properties": {},
+            "type": "object"
+          },
+          "description": "Provides technical dimensions, height, and water tank capacity for the Alchemist machine.",
+          "source": "registerTool"
+        },
+        {
+          "name": "get_order_history",
+          "schema": {
+            "properties": {},
+            "type": "object"
+          },
+          "description": "Retrieves past orders to identify a user's 'usual' beans for reordering.",
+          "source": "registerTool"
+        },
+        {
+          "name": "reorder_product",
+          "schema": {
+            "properties": {
+              "item_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "item_id"
+            ],
+            "type": "object"
+          },
+          "description": "Adds an item to the cart and visually updates the UI bag icon.",
+          "source": "registerTool"
+        },
+        {
+          "name": "search_catalog",
+          "schema": {
+            "properties": {
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "description": "Navigates the boutique to find a product and opens its page.",
+          "source": "registerTool"
+        }
+      ],
+      "error": null,
+      "nativeMeta": {
+        "modelContext": "undefined",
+        "testing": "object"
+      },
+      "missing": [],
+      "extra": [
+        "get_machine_specifications",
+        "get_order_history",
+        "reorder_product",
+        "search_catalog"
+      ],
+      "schemaDiff": [],
+      "srcWrong": [],
       "pass": false
     },
     "ticket-booking": {
       "url": "https://googlechromelabs.github.io/webmcp-tools/demos/ticket-booking/",
-      "native": null,
-      "manuk": null,
-      "error": "native eval threw: {\"exceptionId\":1,\"text\":\"Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'getTools')\",\"lineNumber\":0,\"columnNumber\":0,\"exception\":{\"type\":\"object\",\"subtype\":\"error\",\"className\":\"TypeError\",\"description\":\"TypeError: Cannot read properties of undefined (reading 'getTools'",
+      "native": [],
+      "manuk": [
+        {
+          "name": "query_content",
+          "schema": {
+            "properties": {
+              "genre": {
+                "description": "The genre to filter by (e.g., horror, action, comedy).",
+                "type": "string"
+              }
+            },
+            "required": [
+              "genre"
+            ],
+            "type": "object"
+          },
+          "description": "Filters the movie catalog by a specific genre.",
+          "source": "registerTool"
+        },
+        {
+          "name": "select_showtime",
+          "schema": {
+            "properties": {
+              "date": {
+                "description": "The date of the show in YYYY-MM-DD format. Must be one of the dates returned by query_content for this movie.",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                "type": "string"
+              },
+              "movie_id": {
+                "description": "The ID of the movie to select.",
+                "type": "string"
+              },
+              "tickets": {
+                "default": 1,
+                "description": "Number of tickets.",
+                "type": "number"
+              },
+              "time": {
+                "description": "The start time of the show in 12-hour format with AM/PM (e.g., '8:30 PM').",
+                "pattern": "^[1-12]:[0-5][0-9] (AM|PM)$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "movie_id",
+              "date",
+              "time"
+            ],
+            "type": "object"
+          },
+          "description": "Selects a movie and a specific showtime to initiate the checkout process.",
+          "source": "registerTool"
+        },
+        {
+          "name": "update_location",
+          "schema": {
+            "properties": {
+              "city": {
+                "description": "The city to set as the user's location. (e.g. Montpelier, Paris, New York)",
+                "type": "string"
+              }
+            },
+            "required": [
+              "city"
+            ],
+            "type": "object"
+          },
+          "description": "Updates the user's location.",
+          "source": "registerTool"
+        }
+      ],
+      "error": null,
+      "nativeMeta": {
+        "modelContext": "undefined",
+        "testing": "object"
+      },
+      "missing": [],
+      "extra": [
+        "query_content",
+        "select_showtime",
+        "update_location"
+      ],
+      "schemaDiff": [],
+      "srcWrong": [],
       "pass": false
     },
     "smart-home": {
       "url": "https://googlechromelabs.github.io/webmcp-tools/demos/smart-home/",
-      "native": null,
-      "manuk": null,
-      "error": "native eval threw: {\"exceptionId\":1,\"text\":\"Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'getTools')\",\"lineNumber\":0,\"columnNumber\":0,\"exception\":{\"type\":\"object\",\"subtype\":\"error\",\"className\":\"TypeError\",\"description\":\"TypeError: Cannot read properties of undefined (reading 'getTools'",
+      "native": [],
+      "manuk": [
+        {
+          "name": "getGuestMessages",
+          "schema": {
+            "properties": {},
+            "type": "object"
+          },
+          "description": "Reads visitor and guest sticky notes left on the smart home digital message board.",
+          "source": "registerTool"
+        },
+        {
+          "name": "getPlaylistQueue",
+          "schema": {
+            "properties": {},
+            "type": "object"
+          },
+          "description": "Returns the list of songs and artist metadata currently queued in the Living Room Soniq collaborative party playlist.",
+          "source": "registerTool"
+        },
+        {
+          "name": "lockFrontDoor",
+          "schema": {
+            "properties": {},
+            "type": "object"
+          },
+          "description": "Locks the smart home front door lock to secure the house.",
+          "source": "registerTool"
+        },
+        {
+          "name": "rearrangeDOMComponents",
+          "schema": {
+            "properties": {
+              "componentIds": {
+                "description": "Array of component IDs to display on the dashboard.",
+                "items": {
+                  "enum": [
+                    "weather_widget",
+                    "thermostat_control",
+                    "camera_front_door",
+                    "lock_front_door",
+                    "guest_message_board",
+                    "smart_lights_living_room",
+                    "media_player_living_room",
+                    "alarm_panel",
+                    "air_quality_sensor",
+                    "energy_summary"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "componentIds"
+            ],
+            "type": "object"
+          },
+          "description": "Rearranges the user's home dashboard by adding, removing, or reordering smart home control components based on the user's intent.",
+          "source": "registerTool"
+        },
+        {
+          "name": "setLivingRoomLights",
+          "schema": {
+            "properties": {
+              "brightness": {
+                "description": "Brightness level from 0 (blackout) to 100 (maximum brightness).",
+                "type": "number"
+              },
+              "power": {
+                "description": "Whether to turn the lights 'on' or 'off'.",
+                "enum": [
+                  "on",
+                  "off"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "power"
+            ],
+            "type": "object"
+          },
+          "description": "Turns the living room smart lights ON or OFF and adjusts their brightness percentage (0 to 100).",
+          "source": "registerTool"
+        },
+        {
+          "name": "unlockFrontDoor",
+          "schema": {
+            "properties": {},
+            "type": "object"
+          },
+          "description": "Unlocks the smart home front door lock. Grants physical access to the home.",
+          "source": "registerTool"
+        }
+      ],
+      "error": null,
+      "nativeMeta": {
+        "modelContext": "undefined",
+        "testing": "object"
+      },
+      "missing": [],
+      "extra": [
+        "getGuestMessages",
+        "getPlaylistQueue",
+        "lockFrontDoor",
+        "rearrangeDOMComponents",
+        "setLivingRoomLights",
+        "unlockFrontDoor"
+      ],
+      "schemaDiff": [],
+      "srcWrong": [],
       "pass": false
     },
     "doors": {
       "url": "https://googlechromelabs.github.io/webmcp-tools/demos/doors/",
-      "native": null,
-      "manuk": null,
-      "error": "native eval threw: {\"exceptionId\":1,\"text\":\"Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'getTools')\",\"lineNumber\":0,\"columnNumber\":0,\"exception\":{\"type\":\"object\",\"subtype\":\"error\",\"className\":\"TypeError\",\"description\":\"TypeError: Cannot read properties of undefined (reading 'getTools'",
+      "native": [
+        {
+          "name": "openDoor1",
+          "schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "description": "Open the first mystery door. Only one door can be chosen."
+        },
+        {
+          "name": "openDoor2",
+          "schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "description": "Open the second mystery door. Only one door can be chosen."
+        },
+        {
+          "name": "openDoor3",
+          "schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          },
+          "description": "Open the third mystery door. Only one door can be chosen."
+        }
+      ],
+      "manuk": [
+        {
+          "name": "openDoor1",
+          "schema": {
+            "properties": {},
+            "type": "object"
+          },
+          "description": "Open the first mystery door. Only one door can be chosen.",
+          "source": "declarative"
+        },
+        {
+          "name": "openDoor2",
+          "schema": {
+            "properties": {},
+            "type": "object"
+          },
+          "description": "Open the second mystery door. Only one door can be chosen.",
+          "source": "declarative"
+        },
+        {
+          "name": "openDoor3",
+          "schema": {
+            "properties": {},
+            "type": "object"
+          },
+          "description": "Open the third mystery door. Only one door can be chosen.",
+          "source": "declarative"
+        }
+      ],
+      "error": null,
+      "nativeMeta": {
+        "modelContext": "undefined",
+        "testing": "object"
+      },
+      "missing": [],
+      "extra": [],
+      "schemaDiff": [
+        "openDoor1",
+        "openDoor2",
+        "openDoor3"
+      ],
+      "srcWrong": [],
       "pass": false
     },
     "french-bistro": {
@@ -274,13 +782,77 @@
           "description": "Initiates a dining reservation request at Le Petit Bistro. Accepts customer details, timing, and seating preferences."
         }
       ],
-      "manuk": null,
-      "error": "manuk navigate failed: {\"content\":[{\"type\":\"text\",\"text\":\"CDP Page.navigate timed out\\nundo: restore(\\\"auto1\\\")\\npage: p47dc76:2\"}],\"isError\":true}",
+      "manuk": [
+        {
+          "name": "book_table_le_petit_bistro",
+          "schema": {
+            "properties": {
+              "date": {
+                "description": "Reservation date. Must be today or future.",
+                "type": "string"
+              },
+              "guests": {
+                "description": "Number of people dining. Must be a string value between '1' and '5', or '6' for parties of 6 or more.",
+                "enum": [
+                  "1",
+                  "2",
+                  "3",
+                  "4",
+                  "5",
+                  "6"
+                ],
+                "type": "string"
+              },
+              "name": {
+                "description": "Customer's full name (min 2 chars)",
+                "type": "string"
+              },
+              "phone": {
+                "description": "Customer's phone number (min 10 digits)",
+                "type": "string"
+              },
+              "requests": {
+                "description": "Special requests (allergies, occasions, etc.)",
+                "type": "string"
+              },
+              "seating": {
+                "description": "Preferred seating area",
+                "enum": [
+                  "Main Dining",
+                  "Terrace",
+                  "Private Booth",
+                  "Bar"
+                ],
+                "type": "string"
+              },
+              "time": {
+                "description": "Reservation time",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "phone",
+              "date",
+              "time",
+              "guests"
+            ],
+            "type": "object"
+          },
+          "description": "Initiates a dining reservation request at Le Petit Bistro. Accepts customer details, timing, and seating preferences.",
+          "source": "registerTool"
+        }
+      ],
+      "error": null,
       "nativeMeta": {
         "modelContext": "object",
         "testing": "object"
       },
-      "pass": false
+      "missing": [],
+      "extra": [],
+      "schemaDiff": [],
+      "srcWrong": [],
+      "pass": true
     }
   }
 }

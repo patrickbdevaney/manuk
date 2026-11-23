@@ -1674,6 +1674,9 @@ pub(crate) fn webmcp_bridge() -> String {
     if mutated("webmcp-no-bridge") {
         return String::new();
     }
+    if mutated("webmcp-hard-throw") {
+        return format!("window.__manukHardThrow = true;\n{src}");
+    }
     if mutated("webmcp-no-taint") {
         return src.replace(
             "const taintOf = (desc, hidden) => {",
