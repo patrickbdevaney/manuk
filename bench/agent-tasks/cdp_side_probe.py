@@ -3,7 +3,11 @@
 through opendining's reservation flow, then read the clone's /finish state the way real_run.py does.
 Answers two questions with no LLM: (a) does the phone field accept a typed number, (b) does a completed booking
 reach /finish as bookingDetailsDiff.added[0]. Prints one JSON line. Needs MANUK_CHROME_PIN and the pinned chrome on PATH.
-Usage: cdp_side_probe.py [--mutate no-submit]    (no-submit skips the Complete click: (b) must then be false)
+Usage: cdp_side_probe.py [--flow clean|scoped|isolated] [--mutate no-submit]
+  clean    : everything in one tab (W4.P0.f).  scoped: config + /finish read in the default tab, the booking (home, form,
+  Complete click) in a second tab of the same browser context (what the shim's page:new does).  isolated: the booking tab
+  lives in a fresh browser context (own cookies/storage) - the hypothesis for a Complete-but-empty /finish.
+  no-submit skips the Complete click: added[0] must then be null (the gate's mutation).
 """
 import asyncio, json, os, subprocess, sys, tempfile, time, urllib.request
 import websockets
@@ -14,8 +18,13 @@ PIN = os.environ.get("MANUK_CHROME_PIN", "145.0.7632.116")
 
 
 class Cdp:
-    def __init__(self, ws):
-        self.ws, self.n, self.pend = ws, 0, {}
+    def __init__(self, ws, sid=None, parent=None):
+        self.ws, self.sid = ws, sid
+        self.n, self.pend = (0, {}) if parent is None else (None, None)
+        self.parent = parent
+
+    def view(self, sid):
+        return Cdp(self.ws, sid, self)
 
     async def pump(self):
         async for m in self.ws:
@@ -24,10 +33,15 @@ class Cdp:
                 self.pend.pop(j["id"]).set_result(j)
 
     async def send(self, method, **params):
-        self.n += 1
+        root = self.parent or self
+        root.n += 1
+        i = root.n
         f = asyncio.get_event_loop().create_future()
-        self.pend[self.n] = f
-        await self.ws.send(json.dumps({"id": self.n, "method": method, "params": params}))
+        root.pend[i] = f
+        msg = {"id": i, "method": method, "params": params}
+        if self.sid:
+            msg["sessionId"] = self.sid
+        await self.ws.send(json.dumps(msg))
         return (await asyncio.wait_for(f, 30)).get("result", {})
 
     async def ev(self, js):
@@ -47,11 +61,11 @@ class Cdp:
         return True
 
 
-async def main(mutate):
+async def main(mutate, flow):
     d = tempfile.mkdtemp()
     p = subprocess.Popen([CHROME, "--headless=new", "--no-sandbox", "--disable-gpu", "--remote-debugging-port=9333",
                           f"--user-data-dir={d}", "about:blank"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    out = {"chrome_ver": PIN}
+    out = {"chrome_ver": PIN, "flow": flow}
     try:
         for _ in range(40):
             try:
@@ -59,30 +73,44 @@ async def main(mutate):
                 break
             except Exception:
                 time.sleep(0.5)
-        wsurl = next(t for t in tabs if t["type"] == "page")["webSocketDebuggerUrl"]
+        wsurl = json.load(urllib.request.urlopen("http://127.0.0.1:9333/json/version"))["webSocketDebuggerUrl"]
         async with websockets.connect(wsurl, max_size=2**26) as ws:
-            c = Cdp(ws)
-            asyncio.ensure_future(c.pump())
-            await c.send("Page.enable")
+            root = Cdp(ws)
+            asyncio.ensure_future(root.pump())
+
+            async def tab(ctx=None):
+                a = {"url": "about:blank"}
+                if ctx:
+                    a["browserContextId"] = ctx
+                tid = (await root.send("Target.createTarget", **a))["targetId"]
+                sid = (await root.send("Target.attachToTarget", targetId=tid, flatten=True))["sessionId"]
+                v = root.view(sid)
+                await v.send("Page.enable")
+                return v
+            c = await tab()   # the default tab: config + /finish reads
             await c.goto(f"{SITE}/config?run_id=0&task_id=opendining-8&latency=0")
             await c.goto(f"{SITE}/finish")
             rid = await c.ev("(()=>{const m=document.body.innerText;return null})()")
-            await c.goto(SITE, 6)
-            link = await c.ev("document.querySelector('a[href^=\"/booking?index=\"]').getAttribute('href')")
+            b = c
+            if flow != "clean":
+                ctx = (await root.send("Target.createBrowserContext"))["browserContextId"] if flow == "isolated" else None
+                b = await tab(ctx)   # the booking tab
+            await b.goto(SITE, 6)
+            link = await b.ev("document.querySelector('a[href^=\"/booking?index=\"]').getAttribute('href')")
             out["booking_link"] = bool(link)
-            await c.goto(SITE + link, 6)
-            out["form_before"] = await c.ev("document.querySelector('input[type=tel]').value")
-            await c.click("document.querySelector('input[type=tel]')")
-            await c.send("Input.insertText", text=os.environ.get("PROBE_TEL", "2024561111"))
+            await b.goto(SITE + link, 6)
+            out["form_before"] = await b.ev("document.querySelector('input[type=tel]').value")
+            await b.click("document.querySelector('input[type=tel]')")
+            await b.send("Input.insertText", text=os.environ.get("PROBE_TEL", "2024561111"))
             await asyncio.sleep(0.5)
-            out["tel_after_insert"] = await c.ev("document.querySelector('input[type=tel]').value")
-            out["tel_invalid"] = await c.ev("document.querySelector('input[type=tel]').getAttribute('aria-invalid')")
+            out["tel_after_insert"] = await b.ev("document.querySelector('input[type=tel]').value")
+            out["tel_invalid"] = await b.ev("document.querySelector('input[type=tel]').getAttribute('aria-invalid')")
             if mutate != "no-submit":
-                ok = await c.click("[...document.querySelectorAll('button')].find(b=>/complete reservation/i.test(b.innerText))")
+                ok = await b.click("[...document.querySelectorAll('button')].find(b=>/complete reservation/i.test(b.innerText))")
                 out["clicked_complete"] = ok
                 await asyncio.sleep(4)
-            out["page_text"] = (await c.ev("document.body.innerText.includes('Booking Complete')"))
-            out["body_tail"] = (await c.ev("document.body.innerText.slice(-400)"))
+            out["page_text"] = (await b.ev("document.body.innerText.includes('Booking Complete')"))
+            out["body_tail"] = (await b.ev("document.body.innerText.slice(-400)"))
             await c.goto(f"{SITE}/finish", 4)
             txt = await c.ev("(document.querySelector('pre')||document.body).innerText")
             try:
@@ -99,4 +127,8 @@ async def main(mutate):
     return 0
 
 
-sys.exit(asyncio.run(main(sys.argv[2] if len(sys.argv) > 2 and sys.argv[1] == "--mutate" else "")))
+def arg(name, default=""):
+    return sys.argv[sys.argv.index(name) + 1] if name in sys.argv else default
+
+
+sys.exit(asyncio.run(main(arg("--mutate"), arg("--flow", "clean"))))
