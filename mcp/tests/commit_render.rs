@@ -27,21 +27,28 @@ fn serve() -> (String, Log) {
             std::thread::spawn(move || {
                 let mut buf = [0u8; 8192];
                 let n = s.read(&mut buf).unwrap_or(0);
-                let first = String::from_utf8_lossy(&buf[..n]).lines().next().unwrap_or("").to_string();
+                let first = String::from_utf8_lossy(&buf[..n])
+                    .lines()
+                    .next()
+                    .unwrap_or("")
+                    .to_string();
                 let mut it = first.split_whitespace();
                 let (m, p) = (it.next().unwrap_or(""), it.next().unwrap_or(""));
                 if p == "/favicon.ico" {
                     return;
                 }
                 lg.lock().unwrap().push(format!("{m} {p}"));
-                let (ct, body) = if p == "/" { ("text/html", PAGE) } else { ("text/plain", "ok") };
+                let (ct, body) = if p == "/" {
+                    ("text/html", PAGE)
+                } else {
+                    ("text/plain", "ok")
+                };
                 let _ = write!(s, "HTTP/1.1 200 OK\r\nContent-Type: {ct}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
             });
         }
     });
     (format!("http://{addr}"), log)
 }
-
 
 struct Client {
     child: Child,
@@ -121,11 +128,20 @@ impl Drop for Client {
 }
 
 fn posts(log: &Log) -> usize {
-    log.lock().unwrap().iter().filter(|l| l.starts_with("POST /order")).count()
+    log.lock()
+        .unwrap()
+        .iter()
+        .filter(|l| l.starts_with("POST /order"))
+        .count()
 }
 
 fn page_of(t: &str) -> String {
-    t.lines().rev().find_map(|l| l.strip_prefix("page: ")).unwrap().trim().to_string()
+    t.lines()
+        .rev()
+        .find_map(|l| l.strip_prefix("page: "))
+        .unwrap()
+        .trim()
+        .to_string()
 }
 
 #[test]
@@ -134,24 +150,50 @@ fn held_requests_are_rendered_before_release_and_sent_once() {
     let mut c = Client::start(&[]);
     let (_, nav) = c.call("navigate", json!({"url": format!("{base}/")}));
     let (_, cp) = c.call("checkpoint", json!({"page": page_of(&nav)}));
-    let cid = cp.split_whitespace().skip_while(|w| *w != "checkpoint").nth(1).unwrap().to_string();
+    let cid = cp
+        .split_whitespace()
+        .skip_while(|w| *w != "checkpoint")
+        .nth(1)
+        .unwrap()
+        .to_string();
     let (_, fk) = c.call("fork", json!({"checkpoint": cid}));
-    let line = fk.lines().find(|l| l.contains("Place order")).map(str::to_string).unwrap_or_else(|| {
-        c.call("observe", json!({"page": page_of(&fk)})).1.lines().find(|l| l.contains("Place order")).expect("button").to_string()
-    });
+    let line = fk
+        .lines()
+        .find(|l| l.contains("Place order"))
+        .map(str::to_string)
+        .unwrap_or_else(|| {
+            c.call("observe", json!({"page": page_of(&fk)}))
+                .1
+                .lines()
+                .find(|l| l.contains("Place order"))
+                .expect("button")
+                .to_string()
+        });
     let h = &line[line.find("[h").unwrap() + 1..];
     let h = &h[..h.find(']').unwrap()];
-    let (_, act) = c.call("act", json!({"handle": h, "action": "click", "page": page_of(&fk)}));
+    let (_, act) = c.call(
+        "act",
+        json!({"handle": h, "action": "click", "page": page_of(&fk)}),
+    );
     std::thread::sleep(std::time::Duration::from_millis(700));
     assert_eq!(posts(&log), 0, "the fence must hold the POST: {act}");
 
     let (_, ask) = c.call("commit", json!({"page": page_of(&act)}));
     std::thread::sleep(std::time::Duration::from_millis(500));
-    assert!(ask.contains("CONFIRM REQUIRED"), "no confirm prompt:\n{ask}");
+    assert!(
+        ask.contains("CONFIRM REQUIRED"),
+        "no confirm prompt:\n{ask}"
+    );
     assert!(ask.contains("POST"), "prompt lacks the method:\n{ask}");
-    assert!(ask.contains(&base), "prompt lacks the origin {base}:\n{ask}");
+    assert!(
+        ask.contains(&base),
+        "prompt lacks the origin {base}:\n{ask}"
+    );
     assert!(ask.contains("/order"), "prompt lacks the path:\n{ask}");
-    assert!(ask.contains("body=14 bytes"), "prompt lacks the body size:\n{ask}");
+    assert!(
+        ask.contains("body=14 bytes"),
+        "prompt lacks the body size:\n{ask}"
+    );
     assert_eq!(posts(&log), 0, "an unconfirmed commit must send nothing");
 
     let (_, done) = c.call("commit", json!({"page": page_of(&ask), "confirm": true}));

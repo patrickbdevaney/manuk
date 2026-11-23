@@ -1,0 +1,981 @@
+- generic [ref=f2e1]:
+  - main [ref=f2e209]:
+    - navigation "Main navigation menu" [ref=f2e2297]:
+      - link "Go to homepage" [ref=f2e2298] [cursor=pointer]:
+        - /url: /
+        - img "Zilloft Logo" [ref=f2e2299]
+      - generic [ref=f2e216]:
+        - list [ref=f2e217]:
+          - listitem [ref=f2e218]: Buy
+          - listitem [ref=f2e219]: Rent
+          - listitem [ref=f2e220]: Sell
+          - listitem [ref=f2e221]: Home Loans
+          - listitem [ref=f2e222]: Find an Agent
+        - list [ref=f2e223]:
+          - listitem [ref=f2e224]: Manage Rentals
+          - listitem [ref=f2e225]: Advertise
+        - list [ref=f2e226]:
+          - listitem [ref=f2e227]: Help
+        - list [ref=f2e228]:
+          - listitem [ref=f2e229]: Sign In
+    - region "Property filters section" [ref=f2e2300]:
+      - generic "Search for properties by address, neighborhood, city, or ZIP code" [ref=f2e2301]:
+        - generic [ref=f2e237]:
+          - textbox "Address, neighborhood, city or ZIP code" [ref=f2e2302]: San Francisco
+          - generic [ref=f2e239]:
+            - button [ref=f2e240] [cursor=pointer]
+            - button [ref=f2e243] [cursor=pointer]
+          - group [aria-hidden]
+      - generic [ref=f2e247]:
+        - button [ref=f2e2303] [cursor=pointer]
+        - button [ref=f2e2304] [cursor=pointer]
+        - button [active] [ref=f2e2305] [cursor=pointer]
+        - button [ref=f2e2308] [cursor=pointer]
+      - button "Save search" [ref=f2e2309] [cursor=pointer]
+    - main "Search results and map view" [ref=f2e2310]:
+      - main "Search results for homes" [ref=f2e2311]:
+        - main [ref=f2e2319]:
+          - generic [ref=f2e2320]:
+            - heading "San Francisco Real Estate & Homes For Sale" [level=1] [ref=f2e2321]
+            - generic [ref=f2e2322]:
+              - generic [ref=f2e2323]: 36 results
+              - generic [ref=f2e2324]: "Sort: Homes for you"
+          - list "List of properties" [ref=f2e2326]:
+            - listitem [ref=f2e2327]:
+              - article [ref=f2e2330]:
+                - generic [ref=f2e2331] [cursor=pointer]:
+                  - generic [ref=f2e2332]:
+                    - link "2750 Wheatstone St SPACE 97, San Diego, CA 92111" [ref=f2e2333]:
+                      - /url: /homes
+                    - generic [ref=f2e2335]: COLDWELL BANKER REALTY, undefined
+                    - generic [ref=f2e2336]: $395,000
+                    - list [ref=f2e2340]:
+                      - listitem [ref=f2e2341]: 3 bds |
+                      - listitem [ref=f2e2342]: 3 ba |
+                      - listitem [ref=f2e2343]: 1,334 sqft
+                      - text: "- Home for sale"
+                    - button [ref=f2e2345]
+                  - generic [ref=f2e2349]:
+                    - generic:
+                      - generic [ref=f2e2350]: New design
+                      - button "Save this home" [ref=f2e2352]:
+                        - img "Save this home" [ref=f2e2354]
+                    - generic [ref=f2e2358]:
+                      - img "2750 Wheatstone St SPACE 97, San Diego, CA 92111" [ref=f2e2359]
+                      - button "View previous image" [ref=f2e2360]
+                      - button "View next image" [ref=f2e2363]
+            - listitem [ref=f2e2366]:
+              - article [ref=f2e2369]:
+                - generic [ref=f2e2370] [cursor=pointer]:
+                  - generic [ref=f2e2371]:
+                    - link "2401 S Poplar St, Santa Ana, CA 92704" [ref=f2e2372]:
+                      - /url: /homes
+                    - generic [ref=f2e2374]: RE/MAX NEW DIMENSION, undefined
+                    - generic [ref=f2e2375]: $449,900
+                    - list [ref=f2e2379]:
+                      - listitem [ref=f2e2380]: 4 bds |
+                      - listitem [ref=f2e2381]: 2 ba |
+                      - listitem [ref=f2e2382]: 2,246 sqft
+                      - text: "- House for sale"
+                    - button [ref=f2e2384]
+                  - generic [ref=f2e2388]:
+                    - generic:
+                      - generic [ref=f2e2389]: 28 days on Zilloft
+                      - button "Save this home" [ref=f2e2391]:
+                        - img "Save this home" [ref=f2e2393]
+                    - generic [ref=f2e2397]:
+                      - img "2401 S Poplar St, Santa Ana, CA 92704" [ref=f2e2398]
+                      - button "View previous image" [ref=f2e2399]
+                      - button "View next image" [ref=f2e2402]
+            - listitem [ref=f2e2405]:
+              - article [ref=f2e2408]:
+                - generic [ref=f2e2409] [cursor=pointer]:
+                  - generic [ref=f2e2410]:
+                    - link "20076 Canyon View Dr, Santa Clarita, CA 91351" [ref=f2e2411]:
+                      - /url: /homes
+                    - generic [ref=f2e2413]: COLDWELL BANKER REALTY, undefined
+                    - generic [ref=f2e2414]: $360,000
+                    - list [ref=f2e2418]:
+                      - listitem [ref=f2e2419]: 3 bds |
+                      - listitem [ref=f2e2420]: 2 ba |
+                      - listitem [ref=f2e2421]: 1,752 sqft
+                      - text: "- House for sale"
+                    - button [ref=f2e2423]
+                  - generic [ref=f2e2427]:
+                    - generic:
+                      - generic [ref=f2e2428]: Finished drywall
+                      - button "Save this home" [ref=f2e2430]:
+                        - img "Save this home" [ref=f2e2432]
+                    - generic [ref=f2e2436]:
+                      - img "20076 Canyon View Dr, Santa Clarita, CA 91351" [ref=f2e2437]
+                      - button "View previous image" [ref=f2e2438]
+                      - button "View next image" [ref=f2e2441]
+            - listitem [ref=f2e2444]:
+              - article [ref=f2e2447]:
+                - generic [ref=f2e2448] [cursor=pointer]:
+                  - generic [ref=f2e2449]:
+                    - link "19928 Canyon View Dr, Santa Clarita, CA 91351" [ref=f2e2450]:
+                      - /url: /homes
+                    - generic [ref=f2e2452]: COLDWELL BANKER REALTY, undefined
+                    - generic [ref=f2e2453]: $335,000
+                    - list [ref=f2e2457]:
+                      - listitem [ref=f2e2458]: 3 bds |
+                      - listitem [ref=f2e2459]: 2 ba |
+                      - listitem [ref=f2e2460]: 1,482 sqft
+                      - text: "- House for sale"
+                    - button [ref=f2e2462]
+                  - generic [ref=f2e2466]:
+                    - generic:
+                      - generic [ref=f2e2467]: Beautifully landscaped backyard
+                      - button "Save this home" [ref=f2e2469]:
+                        - img "Save this home" [ref=f2e2471]
+                    - generic [ref=f2e2475]:
+                      - img "19928 Canyon View Dr, Santa Clarita, CA 91351" [ref=f2e2476]
+                      - button "View previous image" [ref=f2e2477]
+                      - button "View next image" [ref=f2e2480]
+            - listitem [ref=f2e2483]:
+              - article [ref=f2e2486]:
+                - generic [ref=f2e2487] [cursor=pointer]:
+                  - generic [ref=f2e2488]:
+                    - link "914 Lincoln Blvd APT 103, Santa Monica, CA 90403" [ref=f2e2489]:
+                      - /url: /homes
+                    - generic [ref=f2e2491]: "THE CONDO EXPERTS, Brian Maser DRE # 01340306"
+                    - generic [ref=f2e2492]: $999,000
+                    - list [ref=f2e2496]:
+                      - listitem [ref=f2e2497]: 3 bds |
+                      - listitem [ref=f2e2498]: 2 ba |
+                      - listitem [ref=f2e2499]: 1,135 sqft
+                      - text: "- Condo for sale"
+                    - button [ref=f2e2501]
+                  - generic [ref=f2e2505]:
+                    - generic:
+                      - generic [ref=f2e2506]: Showcase
+                      - button "Save this home" [ref=f2e2508]:
+                        - img "Save this home" [ref=f2e2510]
+                    - generic [ref=f2e2514]:
+                      - img "914 Lincoln Blvd APT 103, Santa Monica, CA 90403" [ref=f2e2515]
+                      - button "View previous image" [ref=f2e2516]
+                      - button "View next image" [ref=f2e2519]
+            - listitem [ref=f2e2522]:
+              - article [ref=f2e2525]:
+                - generic [ref=f2e2526] [cursor=pointer]:
+                  - generic [ref=f2e2527]:
+                    - link "3595 Santa Fe Ave SPACE 209, Long Beach, CA 90810" [ref=f2e2528]:
+                      - /url: /homes
+                    - generic [ref=f2e2530]: PACIFIC ESTATES, undefined
+                    - generic [ref=f2e2531]: $200,000
+                    - list [ref=f2e2535]:
+                      - listitem [ref=f2e2536]: 3 bds |
+                      - listitem [ref=f2e2537]: 2 ba |
+                      - listitem [ref=f2e2538]: 1,608 sqft
+                      - text: "- Home for sale"
+                    - button [ref=f2e2540]
+                  - generic [ref=f2e2544]:
+                    - generic:
+                      - generic [ref=f2e2545]: "Price cut: $45,000 (Sep 20)"
+                      - button "Save this home" [ref=f2e2547]:
+                        - img "Save this home" [ref=f2e2549]
+                    - generic [ref=f2e2553]:
+                      - img "3595 Santa Fe Ave SPACE 209, Long Beach, CA 90810" [ref=f2e2554]
+                      - button "View previous image" [ref=f2e2555]
+                      - button "View next image" [ref=f2e2558]
+            - listitem [ref=f2e2561]:
+              - article [ref=f2e2564]:
+                - generic [ref=f2e2565] [cursor=pointer]:
+                  - generic [ref=f2e2566]:
+                    - link "679 Rancho Dr, San Luis Obispo, CA 93405" [ref=f2e2567]:
+                      - /url: /homes
+                    - generic [ref=f2e2569]: ANDREWS REAL ESTATE GROUP INC, undefined
+                    - generic [ref=f2e2570]: $895,000
+                    - list [ref=f2e2574]:
+                      - listitem [ref=f2e2575]: 4 bds |
+                      - listitem [ref=f2e2576]: 3 ba |
+                      - listitem [ref=f2e2577]: 2,054 sqft
+                      - text: "- House for sale"
+                    - button [ref=f2e2579]
+                  - generic [ref=f2e2583]:
+                    - generic:
+                      - generic [ref=f2e2584]: Beautifully landscaped backyard gardens
+                      - button "Save this home" [ref=f2e2586]:
+                        - img "Save this home" [ref=f2e2588]
+                    - generic [ref=f2e2592]:
+                      - img "679 Rancho Dr, San Luis Obispo, CA 93405" [ref=f2e2593]
+                      - button "View previous image" [ref=f2e2594]
+                      - button "View next image" [ref=f2e2597]
+            - listitem [ref=f2e2600]:
+              - article [ref=f2e2603]:
+                - generic [ref=f2e2604] [cursor=pointer]:
+                  - generic [ref=f2e2605]:
+                    - link "24816 Los Altos Dr, Santa Clarita, CA 91355" [ref=f2e2606]:
+                      - /url: /homes
+                    - generic [ref=f2e2608]: RE/MAX OF SANTA CLARITA, undefined
+                    - generic [ref=f2e2609]: $2,775,000
+                    - list [ref=f2e2613]:
+                      - listitem [ref=f2e2614]: 6 bds |
+                      - listitem [ref=f2e2615]: 6 ba |
+                      - listitem [ref=f2e2616]: 4,506 sqft
+                      - text: "- House for sale"
+                    - button [ref=f2e2618]
+                  - generic [ref=f2e2622]:
+                    - generic:
+                      - generic [ref=f2e2623]: Showcase
+                      - button "Save this home" [ref=f2e2625]:
+                        - img "Save this home" [ref=f2e2627]
+                    - generic [ref=f2e2631]:
+                      - img "24816 Los Altos Dr, Santa Clarita, CA 91355" [ref=f2e2632]
+                      - button "View previous image" [ref=f2e2633]
+                      - button "View next image" [ref=f2e2636]
+            - listitem [ref=f2e2639]:
+              - article [ref=f2e2642]:
+                - generic [ref=f2e2643] [cursor=pointer]:
+                  - generic [ref=f2e2644]:
+                    - link "4139 Newport Ct, San Bernardino, CA 92404" [ref=f2e2645]:
+                      - /url: /homes
+                    - generic [ref=f2e2647]: REALTY ONE GROUP EMPIRE, undefined
+                    - generic [ref=f2e2648]: $549,000
+                    - list [ref=f2e2652]:
+                      - listitem [ref=f2e2653]: 4 bds |
+                      - listitem [ref=f2e2654]: 3 ba |
+                      - listitem [ref=f2e2655]: 2,301 sqft
+                      - text: "- House for sale"
+                    - button [ref=f2e2657]
+                  - generic [ref=f2e2661]:
+                    - generic:
+                      - generic [ref=f2e2662]: 12 hours ago
+                      - button "Save this home" [ref=f2e2664]:
+                        - img "Save this home" [ref=f2e2666]
+                    - generic [ref=f2e2670]:
+                      - img "4139 Newport Ct, San Bernardino, CA 92404" [ref=f2e2671]
+                      - button "View previous image" [ref=f2e2672]
+                      - button "View next image" [ref=f2e2675]
+            - listitem [ref=f2e2678]:
+              - article [ref=f2e2681]:
+                - generic [ref=f2e2682] [cursor=pointer]:
+                  - generic [ref=f2e2683]:
+                    - link "388 N 19th St, San Jose, CA 95112" [ref=f2e2684]:
+                      - /url: /homes
+                    - generic [ref=f2e2686]: $1,299,000
+                    - list [ref=f2e2690]:
+                      - listitem [ref=f2e2691]: 3 bds |
+                      - listitem [ref=f2e2692]: 2 ba |
+                      - listitem [ref=f2e2693]: 1,346 sqft
+                      - text: "- House for sale"
+                    - button [ref=f2e2695]
+                  - generic [ref=f2e2699]:
+                    - generic:
+                      - generic [ref=f2e2700]: Showcase
+                      - button "Save this home" [ref=f2e2702]:
+                        - img "Save this home" [ref=f2e2704]
+                    - generic [ref=f2e2708]:
+                      - img "388 N 19th St, San Jose, CA 95112" [ref=f2e2709]
+                      - button "View previous image" [ref=f2e2710]
+                      - button "View next image" [ref=f2e2713]
+            - listitem [ref=f2e2716]:
+              - article [ref=f2e2719]:
+                - generic [ref=f2e2720] [cursor=pointer]:
+                  - generic [ref=f2e2721]:
+                    - link "620 Almaden Walk Loop, San Jose, CA 95125" [ref=f2e2722]:
+                      - /url: /homes
+                    - generic [ref=f2e2724]: $950,000
+                    - list [ref=f2e2728]:
+                      - listitem [ref=f2e2729]: 3 bds |
+                      - listitem [ref=f2e2730]: 3 ba |
+                      - listitem [ref=f2e2731]: 1,425 sqft
+                      - text: "- Townhouse for sale"
+                    - button [ref=f2e2733]
+                  - generic [ref=f2e2737]:
+                    - generic:
+                      - generic [ref=f2e2738]: "Open: Sat 1-4pm"
+                      - button "Save this home" [ref=f2e2740]:
+                        - img "Save this home" [ref=f2e2742]
+                    - generic [ref=f2e2746]:
+                      - img "620 Almaden Walk Loop, San Jose, CA 95125" [ref=f2e2747]
+                      - button "View previous image" [ref=f2e2748]
+                      - button "View next image" [ref=f2e2751]
+            - listitem [ref=f2e2754]:
+              - article [ref=f2e2757]:
+                - generic [ref=f2e2758] [cursor=pointer]:
+                  - generic [ref=f2e2759]:
+                    - link "503 N Santa Anita Ave APT G, Arcadia, CA 91006" [ref=f2e2760]:
+                      - /url: /homes
+                    - generic [ref=f2e2762]: PINNACLE REAL ESTATE GROUP, undefined
+                    - generic [ref=f2e2763]: $1,498,000
+                    - list [ref=f2e2767]:
+                      - listitem [ref=f2e2768]: 5 bds |
+                      - listitem [ref=f2e2769]: 4 ba |
+                      - listitem [ref=f2e2770]: 2,343 sqft
+                      - text: "- Condo for sale"
+                    - button [ref=f2e2772]
+                  - generic [ref=f2e2776]:
+                    - generic:
+                      - generic [ref=f2e2777]: Loft area
+                      - button "Save this home" [ref=f2e2779]:
+                        - img "Save this home" [ref=f2e2781]
+                    - generic [ref=f2e2785]:
+                      - img "503 N Santa Anita Ave APT G, Arcadia, CA 91006" [ref=f2e2786]
+                      - button "View previous image" [ref=f2e2787]
+                      - button "View next image" [ref=f2e2790]
+            - listitem [ref=f2e2793]:
+              - article [ref=f2e2796]:
+                - generic [ref=f2e2797] [cursor=pointer]:
+                  - generic [ref=f2e2798]:
+                    - link "13 Via Jacobea, San Clemente, CA 92673" [ref=f2e2799]:
+                      - /url: /homes
+                    - generic [ref=f2e2801]: COLDWELL BANKER REALTY, undefined
+                    - generic [ref=f2e2802]: $2,199,900
+                    - list [ref=f2e2806]:
+                      - listitem [ref=f2e2807]: 4 bds |
+                      - listitem [ref=f2e2808]: 3 ba |
+                      - listitem [ref=f2e2809]: 2,941 sqft
+                      - text: "- House for sale"
+                    - button [ref=f2e2811]
+                  - generic [ref=f2e2815]:
+                    - generic:
+                      - generic [ref=f2e2816]: 22 hours ago
+                      - button "Save this home" [ref=f2e2818]:
+                        - img "Save this home" [ref=f2e2820]
+                    - generic [ref=f2e2824]:
+                      - img "13 Via Jacobea, San Clemente, CA 92673" [ref=f2e2825]
+                      - button "View previous image" [ref=f2e2826]
+                      - button "View next image" [ref=f2e2829]
+            - listitem [ref=f2e2832]:
+              - article [ref=f2e2835]:
+                - generic [ref=f2e2836] [cursor=pointer]:
+                  - generic [ref=f2e2837]:
+                    - link "2900 San Juan Dr, Fullerton, CA 92835" [ref=f2e2838]:
+                      - /url: /homes
+                    - generic [ref=f2e2840]: SEVEN GABLES REAL ESTATE, undefined
+                    - generic [ref=f2e2841]: $2,100,000
+                    - list [ref=f2e2845]:
+                      - listitem [ref=f2e2846]: 3 bds |
+                      - listitem [ref=f2e2847]: 3 ba |
+                      - listitem [ref=f2e2848]: 2,823 sqft
+                      - text: "- House for sale"
+                    - button [ref=f2e2850]
+                  - generic [ref=f2e2854]:
+                    - generic:
+                      - generic [ref=f2e2855]: Showcase
+                      - button "Save this home" [ref=f2e2857]:
+                        - img "Save this home" [ref=f2e2859]
+                    - generic [ref=f2e2863]:
+                      - img "2900 San Juan Dr, Fullerton, CA 92835" [ref=f2e2864]
+                      - button "View previous image" [ref=f2e2865]
+                      - button "View next image" [ref=f2e2868]
+            - listitem [ref=f2e2871]:
+              - article [ref=f2e2874]:
+                - generic [ref=f2e2875] [cursor=pointer]:
+                  - generic [ref=f2e2876]:
+                    - link "29076 Alessandro Blvd, Moreno Valley, CA 92555" [ref=f2e2877]:
+                      - /url: /homes
+                    - generic [ref=f2e2879]: KELLER WILLIAMS, THE LAKES, undefined
+                    - generic [ref=f2e2880]: $500,000
+                    - list [ref=f2e2884]:
+                      - listitem [ref=f2e2885]: 4 bds |
+                      - listitem [ref=f2e2886]: 2 ba |
+                      - listitem [ref=f2e2887]: 1,756 sqft
+                      - text: "- House for sale"
+                    - button [ref=f2e2889]
+                  - generic [ref=f2e2893]:
+                    - generic:
+                      - generic [ref=f2e2894]: 3D Tour
+                      - button "Save this home" [ref=f2e2896]:
+                        - img "Save this home" [ref=f2e2898]
+                    - generic [ref=f2e2902]:
+                      - img "29076 Alessandro Blvd, Moreno Valley, CA 92555" [ref=f2e2903]
+                      - button "View previous image" [ref=f2e2904]
+                      - button "View next image" [ref=f2e2907]
+            - listitem [ref=f2e2910]:
+              - article [ref=f2e2913]:
+                - generic [ref=f2e2914] [cursor=pointer]:
+                  - generic [ref=f2e2915]:
+                    - link "27575 Elder View Dr, Santa Clarita, CA 91354" [ref=f2e2916]:
+                      - /url: /homes
+                    - generic [ref=f2e2918]: KELLER WILLIAMS VIP PROPERTIES, undefined
+                    - generic [ref=f2e2919]: $729,900
+                    - list [ref=f2e2923]:
+                      - listitem [ref=f2e2924]: 3 bds |
+                      - listitem [ref=f2e2925]: 2 ba |
+                      - listitem [ref=f2e2926]: 1,245 sqft
+                      - text: "- House for sale"
+                    - button [ref=f2e2928]
+                  - generic [ref=f2e2932]:
+                    - generic:
+                      - generic [ref=f2e2933]: Real wood-burning fireplace
+                      - button "Save this home" [ref=f2e2935]:
+                        - img "Save this home" [ref=f2e2937]
+                    - generic [ref=f2e2941]:
+                      - img "27575 Elder View Dr, Santa Clarita, CA 91354" [ref=f2e2942]
+                      - button "View previous image" [ref=f2e2943]
+                      - button "View next image" [ref=f2e2946]
+            - listitem [ref=f2e2949]:
+              - article [ref=f2e2952]:
+                - generic [ref=f2e2953] [cursor=pointer]:
+                  - generic [ref=f2e2954]:
+                    - link "24148 Reyes Adobe Way, Santa Clarita, CA 91354" [ref=f2e2955]:
+                      - /url: /homes
+                    - generic [ref=f2e2957]: RE/MAX OF SANTA CLARITA, undefined
+                    - generic [ref=f2e2958]: $1,850,000
+                    - list [ref=f2e2962]:
+                      - listitem [ref=f2e2963]: 5 bds |
+                      - listitem [ref=f2e2964]: 5 ba |
+                      - listitem [ref=f2e2965]: 4,484 sqft
+                      - text: "- House for sale"
+                    - button [ref=f2e2967]
+                  - generic [ref=f2e2971]:
+                    - generic:
+                      - generic [ref=f2e2972]: Showcase
+                      - button "Save this home" [ref=f2e2974]:
+                        - img "Save this home" [ref=f2e2976]
+                    - generic [ref=f2e2980]:
+                      - img "24148 Reyes Adobe Way, Santa Clarita, CA 91354" [ref=f2e2981]
+                      - button "View previous image" [ref=f2e2982]
+                      - button "View next image" [ref=f2e2985]
+            - listitem [ref=f2e2988]:
+              - article [ref=f2e2991]:
+                - generic [ref=f2e2992] [cursor=pointer]:
+                  - generic [ref=f2e2993]:
+                    - link "1522 27th Ave, San Francisco, CA 94122" [ref=f2e2994]:
+                      - /url: /homes
+                    - generic [ref=f2e2996]: "COLDWELL BANKER REALTY, Christina C. Chung DRE #00716773"
+                    - generic [ref=f2e2997]: $995,000
+                    - list [ref=f2e3001]:
+                      - listitem [ref=f2e3002]: 3 bds |
+                      - listitem [ref=f2e3003]: 2 ba |
+                      - listitem [ref=f2e3004]: 1,646 sqft
+                      - text: "- House for sale"
+                    - button [ref=f2e3006]
+                  - generic [ref=f2e3010]:
+                    - generic:
+                      - generic [ref=f2e3011]: "Open: Sat 2-4pm"
+                      - button "Save this home" [ref=f2e3013]:
+                        - img "Save this home" [ref=f2e3015]
+                    - generic [ref=f2e3019]:
+                      - img "1522 27th Ave, San Francisco, CA 94122" [ref=f2e3020]
+                      - button "View previous image" [ref=f2e3021]
+                      - button "View next image" [ref=f2e3024]
+            - listitem [ref=f2e3027]:
+              - article [ref=f2e3030]:
+                - generic [ref=f2e3031] [cursor=pointer]:
+                  - generic [ref=f2e3032]:
+                    - link "10020 Vista La Cuesta Ct, San Diego, CA 92131" [ref=f2e3033]:
+                      - /url: /homes
+                    - generic [ref=f2e3035]: HOMESMART REALTY WEST, undefined
+                    - generic [ref=f2e3036]: $1,400,000
+                    - list [ref=f2e3040]:
+                      - listitem [ref=f2e3041]: 3 bds |
+                      - listitem [ref=f2e3042]: 2 ba |
+                      - listitem [ref=f2e3043]: 1,724 sqft
+                      - text: "- House for sale"
+                    - button [ref=f2e3045]
+                  - generic [ref=f2e3049]:
+                    - generic:
+                      - generic [ref=f2e3050]: Quiet cul-de-sac
+                      - button "Save this home" [ref=f2e3052]:
+                        - img "Save this home" [ref=f2e3054]
+                    - generic [ref=f2e3058]:
+                      - img "10020 Vista La Cuesta Ct, San Diego, CA 92131" [ref=f2e3059]
+                      - button "View previous image" [ref=f2e3060]
+                      - button "View next image" [ref=f2e3063]
+            - listitem [ref=f2e3066]:
+              - article [ref=f2e3069]:
+                - generic [ref=f2e3070] [cursor=pointer]:
+                  - generic [ref=f2e3071]:
+                    - link "1362 San Juan Ave, San Jose, CA 95110" [ref=f2e3072]:
+                      - /url: /homes
+                    - generic [ref=f2e3074]: $999,000
+                    - list [ref=f2e3078]:
+                      - listitem [ref=f2e3079]: 3 bds |
+                      - listitem [ref=f2e3080]: 2 ba |
+                      - listitem [ref=f2e3081]: 1,337 sqft
+                      - text: "- House for sale"
+                    - button [ref=f2e3083]
+                  - generic [ref=f2e3087]:
+                    - generic:
+                      - generic [ref=f2e3088]: Private backyard area
+                      - button "Save this home" [ref=f2e3090]:
+                        - img "Save this home" [ref=f2e3092]
+                    - generic [ref=f2e3096]:
+                      - img "1362 San Juan Ave, San Jose, CA 95110" [ref=f2e3097]
+                      - button "View previous image" [ref=f2e3098]
+                      - button "View next image" [ref=f2e3101]
+            - listitem [ref=f2e3104]:
+              - article [ref=f2e3107]:
+                - generic [ref=f2e3108] [cursor=pointer]:
+                  - generic [ref=f2e3109]:
+                    - link "1773 Mesa Verde Ave, San Bernardino, CA 92404" [ref=f2e3110]:
+                      - /url: /homes
+                    - generic [ref=f2e3112]: EXP REALTY GREATER LOS ANGELES, undefined
+                    - generic [ref=f2e3113]: $499,999
+                    - list [ref=f2e3117]:
+                      - listitem [ref=f2e3118]: 4 bds |
+                      - listitem [ref=f2e3119]: 2 ba |
+                      - listitem [ref=f2e3120]: 1,690 sqft
+                      - text: "- House for sale"
+                    - button [ref=f2e3122]
+                  - generic [ref=f2e3126]:
+                    - generic:
+                      - generic [ref=f2e3127]: Private pool and spa
+                      - button "Save this home" [ref=f2e3129]:
+                        - img "Save this home" [ref=f2e3131]
+                    - generic [ref=f2e3135]:
+                      - img "1773 Mesa Verde Ave, San Bernardino, CA 92404" [ref=f2e3136]
+                      - button "View previous image" [ref=f2e3137]
+                      - button "View next image" [ref=f2e3140]
+            - listitem [ref=f2e3143]:
+              - article [ref=f2e3146]:
+                - generic [ref=f2e3147] [cursor=pointer]:
+                  - generic [ref=f2e3148]:
+                    - link "26416 Misty Ridge Pl, Santa Clarita, CA 91387" [ref=f2e3149]:
+                      - /url: /homes
+                    - generic [ref=f2e3151]: REALTY EXECUTIVES HOMES, undefined
+                    - generic [ref=f2e3152]: $1,099,000
+                    - list [ref=f2e3156]:
+                      - listitem [ref=f2e3157]: 6 bds |
+                      - listitem [ref=f2e3158]: 4 ba |
+                      - listitem [ref=f2e3159]: 3,634 sqft
+                      - text: "- House for sale"
+                    - button [ref=f2e3161]
+                  - generic [ref=f2e3165]:
+                    - generic:
+                      - generic [ref=f2e3166]: Mini basketball court
+                      - button "Save this home" [ref=f2e3168]:
+                        - img "Save this home" [ref=f2e3170]
+                    - generic [ref=f2e3174]:
+                      - img "26416 Misty Ridge Pl, Santa Clarita, CA 91387" [ref=f2e3175]
+                      - button "View previous image" [ref=f2e3176]
+                      - button "View next image" [ref=f2e3179]
+            - listitem [ref=f2e3182]:
+              - article [ref=f2e3185]:
+                - generic [ref=f2e3186] [cursor=pointer]:
+                  - generic [ref=f2e3187]:
+                    - link "9482 Chabola Rd, San Diego, CA 92129" [ref=f2e3188]:
+                      - /url: /homes
+                    - generic [ref=f2e3190]: SAN DIEGO CASTLES REALTY, undefined
+                    - generic [ref=f2e3191]: $1,565,000
+                    - list [ref=f2e3195]:
+                      - listitem [ref=f2e3196]: 4 bds |
+                      - listitem [ref=f2e3197]: 3 ba |
+                      - listitem [ref=f2e3198]: 2,389 sqft
+                      - text: "- House for sale"
+                    - button [ref=f2e3200]
+                  - generic [ref=f2e3204]:
+                    - generic:
+                      - generic [ref=f2e3205]: 14 hours ago
+                      - button "Save this home" [ref=f2e3207]:
+                        - img "Save this home" [ref=f2e3209]
+                    - generic [ref=f2e3213]:
+                      - img "9482 Chabola Rd, San Diego, CA 92129" [ref=f2e3214]
+                      - button "View previous image" [ref=f2e3215]
+                      - button "View next image" [ref=f2e3218]
+            - listitem [ref=f2e3221]:
+              - article [ref=f2e3224]:
+                - generic [ref=f2e3225] [cursor=pointer]:
+                  - generic [ref=f2e3226]:
+                    - link "1213 Pacific St, Santa Monica, CA 90405" [ref=f2e3227]:
+                      - /url: /homes
+                    - generic [ref=f2e3229]: "RE/MAX ONE, David Rothblum DRE # 01332525"
+                    - generic [ref=f2e3230]: $1,999,000
+                    - list [ref=f2e3234]:
+                      - listitem [ref=f2e3235]: 3 bds |
+                      - listitem [ref=f2e3236]: 2 ba |
+                      - listitem [ref=f2e3237]: 1,734 sqft
+                      - text: "- House for sale"
+                    - button [ref=f2e3239]
+                  - generic [ref=f2e3243]:
+                    - generic:
+                      - generic [ref=f2e3244]: Cozy fireplace
+                      - button "Save this home" [ref=f2e3246]:
+                        - img "Save this home" [ref=f2e3248]
+                    - generic [ref=f2e3252]:
+                      - img "1213 Pacific St, Santa Monica, CA 90405" [ref=f2e3253]
+                      - button "View previous image" [ref=f2e3254]
+                      - button "View next image" [ref=f2e3257]
+            - listitem [ref=f2e3260]:
+              - article [ref=f2e3263]:
+                - generic [ref=f2e3264] [cursor=pointer]:
+                  - generic [ref=f2e3265]:
+                    - link "6526 Crabtree St, San Diego, CA 92114" [ref=f2e3266]:
+                      - /url: /homes
+                    - generic [ref=f2e3268]: COLDWELL BANKER WEST, undefined
+                    - generic [ref=f2e3269]: $860,000
+                    - list [ref=f2e3273]:
+                      - listitem [ref=f2e3274]: 5 bds |
+                      - listitem [ref=f2e3275]: 3 ba |
+                      - listitem [ref=f2e3276]: 1,634 sqft
+                      - text: "- House for sale"
+                    - button [ref=f2e3278]
+                  - generic [ref=f2e3282]:
+                    - generic:
+                      - generic [ref=f2e3283]: 6 hours ago
+                      - button "Save this home" [ref=f2e3285]:
+                        - img "Save this home" [ref=f2e3287]
+                    - generic [ref=f2e3291]:
+                      - img "6526 Crabtree St, San Diego, CA 92114" [ref=f2e3292]
+                      - button "View previous image" [ref=f2e3293]
+                      - button "View next image" [ref=f2e3296]
+            - listitem [ref=f2e3299]:
+              - article [ref=f2e3302]:
+                - generic [ref=f2e3303] [cursor=pointer]:
+                  - generic [ref=f2e3304]:
+                    - link "23306 Maple St, Santa Clarita, CA 91321" [ref=f2e3305]:
+                      - /url: /homes
+                    - generic [ref=f2e3307]: RE/MAX OF SANTA CLARITA, undefined
+                    - generic [ref=f2e3308]: $1,871,000
+                    - list [ref=f2e3312]:
+                      - listitem [ref=f2e3313]: 5 bds |
+                      - listitem [ref=f2e3314]: 5 ba |
+                      - listitem [ref=f2e3315]: 6,105 sqft
+                      - text: "- House for sale"
+                    - button [ref=f2e3317]
+                  - generic [ref=f2e3321]:
+                    - generic:
+                      - generic [ref=f2e3322]: 3D Tour
+                      - button "Save this home" [ref=f2e3324]:
+                        - img "Save this home" [ref=f2e3326]
+                    - generic [ref=f2e3330]:
+                      - img "23306 Maple St, Santa Clarita, CA 91321" [ref=f2e3331]
+                      - button "View previous image" [ref=f2e3332]
+                      - button "View next image" [ref=f2e3335]
+            - listitem [ref=f2e3338]:
+              - article [ref=f2e3341]:
+                - generic [ref=f2e3342] [cursor=pointer]:
+                  - generic [ref=f2e3343]:
+                    - link "1507 35th Ave, San Francisco, CA 94122" [ref=f2e3344]:
+                      - /url: /homes
+                    - generic [ref=f2e3346]: "BARBCO, Jason C. Chan DRE #01320348"
+                    - generic [ref=f2e3347]: $1,295,000
+                    - list [ref=f2e3351]:
+                      - listitem [ref=f2e3352]: 3 bds |
+                      - listitem [ref=f2e3353]: 3 ba |
+                      - listitem [ref=f2e3354]: 1,851 sqft
+                      - text: "- House for sale"
+                    - button [ref=f2e3356]
+                  - generic [ref=f2e3360]:
+                    - generic:
+                      - generic [ref=f2e3361]: "Open: Sun 2-4pm"
+                      - button "Save this home" [ref=f2e3363]:
+                        - img "Save this home" [ref=f2e3365]
+                    - generic [ref=f2e3369]:
+                      - img "1507 35th Ave, San Francisco, CA 94122" [ref=f2e3370]
+                      - button "View previous image" [ref=f2e3371]
+                      - button "View next image" [ref=f2e3374]
+            - listitem [ref=f2e3377]:
+              - article [ref=f2e3380]:
+                - generic [ref=f2e3381] [cursor=pointer]:
+                  - generic [ref=f2e3382]:
+                    - link "3560 Luna Ave, San Diego, CA 92117" [ref=f2e3383]:
+                      - /url: /homes
+                    - generic [ref=f2e3385]: COMPASS, undefined
+                    - generic [ref=f2e3386]: $959,000
+                    - list [ref=f2e3390]:
+                      - listitem [ref=f2e3391]: 3 bds |
+                      - listitem [ref=f2e3392]: 2 ba |
+                      - listitem [ref=f2e3393]: 999 sqft
+                      - text: "- House for sale"
+                    - button [ref=f2e3395]
+                  - generic [ref=f2e3399]:
+                    - generic:
+                      - generic [ref=f2e3400]: Serene backyard
+                      - button "Save this home" [ref=f2e3402]:
+                        - img "Save this home" [ref=f2e3404]
+                    - generic [ref=f2e3408]:
+                      - img "3560 Luna Ave, San Diego, CA 92117" [ref=f2e3409]
+                      - button "View previous image" [ref=f2e3410]
+                      - button "View next image" [ref=f2e3413]
+            - listitem [ref=f2e3416]:
+              - article [ref=f2e3419]:
+                - generic [ref=f2e3420] [cursor=pointer]:
+                  - generic [ref=f2e3421]:
+                    - link "10103 Prairie Fawn Dr, San Diego, CA 92127" [ref=f2e3422]:
+                      - /url: /homes
+                    - generic [ref=f2e3424]: RE/MAX CONNECTIONS, undefined
+                    - generic [ref=f2e3425]: $1,679,999
+                    - list [ref=f2e3429]:
+                      - listitem [ref=f2e3430]: 4 bds |
+                      - listitem [ref=f2e3431]: 3 ba |
+                      - listitem [ref=f2e3432]: 2,344 sqft
+                      - text: "- House for sale"
+                    - button [ref=f2e3434]
+                  - generic [ref=f2e3438]:
+                    - generic:
+                      - generic [ref=f2e3439]: Mature fruit trees
+                      - button "Save this home" [ref=f2e3441]:
+                        - img "Save this home" [ref=f2e3443]
+                    - generic [ref=f2e3447]:
+                      - img "10103 Prairie Fawn Dr, San Diego, CA 92127" [ref=f2e3448]
+                      - button "View previous image" [ref=f2e3449]
+                      - button "View next image" [ref=f2e3452]
+            - listitem [ref=f2e3455]:
+              - article [ref=f2e3458]:
+                - generic [ref=f2e3459] [cursor=pointer]:
+                  - generic [ref=f2e3460]:
+                    - link "40526 Sanalamar Dr, Hemet, CA 92544" [ref=f2e3461]:
+                      - /url: /homes
+                    - generic [ref=f2e3463]: EXP REALTY OF CALIFORNIA INC., undefined
+                    - generic [ref=f2e3464]: $449,000
+                    - list [ref=f2e3468]:
+                      - listitem [ref=f2e3469]: 3 bds |
+                      - listitem [ref=f2e3470]: 2 ba |
+                      - listitem [ref=f2e3471]: 1,702 sqft
+                      - text: "- House for sale"
+                    - button [ref=f2e3473]
+                  - generic [ref=f2e3477]:
+                    - generic:
+                      - generic [ref=f2e3478]: "Price cut: $10,000 (Sep 17)"
+                      - button "Save this home" [ref=f2e3480]:
+                        - img "Save this home" [ref=f2e3482]
+                    - generic [ref=f2e3486]:
+                      - img "40526 Sanalamar Dr, Hemet, CA 92544" [ref=f2e3487]
+                      - button "View previous image" [ref=f2e3488]
+                      - button "View next image" [ref=f2e3491]
+            - listitem [ref=f2e3494]:
+              - article [ref=f2e3497]:
+                - generic [ref=f2e3498] [cursor=pointer]:
+                  - generic [ref=f2e3499]:
+                    - link "821 Emerson St, Thousand Oaks, CA 91362" [ref=f2e3500]:
+                      - /url: /homes
+                    - generic [ref=f2e3502]: COMPASS, undefined
+                    - generic [ref=f2e3503]: $4,985,000
+                    - list [ref=f2e3507]:
+                      - listitem [ref=f2e3508]: 4 bds |
+                      - listitem [ref=f2e3509]: 5 ba |
+                      - listitem [ref=f2e3510]: 4,766 sqft
+                      - text: "- New construction"
+                    - button [ref=f2e3512]
+                  - generic [ref=f2e3516]:
+                    - generic:
+                      - generic [ref=f2e3517]: Built-in bbq area
+                      - button "Save this home" [ref=f2e3519]:
+                        - img "Save this home" [ref=f2e3521]
+                    - generic [ref=f2e3525]:
+                      - img "821 Emerson St, Thousand Oaks, CA 91362" [ref=f2e3526]
+                      - button "View previous image" [ref=f2e3527]
+                      - button "View next image" [ref=f2e3530]
+            - listitem [ref=f2e3533]:
+              - article [ref=f2e3536]:
+                - generic [ref=f2e3537] [cursor=pointer]:
+                  - generic [ref=f2e3538]:
+                    - link "2832 Lyon St, San Francisco, CA 94123" [ref=f2e3539]:
+                      - /url: /homes
+                    - generic [ref=f2e3541]: "SOTHEBY'S INTERNATIONAL REALTY, Rebecca Schumacher DRE #01756452"
+                    - generic [ref=f2e3542]: $1,980,000
+                    - list [ref=f2e3546]:
+                      - listitem [ref=f2e3547]: 3 bds |
+                      - listitem [ref=f2e3548]: 2 ba |
+                      - listitem [ref=f2e3549]: 1,890 sqft
+                      - text: "- Condo for sale"
+                    - button [ref=f2e3551]
+                  - generic [ref=f2e3555]:
+                    - generic:
+                      - generic [ref=f2e3556]: 18 hours ago
+                      - button "Save this home" [ref=f2e3558]:
+                        - img "Save this home" [ref=f2e3560]
+                    - generic [ref=f2e3564]:
+                      - img "2832 Lyon St, San Francisco, CA 94123" [ref=f2e3565]
+                      - button "View previous image" [ref=f2e3566]
+                      - button "View next image" [ref=f2e3569]
+            - listitem [ref=f2e3572]:
+              - article [ref=f2e3575]:
+                - generic [ref=f2e3576] [cursor=pointer]:
+                  - generic [ref=f2e3577]:
+                    - link "1 Wright St, San Francisco, CA 94110" [ref=f2e3578]:
+                      - /url: /homes
+                    - generic [ref=f2e3580]: "INSPIRE REAL ESTATE, Dan Dodd DRE #01407328"
+                    - generic [ref=f2e3581]: $850,000
+                    - list [ref=f2e3585]:
+                      - listitem [ref=f2e3586]: 3 bds |
+                      - listitem [ref=f2e3587]: 2 ba |
+                      - listitem [ref=f2e3588]: 1,325 sqft
+                      - text: "- House for sale"
+                    - button [ref=f2e3590]
+                  - generic [ref=f2e3594]:
+                    - generic:
+                      - generic [ref=f2e3595]: Side yard
+                      - button "Save this home" [ref=f2e3597]:
+                        - img "Save this home" [ref=f2e3599]
+                    - generic [ref=f2e3603]:
+                      - img "1 Wright St, San Francisco, CA 94110" [ref=f2e3604]
+                      - button "View previous image" [ref=f2e3605]
+                      - button "View next image" [ref=f2e3608]
+            - listitem [ref=f2e3611]:
+              - article [ref=f2e3614]:
+                - generic [ref=f2e3615] [cursor=pointer]:
+                  - generic [ref=f2e3616]:
+                    - link "252 N Allen St, San Bernardino, CA 92408" [ref=f2e3617]:
+                      - /url: /homes
+                    - generic [ref=f2e3619]: COMPASS, undefined
+                    - generic [ref=f2e3620]: $384,990
+                    - list [ref=f2e3624]:
+                      - listitem [ref=f2e3625]: 3 bds |
+                      - listitem [ref=f2e3626]: 2 ba |
+                      - listitem [ref=f2e3627]: 981 sqft
+                      - text: "- House for sale"
+                    - button [ref=f2e3629]
+                  - generic [ref=f2e3633]:
+                    - generic:
+                      - generic [ref=f2e3634]: Completely fenced yard
+                      - button "Save this home" [ref=f2e3636]:
+                        - img "Save this home" [ref=f2e3638]
+                    - generic [ref=f2e3642]:
+                      - img "252 N Allen St, San Bernardino, CA 92408" [ref=f2e3643]
+                      - button "View previous image" [ref=f2e3644]
+                      - button "View next image" [ref=f2e3647]
+            - listitem [ref=f2e3650]:
+              - article [ref=f2e3653]:
+                - generic [ref=f2e3654] [cursor=pointer]:
+                  - generic [ref=f2e3655]:
+                    - link "6798 Golondrina Dr, San Bernardino, CA 92404" [ref=f2e3656]:
+                      - /url: /homes
+                    - generic [ref=f2e3658]: BHHS LIFESTYLE PROPERTIES, undefined
+                    - generic [ref=f2e3659]: $479,000
+                    - list [ref=f2e3663]:
+                      - listitem [ref=f2e3664]: 4 bds |
+                      - listitem [ref=f2e3665]: 2 ba |
+                      - listitem [ref=f2e3666]: 1,248 sqft
+                      - text: "- House for sale"
+                    - button [ref=f2e3668]
+                  - generic [ref=f2e3672]:
+                    - generic:
+                      - generic [ref=f2e3673]: Semi enclosed patio
+                      - button "Save this home" [ref=f2e3675]:
+                        - img "Save this home" [ref=f2e3677]
+                    - generic [ref=f2e3681]:
+                      - img "6798 Golondrina Dr, San Bernardino, CA 92404" [ref=f2e3682]
+                      - button "View previous image" [ref=f2e3683]
+                      - button "View next image" [ref=f2e3686]
+            - listitem [ref=f2e3689]:
+              - article [ref=f2e3692]:
+                - generic [ref=f2e3693] [cursor=pointer]:
+                  - generic [ref=f2e3694]:
+                    - link "174 Coolwater Dr, San Diego, CA 92114" [ref=f2e3695]:
+                      - /url: /homes
+                    - generic [ref=f2e3697]: HOMESMART REALTY WEST, undefined
+                    - generic [ref=f2e3698]: $625,000
+                    - list [ref=f2e3702]:
+                      - listitem [ref=f2e3703]: 3 bds |
+                      - listitem [ref=f2e3704]: 2 ba |
+                      - listitem [ref=f2e3705]: 1,375 sqft
+                      - text: "- House for sale"
+                    - button [ref=f2e3707]
+                  - generic [ref=f2e3711]:
+                    - generic:
+                      - generic [ref=f2e3712]: 3 days on Zilloft
+                      - button "Save this home" [ref=f2e3714]:
+                        - img "Save this home" [ref=f2e3716]
+                    - generic [ref=f2e3720]:
+                      - img "174 Coolwater Dr, San Diego, CA 92114" [ref=f2e3721]
+                      - button "View previous image" [ref=f2e3722]
+                      - button "View next image" [ref=f2e3725]
+          - generic [ref=f2e3728]:
+            - generic [ref=f2e3729]:
+              - button "Save this search" [ref=f2e3730] [cursor=pointer]
+              - text: to get email alerts when listings hit the market.
+            - list [ref=f2e3732]:
+              - listitem [ref=f2e3733]:
+                - paragraph [ref=f2e3735]: IDX information is provided exclusively for personal, non-commercial use, and may not be used for any purpose other than to identify prospective properties consumers may be interested in purchasing. Information is deemed reliable but not guaranteed.
+              - listitem [ref=f2e3736]:
+                - img "Ad 2" [ref=f2e3737]
+                - paragraph [ref=f2e3738]: Bay East 2024. CCAR 2024. bridgeMLS 2024. Information Deemed Reliable But Not Guaranteed. This information is being provided by the Bay East MLS, or CCAR MLS, or bridgeMLS. The listings presented here may or may not be listed by the Broker/Agent operating this website. This information is intended for the personal use of consumers and may not be used for any purpose other than to identify prospective properties consumers may be interested in purchasing. Data last updated at 2024-09-25 12:31:39 PDT.
+              - listitem [ref=f2e3739]:
+                - img "Ad 1" [ref=f2e3740]
+                - paragraph [ref=f2e3741]: Based on information from the MLSListings MLS as of 2024-09-25 12:38:21 PDT. All data, including all measurements and calculations of area, is obtained from various sources and has not been, and will not be, verified by broker or MLS. All information should be independently reviewed and verified for accuracy. Properties may or may not be listed by the office/agent presenting the information.
+            - separator [ref=f2e3742]
+        - contentinfo [ref=f2e3745]:
+          - navigation [ref=f2e3746]:
+            - list [ref=f2e3747]:
+              - listitem [ref=f2e3748]:
+                - paragraph [ref=f2e3749] [cursor=pointer]: About
+              - listitem [ref=f2e3750]:
+                - paragraph [ref=f2e3751] [cursor=pointer]: Zestimates
+              - listitem [ref=f2e3752]:
+                - paragraph [ref=f2e3753] [cursor=pointer]: Research
+              - listitem [ref=f2e3754]:
+                - paragraph [ref=f2e3755] [cursor=pointer]: Careers
+              - listitem [ref=f2e3756]:
+                - paragraph [ref=f2e3757] [cursor=pointer]: Careers - U.S. Privacy Notice
+              - listitem [ref=f2e3758]:
+                - paragraph [ref=f2e3759] [cursor=pointer]: Careers - Mexico Privacy Notice
+              - listitem [ref=f2e3760]:
+                - paragraph [ref=f2e3761] [cursor=pointer]: Help
+              - listitem [ref=f2e3762]:
+                - paragraph [ref=f2e3763] [cursor=pointer]: Advertise
+              - listitem [ref=f2e3764]:
+                - paragraph [ref=f2e3765] [cursor=pointer]: Fair Housing Guide
+              - listitem [ref=f2e3766]:
+                - paragraph [ref=f2e3767] [cursor=pointer]: Advocacy
+              - listitem [ref=f2e3768]:
+                - paragraph [ref=f2e3769] [cursor=pointer]: Terms of use
+              - listitem [ref=f2e3770]:
+                - paragraph [ref=f2e3771] [cursor=pointer]: Privacy Portal
+              - listitem [ref=f2e3772]:
+                - paragraph [ref=f2e3773] [cursor=pointer]: Cookie Preference
+              - listitem [ref=f2e3774]:
+                - paragraph [ref=f2e3775] [cursor=pointer]: Learn
+              - listitem [ref=f2e3776]:
+                - paragraph [ref=f2e3777] [cursor=pointer]: AI
+              - listitem [ref=f2e3778]:
+                - paragraph [ref=f2e3779] [cursor=pointer]: Mobile Apps
+            - list [ref=f2e3780]:
+              - listitem [ref=f2e3781]:
+                - paragraph [ref=f2e3782] [cursor=pointer]: Trulia
+              - listitem [ref=f2e3783]:
+                - paragraph [ref=f2e3784] [cursor=pointer]: StreetEasy
+              - listitem [ref=f2e3785]:
+                - paragraph [ref=f2e3786] [cursor=pointer]: HotPads
+              - listitem [ref=f2e3787]:
+                - paragraph [ref=f2e3788] [cursor=pointer]: Out East
+              - listitem [ref=f2e3789]:
+                - paragraph [ref=f2e3790] [cursor=pointer]: Showing Time+
+            - link "Learn more about how to opt out of personal information sales" [ref=f2e3792] [cursor=pointer]:
+              - /url: "#"
+              - text: Do Not Sell or Share My Personal Information
+          - generic [ref=f2e3795]:
+            - paragraph [ref=f2e3796]:
+              - text: Zilloft Group is committed to ensuring digital accessibility for individuals with disabilities. We are continuously working to improve the accessibility of our web experience for everyone, and we welcome feedback and accommodation requests. If you wish to report an issue or seek an accommodation, please
+              - link "let us know." [ref=f2e3797] [cursor=pointer]:
+                - /url: "#"
+            - paragraph [ref=f2e3798]:
+              - text: Zilloft, Inc. holds real estate brokerage
+              - link "licenses" [ref=f2e3799] [cursor=pointer]:
+                - /url: "#"
+              - text: in multiple states. Zilloft (Canada), Inc. holds real estate brokerage
+              - link "licenses" [ref=f2e3800] [cursor=pointer]:
+                - /url: "#"
+              - text: in multiple provinces.
+              - link "§ 442-H New York Standard Operating Procedures" [ref=f2e3801] [cursor=pointer]:
+                - /url: "#"
+              - link "§ New York Fair Housing Notice" [ref=f2e3802] [cursor=pointer]:
+                - /url: "#"
+              - 'link "TREC: Information about brokerage services, Consumer protection notice" [ref=f2e3803] [cursor=pointer]':
+                - /url: "#"
+              - text: "California DRE #1522444"
+              - link "Contact Zilloft, Inc. Brokerage" [ref=f2e3804] [cursor=pointer]:
+                - /url: "#"
+            - paragraph [ref=f2e3805]: For listings in Canada, the trademarks REALTOR®, REALTORS®, and the REALTOR® logo are controlled by The Canadian Real Estate Association (CREA) and identify real estate professionals who are members of CREA. The trademarks MLS®, Multiple Listing Service® and the associated logos are owned by CREA and identify the quality of services provided by real estate professionals who are members of CREA. Used under license.
+            - generic [ref=f2e3806]:
+              - figure [ref=f2e3807] [cursor=pointer]:
+                - img "App Store" [ref=f2e3808]
+              - figure [ref=f2e3809] [cursor=pointer]:
+                - img "Google Play Store" [ref=f2e3810]
+            - list [ref=f2e3811]:
+              - listitem [ref=f2e3812]:
+                - figure [ref=f2e3814] [cursor=pointer]:
+                  - img "Zilloft logo" [ref=f2e3815]
+              - listitem [ref=f2e3816]:
+                - generic [ref=f2e3817]:
+                  - generic [ref=f2e3818]: "Follow us:"
+                  - button "Follow us in Facebook" [ref=f2e3819] [cursor=pointer]:
+                    - img "Facebook" [ref=f2e3820]
+                  - button "Follow us in Instagram" [ref=f2e3821] [cursor=pointer]:
+                    - img "Instagram" [ref=f2e3822]
+                  - button "Follow us in Tiktok" [ref=f2e3823] [cursor=pointer]:
+                    - img "TikTok" [ref=f2e3824]
+              - listitem [ref=f2e3825]:
+                - generic [ref=f2e3826]:
+                  - generic [ref=f2e3827]: © 2006-2024 Zilloft
+                  - figure [ref=f2e3828] [cursor=pointer]:
+                    - img "House logo" [ref=f2e3829]
+            - img "Zilloft Footer Art" [ref=f2e3830]
+      - region "Map view of search results" [ref=f2e2317]:
+        - img "Map displaying properties available for search results" [ref=f2e2318]
+  - alert [ref=f2e208]: "Zilloft: Real Estate, Apartments, Mortgages & Home Values"

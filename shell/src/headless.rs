@@ -58,7 +58,8 @@ pub fn load_handoff(url: &str, width: u32) -> Result<Handoff> {
     };
     let rt = manuk_net::runtime();
     let fonts = FontContext::new();
-    let (mut page, _) = rt.block_on(manuk_page::fetch_streaming_page(&url, &fonts, width as f32))?;
+    let (mut page, _) =
+        rt.block_on(manuk_page::fetch_streaming_page(&url, &fonts, width as f32))?;
     rt.block_on(page.fetch_and_apply_stylesheets(&fonts, width as f32));
     rt.block_on(page.fetch_and_apply_images(&fonts, width as f32));
     let final_url = page.final_url.clone();
@@ -162,8 +163,14 @@ pub fn cmd(args: &[String]) -> Result<()> {
     };
     let flag = |n: &str| crate::flag_value(args, &[n]);
     let driver = Driver::parse(flag("--driver").unwrap_or("hub"))?;
-    let max_steps: usize = flag("--max-steps").and_then(|s| s.parse().ok()).unwrap_or(40);
-    let budget = Duration::from_secs(flag("--timeout-s").and_then(|s| s.parse().ok()).unwrap_or(300));
+    let max_steps: usize = flag("--max-steps")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(40);
+    let budget = Duration::from_secs(
+        flag("--timeout-s")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(300),
+    );
     let mut config = crate::panel::PanelScope::assistant().agent_config();
     config.max_steps = max_steps;
     let backend: Box<dyn InferenceBackend> = match flag("--script") {
@@ -175,16 +182,18 @@ pub fn cmd(args: &[String]) -> Result<()> {
             Box::new(manuk_agent::replay::ReplayBackend::new(replies))
         }
         None => {
-            let port = std::env::var("MANUK_LLAMA_PORT").ok().and_then(|s| s.parse().ok());
+            let port = std::env::var("MANUK_LLAMA_PORT")
+                .ok()
+                .and_then(|s| s.parse().ok());
             manuk_agent::env::load_dotenv();
-            let Some(kind) = crate::panel::resolve_panel_backend(
-                port,
-                manuk_agent::env::single_key().is_some(),
-            ) else {
+            let Some(kind) =
+                crate::panel::resolve_panel_backend(port, manuk_agent::env::single_key().is_some())
+            else {
                 bail!("agent-task: no model: set MANUK_LLAMA_PORT, put GROQ_API_KEY in .env, or pass --script");
             };
             Box::new(
-                crate::panel::build_panel_backend(&kind).context("agent-task: backend key vanished")?,
+                crate::panel::build_panel_backend(&kind)
+                    .context("agent-task: backend key vanished")?,
             )
         }
     };
@@ -209,7 +218,8 @@ mod tests {
     use super::*;
     use manuk_agent::replay::ReplayBackend;
 
-    const FIXTURE: &str = "<title>Fixture</title><body><h1>Price list</h1><p>The widget costs 42 dollars.</p>\
+    const FIXTURE: &str =
+        "<title>Fixture</title><body><h1>Price list</h1><p>The widget costs 42 dollars.</p>\
         <div style=\"height:3000px\">spacer</div><p>the end</p></body>";
 
     fn handoff() -> Handoff {
@@ -230,7 +240,9 @@ mod tests {
             "what does the widget cost?",
             handoff(),
             cfg,
-            Box::new(ReplayBackend::new(replies.iter().map(|s| s.to_string()).collect())),
+            Box::new(ReplayBackend::new(
+                replies.iter().map(|s| s.to_string()).collect(),
+            )),
             (1024, 768),
             Duration::from_secs(60),
         )

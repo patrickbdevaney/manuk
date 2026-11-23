@@ -13,12 +13,12 @@
 //! `<url>` may be `http(s)://…`, `file://…`, or a local path.
 
 mod agent_run;
-mod headless;
-mod human_view;
-mod hub_run;
 mod audio;
 mod chrome;
 mod find;
+mod headless;
+mod hub_run;
+mod human_view;
 mod media;
 mod panel;
 mod prerender;
@@ -170,7 +170,8 @@ fn cmd_view_frame(args: &[String]) -> Result<()> {
         human_view::HumanView::Engine => {
             let rt = manuk_net::runtime();
             let fonts = FontContext::new();
-            let (page, _) = rt.block_on(manuk_page::fetch_streaming_page(url, &fonts, width as f32))?;
+            let (page, _) =
+                rt.block_on(manuk_page::fetch_streaming_page(url, &fonts, width as f32))?;
             let c = page.paint_scrolled(&fonts, width, 720, 0.0);
             human_view::Frame {
                 source: human_view::FrameSource::Engine,
@@ -182,7 +183,9 @@ fn cmd_view_frame(args: &[String]) -> Result<()> {
         }
     };
     match &frame.source {
-        human_view::FrameSource::Chrome { target_id } => println!("source=chrome target={target_id}"),
+        human_view::FrameSource::Chrome { target_id } => {
+            println!("source=chrome target={target_id}")
+        }
         human_view::FrameSource::Engine => println!("source=engine"),
     }
     println!("size={}x{}", frame.width, frame.height);

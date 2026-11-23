@@ -139,7 +139,10 @@ fn wait_rung_clears_a_transient_cover() {
 #[test]
 fn wait_rung_mutant_is_refused() {
     let (err, txt, obs) = go("ladder_wait.html", &[("MANUK_LADDER_MUTATE", "wait")]);
-    assert!(err && txt.contains("OCCLUDED") && !obs.contains("went"), "err={err}: {txt}");
+    assert!(
+        err && txt.contains("OCCLUDED") && !obs.contains("went"),
+        "err={err}: {txt}"
+    );
 }
 #[test]
 fn escape_rung_closes_a_covering_menu() {
@@ -149,24 +152,36 @@ fn escape_rung_closes_a_covering_menu() {
 #[test]
 fn escape_rung_mutant_is_refused() {
     let (err, txt, obs) = go("ladder_escape.html", &[("MANUK_LADDER_MUTATE", "escape")]);
-    assert!(err && txt.contains("OCCLUDED") && !obs.contains("went"), "err={err}: {txt}");
+    assert!(
+        err && txt.contains("OCCLUDED") && !obs.contains("went"),
+        "err={err}: {txt}"
+    );
 }
 #[test]
 fn dismiss_rung_rejects_a_consent_layer_never_accepts() {
     let (err, txt, obs) = go("ladder_dismiss.html", &[]);
-    assert!(!err && obs.contains("went") && !obs.contains("ACCEPTED"), "err={err}: {txt}\n{obs}");
+    assert!(
+        !err && obs.contains("went") && !obs.contains("ACCEPTED"),
+        "err={err}: {txt}\n{obs}"
+    );
 }
 #[test]
 fn dismiss_rung_mutant_is_refused() {
     let (err, txt, obs) = go("ladder_dismiss.html", &[("MANUK_LADDER_MUTATE", "dismiss")]);
-    assert!(err && txt.contains("OCCLUDED") && !obs.contains("went"), "err={err}: {txt}");
+    assert!(
+        err && txt.contains("OCCLUDED") && !obs.contains("went"),
+        "err={err}: {txt}"
+    );
 }
 #[test]
 fn accept_only_layer_is_a_typed_refusal_naming_the_rungs() {
     let (err, txt, obs) = go("ladder_accept_only.html", &[]);
     assert!(
-        err && txt.contains("OCCLUDED") && txt.contains("tried: scroll, wait 2s")
-            && txt.contains("accept is never clicked") && !obs.contains("ACCEPTED") && !obs.contains("went"),
+        err && txt.contains("OCCLUDED")
+            && txt.contains("tried: scroll, wait 2s")
+            && txt.contains("accept is never clicked")
+            && !obs.contains("ACCEPTED")
+            && !obs.contains("went"),
         "err={err}: {txt}\n{obs}"
     );
 }

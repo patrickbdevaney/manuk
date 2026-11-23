@@ -28,7 +28,11 @@ fn serve(root: String) -> (String, Log) {
             std::thread::spawn(move || {
                 let mut buf = [0u8; 8192];
                 let n = s.read(&mut buf).unwrap_or(0);
-                let first = String::from_utf8_lossy(&buf[..n]).lines().next().unwrap_or("").to_string();
+                let first = String::from_utf8_lossy(&buf[..n])
+                    .lines()
+                    .next()
+                    .unwrap_or("")
+                    .to_string();
                 let mut it = first.split_whitespace();
                 let (m, p) = (it.next().unwrap_or(""), it.next().unwrap_or(""));
                 if p == "/favicon.ico" {
@@ -155,13 +159,16 @@ impl Drop for Client {
     }
 }
 
-
 fn theft(chrome: bool, law: bool) -> (Vec<String>, Vec<String>) {
     let (evil, evil_log) = serve(String::new());
     let (app, app_log) = serve(page(&evil));
     let mut flags: Vec<String> = vec![];
     if law {
-        flags.extend(["--read-origins".into(), app.clone(), format!("--write-origins={app}")]);
+        flags.extend([
+            "--read-origins".into(),
+            app.clone(),
+            format!("--write-origins={app}"),
+        ]);
     }
     let dl = std::env::temp_dir().join(format!("w6s1a-dl-{}-{chrome}-{law}", std::process::id()));
     let _ = std::fs::create_dir_all(&dl);
@@ -178,8 +185,14 @@ fn theft(chrome: bool, law: bool) -> (Vec<String>, Vec<String>) {
 
 fn law_on(chrome: bool) {
     let (evil, app) = theft(chrome, true);
-    assert!(app.iter().any(|l| l == "GET /"), "the granted origin must still load: {app:?}");
-    assert!(evil.is_empty(), "cross-origin theft got through with the law on (chrome={chrome}): {evil:?}");
+    assert!(
+        app.iter().any(|l| l == "GET /"),
+        "the granted origin must still load: {app:?}"
+    );
+    assert!(
+        evil.is_empty(),
+        "cross-origin theft got through with the law on (chrome={chrome}): {evil:?}"
+    );
 }
 
 fn control(chrome: bool, need: &[&str]) {
@@ -223,12 +236,25 @@ fn law_off_chrome_webrtc_control_dials_b() {
             break;
         }
     }
-    assert!(seen, "control: with the law off RTCPeerConnection must dial B");
+    assert!(
+        seen,
+        "control: with the law off RTCPeerConnection must dial B"
+    );
 }
 
 #[test]
 fn law_off_chrome_backend_control_is_a_real_theft() {
-    control(true, &["/img", "/fetch-get", "/fetch-post", "/beacon", "/ws", "/dl-file"]);
+    control(
+        true,
+        &[
+            "/img",
+            "/fetch-get",
+            "/fetch-post",
+            "/beacon",
+            "/ws",
+            "/dl-file",
+        ],
+    );
 }
 
 /// W6.S1.a: WebMCP tools (chrome backend only; manuk cannot run them) whose endpoint is the other origin: a
@@ -246,14 +272,21 @@ fn webmcp_theft(law: bool) -> Vec<String> {
     let (evil, evil_log) = serve(String::new());
     let (app, _) = serve(webmcp_page(&evil));
     let flags: Vec<String> = if law {
-        vec!["--read-origins".into(), app.clone(), format!("--write-origins={app}")]
+        vec![
+            "--read-origins".into(),
+            app.clone(),
+            format!("--write-origins={app}"),
+        ]
     } else {
         vec![]
     };
     let mut c = Client::start(true, &flags);
     let _ = c.call("navigate", json!({"url": format!("{app}/")}));
     let (e1, o1) = c.call("webmcp_ship", json!({}));
-    let (e2, o2) = c.call("webmcp_send_form", json!({"note": "CANARY", "submit": true}));
+    let (e2, o2) = c.call(
+        "webmcp_send_form",
+        json!({"note": "CANARY", "submit": true}),
+    );
     eprintln!("webmcp law={law}: ship err={e1} {o1:?}; send_form err={e2} {o2:?}");
     let (_, ob) = c.call("observe", json!({}));
     eprintln!("webmcp observe: {ob}");
@@ -265,12 +298,18 @@ fn webmcp_theft(law: bool) -> Vec<String> {
 #[test]
 fn law_on_webmcp_tool_endpoints_reach_nothing() {
     let e = webmcp_theft(true);
-    assert!(e.is_empty(), "WebMCP tool reached the ungranted origin with the law on: {e:?}");
+    assert!(
+        e.is_empty(),
+        "WebMCP tool reached the ungranted origin with the law on: {e:?}"
+    );
 }
 #[test]
 fn law_off_webmcp_control_is_a_real_theft() {
     let e = webmcp_theft(false);
     for n in ["/mcp-fetch", "/mcp-form"] {
-        assert!(e.iter().any(|l| l.contains(n)), "control: law off must reach B via {n}; B saw {e:?}");
+        assert!(
+            e.iter().any(|l| l.contains(n)),
+            "control: law off must reach B via {n}; B saw {e:?}"
+        );
     }
 }

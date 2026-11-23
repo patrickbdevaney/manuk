@@ -160,10 +160,8 @@ impl Client {
             .arg(dir);
         if keyring {
             // The password must come from the OS keyring (secret-tool), not the env provider. The confined
-            // process cannot exec secret-tool (landlock grants no exec: agent/src/confine.rs), so this run
-            // is unconfined; see the W3.16.a follow-up row.
-            cmd.arg("--no-confine")
-                .env("MANUK_SECRET_ALLOW", KEYRING_ITEM)
+            // process cannot exec; the pre-confinement broker (W3.16.a.a) answers the lookup.
+            cmd.env("MANUK_SECRET_ALLOW", KEYRING_ITEM)
                 .env_remove("MANUK_SECRET_PORTALPW");
         } else {
             cmd.env("MANUK_SECRET_PORTALPW", SECRET);

@@ -1,0 +1,128 @@
+{
+ "id": "w6c2a-cdp-layer",
+ "note": "W6.C2.a: cdp-layer arm x3 over the 17-task REAL-fast subset (fast_subset.SUBSET) at HEAD 499e5fba (the W6.C2 commit: evaluate, act force/at, withheld markers). manuk-mcp built from HEAD into /home/patrickd/manuk-w6c2a-target (separate target dir: the running w6b1-driver job uses target/release). Passed through env MANUK_MCP_BIN. chrome_ver 145.0.7632.116. The verdict (evaluate use, pass and turns vs the W6.B0 cdp-layer rows on the same 17 tasks) is computed by bench/agent-tasks/w6c2a_tally.py, not by this band.",
+ "inputs": [
+  "/home/patrickd/manuk-w6c2a-target/release/manuk-mcp",
+  "bench/agent-tasks/real_run.py",
+  "bench/agent-tasks/run_arm.py",
+  "bench/agent-tasks/fast_subset.py"
+ ],
+ "steps": [
+  {
+   "name": "cdp-layer run1",
+   "argv": [
+    "env",
+    "MANUK_MCP_BIN=/home/patrickd/manuk-w6c2a-target/release/manuk-mcp",
+    "MANUK_CHROME_PIN=145.0.7632.116",
+    "python3",
+    "-I",
+    "bench/agent-tasks/real_run.py",
+    "run",
+    "--arm",
+    "cdp-layer",
+    "--runs",
+    "1",
+    "--run-base",
+    "0",
+    "--judge",
+    "--jobs",
+    "2",
+    "--tasks",
+    "gocalendar-2,gomail-3,gomail-5,opendining-10,opendining-4,opendining-7,staynb-4,udriver-10,udriver-7,udriver-9,zilloft-2,zilloft-5,dashdish-3,gomail-8,networkin-3,opendining-2,opendining-8",
+    "--out",
+    "bench-queue/out/w6c2a-cdplayer-real.tsv",
+    "--transcripts",
+    "/home/patrickd/.cache/manuk-bq/transcripts-w6c2a"
+   ]
+  },
+  {
+   "name": "cdp-layer run2",
+   "argv": [
+    "env",
+    "MANUK_MCP_BIN=/home/patrickd/manuk-w6c2a-target/release/manuk-mcp",
+    "MANUK_CHROME_PIN=145.0.7632.116",
+    "python3",
+    "-I",
+    "bench/agent-tasks/real_run.py",
+    "run",
+    "--arm",
+    "cdp-layer",
+    "--runs",
+    "1",
+    "--run-base",
+    "1",
+    "--judge",
+    "--jobs",
+    "2",
+    "--tasks",
+    "gocalendar-2,gomail-3,gomail-5,opendining-10,opendining-4,opendining-7,staynb-4,udriver-10,udriver-7,udriver-9,zilloft-2,zilloft-5,dashdish-3,gomail-8,networkin-3,opendining-2,opendining-8",
+    "--out",
+    "bench-queue/out/w6c2a-cdplayer-real.tsv",
+    "--transcripts",
+    "/home/patrickd/.cache/manuk-bq/transcripts-w6c2a"
+   ]
+  },
+  {
+   "name": "cdp-layer run3",
+   "argv": [
+    "env",
+    "MANUK_MCP_BIN=/home/patrickd/manuk-w6c2a-target/release/manuk-mcp",
+    "MANUK_CHROME_PIN=145.0.7632.116",
+    "python3",
+    "-I",
+    "bench/agent-tasks/real_run.py",
+    "run",
+    "--arm",
+    "cdp-layer",
+    "--runs",
+    "1",
+    "--run-base",
+    "2",
+    "--judge",
+    "--jobs",
+    "2",
+    "--tasks",
+    "gocalendar-2,gomail-3,gomail-5,opendining-10,opendining-4,opendining-7,staynb-4,udriver-10,udriver-7,udriver-9,zilloft-2,zilloft-5,dashdish-3,gomail-8,networkin-3,opendining-2,opendining-8",
+    "--out",
+    "bench-queue/out/w6c2a-cdplayer-real.tsv",
+    "--transcripts",
+    "/home/patrickd/.cache/manuk-bq/transcripts-w6c2a"
+   ]
+  }
+ ],
+ "reconcile": {
+  "tsv_glob": "bench-queue/out/w6c2a-cdplayer-real*.tsv",
+  "primary_judge": "openai/gpt-oss-120b"
+ },
+ "band": {
+  "tsv_glob": "bench-queue/out/w6c2a-cdplayer-real.tsv",
+  "runs": 3,
+  "tasks": [
+   "gocalendar-2",
+   "gomail-3",
+   "gomail-5",
+   "opendining-10",
+   "opendining-4",
+   "opendining-7",
+   "staynb-4",
+   "udriver-10",
+   "udriver-7",
+   "udriver-9",
+   "zilloft-2",
+   "zilloft-5",
+   "dashdish-3",
+   "gomail-8",
+   "networkin-3",
+   "opendining-2",
+   "opendining-8"
+  ],
+  "task_pass_2of3": [
+   0,
+   17
+  ],
+  "per_run": [
+   0,
+   17
+  ]
+ }
+}

@@ -36,6 +36,9 @@ fn real_main(mut args: Vec<String>) -> anyhow::Result<()> {
             .with_ansi(false)
             .try_init();
     }
+    if args.first().map(String::as_str) == Some("--secret-broker") {
+        return manuk_net::secrets::broker_main();
+    }
     if args.first().map(String::as_str) == Some("--confine-selftest") {
         return manuk_mcp::confine::selftest(&args[1..]);
     }
@@ -208,6 +211,8 @@ fn real_main(mut args: Vec<String>) -> anyhow::Result<()> {
     }
     let opts = manuk_mcp::isolation::Options::parse(args)?;
     let _held = manuk_mcp::isolation::apply(&opts)?;
+    // W3.16.a.a: before landlock closes exec, start the unconfined secret-provider broker (only if names are listed).
+    manuk_net::secrets::start_broker()?;
     if confine {
         let cache = manuk_mcp::confine::cache_dir();
         let mut g = manuk_mcp::confine::Grants::default();

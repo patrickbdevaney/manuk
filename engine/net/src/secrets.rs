@@ -60,10 +60,88 @@ fn allowed(name: &str) -> bool {
     })
 }
 
+static BROKER: Mutex<Option<Broker>> = Mutex::new(None);
+
+struct Broker {
+    child: std::process::Child,
+    tx: std::process::ChildStdin,
+    rx: std::io::BufReader<std::process::ChildStdout>,
+}
+
+/// W3.16.a.a: the OS-confined process cannot exec `secret-tool`/`op` (landlock grants no exec, and
+/// granting the binary would let the ELF loader run any readable ELF). So BEFORE confinement the
+/// process re-execs itself as `--secret-broker`: a tiny unconfined helper that never sees page content,
+/// answers one `name` per line with hex(value) or `ERR`, and re-applies the `MANUK_SECRET_ALLOW` list
+/// itself. Started only when the operator listed names; dies when the pipe closes.
+pub fn start_broker() -> Result<()> {
+    if std::env::var("MANUK_SECRET_ALLOW").map_or(true, |l| l.trim().is_empty()) {
+        return Ok(());
+    }
+    let mut child = std::process::Command::new(std::env::current_exe()?)
+        .arg("--secret-broker")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()?;
+    let tx = child.stdin.take().unwrap();
+    let rx = std::io::BufReader::new(child.stdout.take().unwrap());
+    *BROKER.lock().unwrap() = Some(Broker { child, tx, rx });
+    Ok(())
+}
+
+/// Child-process entry for `--secret-broker`.
+pub fn broker_main() -> Result<()> {
+    use std::io::{BufRead, Write};
+    let stdin = std::io::stdin();
+    let mut out = std::io::stdout();
+    for line in stdin.lock().lines() {
+        let name = line?;
+        let reply = match lookup_direct(&name) {
+            Ok(v) => v.bytes().map(|b| format!("{b:02x}")).collect::<String>(),
+            Err(_) => "ERR".to_string(),
+        };
+        writeln!(out, "{reply}")?;
+        out.flush()?;
+    }
+    Ok(())
+}
+
+fn lookup_via_broker(name: &str) -> Option<Result<String>> {
+    use std::io::{BufRead, Write};
+    let mut g = BROKER.lock().ok()?;
+    let b = g.as_mut()?;
+    let _ = &b.child;
+    if writeln!(b.tx, "{name}").and_then(|_| b.tx.flush()).is_err() {
+        return Some(Err(anyhow::anyhow!("secret broker is gone")));
+    }
+    let mut line = String::new();
+    if b.rx.read_line(&mut line).is_err() {
+        return Some(Err(anyhow::anyhow!("secret broker is gone")));
+    }
+    let line = line.trim();
+    if line.is_empty() || line == "ERR" || line.len() % 2 != 0 {
+        return Some(Err(anyhow::anyhow!("no secret named {name:?}: store it in the OS keyring (secret-tool store service manuk account {name}) or give an op:// reference; the keyring item is missing or locked")));
+    }
+    let bytes: Option<Vec<u8>> = (0..line.len() / 2)
+        .map(|i| u8::from_str_radix(&line[2 * i..2 * i + 2], 16).ok())
+        .collect();
+    Some(match bytes.and_then(|b| String::from_utf8(b).ok()) {
+        Some(v) => Ok(v),
+        None => Err(anyhow::anyhow!("secret broker sent a malformed reply")),
+    })
+}
+
 fn lookup(name: &str) -> Result<String> {
     if let Ok(v) = std::env::var(env_key(name)) {
         return Ok(v);
     }
+    if let Some(r) = lookup_via_broker(name) {
+        return r;
+    }
+    lookup_direct(name)
+}
+
+fn lookup_direct(name: &str) -> Result<String> {
     if !allowed(name) {
         bail!("secret {name:?} is not in the operator's list: set {} or add the name to MANUK_SECRET_ALLOW (comma separated) to let it be read from the keyring or 1Password", env_key(name));
     }

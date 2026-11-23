@@ -10,7 +10,15 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
 use serde_json::{json, Value};
 
-const CORE: [&str; 7] = ["navigate", "observe", "act", "fill_form", "type", "extract", "evaluate"];
+const CORE: [&str; 7] = [
+    "navigate",
+    "observe",
+    "act",
+    "fill_form",
+    "type",
+    "extract",
+    "evaluate",
+];
 /// W6.C2: `evaluate` is a new always-loaded capability, not a description of the W5.T3 surface; the 40% bar
 /// guards the verbosity of the tools that existed then, so it is measured without `evaluate`, and
 /// `evaluate_costs_little` caps what the new tool itself may weigh.
@@ -178,7 +186,14 @@ fn manual_checkpoint_is_not_listed() {
 #[test]
 fn evaluate_costs_little() {
     let tools = Client::start().list();
-    let e = tools.iter().find(|t| t["name"] == NEW).expect("evaluate is listed");
-    assert!(size(e) <= EVALUATE_MAX, "evaluate is {} B (> {EVALUATE_MAX})", size(e));
+    let e = tools
+        .iter()
+        .find(|t| t["name"] == NEW)
+        .expect("evaluate is listed");
+    assert!(
+        size(e) <= EVALUATE_MAX,
+        "evaluate is {} B (> {EVALUATE_MAX})",
+        size(e)
+    );
     assert_eq!(e["_meta"]["anthropic/alwaysLoad"], json!(true));
 }

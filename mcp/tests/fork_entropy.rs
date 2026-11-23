@@ -269,8 +269,14 @@ fn chrome_forks_of_one_checkpoint_roll_distinct_dice() {
 /// fork's own stream (no REPLAY DIVERGED) and show the same value.
 /// The number following the last `Roll: ` in a result (0.xxx).
 fn num_after_roll(t: &str) -> String {
-    let i = t.rfind("Roll: ").unwrap_or_else(|| panic!("no roll in {t}")) + 6;
-    let n: String = t[i..].chars().take_while(|c| c.is_ascii_digit() || *c == '.').collect();
+    let i = t
+        .rfind("Roll: ")
+        .unwrap_or_else(|| panic!("no roll in {t}"))
+        + 6;
+    let n: String = t[i..]
+        .chars()
+        .take_while(|c| c.is_ascii_digit() || *c == '.')
+        .collect();
     assert!(n.starts_with("0."), "no rolled number in {t}");
     n
 }

@@ -95,7 +95,11 @@ fn a_page_handshake_carries_origin_user_agent_and_accept_language() {
         &[],
         Some(page),
     ));
-    assert!(conn.is_ok(), "the gateway admits a handshake that carries the page origin: {:?}", conn.err());
+    assert!(
+        conn.is_ok(),
+        "the gateway admits a handshake that carries the page origin: {:?}",
+        conn.err()
+    );
 
     let seen = rx.recv().unwrap();
     assert!(seen.accepted, "server accepted the upgrade");

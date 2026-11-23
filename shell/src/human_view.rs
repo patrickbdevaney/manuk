@@ -36,7 +36,9 @@ impl HumanView {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum FrameSource {
     /// Captured from Chrome over CDP; the id of the page target.
-    Chrome { target_id: String },
+    Chrome {
+        target_id: String,
+    },
     Engine,
 }
 
@@ -53,7 +55,12 @@ pub struct Frame {
 impl Frame {
     pub fn pixel(&self, x: u32, y: u32) -> [u8; 4] {
         let i = ((y * self.width + x) * 4) as usize;
-        [self.rgba[i], self.rgba[i + 1], self.rgba[i + 2], self.rgba[i + 3]]
+        [
+            self.rgba[i],
+            self.rgba[i + 1],
+            self.rgba[i + 2],
+            self.rgba[i + 3],
+        ]
     }
 }
 
@@ -106,7 +113,10 @@ mod tests {
             HumanView::from_config(&["--engine-view".into()], None),
             HumanView::Engine
         );
-        assert_eq!(HumanView::from_config(&[], Some("engine")), HumanView::Engine);
+        assert_eq!(
+            HumanView::from_config(&[], Some("engine")),
+            HumanView::Engine
+        );
         assert_eq!(
             HumanView::from_config(&["--chrome-view".into()], Some("engine")),
             HumanView::Chrome

@@ -2500,9 +2500,14 @@ impl CdpBackend {
     fn aim(&mut self, node: NodeId) -> Result<(f32, f32, u64)> {
         // W6.C1 wait rung: a cover that lands at dispatch is often transient; retry ~2s on the real hit test.
         let mut r = self.aim_once(node);
-        if !std::env::var("MANUK_LADDER_MUTATE").is_ok_and(|v| v == "all" || v.split(',').any(|x| x == "wait")) {
+        if !std::env::var("MANUK_LADDER_MUTATE")
+            .is_ok_and(|v| v == "all" || v.split(',').any(|x| x == "wait"))
+        {
             for _ in 0..4 {
-                if !r.as_ref().is_err_and(|e| e.to_string().starts_with("OCCLUDED at dispatch")) {
+                if !r
+                    .as_ref()
+                    .is_err_and(|e| e.to_string().starts_with("OCCLUDED at dispatch"))
+                {
                     break;
                 }
                 std::thread::sleep(std::time::Duration::from_millis(500));
@@ -3057,7 +3062,9 @@ impl Backend for CdpBackend {
             self.cdp.call("Input.dispatchMouseEvent", json!({"type": t, "x": x, "y": y, "button": "left", "buttons": if t == "mousePressed" { 1 } else { 0 }, "clickCount": cc}))?;
         }
         self.after_action()?;
-        Ok(format!("dispatched click at viewport ({x:.0},{y:.0}); no hit-test (at=)"))
+        Ok(format!(
+            "dispatched click at viewport ({x:.0},{y:.0}); no hit-test (at=)"
+        ))
     }
     fn arm_dialog(&mut self, accept: bool, text: Option<String>) -> Result<()> {
         self.cdp.dialog_arm = Some((accept, text));

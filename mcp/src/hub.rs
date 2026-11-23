@@ -443,8 +443,16 @@ impl<B: Backend> Hub<B> {
                     .unwrap_or_else(|_| h.what.url.clone());
                 let path = h.what.short();
                 let path = path.split_once(' ').map_or(path.as_str(), |x| x.1);
-                let note = if h.replayable { "" } else { " (cannot be replayed; will be dropped)" };
-                format!("  {} {origin} {path} body={} bytes{note}", h.what.method, h.body.len())
+                let note = if h.replayable {
+                    ""
+                } else {
+                    " (cannot be replayed; will be dropped)"
+                };
+                format!(
+                    "  {} {origin} {path} body={} bytes{note}",
+                    h.what.method,
+                    h.body.len()
+                )
             })
             .collect::<Vec<_>>()
             .join("\n")
@@ -696,11 +704,15 @@ impl<B: Backend> Hub<B> {
             return Ok(Output::Text(self.checkpoint(&id)));
         }
         if tool == "commit" {
-            return Ok(Output::Text(self.commit(
-                &id,
-                args.get("confirm").and_then(Value::as_bool).unwrap_or(false),
-            )
-            .await));
+            return Ok(Output::Text(
+                self.commit(
+                    &id,
+                    args.get("confirm")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false),
+                )
+                .await,
+            ));
         }
         let logged = !UNLOGGED.contains(&tool);
         let a = strip_page(args);

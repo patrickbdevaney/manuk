@@ -101,13 +101,17 @@ impl manuk_agent::InferenceBackend for FixtureBackend {
         tokio::time::sleep(self.think).await;
         let left = self.left.load(std::sync::atomic::Ordering::SeqCst);
         if self.hub {
-            if self.handoff_first.swap(false, std::sync::atomic::Ordering::SeqCst) {
+            if self
+                .handoff_first
+                .swap(false, std::sync::atomic::Ordering::SeqCst)
+            {
                 return Ok(r#"{"tool":"handoff","args":{"reason":"fixture needs you","timeout_ms":60000}}"#.into());
             }
             if left == 0 {
                 return Ok(r#"{"tool":"finish","args":{"answer":"fixture done"}}"#.into());
             }
-            self.left.store(left - 1, std::sync::atomic::Ordering::SeqCst);
+            self.left
+                .store(left - 1, std::sync::atomic::Ordering::SeqCst);
             return Ok(r#"{"tool":"scroll","args":{"dy":120}}"#.into());
         }
         if left == 0 {

@@ -22,9 +22,9 @@ use winit::keyboard::{Key, ModifiersState, NamedKey};
 use winit::window::{Window, WindowId};
 
 use crate::agent_run::Phase;
-use crate::hub_run::HubRun;
 use crate::chrome::{self, Bookmarks, History, Settings};
 use crate::find::{self, FindSession};
+use crate::hub_run::HubRun;
 use crate::panel::{self, PanelScope};
 use crate::prerender;
 use crate::session::{self, SessionStore};
@@ -1968,7 +1968,12 @@ impl App {
         let (w, h) = (gpu.config.width, gpu.config.height);
         // The page is painted **below** the chrome band: shifting the scroll by
         // -CHROME_HEIGHT moves page content down so its top sits just under the toolbar.
-        if self.page.is_none() && self.agent.as_ref().is_some_and(|r| r.agent_has_page() && r.view_busy()) {
+        if self.page.is_none()
+            && self
+                .agent
+                .as_ref()
+                .is_some_and(|r| r.agent_has_page() && r.view_busy())
+        {
             // A Hub call holds the agent's browser this turn: keep the previous frame on screen
             // (a white flash here would be the W3.17.a regression).
             self.needs_paint = true;
@@ -4115,7 +4120,10 @@ impl App {
             self.clamp_scroll();
             self.rerender();
             if let Some(win) = &self.window {
-                win.set_title(&format!("[agent needs you] {} — manuk", truncate(&reason, 60)));
+                win.set_title(&format!(
+                    "[agent needs you] {} — manuk",
+                    truncate(&reason, 60)
+                ));
             }
         }
         let Some(run) = self.agent.as_mut() else {

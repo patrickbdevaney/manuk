@@ -3,7 +3,7 @@
 # A new row needs a security review (a SEC.DID node), not a quiet edit. Run with --list to see the live inventory.
 agent/src/confine.rs	Command::new	1	confine selftest probe: execs /bin/true to check landlock denies exec; reached only via the selftest subcommand, never page content
 agent/src/confine.rs	process::Command	1	import/path for the same selftest probe (see above)
-engine/net/src/secrets.rs	Command::new	2	operator secret provider: `op read <ref>` or `secret-tool lookup`; argv only (no shell). The name can be agent-supplied via the type tool's secret arg; see SEC.DID.7.a
-engine/net/src/secrets.rs	process::Command	2	import/path for the secret provider (see above)
+engine/net/src/secrets.rs	Command::new	3	operator secret provider: `op read <ref>` or `secret-tool lookup`; argv only (no shell). The name can be agent-supplied via the type tool's secret arg; see SEC.DID.7.a; W3.16.a.a: 3rd site re-execs current_exe with --secret-broker BEFORE landlock (argv fixed, only when MANUK_SECRET_ALLOW is set) so the confined process needs no exec
+engine/net/src/secrets.rs	process::Command	3	import/path for the secret provider (see above)
 mcp/src/cdp.rs	Command::new	2	launches the operator-chosen Chrome executable for the CDP backend (chrome_exe); argv fixed by the server, page content cannot name the binary; second site (W4.A5.b.b, reviewed W4.E1.b.a): /bin/sh reaper that kills the Chrome process group and removes the profile dir after the MCP server dies - script text is built from the server's own numeric pid/pgid, the dir goes via env, no page content reaches argv
 mcp/src/zygote.rs	libc::fork	1	fork-only zygote: the forked child serves requests and never execs page-derived content (no exec token in this file)

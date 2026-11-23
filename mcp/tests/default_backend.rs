@@ -28,7 +28,10 @@ fn reported_backend(args: &[&str]) -> String {
     drop(tx);
     let _ = child.wait();
     let v: serde_json::Value = serde_json::from_str(&line).expect("initialize reply");
-    v["result"]["serverInfo"]["title"].as_str().unwrap_or("").to_string()
+    v["result"]["serverInfo"]["title"]
+        .as_str()
+        .unwrap_or("")
+        .to_string()
 }
 
 #[test]

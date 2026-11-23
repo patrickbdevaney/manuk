@@ -1440,7 +1440,10 @@ impl<B: Backend> Session<B> {
             "back" => self.back().await.map(Output::Text),
             "wait_for" => self.wait_for(a).await.map(Output::Text),
             "evaluate" => self
-                .evaluate(arg_str(a, "expression").ok_or_else(|| anyhow!("evaluate needs `expression`"))?)
+                .evaluate(
+                    arg_str(a, "expression")
+                        .ok_or_else(|| anyhow!("evaluate needs `expression`"))?,
+                )
                 .await
                 .map(Output::Text),
             "act" if a.get("at").is_some() && a.get("handle").is_none() => {
@@ -2040,8 +2043,7 @@ impl<B: Backend> Session<B> {
         }
         let Ok(tree) = self.tree() else { return false };
         fn inside(n: &A11yNode, id: NodeId, f: &dyn Fn(&A11yNode) -> bool) -> bool {
-            (f(n) && n.iter().any(|k| k.node == id))
-                || n.children.iter().any(|c| inside(c, id, f))
+            (f(n) && n.iter().any(|k| k.node == id)) || n.children.iter().any(|c| inside(c, id, f))
         }
         let is_menu = |n: &A11yNode| matches!(n.role, Role::Menu);
         let has = |n: &A11yNode, id: NodeId| n.iter().any(|k| k.node == id);
@@ -2062,16 +2064,17 @@ impl<B: Backend> Session<B> {
             let Ok(tree) = self.tree() else { return false };
             let vp = self.b.viewport();
             let ovs = crate::overlay::find(&tree, &vp);
-            let ov = ovs
-                .iter()
-                .find(|o| o.node.iter().any(|k| k.node == by) && !o.node.iter().any(|k| k.node == node));
+            let ov = ovs.iter().find(|o| {
+                o.node.iter().any(|k| k.node == by) && !o.node.iter().any(|k| k.node == node)
+            });
             match ov {
                 None => {}
                 Some(o) if o.kind == crate::overlay::Kind::BotWall => {
                     tried.push("dismiss(bot wall: handoff)".into())
                 }
                 Some(o) => match o.control {
-                    None => tried.push("dismiss(no reject/close control; accept is never clicked)".into()),
+                    None => tried
+                        .push("dismiss(no reject/close control; accept is never clicked)".into()),
                     Some(c) => {
                         let ctl = c.node;
                         tried.push("dismiss".into());
@@ -2227,7 +2230,11 @@ impl<B: Backend> Session<B> {
         let v = self.b.page_eval_readonly(expr).await?;
         let n = v.chars().count();
         let v: String = v.chars().take(CAP).collect();
-        let more = if n > CAP { format!("\n[truncated: {n} chars, showing {CAP}]") } else { String::new() };
+        let more = if n > CAP {
+            format!("\n[truncated: {n} chars, showing {CAP}]")
+        } else {
+            String::new()
+        };
         Ok(format!("{UNTRUSTED}\n{v}{more}"))
     }
 
