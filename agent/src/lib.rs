@@ -2370,6 +2370,15 @@ pub trait TabController {
     fn open_tab_from_history(&mut self, url: &str) -> bool;
     /// Open a new tab searching for `query`; returns the URL that was opened.
     fn open_search(&mut self, query: &str) -> String;
+    /// One line per tab (`title <url>`), in tab order, plus the index of the focused one.
+    /// Default: a controller with no tab model reports none.
+    fn list_tabs(&self) -> (Vec<String>, Option<usize>) {
+        (Vec::new(), None)
+    }
+    /// Focus the tab at 0-based `index`; false when there is no such tab.
+    fn switch_tab(&mut self, _index: usize) -> bool {
+        false
+    }
 }
 
 /// Parse an action's `role` string into an a11y role, defaulting to `button` — the

@@ -31,6 +31,71 @@ use serde_json::{Map, Value};
 
 use crate::agent_run::{clip, effect_diff, first_line, Phase};
 
+/// Verbs the window's tab set answers (the Hub's single-page backend has no tabs).
+fn is_tab_verb(tool: &str) -> bool {
+    matches!(tool, "tabs" | "open_tab" | "search_tab")
+}
+
+/// Run a tab verb against the window's tabs. `tabs(list|switch|close)` uses 1-based `index` like the MCP
+/// schema; `open_tab` only reopens a URL already in the session's history (un-steerable).
+fn run_tab_verb(
+    tool: &str,
+    args: &Map<String, Value>,
+    tabs: Option<&mut dyn TabController>,
+) -> String {
+    let Some(tabs) = tabs else {
+        return "ERROR: no tab context in this run".into();
+    };
+    let index = args
+        .get("index")
+        .and_then(Value::as_u64)
+        .map(|n| n as usize);
+    let str_arg = |k: &str| args.get(k).and_then(Value::as_str);
+    match tool {
+        "open_tab" => match str_arg("url") {
+            Some(u) if tabs.open_tab_from_history(u) => format!("opened {u}"),
+            Some(_) => "ERROR: that URL is not in the session history".into(),
+            None => "ERROR: open_tab needs url".into(),
+        },
+        "search_tab" => match str_arg("query") {
+            Some(q) => format!("opened a tab: {}", tabs.open_search(q)),
+            None => "ERROR: search_tab needs query".into(),
+        },
+        _ => match str_arg("action").unwrap_or("list") {
+            "list" => {
+                let (lines, active) = tabs.list_tabs();
+                if lines.is_empty() {
+                    return "no tabs".into();
+                }
+                lines
+                    .iter()
+                    .enumerate()
+                    .map(|(i, l)| {
+                        format!(
+                            "{}{}. {l}",
+                            if Some(i) == active { "* " } else { "  " },
+                            i + 1
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            }
+            "switch" => match index.and_then(|n| n.checked_sub(1)) {
+                Some(i) if tabs.switch_tab(i) => format!("switched to tab {}", i + 1),
+                _ => "ERROR: switch needs a valid 1-based index".into(),
+            },
+            "close" => match index.and_then(|n| n.checked_sub(1)) {
+                Some(i) => {
+                    let n = tabs.close_tabs(&manuk_agent::TabSelector::Indices(vec![i]));
+                    format!("closed {n} tab(s)")
+                }
+                None => "ERROR: close needs a valid 1-based index".into(),
+            },
+            other => format!("ERROR: unknown tabs action {other:?}"),
+        },
+    }
+}
+
 const LOG_LINES: usize = 3;
 /// How long one `pump` waits on a Hub call before yielding to the window.
 const POLL_SLICE: Duration = Duration::from_millis(8);
@@ -107,6 +172,8 @@ pub struct HubRun {
     inflight: Option<tokio::task::JoinHandle<anyhow::Result<String>>>,
     /// The first call is an `observe`, so the model starts with a view of the page.
     next_call: Option<(String, Map<String, Value>)>,
+    /// A tab verb the model asked for; it runs against the window's `TabController` on the next pump.
+    tab_call: Option<(String, Map<String, Value>)>,
     log: Vec<String>,
     before: Option<String>,
     human_kind: Option<HumanKind>,
@@ -183,6 +250,7 @@ impl HubRun {
             messages,
             inflight: None,
             next_call: Some(("observe".into(), Map::new())),
+            tab_call: None,
             log: vec![format!("task: {}", clip(task, 60))],
             before: None,
             human_kind: None,
@@ -274,7 +342,7 @@ impl HubRun {
     pub fn pump(
         &mut self,
         rt: &tokio::runtime::Runtime,
-        _tabs: Option<&mut dyn TabController>,
+        tabs: Option<&mut dyn TabController>,
     ) -> bool {
         if self.stop_requested && self.is_active() {
             // A Hub call holds the page: let it finish (it is short) so the page is not lost.
@@ -315,6 +383,11 @@ impl HubRun {
             return self.on_reply(reply);
         }
         // Idle: either a queued call (the opening observe) or ask the model.
+        if let Some((tool, args)) = self.tab_call.take() {
+            let text = run_tab_verb(&tool, &args, tabs);
+            self.on_result(&tool, Ok(Output::Text(text)));
+            return true;
+        }
         if let Some((tool, args)) = self.next_call.take() {
             self.begin_call(tool, args);
             return false;
@@ -401,7 +474,11 @@ impl HubRun {
                     "{tool} {}",
                     clip(&Value::Object(args.clone()).to_string(), 50)
                 ));
-                self.begin_call(tool, args);
+                if is_tab_verb(&tool) {
+                    self.tab_call = Some((tool, args));
+                } else {
+                    self.begin_call(tool, args);
+                }
             }
             None => {
                 self.push_log("model reply was not a tool call".into());
@@ -871,6 +948,51 @@ mod tests {
             seen.contains("BUTTON-TYPED-77"),
             "next step is told: {seen}"
         );
+    }
+
+    /// W6.H1.c: the model's `tabs` calls reach the window's tab set through the TabController.
+    #[test]
+    fn tabs_tool_drives_the_window_tab_set() {
+        let fonts = FontContext::new();
+        let rt = rt();
+        let (mut run, seen) = start(
+            &fonts,
+            &[
+                r#"{"tool":"tabs","args":{"action":"list"}}"#,
+                r#"{"tool":"tabs","args":{"action":"switch","index":1}}"#,
+                r#"{"tool":"search_tab","args":{"query":"rust"}}"#,
+                r#"{"tool":"finish","args":{"answer":"ok"}}"#,
+            ],
+        );
+        let mut browser = crate::tab::Browser::new(2);
+        let a = browser.open("https://a.test/");
+        let _b = browser.open("https://b.test/");
+        assert_ne!(browser.active(), Some(a));
+        for _ in 0..4000 {
+            let mut tabs = crate::session::BrowserTabs::new(
+                &mut browser,
+                Vec::new(),
+                crate::session::default_search_settings(),
+            );
+            run.pump(&rt, Some(&mut tabs));
+            if !run.is_active() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        assert_eq!(
+            run.phase(),
+            &Phase::Done("ok".into()),
+            "{:?}",
+            run.log_lines()
+        );
+        let seen = seen.lock().unwrap().join("\n---\n");
+        assert!(
+            seen.contains("https://a.test/") && seen.contains("https://b.test/"),
+            "list: {seen}"
+        );
+        assert_eq!(browser.active(), Some(a), "switch(1) focused the first tab");
+        assert_eq!(browser.tabs().len(), 3, "search_tab opened a tab");
     }
 
     #[test]

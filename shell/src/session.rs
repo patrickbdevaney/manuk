@@ -369,6 +369,30 @@ impl manuk_agent::TabController for BrowserTabs<'_> {
             .open_restored(url.clone(), format!("Search: {query}"), false);
         url
     }
+
+    fn list_tabs(&self) -> (Vec<String>, Option<usize>) {
+        let tabs = self.browser.tabs();
+        let active = self
+            .browser
+            .active()
+            .and_then(|a| tabs.iter().position(|t| t.id == a));
+        (
+            tabs.iter()
+                .map(|t| format!("{} <{}>", t.title, t.url))
+                .collect(),
+            active,
+        )
+    }
+
+    fn switch_tab(&mut self, index: usize) -> bool {
+        match self.browser.tabs().get(index).map(|t| t.id) {
+            Some(id) => {
+                self.browser.focus(id);
+                true
+            }
+            None => false,
+        }
+    }
 }
 
 /// **Open a tab from persisted history.** Depends on the store existing (the sequencing
