@@ -778,3 +778,80 @@ rows and traces in `docs/sprint/perf1-pf14b/`.
   initial pass is ~1.5 ms; the earlier PERF.md layout/script figures for other URLs are not re-measured here (follow-up PERF.1.4.b.a).
 - **Gate:** `perf1-profile.py --self-test` OK. The mutant (emit removed) is the pre-change binary: its layout median stays 10.3 ms with no
   initial-pass line, which is the old split; the emit is the only behavioural difference between the two binaries.
+
+## PERF.1.2.a.a results (full cascade+layout passes per load phase; chrome_ver=145.0.7632.116; manuk only)
+
+Measured with `scripts/perf1-passes.py --runs 3` (binary: `target/release/a11y-dump` built from HEAD 49df02b1, which includes the
+PERF.1.2.a adoption at `fire_lifecycle`). Each `cascade` / `layout` nettrace line is attributed to the `phase` line that closes its
+interval (phases run back to back and each `phase` line is written at its end). Raw data: `docs/sprint/perf1-passes/passes.json`.
+
+Reading the table: `passes` = `cascade` lines in that phase (each pass also writes one `layout` line; `memo hits` = `layout 0` lines,
+where the pass memo answered without a layout). `ms per pass` = (cascade + layout ms) / passes over the 3 runs, memo hits included
+in the denominator. Pass totals equal the trace line counts exactly in every run (the script refuses to print otherwise).
+
+chrome_ver=145.0.7632.116 binary=target/release/a11y-dump runs=3
+
+### comix.to (https://comix.to/)
+
+| phase (trace order) | window | passes r0 | passes r1 | passes r2 | total | ms per pass (cascade+layout) | memo hits |
+|---|---|---|---|---|---|---|---|
+| cascade+layout+blocking scripts | script-window | 2 | 2 | 2 | 6 | 3.1 | 0 |
+| deferred scripts | script-window | 15 | 15 | 15 | 45 | 47.4 | 36 |
+| DOMContentLoaded | script-window | 1 | 0 | 0 | 1 | 0.0 | 0 |
+| subframes (pre-load) | loader-window | 2 | 1 | 1 | 4 | 114.0 | 0 |
+| finish_loading: dynamic scripts | script-window | 2 | 0 | 0 | 2 | 78.1 | 0 |
+| finish_loading: page fetches | loader-window | 1 | 1 | 1 | 3 | 157.7 | 0 |
+| **pass total** | | 23 | 19 | 19 | 61 | | |
+| trace `cascade` lines | | 23 | 19 | 19 | | | |
+| trace `layout` lines | | 23 | 19 | 19 | | | |
+
+### puentedemando.com (https://www.puentedemando.com/)
+
+| phase (trace order) | window | passes r0 | passes r1 | passes r2 | total | ms per pass (cascade+layout) | memo hits |
+|---|---|---|---|---|---|---|---|
+| cascade+layout+blocking scripts | script-window | 3 | 3 | 3 | 9 | 104.0 | 0 |
+| deferred scripts | script-window | 1 | 1 | 1 | 3 | 115.7 | 0 |
+| DOMContentLoaded | script-window | 1 | 1 | 1 | 3 | 89.6 | 2 |
+| subframes (pre-load) | loader-window | 1 | 1 | 1 | 3 | 123.3 | 0 |
+| finish_loading: page fetches | loader-window | 3 | 3 | 3 | 9 | 114.6 | 3 |
+| **pass total** | | 9 | 9 | 9 | 27 | | |
+| trace `cascade` lines | | 9 | 9 | 9 | | | |
+| trace `layout` lines | | 9 | 9 | 9 | | | |
+
+### Alan_Turing (https://en.wikipedia.org/wiki/Alan_Turing)
+
+| phase (trace order) | window | passes r0 | passes r1 | passes r2 | total | ms per pass (cascade+layout) | memo hits |
+|---|---|---|---|---|---|---|---|
+| cascade+layout+blocking scripts | script-window | 2 | 2 | 2 | 6 | 331.1 | 0 |
+| deferred scripts | script-window | 1 | 1 | 1 | 3 | 325.0 | 0 |
+| finish_loading: dynamic scripts | script-window | 3 | 3 | 3 | 9 | 338.8 | 0 |
+| **pass total** | | 6 | 6 | 6 | 18 | | |
+| trace `cascade` lines | | 6 | 6 | 6 | | | |
+| trace `layout` lines | | 6 | 6 | 6 | | | |
+
+**Adoption differential (`MANUK_NO_ADOPT_REFLOW=1`, same script, `docs/sprint/perf1-passes-noadopt/`).** Pass totals per run:
+
+| URL | adopt (default) r0 / r1 / r2 | `MANUK_NO_ADOPT_REFLOW=1` r0 / r1 / r2 |
+|---|---|---|
+| comix.to | 23 / 19 / 19 | 19 / 19 / 19 |
+| puentedemando.com | 9 / 9 / 9 | 9 / 9 / 9 |
+| Alan_Turing | 6 / 6 / 6 | 6 / 6 / 6 |
+
+Which passes are forced reflows that are redone, and which are real script mutations:
+
+- **Lifecycle forced reflows are already gone.** The adoption only runs in `fire_lifecycle` (DOMContentLoaded and load). Turning it
+  off removes nothing consistent: the only difference is comix.to r0 (23 vs 19), and r1/r2 are 19 on both arms, which is live-page
+  variance (the same page's DOMContentLoaded and dynamic-scripts passes appear in one run only). puentedemando.com and Wikipedia are
+  identical on both arms.
+- **The remaining passes are in script windows the switch does not cover, so this trace cannot split them.** comix.to's 45 deferred-scripts
+  passes (36 memo hits, ~50 ms per pass), puentedemando's 9 blocking-script passes and Wikipedia's 18 script-phase passes
+  (`cascade+layout+blocking scripts`, `deferred scripts`, `finish_loading: dynamic scripts`, ~330 ms per pass) run inside JS rounds
+  that have no adoption, so a forced reflow there and a real mutation look the same in the trace. Nothing measured here shows a redone
+  forced reflow on these three URLs at HEAD. Classifying them needs a tag on the forced-reflow path: follow-up PERF.1.2.a.a.a.
+- **Wikipedia is the clearest case of real work:** 3 `finish_loading: dynamic scripts` passes at ~330 ms each on identical runs. The
+  reflow adoption cannot remove them, so only fewer mutations or a cheaper pass can.
+
+**Limits, stated plainly.** Three runs per URL, live pages (comix.to varied 23 vs 19 passes between runs). The `ms per pass` numbers are
+single-machine medians of a few lines, not a benchmark, and do not compare with PERF.md's earlier sweeps (the machine's speed varied
+between sweeps). Gate self-test: `python3 -I scripts/perf1-passes.py --self-test` is OK, and it is red on two doctored tables (one
+pass lost, one layout total missing).

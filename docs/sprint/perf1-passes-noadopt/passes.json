@@ -1,0 +1,502 @@
+{
+ "chrome_ver": "145.0.7632.116",
+ "binary": "target/release/a11y-dump",
+ "runs": 3,
+ "arm_env": {
+  "MANUK_NO_ADOPT_REFLOW": "1"
+ },
+ "urls": {
+  "comix.to": {
+   "url": "https://comix.to/",
+   "runs": [
+    {
+     "run": 0,
+     "status": "OK",
+     "wall_s": 7.329,
+     "counts": {
+      "cascade": 19,
+      "layout": 19
+     },
+     "reconciled": true,
+     "errors": [],
+     "buckets": [
+      {
+       "seq": 4,
+       "phase": "cascade+layout+blocking scripts",
+       "class": "script-window",
+       "cascade_n": 2,
+       "layout_n": 2,
+       "memo_hits": 0,
+       "cascade_us": 6949,
+       "layout_us": 160
+      },
+      {
+       "seq": 5,
+       "phase": "deferred scripts",
+       "class": "script-window",
+       "cascade_n": 15,
+       "layout_n": 15,
+       "memo_hits": 12,
+       "cascade_us": 487793,
+       "layout_us": 265575
+      },
+      {
+       "seq": 7,
+       "phase": "subframes (pre-load)",
+       "class": "loader-window",
+       "cascade_n": 1,
+       "layout_n": 1,
+       "memo_hits": 0,
+       "cascade_us": 29055,
+       "layout_us": 121279
+      },
+      {
+       "seq": 13,
+       "phase": "finish_loading: page fetches",
+       "class": "loader-window",
+       "cascade_n": 1,
+       "layout_n": 1,
+       "memo_hits": 0,
+       "cascade_us": 35507,
+       "layout_us": 137882
+      }
+     ]
+    },
+    {
+     "run": 1,
+     "status": "OK",
+     "wall_s": 6.929,
+     "counts": {
+      "cascade": 19,
+      "layout": 19
+     },
+     "reconciled": true,
+     "errors": [],
+     "buckets": [
+      {
+       "seq": 4,
+       "phase": "cascade+layout+blocking scripts",
+       "class": "script-window",
+       "cascade_n": 2,
+       "layout_n": 2,
+       "memo_hits": 0,
+       "cascade_us": 8883,
+       "layout_us": 217
+      },
+      {
+       "seq": 5,
+       "phase": "deferred scripts",
+       "class": "script-window",
+       "cascade_n": 15,
+       "layout_n": 15,
+       "memo_hits": 12,
+       "cascade_us": 483064,
+       "layout_us": 274897
+      },
+      {
+       "seq": 7,
+       "phase": "subframes (pre-load)",
+       "class": "loader-window",
+       "cascade_n": 1,
+       "layout_n": 1,
+       "memo_hits": 0,
+       "cascade_us": 30786,
+       "layout_us": 130733
+      },
+      {
+       "seq": 13,
+       "phase": "finish_loading: page fetches",
+       "class": "loader-window",
+       "cascade_n": 1,
+       "layout_n": 1,
+       "memo_hits": 0,
+       "cascade_us": 36892,
+       "layout_us": 130187
+      }
+     ]
+    },
+    {
+     "run": 2,
+     "status": "OK",
+     "wall_s": 6.928,
+     "counts": {
+      "cascade": 19,
+      "layout": 19
+     },
+     "reconciled": true,
+     "errors": [],
+     "buckets": [
+      {
+       "seq": 4,
+       "phase": "cascade+layout+blocking scripts",
+       "class": "script-window",
+       "cascade_n": 2,
+       "layout_n": 2,
+       "memo_hits": 0,
+       "cascade_us": 5715,
+       "layout_us": 164
+      },
+      {
+       "seq": 5,
+       "phase": "deferred scripts",
+       "class": "script-window",
+       "cascade_n": 15,
+       "layout_n": 15,
+       "memo_hits": 12,
+       "cascade_us": 473083,
+       "layout_us": 274677
+      },
+      {
+       "seq": 7,
+       "phase": "subframes (pre-load)",
+       "class": "loader-window",
+       "cascade_n": 1,
+       "layout_n": 1,
+       "memo_hits": 0,
+       "cascade_us": 29642,
+       "layout_us": 131185
+      },
+      {
+       "seq": 13,
+       "phase": "finish_loading: page fetches",
+       "class": "loader-window",
+       "cascade_n": 1,
+       "layout_n": 1,
+       "memo_hits": 0,
+       "cascade_us": 37082,
+       "layout_us": 133608
+      }
+     ]
+    }
+   ]
+  },
+  "puentedemando.com": {
+   "url": "https://www.puentedemando.com/",
+   "runs": [
+    {
+     "run": 0,
+     "status": "OK",
+     "wall_s": 14.143,
+     "counts": {
+      "cascade": 9,
+      "layout": 9
+     },
+     "reconciled": true,
+     "errors": [],
+     "buckets": [
+      {
+       "seq": 4,
+       "phase": "cascade+layout+blocking scripts",
+       "class": "script-window",
+       "cascade_n": 3,
+       "layout_n": 3,
+       "memo_hits": 0,
+       "cascade_us": 158068,
+       "layout_us": 126890
+      },
+      {
+       "seq": 5,
+       "phase": "deferred scripts",
+       "class": "script-window",
+       "cascade_n": 1,
+       "layout_n": 1,
+       "memo_hits": 0,
+       "cascade_us": 63037,
+       "layout_us": 52524
+      },
+      {
+       "seq": 6,
+       "phase": "DOMContentLoaded",
+       "class": "script-window",
+       "cascade_n": 1,
+       "layout_n": 1,
+       "memo_hits": 1,
+       "cascade_us": 66865,
+       "layout_us": 0
+      },
+      {
+       "seq": 7,
+       "phase": "subframes (pre-load)",
+       "class": "loader-window",
+       "cascade_n": 1,
+       "layout_n": 1,
+       "memo_hits": 0,
+       "cascade_us": 61835,
+       "layout_us": 48505
+      },
+      {
+       "seq": 13,
+       "phase": "finish_loading: page fetches",
+       "class": "loader-window",
+       "cascade_n": 3,
+       "layout_n": 3,
+       "memo_hits": 1,
+       "cascade_us": 206864,
+       "layout_us": 108074
+      }
+     ]
+    },
+    {
+     "run": 1,
+     "status": "OK",
+     "wall_s": 13.943,
+     "counts": {
+      "cascade": 9,
+      "layout": 9
+     },
+     "reconciled": true,
+     "errors": [],
+     "buckets": [
+      {
+       "seq": 4,
+       "phase": "cascade+layout+blocking scripts",
+       "class": "script-window",
+       "cascade_n": 3,
+       "layout_n": 3,
+       "memo_hits": 0,
+       "cascade_us": 153632,
+       "layout_us": 124722
+      },
+      {
+       "seq": 5,
+       "phase": "deferred scripts",
+       "class": "script-window",
+       "cascade_n": 1,
+       "layout_n": 1,
+       "memo_hits": 0,
+       "cascade_us": 67294,
+       "layout_us": 50482
+      },
+      {
+       "seq": 6,
+       "phase": "DOMContentLoaded",
+       "class": "script-window",
+       "cascade_n": 1,
+       "layout_n": 1,
+       "memo_hits": 1,
+       "cascade_us": 61749,
+       "layout_us": 0
+      },
+      {
+       "seq": 7,
+       "phase": "subframes (pre-load)",
+       "class": "loader-window",
+       "cascade_n": 1,
+       "layout_n": 1,
+       "memo_hits": 0,
+       "cascade_us": 65985,
+       "layout_us": 48394
+      },
+      {
+       "seq": 13,
+       "phase": "finish_loading: page fetches",
+       "class": "loader-window",
+       "cascade_n": 3,
+       "layout_n": 3,
+       "memo_hits": 1,
+       "cascade_us": 203948,
+       "layout_us": 108353
+      }
+     ]
+    },
+    {
+     "run": 2,
+     "status": "OK",
+     "wall_s": 13.19,
+     "counts": {
+      "cascade": 9,
+      "layout": 9
+     },
+     "reconciled": true,
+     "errors": [],
+     "buckets": [
+      {
+       "seq": 4,
+       "phase": "cascade+layout+blocking scripts",
+       "class": "script-window",
+       "cascade_n": 3,
+       "layout_n": 3,
+       "memo_hits": 0,
+       "cascade_us": 157651,
+       "layout_us": 125613
+      },
+      {
+       "seq": 5,
+       "phase": "deferred scripts",
+       "class": "script-window",
+       "cascade_n": 1,
+       "layout_n": 1,
+       "memo_hits": 0,
+       "cascade_us": 68712,
+       "layout_us": 49955
+      },
+      {
+       "seq": 6,
+       "phase": "DOMContentLoaded",
+       "class": "script-window",
+       "cascade_n": 1,
+       "layout_n": 1,
+       "memo_hits": 0,
+       "cascade_us": 61653,
+       "layout_us": 49409
+      },
+      {
+       "seq": 7,
+       "phase": "subframes (pre-load)",
+       "class": "loader-window",
+       "cascade_n": 1,
+       "layout_n": 1,
+       "memo_hits": 0,
+       "cascade_us": 67876,
+       "layout_us": 49592
+      },
+      {
+       "seq": 13,
+       "phase": "finish_loading: page fetches",
+       "class": "loader-window",
+       "cascade_n": 3,
+       "layout_n": 3,
+       "memo_hits": 1,
+       "cascade_us": 205564,
+       "layout_us": 111418
+      }
+     ]
+    }
+   ]
+  },
+  "Alan_Turing": {
+   "url": "https://en.wikipedia.org/wiki/Alan_Turing",
+   "runs": [
+    {
+     "run": 0,
+     "status": "OK",
+     "wall_s": 5.325,
+     "counts": {
+      "cascade": 6,
+      "layout": 6
+     },
+     "reconciled": true,
+     "errors": [],
+     "buckets": [
+      {
+       "seq": 4,
+       "phase": "cascade+layout+blocking scripts",
+       "class": "script-window",
+       "cascade_n": 2,
+       "layout_n": 2,
+       "memo_hits": 0,
+       "cascade_us": 352410,
+       "layout_us": 259538
+      },
+      {
+       "seq": 5,
+       "phase": "deferred scripts",
+       "class": "script-window",
+       "cascade_n": 1,
+       "layout_n": 1,
+       "memo_hits": 0,
+       "cascade_us": 237464,
+       "layout_us": 75997
+      },
+      {
+       "seq": 11,
+       "phase": "finish_loading: dynamic scripts",
+       "class": "script-window",
+       "cascade_n": 3,
+       "layout_n": 3,
+       "memo_hits": 0,
+       "cascade_us": 716777,
+       "layout_us": 235153
+      }
+     ]
+    },
+    {
+     "run": 1,
+     "status": "OK",
+     "wall_s": 5.475,
+     "counts": {
+      "cascade": 6,
+      "layout": 6
+     },
+     "reconciled": true,
+     "errors": [],
+     "buckets": [
+      {
+       "seq": 4,
+       "phase": "cascade+layout+blocking scripts",
+       "class": "script-window",
+       "cascade_n": 2,
+       "layout_n": 2,
+       "memo_hits": 0,
+       "cascade_us": 361815,
+       "layout_us": 264345
+      },
+      {
+       "seq": 5,
+       "phase": "deferred scripts",
+       "class": "script-window",
+       "cascade_n": 1,
+       "layout_n": 1,
+       "memo_hits": 0,
+       "cascade_us": 234447,
+       "layout_us": 79443
+      },
+      {
+       "seq": 11,
+       "phase": "finish_loading: dynamic scripts",
+       "class": "script-window",
+       "cascade_n": 3,
+       "layout_n": 3,
+       "memo_hits": 0,
+       "cascade_us": 765200,
+       "layout_us": 250270
+      }
+     ]
+    },
+    {
+     "run": 2,
+     "status": "OK",
+     "wall_s": 5.578,
+     "counts": {
+      "cascade": 6,
+      "layout": 6
+     },
+     "reconciled": true,
+     "errors": [],
+     "buckets": [
+      {
+       "seq": 4,
+       "phase": "cascade+layout+blocking scripts",
+       "class": "script-window",
+       "cascade_n": 2,
+       "layout_n": 2,
+       "memo_hits": 0,
+       "cascade_us": 357076,
+       "layout_us": 274791
+      },
+      {
+       "seq": 5,
+       "phase": "deferred scripts",
+       "class": "script-window",
+       "cascade_n": 1,
+       "layout_n": 1,
+       "memo_hits": 0,
+       "cascade_us": 238034,
+       "layout_us": 78346
+      },
+      {
+       "seq": 11,
+       "phase": "finish_loading: dynamic scripts",
+       "class": "script-window",
+       "cascade_n": 3,
+       "layout_n": 3,
+       "memo_hits": 0,
+       "cascade_us": 785268,
+       "layout_us": 232820
+      }
+     ]
+    }
+   ]
+  }
+ }
+}
