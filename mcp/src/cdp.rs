@@ -202,6 +202,20 @@ impl Cdp {
         else {
             return;
         };
+        // W3.16.b.a.a: a ServiceWorker registration or an RTCPeerConnection ICE-server list is refused outright
+        // (neither can be judged per frame from here); the refusal is logged in the same form as the others.
+        if matches!(f["k"].as_str(), Some("sw" | "ice")) {
+            let what = if f["k"] == "sw" {
+                "ServiceWorker registration"
+            } else {
+                "WebRTC ICE server list"
+            };
+            eprintln!(
+                "manuk: EGRESS-DENIED (secret): the {what} ({}) is refused while a secret handle exists. Nothing was sent",
+                f["u"].as_str().unwrap_or("").chars().take(120).collect::<String>()
+            );
+            return;
+        }
         let ok = manuk_net::taint::check_egress(
             f["d"].as_str().unwrap_or(""),
             f["u"].as_str().unwrap_or(""),
@@ -366,6 +380,11 @@ window.__mkV=function(i,ok){var f=q[i];delete q[i];f&&f(ok)};
 WebSocket.prototype.send=function(d){var me=this;chk(me.url,d,function(ok){if(ok)S.call(me,d)})};
 if(window.RTCDataChannel){var RS=RTCDataChannel.prototype.send;RTCDataChannel.prototype.send=function(d){var me=this;chk('webrtc:'+me.label,d,function(ok){if(ok)RS.call(me,d)},'rtc')}}
 try{Object.defineProperty(window,'WebTransport',{value:undefined,configurable:true})}catch(e){}
+if(__SWICE__){try{var SC=window.ServiceWorkerContainer;if(SC){SC.prototype.register=function(u){E(JSON.stringify({i:0,u:String(u),d:'',k:'sw'}));return Promise.reject(new DOMException('ServiceWorker registration is refused while a secret handle exists','SecurityError'))}}}catch(e){}
+try{if(navigator.serviceWorker&&navigator.serviceWorker.getRegistrations)navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(x){x.unregister()})})}catch(e){}
+['RTCPeerConnection','webkitRTCPeerConnection'].forEach(function(nm){var C=window[nm];if(!C)return;var strip=function(c){if(c&&c.iceServers&&c.iceServers.length){E(JSON.stringify({i:0,u:JSON.stringify(c.iceServers),d:'',k:'ice'}));c=Object.assign({},c,{iceServers:[]})}return c};
+var G=function(c,o){return new C(strip(c),o)};G.prototype=C.prototype;Object.getOwnPropertyNames(C).forEach(function(k){try{if(!(k in G)||k==='generateCertificate')G[k]=C[k]}catch(e){}});window[nm]=G;
+var sc=C.prototype.setConfiguration;if(sc)C.prototype.setConfiguration=function(c){return sc.call(this,strip(c))}})}
 function mk(C,shared){var G=function(u,o){var abs=new URL(u,location.href).href,mod=o&&o.type==='module',
 src=__WG__+';'+(mod?'import('+JSON.stringify(abs)+')':'importScripts('+JSON.stringify(abs)+')'),
 w=new C(URL.createObjectURL(new Blob([src],{type:'text/javascript'})),o);
@@ -392,7 +411,9 @@ w=new O(URL.createObjectURL(new Blob([src],{type:'text/javascript'})),o);
 w.addEventListener('message',function(e){var m=e.data;if(m&&m.__mkq){e.stopImmediatePropagation();up({u:m.u,d:m.d,k:m.k},function(ok){PM.call(w,{__mkv:1,i:m.i,ok:ok})})}});return w};G.prototype=O.prototype;self.Worker=G}})()"#;
 
 fn ws_secret_guard() -> String {
-    WS_SECRET_GUARD.replace("__WG__", &json!(WORKER_SECRET_GUARD).to_string())
+    WS_SECRET_GUARD
+        .replace("__WG__", &json!(WORKER_SECRET_GUARD).to_string())
+        .replace("__SWICE__", if mutated("no-sw-ice-guard") { "0" } else { "1" })
 }
 
 const SETTLE_PROBE: &str = r#"(function(){if(window.__mk)return;var S=window.__mk={u:{},t:{},n:0,d:[]};
