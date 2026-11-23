@@ -75,6 +75,8 @@ def parse_trace(text):
             passes.append((t, "cascade", int(f[2])))
         elif kind == "layout":
             passes.append((t, "layout", int(f[2])))  # "layout 0" = pass-memo hit
+        elif kind == "reflow":
+            passes.append((t, "reflow", 0))  # forced_reflow tags the pass written just before it
     phases.sort()
     return phases, passes
 
@@ -86,17 +88,23 @@ def group(text):
     ends = [p[0] for p in phases]
     buckets = [
         {"seq": i, "phase": p[1], "class": "script-window" if p[1] in SCRIPT_WINDOWS else "loader-window",
-         "cascade_n": 0, "layout_n": 0, "memo_hits": 0, "cascade_us": 0, "layout_us": 0}
+         "cascade_n": 0, "layout_n": 0, "memo_hits": 0, "cascade_us": 0, "layout_us": 0, "forced_n": 0}
         for i, p in enumerate(phases)
     ]
     after = {"seq": len(phases), "phase": AFTER, "class": "-", "cascade_n": 0, "layout_n": 0,
-             "memo_hits": 0, "cascade_us": 0, "layout_us": 0}
-    counts = {"cascade": 0, "layout": 0}
+             "memo_hits": 0, "cascade_us": 0, "layout_us": 0, "forced_n": 0}
+    counts = {"cascade": 0, "layout": 0, "reflow": 0, "orphan_reflow": 0}
+    prev = None
     for t, kind, us in passes:
         counts[kind] += 1
+        if kind == "reflow" and prev != "layout":
+            counts["orphan_reflow"] += 1  # a tag that does not follow a layout line tags no pass
+        prev = kind
         i = bisect.bisect_left(ends, t)  # first phase whose end is >= t
         b = buckets[i] if i < len(phases) else after
-        if kind == "cascade":
+        if kind == "reflow":
+            b["forced_n"] += 1
+        elif kind == "cascade":
             b["cascade_n"] += 1
             b["cascade_us"] += us
         else:
@@ -105,7 +113,7 @@ def group(text):
             if us == 0:
                 b["memo_hits"] += 1
     out = [b for b in buckets if b["cascade_n"] or b["layout_n"]]
-    if after["cascade_n"] or after["layout_n"]:
+    if after["cascade_n"] or after["layout_n"] or after["forced_n"]:
         out.append(after)
     return out, counts
 
@@ -121,6 +129,41 @@ def reconcile(buckets, counts):
         errs.append(f"layout: buckets {l_tot} != trace lines {counts['layout']}")
     if counts["cascade"] != counts["layout"]:
         errs.append(f"trace has {counts['cascade']} cascade but {counts['layout']} layout lines")
+    f_tot = sum(b["forced_n"] for b in buckets)
+    if f_tot != counts["reflow"]:
+        errs.append(f"forced: buckets {f_tot} != trace reflow lines {counts['reflow']}")
+    if counts["orphan_reflow"]:
+        errs.append(f"{counts['orphan_reflow']} reflow tag(s) do not follow a layout line")
+    if counts["reflow"] > counts["cascade"]:
+        errs.append(f"{counts['reflow']} forced tags for {counts['cascade']} passes")
+    # forced + mutation == passes, per bucket and in total (mutation = passes - forced, never negative)
+    for b in buckets:
+        if b["forced_n"] > b["cascade_n"]:
+            errs.append(f"{b['phase']}: forced {b['forced_n']} > passes {b['cascade_n']}")
+    if sum(b["forced_n"] + (b["cascade_n"] - b["forced_n"]) for b in buckets) != counts["cascade"]:
+        errs.append("forced + mutation != cascade lines")
+    return errs
+
+
+FIXTURES = [("forced-read.html", 1), ("no-read.html", 0)]
+
+
+def fixture_check():
+    """The known-geometry fixtures: forced-read.html reads geometry once in DOMContentLoaded (exactly 1
+    forced pass), no-read.html does the same mutation without the read (0). Returns a list of errors."""
+    errs = []
+    for name, want in FIXTURES:
+        path = os.path.join(ROOT, "docs", "sprint", "perf1-fixtures", name)
+        tf = tempfile.NamedTemporaryFile(prefix="perf1-fx-", suffix=".tsv", delete=False)
+        tf.close()
+        subprocess.run([BINARY, "file://" + path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                       env=dict(os.environ, MANUK_NET_TRACE=tf.name), timeout=60)
+        text = open(tf.name, encoding="utf-8", errors="replace").read()
+        os.unlink(tf.name)
+        b, c = group(text)
+        errs += [f"{name}: {e}" for e in reconcile(b, c)]
+        if c["reflow"] != want:
+            errs.append(f"{name}: {c['reflow']} forced passes, fixture has exactly {want} geometry read(s)")
     return errs
 
 
@@ -172,7 +215,22 @@ def self_test():
     # Mutant: layout lines ignored by the grouping -> layout total is 0 vs trace count.
     no_layout = [dict(x, layout_n=0) for x in b]
     assert reconcile(no_layout, c), "missing layout lines reconciled: the gate cannot go red"
-    print("self-test OK: grouping, reconciliation, and two red mutants")
+    # Forced/mutation split: a reflow tag follows the layout line of the pass it tags.
+    tagged = good.replace("420\tlayout\t0", "420\tlayout\t0\n421\treflow\tforced")
+    b2, c2 = group(tagged)
+    assert reconcile(b2, c2) == [] and c2["reflow"] == 1 and b2[0]["forced_n"] == 1, (b2, c2)
+    # Mutant: a tag written for no pass (after a cascade line, not a layout line) must go red.
+    stray = good.replace("380\tcascade\t40000", "380\tcascade\t40000\n381\treflow\tforced")
+    b3, c3 = group(stray)
+    assert reconcile(b3, c3), "a reflow tag that follows no layout line reconciled"
+    # Mutant: a tag for every pass (3 passes, 4 tags) must go red.
+    every = tagged + "\n711\treflow\tforced\n712\treflow\tforced\n713\treflow\tforced"
+    b4, c4 = group(every)
+    assert reconcile(b4, c4), "more forced tags than passes reconciled"
+    # Mutant: bucket loses its forced count -> disagrees with the trace's reflow lines.
+    lost = [dict(x, forced_n=0) for x in b2]
+    assert reconcile(lost, c2), "lost forced counts reconciled"
+    print("self-test OK: grouping, reconciliation, forced split, and five red mutants")
     return 0
 
 
@@ -182,10 +240,15 @@ def main():
     ap.add_argument("--timeout", type=int, default=180)
     ap.add_argument("--out", default=os.path.join(ROOT, "docs", "sprint", "perf1-passes"))
     ap.add_argument("--self-test", action="store_true")
+    ap.add_argument("--fixture-check", action="store_true", help="run the known-geometry-read fixtures (needs the binary)")
     ap.add_argument("--from-json", help="re-render the table from a saved passes.json (no browser run)")
     a = ap.parse_args()
     if a.self_test:
         return self_test()
+    if a.fixture_check:
+        e = fixture_check()
+        print("fixture-check", "OK" if not e else f"RED: {e}")
+        return 1 if e else 0
     if a.from_json:
         with open(a.from_json) as fh:
             print(render(json.load(fh)))
@@ -200,6 +263,10 @@ def main():
     result = {"chrome_ver": pin, "binary": os.path.relpath(BINARY, ROOT), "runs": a.runs, "arm_env": arm,
               "urls": {}}
     bad = []
+    fx = fixture_check()
+    if fx:
+        bad.append(("fixtures", 0, fx))
+    print("fixture-check", "OK" if not fx else f"RED: {fx}", file=sys.stderr)
     for label, url in URLS:
         result["urls"][label] = {"url": url, "runs": []}
         for r in range(a.runs):
@@ -215,7 +282,7 @@ def main():
                 "reconciled": not errs, "errors": errs, "buckets": buckets,
             })
             print(f"{label} run{r}: {status} wall={wall:.2f}s cascade={counts['cascade']} "
-                  f"layout={counts['layout']} {'OK' if not errs else 'MISMATCH ' + '; '.join(errs)}",
+                  f"layout={counts['layout']} forced={counts['reflow']} mutation={counts['cascade'] - counts['reflow']} {'OK' if not errs else 'MISMATCH ' + '; '.join(errs)}",
                   file=sys.stderr)
     with open(os.path.join(a.out, "passes.json"), "w") as fh:
         json.dump(result, fh, indent=1)
@@ -256,11 +323,11 @@ def render(result):
                 order.setdefault(key, (len(order) if key not in order else order[key]))
         keys.sort(key=lambda key: min((k[key]["seq"] for k in keyed if key in k), default=0))
         hdr = "| phase (trace order) | window | " + " | ".join(f"passes r{r['run']}" for r in runs) + \
-              " | total | ms per pass (cascade+layout) | memo hits |"
-        lines += [hdr, "|" + "---|" * (2 + len(runs) + 3)]
+              " | total | forced | mutation | ms per pass (cascade+layout) | memo hits |"
+        lines += [hdr, "|" + "---|" * (2 + len(runs) + 5)]
         for key in keys:
             name = key[0]
-            per, tot_n, tot_us, memo, win = [], 0, 0, 0, "-"
+            per, tot_n, tot_us, memo, win, forced = [], 0, 0, 0, "-", 0
             for k in keyed:
                 b = k.get(key)
                 per.append(str(b["cascade_n"] if b else 0))
@@ -268,16 +335,18 @@ def render(result):
                     tot_n += b["cascade_n"]
                     tot_us += b["cascade_us"] + b["layout_us"]
                     memo += b["memo_hits"]
+                    forced += b["forced_n"]
                     win = b["class"]
             if not tot_n:
                 continue
             ms = f"{tot_us / 1000 / tot_n:.1f}"
             label_name = name if key[1] == 0 else f"{name} (#{key[1] + 1})"
-            lines.append(f"| {label_name} | {win} | " + " | ".join(per) + f" | {tot_n} | {ms} | {memo} |")
+            lines.append(f"| {label_name} | {win} | " + " | ".join(per) + f" | {tot_n} | {forced} | {tot_n - forced} | {ms} | {memo} |")
         cells = [str(sum(b["cascade_n"] for b in r["buckets"])) for r in runs]
-        lines.append("| **pass total** | | " + " | ".join(cells) + f" | {sum(int(c) for c in cells)} | | |")
-        lines.append("| trace `cascade` lines | | " + " | ".join(str(r["counts"]["cascade"]) for r in runs) + " | | | |")
-        lines.append("| trace `layout` lines | | " + " | ".join(str(r["counts"]["layout"]) for r in runs) + " | | | |")
+        lines.append("| **pass total** | | " + " | ".join(cells) + f" | {sum(int(c) for c in cells)} | {sum(r['counts']['reflow'] for r in runs)} | {sum(int(c) for c in cells) - sum(r['counts']['reflow'] for r in runs)} | | |")
+        lines.append("| trace `cascade` lines | | " + " | ".join(str(r["counts"]["cascade"]) for r in runs) + " | | | | | |")
+        lines.append("| trace `layout` lines | | " + " | ".join(str(r["counts"]["layout"]) for r in runs) + " | | | | | |")
+        lines.append("| trace `reflow` (forced) lines | | " + " | ".join(str(r["counts"]["reflow"]) for r in runs) + " | | | | | |")
         lines.append("")
     return "\n".join(lines)
 

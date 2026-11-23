@@ -2630,6 +2630,12 @@ unsafe fn forced_reflow(ctx: *mut std::ffi::c_void, dom: *mut Dom) {
     let t_layout = std::time::Instant::now();
     let mut root_box;
     (c.styles, root_box) = restyle_and_layout(dom, &sheets, fonts, c.viewport_width, &c.images);
+    // PERF.1.2.a.a.a: tags the cascade+layout pair just written as a FORCED reflow (a script geometry read),
+    // as opposed to a restyle after a mutation. Written right after the layout line, so the trace
+    // reader pairs it with the pass before it.
+    if manuk_net::nettrace::enabled() {
+        manuk_net::nettrace::emit("reflow", "forced");
+    }
 
     // ⚠⚠⚠ **LAYOUT STARTS AT ZERO EVERY TIME, SO THIS TREE IS UNSCROLLED AND UNSTUCK.** Only `Page`
     // knows what has been scrolled, so a forced reflow used to answer a mid-script geometry read
