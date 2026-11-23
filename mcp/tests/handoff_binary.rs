@@ -16,6 +16,9 @@ struct Client {
 
 impl Client {
     fn start(script: Option<&std::path::Path>) -> Client {
+        Client::start_env(script, None)
+    }
+    fn start_env(script: Option<&std::path::Path>, sock: Option<&std::path::Path>) -> Client {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_manuk-mcp"));
         cmd.stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -23,6 +26,10 @@ impl Client {
         match script {
             Some(p) => cmd.env("MANUK_HANDOFF_SCRIPT", p),
             None => cmd.env_remove("MANUK_HANDOFF_SCRIPT"),
+        };
+        match sock {
+            Some(p) => cmd.env("MANUK_HANDOFF_SOCKET", p),
+            None => cmd.env_remove("MANUK_HANDOFF_SOCKET"),
         };
         let mut child = cmd.spawn().expect("spawn manuk-mcp");
         let tx = child.stdin.take().unwrap();
@@ -119,4 +126,78 @@ fn without_the_env_handoff_still_errors() {
     c.tool("navigate", json!({"url": url()}));
     let (err, r) = c.tool("handoff", json!({"reason": "x"}));
     assert!(err && r.contains("no human surface"), "{r}");
+}
+
+/// R3.3.a.a: a shell-side surface stub over a unix socket. The shell is a separate process from the
+/// stdio server; the human's actions arrive as `eval` lines, Resume as `resume`.
+#[cfg(unix)]
+mod socket {
+    use super::*;
+    use std::os::unix::net::UnixListener;
+
+    fn sock_path(n: &str) -> std::path::PathBuf {
+        let d = std::env::temp_dir().join(format!("manuk-hs-{}-{n}", std::process::id()));
+        let _ = std::fs::remove_file(&d);
+        d
+    }
+
+    /// `act`: what the stub human does after the handoff arrives (None = stays silent).
+    fn stub(path: &std::path::Path, act: Option<&'static str>) -> std::thread::JoinHandle<String> {
+        let l = UnixListener::bind(path).unwrap();
+        std::thread::spawn(move || {
+            let (s, _) = l.accept().unwrap();
+            let mut rd = BufReader::new(s.try_clone().unwrap());
+            let mut line = String::new();
+            rd.read_line(&mut line).unwrap();
+            let mut w = s;
+            if let Some(js) = act {
+                writeln!(w, "{}", json!({"type": "eval", "js": js})).unwrap();
+                writeln!(w, "{}", json!({"type": "resume"})).unwrap();
+            }
+            std::thread::sleep(std::time::Duration::from_millis(1500));
+            line
+        })
+    }
+
+    #[test]
+    fn handoff_forwards_to_a_shell_over_the_socket() {
+        let p = sock_path("a");
+        let h = stub(&p, Some("signin()"));
+        let mut c = Client::start_env(None, Some(&p));
+        c.tool("navigate", json!({"url": url()}));
+        let (err, r) = c.tool("handoff", json!({"reason": "log in", "timeout_ms": 5000}));
+        assert!(!err, "{r}");
+        assert!(r.contains("resumed"), "{r}");
+        assert!(
+            r.contains("Welcome back, Pat"),
+            "diff must carry the human's change: {r}"
+        );
+        let got = h.join().unwrap();
+        assert!(
+            got.contains("\"reason\":\"log in\"") && got.contains("\"type\":\"handoff\""),
+            "{got}"
+        );
+    }
+
+    #[test]
+    fn a_silent_shell_times_out() {
+        let p = sock_path("b");
+        let _h = stub(&p, None);
+        let mut c = Client::start_env(None, Some(&p));
+        c.tool("navigate", json!({"url": url()}));
+        let (_, r) = c.tool("handoff", json!({"reason": "x", "timeout_ms": 200}));
+        assert!(r.contains("TIMED OUT after 200 ms"), "{r}");
+    }
+
+    #[test]
+    fn no_shell_listening_fails_loudly_and_never_pretends() {
+        let p = sock_path("c"); // nothing bound
+        let out = Command::new(env!("CARGO_BIN_EXE_manuk-mcp"))
+            .env("MANUK_HANDOFF_SOCKET", &p)
+            .stdin(Stdio::null())
+            .output()
+            .unwrap();
+        assert!(!out.status.success());
+        assert!(String::from_utf8_lossy(&out.stderr).contains("no shell listening"));
+    }
 }

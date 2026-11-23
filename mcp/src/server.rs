@@ -223,7 +223,10 @@ impl ServerHandler for ManukMcp {
     #[allow(deprecated)]
     fn get_info(&self) -> ServerConfig {
         let mut info = rmcp::model::Implementation::from_build_env();
-        info.title = Some(format!("backend={}", BACKEND_NAME.get().unwrap_or(&"engine")));
+        info.title = Some(format!(
+            "backend={}",
+            BACKEND_NAME.get().unwrap_or(&"engine")
+        ));
         ServerConfig::new(
             ServerCapabilities::builder()
                 .enable_tools()
@@ -325,7 +328,68 @@ impl ServerHandler for ManukMcp {
 /// `handoff` errors.
 static HANDOFF_SCRIPT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
 
+/// R3.3.a.a: the connection to a running shell's human surface (`MANUK_HANDOFF_SOCKET=<unix socket>`),
+/// opened at startup BEFORE confinement (a later connect() would be a filesystem write). If the shell is
+/// not listening, startup fails loudly rather than letting `handoff` pretend. Protocol, one JSON object
+/// per line: we send `{"type":"handoff","reason","timeout_ms","url"}`; the shell answers any number of
+/// `{"type":"eval","js"}` (the human's input, applied to the page we hold) then `{"type":"resume"}`.
+#[cfg(unix)]
+static HANDOFF_SOCKET: std::sync::Mutex<Option<std::os::unix::net::UnixStream>> =
+    std::sync::Mutex::new(None);
+
+#[cfg(unix)]
+struct SocketHuman(std::os::unix::net::UnixStream);
+
+#[cfg(unix)]
+#[async_trait::async_trait(?Send)]
+impl manuk_agent::HumanSurface for SocketHuman {
+    async fn turn(
+        &mut self,
+        b: &mut AgentBrowser,
+        req: &manuk_agent::HandoffRequest,
+    ) -> manuk_agent::HumanTurn {
+        use std::io::{BufRead, Write};
+        let msg = serde_json::json!({"type": "handoff", "reason": req.reason,
+            "timeout_ms": req.timeout_ms, "url": b.current_url()});
+        if writeln!(self.0, "{msg}").is_err() {
+            return manuk_agent::HumanTurn::TimedOut; // shell went away
+        }
+        let deadline = std::time::Instant::now() + std::time::Duration::from_millis(req.timeout_ms);
+        let mut rd = std::io::BufReader::new(match self.0.try_clone() {
+            Ok(s) => s,
+            Err(_) => return manuk_agent::HumanTurn::TimedOut,
+        });
+        loop {
+            let left = deadline.saturating_duration_since(std::time::Instant::now());
+            if left.is_zero() || self.0.set_read_timeout(Some(left)).is_err() {
+                return manuk_agent::HumanTurn::TimedOut;
+            }
+            let mut line = String::new();
+            match rd.read_line(&mut line) {
+                Ok(0) | Err(_) => return manuk_agent::HumanTurn::TimedOut,
+                Ok(_) => {}
+            }
+            let v: serde_json::Value = serde_json::from_str(&line).unwrap_or_default();
+            match v["type"].as_str() {
+                Some("resume") => return manuk_agent::HumanTurn::Resumed,
+                Some("eval") => {
+                    if let Some(js) = v["js"].as_str() {
+                        let _ = b.eval_value(js).await;
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
 pub fn load_handoff_script() -> Result<()> {
+    #[cfg(unix)]
+    if let Some(p) = std::env::var_os("MANUK_HANDOFF_SOCKET") {
+        let s = std::os::unix::net::UnixStream::connect(&p)
+            .map_err(|e| anyhow::anyhow!("MANUK_HANDOFF_SOCKET {p:?}: no shell listening: {e}"))?;
+        *HANDOFF_SOCKET.lock().unwrap() = Some(s);
+    }
     if let Some(p) = std::env::var_os("MANUK_HANDOFF_SCRIPT") {
         let s = std::fs::read_to_string(&p)
             .map_err(|e| anyhow::anyhow!("MANUK_HANDOFF_SCRIPT {p:?}: {e}"))?;
@@ -365,6 +429,15 @@ pub fn new_agent_browser(width: u32, height: u32) -> AgentBrowser {
     b.set_init_script(crate::cdp::webmcp_bridge());
     if let Some(js) = HANDOFF_SCRIPT.get() {
         b.set_human(Box::new(ScriptedHuman(js.clone())));
+    }
+    #[cfg(unix)]
+    if let Some(s) = HANDOFF_SOCKET
+        .lock()
+        .unwrap()
+        .as_ref()
+        .and_then(|s| s.try_clone().ok())
+    {
+        b.set_human(Box::new(SocketHuman(s)));
     }
     b
 }
