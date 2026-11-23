@@ -25,6 +25,10 @@ const NOTE_VALUE_MAX: usize = 500;
 fn mutated_resume_salt() -> bool {
     std::env::var("MANUK_MUTATE").is_ok_and(|v| v == "resume-salt-zero")
 }
+/// Test-only mutant (`MANUK_MUTATE=commit-no-render`): `commit` releases held requests without showing them.
+fn mutated_commit_render() -> bool {
+    std::env::var("MANUK_MUTATE").is_ok_and(|v| v == "commit-no-render")
+}
 fn mutated_fork_salt() -> bool {
     std::env::var("MANUK_MUTATE").is_ok_and(|v| v == "fork-salt-parent")
 }
@@ -430,9 +434,34 @@ impl<B: Backend> Hub<B> {
         format!("checkpoint {cid} [{tag}] at {id}:{n} ({url}); restore/fork replays the log into a fresh page, so it costs one page load. {note}\npage: {id}:{n}")
     }
 
-    /// `commit`: lift the branch's write-fence and send what it held, once each.
-    async fn commit(&mut self, id: &str) -> String {
+    /// W6.S1.b: what the human approves. Method, origin, path and body size of each held request.
+    fn render_held(held: &[manuk_net::ledger::Held]) -> String {
+        held.iter()
+            .map(|h| {
+                let origin = url::Url::parse(&h.what.url)
+                    .map(|u| u.origin().ascii_serialization())
+                    .unwrap_or_else(|_| h.what.url.clone());
+                let path = h.what.short();
+                let path = path.split_once(' ').map_or(path.as_str(), |x| x.1);
+                let note = if h.replayable { "" } else { " (cannot be replayed; will be dropped)" };
+                format!("  {} {origin} {path} body={} bytes{note}", h.what.method, h.body.len())
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    /// `commit`: lift the branch's write-fence and send what it held, once each. Held requests are
+    /// shown first; nothing is sent until the call is repeated with `confirm=true`.
+    async fn commit(&mut self, id: &str, confirmed: bool) -> String {
         let page = self.pages.get_mut(id).unwrap();
+        if !confirmed && !page.held.is_empty() && !mutated_commit_render() {
+            return format!(
+                "CONFIRM REQUIRED (commit): this branch holds {} request(s) that have NOT been sent:\n{}\nrepeat commit with confirm=true to send them (once each), or discard the page.\npage: {id}:{}",
+                page.held.len(),
+                Self::render_held(&page.held),
+                page.log.len()
+            );
+        }
         let held = std::mem::take(&mut page.held);
         page.fenced = false;
         let (mut sent, mut dropped) = (Vec::new(), Vec::new());
@@ -667,7 +696,11 @@ impl<B: Backend> Hub<B> {
             return Ok(Output::Text(self.checkpoint(&id)));
         }
         if tool == "commit" {
-            return Ok(Output::Text(self.commit(&id).await));
+            return Ok(Output::Text(self.commit(
+                &id,
+                args.get("confirm").and_then(Value::as_bool).unwrap_or(false),
+            )
+            .await));
         }
         let logged = !UNLOGGED.contains(&tool);
         let a = strip_page(args);

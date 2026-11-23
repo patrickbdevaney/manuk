@@ -114,7 +114,7 @@ pub fn tools() -> Vec<Tool> {
                     json!({"type": "boolean", "description": "full effect diff"}),
                 );
             }
-            if matches!(n, "navigate" | "act" | "type" | "fill_form") {
+            if matches!(n, "navigate" | "act" | "type" | "fill_form" | "commit") {
                 p.insert(
                     "confirm".into(),
                     json!({"type": "boolean", "description": "approved CONFIRM REQUIRED"}),
@@ -172,7 +172,7 @@ pub fn tools() -> Vec<Tool> {
         t("restore", "Rewind to a checkpoint in a fresh default page.", schema(json!({"checkpoint": {"type": "string"}}), &["checkpoint"])),
         t("fork", "Like restore, but a new page; the current one stays.", schema(json!({"checkpoint": {"type": "string"}}), &["checkpoint"])),
         t("note", "Task note kept across navigate/restore/fork. No key lists; empty value deletes.", schema(json!({"key": {"type": "string"}, "value": {"type": "string"}}), &[])),
-        t("commit", "Send this fork's held POST/PUT/DELETE requests.", schema(json!({}), &[])),
+        t("commit", "Show this fork's held POST/PUT/DELETE requests (method, origin, body size); send them with confirm=true.", schema(json!({}), &[])),
         t("screenshot", "PNG of the viewport (opt-in; expensive).", schema(json!({"handle": {"type": "string"}}), &[])),
     ]
 }

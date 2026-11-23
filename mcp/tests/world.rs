@@ -304,7 +304,10 @@ fn forked_branch_holds_post_and_beacon_until_commit_which_sends_exactly_once() {
     let (eff, p) = click(&mut c, &p, "Beacon");
     assert!(eff.contains("held=[POST /order, POST /beacon]"), "{eff}");
     assert_eq!(state(&base), "add=0 order=0 beacon=0");
-    let (e, cm) = c.tool("commit", json!({"page": p}));
+    let (_, ask) = c.tool("commit", json!({"page": p}));
+    assert!(ask.contains("CONFIRM REQUIRED"), "{ask}");
+    assert_eq!(state(&base), "add=0 order=0 beacon=0", "unconfirmed commit sent something");
+    let (e, cm) = c.tool("commit", json!({"page": p, "confirm": true}));
     assert!(!e && cm.contains("sent 2"), "{cm}");
     assert_eq!(
         state(&base),
