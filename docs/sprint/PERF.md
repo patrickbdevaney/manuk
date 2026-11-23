@@ -855,3 +855,8 @@ Which passes are forced reflows that are redone, and which are real script mutat
 single-machine medians of a few lines, not a benchmark, and do not compare with PERF.md's earlier sweeps (the machine's speed varied
 between sweeps). Gate self-test: `python3 -I scripts/perf1-passes.py --self-test` is OK, and it is red on two doctored tables (one
 pass lost, one layout total missing).
+
+## PERF.1.2 final re-measure at HEAD ccb171a4 (chrome_ver=145.0.7632.116; manuk only)
+
+`perf1-profile.py --runs 3 --engines manuk`, raw rows `docs/sprint/perf1-pf12c/runs.jsonl/runs.jsonl`; `perf1-settle-gate.py` Σ settle = **14.61 s** (bar <= 11): **not met**, node stays BLOCKED.
+Top URLs (median s): puentedemando.com 3.43, Rust 2.21, Alan_Turing 1.66, comix.to 1.50, Python 1.50, mobile.bg 1.04. What is left is JS evaluation inside script rounds (PERF.1.4 territory), not redundant cascade/layout.

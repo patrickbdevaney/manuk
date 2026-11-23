@@ -1,0 +1,28 @@
+0	epoch	1795459058885147
+54237	dns	client.dkitrxmdwoqruvsi.net	54203
+370115	connect	client.dkitrxmdwoqruvsi.net	370089
+677101	req	https://client.dkitrxmdwoqruvsi.net/	0	677097	404	HTTP/2.0	-	GET
+677335	body	https://client.dkitrxmdwoqruvsi.net/	11010	404
+677638	phase	html parse	230
+677670	phase	external scripts	20
+677690	phase	module graph prefetch	10
+677700	phase	blocking stylesheets	1
+677955	cascade	142
+678125	layout	156
+696328	cascade	110
+696453	layout	102
+696494	phase	cascade+layout+blocking scripts	18783
+696701	phase	deferred scripts	196
+697650	phase	DOMContentLoaded	937
+698072	phase	subframes (pre-load)	406
+698099	phase	initial images+masks	9
+715884	phase	load event	17773
+716115	phase	finish_loading: external CSS	195
+716264	phase	finish_loading: dynamic scripts	132
+716281	phase	finish_loading: subframes	6
+716404	phase	finish_loading: page fetches	113
+716423	phase	finish_loading: images	8
+716433	phase	finish_loading: icon masks	0
+716443	phase	finish_loading: background images	1
+716786	mark	navigate_returned
+716860	mark	a11y_built
