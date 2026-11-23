@@ -1,0 +1,36 @@
+arm	task	run	hand_label	evidence
+cdp-layer+pwfmt-v7r	dashdish-4	1	refusal-seen	last success CALL 73; clause (b) fired: results of CALLs 76, 77, 79 start with no change / url: unchanged (newline form)
+cdp-layer+pwfmt-v7r	dashdish-5	2	stop-by-choice	no clause fired after last success CALL 28
+cdp-layer+pwfmt-v7r	fly-unified-4	1	stop-by-choice	no clause fired after last success CALL 18 (UNREACHABLE is a success)
+cdp-layer+pwfmt-v7r	fly-unified-5	2	stop-by-choice	no clause fired after last success CALL 13
+cdp-layer+pwfmt-v7r	fly-unified-9	1	refusal-seen	last success CALL 27; clause (b) fired: results of CALLs 28 and 30 start with no change / url: unchanged
+cdp-layer+pwfmt-v7r	gocalendar-7	1	stop-by-choice	no clause fired after last success CALL 10; only one STALE-class result (CALL 12 is unknown handles) so (c) not met
+cdp-layer+pwfmt-v7r	gomail-3	2	stop-by-choice	no clause fired after last success CALL 10
+cdp-layer+pwfmt-v7r	networkin-6	1	stop-by-choice	no clause fired after last success CALL 23
+cdp-layer+pwfmt-v7r	opendining-4	1	stop-by-choice	no clause fired after last success CALL 36 (OCCLUDED is a success); only one STALE result (CALL 37) so (c) not met
+cdp-layer+pwfmt-v7r	staynb-4	1	stop-by-choice	no clause fired after last success CALL 45; (g) text 'typed fill didn't register' but only fill_form was used, no type call
+cdp-layer+pwfmt-v7r	staynb-8	1	stop-by-choice	no clause fired after last success CALL 19
+cdp-layer+pwfmt-v7r	topwork-3	1	stop-by-choice	no clause fired after last success CALL 33
+cdp-layer+pwfmt-v7r	dashdish-4	2	stop-by-choice	no clause fired after last success CALL 51 (only one no-change result after, CALL 53; clause b needs two)
+cdp-layer+pwfmt-v7r	fly-unified-2	1	stop-by-choice	no clause fired after last success CALL 35
+cdp-layer+pwfmt-v7r	fly-unified-4	2	stop-by-choice	no clause fired after last success CALL 13
+cdp-layer+pwfmt-v7r	fly-unified-6	1	stop-by-choice	no clause fired after last success CALL 35
+cdp-layer+pwfmt-v7r	fly-unified-9	2	stop-by-choice	no clause fired after last success CALL 22
+cdp-layer+pwfmt-v7r	gocalendar-7	2	stop-by-choice	no clause fired after last success CALL 7
+cdp-layer+pwfmt-v7r	networkin-10	1	stop-by-choice	no clause fired after last success CALL 2
+cdp-layer+pwfmt-v7r	networkin-9	1	stop-by-choice	no clause fired after last success CALL 22
+cdp-layer+pwfmt-v7r	opendining-5	1	stop-by-choice	no clause fired after last success CALL 38
+cdp-layer+pwfmt-v7r	staynb-5	1	stop-by-choice	no clause fired after last success CALL 29
+cdp-layer+pwfmt-v7r	topwork-1	1	stop-by-choice	no clause fired after last success CALL 26
+cdp-layer+pwfmt-v7r	topwork-4	1	stop-by-choice	no clause fired after last success CALL 35
+cdp-layer+pwfmt-v7r	dashdish-5	1	stop-by-choice	last success CALL 31; no clause fired after last success CALL 31 (only a screenshot follows); no typing calls so (g),(h) not met
+cdp-layer+pwfmt-v7r	fly-unified-2	2	stop-by-choice	last success CALL 28 (type, read-only result is a success) is the final call; no clause fired after last success CALL 28; no non-final assistant text for (g)
+cdp-layer+pwfmt-v7r	fly-unified-5	1	stop-by-choice	last success CALL 10 (UNREACHABLE is a success); no clause fired after last success CALL 10; typing results not all failures
+cdp-layer+pwfmt-v7r	fly-unified-6	2	stop-by-choice	last success CALL 11 (type, read-only); no clause fired after last success CALL 11; no non-final assistant text for (g)
+cdp-layer+pwfmt-v7r	gocalendar-1	1	stop-by-choice	last success CALL 48; only one no change/url unchanged result after it (CALL 50 key) so (b) not met; no other clause fired
+cdp-layer+pwfmt-v7r	gomail-3	1	stop-by-choice	last success CALL 10 (type ok); no clause fired after last success CALL 10
+cdp-layer+pwfmt-v7r	networkin-3	1	stop-by-choice	last success CALL 10 (type ok); no clause fired after last success CALL 10; non-final text is only about a modal
+cdp-layer+pwfmt-v7r	opendining-10	1	stop-by-choice	last success CALL 29; no clause fired after last success CALL 29; no typing calls
+cdp-layer+pwfmt-v7r	opendining-8	1	stop-by-choice	last success CALL 17 (final call); no clause fired after last success CALL 17; no non-final assistant text for (g)
+cdp-layer+pwfmt-v7r	staynb-6	1	stop-by-choice	last success CALL 35; no clause fired after last success CALL 35; no type/browser_type call and no (g) phrases in non-final texts
+cdp-layer+pwfmt-v7r	topwork-2	1	stop-by-choice	last success CALL 35; no clause fired after last success CALL 35; only the final answer has (g)-type wording and is excluded; typing results not all failures
