@@ -3503,6 +3503,7 @@ dependencies = [
  "manuk-html",
  "manuk-js",
  "manuk-layout",
+ "manuk-mcp",
  "manuk-media",
  "manuk-net",
  "manuk-page",

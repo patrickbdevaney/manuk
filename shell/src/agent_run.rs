@@ -11,6 +11,8 @@
 //! the human UI and remembers what the agent last saw; Resume re-adopts it and hands the agent an
 //! effect diff of what the human changed, fenced as untrusted, before its next observation.
 
+#![allow(dead_code)] // W6.H1: the shell now drives `hub_run::HubRun`; this TaskRun path stays as the A/B baseline until the measurement lands
+
 use manuk_agent::{
     AgentBrowser, AgentConfig, Begun, Handoff, InferenceBackend, PendingStep, StepStatus,
     TabController, TaskRun,
@@ -63,16 +65,30 @@ pub struct AgentRun {
 pub struct FixtureBackend {
     left: std::sync::atomic::AtomicUsize,
     think: std::time::Duration,
+    /// W6.H1: reply in the Hub's `{"tool","args"}` grammar instead of `TaskRun`'s `{"action"}`.
+    hub: bool,
+    /// W6.H1: the first hub reply is a `handoff` call (the live gate for the GUI human turn).
+    handoff_first: std::sync::atomic::AtomicBool,
 }
 
 impl FixtureBackend {
     /// Parse `"<steps>:<ms>"`.
     pub fn from_spec(spec: &str) -> Option<Self> {
+        let (spec, handoff) = match spec.strip_suffix(":handoff") {
+            Some(s) => (s, true),
+            None => (spec, false),
+        };
         let (n, ms) = spec.split_once(':')?;
         Some(FixtureBackend {
+            handoff_first: std::sync::atomic::AtomicBool::new(handoff),
             left: std::sync::atomic::AtomicUsize::new(n.parse().ok()?),
             think: std::time::Duration::from_millis(ms.parse().ok()?),
+            hub: false,
         })
+    }
+    pub fn for_hub(mut self) -> Self {
+        self.hub = true;
+        self
     }
     pub fn steps(&self) -> usize {
         self.left.load(std::sync::atomic::Ordering::SeqCst)
@@ -84,6 +100,16 @@ impl manuk_agent::InferenceBackend for FixtureBackend {
     async fn complete(&self, _m: &[manuk_agent::Message]) -> anyhow::Result<String> {
         tokio::time::sleep(self.think).await;
         let left = self.left.load(std::sync::atomic::Ordering::SeqCst);
+        if self.hub {
+            if self.handoff_first.swap(false, std::sync::atomic::Ordering::SeqCst) {
+                return Ok(r#"{"tool":"handoff","args":{"reason":"fixture needs you","timeout_ms":60000}}"#.into());
+            }
+            if left == 0 {
+                return Ok(r#"{"tool":"finish","args":{"answer":"fixture done"}}"#.into());
+            }
+            self.left.store(left - 1, std::sync::atomic::Ordering::SeqCst);
+            return Ok(r#"{"tool":"scroll","args":{"dy":120}}"#.into());
+        }
         if left == 0 {
             return Ok(r#"{"action":"finish","answer":"fixture done"}"#.into());
         }
@@ -378,11 +404,11 @@ pub fn effect_diff(before: &str, after: &str) -> String {
     }
 }
 
-fn first_line(s: &str) -> &str {
+pub(crate) fn first_line(s: &str) -> &str {
     s.lines().next().unwrap_or("")
 }
 
-fn clip(s: &str, n: usize) -> String {
+pub(crate) fn clip(s: &str, n: usize) -> String {
     if s.chars().count() <= n {
         s.to_string()
     } else {

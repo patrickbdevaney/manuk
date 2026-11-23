@@ -41,6 +41,8 @@ manuk-compositor.workspace = true
 manuk-page.workspace = true
 manuk-agent.workspace = true
 manuk-consent.workspace = true
+# W6.H1: the shell's agent drives the same Hub (tool surface, act log, handoff) an MCP client does.
+manuk-mcp = { path = "../mcp" }
 # The decoder lives HERE and nowhere else in the tree. `manuk-page` deliberately takes raw RGBA
 # rather than naming a media type, so the ~25 gate binaries that link it never compile openh264's
 # C — the isolation tick 236 established. The shell is a single binary and the one place a real

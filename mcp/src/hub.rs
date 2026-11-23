@@ -184,6 +184,19 @@ impl<B: Backend> Hub<B> {
         }
     }
 
+    /// W6.H1: run `f` on the default page's backend (the page a call without `page` acts on). The GUI
+    /// shell uses it between calls to release the live page to its human; `None` before any call.
+    pub fn with_default_backend<R>(&mut self, f: impl FnOnce(&mut B) -> R) -> Option<R> {
+        let id = self.default.clone()?;
+        let p = self.pages.get_mut(&id)?;
+        Some(f(p.s.backend_mut()))
+    }
+
+    /// W6.H1: the default page's backend, read-only (the shell paints the agent's page from it).
+    pub fn default_backend(&self) -> Option<&B> {
+        Some(self.pages.get(self.default.as_ref()?)?.s.backend())
+    }
+
     /// W3.9: origin sets and confirm kinds applied to every page this hub makes.
     pub fn with_grants(mut self, g: crate::policy::Grants) -> Self {
         // Before any backend is made: Chrome decides at launch whether to intercept requests.

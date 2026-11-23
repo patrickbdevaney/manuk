@@ -21,7 +21,8 @@ use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::keyboard::{Key, ModifiersState, NamedKey};
 use winit::window::{Window, WindowId};
 
-use crate::agent_run::{AgentRun, Phase};
+use crate::agent_run::Phase;
+use crate::hub_run::HubRun;
 use crate::chrome::{self, Bookmarks, History, Settings};
 use crate::find::{self, FindSession};
 use crate::panel::{self, PanelScope};
@@ -339,7 +340,7 @@ struct App {
     /// Ctrl+J opens a task prompt; typed text goes to the agent, not the page.
     agent_open: bool,
     /// W3.17: the live agent run (one step per winit turn), if any.
-    agent: Option<AgentRun>,
+    agent: Option<HubRun>,
     /// Live-window gate measurements (set only for a fixture run).
     live: Option<LiveMetrics>,
     /// Minted from the winit input event being dispatched right now; `None` otherwise.
@@ -1967,6 +1968,12 @@ impl App {
         let (w, h) = (gpu.config.width, gpu.config.height);
         // The page is painted **below** the chrome band: shifting the scroll by
         // -CHROME_HEIGHT moves page content down so its top sits just under the toolbar.
+        if self.page.is_none() && self.agent.as_ref().is_some_and(|r| r.agent_has_page() && r.view_busy()) {
+            // A Hub call holds the agent's browser this turn: keep the previous frame on screen
+            // (a white flash here would be the W3.17.a regression).
+            self.needs_paint = true;
+            return;
+        }
         let mut canvas = match &self.page {
             // Route through the page's own painter so decoded <img> bitmaps are blitted.
             Some(page) => page.paint_scrolled(&self.fonts, w, h, self.scroll_y - CHROME_TOP),
@@ -2220,7 +2227,7 @@ impl App {
                 &font(14.0, HINT),
             ); // × close
             if is_active {
-                if let Some(badge) = self.agent.as_ref().and_then(AgentRun::badge) {
+                if let Some(badge) = self.agent.as_ref().and_then(HubRun::badge) {
                     canvas.fill_rect(
                         x + tw - 62.0,
                         7.0,
@@ -3822,7 +3829,7 @@ impl App {
     /// `run_task`, whose observation fence is unconditional.
     /// The agent strip's buttons, left to right: `(label, x, width)`, for the window width `w`.
     fn agent_strip_buttons(&self, w: f32) -> Vec<(&'static str, f32, f32)> {
-        let labels: &[&'static str] = match self.agent.as_ref().map(AgentRun::phase) {
+        let labels: &[&'static str] = match self.agent.as_ref().map(HubRun::phase) {
             Some(Phase::Running) => &["Take over", "Stop"],
             Some(Phase::HumanTurn) => &["Resume", "Stop"],
             _ => &[],
@@ -3972,7 +3979,7 @@ impl App {
     }
 
     fn run_agent(&mut self, task: &str, consent: HandoffConsent) {
-        if self.agent.as_ref().is_some_and(AgentRun::is_active) {
+        if self.agent.as_ref().is_some_and(HubRun::is_active) {
             tracing::warn!("agent: a run is already active (Esc to stop it)");
             return;
         }
@@ -3984,6 +3991,7 @@ impl App {
         if let Some(fx) = std::env::var("MANUK_AGENT_FIXTURE")
             .ok()
             .and_then(|s| crate::agent_run::FixtureBackend::from_spec(&s))
+            .map(crate::agent_run::FixtureBackend::for_hub)
         {
             let (w, h) = match &self.gpu {
                 Some(g) => (g.config.width, g.config.height),
@@ -3998,7 +4006,7 @@ impl App {
             cfg.max_steps = 40;
             cfg.send_screenshots = false;
             self.live = Some(LiveMetrics::default());
-            self.agent = Some(AgentRun::start(
+            self.agent = Some(HubRun::start(
                 task,
                 handoff,
                 consent,
@@ -4039,7 +4047,7 @@ impl App {
             history: self.history.entries().to_vec(),
         };
         tracing::info!(backend = ?kind, task, "agent: running one step per frame (Esc stops)");
-        self.agent = Some(AgentRun::start(
+        self.agent = Some(HubRun::start(
             task,
             handoff,
             consent,
@@ -4068,6 +4076,7 @@ impl App {
             let mut tabs = crate::session::BrowserTabs::new(&mut self.browser, known, settings);
             run.pump(&self.rt, Some(&mut tabs))
         };
+        self.agent_handoff_traffic();
         if !changed {
             return;
         }
@@ -4087,6 +4096,43 @@ impl App {
         }
         self.needs_paint = true;
         self.request_redraw();
+    }
+
+    /// W6.H1: the agent's `handoff` tool asked for the human (the page arrives in the window), or
+    /// the human's turn timed out (the page goes back to the agent). Neither needs a gesture: the
+    /// human's own Resume (Ctrl+Shift+R / the strip button) is what carries the consent.
+    fn agent_handoff_traffic(&mut self) {
+        let Some(run) = self.agent.as_mut() else {
+            return;
+        };
+        if let Some((h, reason)) = run.take_handed_page() {
+            let w = self.gpu.as_ref().map_or(self.width, |g| g.config.width);
+            self.scroll_y = h.scroll_y;
+            let mut page = h.page;
+            page.relayout_zoomed(&self.fonts, w as f32, self.zoom);
+            self.viewport.content_height = page.content_height;
+            self.page = Some(page);
+            self.clamp_scroll();
+            self.rerender();
+            if let Some(win) = &self.window {
+                win.set_title(&format!("[agent needs you] {} — manuk", truncate(&reason, 60)));
+            }
+        }
+        let Some(run) = self.agent.as_mut() else {
+            return;
+        };
+        if run.wants_page_back() {
+            if let Some(page) = self.page.take() {
+                let handoff = Handoff {
+                    page,
+                    scroll_y: self.scroll_y,
+                    history: self.history.entries().to_vec(),
+                };
+                run.timed_out(handoff);
+                self.needs_paint = true;
+                self.request_redraw();
+            }
+        }
     }
 
     /// The run ended: the page goes back to the human view.
@@ -4186,7 +4232,7 @@ impl App {
 
         // W3.17: Esc halts a live run before its next step; Ctrl+Shift+T takes over; Ctrl+Shift+R
         // resumes. All three need a real key press (`self.consent` is minted from the winit event).
-        if self.agent.as_ref().is_some_and(AgentRun::is_active) {
+        if self.agent.as_ref().is_some_and(HubRun::is_active) {
             if matches!(key, Key::Named(NamedKey::Escape)) {
                 if let Some(run) = self.agent.as_mut() {
                     if let Some(l) = self.live.as_mut() {
@@ -4217,7 +4263,7 @@ impl App {
                 }
             }
             // While the agent holds the page the human view is inert (no page to type into).
-            if self.agent.as_ref().is_some_and(AgentRun::agent_has_page) && !self.agent_open {
+            if self.agent.as_ref().is_some_and(HubRun::agent_has_page) && !self.agent_open {
                 return true;
             }
         }
