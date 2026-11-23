@@ -1,0 +1,173 @@
+arm	task	run	class	hand_label	kind	tool_idx	tool	phrase	pos	beyond_trunc	final_msg	rule_counts	code_counts	label_reflects
+cdp-layer+pwfmt-v7r	dashdish-4	1	refusal-seen	refusal-seen	result	4	act	no change\nurl: unchanged	0	0	0	0	0	yes
+cdp-layer+pwfmt-v7r	dashdish-4	1	refusal-seen	refusal-seen	info	8	act	OCCLUDED	0	0	0	0	0	yes
+cdp-layer+pwfmt-v7r	dashdish-4	1	refusal-seen	refusal-seen	info	13	act	OCCLUDED	0	0	0	0	0	yes
+cdp-layer+pwfmt-v7r	dashdish-4	1	refusal-seen	refusal-seen	result	15	act	no change\nurl: unchanged	0	0	0	0	0	yes
+cdp-layer+pwfmt-v7r	dashdish-4	1	refusal-seen	refusal-seen	result	18	key	no change\nurl: unchanged	0	0	0	0	0	yes
+cdp-layer+pwfmt-v7r	dashdish-4	1	refusal-seen	refusal-seen	result	31	act	no change\nurl: unchanged	0	0	0	0	0	yes
+cdp-layer+pwfmt-v7r	dashdish-4	1	refusal-seen	refusal-seen	result	34	act	no change\nurl: unchanged	0	0	0	0	0	yes
+cdp-layer+pwfmt-v7r	dashdish-4	1	refusal-seen	refusal-seen	result	39	act	no change\nurl: unchanged	0	0	0	0	0	yes
+cdp-layer+pwfmt-v7r	dashdish-4	1	refusal-seen	refusal-seen	result	40	key	no change\nurl: unchanged	0	0	0	0	0	yes
+cdp-layer+pwfmt-v7r	dashdish-4	1	refusal-seen	refusal-seen	info	42	act	OCCLUDED	0	0	0	0	0	yes
+cdp-layer+pwfmt-v7r	dashdish-4	1	refusal-seen	refusal-seen	info	45	act	OCCLUDED	0	0	0	0	0	yes
+cdp-layer+pwfmt-v7r	dashdish-4	1	refusal-seen	refusal-seen	result	48	key	no change\nurl: unchanged	0	0	0	0	0	yes
+cdp-layer+pwfmt-v7r	dashdish-4	1	refusal-seen	refusal-seen	info	49	act	OCCLUDED	0	0	0	0	0	yes
+cdp-layer+pwfmt-v7r	dashdish-4	1	refusal-seen	refusal-seen	info	52	act	OCCLUDED	0	0	0	0	0	yes
+cdp-layer+pwfmt-v7r	dashdish-4	1	refusal-seen	refusal-seen	result	54	act	no change\nurl: unchanged	0	0	0	0	0	yes
+cdp-layer+pwfmt-v7r	dashdish-4	1	refusal-seen	refusal-seen	result	57	act	STALE	0	0	0	0	0	yes
+cdp-layer+pwfmt-v7r	dashdish-4	1	refusal-seen	refusal-seen	result	65	type	no change\nurl: unchanged	0	0	0	0	0	yes
+cdp-layer+pwfmt-v7r	dashdish-4	1	refusal-seen	refusal-seen	result	69	act	no change\nurl: unchanged	0	0	0	0	0	yes
+cdp-layer+pwfmt-v7r	dashdish-4	1	refusal-seen	refusal-seen	result	75	act	no change\nurl: unchanged	0	0	0	1	1	yes
+cdp-layer+pwfmt-v7r	dashdish-4	1	refusal-seen	refusal-seen	result	76	key	no change\nurl: unchanged	0	0	0	1	1	yes
+cdp-layer+pwfmt-v7r	dashdish-4	1	refusal-seen	refusal-seen	result	78	act	no change\nurl: unchanged	0	0	0	1	1	yes
+cdp-layer+pwfmt-v7r	dashdish-4	2	stop-by-choice	stop-by-choice	result	9	act	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	dashdish-4	2	stop-by-choice	stop-by-choice	result	11	act	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	dashdish-4	2	stop-by-choice	stop-by-choice	result	12	type	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	dashdish-4	2	stop-by-choice	stop-by-choice	info	15	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	dashdish-4	2	stop-by-choice	stop-by-choice	info	19	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	dashdish-4	2	stop-by-choice	stop-by-choice	result	23	act	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	dashdish-4	2	stop-by-choice	stop-by-choice	result	32	act	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	dashdish-4	2	stop-by-choice	stop-by-choice	info	36	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	dashdish-4	2	stop-by-choice	stop-by-choice	info	38	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	dashdish-4	2	stop-by-choice	stop-by-choice	info	41	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	dashdish-4	2	stop-by-choice	stop-by-choice	result	42	act	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	dashdish-4	2	stop-by-choice	stop-by-choice	result	45	act	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	dashdish-4	2	stop-by-choice	stop-by-choice	result	47	act	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	dashdish-4	2	stop-by-choice	stop-by-choice	result	48	key	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	dashdish-4	2	stop-by-choice	stop-by-choice	result	52	act	no change\nurl: unchanged	0	0	0	1	1	no
+cdp-layer+pwfmt-v7r	dashdish-5	1	stop-by-choice	stop-by-choice	result	3	act	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	dashdish-5	1	stop-by-choice	stop-by-choice	info	12	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	dashdish-5	1	stop-by-choice	stop-by-choice	info	16	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	dashdish-5	1	stop-by-choice	stop-by-choice	result	20	act	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	dashdish-5	2	stop-by-choice	stop-by-choice	info	4	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	dashdish-5	2	stop-by-choice	stop-by-choice	result	8	act	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	dashdish-5	2	stop-by-choice	stop-by-choice	info	13	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	dashdish-5	2	stop-by-choice	stop-by-choice	info	15	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	dashdish-5	2	stop-by-choice	stop-by-choice	result	16	act	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	dashdish-5	2	stop-by-choice	stop-by-choice	result	18	act	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	dashdish-5	2	stop-by-choice	stop-by-choice	result	23	act	STALE	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	fly-unified-2	1	stop-by-choice	stop-by-choice	result	3	act	refused focus	4	0	0	0	0	no
+cdp-layer+pwfmt-v7r	fly-unified-2	1	stop-by-choice	stop-by-choice	info	5	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	fly-unified-2	1	stop-by-choice	stop-by-choice	info	14	act	UNREACHABLE	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	fly-unified-2	1	stop-by-choice	stop-by-choice	result	23	key	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	fly-unified-2	1	stop-by-choice	stop-by-choice	result	28	act	refused focus	4	0	0	0	0	no
+cdp-layer+pwfmt-v7r	fly-unified-2	1	stop-by-choice	stop-by-choice	result	29	key	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	fly-unified-2	1	stop-by-choice	stop-by-choice	result	32	key	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	fly-unified-2	1	stop-by-choice	stop-by-choice	info	34	type	read-only	7	0	0	0	0	no
+cdp-layer+pwfmt-v7r	fly-unified-2	2	stop-by-choice	stop-by-choice	result	3	act	refused focus	4	0	0	0	0	no
+cdp-layer+pwfmt-v7r	fly-unified-2	2	stop-by-choice	stop-by-choice	info	15	act	UNREACHABLE	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	fly-unified-2	2	stop-by-choice	stop-by-choice	info	27	type	read-only	7	0	0	0	0	no
+cdp-layer+pwfmt-v7r	fly-unified-4	1	stop-by-choice	stop-by-choice	info	2	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	fly-unified-4	1	stop-by-choice	stop-by-choice	info	12	act	UNREACHABLE	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	fly-unified-4	1	stop-by-choice	stop-by-choice	info	17	act	UNREACHABLE	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	fly-unified-4	2	stop-by-choice	stop-by-choice	info	1	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	fly-unified-4	2	stop-by-choice	stop-by-choice	result	2	act	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	fly-unified-4	2	stop-by-choice	stop-by-choice	result	3	act	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	fly-unified-4	2	stop-by-choice	stop-by-choice	info	12	act	UNREACHABLE	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	fly-unified-5	1	refusal-seen	stop-by-choice	info	9	act	UNREACHABLE	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	fly-unified-5	1	refusal-seen	stop-by-choice	text	0	-	greyed out	472	0	1	0	1	no
+cdp-layer+pwfmt-v7r	fly-unified-5	2	stop-by-choice	stop-by-choice	result	1	act	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	fly-unified-5	2	stop-by-choice	stop-by-choice	info	4	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	fly-unified-6	1	stop-by-choice	stop-by-choice	info	3	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	fly-unified-6	1	stop-by-choice	stop-by-choice	info	10	act	UNREACHABLE	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	fly-unified-6	1	stop-by-choice	stop-by-choice	info	13	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	fly-unified-6	1	stop-by-choice	stop-by-choice	result	14	key	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	fly-unified-6	1	stop-by-choice	stop-by-choice	info	15	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	fly-unified-6	1	stop-by-choice	stop-by-choice	info	25	act	UNREACHABLE	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	fly-unified-6	1	stop-by-choice	stop-by-choice	result	28	key	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	fly-unified-6	1	stop-by-choice	stop-by-choice	result	30	key	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	fly-unified-6	1	stop-by-choice	stop-by-choice	result	32	act	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	fly-unified-6	1	stop-by-choice	stop-by-choice	result	33	key	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	fly-unified-6	2	stop-by-choice	stop-by-choice	info	8	act	UNREACHABLE	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	fly-unified-6	2	stop-by-choice	stop-by-choice	info	10	type	read-only	7	0	0	0	0	no
+cdp-layer+pwfmt-v7r	fly-unified-9	1	refusal-seen	refusal-seen	info	4	act	OCCLUDED	0	0	0	0	0	yes
+cdp-layer+pwfmt-v7r	fly-unified-9	1	refusal-seen	refusal-seen	result	19	act	no change\nurl: unchanged	0	0	0	0	0	yes
+cdp-layer+pwfmt-v7r	fly-unified-9	1	refusal-seen	refusal-seen	result	22	act	no change\nurl: unchanged	0	0	0	0	0	yes
+cdp-layer+pwfmt-v7r	fly-unified-9	1	refusal-seen	refusal-seen	result	24	act	refused focus	4	0	0	0	0	yes
+cdp-layer+pwfmt-v7r	fly-unified-9	1	refusal-seen	refusal-seen	result	25	key	no change\nurl: unchanged	0	0	0	0	0	yes
+cdp-layer+pwfmt-v7r	fly-unified-9	1	refusal-seen	refusal-seen	result	27	key	no change\nurl: unchanged	0	0	0	1	1	yes
+cdp-layer+pwfmt-v7r	fly-unified-9	1	refusal-seen	refusal-seen	result	29	key	no change\nurl: unchanged	0	0	0	1	1	yes
+cdp-layer+pwfmt-v7r	fly-unified-9	1	refusal-seen	refusal-seen	text	0	-	greyed out	321	0	1	0	1	yes
+cdp-layer+pwfmt-v7r	gocalendar-1	1	stop-by-choice	stop-by-choice	result	11	type	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	gocalendar-1	1	stop-by-choice	stop-by-choice	result	15	key	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	gocalendar-1	1	stop-by-choice	stop-by-choice	result	17	key	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	gocalendar-1	1	stop-by-choice	stop-by-choice	info	18	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	gocalendar-1	1	stop-by-choice	stop-by-choice	result	30	key	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	gocalendar-1	1	stop-by-choice	stop-by-choice	result	31	act	STALE	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	gocalendar-1	1	stop-by-choice	stop-by-choice	result	31	act	no longer on the page	13	0	0	0	0	no
+cdp-layer+pwfmt-v7r	gocalendar-1	1	stop-by-choice	stop-by-choice	result	34	key	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	gocalendar-1	1	stop-by-choice	stop-by-choice	result	41	act	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	gocalendar-1	1	stop-by-choice	stop-by-choice	result	44	key	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	gocalendar-1	1	stop-by-choice	stop-by-choice	result	49	key	no change\nurl: unchanged	0	0	0	1	1	no
+cdp-layer+pwfmt-v7r	gocalendar-7	1	stop-by-choice	stop-by-choice	result	11	scroll	is unknown (handles	4	0	0	1	1	no
+cdp-layer+pwfmt-v7r	gocalendar-7	1	stop-by-choice	stop-by-choice	info	11	scroll	is unknown	4	0	0	0	0	no
+cdp-layer+pwfmt-v7r	gomail-3	2	stop-by-choice	stop-by-choice	info	7	fill_form	UNREACHABLE	143	0	0	0	0	no
+cdp-layer+pwfmt-v7r	networkin-3	1	stop-by-choice	stop-by-choice	info	1	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	networkin-3	1	stop-by-choice	stop-by-choice	info	2	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	networkin-3	1	stop-by-choice	stop-by-choice	info	4	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	networkin-3	1	stop-by-choice	stop-by-choice	info	5	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	networkin-6	1	stop-by-choice	stop-by-choice	result	8	act	is unknown (handles	5	0	0	0	0	no
+cdp-layer+pwfmt-v7r	networkin-6	1	stop-by-choice	stop-by-choice	info	8	act	is unknown	5	0	0	0	0	no
+cdp-layer+pwfmt-v7r	networkin-6	1	stop-by-choice	stop-by-choice	info	10	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	networkin-6	1	stop-by-choice	stop-by-choice	info	11	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	networkin-6	1	stop-by-choice	stop-by-choice	info	17	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	networkin-9	1	stop-by-choice	stop-by-choice	result	2	type	is unknown (handles	3	0	0	0	0	no
+cdp-layer+pwfmt-v7r	networkin-9	1	stop-by-choice	stop-by-choice	info	2	type	is unknown	3	0	0	0	0	no
+cdp-layer+pwfmt-v7r	networkin-9	1	stop-by-choice	stop-by-choice	info	5	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	networkin-9	1	stop-by-choice	stop-by-choice	result	8	act	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	opendining-10	1	stop-by-choice	stop-by-choice	result	9	act	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	opendining-4	1	stop-by-choice	stop-by-choice	result	4	act	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	opendining-4	1	stop-by-choice	stop-by-choice	result	8	act	STALE	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	opendining-4	1	stop-by-choice	stop-by-choice	result	8	act	no longer on the page	13	0	0	0	0	no
+cdp-layer+pwfmt-v7r	opendining-4	1	stop-by-choice	stop-by-choice	info	17	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	opendining-4	1	stop-by-choice	stop-by-choice	info	18	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	opendining-4	1	stop-by-choice	stop-by-choice	info	21	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	opendining-4	1	stop-by-choice	stop-by-choice	info	26	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	opendining-4	1	stop-by-choice	stop-by-choice	info	27	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	opendining-4	1	stop-by-choice	stop-by-choice	result	28	key	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	opendining-4	1	stop-by-choice	stop-by-choice	result	31	handoff	no human surface is attached	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	opendining-4	1	stop-by-choice	stop-by-choice	info	35	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	opendining-4	1	stop-by-choice	stop-by-choice	result	36	act	STALE	0	0	0	1	1	no
+cdp-layer+pwfmt-v7r	opendining-8	1	stop-by-choice	stop-by-choice	result	5	act	is unknown (handles	4	0	0	0	0	no
+cdp-layer+pwfmt-v7r	opendining-8	1	stop-by-choice	stop-by-choice	info	5	act	is unknown	4	0	0	0	0	no
+cdp-layer+pwfmt-v7r	opendining-8	1	stop-by-choice	stop-by-choice	info	7	act	read-only	1190	1	0	0	0	no
+cdp-layer+pwfmt-v7r	opendining-8	1	stop-by-choice	stop-by-choice	info	11	observe	read-only	437	1	0	0	0	no
+cdp-layer+pwfmt-v7r	staynb-4	1	stop-by-choice	stop-by-choice	result	3	fill_form	no change\nurl: unchanged	176	0	0	0	0	no
+cdp-layer+pwfmt-v7r	staynb-4	1	stop-by-choice	stop-by-choice	result	8	act	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	staynb-4	1	stop-by-choice	stop-by-choice	result	17	act	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	staynb-4	1	stop-by-choice	stop-by-choice	info	31	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	staynb-4	1	stop-by-choice	stop-by-choice	result	33	act	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	staynb-4	1	stop-by-choice	stop-by-choice	info	34	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	staynb-4	1	stop-by-choice	stop-by-choice	result	36	key	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	staynb-4	1	stop-by-choice	stop-by-choice	info	37	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	staynb-4	1	stop-by-choice	stop-by-choice	info	39	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	staynb-4	1	stop-by-choice	stop-by-choice	info	41	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	staynb-4	1	stop-by-choice	stop-by-choice	result	43	key	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	staynb-4	1	stop-by-choice	stop-by-choice	info	44	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	staynb-4	1	stop-by-choice	stop-by-choice	text	0	-	didn't register	43	0	0	0	0	no
+cdp-layer+pwfmt-v7r	staynb-6	1	stop-by-choice	stop-by-choice	result	5	key	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	staynb-6	1	stop-by-choice	stop-by-choice	result	16	act	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	staynb-8	1	stop-by-choice	stop-by-choice	info	12	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	staynb-8	1	stop-by-choice	stop-by-choice	result	13	key	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	staynb-8	1	stop-by-choice	stop-by-choice	info	14	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	topwork-1	1	stop-by-choice	stop-by-choice	info	10	act	OCCLUDED	140	0	0	0	0	no
+cdp-layer+pwfmt-v7r	topwork-1	1	stop-by-choice	stop-by-choice	info	12	act	OCCLUDED	90	0	0	0	0	no
+cdp-layer+pwfmt-v7r	topwork-1	1	stop-by-choice	stop-by-choice	result	14	key	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	topwork-1	1	stop-by-choice	stop-by-choice	info	15	act	OCCLUDED	90	0	0	0	0	no
+cdp-layer+pwfmt-v7r	topwork-2	1	stop-by-choice	stop-by-choice	info	16	act	OCCLUDED	140	0	0	0	0	no
+cdp-layer+pwfmt-v7r	topwork-2	1	stop-by-choice	stop-by-choice	info	18	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	topwork-2	1	stop-by-choice	stop-by-choice	result	21	act	refused focus	5	0	0	0	0	no
+cdp-layer+pwfmt-v7r	topwork-2	1	stop-by-choice	stop-by-choice	result	24	act	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	topwork-2	1	stop-by-choice	stop-by-choice	result	25	act	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	topwork-2	1	stop-by-choice	stop-by-choice	result	29	act	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	topwork-3	1	stop-by-choice	stop-by-choice	result	6	act	no change\nurl: unchanged	123	0	0	0	0	no
+cdp-layer+pwfmt-v7r	topwork-3	1	stop-by-choice	stop-by-choice	info	15	act	OCCLUDED	140	0	0	0	0	no
+cdp-layer+pwfmt-v7r	topwork-3	1	stop-by-choice	stop-by-choice	info	19	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	topwork-3	1	stop-by-choice	stop-by-choice	result	21	act	refused focus	5	0	0	0	0	no
+cdp-layer+pwfmt-v7r	topwork-3	1	stop-by-choice	stop-by-choice	result	26	act	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	topwork-4	1	stop-by-choice	stop-by-choice	info	14	act	OCCLUDED	140	0	0	0	0	no
+cdp-layer+pwfmt-v7r	topwork-4	1	stop-by-choice	stop-by-choice	info	16	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	topwork-4	1	stop-by-choice	stop-by-choice	result	18	act	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	topwork-4	1	stop-by-choice	stop-by-choice	result	23	act	no change\nurl: unchanged	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	topwork-4	1	stop-by-choice	stop-by-choice	info	24	act	OCCLUDED	0	0	0	0	0	no
+cdp-layer+pwfmt-v7r	topwork-4	1	stop-by-choice	stop-by-choice	result	28	act	no change\nurl: unchanged	123	0	0	0	0	no
