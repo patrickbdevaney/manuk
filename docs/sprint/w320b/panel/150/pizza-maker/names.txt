@@ -1,0 +1,7 @@
+add_topping
+manage_pizza
+remove_topping
+set_pizza_size
+set_pizza_style
+share_pizza
+toggle_layer

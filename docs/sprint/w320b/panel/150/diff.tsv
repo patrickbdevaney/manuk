@@ -1,0 +1,4 @@
+page	chrome_ver	panel_n	manuk_n	missing_in_manuk	extra_in_manuk	verdict
+pizza-maker	150.0.7871.124	7	7	-	-	MATCH
+french-bistro	150.0.7871.124	1	1	-	-	MATCH
+hotel-chain	150.0.7871.124	3	3	-	-	MATCH
