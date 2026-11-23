@@ -1,0 +1,143 @@
+{
+ "id": "w6c1a-ladder",
+ "note": "W6.C1.a: cdp-layer arm x3 at HEAD ee2f09e4 (code = W6.C1 commit 51b8d4f2 + W6.C2 499e5fba beneath it; docs-only after). Binary built into /home/patrickd/manuk-w6c1a-target. Tasks: REAL-fast 17 (fast_subset.SUBSET) + the 15 dialog_modal tasks (W6.X1 list), 32 tasks x 3 runs. Baseline = W6.B0 cdp-layer rows (HEAD 6a7acb8f, pre-C1, pre-C2) on the same tasks. Verdict computed by bench/agent-tasks/w6c1a_tally.py, not by this band.",
+ "inputs": [
+  "/home/patrickd/manuk-w6c1a-target/release/manuk-mcp",
+  "bench/agent-tasks/real_run.py",
+  "bench/agent-tasks/run_arm.py",
+  "bench/agent-tasks/fast_subset.py"
+ ],
+ "steps": [
+  {
+   "name": "cdp-layer W6.C1 run1",
+   "argv": [
+    "env",
+    "MANUK_MCP_BIN=/home/patrickd/manuk-w6c1a-target/release/manuk-mcp",
+    "MANUK_CHROME_PIN=145.0.7632.116",
+    "python3",
+    "-I",
+    "bench/agent-tasks/real_run.py",
+    "run",
+    "--arm",
+    "cdp-layer",
+    "--runs",
+    "1",
+    "--run-base",
+    "0",
+    "--judge",
+    "--jobs",
+    "2",
+    "--tasks",
+    "gocalendar-2,gomail-3,gomail-5,gomail-8,networkin-3,opendining-10,opendining-2,opendining-4,opendining-7,opendining-8,staynb-4,udriver-10,udriver-7,udriver-9,zilloft-2,zilloft-5,dashdish-3,topwork-1,topwork-2,topwork-3,topwork-4,fly-unified-2,fly-unified-4,fly-unified-5,fly-unified-9,dashdish-2,dashdish-4,dashdish-5,staynb-6,staynb-8,zilloft-3,zilloft-6",
+    "--out",
+    "bench-queue/out/w6c1a-ladder.tsv",
+    "--transcripts",
+    "/home/patrickd/.cache/manuk-bq/transcripts-w6c1a"
+   ]
+  },
+  {
+   "name": "cdp-layer W6.C1 run2",
+   "argv": [
+    "env",
+    "MANUK_MCP_BIN=/home/patrickd/manuk-w6c1a-target/release/manuk-mcp",
+    "MANUK_CHROME_PIN=145.0.7632.116",
+    "python3",
+    "-I",
+    "bench/agent-tasks/real_run.py",
+    "run",
+    "--arm",
+    "cdp-layer",
+    "--runs",
+    "1",
+    "--run-base",
+    "1",
+    "--judge",
+    "--jobs",
+    "2",
+    "--tasks",
+    "gocalendar-2,gomail-3,gomail-5,gomail-8,networkin-3,opendining-10,opendining-2,opendining-4,opendining-7,opendining-8,staynb-4,udriver-10,udriver-7,udriver-9,zilloft-2,zilloft-5,dashdish-3,topwork-1,topwork-2,topwork-3,topwork-4,fly-unified-2,fly-unified-4,fly-unified-5,fly-unified-9,dashdish-2,dashdish-4,dashdish-5,staynb-6,staynb-8,zilloft-3,zilloft-6",
+    "--out",
+    "bench-queue/out/w6c1a-ladder.tsv",
+    "--transcripts",
+    "/home/patrickd/.cache/manuk-bq/transcripts-w6c1a"
+   ]
+  },
+  {
+   "name": "cdp-layer W6.C1 run3",
+   "argv": [
+    "env",
+    "MANUK_MCP_BIN=/home/patrickd/manuk-w6c1a-target/release/manuk-mcp",
+    "MANUK_CHROME_PIN=145.0.7632.116",
+    "python3",
+    "-I",
+    "bench/agent-tasks/real_run.py",
+    "run",
+    "--arm",
+    "cdp-layer",
+    "--runs",
+    "1",
+    "--run-base",
+    "2",
+    "--judge",
+    "--jobs",
+    "2",
+    "--tasks",
+    "gocalendar-2,gomail-3,gomail-5,gomail-8,networkin-3,opendining-10,opendining-2,opendining-4,opendining-7,opendining-8,staynb-4,udriver-10,udriver-7,udriver-9,zilloft-2,zilloft-5,dashdish-3,topwork-1,topwork-2,topwork-3,topwork-4,fly-unified-2,fly-unified-4,fly-unified-5,fly-unified-9,dashdish-2,dashdish-4,dashdish-5,staynb-6,staynb-8,zilloft-3,zilloft-6",
+    "--out",
+    "bench-queue/out/w6c1a-ladder.tsv",
+    "--transcripts",
+    "/home/patrickd/.cache/manuk-bq/transcripts-w6c1a"
+   ]
+  }
+ ],
+ "reconcile": {
+  "tsv_glob": "bench-queue/out/w6c1a-ladder*.tsv",
+  "primary_judge": "openai/gpt-oss-120b"
+ },
+ "band": {
+  "tsv_glob": "bench-queue/out/w6c1a-ladder.tsv",
+  "runs": 3,
+  "tasks": [
+   "dashdish-2",
+   "dashdish-3",
+   "dashdish-4",
+   "dashdish-5",
+   "fly-unified-2",
+   "fly-unified-4",
+   "fly-unified-5",
+   "fly-unified-9",
+   "gocalendar-2",
+   "gomail-3",
+   "gomail-5",
+   "gomail-8",
+   "networkin-3",
+   "opendining-10",
+   "opendining-2",
+   "opendining-4",
+   "opendining-7",
+   "opendining-8",
+   "staynb-4",
+   "staynb-6",
+   "staynb-8",
+   "topwork-1",
+   "topwork-2",
+   "topwork-3",
+   "topwork-4",
+   "udriver-10",
+   "udriver-7",
+   "udriver-9",
+   "zilloft-2",
+   "zilloft-3",
+   "zilloft-5",
+   "zilloft-6"
+  ],
+  "task_pass_2of3": [
+   0,
+   32
+  ],
+  "per_run": [
+   0,
+   32
+  ]
+ }
+}
