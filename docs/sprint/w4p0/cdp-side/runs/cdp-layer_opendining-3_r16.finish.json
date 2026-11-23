@@ -1,0 +1,23 @@
+{
+ "bookingDetailsDiff": {
+  "added": {},
+  "deleted": {},
+  "updated": {}
+ },
+ "config": {
+  "open_dining": {
+   "error_booking": false,
+   "hide_aria_labels": false,
+   "latency": 0,
+   "no_available_slots": false,
+   "removePopup": false,
+   "run_id": "0",
+   "task_id": "opendining-3"
+  }
+ },
+ "reviewDetailsDiff": {
+  "added": {},
+  "deleted": {},
+  "updated": {}
+ }
+}

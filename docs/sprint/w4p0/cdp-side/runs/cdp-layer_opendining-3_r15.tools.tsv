@@ -1,0 +1,62 @@
+1	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app"}
+2	mcp__browser__act	{"action": "click", "handle": "h3"}
+3	mcp__browser__act	{"action": "click", "handle": "h6"}
+4	mcp__browser__observe	{"mode": "interactive"}
+5	mcp__browser__act	{"action": "click", "handle": "h153"}
+6	mcp__browser__observe	{"mode": "content"}
+7	mcp__browser__act	{"action": "click", "handle": "h3"}
+8	mcp__browser__observe	{"mode": "interactive"}
+9	mcp__browser__act	{"action": "click", "handle": "h314"}
+10	mcp__browser__act	{"action": "click", "handle": "h4"}
+11	mcp__browser__observe	{"mode": "viewport"}
+12	mcp__browser__observe	{"mode": "interactive"}
+13	mcp__browser__act	{"action": "select", "handle": "h4", "value": "7:00 PM"}
+14	mcp__browser__observe	{"mode": "viewport"}
+15	mcp__browser__act	{"action": "click", "handle": "h365"}
+16	mcp__browser__observe	{"mode": "interactive"}
+17	mcp__browser__act	{"action": "click", "handle": "h363"}
+18	mcp__browser__observe	{"mode": "interactive"}
+19	mcp__browser__act	{"action": "click", "handle": "h6"}
+20	mcp__browser__observe	{"mode": "viewport"}
+21	mcp__browser__act	{"action": "click", "handle": "h378"}
+22	mcp__browser__act	{"action": "click", "handle": "h4"}
+23	mcp__browser__observe	{"mode": "interactive"}
+24	mcp__browser__act	{"action": "click", "handle": "h434"}
+25	mcp__browser__observe	{"mode": "interactive"}
+26	mcp__browser__act	{"action": "click", "handle": "h4"}
+27	mcp__browser__observe	{"mode": "interactive"}
+28	mcp__browser__act	{"action": "click", "handle": "h480"}
+29	mcp__browser__observe	{"mode": "interactive"}
+30	mcp__browser__act	{"action": "click", "handle": "h14"}
+31	mcp__browser__observe	{"mode": "interactive"}
+32	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app"}
+33	mcp__browser__act	{"action": "click", "handle": "h510"}
+34	mcp__browser__observe	{"mode": "interactive"}
+35	mcp__browser__act	{"action": "click", "handle": "h645"}
+36	mcp__browser__act	{"action": "click", "handle": "h513"}
+37	mcp__browser__observe	{"mode": "viewport"}
+38	mcp__browser__act	{"action": "click", "handle": "h661"}
+39	mcp__browser__act	{"action": "click", "handle": "h511"}
+40	mcp__browser__observe	{"mode": "interactive"}
+41	mcp__browser__act	{"action": "click", "handle": "h827"}
+42	mcp__browser__observe	{"mode": "interactive"}
+43	mcp__browser__act	{"action": "click", "handle": "h521"}
+44	mcp__browser__observe	{"mode": "interactive"}
+45	ToolSearch	{"max_results": 1, "query": "select:mcp__browser__back"}
+46	mcp__browser__back	{}
+47	mcp__browser__observe	{"mode": "interactive"}
+48	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app/booking?index=e83c1c2b-9f5b-4a7c-bd54-b165a86a0f3d&guests=4%20people&date=Sat,%2020%20Jul%202024%2007:00:00%20GMT&time=7:00%20PM"}
+49	mcp__browser__type	{"handle": "h1063", "text": "4155550123"}
+50	mcp__browser__observe	{"mode": "interactive"}
+51	mcp__browser__act	{"action": "click", "handle": "h1068"}
+52	mcp__browser__observe	{"mode": "content"}
+53	mcp__browser__act	{"action": "click", "handle": "h1062"}
+54	mcp__browser__observe	{"mode": "interactive"}
+55	mcp__browser__act	{"action": "click", "handle": "h2004"}
+56	mcp__browser__observe	{"mode": "interactive"}
+57	mcp__browser__key	{"key": "Escape"}
+58	mcp__browser__observe	{"mode": "interactive"}
+59	mcp__browser__type	{"handle": "h1063", "text": "+1 415 555 0123"}
+60	mcp__browser__observe	{"mode": "interactive"}
+61	mcp__browser__act	{"action": "click", "handle": "h1068"}
+62	mcp__browser__observe	{"mode": "content"}

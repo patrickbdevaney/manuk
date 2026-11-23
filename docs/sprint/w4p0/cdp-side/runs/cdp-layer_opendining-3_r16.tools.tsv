@@ -1,0 +1,36 @@
+1	ToolSearch	{"max_results": 5, "query": "select:mcp__browser__navigate,mcp__browser__observe,mcp__browser__fill_form,mcp__browser__act,mcp__browser__type"}
+2	mcp__browser__navigate	{"url": "https://evals-opendining.vercel.app"}
+3	mcp__browser__act	{"action": "click", "handle": "h3", "page": "pb6e947:3"}
+4	mcp__browser__observe	{"mode": "interactive", "page": "pb6e947:3"}
+5	mcp__browser__act	{"page": "pb6e947:5", "steps": [{"handle": "h138", "tool": "click"}, {"handle": "h4", "tool": "click"}]}
+6	mcp__browser__observe	{"mode": "interactive", "page": "pb6e947:5"}
+7	mcp__browser__act	{"action": "click", "handle": "h138", "page": "pb6e947:7"}
+8	mcp__browser__observe	{"mode": "interactive", "page": "pb6e947:8"}
+9	mcp__browser__act	{"action": "click", "handle": "h4", "page": "pb6e947:9"}
+10	mcp__browser__observe	{"include_hidden": false, "mode": "interactive", "page": "pb6e947:10"}
+11	mcp__browser__act	{"action": "click", "handle": "h189", "page": "pb6e947:11"}
+12	mcp__browser__observe	{"include_hidden": false, "mode": "interactive", "page": "pb6e947:11"}
+13	mcp__browser__act	{"action": "select", "handle": "h4", "page": "pb6e947:13", "value": "7:00 PM"}
+14	mcp__browser__observe	{"include_hidden": false, "mode": "interactive", "page": "pb6e947:14"}
+15	mcp__browser__act	{"action": "click", "force": true, "handle": "h189", "page": "pb6e947:15"}
+16	mcp__browser__evaluate	{"expression": "(() => { const s = [...document.querySelectorAll('select')]; return s.map(x => ({name: x.name||x.id||x.getAttribute('aria-label'), value: x.value, opts: [...x.options].length})); })()", "page": "pb6e947:16"}
+17	ToolSearch	{"max_results": 2, "query": "select:mcp__browser__scroll,mcp__browser__key"}
+18	mcp__browser__scroll	{"page": "pb6e947:17", "to": "h189"}
+19	mcp__browser__act	{"action": "click", "handle": "h189", "page": "pb6e947:18"}
+20	mcp__browser__act	{"action": "click", "handle": "h177", "page": "pb6e947:19"}
+21	mcp__browser__observe	{"include_hidden": false, "mode": "interactive", "page": "pb6e947:20"}
+22	mcp__browser__type	{"handle": "h4", "page": "pb6e947:21", "text": "7:00 PM"}
+23	mcp__browser__observe	{"mode": "viewport", "page": "pb6e947:22"}
+24	mcp__browser__act	{"action": "click", "handle": "h4", "page": "pb6e947:23"}
+25	mcp__browser__key	{"handle": "h4", "key": "End", "page": "pb6e947:23"}
+26	mcp__browser__observe	{"include_hidden": false, "mode": "interactive", "page": "pb6e947:25"}
+27	mcp__browser__scroll	{"page": "pb6e947:26", "to": "h349"}
+28	mcp__browser__act	{"action": "click", "handle": "h349", "page": "pb6e947:27"}
+29	mcp__browser__key	{"key": "ArrowDown", "page": "pb6e947:28"}
+30	mcp__browser__observe	{"mode": "diff", "page": "pb6e947:29"}
+31	mcp__browser__scroll	{"dy": 400, "page": "pb6e947:30"}
+32	mcp__browser__observe	{"mode": "viewport", "page": "pb6e947:31"}
+33	mcp__browser__act	{"action": "hover", "handle": "h347", "page": "pb6e947:32"}
+34	mcp__browser__scroll	{"dy": 200, "page": "pb6e947:32"}
+35	mcp__browser__key	{"handle": "h347", "key": "PageDown", "page": "pb6e947:34"}
+36	mcp__browser__key	{"key": "Escape", "page": "pb6e947:35"}
