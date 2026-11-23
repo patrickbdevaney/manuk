@@ -1,0 +1,80 @@
+{
+ "id": "w6h1b-ab",
+ "note": "W6.H1.b: TaskRun vs Hub A/B on suite-v1 (40 tasks, live+fixture), engine backend, 1 run per (task,driver), judge = suite verify.py on ANSWER, model=GROQ_MODEL (qwen/qwen3.8-27b, the default qwen/qwen3.6-27b is no longer served). Verdict is docs/sprint/w6/H1.md from `h1_ab.py tally`, NOT the band below (the band fields are a shape placeholder: 1 run per driver cannot be a 2-of-3 band).",
+ "inputs": [
+  "target/release/manuk",
+  "bench/agent-tasks/h1_ab.py",
+  "bench/agent-tasks/verify.py",
+  "bench/agent-tasks/fixtures.py",
+  "bench/agent-tasks/suite-v1.json"
+ ],
+ "steps": [
+  {
+   "name": "h1 ab taskrun vs hub, 40 tasks x 2 drivers x 1 run",
+   "argv": [
+    "env",
+    "MANUK_CHROME_PIN=145.0.7632.116",
+    "python3",
+    "-I",
+    "bench/agent-tasks/h1_ab.py",
+    "run",
+    "--out",
+    "bench-queue/out/w6h1b-ab.tsv"
+   ]
+  }
+ ],
+ "band": {
+  "tsv_glob": "bench-queue/out/w6h1b-ab.tsv",
+  "tasks": [
+   "L01",
+   "L02",
+   "L03",
+   "L04",
+   "L05",
+   "L06",
+   "L07",
+   "L08",
+   "L09",
+   "L10",
+   "L11",
+   "L12",
+   "L13",
+   "L14",
+   "L15",
+   "L16",
+   "L17",
+   "L18",
+   "L19",
+   "L20",
+   "L21",
+   "L22",
+   "L23",
+   "L24",
+   "L25",
+   "F01",
+   "F02",
+   "F03",
+   "F04",
+   "F05",
+   "F06",
+   "F07",
+   "F08",
+   "F09",
+   "F10",
+   "F11",
+   "F12",
+   "F13",
+   "F14",
+   "F15"
+  ],
+  "runs": 1,
+  "task_pass_2of3": [
+   0,
+   40
+  ]
+ },
+ "reconcile": {
+  "tsv_glob": "bench-queue/out/w6h1b-none-*.tsv",
+  "primary_judge": "verify.py"
+ }
+}
