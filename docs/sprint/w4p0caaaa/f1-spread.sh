@@ -9,6 +9,9 @@
 #   they are killed on exit.
 #   QUIET_WAIT_S (default 0) = wait up to this many seconds for 1-min load < QUIET_MAX_LOAD (default 2.0)
 #   before the first run, so a "quiet" label is only given when the machine actually was quiet.
+#   QUIET_EACH=1 (node W4.P0.c.a.a.a.a.a) = apply that wait before EVERY run, and if load1 is still
+#   >= QUIET_MAX_LOAD after QUIET_WAIT_S, write no row and exit 3 (so no row is ever labelled quiet
+#   unless its own start-of-run load1 was below the bar).
 set -u
 cd "$(dirname "$0")/../../.." || exit 1
 LABEL=$1; RUNS=$2; WORKERS=${3:-0}
@@ -24,7 +27,17 @@ cleanup() { for p in "${PIDS[@]:-}"; do kill "$p" 2>/dev/null; done; }
 trap cleanup EXIT
 touch .git/sprint-working
 
-if [ "${QUIET_WAIT_S:-0}" -gt 0 ] && [ "$WORKERS" -eq 0 ]; then
+quiet_now() { awk -v a="$(cut -d' ' -f1 /proc/loadavg)" -v b="${QUIET_MAX_LOAD:-2.0}" 'BEGIN{exit !(a+0 < b+0)}'; }
+wait_quiet() {  # returns 0 once load1 < bar, 1 after QUIET_WAIT_S without it
+  local waited=0
+  until quiet_now; do
+    [ "$waited" -ge "${QUIET_WAIT_S:-0}" ] && { echo "# quiet wait FAILED after ${waited}s, load1 $(cut -d' ' -f1 /proc/loadavg)" >&2; return 1; }
+    sleep 15; waited=$((waited+15)); touch .git/sprint-working
+  done
+  echo "# quiet wait: waited ${waited}s, load1 now $(cut -d' ' -f1 /proc/loadavg) at $(date -u +%FT%TZ)" >&2
+}
+
+if [ "${QUIET_EACH:-0}" != 1 ] && [ "${QUIET_WAIT_S:-0}" -gt 0 ] && [ "$WORKERS" -eq 0 ]; then
   waited=0
   while :; do
     l1=$(cut -d' ' -f1 /proc/loadavg)
@@ -40,7 +53,11 @@ for ((w=0; w<WORKERS; w++)); do yes > /dev/null & PIDS+=($!); done
 
 for ((i=1; i<=RUNS; i++)); do
   touch .git/sprint-working
+  if [ "${QUIET_EACH:-0}" = 1 ]; then wait_quiet || exit 3; fi
   read -r L1 L5 L15 RQ _ < /proc/loadavg
+  if [ "${QUIET_EACH:-0}" = 1 ] && ! awk -v a="$L1" -v b="${QUIET_MAX_LOAD:-2.0}" 'BEGIN{exit !(a+0 < b+0)}'; then
+    echo "# load1 $L1 rose above bar between wait and run; aborting run $i" >&2; exit 3
+  fi
   TXT=$($BIN bench --pages "$CORPUS" --runs 5 2>/dev/null)
   C=$(echo "$TXT" | awk '/^large /{print $5; exit}')
   LT=$(echo "$TXT" | awk '/^large /{print $9; exit}')

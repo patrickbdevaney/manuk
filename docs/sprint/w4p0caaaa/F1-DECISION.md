@@ -20,3 +20,14 @@ Re-open condition: if W4.P0.c.a.a.a.a.a lands >=5 quiet rows (load1 < 2.0) and a
 flaky on the code itself and a statistic change (with a deliberately flaky mutant going red) is warranted.
 If all quiet rows pass, the flake is environmental and a wall failure on a loaded host should be re-run on
 a quiet one, not "fixed" in verify.sh.
+
+## Quiet-host result (W4.P0.c.a.a.a.a.a, 2026-11-23T04:33Z, chrome_ver=145.0.7632.116)
+
+5 runs labelled `quiet-load1<2` in `F1-spread.tsv`. Every run started only after its own start-of-run load1 was
+below 2.0 (`QUIET_EACH=1` in `f1-spread.sh`; load1 1.89-1.90, load5 3.24-3.26). cascade/mid =
+0.37, 0.37, 0.37, 0.50, 0.37: **5/5 PASS** (ambient load ~8.8: 0.43-0.81, 2/5 exceed).
+Large cascade 11.3-15.4 ms on the quiet host, against 15.2-25.8 ms at ambient load.
+So the re-open condition resolves to "environmental": the decision above stands. A red F1 on a loaded host
+should be re-run on a quiet one; verify.sh is unchanged. Caveat: load5 was still ~3.2, so this is a
+quiet-ish window rather than a fully idle host. The binary was target/release/manuk-wpt built 2026-11-22 06:45,
+the same binary as the loaded rows, so the comparison is like-for-like.
