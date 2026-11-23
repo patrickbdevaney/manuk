@@ -356,6 +356,7 @@ fn restyle_and_layout(
             log_memo_miss(k.0, dom.len(), &styles);
         }
     }
+    let memo_key = memo_key.filter(|k| memo_worth_storing(*k));
     let styles_in = memo_key.map(|_| styles.clone());
     let t_layout = std::time::Instant::now();
     let mut root_box = layout_document(dom, &styles, fonts, viewport_width);
@@ -479,6 +480,28 @@ struct LayoutMemo {
 
 thread_local! {
     static LAST_LAYOUT: std::cell::RefCell<Option<LayoutMemo>> = const { std::cell::RefCell::new(None) };
+    /// The key of the last pass that computed one, stored or not. See [`memo_worth_storing`].
+    static LAST_KEY_SEEN: std::cell::Cell<Option<(u64, u64)>> = const { std::cell::Cell::new(None) };
+}
+
+/// **Store a layout in the memo only once its inputs have come round a second time** (PERF.1.2).
+///
+/// Storing costs two whole-`StyleMap` clones and a box-tree clone. On Wikipedia (~19k nodes) that was
+/// 110-190 ms per pass, paid by every forced reflow and post-script restyle, and never repaid: each of
+/// those passes lays out a tree a script has just GROWN, so its key is new and the memo can never hit.
+/// The case the memo exists for (comix.to's carousel re-laying out one tree ~13 times, PERF.1.3.a)
+/// repeats its key pass after pass, so it still stores on the second pass and hits from the third.
+/// `MANUK_MEMO_STORE_ALWAYS=1` restores the old store-every-slow-pass rule (the A/B arm).
+fn memo_worth_storing(k: (u64, u64)) -> bool {
+    let prev = LAST_KEY_SEEN.with(|c| c.replace(Some(k)));
+    #[cfg(test)]
+    if PASS_MEMO_FORCE.with(|f| f.get()) {
+        return true;
+    }
+    if std::env::var_os("MANUK_MEMO_STORE_ALWAYS").is_some() {
+        return true;
+    }
+    prev.is_some_and(|p| p.0 == k.0 || p.1 == k.1)
 }
 
 /// Everything `layout_document` and the `@container` re-pass read besides the computed styles: the
@@ -2241,6 +2264,12 @@ fn selected_image_urls(
 }
 
 /// PERF.1.1.a: the early scan is on unless `MANUK_NO_EARLY_SCAN` is set (the gate's mutant arm).
+/// `MANUK_NO_DYN_PREFETCH=1` turns off PERF.1.2's early fetch of scripts inserted by a running
+/// dynamic script (the A/B arm).
+fn dyn_script_prefetch_enabled() -> bool {
+    std::env::var_os("MANUK_NO_DYN_PREFETCH").is_none()
+}
+
 fn early_scan_enabled() -> bool {
     std::env::var_os("MANUK_NO_EARLY_SCAN").is_none()
 }
@@ -7450,55 +7479,40 @@ impl Page {
         // Scoped to this run of rounds, not to the navigation: a flag whose reset lives somewhere
         // else eventually leaks and silently stops a healthy page from running its scripts.
         manuk_js::event_loop::clear_convergence_state();
-        for _ in 0..max_rounds {
+        let mut warmed: std::collections::HashSet<String> = std::collections::HashSet::new();
+        for round in 0..max_rounds {
             // Links a script inserted since the last round: fetch them, then tell the page.
             self.fetch_and_apply_stylesheets(fonts, viewport_width)
                 .await;
             let notified = self.fire_stylesheet_link_events(fonts, viewport_width);
-            let csp = &self.csp;
-            let pending: Vec<(manuk_dom::NodeId, String)> = self
-                .dom
-                .descendants(self.dom.root())
-                .filter(|&n| self.dom.tag_name(n) == Some("script"))
-                // A node in `dyn_scripts_ran` has already been evaluated. This used to be read off
-                // the DOM ("`src` was deleted, so it ran"), which is why a running script could not
-                // see its own URL — see the field's own comment.
-                .filter(|n| !self.dyn_scripts_ran.contains(n))
-                .filter_map(|n| {
-                    let src = self.dom.element(n)?.attr("src")?.trim().to_string();
-                    (!src.is_empty()).then(|| (n, resolve_url(&self.final_url, &src)))
-                })
-                // **This is the path an injected `<script src>` takes**, so it is the one CSP was
-                // written for: the initial parse is authored markup, but a script appended at
-                // runtime is what an XSS payload does. Enforcing on the first pass only would have
-                // been enforcement on the half that matters least.
-                .filter(|(_, url)| match Url::parse(url) {
-                    Ok(u) => {
-                        let ok =
-                            csp.allows_script_url(&u) && !mixed_content_blocks(&self.final_url, &u);
-                        if !ok {
-                            tracing::info!(%url, "CSP blocked a dynamically added <script src>");
-                        }
-                        ok
-                    }
-                    Err(_) => true,
-                })
-                .collect();
+            let pending = self.pending_dynamic_scripts(true);
             if pending.is_empty() && notified == 0 {
                 break;
             }
-            let fetched =
-                futures_util::future::join_all(pending.into_iter().map(|(node, url)| async move {
+            // **PERF.1.2: run each script the moment it and every script before it have arrived**, in
+            // the same order as before (document order within the round). Waiting for the WHOLE round
+            // (`join_all`) left the fast scripts idle behind the slowest fetch, and so held back the
+            // scripts THEY insert: puentedemando.com's GTM -> cookie banner -> banner.js chain waited
+            // ~0.7 s on an unrelated clarity.ms connect each hop.
+            for (_, url) in &pending {
+                warmed.insert(url.clone());
+            }
+            let mut fetched: futures_util::stream::FuturesOrdered<_> = pending
+                .into_iter()
+                .map(|(node, url)| async move {
                     let text = manuk_net::fetch(&url)
                         .await
                         .ok()
                         .and_then(|r| subresource_text(&r));
                     (node, text)
-                }))
-                .await;
-
+                })
+                .collect();
+            // The next round exists only if this one is not the last; a script inserted in the last
+            // round never runs, so it is not fetched early either.
+            let prefetch = round + 1 < max_rounds && dyn_script_prefetch_enabled();
             let mut any = false;
-            for (node, text) in fetched {
+            while let Some((node, text)) = futures_util::stream::StreamExt::next(&mut fetched).await
+            {
                 // A runtime-fetched script is a script round like any other: it arms the forced-reflow
                 // hook so its geometry reads see the nodes it just appended (G_RUNTIME_SCRIPT_READS_FRESH_GEOMETRY).
                 let _reflow = ReflowScope::install(
@@ -7576,6 +7590,21 @@ impl Page {
                 // A handler almost always injects the NEXT script (that is what a chunk loader is
                 // for), so this round counts as progress even when the body itself was empty.
                 any = true;
+                // **Start fetching what this script just inserted, now** — not after the rest of the
+                // round has run. It still RUNS in the next round, in the same order as before; only
+                // the wire time moves earlier. `manuk_net::fetch` single-flights the URL, so the
+                // round's own fetch joins this one instead of asking again.
+                if prefetch {
+                    if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                        for (_, url) in self.pending_dynamic_scripts(false) {
+                            if warmed.insert(url.clone()) {
+                                handle.spawn(async move {
+                                    let _ = manuk_net::fetch(&url).await;
+                                });
+                            }
+                        }
+                    }
+                }
             }
             if !any {
                 break;
@@ -7616,6 +7645,41 @@ impl Page {
     /// `<link rel=stylesheet data-precedence>` and holds the whole commit until that link's `load`/`error`;
     /// with no event the commit waits for its 60 s timer (opendining: 0 targets inside a 4 s settle,
     /// W6.R1.b.a.a). Fires once per link, after the stylesheet fetch phase has settled it.
+    /// The `<script src>` elements the page added at runtime that have not run yet, with their
+    /// resolved URLs, in document order — minus the ones CSP or mixed-content rules forbid
+    /// (`log_blocked` reports those; the early-fetch scan passes `false` so each is reported once).
+    #[cfg(feature = "spidermonkey")]
+    fn pending_dynamic_scripts(&self, log_blocked: bool) -> Vec<(manuk_dom::NodeId, String)> {
+        let csp = &self.csp;
+        self.dom
+            .descendants(self.dom.root())
+            .filter(|&n| self.dom.tag_name(n) == Some("script"))
+            // A node in `dyn_scripts_ran` has already been evaluated. This used to be read off
+            // the DOM ("`src` was deleted, so it ran"), which is why a running script could not
+            // see its own URL — see the field's own comment.
+            .filter(|n| !self.dyn_scripts_ran.contains(n))
+            .filter_map(|n| {
+                let src = self.dom.element(n)?.attr("src")?.trim().to_string();
+                (!src.is_empty()).then(|| (n, resolve_url(&self.final_url, &src)))
+            })
+            // **This is the path an injected `<script src>` takes**, so it is the one CSP was
+            // written for: the initial parse is authored markup, but a script appended at
+            // runtime is what an XSS payload does. Enforcing on the first pass only would have
+            // been enforcement on the half that matters least.
+            .filter(|(_, url)| match Url::parse(url) {
+                Ok(u) => {
+                    let ok =
+                        csp.allows_script_url(&u) && !mixed_content_blocks(&self.final_url, &u);
+                    if !ok && log_blocked {
+                        tracing::info!(%url, "CSP blocked a dynamically added <script src>");
+                    }
+                    ok
+                }
+                Err(_) => true,
+            })
+            .collect()
+    }
+
     #[cfg(feature = "spidermonkey")]
     fn fire_stylesheet_link_events(&mut self, fonts: &FontContext, viewport_width: f32) -> usize {
         if self.js.is_none() {
@@ -11629,7 +11693,7 @@ impl Page {
             Some(r) => r,
             None => {
                 let root = layout_document(&self.dom, styles, fonts, viewport_width);
-                if let Some(k) = memo_key {
+                if let Some(k) = memo_key.filter(|k| memo_worth_storing(*k)) {
                     if t_layout.elapsed().as_millis() as u64 >= pass_memo_min_ms() {
                         LAST_LAYOUT.with(|c| {
                             *c.borrow_mut() = Some(LayoutMemo {
@@ -17119,6 +17183,24 @@ mod tests {
 
     /// RG.S1.a.a.a.b.a.a.a.a.a: `relayout` over an unchanged tree reuses the previous layout, and
     /// what it installs equals a fresh layout; any input change (a style, here) lays out again.
+    /// PERF.1.2: the memo is stored only when a pass's key repeats the previous pass's (comix.to's
+    /// carousel), never for a pass over a tree a script has just grown (Wikipedia's forced reflows).
+    /// Mutant "always store" makes the first assertion red.
+    #[test]
+    fn memo_is_stored_only_when_the_key_comes_round_again() {
+        LAST_KEY_SEEN.with(|c| c.set(None));
+        assert!(
+            !memo_worth_storing((1, 2)),
+            "a first-seen key must not pay for a store"
+        );
+        assert!(memo_worth_storing((1, 2)), "a repeated key must be stored");
+        assert!(!memo_worth_storing((3, 4)), "a new tree must not be stored");
+        assert!(
+            memo_worth_storing((5, 4)),
+            "same tree, new images (key.1 repeats) is stored"
+        );
+    }
+
     #[test]
     fn rg_s1_relayout_with_equal_inputs_reuses_the_previous_layout() {
         PASS_MEMO_FORCE.with(|f| f.set(true));

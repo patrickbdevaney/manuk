@@ -860,3 +860,23 @@ pass lost, one layout total missing).
 
 `perf1-profile.py --runs 3 --engines manuk`, raw rows `docs/sprint/perf1-pf12c/runs.jsonl/runs.jsonl`; `perf1-settle-gate.py` Σ settle = **14.61 s** (bar <= 11): **not met**, node stays BLOCKED.
 Top URLs (median s): puentedemando.com 3.43, Rust 2.21, Alan_Turing 1.66, comix.to 1.50, Python 1.50, mobile.bg 1.04. What is left is JS evaluation inside script rounds (PERF.1.4 territory), not redundant cascade/layout.
+
+## PERF.1.2 second pass: overlap the dynamic-script chain, store the layout memo only on a repeated key (chrome_ver=145.0.7632.116; manuk only)
+
+Paired interleaved, same binary (`perf1-profile.py --runs 3 --manuk NEW --manuk-b NEW --env-b MANUK_NO_DYN_PREFETCH=1,MANUK_MEMO_STORE_ALWAYS=1`,
+20 URLs x 3 runs, raw rows and traces `docs/sprint/perf1-pf12d/`). Arm B is the old behaviour except that a round's scripts run as
+they arrive (not switchable).
+
+| arm | Σ settle s (sum of per-URL medians) | Σ load s |
+|---|---|---|
+| new | 12.31 | 67.43 |
+| B (old rules) | 13.51 | 69.98 |
+
+Bar (Σ settle <= 11 s): **not met**. Movers (median settle s, B -> new): puentedemando.com 3.32 -> 2.45, Rust 2.01 -> 1.63,
+Alan_Turing 1.55 -> 1.32, Python 1.56 -> 1.41. Against: comix.to 1.32 -> 1.78 (layout 0.54 -> 0.66-1.08: it loses one memo hit, and
+run 1 of the new arm caught an extra dynamic-scripts round on the live page).
+a11y node counts new vs B (`perf1-settle-gate.py --nodes`): max drift 0.24 % (mobile.bg 419 vs 418), 0 on 18 others; comix.to read
+failed once in the gate run and gave 2251 = 2251 in 3/3 reruns.
+Measured cost split on Alan_Turing (temporary timers, one run): each forced reflow in `dynamic scripts` = MinimalCascade 300-400 ms +
+layout 90-150 ms + memo clones 110-190 ms (now gone); the closing `apply_stylesheets` (~400 ms cascade+layout) emits no trace line, so it
+counts as settle. What remains is full-document cascades for small script mutations -> incremental restyle (PERF.1.2.b).

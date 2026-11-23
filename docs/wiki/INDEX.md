@@ -2986,6 +2986,12 @@
   - L36 · What the next phase costs
   - L52 · The shape worth keeping
 
+## Overlap a script chain, and store a memo only when it can hit
+`docs/wiki/overlap-a-script-chain-and-store-a-memo-only-when-it-can-hit.md`
+
+  - L7 · Mechanism (engine/page/src/lib.rs)
+  - L21 · Not fixed
+
 ## A page's fetches and timers need a pump after load, not only during it
 `docs/wiki/page-async-work-needs-a-post-load-pump.md`
 
@@ -3814,4 +3820,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3105 sections across 176 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3107 sections across 177 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
