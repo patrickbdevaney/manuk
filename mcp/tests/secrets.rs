@@ -16,6 +16,8 @@ use serde_json::{json, Value};
 const SECRET: &str = "Tr0ub4dor3-zq91x";
 /// OS-keyring item (service=manuk, account=KEYRING_ITEM), stored by scripts/w316-keyring-gate.sh.
 const KEYRING_ITEM: &str = "w3a16a-pw";
+/// W3.16.a.b.a: reference answered by the SHIM-OP script (not 1Password) written by `write_shim_op`.
+const OP_REF: &str = "op://test/item/password";
 type Log = Arc<Mutex<Vec<String>>>;
 
 fn page(evil: &str) -> String {
@@ -168,7 +170,7 @@ struct Client {
 }
 
 impl Client {
-    fn start(chrome: bool, dir: &Path, mutate: bool, keyring: bool) -> Client {
+    fn start(chrome: bool, dir: &Path, mutate: bool, keyring: Option<&str>) -> Client {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_manuk-mcp"));
         if chrome {
             cmd.args(["--backend", "chrome"]);
@@ -184,10 +186,17 @@ impl Client {
             .env("MANUK_HTTP_CACHE_DIR", dir.join("cache"))
             .arg("--allow-write")
             .arg(dir);
-        if keyring {
+        if let Some(item) = keyring {
+            if item == OP_REF {
+                let bin = write_shim_op(dir);
+                cmd.env(
+                    "PATH",
+                    format!("{}:{}", bin.display(), std::env::var("PATH").unwrap_or_default()),
+                );
+            }
             // The password must come from the OS keyring (secret-tool), not the env provider. The confined
             // process cannot exec; the pre-confinement broker (W3.16.a.a) answers the lookup.
-            cmd.env("MANUK_SECRET_ALLOW", KEYRING_ITEM)
+            cmd.env("MANUK_SECRET_ALLOW", item)
                 .env_remove("MANUK_SECRET_PORTALPW");
         } else {
             cmd.env("MANUK_SECRET_PORTALPW", SECRET);
@@ -288,10 +297,30 @@ struct Outcome {
     store_hits: usize,
 }
 
-fn run(chrome: bool, mutate: bool, keyring: bool) -> Outcome {
+/// A shim `op` (labelled SHIM-OP, not 1Password): answers exactly `op read op://test/item/password`, and
+/// records every argv so the test can prove the plumbing spawned it with the right arguments.
+fn write_shim_op(dir: &Path) -> PathBuf {
+    let bin = dir.join("shim-bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let f = bin.join("op");
+    std::fs::write(
+        &f,
+        format!(
+            "#!/bin/sh\n# SHIM-OP: not 1Password\necho \"$*\" >> \"{}/op-argv.log\"\n[ \"$*\" = \"read {OP_REF}\" ] && printf '%s\\n' '{SECRET}' || exit 1\n",
+            dir.display()
+        ),
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&f, std::fs::Permissions::from_mode(0o755)).unwrap();
+    bin
+}
+
+fn run(chrome: bool, mutate: bool, keyring: Option<&str>) -> Outcome {
     let dir = std::env::temp_dir().join(format!(
-        "w316-{}-{chrome}-{mutate}-{keyring}",
-        std::process::id()
+        "w316-{}-{chrome}-{mutate}-{}",
+        std::process::id(),
+        keyring.map(|k| k.len()).unwrap_or(0)
     ));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
@@ -316,7 +345,7 @@ fn run(chrome: bool, mutate: bool, keyring: bool) -> Outcome {
     step(
         &mut c,
         "type",
-        json!({"handle": handle_of(&nav, "\"Password\""), "secret": if keyring { KEYRING_ITEM } else { "portalpw" }}),
+        json!({"handle": handle_of(&nav, "\"Password\""), "secret": keyring.unwrap_or("portalpw")}),
     );
     step(
         &mut c,
@@ -374,7 +403,7 @@ fn run(chrome: bool, mutate: bool, keyring: bool) -> Outcome {
     }
 }
 
-fn assert_green(chrome: bool, keyring: bool) {
+fn assert_green(chrome: bool, keyring: Option<&str>) {
     let o = run(chrome, false, keyring);
     assert!(
         !o.evil.iter().any(|l| l.contains(SECRET)),
@@ -482,12 +511,12 @@ fn totp_equals_oathtool_at_fixed_times() {
 
 #[test]
 fn manuk_backend_blocks_all_four_and_login_succeeds() {
-    assert_green(false, false);
+    assert_green(false, None);
 }
 
 #[test]
 fn chrome_backend_blocks_all_four_and_login_succeeds() {
-    assert_green(true, false);
+    assert_green(true, None);
 }
 
 /// Needs an unlocked Secret Service holding `KEYRING_ITEM` = SECRET (service=manuk). Build the store inside a
@@ -505,13 +534,13 @@ fn keyring_backend_blocks_all_four_and_login_succeeds() {
         SECRET,
         "keyring item {KEYRING_ITEM} is not stored; the gate cannot run"
     );
-    assert_green(false, true);
+    assert_green(false, Some(KEYRING_ITEM));
 }
 
 #[test]
 #[ignore = "needs the keyring item; run scripts/w316-keyring-gate.sh"]
 fn guard_off_keyring_run_leaks_so_the_gate_goes_red() {
-    let o = run(false, true, true);
+    let o = run(false, true, Some(KEYRING_ITEM));
     assert!(
         o.evil.iter().any(|l| l.contains(SECRET)),
         "keyring mutant did not leak; the gate cannot go red: {:#?}",
@@ -521,7 +550,7 @@ fn guard_off_keyring_run_leaks_so_the_gate_goes_red() {
 
 #[test]
 fn guard_off_manuk_run_leaks_so_the_gate_goes_red() {
-    let o = run(false, true, false);
+    let o = run(false, true, None);
     for ch in ["GET /f?", "POST /b", "WS frame"] {
         assert!(
             o.evil.iter().any(|l| l.contains(ch) && l.contains(SECRET)),
@@ -538,7 +567,7 @@ fn guard_off_manuk_run_leaks_so_the_gate_goes_red() {
 
 #[test]
 fn guard_off_chrome_run_leaks_so_the_gate_goes_red() {
-    let o = run(true, true, false);
+    let o = run(true, true, None);
     assert!(
         o.evil.iter().any(|l| l.contains(SECRET)),
         "mutant did not leak; the gate cannot go red: {:#?}",
@@ -548,7 +577,7 @@ fn guard_off_chrome_run_leaks_so_the_gate_goes_red() {
 
 #[test]
 fn guard_off_chrome_run_leaks_the_w316b_channels() {
-    let o = run(true, true, false);
+    let o = run(true, true, None);
     for ch in ["WS frame", "GET /wf?", "GET /es?"] {
         assert!(
             o.evil.iter().any(|l| l.contains(ch) && l.contains(SECRET)),
@@ -560,7 +589,7 @@ fn guard_off_chrome_run_leaks_the_w316b_channels() {
 
 #[test]
 fn guard_off_chrome_run_leaks_the_w316ba_channels() {
-    let o = run(true, true, false);
+    let o = run(true, true, None);
     for ch in ["WS frame", "GET /rtc?"] {
         assert!(
             o.evil.iter().any(|l| l.contains(ch) && l.contains(SECRET)),
@@ -673,5 +702,37 @@ fn secret_name_in_operator_list_still_resolves() {
     assert!(
         !text.contains("fake-pw-7a"),
         "secret bytes leaked into the result: {text}"
+    );
+}
+
+/// W3.16.a.b.a (SHIM-OP, does not prove 1Password): `type(secret='op://test/item/password')` makes the
+/// secrets plumbing spawn `op read <ref>` (allow-listed via MANUK_SECRET_ALLOW), fills the same-origin login,
+/// and the egress gate still refuses the shimmed value to a foreign origin.
+#[test]
+fn shim_op_backend_blocks_all_four_and_login_succeeds() {
+    assert_green(false, Some(OP_REF));
+    let argv = std::fs::read_to_string(
+        std::env::temp_dir()
+            .join(format!(
+                "w316-{}-false-false-{}",
+                std::process::id(),
+                OP_REF.len()
+            ))
+            .join("op-argv.log"),
+    )
+    .unwrap_or_default();
+    assert!(
+        argv.lines().any(|l| l == format!("read {OP_REF}")),
+        "shim op was never asked `read {OP_REF}`: {argv:?}"
+    );
+}
+
+#[test]
+fn guard_off_shim_op_run_leaks_so_the_gate_goes_red() {
+    let o = run(false, true, Some(OP_REF));
+    assert!(
+        o.evil.iter().any(|l| l.contains(SECRET)),
+        "shim-op mutant did not leak; the gate cannot go red: {:#?}",
+        o.evil
     );
 }
