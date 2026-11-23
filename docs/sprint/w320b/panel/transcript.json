@@ -1,0 +1,286 @@
+{
+  "chrome_ver": "149.0.7827.155",
+  "browser": "Chrome/149.0.7827.155",
+  "transcript": {
+    "pizza-maker": {
+      "url": "https://googlechromelabs.github.io/webmcp-tools/demos/pizza-maker/",
+      "native": [
+        {
+          "name": "add_topping",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "topping": {
+                "type": "string",
+                "enum": [
+                  "🍕",
+                  "🍄",
+                  "🌿",
+                  "🍍",
+                  "🫑",
+                  "🥓",
+                  "🧅",
+                  "🫒",
+                  "🌽",
+                  "🌶️",
+                  "🐑"
+                ]
+              },
+              "size": {
+                "type": "string",
+                "enum": [
+                  "Small",
+                  "Medium",
+                  "Large",
+                  "Extra Large"
+                ]
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 50,
+                "description": "Number of toppings to add"
+              }
+            },
+            "required": [
+              "topping"
+            ]
+          },
+          "description": "Add one or more toppings to the pizza"
+        },
+        {
+          "name": "manage_pizza",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "remove_last",
+                  "reset"
+                ]
+              }
+            },
+            "required": [
+              "action"
+            ]
+          },
+          "description": "Manage pizza state"
+        },
+        {
+          "name": "remove_topping",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "topping": {
+                "type": "string",
+                "enum": [
+                  "🍕",
+                  "🍄",
+                  "🌿",
+                  "🍍",
+                  "🫑",
+                  "🥓",
+                  "🧅",
+                  "🫒",
+                  "🌽",
+                  "🌶️",
+                  "🐑"
+                ]
+              },
+              "all": {
+                "type": "boolean",
+                "description": "Remove all toppings of this type"
+              }
+            },
+            "required": [
+              "topping"
+            ]
+          },
+          "description": "Remove a specific topping from the pizza"
+        },
+        {
+          "name": "set_pizza_size",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "size": {
+                "type": "string",
+                "enum": [
+                  "Small",
+                  "Medium",
+                  "Large",
+                  "Extra Large"
+                ],
+                "description": "The specific size name."
+              },
+              "number_of_persons": {
+                "type": "number",
+                "description": "The number of people eating to help infer the correct size."
+              }
+            }
+          },
+          "description": "Set the pizza size directly or infer it based on the number of people."
+        },
+        {
+          "name": "set_pizza_style",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "style": {
+                "type": "string",
+                "enum": [
+                  "Classic",
+                  "Bianca",
+                  "BBQ",
+                  "Pesto",
+                  "Wales"
+                ]
+              }
+            },
+            "required": [
+              "style"
+            ]
+          },
+          "description": "Set the style of the pizza (colors/theme)"
+        },
+        {
+          "name": "share_pizza",
+          "description": "Get a shareable URL for the current pizza creation"
+        },
+        {
+          "name": "toggle_layer",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "layer": {
+                "type": "string",
+                "enum": [
+                  "sauce-layer",
+                  "cheese-layer"
+                ]
+              },
+              "action": {
+                "type": "string",
+                "enum": [
+                  "add",
+                  "remove",
+                  "toggle"
+                ]
+              }
+            },
+            "required": [
+              "layer"
+            ]
+          },
+          "description": "Control pizza layers (sauce, cheese). Use \"add\", \"remove\", or \"toggle\"."
+        }
+      ],
+      "manuk": null,
+      "error": "manuk navigate failed: {\"content\":[{\"type\":\"text\",\"text\":\"CDP Page.navigate timed out\\npage: p47dc76:1\"}],\"isError\":true}",
+      "nativeMeta": {
+        "modelContext": "object",
+        "testing": "object"
+      },
+      "pass": false
+    },
+    "coffee-shop": {
+      "url": "https://googlechromelabs.github.io/webmcp-tools/demos/coffee-shop/",
+      "native": null,
+      "manuk": null,
+      "error": "native eval threw: {\"exceptionId\":1,\"text\":\"Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'getTools')\",\"lineNumber\":0,\"columnNumber\":0,\"exception\":{\"type\":\"object\",\"subtype\":\"error\",\"className\":\"TypeError\",\"description\":\"TypeError: Cannot read properties of undefined (reading 'getTools'",
+      "pass": false
+    },
+    "ticket-booking": {
+      "url": "https://googlechromelabs.github.io/webmcp-tools/demos/ticket-booking/",
+      "native": null,
+      "manuk": null,
+      "error": "native eval threw: {\"exceptionId\":1,\"text\":\"Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'getTools')\",\"lineNumber\":0,\"columnNumber\":0,\"exception\":{\"type\":\"object\",\"subtype\":\"error\",\"className\":\"TypeError\",\"description\":\"TypeError: Cannot read properties of undefined (reading 'getTools'",
+      "pass": false
+    },
+    "smart-home": {
+      "url": "https://googlechromelabs.github.io/webmcp-tools/demos/smart-home/",
+      "native": null,
+      "manuk": null,
+      "error": "native eval threw: {\"exceptionId\":1,\"text\":\"Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'getTools')\",\"lineNumber\":0,\"columnNumber\":0,\"exception\":{\"type\":\"object\",\"subtype\":\"error\",\"className\":\"TypeError\",\"description\":\"TypeError: Cannot read properties of undefined (reading 'getTools'",
+      "pass": false
+    },
+    "doors": {
+      "url": "https://googlechromelabs.github.io/webmcp-tools/demos/doors/",
+      "native": null,
+      "manuk": null,
+      "error": "native eval threw: {\"exceptionId\":1,\"text\":\"Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'getTools')\",\"lineNumber\":0,\"columnNumber\":0,\"exception\":{\"type\":\"object\",\"subtype\":\"error\",\"className\":\"TypeError\",\"description\":\"TypeError: Cannot read properties of undefined (reading 'getTools'",
+      "pass": false
+    },
+    "french-bistro": {
+      "url": "https://googlechromelabs.github.io/webmcp-tools/demos/french-bistro/",
+      "native": [
+        {
+          "name": "book_table_le_petit_bistro",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Customer's full name (min 2 chars)"
+              },
+              "phone": {
+                "type": "string",
+                "description": "Customer's phone number (min 10 digits)"
+              },
+              "date": {
+                "type": "string",
+                "description": "Reservation date. Must be today or future."
+              },
+              "time": {
+                "type": "string",
+                "description": "Reservation time"
+              },
+              "guests": {
+                "type": "string",
+                "description": "Number of people dining. Must be a string value between '1' and '5', or '6' for parties of 6 or more.",
+                "enum": [
+                  "1",
+                  "2",
+                  "3",
+                  "4",
+                  "5",
+                  "6"
+                ]
+              },
+              "seating": {
+                "type": "string",
+                "description": "Preferred seating area",
+                "enum": [
+                  "Main Dining",
+                  "Terrace",
+                  "Private Booth",
+                  "Bar"
+                ]
+              },
+              "requests": {
+                "type": "string",
+                "description": "Special requests (allergies, occasions, etc.)"
+              }
+            },
+            "required": [
+              "name",
+              "phone",
+              "date",
+              "time",
+              "guests"
+            ]
+          },
+          "description": "Initiates a dining reservation request at Le Petit Bistro. Accepts customer details, timing, and seating preferences."
+        }
+      ],
+      "manuk": null,
+      "error": "manuk navigate failed: {\"content\":[{\"type\":\"text\",\"text\":\"CDP Page.navigate timed out\\nundo: restore(\\\"auto1\\\")\\npage: p47dc76:2\"}],\"isError\":true}",
+      "nativeMeta": {
+        "modelContext": "object",
+        "testing": "object"
+      },
+      "pass": false
+    }
+  }
+}
