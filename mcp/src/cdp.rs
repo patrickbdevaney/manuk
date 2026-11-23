@@ -1931,6 +1931,12 @@ impl Drop for LaunchGuard {
 }
 
 impl CdpBackend {
+    /// W6.D1.b: the CDP target id of the page this backend is attached to (what the shell's human
+    /// view shows), so a consumer can prove a frame came from Chrome.
+    pub fn target_id(&self) -> &str {
+        &self.cur
+    }
+
     pub fn launch(width: u32, height: u32) -> Result<Self> {
         let dir = std::env::temp_dir().join(format!(
             "manuk-cdp-{}-{}",

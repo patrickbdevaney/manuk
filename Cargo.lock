@@ -3494,6 +3494,7 @@ dependencies = [
  "async-trait",
  "bytemuck",
  "cpal",
+ "image",
  "libc",
  "manuk-agent",
  "manuk-compositor",

@@ -49,6 +49,7 @@ manuk-mcp = { path = "../mcp" }
 # decode has to happen, so it is the correct and only place to pay that cost.
 manuk-media = { workspace = true, features = ["video", "audio", "av1", "avif"] }
 
+image = { version = "0.25", default-features = false, features = ["png"] }
 anyhow.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true

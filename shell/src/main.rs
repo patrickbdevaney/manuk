@@ -14,6 +14,7 @@
 
 mod agent_run;
 mod headless;
+mod human_view;
 mod hub_run;
 mod audio;
 mod chrome;
@@ -71,6 +72,7 @@ fn main() -> Result<()> {
         Some("jit-status") => cmd_jit_status(),
         Some("render") => cmd_render(&args[1..]),
         Some("browse") => cmd_browse(&args[1..]),
+        Some("view-frame") => cmd_view_frame(&args[1..]),
         Some("agent-task") => headless::cmd(&args[1..]),
         #[cfg(feature = "_sm")]
         Some("eval") => cmd_eval(&args[1..]),
@@ -146,6 +148,47 @@ fn positional(args: &[String]) -> Option<&str> {
     args.iter()
         .find(|a| !a.starts_with('-'))
         .map(String::as_str)
+}
+
+/// W6.D1.b: capture ONE human-view frame of `<url>` with the configured backend and print what
+/// produced it (`source=chrome target=<CDP id>` or `source=engine`), its size, a few probe pixels
+/// and the page text. Default config = Chrome; `--engine-view` opts into the in-process engine.
+fn cmd_view_frame(args: &[String]) -> Result<()> {
+    let Some(url) = positional(args) else {
+        bail!("view-frame: missing <url>");
+    };
+    let width: u32 = flag_value(args, &["--width", "-w"])
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(DEFAULT_WIDTH);
+    let env = std::env::var("MANUK_HUMAN_VIEW").ok();
+    let frame = match human_view::HumanView::from_config(args, env.as_deref()) {
+        human_view::HumanView::Chrome => {
+            let mut v = human_view::ChromeView::launch(width, 720)?;
+            v.navigate(url)?;
+            v.frame()?
+        }
+        human_view::HumanView::Engine => {
+            let rt = manuk_net::runtime();
+            let fonts = FontContext::new();
+            let (page, _) = rt.block_on(manuk_page::fetch_streaming_page(url, &fonts, width as f32))?;
+            let c = page.paint_scrolled(&fonts, width, 720, 0.0);
+            human_view::Frame {
+                source: human_view::FrameSource::Engine,
+                width: c.width(),
+                height: c.height(),
+                rgba: c.rgba_bytes().to_vec(),
+                text: String::new(),
+            }
+        }
+    };
+    match &frame.source {
+        human_view::FrameSource::Chrome { target_id } => println!("source=chrome target={target_id}"),
+        human_view::FrameSource::Engine => println!("source=engine"),
+    }
+    println!("size={}x{}", frame.width, frame.height);
+    println!("pixel0={:?}", frame.pixel(1, 1));
+    println!("text={}", frame.text.replace('\n', " | "));
+    Ok(())
 }
 
 fn cmd_render(args: &[String]) -> Result<()> {
