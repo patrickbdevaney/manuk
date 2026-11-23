@@ -43,6 +43,15 @@ class T(unittest.TestCase):
         p = transcript([("act", "ok clicked"), ("act", "h418 refused focus (inert or disabled); nothing was focused"), ("find", "- button x")])
         self.assertEqual(r.classify(p), "refusal-seen")
 
+    def test_newline_form_nochange_is_failure(self):
+        NL = "no change\nurl: unchanged"
+        # newline form after a success: failure result, two of them -> refusal-seen (clause b)
+        self.assertEqual(r.classify(transcript([("act", "ok clicked"), ("act", NL), ("act", NL)])), "refusal-seen")
+        # and it must not move the last-success window
+        self.assertEqual(r.classify(transcript([("act", "ok clicked"), ("act", NL), ("act", NL), ("act", NL)])), "refusal-seen")
+        # a single one is not enough
+        self.assertEqual(r.classify(transcript([("act", "ok clicked"), ("act", NL)])), "stop-by-choice")
+
     def test_unrecovered_nochange_is_act(self):
         self.assertEqual(r.classify(transcript([("act", NC), ("act", NC)])), "refusal-seen")
 

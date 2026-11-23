@@ -1,0 +1,36 @@
+arm	task	run	hand_label	evidence
+cdp-layer+pwfmt-v7r	dashdish-4	1	refusal-seen	clause (b): after last success (act ok, CALL73) three results start with no change|url unchanged (focus, Enter, click)
+cdp-layer+pwfmt-v7r	dashdish-5	1	stop-by-choice	no clause (a)-(h) fired in window after last success; action calls made
+cdp-layer+pwfmt-v7r	fly-unified-2	1	stop-by-choice	no clause (a)-(h) fired in window after last success; action calls made
+cdp-layer+pwfmt-v7r	fly-unified-4	1	stop-by-choice	no clause (a)-(h) fired in window after last success; action calls made
+cdp-layer+pwfmt-v7r	fly-unified-5	1	stop-by-choice	no clause (a)-(h) fired in window after last success; action calls made
+cdp-layer+pwfmt-v7r	fly-unified-6	1	stop-by-choice	no clause (a)-(h) fired in window after last success; action calls made
+cdp-layer+pwfmt-v7r	fly-unified-9	1	refusal-seen	clause (b): after last success (act click CALL27) two key results (shift+Tab, ArrowDown) start with no change|url unchanged
+cdp-layer+pwfmt-v7r	gocalendar-1	1	stop-by-choice	only one no change result after last success (key End); no other clause; action calls made
+cdp-layer+pwfmt-v7r	gocalendar-7	1	stop-by-choice	only one STALE-class result (is unknown (handles) after last success; need two; action calls made
+cdp-layer+pwfmt-v7r	gomail-3	1	stop-by-choice	no clause (a)-(h) fired in window after last success; action calls made
+cdp-layer+pwfmt-v7r	networkin-10	1	stop-by-choice	no clause (a)-(h) fired in window after last success; action calls made
+cdp-layer+pwfmt-v7r	networkin-3	1	stop-by-choice	no clause (a)-(h) fired in window after last success; action calls made
+cdp-layer+pwfmt-v7r	networkin-6	1	stop-by-choice	no clause (a)-(h) fired in window after last success; action calls made
+cdp-layer+pwfmt-v7r	networkin-9	1	stop-by-choice	no clause (a)-(h) fired in window after last success; action calls made
+cdp-layer+pwfmt-v7r	opendining-10	1	stop-by-choice	no clause (a)-(h) fired in window after last success; action calls made
+cdp-layer+pwfmt-v7r	opendining-4	1	stop-by-choice	only one STALE after last success; no human surface is not a step-4 clause and was before last success; action calls made
+cdp-layer+pwfmt-v7r	opendining-5	1	stop-by-choice	no clause (a)-(h) fired in window after last success; action calls made
+cdp-layer+pwfmt-v7r	opendining-8	1	stop-by-choice	no clause (a)-(h) fired in window after last success; action calls made
+cdp-layer+pwfmt-v7r	staynb-4	1	stop-by-choice	no clause fired: (g) text says fill did not register but only bare fill_form used (not type/browser_type), (h) one typing call; after last success only OCCLUDED/NOCHANGE-free; action calls made
+cdp-layer+pwfmt-v7r	staynb-5	1	stop-by-choice	no clause (a)-(h) fired in window after last success; action calls made
+cdp-layer+pwfmt-v7r	staynb-6	1	stop-by-choice	no clause (a)-(h) fired in window after last success; action calls made
+cdp-layer+pwfmt-v7r	staynb-8	1	stop-by-choice	no clause (a)-(h) fired in window after last success; action calls made
+cdp-layer+pwfmt-v7r	topwork-1	1	stop-by-choice	no clause (a)-(h) fired in window after last success; action calls made
+cdp-layer+pwfmt-v7r	topwork-2	1	stop-by-choice	no clause (a)-(h) fired in window after last success; action calls made
+cdp-layer+pwfmt-v7r	topwork-3	1	stop-by-choice	no clause (a)-(h) fired in window after last success; action calls made
+cdp-layer+pwfmt-v7r	topwork-4	1	stop-by-choice	no clause (a)-(h) fired in window after last success; action calls made
+cdp-layer+pwfmt-v7r	dashdish-4	2	stop-by-choice	only one no change after last success (navigate); (g)/(h) not met; action calls made
+cdp-layer+pwfmt-v7r	dashdish-5	2	stop-by-choice	no clause (a)-(h) fired in window after last success; action calls made
+cdp-layer+pwfmt-v7r	fly-unified-2	2	stop-by-choice	no clause (a)-(h) fired in window after last success; action calls made
+cdp-layer+pwfmt-v7r	fly-unified-4	2	stop-by-choice	no clause (a)-(h) fired in window after last success; action calls made
+cdp-layer+pwfmt-v7r	fly-unified-5	2	stop-by-choice	no clause (a)-(h) fired in window after last success; action calls made
+cdp-layer+pwfmt-v7r	fly-unified-6	2	stop-by-choice	no clause (a)-(h) fired in window after last success; action calls made
+cdp-layer+pwfmt-v7r	fly-unified-9	2	stop-by-choice	no clause (a)-(h) fired in window after last success; action calls made
+cdp-layer+pwfmt-v7r	gocalendar-7	2	stop-by-choice	no clause (a)-(h) fired in window after last success; action calls made
+cdp-layer+pwfmt-v7r	gomail-3	2	stop-by-choice	no clause (a)-(h) fired in window after last success; action calls made

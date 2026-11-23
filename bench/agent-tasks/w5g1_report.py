@@ -29,7 +29,7 @@ ACTS = {"act", "type", "fill_form", "browser_click", "browser_type", "browser_fi
         "browser_press_key", "click", "press", "select", "key", "scroll", "navigate", "handoff", "drag", "browser_navigate",
         "browser_hover", "browser_navigate_back", "back"}
 # a result that is not a success: the same signals real_classify counts as act failures, plus plain errors
-FAIL = re.compile(r"^no change \| url: unchanged|STALE|no longer on the page|handles are per-page|is unknown \(handles|"
+FAIL = re.compile(r"^no change[ \t]*(?:\||\n)[ \t]*url: unchanged|STALE|no longer on the page|handles are per-page|is unknown \(handles|"
                   r"bad page handle|not found in the current page snapshot|is not supported by this backend|"
                   r"refused focus|no enclosing <form>|no human surface is attached|TimeoutError|^\s*(Error|error)\b|### Error", re.M)
 ARMS = ["cdp-layer", "cdp-layer+pwfmt"]
