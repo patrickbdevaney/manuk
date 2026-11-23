@@ -15,6 +15,9 @@ const MCP = process.env.MANUK_MCP_BIN || 'target/release/manuk-mcp';
 const PIN = process.env.MANUK_CHROME_PIN || 'unset';
 const BASE = 'https://googlechromelabs.github.io/webmcp-tools/demos/';
 const DEMOS = ['pizza-maker', 'coffee-shop', 'ticket-booking', 'smart-home', 'doors', 'french-bistro'];
+// W3.20.b.b: source label the manuk MCP entry must carry, from the page-level trace in BISTRO.md (trace-bistro.mjs):
+// the page's webmcp-declarative.js polyfill calls modelContext.registerTool for form[toolname], so the bridge sees a registerTool.
+const EXPECT_SOURCE = { 'french-bistro': process.env.SRC_MUTANT || 'registerTool' };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const sortKeys = (v) =>
@@ -110,6 +113,7 @@ async function manukTools(url) {
     name: t.name.slice('webmcp_'.length),
     schema: asObj(t.inputSchema),
     description: t.description,
+    source: t._meta?.['manuk/webmcpSource'],
   }));
 }
 
@@ -132,8 +136,9 @@ for (const d of DEMOS) {
     const missing = nn.filter((n) => !mn.includes(n));
     const extra = mn.filter((n) => !nn.includes(n));
     const schemaDiff = rec.native.filter((t) => { const m = rec.manuk.find((x) => x.name === t.name); return m && !schemaEqual(t.schema, m.schema); }).map((t) => t.name);
-    const pass = nn.length > 0 && missing.length === 0 && extra.length === 0 && schemaDiff.length === 0;
-    Object.assign(rec, { missing, extra, schemaDiff, pass });
+    const srcWrong = rec.manuk.filter((t) => EXPECT_SOURCE[d] && t.source !== EXPECT_SOURCE[d]).map((t) => t.name + ':' + t.source);
+    const pass = srcWrong.length === 0 && nn.length > 0 && missing.length === 0 && extra.length === 0 && schemaDiff.length === 0;
+    Object.assign(rec, { missing, extra, schemaDiff, srcWrong, pass });
   } catch (e) {
     rec.error = String(e.message || e);
     rec.pass = false;
@@ -142,7 +147,7 @@ for (const d of DEMOS) {
   rows.push([d, rec.pass ? 'PASS' : 'FAIL', rec.native ? rec.native.length : '', rec.manuk ? rec.manuk.length : '',
     rec.native ? rec.native.map((t) => t.name).join(',') : '', rec.manuk ? rec.manuk.map((t) => t.name).join(',') : '',
     (rec.missing || []).join(',') || '-', (rec.extra || []).join(',') || '-', (rec.schemaDiff || []).join(',') || '-', rec.error || '-', PIN].join('\t'));
-  console.error(`${d}: ${rec.pass ? 'PASS' : 'FAIL'} native=${rec.native?.length} manuk=${rec.manuk?.length} missing=${rec.missing} extra=${rec.extra} schemaDiff=${rec.schemaDiff} ${rec.error || ''}`);
+  console.error(`${d}: ${rec.pass ? 'PASS' : 'FAIL'} native=${rec.native?.length} manuk=${rec.manuk?.length} missing=${rec.missing} extra=${rec.extra} schemaDiff=${rec.schemaDiff} srcWrong=${rec.srcWrong} sources=${(rec.manuk||[]).map((t)=>t.source)} ${rec.error || ''}`);
 }
 const header = ['demo', 'verdict', 'native_n', 'manuk_n', 'native_names', 'manuk_names', 'missing_in_manuk', 'extra_in_manuk', 'schema_diff', 'error', 'chrome_ver'].join('\t');
 const pagesPass = Object.values(transcript).filter((r) => r.pass).length;

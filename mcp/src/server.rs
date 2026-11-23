@@ -94,7 +94,14 @@ pub fn webmcp_tool(t: &Value) -> Option<Tool> {
     };
     let ann = rmcp::model::ToolAnnotations::new()
         .read_only(t["annotations"]["readOnlyHint"] == json!(true));
-    Some(Tool::new(format!("webmcp_{name}"), desc, Arc::new(schema)).annotate(ann))
+    let mut tool = Tool::new(format!("webmcp_{name}"), desc, Arc::new(schema)).annotate(ann);
+    // Provenance label (declarative | registerTool | synthesized), set by the bridge, never by page text.
+    if let Some(src) = t["source"].as_str() {
+        let mut m = Map::new();
+        m.insert("manuk/webmcpSource".into(), json!(src));
+        tool = tool.with_meta(rmcp::model::MetaObject(m));
+    }
+    Some(tool)
 }
 
 fn schema(props: Value, required: &[&str]) -> Map<String, Value> {
