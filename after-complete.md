@@ -1,0 +1,30 @@
+- generic [active] [ref=f2e1]:
+  - alert [ref=f2e2]
+  - generic [ref=f2e3]:
+    - generic [ref=f2e14]:
+      - generic [ref=f2e15]:
+        - paragraph [ref=f2e17]: Mobile
+        - paragraph [ref=f2e20]: For Businesses
+        - paragraph [ref=f2e21]: Get help
+        - paragraph [ref=f2e22]: FAQs
+        - paragraph [ref=f2e24]: EN
+      - generic [ref=f2e27]:
+        - generic [ref=f2e28]:
+          - button "Home" [ref=f2e29] [cursor=pointer]:
+            - img "logo" [ref=f2e30]
+          - separator [ref=f2e32]
+        - generic [ref=f2e39]:
+          - generic [ref=f2e40]: TA
+          - separator [ref=f2e45]
+    - generic [ref=f2e2479]:
+      - paragraph [ref=f2e2482]: Booking Complete
+      - paragraph [ref=f2e2483]: You are all set!
+      - generic [ref=f2e2484]:
+        - img "restaurant" [ref=f2e2486]
+        - generic [ref=f2e2487]:
+          - paragraph [ref=f2e2488]: Fancy Lights Bistro
+          - generic [ref=f2e2489]:
+            - paragraph [ref=f2e2493]: Jul 18
+            - paragraph [ref=f2e2497]: 1:30 PM
+            - paragraph [ref=f2e2501]: 2 people
+      - button "Return Home" [ref=f2e2502] [cursor=pointer]: Return home

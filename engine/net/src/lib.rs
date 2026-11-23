@@ -40,6 +40,7 @@ pub mod cookies;
 pub mod cors;
 pub mod egress;
 pub mod nettrace;
+pub mod replay;
 pub mod scope;
 pub mod secrets;
 pub mod storage_state;
@@ -481,6 +482,9 @@ mod http_cache {
     /// entry is deliberately declined here so the caller goes to the wire; [`revalidation_headers`]
     /// is what turns that trip into a conditional request.
     pub fn get(part: &str, url: &str) -> Option<Response> {
+        if crate::replay::is_replay() {
+            return None; // replay answers from the recording, never from a (possibly different) cache
+        }
         ensure_loaded(part, url);
         let map = store().lock().ok()?;
         let e = map.get(&key(part, url))?;
@@ -1726,17 +1730,24 @@ pub async fn post_document(
     let u = Url::parse(url).with_context(|| format!("invalid URL: {url}"))?;
     let init = initiator.and_then(|s| Url::parse(s).ok());
     let headers = [("content-type", content_type)];
-    let resp = match tokio::time::timeout(
-        deadline,
-        send_once("POST", &u, &headers, body, init.as_ref()),
-    )
-    .await
-    {
-        Ok(r) => r?,
-        Err(_) => bail!(
-            "POST to {url} exceeded the {:.0}s document deadline",
-            deadline.as_secs_f32()
-        ),
+    let resp = if let Some(r) = replay::replay("POST", url, &body) {
+        r?
+    } else {
+        let rec_body = body.clone();
+        let resp = match tokio::time::timeout(
+            deadline,
+            send_once("POST", &u, &headers, body, init.as_ref()),
+        )
+        .await
+        {
+            Ok(r) => r?,
+            Err(_) => bail!(
+                "POST to {url} exceeded the {:.0}s document deadline",
+                deadline.as_secs_f32()
+            ),
+        };
+        replay::record("POST", url, &rec_body, &resp);
+        resp
     };
     // POST→redirect→GET: follow a redirect as a GET of its Location, reusing the GET redirect chain
     // (which carries its own cookie attach + further-redirect handling).
@@ -1782,6 +1793,9 @@ pub enum DocOrDownload {
 /// chunk-by-chunk, into a `.part` sibling file that is atomically renamed on completion. The file
 /// never exists whole in RAM, and a slow-but-alive transfer is allowed to finish.
 pub async fn fetch_document_or_download(url: &str, dir: &std::path::Path) -> Result<DocOrDownload> {
+    if let Some(r) = replay::replay("GET", url, &[]) {
+        return r.map(DocOrDownload::Document);
+    }
     // A cached response is, by construction, a document: downloads are never put in the HTTP cache
     // (they go to disk, below). So a cache hit skips the wire exactly as the document path did.
     if let Some(cached) = http_cache::get(&partition_of(url, None), url) {
@@ -1907,6 +1921,7 @@ pub async fn fetch_document_or_download(url: &str, dir: &std::path::Path) -> Res
         http_version,
     };
     http_cache::put(&partition_of(url, None), url, &resp);
+    replay::record("GET", url, &[], &resp);
     Ok(DocOrDownload::Document(resp))
 }
 
@@ -2043,8 +2058,16 @@ async fn fetch_with_deadline(
             return fetch_file(&u, initiator).await;
         }
     }
+    if let Some(r) = replay::replay("GET", url, &[]) {
+        return r;
+    }
     match tokio::time::timeout(d, fetch_inner(url, initiator)).await {
-        Ok(r) => r,
+        Ok(r) => {
+            if let Ok(resp) = &r {
+                replay::record("GET", url, &[], resp);
+            }
+            r
+        }
         Err(_) => {
             let secs = d.as_secs_f32();
             tracing::warn!(%url, "timed out after {secs:.1}s");
@@ -2147,6 +2170,46 @@ impl ResponseMeta {
 /// first-paint checkpoint before the tail lands. Returns the response metadata once
 /// the body completes.
 pub async fn fetch_streaming<F: FnMut(&[u8])>(url: &str, mut on_chunk: F) -> Result<ResponseMeta> {
+    if let Some(r) = replay::replay("GET", url, &[]) {
+        let r = r?;
+        on_chunk(&r.body);
+        return Ok(ResponseMeta {
+            status: r.status,
+            headers: r.headers,
+            final_url: r.final_url,
+            http_version: r.http_version,
+        });
+    }
+    let mut rec: Vec<u8> = Vec::new();
+    let recording = replay::is_record();
+    let mut on_chunk = |c: &[u8]| {
+        if recording {
+            rec.extend_from_slice(c);
+        }
+        on_chunk(c)
+    };
+    let meta = fetch_streaming_wire(url, &mut on_chunk).await?;
+    if recording {
+        replay::record(
+            "GET",
+            url,
+            &[],
+            &Response {
+                status: meta.status,
+                headers: meta.headers.clone(),
+                body: Bytes::from(rec),
+                final_url: meta.final_url.clone(),
+                http_version: meta.http_version,
+            },
+        );
+    }
+    Ok(meta)
+}
+
+async fn fetch_streaming_wire<F: FnMut(&[u8])>(
+    url: &str,
+    on_chunk: &mut F,
+) -> Result<ResponseMeta> {
     let mut current = Url::parse(url).with_context(|| format!("invalid URL: {url}"))?;
     for _ in 0..=MAX_REDIRECTS {
         let resp = send_raw("GET", &current, &[], Bytes::new()).await?;
@@ -2213,6 +2276,13 @@ pub async fn fetch_prefix_until(
         lean::note_refused(url);
         bail!("lean profile: tracker host not fetched: {url}");
     }
+    let pm = format!("GETPREFIX{max}");
+    if let Some(r) = replay::replay(&pm, url, &[]) {
+        let r = r?;
+        let mut b = r.body.to_vec();
+        b.truncate(max);
+        return Ok((r.status, b));
+    }
     let mut current = Url::parse(url).with_context(|| format!("invalid URL: {url}"))?;
     let range = format!("bytes=0-{}", max.saturating_sub(1));
     for _ in 0..=MAX_REDIRECTS {
@@ -2249,6 +2319,18 @@ pub async fn fetch_prefix_until(
             }
         }
         out.truncate(max);
+        replay::record(
+            &pm,
+            url,
+            &[],
+            &Response {
+                status,
+                headers: Vec::new(),
+                body: Bytes::from(out.clone()),
+                final_url: current.clone(),
+                http_version: HttpVersion::Http11,
+            },
+        );
         lean::WIRE_BYTES.fetch_add(out.len() as u64, std::sync::atomic::Ordering::Relaxed);
         if nettrace::enabled() {
             // Bytes actually READ: the `req` line's content_length is what the server declared for the range.
@@ -2527,13 +2609,22 @@ pub async fn request_from(
 ) -> Result<Response> {
     let u = Url::parse(url).with_context(|| format!("invalid URL: {url}"))?;
     let init = initiator.and_then(|s| Url::parse(s).ok());
-    if init.is_none() && initiator.is_none() {
-        // No page behind this call: the embedder's own API request (e.g. a local LLM on loopback).
-        return TRUSTED
-            .scope((), send_once(method, &u, headers, body, None))
-            .await;
+    if let Some(r) = replay::replay(method, url, &body) {
+        return r;
     }
-    send_once(method, &u, headers, body, init.as_ref()).await
+    let rec_body = body.clone();
+    let out = if init.is_none() && initiator.is_none() {
+        // No page behind this call: the embedder's own API request (e.g. a local LLM on loopback).
+        TRUSTED
+            .scope((), send_once(method, &u, headers, body, None))
+            .await
+    } else {
+        send_once(method, &u, headers, body, init.as_ref()).await
+    };
+    if let Ok(r) = &out {
+        replay::record(method, url, &rec_body, r);
+    }
+    out
 }
 
 /// Process-global RFC-6265 cookie jar shared by every request (U6). Single-profile for now;

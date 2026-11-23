@@ -210,7 +210,11 @@ impl Client {
                 let bin = write_shim_op(dir);
                 cmd.env(
                     "PATH",
-                    format!("{}:{}", bin.display(), std::env::var("PATH").unwrap_or_default()),
+                    format!(
+                        "{}:{}",
+                        bin.display(),
+                        std::env::var("PATH").unwrap_or_default()
+                    ),
                 );
             }
             // The password must come from the OS keyring (secret-tool), not the env provider. The confined
@@ -490,7 +494,9 @@ fn assert_green(chrome: bool, keyring: Option<&str>) {
             );
         }
         assert!(
-            !o.evil.iter().any(|l| l.contains("/swf") || l.contains("/sw2")),
+            !o.evil
+                .iter()
+                .any(|l| l.contains("/swf") || l.contains("/sw2")),
             "ServiceWorker reached the evil origin: {:#?}",
             o.evil
         );

@@ -171,6 +171,16 @@ fn real_main(mut args: Vec<String>) -> anyhow::Result<()> {
     if args.len() != before {
         manuk_js::determinism::enable();
     }
+    for (flag, rec) in [("--record=", true), ("--replay=", false)] {
+        if let Some(i) = args.iter().position(|a| a.starts_with(flag)) {
+            let d = args.remove(i)[flag.len()..].to_string();
+            if rec {
+                manuk_net::replay::record_to(std::path::Path::new(&d));
+            } else {
+                manuk_net::replay::replay_from(std::path::Path::new(&d));
+            }
+        }
+    }
     let before = args.len();
     args.retain(|a| a != "--no-confine");
     let confine = args.len() == before;

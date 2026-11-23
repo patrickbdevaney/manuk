@@ -12,3 +12,4 @@ engine/net/src/secrets.rs	secret-tool	operator-side secret provider reads the OS
 mcp/tests/secrets.rs	keyring	integration gate for the operator keyring backend (W3.16); test only
 mcp/tests/secrets.rs	secret-tool	integration gate for the operator keyring backend (W3.16); test only
 mcp/tests/secrets.rs	secret service	integration gate for the operator keyring backend (W3.16); test only
+mcp/src/cdp.rs	keyring	comment on the Chrome --password-store=basic launch flag (stops Chrome 149 blocking on a keyring lookup); no credential access

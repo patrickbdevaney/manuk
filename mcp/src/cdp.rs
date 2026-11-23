@@ -413,7 +413,10 @@ w.addEventListener('message',function(e){var m=e.data;if(m&&m.__mkq){e.stopImmed
 fn ws_secret_guard() -> String {
     WS_SECRET_GUARD
         .replace("__WG__", &json!(WORKER_SECRET_GUARD).to_string())
-        .replace("__SWICE__", if mutated("no-sw-ice-guard") { "0" } else { "1" })
+        .replace(
+            "__SWICE__",
+            if mutated("no-sw-ice-guard") { "0" } else { "1" },
+        )
 }
 
 const SETTLE_PROBE: &str = r#"(function(){if(window.__mk)return;var S=window.__mk={u:{},t:{},n:0,d:[]};

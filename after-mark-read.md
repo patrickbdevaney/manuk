@@ -1,0 +1,790 @@
+- generic [active] [ref=f2e1]:
+  - main "Main content" [ref=f2e14]:
+    - generic [ref=f2e30]:
+      - generic [ref=f2e31]:
+        - generic [ref=f2e32] [cursor=pointer]
+        - link "GoMail" [ref=f2e36] [cursor=pointer]:
+          - /url: /
+          - heading "GoMail" [level=6] [ref=f2e39]
+      - generic [ref=f2e40]:
+        - search "Search mail" [ref=f2e42]:
+          - textbox "Search mail" [ref=f2e45]
+          - button "Advanced search options" [ref=f2e46] [cursor=pointer]
+          - button "Search search" [ref=f2e49] [cursor=pointer]
+        - generic [ref=f2e53]:
+          - button "Support" [ref=f2e55] [cursor=pointer]
+          - button "Support" [ref=f2e60] [cursor=pointer]
+      - generic [ref=f2e65]:
+        - button "Support" [ref=f2e69] [cursor=pointer]
+        - button "Support" [ref=f2e75] [cursor=pointer]
+    - generic [ref=f2e78]:
+      - navigation "Mailbox navigation" [ref=f2e79]:
+        - generic [ref=f2e80]:
+          - generic [ref=f2e81]: Compose
+          - generic [ref=f2e84]:
+            - menuitem "Inbox menu item, 16 unread" [ref=f2e932] [cursor=pointer]:
+              - generic [ref=f2e89]:
+                - generic [ref=f2e90]: Inbox
+                - generic [ref=f2e91]: "16"
+            - menuitem "Starred menu item" [ref=f2e93] [cursor=pointer]:
+              - generic [ref=f2e94]: Starred
+            - menuitem "Snoozed menu item" [ref=f2e99] [cursor=pointer]:
+              - generic [ref=f2e100]: Snoozed
+            - menuitem "Sent menu item" [ref=f2e105] [cursor=pointer]:
+              - generic [ref=f2e106]: Sent
+            - menuitem "Scheduled menu item" [ref=f2e111] [cursor=pointer]:
+              - generic [ref=f2e112]: Scheduled
+            - menuitem "Drafts menu item" [ref=f2e117] [cursor=pointer]:
+              - generic [ref=f2e118]: Drafts
+            - menuitem "More menu item" [ref=f2e122] [cursor=pointer]:
+              - generic [ref=f2e123]: More
+          - generic [ref=f2e127]:
+            - generic [ref=f2e128]: Labels
+            - button "Create new label" [ref=f2e129] [cursor=pointer]
+      - main "Email list" [ref=f2e130]:
+        - generic [ref=f2e132]:
+          - generic [ref=f2e133]:
+            - generic [ref=f2e134]:
+              - button [ref=f2e135] [cursor=pointer]
+              - generic [ref=f2e919]:
+                - generic "Archive" [ref=f2e920] [cursor=pointer]
+                - button "Report spam" [ref=f2e922] [cursor=pointer]
+                - generic "Delete" [ref=f2e923] [cursor=pointer]
+              - generic [ref=f2e924] [cursor=pointer]:
+                - generic "Mark as unread" [ref=f2e933]
+                - generic "Snooze" [ref=f2e926]
+                - generic "Add to tasks" [ref=f2e927]
+              - generic [ref=f2e928]:
+                - generic "Move to" [ref=f2e929] [cursor=pointer]
+                - generic "Labels" [ref=f2e930] [cursor=pointer]
+                - generic "More" [ref=f2e931] [cursor=pointer]
+            - generic [ref=f2e139]:
+              - paragraph [ref=f2e140]: 1-50 of 54
+              - generic "Newer" [ref=f2e141]
+              - generic "Older" [ref=f2e142] [cursor=pointer]
+          - list "Email list" [ref=f2e143]:
+            - table [ref=f2e145]:
+              - rowgroup [ref=f2e146]:
+                - listitem "Email from Support, Your Account Statement is Ready" [ref=f2e147] [cursor=pointer]:
+                  - cell [ref=f2e148]
+                  - cell [ref=f2e149]:
+                    - checkbox "Select email from Support" [checked] [ref=f2e150]
+                  - cell [ref=f2e152]:
+                    - button "Remove star from email from Support" [pressed] [ref=f2e153]
+                  - cell [ref=f2e154]:
+                    - paragraph [ref=f2e155]: Support
+                  - cell [ref=f2e156]:
+                    - generic [ref=f2e157]:
+                      - paragraph [ref=f2e158]: Your Account Statement is Ready
+                      - paragraph [ref=f2e159]: "- Dear customer, your account statement for September is now available. Please review it."
+                  - cell [ref=f2e160]:
+                    - paragraph [ref=f2e161]: Sep 2
+                - listitem "Email from Newsletter, Weekly Tech News Roundup" [ref=f2e162] [cursor=pointer]:
+                  - cell [ref=f2e163]
+                  - cell [ref=f2e164]:
+                    - checkbox "Select email from Newsletter" [ref=f2e165]
+                  - cell [ref=f2e167]:
+                    - button "Add star to email from Newsletter" [ref=f2e168]
+                  - cell [ref=f2e169]:
+                    - paragraph [ref=f2e170]: Newsletter
+                  - cell [ref=f2e171]:
+                    - generic [ref=f2e172]:
+                      - paragraph [ref=f2e173]: Weekly Tech News Roundup
+                      - paragraph [ref=f2e174]: "- Top stories this week: AI advancements, new smartphone releases, and more."
+                  - cell [ref=f2e175]:
+                    - paragraph [ref=f2e176]: Sep 2
+                - listitem "Email from Updates, Exclusive Discounts Just for You!" [ref=f2e177] [cursor=pointer]:
+                  - cell [ref=f2e178]
+                  - cell [ref=f2e179]:
+                    - checkbox "Select email from Updates" [ref=f2e180]
+                  - cell [ref=f2e182]:
+                    - button "Add star to email from Updates" [ref=f2e183]
+                  - cell [ref=f2e184]:
+                    - paragraph [ref=f2e185]: Updates
+                  - cell [ref=f2e186]:
+                    - generic [ref=f2e187]:
+                      - paragraph [ref=f2e188]: Exclusive Discounts Just for You!
+                      - paragraph [ref=f2e189]: "- Don’t miss out on these exclusive deals! Shop now and save big on your favorite items!"
+                  - cell [ref=f2e190]:
+                    - paragraph [ref=f2e191]: Sep 1
+                - listitem "Email from No Reply, Your Workout Summary for August" [ref=f2e192] [cursor=pointer]:
+                  - cell [ref=f2e193]
+                  - cell [ref=f2e194]:
+                    - checkbox "Select email from No Reply" [ref=f2e195]
+                  - cell [ref=f2e197]:
+                    - button "Add star to email from No Reply" [ref=f2e198]
+                  - cell [ref=f2e199]:
+                    - paragraph [ref=f2e200]: No Reply
+                  - cell [ref=f2e201]:
+                    - generic [ref=f2e202]:
+                      - paragraph [ref=f2e203]: Your Workout Summary for August
+                      - paragraph [ref=f2e204]: "- Great job! You completed 20 workouts in August. Keep up the momentum!"
+                  - cell [ref=f2e205]:
+                    - paragraph [ref=f2e206]: Aug 31
+                - listitem "Email from Notifications, New Shows and Movies for September!" [ref=f2e207] [cursor=pointer]:
+                  - cell [ref=f2e208]
+                  - cell [ref=f2e209]:
+                    - checkbox "Select email from Notifications" [ref=f2e210]
+                  - cell [ref=f2e212]:
+                    - button "Add star to email from Notifications" [ref=f2e213]
+                  - cell [ref=f2e214]:
+                    - paragraph [ref=f2e215]: Notifications
+                  - cell [ref=f2e216]:
+                    - generic [ref=f2e217]:
+                      - paragraph [ref=f2e218]: New Shows and Movies for September!
+                      - paragraph [ref=f2e219]: "- Check out the new releases: blockbuster hits and original series available now!"
+                  - cell [ref=f2e220]:
+                    - paragraph [ref=f2e221]: Aug 30
+                - 'listitem "Email from Support, Zoom Meeting: Your Invitation for Tomorrow" [ref=f2e222] [cursor=pointer]':
+                  - cell [ref=f2e223]
+                  - cell [ref=f2e224]:
+                    - checkbox "Select email from Support" [ref=f2e225]
+                  - cell [ref=f2e227]:
+                    - button "Add star to email from Support" [ref=f2e228]
+                  - cell [ref=f2e229]:
+                    - paragraph [ref=f2e230]: Support
+                  - cell [ref=f2e231]:
+                    - generic [ref=f2e232]:
+                      - paragraph [ref=f2e233]: "Zoom Meeting: Your Invitation for Tomorrow"
+                      - paragraph [ref=f2e234]: "- Your Zoom meeting is scheduled for tomorrow. Don’t forget to join!"
+                  - cell [ref=f2e235]:
+                    - paragraph [ref=f2e236]: Aug 13
+                - 'listitem "Email from John Doe, Meeting Recap: Key Points and Action Items" [ref=f2e237] [cursor=pointer]':
+                  - cell [ref=f2e238]
+                  - cell [ref=f2e239]:
+                    - checkbox "Select email from John Doe" [ref=f2e240]
+                  - cell [ref=f2e242]:
+                    - button "Add star to email from John Doe" [ref=f2e243]
+                  - cell [ref=f2e244]:
+                    - paragraph [ref=f2e245]: John Doe
+                  - cell [ref=f2e246]:
+                    - generic [ref=f2e247]:
+                      - paragraph [ref=f2e248]: "Meeting Recap: Key Points and Action Items"
+                      - paragraph [ref=f2e249]: "- Here is the recap of the meeting and the action items ..."
+                  - cell [ref=f2e250]:
+                    - paragraph [ref=f2e251]: Aug 13
+                - 'listitem "Email from Events, Upcoming Event: ReactJS Community Meetup" [ref=f2e252] [cursor=pointer]':
+                  - cell [ref=f2e253]
+                  - cell [ref=f2e254]:
+                    - checkbox "Select email from Events" [ref=f2e255]
+                  - cell [ref=f2e257]:
+                    - button "Add star to email from Events" [ref=f2e258]
+                  - cell [ref=f2e259]:
+                    - paragraph [ref=f2e260]: Events
+                  - cell [ref=f2e261]:
+                    - generic [ref=f2e262]:
+                      - paragraph [ref=f2e263]: "Upcoming Event: ReactJS Community Meetup"
+                      - paragraph [ref=f2e264]: "- Join us at the next ReactJS meetup! Click here for more details..."
+                  - cell [ref=f2e265]:
+                    - paragraph [ref=f2e266]: Aug 12
+                - listitem "Email from Updates, Your Post Has 10 New Comments!" [ref=f2e267] [cursor=pointer]:
+                  - cell [ref=f2e268]
+                  - cell [ref=f2e269]:
+                    - checkbox "Select email from Updates" [ref=f2e270]
+                  - cell [ref=f2e272]:
+                    - button "Add star to email from Updates" [ref=f2e273]
+                  - cell [ref=f2e274]:
+                    - paragraph [ref=f2e275]: Updates
+                  - cell [ref=f2e276]:
+                    - generic [ref=f2e277]:
+                      - paragraph [ref=f2e278]: Your Post Has 10 New Comments!
+                      - paragraph [ref=f2e279]: "- Your recent post is trending! Check out the new comments..."
+                  - cell [ref=f2e280]:
+                    - paragraph [ref=f2e281]: Aug 12
+                - 'listitem "Email from Noreply, Live Stream Alert: Your Favorite Streamer is Now Live" [ref=f2e282] [cursor=pointer]':
+                  - cell [ref=f2e283]
+                  - cell [ref=f2e284]:
+                    - checkbox "Select email from Noreply" [ref=f2e285]
+                  - cell [ref=f2e287]:
+                    - button "Remove star from email from Noreply" [pressed] [ref=f2e288]
+                  - cell [ref=f2e289]:
+                    - paragraph [ref=f2e290]: Noreply
+                  - cell [ref=f2e291]:
+                    - generic [ref=f2e292]:
+                      - paragraph [ref=f2e293]: "Live Stream Alert: Your Favorite Streamer is Now Live"
+                      - paragraph [ref=f2e294]: "- Don’t miss out ! Your favorite streamer is live now."
+                  - cell [ref=f2e295]:
+                    - paragraph [ref=f2e296]: Aug 11
+                - 'listitem "Email from Jane Smith, Project Update: Deadline Extended" [ref=f2e297] [cursor=pointer]':
+                  - cell [ref=f2e298]
+                  - cell [ref=f2e299]:
+                    - checkbox "Select email from Jane Smith" [ref=f2e300]
+                  - cell [ref=f2e302]:
+                    - button "Remove star from email from Jane Smith" [pressed] [ref=f2e303]
+                  - cell [ref=f2e304]:
+                    - paragraph [ref=f2e305]: Jane Smith
+                  - cell [ref=f2e306]:
+                    - generic [ref=f2e307]:
+                      - paragraph [ref=f2e308]: "Project Update: Deadline Extended"
+                      - paragraph [ref=f2e309]: "- The deadline for the project has been extended to the end of the month..."
+                  - cell [ref=f2e310]:
+                    - paragraph [ref=f2e311]: Aug 11
+                - 'listitem "Email from Newsletter, Today’s Headlines: Top Stories from Around the World" [ref=f2e312] [cursor=pointer]':
+                  - cell [ref=f2e313]
+                  - cell [ref=f2e314]:
+                    - checkbox "Select email from Newsletter" [ref=f2e315]
+                  - cell [ref=f2e317]:
+                    - button "Add star to email from Newsletter" [ref=f2e318]
+                  - cell [ref=f2e319]:
+                    - paragraph [ref=f2e320]: Newsletter
+                  - cell [ref=f2e321]:
+                    - generic [ref=f2e322]:
+                      - paragraph [ref=f2e323]: "Today’s Headlines: Top Stories from Around the World"
+                      - paragraph [ref=f2e324]: "- Read the top stories from today’s edition of The New York Times..."
+                  - cell [ref=f2e325]:
+                    - paragraph [ref=f2e326]: Aug 11
+                - 'listitem "Email from No Reply, Pull Request Merged: New Changes in Your Repository" [ref=f2e327] [cursor=pointer]':
+                  - cell [ref=f2e328]
+                  - cell [ref=f2e329]:
+                    - checkbox "Select email from No Reply" [ref=f2e330]
+                  - cell [ref=f2e332]:
+                    - button "Remove star from email from No Reply" [pressed] [ref=f2e333]
+                  - cell [ref=f2e334]:
+                    - paragraph [ref=f2e335]: No Reply
+                  - cell [ref=f2e336]:
+                    - generic [ref=f2e337]:
+                      - paragraph [ref=f2e338]: "Pull Request Merged: New Changes in Your Repository"
+                      - paragraph [ref=f2e339]: "- Your pull request has been successfully merged! Check the new updates..."
+                  - cell [ref=f2e340]:
+                    - paragraph [ref=f2e341]: Aug 10
+                - 'listitem "Email from Noreply, [GitHub] Security Alert: Vulnerability Found in Your Repository" [ref=f2e342] [cursor=pointer]':
+                  - cell [ref=f2e343]
+                  - cell [ref=f2e344]:
+                    - checkbox "Select email from Noreply" [ref=f2e345]
+                  - cell [ref=f2e347]:
+                    - button "Add star to email from Noreply" [ref=f2e348]
+                  - cell [ref=f2e349]:
+                    - paragraph [ref=f2e350]: Noreply
+                  - cell [ref=f2e351]:
+                    - generic [ref=f2e352]:
+                      - paragraph [ref=f2e353]: "[GitHub] Security Alert: Vulnerability Found in Your Repository"
+                      - paragraph [ref=f2e354]: "- We have found a vulnerability in one of your repositories. Please update..."
+                  - cell [ref=f2e355]:
+                    - paragraph [ref=f2e356]: Aug 10
+                - listitem "Email from Notifications, Your LinkedIn Profile Views are Up This Week!" [ref=f2e357] [cursor=pointer]:
+                  - cell [ref=f2e358]
+                  - cell [ref=f2e359]:
+                    - checkbox "Select email from Notifications" [ref=f2e360]
+                  - cell [ref=f2e362]:
+                    - button "Add star to email from Notifications" [ref=f2e363]
+                  - cell [ref=f2e364]:
+                    - paragraph [ref=f2e365]: Notifications
+                  - cell [ref=f2e366]:
+                    - generic [ref=f2e367]:
+                      - paragraph [ref=f2e368]: Your LinkedIn Profile Views are Up This Week!
+                      - paragraph [ref=f2e369]: "- Great news! Your LinkedIn profile has more views this week..."
+                  - cell [ref=f2e370]:
+                    - paragraph [ref=f2e371]: Aug 9
+                - 'listitem "Email from Notifications, New Article Recommendation: How to Improve Your Coding Skills" [ref=f2e372] [cursor=pointer]':
+                  - cell [ref=f2e373]
+                  - cell [ref=f2e374]:
+                    - checkbox "Select email from Notifications" [ref=f2e375]
+                  - cell [ref=f2e377]:
+                    - button "Add star to email from Notifications" [ref=f2e378]
+                  - cell [ref=f2e379]:
+                    - paragraph [ref=f2e380]: Notifications
+                  - cell [ref=f2e381]:
+                    - generic [ref=f2e382]:
+                      - paragraph [ref=f2e383]: "New Article Recommendation: How to Improve Your Coding Skills"
+                      - paragraph [ref=f2e384]: "- Read the latest tips on improving your coding skills in our new article..."
+                  - cell [ref=f2e385]:
+                    - paragraph [ref=f2e386]: Aug 9
+                - 'listitem "Email from No Reply, Your Reservation is Confirmed: Paris Trip" [ref=f2e387] [cursor=pointer]':
+                  - cell [ref=f2e388]
+                  - cell [ref=f2e389]:
+                    - checkbox "Select email from No Reply" [ref=f2e390]
+                  - cell [ref=f2e392]:
+                    - button "Add star to email from No Reply" [ref=f2e393]
+                  - cell [ref=f2e394]:
+                    - paragraph [ref=f2e395]: No Reply
+                  - cell [ref=f2e396]:
+                    - generic [ref=f2e397]:
+                      - paragraph [ref=f2e398]: "Your Reservation is Confirmed: Paris Trip"
+                      - paragraph [ref=f2e399]: "- Your trip to Paris is confirmed! Here are your booking details..."
+                  - cell [ref=f2e400]:
+                    - paragraph [ref=f2e401]: Aug 8
+                - 'listitem "Email from No Reply, You have 5 unread messages in #general" [ref=f2e402] [cursor=pointer]':
+                  - cell [ref=f2e403]
+                  - cell [ref=f2e404]:
+                    - checkbox "Select email from No Reply" [ref=f2e405]
+                  - cell [ref=f2e407]:
+                    - button "Add star to email from No Reply" [ref=f2e408]
+                  - cell [ref=f2e409]:
+                    - paragraph [ref=f2e410]: No Reply
+                  - cell [ref=f2e411]:
+                    - generic [ref=f2e412]:
+                      - paragraph [ref=f2e413]: "You have 5 unread messages in #general"
+                      - paragraph [ref=f2e414]: "- You have unread messages in the #general channel..."
+                  - cell [ref=f2e415]:
+                    - paragraph [ref=f2e416]: Aug 8
+                - listitem "Email from Billing, Your Apple Subscription Invoice" [ref=f2e417] [cursor=pointer]:
+                  - cell [ref=f2e418]
+                  - cell [ref=f2e419]:
+                    - checkbox "Select email from Billing" [ref=f2e420]
+                  - cell [ref=f2e422]:
+                    - button "Add star to email from Billing" [ref=f2e423]
+                  - cell [ref=f2e424]:
+                    - paragraph [ref=f2e425]: Billing
+                  - cell [ref=f2e426]:
+                    - generic [ref=f2e427]:
+                      - paragraph [ref=f2e428]: Your Apple Subscription Invoice
+                      - paragraph [ref=f2e429]: "- Your Apple subscription invoice is now ready. Please review your billing details..."
+                  - cell [ref=f2e430]:
+                    - paragraph [ref=f2e431]: Aug 7
+                - listitem "Email from Hello, New Courses Recommended for You" [ref=f2e432] [cursor=pointer]:
+                  - cell [ref=f2e433]
+                  - cell [ref=f2e434]:
+                    - checkbox "Select email from Hello" [ref=f2e435]
+                  - cell [ref=f2e437]:
+                    - button "Add star to email from Hello" [ref=f2e438]
+                  - cell [ref=f2e439]:
+                    - paragraph [ref=f2e440]: Hello
+                  - cell [ref=f2e441]:
+                    - generic [ref=f2e442]:
+                      - paragraph [ref=f2e443]: New Courses Recommended for You
+                      - paragraph [ref=f2e444]: "- We’ve found new courses that match your interests! Start learning today..."
+                  - cell [ref=f2e445]:
+                    - paragraph [ref=f2e446]: Aug 7
+                - 'listitem "Email from Calendar Notifications, Reminder: Team Sync-Up at 10:00 AM" [ref=f2e447] [cursor=pointer]':
+                  - cell [ref=f2e448]
+                  - cell [ref=f2e449]:
+                    - checkbox "Select email from Calendar Notifications" [ref=f2e450]
+                  - cell [ref=f2e452]:
+                    - button "Remove star from email from Calendar Notifications" [pressed] [ref=f2e453]
+                  - cell [ref=f2e454]:
+                    - paragraph [ref=f2e455]: Calendar Notifications
+                  - cell [ref=f2e456]:
+                    - generic [ref=f2e457]:
+                      - paragraph [ref=f2e458]: "Reminder: Team Sync-Up at 10:00 AM"
+                      - paragraph [ref=f2e459]: "- Don’t forget the team sync-up at 10:00 AM today..."
+                  - cell [ref=f2e460]:
+                    - paragraph [ref=f2e461]: Aug 7
+                - 'listitem "Email from Support, Payment Received: $100 from John Doe" [ref=f2e462] [cursor=pointer]':
+                  - cell [ref=f2e463]
+                  - cell [ref=f2e464]:
+                    - checkbox "Select email from Support" [ref=f2e465]
+                  - cell [ref=f2e467]:
+                    - button "Remove star from email from Support" [pressed] [ref=f2e468]
+                  - cell [ref=f2e469]:
+                    - paragraph [ref=f2e470]: Support
+                  - cell [ref=f2e471]:
+                    - generic [ref=f2e472]:
+                      - paragraph [ref=f2e473]: "Payment Received: $100 from John Doe"
+                      - paragraph [ref=f2e474]: "- You’ve received a payment of $100 from John Doe. View transaction details..."
+                  - cell [ref=f2e475]:
+                    - paragraph [ref=f2e476]: Aug 6
+                - listitem "Email from No Reply, [AWS Billing] Your Latest Invoice is Ready" [ref=f2e477] [cursor=pointer]:
+                  - cell [ref=f2e478]
+                  - cell [ref=f2e479]:
+                    - checkbox "Select email from No Reply" [ref=f2e480]
+                  - cell [ref=f2e482]:
+                    - button "Add star to email from No Reply" [ref=f2e483]
+                  - cell [ref=f2e484]:
+                    - paragraph [ref=f2e485]: No Reply
+                  - cell [ref=f2e486]:
+                    - generic [ref=f2e487]:
+                      - paragraph [ref=f2e488]: "[AWS Billing] Your Latest Invoice is Ready"
+                      - paragraph [ref=f2e489]: "- Your AWS billing statement for this month is now available..."
+                  - cell [ref=f2e490]:
+                    - paragraph [ref=f2e491]: Aug 6
+                - listitem "Email from Info, New Releases to Watch This Weekend" [ref=f2e492] [cursor=pointer]:
+                  - cell [ref=f2e493]
+                  - cell [ref=f2e494]:
+                    - checkbox "Select email from Info" [ref=f2e495]
+                  - cell [ref=f2e497]:
+                    - button "Add star to email from Info" [ref=f2e498]
+                  - cell [ref=f2e499]:
+                    - paragraph [ref=f2e500]: Info
+                  - cell [ref=f2e501]:
+                    - generic [ref=f2e502]:
+                      - paragraph [ref=f2e503]: New Releases to Watch This Weekend
+                      - paragraph [ref=f2e504]: "- Check out these new releases that you can watch this weekend..."
+                  - cell [ref=f2e505]:
+                    - paragraph [ref=f2e506]: Aug 5
+                - listitem "Email from Admin, Your Course Certificate is Ready" [ref=f2e507] [cursor=pointer]:
+                  - cell [ref=f2e508]
+                  - cell [ref=f2e509]:
+                    - checkbox "Select email from Admin" [ref=f2e510]
+                  - cell [ref=f2e512]:
+                    - button "Add star to email from Admin" [ref=f2e513]
+                  - cell [ref=f2e514]:
+                    - paragraph [ref=f2e515]: Admin
+                  - cell [ref=f2e516]:
+                    - generic [ref=f2e517]:
+                      - paragraph [ref=f2e518]: Your Course Certificate is Ready
+                      - paragraph [ref=f2e519]: "- Congratulations! Your course certificate is now available for download..."
+                  - cell [ref=f2e520]:
+                    - paragraph [ref=f2e521]: Aug 5
+                - listitem "Email from No Reply, Your AWS CloudFormation Stack has Completed" [ref=f2e522] [cursor=pointer]:
+                  - cell [ref=f2e523]
+                  - cell [ref=f2e524]:
+                    - checkbox "Select email from No Reply" [ref=f2e525]
+                  - cell [ref=f2e527]:
+                    - button "Add star to email from No Reply" [ref=f2e528]
+                  - cell [ref=f2e529]:
+                    - paragraph [ref=f2e530]: No Reply
+                  - cell [ref=f2e531]:
+                    - generic [ref=f2e532]:
+                      - paragraph [ref=f2e533]: Your AWS CloudFormation Stack has Completed
+                      - paragraph [ref=f2e534]: "- Your AWS CloudFormation stack has completed successfully..."
+                  - cell [ref=f2e535]:
+                    - paragraph [ref=f2e536]: Aug 5
+                - 'listitem "Email from Newsletter, Breaking News: Major Event Happening Now" [ref=f2e537] [cursor=pointer]':
+                  - cell [ref=f2e538]
+                  - cell [ref=f2e539]:
+                    - checkbox "Select email from Newsletter" [ref=f2e540]
+                  - cell [ref=f2e542]:
+                    - button "Add star to email from Newsletter" [ref=f2e543]
+                  - cell [ref=f2e544]:
+                    - paragraph [ref=f2e545]: Newsletter
+                  - cell [ref=f2e546]:
+                    - generic [ref=f2e547]:
+                      - paragraph [ref=f2e548]: "Breaking News: Major Event Happening Now"
+                      - paragraph [ref=f2e549]: "- Breaking news: A major event is happening right now. Read the details..."
+                  - cell [ref=f2e550]:
+                    - paragraph [ref=f2e551]: Aug 4
+                - 'listitem "Email from Support, Your Ride Receipt: Trip to Downtown" [ref=f2e552] [cursor=pointer]':
+                  - cell [ref=f2e553]
+                  - cell [ref=f2e554]:
+                    - checkbox "Select email from Support" [ref=f2e555]
+                  - cell [ref=f2e557]:
+                    - button "Add star to email from Support" [ref=f2e558]
+                  - cell [ref=f2e559]:
+                    - paragraph [ref=f2e560]: Support
+                  - cell [ref=f2e561]:
+                    - generic [ref=f2e562]:
+                      - paragraph [ref=f2e563]: "Your Ride Receipt: Trip to Downtown"
+                      - paragraph [ref=f2e564]: "- Here is your receipt for the ride you took to downtown..."
+                  - cell [ref=f2e565]:
+                    - paragraph [ref=f2e566]: Aug 4
+                - listitem "Email from No Reply, Your Weekly Playlist is Here!" [ref=f2e567] [cursor=pointer]:
+                  - cell [ref=f2e568]
+                  - cell [ref=f2e569]:
+                    - checkbox "Select email from No Reply" [ref=f2e570]
+                  - cell [ref=f2e572]:
+                    - button "Add star to email from No Reply" [ref=f2e573]
+                  - cell [ref=f2e574]:
+                    - paragraph [ref=f2e575]: No Reply
+                  - cell [ref=f2e576]:
+                    - generic [ref=f2e577]:
+                      - paragraph [ref=f2e578]: Your Weekly Playlist is Here!
+                      - paragraph [ref=f2e579]: "- Enjoy your new weekly playlist curated just for you ..."
+                  - cell [ref=f2e580]:
+                    - paragraph [ref=f2e581]: Aug 4
+                - listitem "Email from No Reply, Your Files Have Been Successfully Synced" [ref=f2e582] [cursor=pointer]:
+                  - cell [ref=f2e583]
+                  - cell [ref=f2e584]:
+                    - checkbox "Select email from No Reply" [ref=f2e585]
+                  - cell [ref=f2e587]:
+                    - button "Remove star from email from No Reply" [pressed] [ref=f2e588]
+                  - cell [ref=f2e589]:
+                    - paragraph [ref=f2e590]: No Reply
+                  - cell [ref=f2e591]:
+                    - generic [ref=f2e592]:
+                      - paragraph [ref=f2e593]: Your Files Have Been Successfully Synced
+                      - paragraph [ref=f2e594]: "- All your files have been successfully synced to Dropbox..."
+                  - cell [ref=f2e595]:
+                    - paragraph [ref=f2e596]: Aug 3
+                - listitem "Email from Marketing, New Features Added to Adobe Photoshop" [ref=f2e597] [cursor=pointer]:
+                  - cell [ref=f2e598]
+                  - cell [ref=f2e599]:
+                    - checkbox "Select email from Marketing" [ref=f2e600]
+                  - cell [ref=f2e602]:
+                    - button "Remove star from email from Marketing" [pressed] [ref=f2e603]
+                  - cell [ref=f2e604]:
+                    - paragraph [ref=f2e605]: Marketing
+                  - cell [ref=f2e606]:
+                    - generic [ref=f2e607]:
+                      - paragraph [ref=f2e608]: New Features Added to Adobe Photoshop
+                      - paragraph [ref=f2e609]: "- Check out the new features added to Adobe Photoshop in the latest update..."
+                  - cell [ref=f2e610]:
+                    - paragraph [ref=f2e611]: Aug 3
+                - listitem "Email from Events, Your Ticket to React Conference 2024" [ref=f2e612] [cursor=pointer]:
+                  - cell [ref=f2e613]
+                  - cell [ref=f2e614]:
+                    - checkbox "Select email from Events" [ref=f2e615]
+                  - cell [ref=f2e617]:
+                    - button "Add star to email from Events" [ref=f2e618]
+                  - cell [ref=f2e619]:
+                    - paragraph [ref=f2e620]: Events
+                  - cell [ref=f2e621]:
+                    - generic [ref=f2e622]:
+                      - paragraph [ref=f2e623]: Your Ticket to React Conference 2024
+                      - paragraph [ref=f2e624]: "- Your ticket to React Conference 2024 is ready. Here are the event details..."
+                  - cell [ref=f2e625]:
+                    - paragraph [ref=f2e626]: Aug 2
+                - listitem "Email from Alerts, Suspicious Activity Detected on Your Account" [ref=f2e627] [cursor=pointer]:
+                  - cell [ref=f2e628]
+                  - cell [ref=f2e629]:
+                    - checkbox "Select email from Alerts" [ref=f2e630]
+                  - cell [ref=f2e632]:
+                    - button "Remove star from email from Alerts" [pressed] [ref=f2e633]
+                  - cell [ref=f2e634]:
+                    - paragraph [ref=f2e635]: Alerts
+                  - cell [ref=f2e636]:
+                    - generic [ref=f2e637]:
+                      - paragraph [ref=f2e638]: Suspicious Activity Detected on Your Account
+                      - paragraph [ref=f2e639]: "- Alert: We detected suspicious activity on your account. Please review immediately."
+                  - cell [ref=f2e640]:
+                    - paragraph [ref=f2e641]: Aug 2
+                - listitem "Email from Support, Your Upcoming Trip to New York City" [ref=f2e642] [cursor=pointer]:
+                  - cell [ref=f2e643]
+                  - cell [ref=f2e644]:
+                    - checkbox "Select email from Support" [ref=f2e645]
+                  - cell [ref=f2e647]:
+                    - button "Add star to email from Support" [ref=f2e648]
+                  - cell [ref=f2e649]:
+                    - paragraph [ref=f2e650]: Support
+                  - cell [ref=f2e651]:
+                    - generic [ref=f2e652]:
+                      - paragraph [ref=f2e653]: Your Upcoming Trip to New York City
+                      - paragraph [ref=f2e654]: "- Your New York City trip is just around the corner! Check your itinerary for details."
+                  - cell [ref=f2e655]:
+                    - paragraph [ref=f2e656]: Aug 1
+                - listitem "Email from No Reply, Top Tracks for Your Week" [ref=f2e657] [cursor=pointer]:
+                  - cell [ref=f2e658]
+                  - cell [ref=f2e659]:
+                    - checkbox "Select email from No Reply" [ref=f2e660]
+                  - cell [ref=f2e662]:
+                    - button "Add star to email from No Reply" [ref=f2e663]
+                  - cell [ref=f2e664]:
+                    - paragraph [ref=f2e665]: No Reply
+                  - cell [ref=f2e666]:
+                    - generic [ref=f2e667]:
+                      - paragraph [ref=f2e668]: Top Tracks for Your Week
+                      - paragraph [ref=f2e669]: "- Check out this week’s top tracks personalized just for you!"
+                  - cell [ref=f2e670]:
+                    - paragraph [ref=f2e671]: Jul 31
+                - 'listitem "Email from Newsletter, Breaking News: Election Results Are In" [ref=f2e672] [cursor=pointer]':
+                  - cell [ref=f2e673]
+                  - cell [ref=f2e674]:
+                    - checkbox "Select email from Newsletter" [ref=f2e675]
+                  - cell [ref=f2e677]:
+                    - button "Remove star from email from Newsletter" [pressed] [ref=f2e678]
+                  - cell [ref=f2e679]:
+                    - paragraph [ref=f2e680]: Newsletter
+                  - cell [ref=f2e681]:
+                    - generic [ref=f2e682]:
+                      - paragraph [ref=f2e683]: "Breaking News: Election Results Are In"
+                      - paragraph [ref=f2e684]: "- Breaking News: The latest election results are available now."
+                  - cell [ref=f2e685]:
+                    - paragraph [ref=f2e686]: Jul 31
+                - listitem "Email from Hello, Your Dropbox Space is Running Low" [ref=f2e687] [cursor=pointer]:
+                  - cell [ref=f2e688]
+                  - cell [ref=f2e689]:
+                    - checkbox "Select email from Hello" [ref=f2e690]
+                  - cell [ref=f2e692]:
+                    - button "Add star to email from Hello" [ref=f2e693]
+                  - cell [ref=f2e694]:
+                    - paragraph [ref=f2e695]: Hello
+                  - cell [ref=f2e696]:
+                    - generic [ref=f2e697]:
+                      - paragraph [ref=f2e698]: Your Dropbox Space is Running Low
+                      - paragraph [ref=f2e699]: "- You are running low on Dropbox space. Consider upgrading to avoid interruptions."
+                  - cell [ref=f2e700]:
+                    - paragraph [ref=f2e701]: Jul 30
+                - listitem "Email from Noreply, Your Apple ID Verification Code" [ref=f2e702] [cursor=pointer]:
+                  - cell [ref=f2e703]
+                  - cell [ref=f2e704]:
+                    - checkbox "Select email from Noreply" [ref=f2e705]
+                  - cell [ref=f2e707]:
+                    - button "Add star to email from Noreply" [ref=f2e708]
+                  - cell [ref=f2e709]:
+                    - paragraph [ref=f2e710]: Noreply
+                  - cell [ref=f2e711]:
+                    - generic [ref=f2e712]:
+                      - paragraph [ref=f2e713]: Your Apple ID Verification Code
+                      - paragraph [ref=f2e714]: "- Your verification code: 123456. Enter this code to complete your Apple ID sign-in."
+                  - cell [ref=f2e715]:
+                    - paragraph [ref=f2e716]: Jul 29
+                - 'listitem "Email from Support, Zoom Meeting Scheduled: Marketing Strategy Discussion" [ref=f2e717] [cursor=pointer]':
+                  - cell [ref=f2e718]
+                  - cell [ref=f2e719]:
+                    - checkbox "Select email from Support" [ref=f2e720]
+                  - cell [ref=f2e722]:
+                    - button "Add star to email from Support" [ref=f2e723]
+                  - cell [ref=f2e724]:
+                    - paragraph [ref=f2e725]: Support
+                  - cell [ref=f2e726]:
+                    - generic [ref=f2e727]:
+                      - paragraph [ref=f2e728]: "Zoom Meeting Scheduled: Marketing Strategy Discussion"
+                      - paragraph [ref=f2e729]: "- A new Zoom meeting has been scheduled for the Marketing Strategy Discussion ..."
+                  - cell [ref=f2e730]:
+                    - paragraph [ref=f2e731]: Jul 28
+                - 'listitem "Email from Support, Action Required: Security Patch Update Available" [ref=f2e732] [cursor=pointer]':
+                  - cell [ref=f2e733]
+                  - cell [ref=f2e734]:
+                    - checkbox "Select email from Support" [ref=f2e735]
+                  - cell [ref=f2e737]:
+                    - button "Remove star from email from Support" [pressed] [ref=f2e738]
+                  - cell [ref=f2e739]:
+                    - paragraph [ref=f2e740]: Support
+                  - cell [ref=f2e741]:
+                    - generic [ref=f2e742]:
+                      - paragraph [ref=f2e743]: "Action Required: Security Patch Update Available"
+                      - paragraph [ref=f2e744]: "- Action Required: A security patch update is now available for your repository."
+                  - cell [ref=f2e745]:
+                    - paragraph [ref=f2e746]: Jul 26
+                - listitem "Email from Notifications, Your Friend Request Was Accepted!" [ref=f2e747] [cursor=pointer]:
+                  - cell [ref=f2e748]
+                  - cell [ref=f2e749]:
+                    - checkbox "Select email from Notifications" [ref=f2e750]
+                  - cell [ref=f2e752]:
+                    - button "Add star to email from Notifications" [ref=f2e753]
+                  - cell [ref=f2e754]:
+                    - paragraph [ref=f2e755]: Notifications
+                  - cell [ref=f2e756]:
+                    - generic [ref=f2e757]:
+                      - paragraph [ref=f2e758]: Your Friend Request Was Accepted!
+                      - paragraph [ref=f2e759]: "- Good news! Your friend request has been accepted. Start chatting now!"
+                  - cell [ref=f2e760]:
+                    - paragraph [ref=f2e761]: Jul 26
+                - 'listitem "Email from Events, ReactJS Meetup: RSVP Confirmation" [ref=f2e762] [cursor=pointer]':
+                  - cell [ref=f2e763]
+                  - cell [ref=f2e764]:
+                    - checkbox "Select email from Events" [ref=f2e765]
+                  - cell [ref=f2e767]:
+                    - button "Add star to email from Events" [ref=f2e768]
+                  - cell [ref=f2e769]:
+                    - paragraph [ref=f2e770]: Events
+                  - cell [ref=f2e771]:
+                    - generic [ref=f2e772]:
+                      - paragraph [ref=f2e773]: "ReactJS Meetup: RSVP Confirmation"
+                      - paragraph [ref=f2e774]: "- You are confirmed for the ReactJS Meetup next week. Don’t miss out!"
+                  - cell [ref=f2e775]:
+                    - paragraph [ref=f2e776]: Jul 25
+                - 'listitem "Email from Noreply, Google Workspace: 2-Step Verification Enabled" [ref=f2e777] [cursor=pointer]':
+                  - cell [ref=f2e778]
+                  - cell [ref=f2e779]:
+                    - checkbox "Select email from Noreply" [ref=f2e780]
+                  - cell [ref=f2e782]:
+                    - button "Add star to email from Noreply" [ref=f2e783]
+                  - cell [ref=f2e784]:
+                    - paragraph [ref=f2e785]: Noreply
+                  - cell [ref=f2e786]:
+                    - generic [ref=f2e787]:
+                      - paragraph [ref=f2e788]: "Google Workspace: 2-Step Verification Enabled"
+                      - paragraph [ref=f2e789]: "- Your Google Workspace account now has 2-Step Verification enabled for added security."
+                  - cell [ref=f2e790]:
+                    - paragraph [ref=f2e791]: Jul 24
+                - 'listitem "Email from Newsletter, Latest in Tech: August Edition" [ref=f2e792] [cursor=pointer]':
+                  - cell [ref=f2e793]
+                  - cell [ref=f2e794]:
+                    - checkbox "Select email from Newsletter" [ref=f2e795]
+                  - cell [ref=f2e797]:
+                    - button "Add star to email from Newsletter" [ref=f2e798]
+                  - cell [ref=f2e799]:
+                    - paragraph [ref=f2e800]: Newsletter
+                  - cell [ref=f2e801]:
+                    - generic [ref=f2e802]:
+                      - paragraph [ref=f2e803]: "Latest in Tech: August Edition"
+                      - paragraph [ref=f2e804]: "- Read the latest in tech for August, featuring major announcements from top companies..."
+                  - cell [ref=f2e805]:
+                    - paragraph [ref=f2e806]: Jul 23
+                - 'listitem "Email from Admin, Reminder: Your Course Starts Tomorrow" [ref=f2e807] [cursor=pointer]':
+                  - cell [ref=f2e808]
+                  - cell [ref=f2e809]:
+                    - checkbox "Select email from Admin" [ref=f2e810]
+                  - cell [ref=f2e812]:
+                    - button "Add star to email from Admin" [ref=f2e813]
+                  - cell [ref=f2e814]:
+                    - paragraph [ref=f2e815]: Admin
+                  - cell [ref=f2e816]:
+                    - generic [ref=f2e817]:
+                      - paragraph [ref=f2e818]: "Reminder: Your Course Starts Tomorrow"
+                      - paragraph [ref=f2e819]: "- Reminder: Your Coursera course begins tomorrow. Be sure to join on time."
+                  - cell [ref=f2e820]:
+                    - paragraph [ref=f2e821]: Jul 23
+                - 'listitem "Email from Support, New Episodes Available: Your Favorite Show" [ref=f2e822] [cursor=pointer]':
+                  - cell [ref=f2e823]
+                  - cell [ref=f2e824]:
+                    - checkbox "Select email from Support" [ref=f2e825]
+                  - cell [ref=f2e827]:
+                    - button "Add star to email from Support" [ref=f2e828]
+                  - cell [ref=f2e829]:
+                    - paragraph [ref=f2e830]: Support
+                  - cell [ref=f2e831]:
+                    - generic [ref=f2e832]:
+                      - paragraph [ref=f2e833]: "New Episodes Available: Your Favorite Show"
+                      - paragraph [ref=f2e834]: "- New episodes of your favorite show are now available to stream on Netflix!"
+                  - cell [ref=f2e835]:
+                    - paragraph [ref=f2e836]: Jul 22
+                - 'listitem "Email from No Reply, Missed Messages: You Have 10 Unread in #random" [ref=f2e837] [cursor=pointer]':
+                  - cell [ref=f2e838]
+                  - cell [ref=f2e839]:
+                    - checkbox "Select email from No Reply" [ref=f2e840]
+                  - cell [ref=f2e842]:
+                    - button "Add star to email from No Reply" [ref=f2e843]
+                  - cell [ref=f2e844]:
+                    - paragraph [ref=f2e845]: No Reply
+                  - cell [ref=f2e846]:
+                    - generic [ref=f2e847]:
+                      - paragraph [ref=f2e848]: "Missed Messages: You Have 10 Unread in #random"
+                      - paragraph [ref=f2e849]: "- You have 10 unread messages in the #random Slack channel. Catch up now!"
+                  - cell [ref=f2e850]:
+                    - paragraph [ref=f2e851]: Jul 21
+                - 'listitem "Email from Events, Reminder: Your Event is Tomorrow" [ref=f2e852] [cursor=pointer]':
+                  - cell [ref=f2e853]
+                  - cell [ref=f2e854]:
+                    - checkbox "Select email from Events" [ref=f2e855]
+                  - cell [ref=f2e857]:
+                    - button "Add star to email from Events" [ref=f2e858]
+                  - cell [ref=f2e859]:
+                    - paragraph [ref=f2e860]: Events
+                  - cell [ref=f2e861]:
+                    - generic [ref=f2e862]:
+                      - paragraph [ref=f2e863]: "Reminder: Your Event is Tomorrow"
+                      - paragraph [ref=f2e864]: "- Reminder: Your event is scheduled for tomorrow. Here are the details..."
+                  - cell [ref=f2e865]:
+                    - paragraph [ref=f2e866]: Jul 21
+                - listitem "Email from Support, [AWS] Your Free Tier Usage Report for July" [ref=f2e867] [cursor=pointer]:
+                  - cell [ref=f2e868]
+                  - cell [ref=f2e869]:
+                    - checkbox "Select email from Support" [ref=f2e870]
+                  - cell [ref=f2e872]:
+                    - button "Add star to email from Support" [ref=f2e873]
+                  - cell [ref=f2e874]:
+                    - paragraph [ref=f2e875]: Support
+                  - cell [ref=f2e876]:
+                    - generic [ref=f2e877]:
+                      - paragraph [ref=f2e878]: "[AWS] Your Free Tier Usage Report for July"
+                      - paragraph [ref=f2e879]: "- Your AWS Free Tier usage for July is now available. View your report here ."
+                  - cell [ref=f2e880]:
+                    - paragraph [ref=f2e881]: Jul 20
+                - listitem "Email from Newsletter, New Leadership Articles You Can’t Miss" [ref=f2e882] [cursor=pointer]:
+                  - cell [ref=f2e883]
+                  - cell [ref=f2e884]:
+                    - checkbox "Select email from Newsletter" [ref=f2e885]
+                  - cell [ref=f2e887]:
+                    - button "Remove star from email from Newsletter" [pressed] [ref=f2e888]
+                  - cell [ref=f2e889]:
+                    - paragraph [ref=f2e890]: Newsletter
+                  - cell [ref=f2e891]:
+                    - generic [ref=f2e892]:
+                      - paragraph [ref=f2e893]: New Leadership Articles You Can’t Miss
+                      - paragraph [ref=f2e894]: "- New leadership articles have been published on HBR. Catch up on the latest insights..."
+                  - cell [ref=f2e895]:
+                    - paragraph [ref=f2e896]: Jul 19
+            - generic [ref=f2e897]:
+              - generic [ref=f2e899]:
+                - link "Program Policies" [ref=f2e900] [cursor=pointer]:
+                  - /url: https://www.google.com/
+                - generic [ref=f2e901]:
+                  - text: Powered by
+                  - link "Google" [ref=f2e902] [cursor=pointer]:
+                    - /url: https://www.google.com/
+              - generic [ref=f2e903]:
+                - 'link "Last account activity: 6 hours ago" [ref=f2e904] [cursor=pointer]':
+                  - /url: https://www.google.com/
+                - generic [ref=f2e905]:
+                  - text: Powered by
+                  - link "Details" [ref=f2e906] [cursor=pointer]:
+                    - /url: https://www.google.com/
+      - complementary "Sidebar tools" [ref=f2e907]:
+        - generic [ref=f2e910]:
+          - button "Google Calendar" [ref=f2e911] [cursor=pointer]
+          - button "Google Keep" [ref=f2e913] [cursor=pointer]
+          - button "Google Tasks" [ref=f2e915] [cursor=pointer]
+          - button "Google Contacts" [ref=f2e917] [cursor=pointer]
+  - alert [ref=f2e13]
+  - tooltip "Mark as unread" [ref=f2e936]
