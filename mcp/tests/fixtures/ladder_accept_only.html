@@ -1,0 +1,12 @@
+<!doctype html><html><head><title>Ladder dismiss</title><style>body{margin:0}
+#c{position:fixed;left:0;top:0;width:100%;height:100%;background:#eee;z-index:99}</style></head><body>
+<h1>Ladder dismiss</h1>
+<div id="c" role="dialog" aria-label="Cookie consent">We use cookies for your privacy choices.
+<button id="acc">Accept all</button></div>
+<button id="go">Go</button>
+<h2 id="out">idle</h2>
+<script>
+document.getElementById('go').addEventListener('click',function(){document.getElementById('out').textContent='went';});
+
+document.getElementById('acc').addEventListener('click',function(){document.getElementById('c').remove();document.getElementById('out').textContent='ACCEPTED';});
+</script></body></html>

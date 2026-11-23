@@ -2492,6 +2492,21 @@ impl CdpBackend {
     /// Dispatch-time re-validation: pick a point of the (freshly re-found) element's box that
     /// `DOM.getNodeForLocation` says belongs to the element, else report what covers it.
     fn aim(&mut self, node: NodeId) -> Result<(f32, f32, u64)> {
+        // W6.C1 wait rung: a cover that lands at dispatch is often transient; retry ~2s on the real hit test.
+        let mut r = self.aim_once(node);
+        if !std::env::var("MANUK_LADDER_MUTATE").is_ok_and(|v| v == "all" || v.split(',').any(|x| x == "wait")) {
+            for _ in 0..4 {
+                if !r.as_ref().is_err_and(|e| e.to_string().starts_with("OCCLUDED at dispatch")) {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(500));
+                r = self.aim_once(node);
+            }
+        }
+        r
+    }
+
+    fn aim_once(&mut self, node: NodeId) -> Result<(f32, f32, u64)> {
         let be = self.backend_of(node)?;
         let b = self.built()?;
         let n =

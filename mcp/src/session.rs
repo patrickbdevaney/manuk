@@ -1966,8 +1966,8 @@ impl<B: Backend> Session<B> {
 
     /// Re-aim at `node` through the engine's occlusion-aware hit test. Scrolls once if it is
     /// off-screen. Err names what covers it, by handle.
-    fn verify_landing(&mut self, h: u32, node: NodeId) -> Result<()> {
-        self.verify_reach(h, node, false)
+    async fn verify_landing(&mut self, h: u32, node: NodeId) -> Result<()> {
+        self.verify_reach(h, node, false).await
     }
 
     /// [`Self::verify_landing`] for `type`, which focuses the node and never moves a pointer. A small
@@ -1975,7 +1975,8 @@ impl<B: Backend> Session<B> {
     /// under Pickup's "No results") cannot misdirect the keystrokes, so Playwright's `fill` is not
     /// refused by it. A dialog (or anything inside one) or a page-sized cover (half the viewport or more) still is.
     /// `MANUK_TYPE_COVER_MUTATE=1` restores the pointer-style refusal for the red run.
-    fn verify_reach(&mut self, h: u32, node: NodeId, focus_only: bool) -> Result<()> {
+    async fn verify_reach(&mut self, h: u32, node: NodeId, focus_only: bool) -> Result<()> {
+        let mut tried: Vec<String> = vec!["scroll".into()];
         self.b.reveal(node);
         if self.force {
             return Ok(());
@@ -2000,15 +2001,91 @@ impl<B: Backend> Session<B> {
                     return Ok(());
                 }
                 Landing::Obstructed { by, .. } => {
+                    if self.climb(node, by, &mut tried).await {
+                        return Ok(());
+                    }
+                    let tree = self.tree()?;
                     let who = tree.iter().find(|n| n.node == by).map(|n| (n.role.clone(), n.name.clone()));
                     let hb = self.handle(by);
                     let what = who.map(|(r, n)| format!("{} {:?}", role_str(&r), clip(&n))).unwrap_or_else(|| "another element".into());
-                    bail!("OCCLUDED: h{h} is covered by [h{hb}] {what}; deal with that first (nothing was clicked)");
+                    bail!("OCCLUDED: h{h} is covered by [h{hb}] {what}; deal with that first; tried: {} (nothing was clicked)", tried.join(", "));
                 }
                 Landing::Unreachable => bail!("UNREACHABLE: h{h} has no clickable area (no box, or pointer-events:none); nothing was clicked"),
             }
         }
         bail!("h{h} is still off-screen after scrolling; nothing was clicked")
+    }
+
+    /// W6.C1: the rungs between "scroll" and the typed refusal. Each returns early when the target is clear.
+    /// wait (the cover is often a transient: a spinner, a toast, an animation), escape (a menu or popup
+    /// that is not a dialog), dismiss (a consent/modal layer's reject/close control; accept is never clicked).
+    /// `MANUK_LADDER_MUTATE=wait|escape|dismiss|all` switches rungs off for the red runs.
+    async fn climb(&mut self, node: NodeId, by: NodeId, tried: &mut Vec<String>) -> bool {
+        let off = std::env::var("MANUK_LADDER_MUTATE").unwrap_or_default();
+        let on = |r: &str| !(off == "all" || off.split(',').any(|x| x == r));
+        let clear = |s: &mut Self| -> bool {
+            let Ok(tree) = s.tree() else { return false };
+            let vp = s.b.viewport();
+            matches!(tree.landing(node, Some(vp)), Landing::Clear { .. })
+        };
+        if on("wait") {
+            tried.push("wait 2s".into());
+            for _ in 0..4 {
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                self.b.settle().await; // re-snapshots: a CSS-only cover leaves no DOM event
+                if clear(self) {
+                    return true;
+                }
+            }
+        }
+        let Ok(tree) = self.tree() else { return false };
+        fn inside(n: &A11yNode, id: NodeId, f: &dyn Fn(&A11yNode) -> bool) -> bool {
+            (f(n) && n.iter().any(|k| k.node == id))
+                || n.children.iter().any(|c| inside(c, id, f))
+        }
+        let is_menu = |n: &A11yNode| matches!(n.role, Role::Menu);
+        let has = |n: &A11yNode, id: NodeId| n.iter().any(|k| k.node == id);
+        if on("escape")
+            && inside(&tree, by, &|n| is_menu(n) && !has(n, node))
+            && !inside_dialog(&tree, by, false)
+        {
+            tried.push("escape".into());
+            if self.b.press_key("Escape").await.is_ok() {
+                tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+                self.b.settle().await;
+                if clear(self) {
+                    return true;
+                }
+            }
+        }
+        if on("dismiss") {
+            let Ok(tree) = self.tree() else { return false };
+            let vp = self.b.viewport();
+            let ovs = crate::overlay::find(&tree, &vp);
+            let ov = ovs
+                .iter()
+                .find(|o| o.node.iter().any(|k| k.node == by) && !o.node.iter().any(|k| k.node == node));
+            match ov {
+                None => {}
+                Some(o) if o.kind == crate::overlay::Kind::BotWall => {
+                    tried.push("dismiss(bot wall: handoff)".into())
+                }
+                Some(o) => match o.control {
+                    None => tried.push("dismiss(no reject/close control; accept is never clicked)".into()),
+                    Some(c) => {
+                        let ctl = c.node;
+                        tried.push("dismiss".into());
+                        if self.b.click(ctl).await.is_ok() {
+                            let _ = self.settled().await;
+                            if clear(self) {
+                                return true;
+                            }
+                        }
+                    }
+                },
+            }
+        }
+        false
     }
 
     /// Everything an action returns: what changed, where we are, and the verification evidence.
@@ -2194,7 +2271,7 @@ impl<B: Backend> Session<B> {
         self.b.begin_act();
         let outcome = match action {
             "click" => {
-                self.verify_landing(h, node)?;
+                self.verify_landing(h, node).await?;
                 self.b.click(node).await?
             }
             "check" => {
@@ -2205,7 +2282,7 @@ impl<B: Backend> Session<B> {
                 if (checked == Some(Checked::True)) == want {
                     format!("already {}", if want { "checked" } else { "unchecked" })
                 } else {
-                    self.verify_landing(h, node)?;
+                    self.verify_landing(h, node).await?;
                     self.b.click(node).await?
                 }
             }
@@ -2217,7 +2294,7 @@ impl<B: Backend> Session<B> {
                     .map(|c| c.node);
                 match native {
                     Some(opt) => {
-                        self.verify_landing(h, node)?;
+                        self.verify_landing(h, node).await?;
                         self.b.click(opt).await?
                     }
                     None if n.iter().any(|c| matches!(c.role, Role::Option)) => {
@@ -2233,7 +2310,7 @@ impl<B: Backend> Session<B> {
                 format!("focused h{h}")
             }
             "hover" => {
-                self.verify_landing(h, node)?;
+                self.verify_landing(h, node).await?;
                 self.b.hover(node).await?;
                 format!("pointer over h{h}")
             }
@@ -2395,7 +2472,7 @@ impl<B: Backend> Session<B> {
             tried.push(method);
             self.b.begin_act();
             let evidence = if method == "descendant" {
-                if self.verify_landing(h, target).is_err() {
+                if self.verify_landing(h, target).await.is_err() {
                     continue;
                 }
                 self.b.click(target).await?
@@ -2434,7 +2511,7 @@ impl<B: Backend> Session<B> {
     /// An ARIA combobox / listbox button / react-select: open it, find the option wherever the page put
     /// it (a portal included), click it, and say whether the control now shows the choice.
     async fn aria_select(&mut self, h: u32, node: NodeId, v: &str) -> Result<String> {
-        self.verify_landing(h, node)?;
+        self.verify_landing(h, node).await?;
         self.b.click(node).await?;
         self.b.settle().await;
         let want = v.to_ascii_lowercase();
@@ -2464,7 +2541,7 @@ impl<B: Backend> Session<B> {
                 .unwrap_or_else(|| entry(&tree));
             self.bind(opt, &e)
         };
-        self.verify_landing(oh, opt)?;
+        self.verify_landing(oh, opt).await?;
         let how = self.b.click(opt).await?;
         self.b.settle().await;
         let tree = self.tree()?;
@@ -2621,7 +2698,7 @@ impl<B: Backend> Session<B> {
                 }
             );
         }
-        self.verify_reach(h, node, true).map_err(|e| {
+        self.verify_reach(h, node, true).await.map_err(|e| {
             anyhow!(
                 "{}",
                 e.to_string()
