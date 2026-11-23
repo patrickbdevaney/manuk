@@ -1,0 +1,5 @@
+page	chrome_ver	doc_modelContext	nav_modelContext	nav_modelContextTesting	nav_proto_has_modelContext	doc_tools	nav_tools	testing_tools	title	page_errors
+coffee-shop	149.0.7827.155	undefined	object	object	true	-	[]	[]	The Morning Ritual | Specialty Coffee & Equipment	-
+ticket-booking	149.0.7827.155	undefined	object	object	true	-	[]	[]	Ticket Purchase Flow	-
+smart-home	149.0.7827.155	undefined	object	object	true	-	[]	[]	smart-home-webmcp	-
+pizza-maker	149.0.7827.155	object	object	object	true	add_topping,manage_pizza,remove_topping,set_pizza_size,set_pizza_style,share_pizza,toggle_layer	[]	[]	WebMCP zaMaker!	-
