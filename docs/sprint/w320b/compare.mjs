@@ -20,6 +20,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const sortKeys = (v) =>
   Array.isArray(v) ? v.map(sortKeys) : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, sortKeys(v[k])])) : v;
 const canon = (v) => JSON.stringify(sortKeys(v ?? null));
+// W3.20.b.a rule (RULE.md): native schema absent ('' / null / missing) == manuk exactly {"type":"object","properties":{}}.
+const DEFAULT = canon({ type: 'object', properties: {} });
+const absent = (s) => s === undefined || s === null || s === '';
+const schemaEqual = (nat, man) => (absent(nat) ? canon(man) === DEFAULT : canon(man) === canon(nat));
 const asObj = (s) => {
   if (typeof s !== 'string') return s;
   try { return JSON.parse(s); } catch { return s; }
@@ -123,10 +127,11 @@ for (const d of DEMOS) {
     rec.nativeMeta = { modelContext: nat.modelContext, testing: nat.testing };
     rec.native = (nat.tools || []).map((t) => ({ name: t.name, schema: asObj(t.inputSchema), description: t.description })).sort((a, b) => a.name.localeCompare(b.name));
     rec.manuk = (await manukTools(url)).sort((a, b) => a.name.localeCompare(b.name));
+    if (process.env.RULE_MUTANT === 'drop-default') rec.manuk.forEach((t) => { if (canon(t.schema) === DEFAULT) t.schema = {}; });
     const nn = rec.native.map((t) => t.name), mn = rec.manuk.map((t) => t.name);
     const missing = nn.filter((n) => !mn.includes(n));
     const extra = mn.filter((n) => !nn.includes(n));
-    const schemaDiff = rec.native.filter((t) => { const m = rec.manuk.find((x) => x.name === t.name); return m && canon(m.schema) !== canon(t.schema); }).map((t) => t.name);
+    const schemaDiff = rec.native.filter((t) => { const m = rec.manuk.find((x) => x.name === t.name); return m && !schemaEqual(t.schema, m.schema); }).map((t) => t.name);
     const pass = nn.length > 0 && missing.length === 0 && extra.length === 0 && schemaDiff.length === 0;
     Object.assign(rec, { missing, extra, schemaDiff, pass });
   } catch (e) {

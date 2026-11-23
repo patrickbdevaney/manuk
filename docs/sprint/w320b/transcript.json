@@ -360,10 +360,8 @@
       },
       "missing": [],
       "extra": [],
-      "schemaDiff": [
-        "share_pizza"
-      ],
-      "pass": false
+      "schemaDiff": [],
+      "pass": true
     },
     "coffee-shop": {
       "url": "https://googlechromelabs.github.io/webmcp-tools/demos/coffee-shop/",
@@ -464,11 +462,8 @@
       },
       "missing": [],
       "extra": [],
-      "schemaDiff": [
-        "get_machine_specifications",
-        "get_order_history"
-      ],
-      "pass": false
+      "schemaDiff": [],
+      "pass": true
     },
     "ticket-booking": {
       "url": "https://googlechromelabs.github.io/webmcp-tools/demos/ticket-booking/",
@@ -791,13 +786,8 @@
       },
       "missing": [],
       "extra": [],
-      "schemaDiff": [
-        "getGuestMessages",
-        "getPlaylistQueue",
-        "lockFrontDoor",
-        "unlockFrontDoor"
-      ],
-      "pass": false
+      "schemaDiff": [],
+      "pass": true
     },
     "doors": {
       "url": "https://googlechromelabs.github.io/webmcp-tools/demos/doors/",
@@ -815,18 +805,77 @@
     },
     "french-bistro": {
       "url": "https://googlechromelabs.github.io/webmcp-tools/demos/french-bistro/",
-      "native": [],
+      "native": [
+        {
+          "name": "book_table_le_petit_bistro",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Customer's full name (min 2 chars)"
+              },
+              "phone": {
+                "type": "string",
+                "description": "Customer's phone number (min 10 digits)"
+              },
+              "date": {
+                "type": "string",
+                "description": "Reservation date. Must be today or future."
+              },
+              "time": {
+                "type": "string",
+                "description": "Reservation time"
+              },
+              "guests": {
+                "type": "string",
+                "description": "Number of people dining. Must be a string value between '1' and '5', or '6' for parties of 6 or more.",
+                "enum": [
+                  "1",
+                  "2",
+                  "3",
+                  "4",
+                  "5",
+                  "6"
+                ]
+              },
+              "seating": {
+                "type": "string",
+                "description": "Preferred seating area",
+                "enum": [
+                  "Main Dining",
+                  "Terrace",
+                  "Private Booth",
+                  "Bar"
+                ]
+              },
+              "requests": {
+                "type": "string",
+                "description": "Special requests (allergies, occasions, etc.)"
+              }
+            },
+            "required": [
+              "name",
+              "phone",
+              "date",
+              "time",
+              "guests"
+            ]
+          },
+          "description": "Initiates a dining reservation request at Le Petit Bistro. Accepts customer details, timing, and seating preferences."
+        }
+      ],
       "manuk": [
         {
           "name": "book_table_le_petit_bistro",
           "schema": {
             "properties": {
               "date": {
-                "description": "Date",
+                "description": "Reservation date. Must be today or future.",
                 "type": "string"
               },
               "guests": {
-                "description": "Guests",
+                "description": "Number of people dining. Must be a string value between '1' and '5', or '6' for parties of 6 or more.",
                 "enum": [
                   "1",
                   "2",
@@ -838,19 +887,19 @@
                 "type": "string"
               },
               "name": {
-                "description": "Full Name",
+                "description": "Customer's full name (min 2 chars)",
                 "type": "string"
               },
               "phone": {
-                "description": "Phone Number",
+                "description": "Customer's phone number (min 10 digits)",
                 "type": "string"
               },
               "requests": {
-                "description": "Special Requests",
+                "description": "Special requests (allergies, occasions, etc.)",
                 "type": "string"
               },
               "seating": {
-                "description": "Seating Preference",
+                "description": "Preferred seating area",
                 "enum": [
                   "Main Dining",
                   "Terrace",
@@ -859,12 +908,8 @@
                 ],
                 "type": "string"
               },
-              "submit": {
-                "description": "also submit the form after filling (default false)",
-                "type": "boolean"
-              },
               "time": {
-                "description": "Time",
+                "description": "Reservation time",
                 "type": "string"
               }
             },
@@ -886,11 +931,9 @@
         "testing": "object"
       },
       "missing": [],
-      "extra": [
-        "book_table_le_petit_bistro"
-      ],
+      "extra": [],
       "schemaDiff": [],
-      "pass": false
+      "pass": true
     }
   }
 }
