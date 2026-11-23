@@ -82,8 +82,11 @@ def parse(path):
     return is_error or not has_result, final, results, texts, type_calls
 
 
-def features(path):
+def features(path, exclude_final=False):
+    """exclude_final=True: the final answer message is not an assistant text for clauses like (g) (G1.md, W5.G1.b.d.b.a.a.a.a.a.a)."""
     err, final, results, texts, type_calls = parse(path)
+    if exclude_final and final.strip() and texts and texts[-1].strip() == final.strip():
+        texts = texts[:-1]
     f = collections.Counter()
     f["is_error"] = int(err)
     f["type_calls"] = type_calls

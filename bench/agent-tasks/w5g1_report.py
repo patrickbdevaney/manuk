@@ -87,7 +87,7 @@ def classify(path, mutate=None):
     turn-limit: the run errored. tool-choice: no action call. refusal-seen: an unrecovered browser-side refusal/no-effect result the
     agent saw. stop-by-choice: none of those; the agent ended its run with an answer. `perceive` and `target` are NOT claimed:
     hand labels of them disagreed across draws on the same task, so no cause is attributed to what the agent could see or aim at."""
-    f = rc.features(path)
+    f = rc.features(path, exclude_final=(mutate != "count-final"))  # clause (g) excludes the final answer message (G1.md)
     if f["is_error"]:
         return "turn-limit"
     if action_calls(path) == 0:
@@ -110,7 +110,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--runs-dir", default=os.path.join(ROOT, "target/real-runs"))
     ap.add_argument("--dir", default=os.path.join(ROOT, "docs/sprint/w5/G1"))
-    ap.add_argument("--mutate", choices=["drop-act", "inject-perceive"])
+    ap.add_argument("--mutate", choices=["drop-act", "inject-perceive", "count-final"])
     ap.add_argument("--arm-tsv")
     ap.add_argument("--b-tsv", help="replaces the (b) rows (default DIR/cdp-layer+pwfmt.tsv), e.g. cdp-layer+pwfmt-v2.tsv")
     ap.add_argument("--b-label", help="arm name written in causes (b) rows, so a re-run is not confused with labelled keys")

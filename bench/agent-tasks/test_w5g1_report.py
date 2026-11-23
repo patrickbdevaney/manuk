@@ -5,7 +5,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import w5g1_report as r
 
 
-def transcript(calls):
+def transcript(calls, final="wrong answer", final_as_text=False):
     """calls: [(tool, result_text)] -> path of a stream-json transcript that ends with a (non-error) result."""
     ev = []
     for i, (name, res) in enumerate(calls):
@@ -14,7 +14,9 @@ def transcript(calls):
             continue
         ev.append({"type": "assistant", "message": {"content": [{"type": "tool_use", "id": f"t{i}", "name": "mcp__browser__" + name, "input": {}}]}})
         ev.append({"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": f"t{i}", "content": res}]}})
-    ev.append({"type": "result", "is_error": False, "result": "wrong answer"})
+    if final_as_text:  # the final answer is also the last assistant text message, as in real transcripts
+        ev.append({"type": "assistant", "message": {"content": [{"type": "text", "text": final}]}})
+    ev.append({"type": "result", "is_error": False, "result": final})
     fd, p = tempfile.mkstemp(suffix=".jsonl")
     with os.fdopen(fd, "w") as fh:
         fh.write("\n".join(json.dumps(e) for e in ev) + "\n")
@@ -94,6 +96,18 @@ class T(unittest.TestCase):
     def test_typing_that_landed_is_not_act(self):
         p = transcript([("type", "STALE: h1 is no longer on the page"), ("type", "ok: typed"), ("act", "ok: dispatched click; url: /d")])
         self.assertNotEqual(r.classify(p), "refusal-seen")
+
+    def test_final_answer_greyed_out_is_not_clause_g(self):
+        # W5.G1.b.d.b.a.a.a.a.a.a: (g) excludes the final answer message (fly-unified-5 r1 shape)
+        fin = "The date input is greyed out for dates before the earliest bookable date, typed text in the field."
+        calls = [("type", "ok: typed"), ("act", "ok: dispatched click; url: /d")]
+        self.assertEqual(r.classify(transcript(calls, fin, True)), "stop-by-choice")
+        self.assertEqual(r.classify(transcript(calls, fin, True), "count-final"), "refusal-seen")  # old reading goes red
+
+    def test_midrun_greyed_out_text_is_still_clause_g(self):
+        fin = "done"
+        calls = [("type", "ok: typed"), ("say", "The typed text field is greyed out, typing did not register"), ("act", "ok: dispatched click; url: /d")]
+        self.assertEqual(r.classify(transcript(calls, fin, True)), "refusal-seen")
 
 
 if __name__ == "__main__":
