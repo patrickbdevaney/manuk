@@ -1,0 +1,36 @@
+arm	task	run	hand_label	evidence
+cdp-layer+pwfmt-v7r	dashdish-4	1	refusal-seen	clause b: 3 "no change | url: unchanged" results (focus, key Enter, click) after last success (act click h446 ok)
+cdp-layer+pwfmt-v7r	dashdish-4	2	stop-by-choice	none; no clause fired after last success
+cdp-layer+pwfmt-v7r	dashdish-5	1	stop-by-choice	none; no clause fired after last success
+cdp-layer+pwfmt-v7r	dashdish-5	2	stop-by-choice	none; no clause fired after last success
+cdp-layer+pwfmt-v7r	fly-unified-2	1	stop-by-choice	none; no clause fired after last success
+cdp-layer+pwfmt-v7r	fly-unified-2	2	stop-by-choice	none; no clause fired after last success
+cdp-layer+pwfmt-v7r	fly-unified-4	1	stop-by-choice	none; no clause fired after last success
+cdp-layer+pwfmt-v7r	fly-unified-4	2	stop-by-choice	none; no clause fired after last success
+cdp-layer+pwfmt-v7r	fly-unified-5	1	stop-by-choice	none; no clause fired after last success
+cdp-layer+pwfmt-v7r	fly-unified-5	2	stop-by-choice	none; no clause fired after last success
+cdp-layer+pwfmt-v7r	fly-unified-6	1	stop-by-choice	none; no clause fired after last success
+cdp-layer+pwfmt-v7r	fly-unified-6	2	stop-by-choice	none; no clause fired after last success
+cdp-layer+pwfmt-v7r	fly-unified-9	1	refusal-seen	clause b: 2 "no change | url: unchanged" key results (shift+Tab, ArrowDown) after last success (act click h53)
+cdp-layer+pwfmt-v7r	fly-unified-9	2	stop-by-choice	none; no clause fired after last success
+cdp-layer+pwfmt-v7r	gocalendar-1	1	stop-by-choice	none; no clause fired after last success
+cdp-layer+pwfmt-v7r	gocalendar-7	1	stop-by-choice	none; only 1 STALE-class result after last success (navigate)
+cdp-layer+pwfmt-v7r	gocalendar-7	2	stop-by-choice	none; no clause fired after last success
+cdp-layer+pwfmt-v7r	gomail-3	1	stop-by-choice	none; no clause fired after last success
+cdp-layer+pwfmt-v7r	gomail-3	2	stop-by-choice	none; no clause fired after last success
+cdp-layer+pwfmt-v7r	networkin-10	1	stop-by-choice	none; no clause fired after last success
+cdp-layer+pwfmt-v7r	networkin-3	1	stop-by-choice	none; no clause fired after last success
+cdp-layer+pwfmt-v7r	networkin-6	1	stop-by-choice	none; no clause fired after last success
+cdp-layer+pwfmt-v7r	networkin-9	1	stop-by-choice	none; no clause fired after last success
+cdp-layer+pwfmt-v7r	opendining-10	1	stop-by-choice	none; no clause fired after last success
+cdp-layer+pwfmt-v7r	opendining-4	1	stop-by-choice	none; only 1 STALE after last success (act click h379); handoff failure was earlier
+cdp-layer+pwfmt-v7r	opendining-5	1	stop-by-choice	none; no clause fired after last success
+cdp-layer+pwfmt-v7r	opendining-8	1	stop-by-choice	none; no clause fired after last success
+cdp-layer+pwfmt-v7r	staynb-4	1	stop-by-choice	none; (g) not met: only fill_form, no type call; 1 no-change after last success (act click h672)
+cdp-layer+pwfmt-v7r	staynb-5	1	stop-by-choice	none; no clause fired after last success
+cdp-layer+pwfmt-v7r	staynb-6	1	stop-by-choice	none; no clause fired after last success
+cdp-layer+pwfmt-v7r	staynb-8	1	stop-by-choice	none; no clause fired after last success
+cdp-layer+pwfmt-v7r	topwork-1	1	stop-by-choice	none; no clause fired after last success
+cdp-layer+pwfmt-v7r	topwork-2	1	stop-by-choice	none; no clause fired after last success
+cdp-layer+pwfmt-v7r	topwork-3	1	stop-by-choice	none; no clause fired after last success
+cdp-layer+pwfmt-v7r	topwork-4	1	stop-by-choice	none; no clause fired after last success
