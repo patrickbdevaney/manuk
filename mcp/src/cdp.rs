@@ -205,7 +205,11 @@ impl Cdp {
         let ok = manuk_net::taint::check_egress(
             f["d"].as_str().unwrap_or(""),
             f["u"].as_str().unwrap_or(""),
-            "WebSocket frame",
+            if f["k"] == "rtc" {
+                "WebRTC data channel"
+            } else {
+                "WebSocket frame"
+            },
         )
         .is_ok();
         let keep = m["sessionId"]
@@ -355,25 +359,37 @@ inst(window,A)})();"#;
 /// the page. Dedicated workers get `WORKER_SECRET_GUARD` prepended to their script (a worker context has no
 /// CDP binding): its sends are relayed through the owning page's binding. WebTransport is removed outright
 /// (a datagram/stream cannot be judged per frame here). Fetch already covers worker fetch and EventSource.
-const WS_SECRET_GUARD: &str = r#"(function(){if(window.__mkV||!window.__mkEgress)return;var q={},n=0,S=WebSocket.prototype.send,E=window.__mkEgress,O=window.Worker,PM=O&&O.prototype.postMessage;
+const WS_SECRET_GUARD: &str = r#"(function(){if(window.__mkV||!window.__mkEgress)return;var q={},n=0,S=WebSocket.prototype.send,E=window.__mkEgress,O=window.Worker,SW=window.SharedWorker,PM=O&&O.prototype.postMessage;
 function str(d,cb){if(typeof d==='string')cb(d);else if(typeof Blob!=='undefined'&&d instanceof Blob){var r=new FileReader();r.onload=function(){cb(String(r.result))};r.onerror=function(){cb('\u0000unreadable')};r.readAsText(d)}else if(d instanceof ArrayBuffer||ArrayBuffer.isView(d))cb(new TextDecoder().decode(d));else cb(String(d))}
-function chk(u,d,cb){str(d,function(s){var i=++n;q[i]=cb;E(JSON.stringify({i:i,u:u,d:s}))})}
+function chk(u,d,cb,k){str(d,function(s){var i=++n;q[i]=cb;E(JSON.stringify({i:i,u:u,d:s,k:k}))})}
 window.__mkV=function(i,ok){var f=q[i];delete q[i];f&&f(ok)};
 WebSocket.prototype.send=function(d){var me=this;chk(me.url,d,function(ok){if(ok)S.call(me,d)})};
+if(window.RTCDataChannel){var RS=RTCDataChannel.prototype.send;RTCDataChannel.prototype.send=function(d){var me=this;chk('webrtc:'+me.label,d,function(ok){if(ok)RS.call(me,d)},'rtc')}}
 try{Object.defineProperty(window,'WebTransport',{value:undefined,configurable:true})}catch(e){}
-if(O){var G=function(u,o){var abs=new URL(u,location.href).href,mod=o&&o.type==='module',
+function mk(C,shared){var G=function(u,o){var abs=new URL(u,location.href).href,mod=o&&o.type==='module',
 src=__WG__+';'+(mod?'import('+JSON.stringify(abs)+')':'importScripts('+JSON.stringify(abs)+')'),
-w=new O(URL.createObjectURL(new Blob([src],{type:'text/javascript'})),o);
-w.addEventListener('message',function(e){var m=e.data;if(m&&m.__mkq){e.stopImmediatePropagation();chk(m.u,m.d,function(ok){PM.call(w,{__mkv:1,i:m.i,ok:ok})})}});return w};
-G.prototype=O.prototype;window.Worker=G}})();"#;
+w=new C(URL.createObjectURL(new Blob([src],{type:'text/javascript'})),o);
+if(shared){w.port.addEventListener('message',function(e){var m=e.data;if(m&&m.__mkq){e.stopImmediatePropagation();chk(m.u,m.d,function(ok){w.port.postMessage({__mkv:1,i:m.i,ok:ok})},m.k)}});w.port.start()}
+else w.addEventListener('message',function(e){var m=e.data;if(m&&m.__mkq){e.stopImmediatePropagation();chk(m.u,m.d,function(ok){PM.call(w,{__mkv:1,i:m.i,ok:ok})},m.k)}});
+return w};G.prototype=C.prototype;return G}
+if(O)window.Worker=mk(O,false);if(SW)window.SharedWorker=mk(SW,true)})();"#;
 
-/// The worker half of the guard: runs first inside a wrapped dedicated worker (as a JS string literal for
-/// `WS_SECRET_GUARD`). Sends are posted to the page, which asks the host and answers `{__mkv,i,ok}`.
-const WORKER_SECRET_GUARD: &str = r#"(function(){var S=WebSocket.prototype.send,q={},n=0,P=self.postMessage.bind(self);
+/// The worker half of the guard: runs first inside a wrapped dedicated or shared worker (as a JS string literal
+/// for `WS_SECRET_GUARD`). Sends are posted upward (to the page, or for a nested worker to its parent worker,
+/// which forwards) and answered with `{__mkv,i,ok}`. Nested Worker constructors are wrapped with this same
+/// guard (`GW.toString()`); a shared worker relays over the most recently connected port.
+const WORKER_SECRET_GUARD: &str = r#"(function GW(){var S=WebSocket.prototype.send,q={},n=0,SH=typeof SharedWorkerGlobalScope!=='undefined'&&self instanceof SharedWorkerGlobalScope,ports=[],O=self.Worker,PM=O&&O.prototype.postMessage;
+function up(m,cb){var i=++n;q[i]=cb;m.i=i;m.__mkq=1;if(SH){var p=ports[ports.length-1];if(p)p.postMessage(m);else cb(false)}else self.postMessage(m)}
 function str(d,cb){if(typeof d==='string')cb(d);else if(typeof Blob!=='undefined'&&d instanceof Blob){var r=new FileReader();r.onload=function(){cb(String(r.result))};r.onerror=function(){cb('\u0000unreadable')};r.readAsText(d)}else if(d instanceof ArrayBuffer||ArrayBuffer.isView(d))cb(new TextDecoder().decode(d));else cb(String(d))}
-self.addEventListener('message',function(e){var m=e.data;if(m&&m.__mkv){e.stopImmediatePropagation();var f=q[m.i];delete q[m.i];f&&f(m.ok)}});
-WebSocket.prototype.send=function(d){var me=this;str(d,function(s){var i=++n;q[i]=function(ok){if(ok)S.call(me,d)};P({__mkq:1,i:i,u:me.url,d:s})})};
-try{Object.defineProperty(self,'WebTransport',{value:undefined,configurable:true})}catch(e){}})()"#;
+function verdict(e){var m=e.data;if(m&&m.__mkv){e.stopImmediatePropagation();var f=q[m.i];delete q[m.i];f&&f(m.ok)}}
+if(SH)self.addEventListener('connect',function(e){var p=e.ports[0];ports.push(p);p.addEventListener('message',verdict);p.start()});else self.addEventListener('message',verdict);
+WebSocket.prototype.send=function(d){var me=this;str(d,function(s){up({u:me.url,d:s},function(ok){if(ok)S.call(me,d)})})};
+if(typeof RTCDataChannel!=='undefined'){var RS=RTCDataChannel.prototype.send;RTCDataChannel.prototype.send=function(d){var me=this;str(d,function(s){up({u:'webrtc:'+me.label,d:s,k:'rtc'},function(ok){if(ok)RS.call(me,d)})})}}
+try{Object.defineProperty(self,'WebTransport',{value:undefined,configurable:true})}catch(e){}
+if(O){var G=function(u,o){var abs=new URL(u,self.location.href).href,mod=o&&o.type==='module',
+src='('+GW.toString()+')();'+(mod?'import('+JSON.stringify(abs)+')':'importScripts('+JSON.stringify(abs)+')'),
+w=new O(URL.createObjectURL(new Blob([src],{type:'text/javascript'})),o);
+w.addEventListener('message',function(e){var m=e.data;if(m&&m.__mkq){e.stopImmediatePropagation();up({u:m.u,d:m.d,k:m.k},function(ok){PM.call(w,{__mkv:1,i:m.i,ok:ok})})}});return w};G.prototype=O.prototype;self.Worker=G}})()"#;
 
 fn ws_secret_guard() -> String {
     WS_SECRET_GUARD.replace("__WG__", &json!(WORKER_SECRET_GUARD).to_string())

