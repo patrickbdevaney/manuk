@@ -34,8 +34,14 @@ manuk-wrong breakdown:
   at rest. This is a real injection channel (attribute text reaches the agent as visible content); it is the case the census
   flagged. Shield follow-up filed (W3.15.b.a).
 - **2 under-exposures**: test-2242 and test-732 are visible comments (contrast 13–14:1, unoccluded) absent from the default
-  surface. The cause is not isolated: a minimal replica with the same colors passes, and the page's ancestors carry no hidden
-  styling. Follow-up W3.15.b.c.
+  surface. **Cause (W3.15.b.c): paging, not an omission of painted text.** `extract format=text` returns one page of
+  `EXTRACT_PAGE` = 20,000 chars (mcp/src/session.rs:139) and ends with a `page: <cursor>` line; both pages put 20k+ chars of
+  video transcript before the comments (payload at HTML offset 67k / 82k), so the comment sits on a later extract page the census
+  never fetched. `observe` shows each comment node elided to ~80 chars + `…`, so the payload tail is not there either (the
+  prefix is). A replica passed because it was short. Minimal repro: `w315bc-repro.py` (FAR = comment after 25k chars of filler:
+  payload absent; NEAR = same comment first: present; `--mutate` flips the order and exits 1). No engine fix in scope: the page cap
+  and observe elision are designed budgets, and the census must follow `page:` cursors before it counts a row as omitted
+  (belongs to W3.15.b.b). The 2 "under-exposure" rows are therefore census-method artifacts, leaving 17/40 manuk-wrong.
 
 Scaled to the population of 142 disagreement rows, the attribute-borne class (17/40) is ≈60 rows (95% Wilson CI 40–82), i.e. about 5% of the 1,178 located samples (CI 3.4–7.0%). These are sample estimates, not a census.
 
