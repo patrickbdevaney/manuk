@@ -1,0 +1,12 @@
+# W4.P0.f.a.a.a.a.a.a: bench/agent-tasks/w4/royal_slot_check.py, pinned Chrome, fresh profile per run; chrome_ver=145.0.7632.116
+# mode=real date=Jul20
+run	chrome_ver	date_shown	found	slots	disabled	satisfiable_7pm
+1	145.0.7632.116	Jul 20	True	7:00 PM,7:30 PM,8:00 PM,8:30 PM,9:00 PM	0	True
+2	145.0.7632.116	Jul 20	True	7:00 PM,7:30 PM,8:00 PM,8:30 PM,9:00 PM	0	True
+3	145.0.7632.116	Jul 20	True	7:00 PM,7:30 PM,8:00 PM,8:30 PM,9:00 PM	0	True
+# mode=mutate-date (day 21)
+1	145.0.7632.116	Jul 21	True	7:00 PM,7:30 PM,8:00 PM,8:30 PM,9:00 PM	0	True
+# mode=mutate-date (day 1)
+1	145.0.7632.116	Jul 1	True	7:00 PM,7:30 PM,8:00 PM,8:30 PM,9:00 PM	0	True
+# mode=mutate-restaurant
+1	145.0.7632.116	Jul 20	False	NONE	0	False
