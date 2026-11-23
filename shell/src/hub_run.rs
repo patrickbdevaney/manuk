@@ -126,6 +126,30 @@ impl HubRun {
         consent: HandoffConsent,
         config: AgentConfig,
         backend: Box<dyn InferenceBackend>,
+        size: (u32, u32),
+    ) -> Self {
+        Self::start_with(task, handoff, Some(consent), config, backend, size)
+    }
+
+    /// W6.H1.a: a run with no window and no human gesture (`manuk agent-task`). It holds no consent
+    /// token (none can be minted without a key press), so it can neither hand the page to a human nor
+    /// give it back; a `handoff` tool call times out.
+    pub fn start_headless(
+        task: &str,
+        handoff: Handoff,
+        config: AgentConfig,
+        backend: Box<dyn InferenceBackend>,
+        size: (u32, u32),
+    ) -> Self {
+        Self::start_with(task, handoff, None, config, backend, size)
+    }
+
+    fn start_with(
+        task: &str,
+        handoff: Handoff,
+        consent: Option<HandoffConsent>,
+        config: AgentConfig,
+        backend: Box<dyn InferenceBackend>,
         (w, h): (u32, u32),
     ) -> Self {
         let slot = Rc::new(RefCell::new(Slot::default()));
@@ -164,7 +188,7 @@ impl HubRun {
             human_kind: None,
             human_deadline: None,
             reclaim: false,
-            held: Some(consent),
+            held: consent,
             stop_requested: false,
             steps: 0,
             last_effect: None,

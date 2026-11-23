@@ -133,6 +133,28 @@ impl AgentRun {
         consent: HandoffConsent,
         config: AgentConfig,
         backend: Box<dyn InferenceBackend>,
+        size: (u32, u32),
+    ) -> Self {
+        Self::start_with(task, handoff, Some(consent), config, backend, size)
+    }
+
+    /// W6.H1.a: no window, no human gesture (`manuk agent-task --driver taskrun`).
+    pub fn start_headless(
+        task: &str,
+        handoff: Handoff,
+        config: AgentConfig,
+        backend: Box<dyn InferenceBackend>,
+        size: (u32, u32),
+    ) -> Self {
+        Self::start_with(task, handoff, None, config, backend, size)
+    }
+
+    fn start_with(
+        task: &str,
+        handoff: Handoff,
+        consent: Option<HandoffConsent>,
+        config: AgentConfig,
+        backend: Box<dyn InferenceBackend>,
         (w, h): (u32, u32),
     ) -> Self {
         let mut browser = AgentBrowser::new(w, h);
@@ -149,7 +171,7 @@ impl AgentRun {
             log: vec![format!("task: {}", clip(task, 60))],
             before: None,
             human_page: None,
-            held: Some(consent),
+            held: consent,
             stop_requested: false,
             steps_done: 0,
             last_effect: None,

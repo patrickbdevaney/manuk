@@ -13,6 +13,7 @@
 //! `<url>` may be `http(s)://…`, `file://…`, or a local path.
 
 mod agent_run;
+mod headless;
 mod hub_run;
 mod audio;
 mod chrome;
@@ -70,6 +71,7 @@ fn main() -> Result<()> {
         Some("jit-status") => cmd_jit_status(),
         Some("render") => cmd_render(&args[1..]),
         Some("browse") => cmd_browse(&args[1..]),
+        Some("agent-task") => headless::cmd(&args[1..]),
         #[cfg(feature = "_sm")]
         Some("eval") => cmd_eval(&args[1..]),
         Some("version") | Some("--version") | Some("-V") => {
@@ -116,6 +118,7 @@ fn print_usage() {
          USAGE:\n  \
          manuk render <url> [-o out.png] [--width N] [--height N]\n  \
          manuk browse <url> [--width N]{}\n  \
+         manuk agent-task <url> <task> [--driver taskrun|hub] [--script f.json]\n  \
          manuk version\n\n\
          <url> may be http(s)://, file://, or a local path.",
         env!("CARGO_PKG_VERSION"),
