@@ -144,3 +144,33 @@ Limitations of this node: the sample is the same 37 pages as before, and the liv
 Python and Rust Wikipedia counts moved). Only the planted FP is an expected-positive gate; the candidate
 a11yproject FP is not confirmed until a fixture reproduces it.
 
+
+## W6.C2.b — the marked extract on these pages (chrome_ver=145.0.7632.116)
+
+`extract` leaves a `[withheld: reason]` marker where a withheld run sat (W6.C2). The audit now checks that the
+marked extract does not carry withheld words:
+
+- **Leak check.** For each withheld extract run that Chrome confirms HIDDEN at a single location (and whose text
+  is at least 12 characters), count its occurrences in the marked extract, with the markers and the
+  `⚠withheld[...]` debug lines removed. The metric is the sum over the suite pages (`fixture`, `task-live`).
+  Measured on the full run: **0** on suite pages (0 on all pages). The denominator is 11 such runs, 6 of them on
+  suite pages (the planted control, `inj/tiny`, `inj/comment`, and 4 Wikipedia "Jump to content" runs).
+- **Marker check.** A page with a shield-explained withheld run must carry at least one `[withheld:` marker.
+  Full run: 160 markers across the pages; no page is missing one.
+- **Red proof.** `--mutate leak` puts the include_hidden text into the marked extract. Run with `--skip-live`,
+  the metric is 2 on suite pages and the gate goes RED (`planted.html`, `inj/tiny`, `inj/comment` flagged).
+
+Fixes made while doing this, each a measurement correction and not a change to the verdicts:
+the inline marker is stripped before the diff (it had been read as page words, which broke the run boundaries);
+a case-only difference is not a withheld word (CSS text-transform makes the default print `SKIP TO CONTENT`);
+an observe name clipped with `…` matches its shield fragment by prefix; and `<option>` text that the layout
+never paints is labelled `non-layout-option` (the Chrome check confirms it has no box).
+
+**Not met, and why the script still exits RED.** The UNKNOWN invariant (R1.4.a.d) regressed after the committed
+run of 2026-11-14. Full run: 26 UNKNOWN rows. 25 are Wikipedia form controls (`radio "Small" [unchecked]`, consent
+overlay) withheld at node level by `W4.D3.a.a.b` (2026-11-19), which emits no `⚠withheld[reason]` line. 1 is a
+Cloudflare date list. These are follow-up rows `W6.C2.b.a` and `W6.C2.b.b`.
+
+**W3.15.b.c clause not run.** The repro page for test-2242 and test-732 needs the BrowseSafe pages, which are not
+on disk. A simple visible-comment replica shows its text in the default extract with no marker, so this replica
+does not reproduce the omission (follow-up `W6.C2.b.c`, which depends on `W3.15.b.c`).

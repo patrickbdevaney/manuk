@@ -1,38 +1,38 @@
-chrome_ver	group	url	marker_withheld	marker_reasons	extract_withheld_runs	observe_withheld_runs	diff_anomalies	visible	hidden_confirmed	unmatched	unverifiable	ambiguous	dup	secs	extract_error
-145.0.7632.116	planted	http://127.0.0.1:40971/planted.html	21	low-contrast 10, opacity 11	2	2	0	1	1	0	0	0	2	1.8	False
-145.0.7632.116	fixture	http://127.0.0.1:42249/login	0		0	0	0	0	0	0	0	0	0	1.7	False
-145.0.7632.116	fixture	http://127.0.0.1:42249/form/1	0		0	0	0	0	0	0	0	0	0	1.7	False
-145.0.7632.116	fixture	http://127.0.0.1:42249/shop	0		0	0	0	0	0	0	0	0	0	1.7	False
-145.0.7632.116	fixture	http://127.0.0.1:42249/shop2	0		0	0	0	0	0	0	0	0	0	1.7	False
-145.0.7632.116	fixture	http://127.0.0.1:42249/promo	0		0	0	0	0	0	0	0	0	0	1.7	False
-145.0.7632.116	fixture	http://127.0.0.1:42249/banner	0		0	0	0	0	0	0	0	0	0	1.7	False
-145.0.7632.116	fixture	http://127.0.0.1:42249/feed	0		0	0	0	0	0	0	0	0	0	1.8	False
-145.0.7632.116	fixture	http://127.0.0.1:42249/catalog	0		0	0	0	0	0	0	0	0	0	1.7	False
-145.0.7632.116	fixture	http://127.0.0.1:42249/product	0		0	0	0	0	0	0	0	0	0	1.7	False
-145.0.7632.116	fixture	http://127.0.0.1:42249/inventory	0		0	0	0	0	0	0	0	0	0	1.7	False
-145.0.7632.116	fixture	http://127.0.0.1:42249/inj/hidden	0		0	0	0	0	0	0	0	0	0	1.7	False
-145.0.7632.116	fixture	http://127.0.0.1:42249/inj/offscreen	20	offscreen 20	0	1	1	0	0	1	0	0	0	1.7	False
-145.0.7632.116	fixture	http://127.0.0.1:42249/inj/tiny	20	tiny-font 20	1	1	0	0	1	1	0	0	0	1.8	False
-145.0.7632.116	fixture	http://127.0.0.1:42249/inj/comment	7	opacity 7	1	0	0	0	1	0	0	0	0	1.8	False
-145.0.7632.116	task-live	https://books.toscrape.com/	1	low-contrast 1	1	0	0	0	0	0	0	1	0	6.6	False
-145.0.7632.116	task-live	https://quotes.toscrape.com/	0		0	0	0	0	0	0	0	0	0	3.7	False
-145.0.7632.116	task-live	https://quotes.toscrape.com/js/	0		0	0	0	0	0	0	0	0	0	3.8	False
-145.0.7632.116	task-live	https://quotes.toscrape.com/scroll	0		0	0	0	0	0	0	0	0	0	5.1	False
-145.0.7632.116	task-live	https://example.com/	0		0	0	0	0	0	0	0	0	0	2.1	False
-145.0.7632.116	task-live	https://httpbin.org/html	0		0	0	0	0	0	0	0	0	0	2.1	False
-145.0.7632.116	task-live	https://en.wikipedia.org/wiki/Python_(programming_language)	363	opacity 78, zero-size 285	17	1	3	0	4	3	0	0	1	43.5	False
-145.0.7632.116	task-live	https://en.wikipedia.org/wiki/Rust_(programming_language)	332	opacity 74, zero-size 258	19	1	6	0	5	3	0	0	1	46.7	False
-145.0.7632.116	task-live	https://en.wikipedia.org/wiki/Alan_Turing	435	opacity 76, zero-size 359	20	1	2	0	6	3	0	0	1	60.2	False
-145.0.7632.116	task-live	https://en.wikipedia.org/wiki/Main_Page	95	opacity 88, zero-size 7	3	1	0	0	0	2	1	0	1	5.6	False
-145.0.7632.116	task-live	https://www.scrapethissite.com/pages/simple/	0		0	0	0	0	0	0	0	0	0	12.8	False
-145.0.7632.116	task-live	https://books.toscrape.com/catalogue/page-2.html	1	low-contrast 1	1	0	0	0	0	0	0	1	0	3.9	False
-145.0.7632.116	corpus	https://a11yproject.com/	9	zero-size 9	1	1	0	0	1	0	0	0	1	3.1	False
-145.0.7632.116	corpus	https://blog.cloudflare.com/	27	low-contrast 2, offscreen 3, opacity 17, zero-size 5	4	2	0	0	1	1	3	0	1	14.4	False
-145.0.7632.116	corpus	https://blog.rust-lang.org/	0		0	0	0	0	0	0	0	0	0	8.0	False
-145.0.7632.116	corpus	https://danluu.com/	0		0	0	0	0	0	0	0	0	0	3.2	False
-145.0.7632.116	corpus	https://engineering.fb.com/	6	zero-size 6	1	2	1	0	1	0	1	0	1	3.9	False
-145.0.7632.116	corpus	https://fasterthanli.me/	1	offscreen 1	0	0	0	0	0	0	0	0	0	6.5	False
-145.0.7632.116	corpus	https://joelonsoftware.com/	7	zero-size 7	3	1	0	0	3	0	0	0	1	6.6	False
-145.0.7632.116	corpus	https://jvns.ca/	4	offscreen 4	1	1	0	0	0	0	1	0	1	9.2	False
-145.0.7632.116	corpus	https://martinfowler.com/	0		0	0	0	0	0	0	0	0	0	5.7	False
-145.0.7632.116	corpus	https://matklad.github.io/	0		0	0	0	0	0	0	0	0	0	2.9	False
+chrome_ver	group	url	marker_withheld	marker_reasons	extract_withheld_runs	observe_withheld_runs	diff_anomalies	visible	hidden_confirmed	unmatched	unverifiable	ambiguous	dup	withheld_in_marked	markers	secs	extract_error
+145.0.7632.116	planted	http://127.0.0.1:46377/planted.html	2	low-contrast 1, opacity 1	2	2	0	1	1	0	0	0	2	0	2	2.8	False
+145.0.7632.116	fixture	http://127.0.0.1:41125/login	0		0	0	0	0	0	0	0	0	0	0	0	2.9	False
+145.0.7632.116	fixture	http://127.0.0.1:41125/form/1	0		0	0	0	0	0	0	0	0	0	0	0	2.7	False
+145.0.7632.116	fixture	http://127.0.0.1:41125/shop	0		0	0	0	0	0	0	0	0	0	0	0	2.7	False
+145.0.7632.116	fixture	http://127.0.0.1:41125/shop2	0		0	0	0	0	0	0	0	0	0	0	0	3.2	False
+145.0.7632.116	fixture	http://127.0.0.1:41125/promo	0		0	0	0	0	0	0	0	0	0	0	0	3.0	False
+145.0.7632.116	fixture	http://127.0.0.1:41125/banner	0		0	0	0	0	0	0	0	0	0	0	0	2.8	False
+145.0.7632.116	fixture	http://127.0.0.1:41125/feed	0		0	0	0	0	0	0	0	0	0	0	0	5.2	False
+145.0.7632.116	fixture	http://127.0.0.1:41125/catalog	0		0	0	0	0	0	0	0	0	0	0	0	2.7	False
+145.0.7632.116	fixture	http://127.0.0.1:41125/product	0		0	0	0	0	0	0	0	0	0	0	0	2.8	False
+145.0.7632.116	fixture	http://127.0.0.1:41125/inventory	0		1	0	0	0	0	0	1	0	0	0	0	2.8	False
+145.0.7632.116	fixture	http://127.0.0.1:41125/inj/hidden	0		0	0	0	0	0	0	0	0	0	0	0	2.7	False
+145.0.7632.116	fixture	http://127.0.0.1:41125/inj/offscreen	1	offscreen 1	0	1	0	0	0	1	0	0	0	0	1	2.8	False
+145.0.7632.116	fixture	http://127.0.0.1:41125/inj/tiny	1	tiny-font 1	1	1	0	0	1	1	0	0	0	0	1	2.7	False
+145.0.7632.116	fixture	http://127.0.0.1:41125/inj/comment	1	opacity 1	1	0	0	0	1	0	0	0	0	0	1	2.8	False
+145.0.7632.116	task-live	https://books.toscrape.com/	0		0	0	0	0	0	0	0	0	0	0	0	4.8	False
+145.0.7632.116	task-live	https://quotes.toscrape.com/	0		0	0	0	0	0	0	0	0	0	0	0	3.8	False
+145.0.7632.116	task-live	https://quotes.toscrape.com/js/	0		0	0	0	0	0	0	0	0	0	0	0	3.6	False
+145.0.7632.116	task-live	https://quotes.toscrape.com/scroll	0		0	0	0	0	0	0	0	0	0	0	0	4.2	False
+145.0.7632.116	task-live	https://example.com/	0		0	0	0	0	0	0	0	0	0	0	0	3.0	False
+145.0.7632.116	task-live	https://httpbin.org/html	0		0	0	0	0	0	0	0	0	0	0	0	3.1	False
+145.0.7632.116	task-live	https://en.wikipedia.org/wiki/Python_(programming_language)	611	visibility 39, zero-size 572	1	57	5	0	1	29	3	0	0	0	47	58.4	False
+145.0.7632.116	task-live	https://en.wikipedia.org/wiki/Rust_(programming_language)	308	visibility 35, zero-size 273	1	47	4	0	1	28	0	0	0	0	37	77.8	False
+145.0.7632.116	task-live	https://en.wikipedia.org/wiki/Alan_Turing	714	visibility 37, zero-size 677	1	60	7	0	1	31	0	0	0	0	51	75.0	False
+145.0.7632.116	task-live	https://en.wikipedia.org/wiki/Main_Page	52	visibility 48, zero-size 4	1	12	2	0	1	12	0	0	0	0	2	7.5	False
+145.0.7632.116	task-live	https://www.scrapethissite.com/pages/simple/	0		0	0	0	0	0	0	0	0	0	0	0	12.8	False
+145.0.7632.116	task-live	https://books.toscrape.com/catalogue/page-2.html	0		0	0	0	0	0	0	0	0	0	0	0	6.2	False
+145.0.7632.116	corpus	https://a11yproject.com/	5	zero-size 5	1	5	0	0	1	0	1	2	1	0	5	4.9	False
+145.0.7632.116	corpus	https://blog.cloudflare.com/	12	visibility 10, zero-size 2	2	2	0	0	1	2	0	0	1	0	3	5.0	False
+145.0.7632.116	corpus	https://blog.rust-lang.org/	0		0	0	0	0	0	0	0	0	0	0	0	5.7	False
+145.0.7632.116	corpus	https://danluu.com/	0		0	0	0	0	0	0	0	0	0	0	0	4.5	False
+145.0.7632.116	corpus	https://engineering.fb.com/	2	zero-size 2	1	2	0	0	1	0	0	0	2	0	1	4.1	False
+145.0.7632.116	corpus	https://fasterthanli.me/	22	low-contrast 21, offscreen 1	3	3	0	1	0	2	1	0	2	0	3	6.2	False
+145.0.7632.116	corpus	https://joelonsoftware.com/	7	zero-size 7	1	5	0	0	5	1	0	0	0	0	5	6.9	False
+145.0.7632.116	corpus	https://jvns.ca/	1	offscreen 1	1	1	1	0	0	0	1	0	1	0	1	10.0	False
+145.0.7632.116	corpus	https://martinfowler.com/	0		0	0	0	0	0	0	0	0	0	0	0	8.4	False
+145.0.7632.116	corpus	https://matklad.github.io/	0		0	0	0	0	0	0	0	0	0	0	0	3.9	False

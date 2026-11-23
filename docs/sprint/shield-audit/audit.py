@@ -11,6 +11,7 @@ positive if the shield withheld it). No change => HIDDEN_CONFIRMED.
 
 Run:  MANUK_CHROME_PIN=145.0.7632.116 /tmp/audit-venv/bin/python -I audit.py
       [--mutate blind]   (force every Chrome verdict to HIDDEN: the gate must go red)
+      [--mutate leak]   (W6.C2: put the withheld text into the marked extract: the leak check must go red)
 Writes chunks.tsv and pages.tsv next to this file. Exit 1 when the planted
 false positive is not reported VISIBLE, the planted control is not HIDDEN, or check_invariants() finds a
 verdict that breaks a structural rule (e.g. VISIBLE on an ambiguous run, UNMATCHED without a cause).
@@ -174,10 +175,19 @@ def sh(cmd):
     return subprocess.run(cmd, capture_output=True, text=True).stdout.strip()
 
 
+WITHHELD_MARK = re.compile(r"\[withheld: [^\]]*\]")  # W6.C2: inline marker where a withheld run sat
+
+
+def strip_inline(text):
+    """Page words of an extract with the inline `[withheld: reason]` markers removed (W6.C2)."""
+    return WITHHELD_MARK.sub(" ", text)
+
+
 def strip_noise(text):
     # The marker line, [hN] handles and the per-call page id (pXXXXXX:N) are bookkeeping, not page text.
     out = [l for l in text.splitlines() if not l.lstrip().startswith(("⚠hidden-text", "⚠withheld["))]
     text = re.sub(r"\[h\d+\]", " ", "\n".join(out))
+    text = WITHHELD_MARK.sub(" ", text)
     return re.sub(r"\bp[0-9a-f]{6,}:\d+\b", " ", text)
 
 
@@ -222,13 +232,16 @@ def withheld_runs(default_text, hidden_text, ordered=False):
     glues fragments ("2024 7" prints as "20247"), so such a run is the same text spaced differently.
     ordered=True is the old sequence-only diff (the --mutate seqdiff mutation).
     """
-    a = TOKEN.findall(strip_noise(default_text))
+    # Case-folded comparison: CSS text-transform makes the default extract print "SKIP TO CONTENT" where the
+    # raw DOM text (include_hidden) reads "Skip to content"; a case-only difference withholds no word.
+    a = [w.casefold() for w in TOKEN.findall(strip_noise(default_text))]
     hidden = strip_noise(hidden_text)
     spans = [m.span() for m in TOKEN.finditer(hidden)]
     b = [hidden[x:y] for x, y in spans]
-    sm = difflib.SequenceMatcher(None, a, b, autojunk=False)
-    flat_default = re.sub(ZW_PY + "+", "", strip_noise(default_text))
-    surplus = collections.Counter(b) - collections.Counter(a)
+    bc = [w.casefold() for w in b]
+    sm = difflib.SequenceMatcher(None, a, bc, autojunk=False)
+    flat_default = re.sub(ZW_PY + "+", "", strip_noise(default_text)).casefold()
+    surplus = collections.Counter(bc) - collections.Counter(a)
     runs, anomalies = [], 0
     for tag, _i1, _i2, j1, j2 in sm.get_opcodes():
         if tag == "delete":
@@ -237,7 +250,7 @@ def withheld_runs(default_text, hidden_text, ordered=False):
             continue
         cur = []  # indexes into b; the run text is the original slice, so spacing and hyphens survive
         for j in range(j1, j2):
-            w = b[j]
+            w = bc[j]
             if ordered or surplus[w] > 0:
                 surplus[w] -= 1
                 cur.append(j)
@@ -249,11 +262,11 @@ def withheld_runs(default_text, hidden_text, ordered=False):
     if not ordered:
         # Reordered and glued text ("2024" ... "7" printing as "20247", "next next" as "nextnext") has the same
         # characters in both extracts, so it is no surplus either: a run must fit the character surplus.
-        flat_hidden = re.sub(ZW_PY + "+", "", hidden)
+        flat_hidden = re.sub(ZW_PY + "+", "", hidden).casefold()
         chars = collections.Counter(flat_hidden) - collections.Counter(flat_default)
         kept = []
         for r in runs:
-            flat = re.sub(ZW_PY + "+", "", r)
+            flat = re.sub(ZW_PY + "+", "", r).casefold()
             if flat in flat_default:
                 continue
             need = collections.Counter(flat)
@@ -326,11 +339,20 @@ def run_reason(chunk, dump):
     rs = []
     for r, frag in dump:
         f = " ".join(re.sub(ZW_PY + "+", "", frag).split())
-        if f and f in flat and r not in rs:
+        # observe() clips a long name with "…", so a truncated run holds only the start of its fragment
+        if f and (f in flat or ("…" in flat and f[:40] in flat)) and r not in rs:
             rs.append(r)
     if not rs and not re.sub(r"[\u200e\u200f\u202a-\u202e\u2066-\u2069]", "", flat):
         return "non-layout-mark"  # bidi control characters only: text the page never lays out
     return "+".join(rs) or "UNKNOWN"
+
+
+# W6.C2.b: text that exists only as <option> text. The layout never paints it (a closed select shows one value),
+# and the shield does not withhold it; include_hidden's raw-DOM text prints it, so it reads as withheld.
+OPTION_JS = """(stripped) => {
+  const flat = [...document.querySelectorAll('option')].map(o => o.textContent.replace(/\\s+/g, '')).join('');
+  return flat.length > 0 && flat.includes(stripped.replace(/\\s+/g, ''));
+}"""
 
 
 def audit_page(mcp, page, url, group, mutate):
@@ -355,6 +377,14 @@ def audit_page(mcp, page, url, group, mutate):
     dump_x = reason_dump(default_x, mutate)
     dump_o = reason_dump(obs_d)
     rviol = reason_check("extract", default_x, dump_x) + reason_check("observe", obs_d, dump_o)
+    # W6.C2: the marked extract is what an agent reads. `--mutate leak` swaps in the include_hidden text, so
+    # every withheld run is present in it and the leak check below must go red.
+    # The MANUK_SHIELD_REASONS dump lines ("⚠withheld[reason]: text") carry the withheld words for the audit's
+    # own bookkeeping; they are not part of the agent-facing extract, so the leak check skips them.
+    marked_src = full_hidden if mutate == "leak" else full_default
+    marked_src = "\n".join(l for l in marked_src.splitlines() if not l.lstrip().startswith("⚠withheld["))
+    flat_marked = re.sub(ZW_PY + "+", "", strip_inline(marked_src))
+    n_markers = len(WITHHELD_MARK.findall(full_default))
 
     page.goto(url, wait_until="load", timeout=90000)
     time.sleep(0.5)
@@ -395,6 +425,8 @@ def audit_page(mcp, page, url, group, mutate):
         row["rect"] = f"{r['x']:.0f},{r['y']:.0f},{r['w']:.0f}x{r['h']:.0f}"
         if r["w"] < 1 or r["h"] < 1:
             row["verdict"] = "UNVERIFIABLE_ZERO_BOX"
+            if row["reason"] == "UNKNOWN" and src == "extract" and page.evaluate(OPTION_JS, stripped):
+                row["reason"] = "non-layout-option"
             rows.append(row)
             continue
         page.evaluate("() => document.querySelector('[data-shield-audit]').scrollIntoView({block:'center',inline:'center'})")
@@ -423,9 +455,23 @@ def audit_page(mcp, page, url, group, mutate):
         row["verdict"] = "VISIBLE" if visible else "HIDDEN_CONFIRMED"
         rows.append(row)
 
+    # Leak: a run Chrome confirms HIDDEN at a single location must not appear in the marked extract.
+    # Phrases under 12 characters are skipped (too short to be evidence of a withheld run).
+    leaked = 0
+    for row in rows:
+        row["in_marked"] = 0
+        if row["source"] != "extract" or row["verdict"] != "HIDDEN_CONFIRMED" or row["chrome_matches"] != 1:
+            continue
+        flatc = re.sub(ZW_PY + "+", "", strip_inline(row["chunk"]))
+        if len(flatc) >= 12:
+            row["in_marked"] = flat_marked.count(flatc)
+            leaked += row["in_marked"]
     summary = {"group": group, "url": url, "marker_withheld": n_marker, "marker_reasons": reasons,
                "extract_withheld_runs": len(runs), "observe_withheld_runs": len(obs_runs),
-               "diff_anomalies": anom_x + anom_o, "extract_error": e1 or e2 or e3, "reason_violations": rviol}
+               "diff_anomalies": anom_x + anom_o, "extract_error": e1 or e2 or e3, "reason_violations": rviol,
+               "withheld_in_marked": leaked, "markers": n_markers,
+               # a marker is owed only for runs a shield fragment explains (an UNKNOWN run is a diff artifact)
+               "markers_missing": int(any(run_reason(r, dump_x) != "UNKNOWN" for r in runs) and n_markers == 0)}
     return rows, summary
 
 
@@ -451,7 +497,7 @@ def suite_urls(base):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--mutate", choices=["blind", "reason", "seqdiff"], default=None)
+    ap.add_argument("--mutate", choices=["blind", "reason", "seqdiff", "leak"], default=None)
     ap.add_argument("--skip-live", action="store_true", help="planted page + F-fixtures only (quick check)")
     a = ap.parse_args()
     pin = os.environ.get("MANUK_CHROME_PIN")
@@ -488,7 +534,8 @@ def main():
             except Exception as e:  # keep the audit going; the failure is a row
                 rows, s = [], {"group": group, "url": url, "marker_withheld": "", "marker_reasons": "",
                                "extract_withheld_runs": "", "observe_withheld_runs": "",
-                               "diff_anomalies": "", "extract_error": f"ERROR {type(e).__name__}: {e}"[:200]}
+                               "diff_anomalies": "", "withheld_in_marked": "", "markers": "",
+                               "extract_error": f"ERROR {type(e).__name__}: {e}"[:200]}
             mcp.close()
             s["secs"] = f"{time.time() - t0:.1f}"
             s["visible"] = sum(1 for r in rows if r["verdict"] == "VISIBLE")
@@ -506,7 +553,7 @@ def main():
     plant_srv.shutdown()
 
     cols = ["chrome_ver", "group", "url", "source", "chunk", "chunk_words", "chrome_matches", "rect",
-            "pixel_diff", "verdict", "unmatched_cause", "reason"]
+            "pixel_diff", "verdict", "unmatched_cause", "reason", "in_marked"]
     with open(os.path.join(HERE, "chunks.tsv"), "w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh, delimiter="\t")
         w.writerow(cols)
@@ -514,7 +561,7 @@ def main():
             w.writerow([pin] + [r[c] for c in cols[1:]])
     pcols = ["chrome_ver", "group", "url", "marker_withheld", "marker_reasons", "extract_withheld_runs",
              "observe_withheld_runs", "diff_anomalies", "visible", "hidden_confirmed", "unmatched",
-             "unverifiable", "ambiguous", "dup", "secs", "extract_error"]
+             "unverifiable", "ambiguous", "dup", "withheld_in_marked", "markers", "secs", "extract_error"]
     with open(os.path.join(HERE, "pages.tsv"), "w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh, delimiter="\t")
         w.writerow(pcols)
@@ -532,6 +579,14 @@ def main():
     violations = check_invariants(all_rows)
     for s in summaries:
         violations += [f"{s['url']}: {v}" for v in s.get("reason_violations", [])]
+        if s.get("withheld_in_marked"):
+            violations.append(f"{s['url']}: {s['withheld_in_marked']} withheld run text(s) present in the marked extract")
+        if s.get("markers_missing"):
+            violations.append(f"{s['url']}: withheld runs but no [withheld: reason] marker in the extract")
+    suite_leak = sum(s.get("withheld_in_marked") or 0 for s in summaries if s["group"] in ("fixture", "task-live"))
+    print(f"withheld words present in marked extract on suite pages: {suite_leak} "
+          f"(all pages: {sum(s.get('withheld_in_marked') or 0 for s in summaries)}; "
+          f"markers shown: {sum(s.get('markers') or 0 for s in summaries)})")
     for line in violations[:20]:
         print("INVARIANT VIOLATED: " + line)
     print(f"verdict invariants: {len(violations)} violation(s) over {len(all_rows)} rows")
