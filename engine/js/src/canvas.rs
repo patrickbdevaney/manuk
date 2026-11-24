@@ -356,7 +356,7 @@ pub fn path_pattern(
     // Copy the source pixmap out before borrowing CANVASES mutably (a canvas can pattern-fill itself).
     let src_px: Option<Pixmap> = CANVASES
         .with(|c| c.borrow().get(&src).cloned())
-        .or_else(|| SOURCES.with(|s| s.borrow().get(&src).cloned()));
+        .or_else(|| source_pixmap(src));
     let Some(src_px) = src_px else {
         return; // the source image has not decoded yet — draw nothing, as a real browser does
     };
@@ -486,6 +486,7 @@ pub fn reset() {
     CANVASES.with(|c| c.borrow_mut().clear());
     DIRTY.with(|d| d.borrow_mut().clear());
     SOURCES.with(|s| s.borrow_mut().clear());
+    RAW_SOURCES.with(|s| s.borrow_mut().clear());
 }
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -506,6 +507,10 @@ thread_local! {
     /// Stored premultiplied, because that is what tiny-skia composites and converting once at publish
     /// beats converting on every frame of an animation loop.
     static SOURCES: RefCell<HashMap<u64, Pixmap>> = RefCell::new(HashMap::new());
+    /// DASH.MEM.1.b: the host's own decoded pixels, SHARED (not copied) until a `drawImage` first reads them.
+    /// Copying every `<img>` into a premultiplied Pixmap at publish time doubled the page's decoded-image
+    /// memory (a 147-image page: ~0.9 GB held twice) for pages that never touch a canvas.
+    static RAW_SOURCES: RefCell<HashMap<u64, (u32, u32, std::rc::Rc<dyn SourceBits>)>> = RefCell::new(HashMap::new());
     /// `<img>` nodes whose bitmap became available since the last drain — the queue behind the
     /// `load` event. See [`take_pending_image_loads`].
     static PENDING_IMG_LOAD: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
@@ -532,30 +537,43 @@ pub fn take_pending_image_loads() -> Vec<u64> {
 /// clothes.
 ///
 /// `rgba` is **non-premultiplied** — the shape [`manuk_paint::DecodedImage`] holds.
-pub fn publish_source(node: u64, w: u32, h: u32, rgba: &[u8]) {
-    if w == 0 || h == 0 || rgba.len() < (w as usize) * (h as usize) * 4 {
+pub fn publish_source(node: u64, w: u32, h: u32, bits: std::rc::Rc<dyn SourceBits>) {
+    if w == 0 || h == 0 || bits.rgba().len() < (w as usize) * (h as usize) * 4 {
         return;
     }
-    SOURCES.with(|s| {
-        let mut m = s.borrow_mut();
-        if let Some(p) = m.get(&node) {
-            if p.width() == w && p.height() == h {
-                return;
-            }
-        }
-        let Some(mut px) = Pixmap::new(w, h) else {
-            return;
-        };
-        for (dst, src) in px.pixels_mut().iter_mut().zip(rgba.chunks_exact(4)) {
-            // `from_rgba8` premultiplies. An image with alpha drawn without this is the classic
-            // too-bright halo, and it looks like a blending bug rather than a colour-space one.
-            *dst = tiny_skia::ColorU8::from_rgba(src[0], src[1], src[2], src[3]).premultiply();
-        }
-        // NEW pixels for this node — queue its `load`. Inside the `if let None`/size-changed branch
-        // on purpose: re-publishing the same bitmap every script round must not re-fire the event.
-        m.insert(node, px);
-        PENDING_IMG_LOAD.with(|q| q.borrow_mut().push(node));
-    });
+    let same = RAW_SOURCES
+        .with(|r| matches!(r.borrow().get(&node), Some((pw, ph, _)) if *pw == w && *ph == h));
+    if same {
+        return;
+    }
+    RAW_SOURCES.with(|r| r.borrow_mut().insert(node, (w, h, bits)));
+    // A new bitmap for this node: a premultiplied copy made earlier is stale.
+    SOURCES.with(|s| s.borrow_mut().remove(&node));
+    // NEW pixels for this node — queue its `load`. Re-publishing the same bitmap every script round must
+    // not re-fire the event (the early return above).
+    PENDING_IMG_LOAD.with(|q| q.borrow_mut().push(node));
+}
+
+/// Pixels a host publishes as a `drawImage` source, shared by reference. `rgba` is **non-premultiplied**.
+pub trait SourceBits {
+    fn rgba(&self) -> &[u8];
+}
+
+/// The premultiplied pixmap for a published source, built on first use and cached.
+fn source_pixmap(node: u64) -> Option<Pixmap> {
+    if let Some(p) = SOURCES.with(|s| s.borrow().get(&node).cloned()) {
+        return Some(p);
+    }
+    let (w, h, bits) =
+        RAW_SOURCES.with(|r| r.borrow().get(&node).map(|(w, h, b)| (*w, *h, b.clone())))?;
+    let mut px = Pixmap::new(w, h)?;
+    for (dst, src) in px.pixels_mut().iter_mut().zip(bits.rgba().chunks_exact(4)) {
+        // `from_rgba8` premultiplies. An image with alpha drawn without this is the classic
+        // too-bright halo, and it looks like a blending bug rather than a colour-space one.
+        *dst = tiny_skia::ColorU8::from_rgba(src[0], src[1], src[2], src[3]).premultiply();
+    }
+    SOURCES.with(|s| s.borrow_mut().insert(node, px.clone()));
+    Some(px)
 }
 
 /// The intrinsic size of a publishable source, for the 3-argument `drawImage(img, dx, dy)` overload,
@@ -564,7 +582,7 @@ pub fn publish_source(node: u64, w: u32, h: u32, rgba: &[u8]) {
 pub fn source_size(node: u64) -> Option<(u32, u32)> {
     CANVASES
         .with(|c| c.borrow().get(&node).map(|p| (p.width(), p.height())))
-        .or_else(|| SOURCES.with(|s| s.borrow().get(&node).map(|p| (p.width(), p.height()))))
+        .or_else(|| RAW_SOURCES.with(|s| s.borrow().get(&node).map(|(w, h, _)| (*w, *h))))
 }
 
 /// `drawImage(src, sx, sy, sw, sh, dx, dy, dw, dh)` — all three overloads normalised to nine arguments
@@ -621,7 +639,7 @@ pub fn draw_image(
     // entry in it would panic at runtime.
     let src_px: Option<Pixmap> = CANVASES
         .with(|c| c.borrow().get(&src).cloned())
-        .or_else(|| SOURCES.with(|s| s.borrow().get(&src).cloned()));
+        .or_else(|| source_pixmap(src));
     let Some(src_px) = src_px else {
         return; // an image that has not decoded yet draws nothing, exactly as in a real browser
     };

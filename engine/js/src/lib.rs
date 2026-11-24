@@ -282,7 +282,12 @@ pub fn take_pending_image_loads() -> Vec<u64> {
 /// about which ones it has already sent; re-publishing the same node at the same size is dropped inside.
 /// A no-op without the JS feature, which is correct: no scripts, nothing to draw with.
 #[allow(unused_variables)]
-pub fn publish_image_source(node: u64, width: u32, height: u32, rgba: &[u8]) {
+pub fn publish_image_source(
+    node: u64,
+    width: u32,
+    height: u32,
+    rgba: std::rc::Rc<dyn canvas::SourceBits>,
+) {
     #[cfg(feature = "_sm")]
     {
         canvas::publish_source(node, width, height, rgba);

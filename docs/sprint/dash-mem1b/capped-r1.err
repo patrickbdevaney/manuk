@@ -1,0 +1,6 @@
+manuk-mcp: agent profile=full
+setup-config navigate 0.7s rss=46M
+setup-finish navigate 0.3s rss=53M
+start navigate 19.6s rss=3410M
+observe-interactive observe 0.9s rss=3410M
+observe-viewport observe 0.5s rss=3410M

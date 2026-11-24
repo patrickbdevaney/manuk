@@ -1,4 +1,22 @@
+/// DASH.MEM.1.b: stop glibc holding freed image rasters. Each decode runs on a blocking-pool thread, and a
+/// per-thread arena keeps every freed 25-45 MB raster resident: measured on dashdish-5, the same page peaked
+/// at ~2.9 GB with default malloc and ~1.2 GB with big blocks mmapped (returned on free) and 2 arenas.
+/// `MANUK_MEM_BOUND=0` switches this and the pixel cap off (the mutant arm of the gate).
+#[cfg(target_os = "linux")]
+fn bound_allocator() {
+    if std::env::var("MANUK_MEM_BOUND").as_deref() == Ok("0") {
+        return;
+    }
+    // SAFETY: mallopt only sets allocator parameters; called before any thread is spawned.
+    unsafe {
+        libc::mallopt(libc::M_MMAP_THRESHOLD, 256 * 1024);
+        libc::mallopt(libc::M_ARENA_MAX, 2);
+    }
+}
+
 fn main() -> anyhow::Result<()> {
+    #[cfg(target_os = "linux")]
+    bound_allocator();
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.iter().any(|a| a == "--zygote-after-load") {
         // R3.4.a: the page is loaded in this process and every session is forked from it, so the whole
@@ -109,6 +127,10 @@ fn real_main(mut args: Vec<String>) -> anyhow::Result<()> {
             "--print-key-directory needs --agent-key and --signature-agent"
         ),
         _ => anyhow::bail!("--agent-key and --signature-agent go together"),
+    }
+    // DASH.MEM.1.b: one decoded image holds at most 1080p of pixels in the agent server (MANUK_IMG_MAX_PX overrides; 0 = off).
+    if std::env::var("MANUK_MEM_BOUND").as_deref() != Ok("0") {
+        manuk_net::lean::set_decode_cap_px(2_073_600);
     }
     eprintln!(
         "manuk-mcp: agent profile={}",

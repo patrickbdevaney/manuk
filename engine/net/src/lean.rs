@@ -48,6 +48,44 @@ pub fn set(on: bool) {
     LEAN.store(on, Relaxed);
 }
 
+static DECODE_CAP_PX: AtomicU64 = AtomicU64::new(0);
+static CAP_ENV: AtomicBool = AtomicBool::new(false);
+
+/// DASH.MEM.1.b: the most pixels ONE decoded image may hold (0 = unbounded). A larger raster is
+/// downscaled, aspect kept, to fit. `MANUK_IMG_MAX_PX` overrides whatever [`set_decode_cap_px`] set.
+pub fn decode_cap_px() -> u64 {
+    if !CAP_ENV.swap(true, Relaxed) {
+        if let Some(v) = std::env::var("MANUK_IMG_MAX_PX")
+            .ok()
+            .and_then(|v| v.parse().ok())
+        {
+            DECODE_CAP_PX.store(v, Relaxed);
+        }
+    }
+    DECODE_CAP_PX.load(Relaxed)
+}
+
+/// Set the per-image decoded-pixel cap (the agent server does this at startup).
+pub fn set_decode_cap_px(px: u64) {
+    decode_cap_px(); // let the env override win: read it first
+    if std::env::var_os("MANUK_IMG_MAX_PX").is_none() {
+        DECODE_CAP_PX.store(px, Relaxed);
+    }
+}
+
+/// `(w, h)` fitted under `cap` pixels with the aspect kept; unchanged when it already fits or cap is 0.
+pub fn fit_under_cap(w: u32, h: u32, cap: u64) -> (u32, u32) {
+    let px = w as u64 * h as u64;
+    if cap == 0 || px <= cap {
+        return (w, h);
+    }
+    let k = (cap as f64 / px as f64).sqrt();
+    (
+        ((w as f64 * k).floor() as u32).max(1),
+        ((h as f64 * k).floor() as u32).max(1),
+    )
+}
+
 /// True when image bodies should NOT be fetched now (lean, and no screenshot asked for).
 pub fn images_deferred() -> bool {
     enabled() && !VISUAL.load(Relaxed)
@@ -302,5 +340,21 @@ mod tests {
         set(true);
         assert!(!is_tracker("https://example.com/app.js"));
         set(false);
+    }
+}
+
+#[cfg(test)]
+mod cap_tests {
+    use super::fit_under_cap;
+    #[test]
+    fn fits_and_scales() {
+        assert_eq!(fit_under_cap(100, 100, 0), (100, 100));
+        assert_eq!(fit_under_cap(100, 100, 10_000), (100, 100));
+        let (w, h) = fit_under_cap(3840, 2160, 2_073_600);
+        assert!(
+            w as u64 * h as u64 <= 2_073_600
+                && w >= 1900
+                && (w as f64 / h as f64 - 16.0 / 9.0).abs() < 0.02
+        );
     }
 }

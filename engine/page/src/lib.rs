@@ -1100,9 +1100,26 @@ fn scan_mask_urls(css: &str) -> Vec<String> {
 
 /// Decode fetched bytes as a raster image, falling back to SVG (icons are overwhelmingly SVG).
 fn decode_bitmap(bytes: &[u8], url: &str) -> Option<manuk_paint::DecodedImage> {
+    let d = decode_bitmap_uncapped(bytes, url);
+    if std::env::var_os("MANUK_IMG_LOG").is_some() {
+        if let Some(i) = &d {
+            eprintln!("IMGLOG {} {}x{} {}", i.rgba.len(), i.width, i.height, url);
+        }
+    }
+    d
+}
+
+fn decode_bitmap_uncapped(bytes: &[u8], url: &str) -> Option<manuk_paint::DecodedImage> {
+    let cap = manuk_net::lean::decode_cap_px();
     match image::load_from_memory(bytes) {
-        Ok(img) => {
-            let rgba = img.to_rgba8();
+        Ok(mut img) => {
+            // DASH.MEM.1.b: bound one image's decoded pixels BEFORE the RGBA conversion (which copies).
+            let (iw, ih) = (img.width(), img.height());
+            let (tw, th) = manuk_net::lean::fit_under_cap(iw, ih, cap);
+            if (tw, th) != (iw, ih) {
+                img = img.resize_exact(tw, th, image::imageops::FilterType::Triangle);
+            }
+            let rgba = img.into_rgba8();
             let (w, h) = rgba.dimensions();
             (w > 0 && h > 0).then(|| manuk_paint::DecodedImage {
                 width: w,
@@ -1111,6 +1128,44 @@ fn decode_bitmap(bytes: &[u8], url: &str) -> Option<manuk_paint::DecodedImage> {
             })
         }
         Err(_) => decode_svg(bytes, url).filter(|i| i.width > 0 && i.height > 0),
+    }
+}
+
+/// The page's decoded image handed to JS by reference (see `manuk_js::canvas::SourceBits`).
+struct SharedPixels(std::rc::Rc<manuk_paint::DecodedImage>);
+impl manuk_js::canvas::SourceBits for SharedPixels {
+    fn rgba(&self) -> &[u8] {
+        &self.0.rgba
+    }
+}
+
+/// DASH.MEM.1.b: at most this many bitmaps are inside the codec at once. Each in-flight decode holds the
+/// whole source raster (a 3840x2160 photo is 25-33 MB, twice that mid-conversion); 147 of them on the
+/// blocking pool at once was the ~4 GB transient. Decoding is CPU-bound, so more threads than cores bought nothing.
+struct DecodeSlot;
+static DECODE_SLOTS: (std::sync::Mutex<usize>, std::sync::Condvar) =
+    (std::sync::Mutex::new(0), std::sync::Condvar::new());
+impl DecodeSlot {
+    fn take() -> Self {
+        static MAX: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
+        let max = *MAX.get_or_init(|| {
+            std::env::var("MANUK_DECODE_SLOTS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(4)
+        });
+        let mut n = DECODE_SLOTS.0.lock().unwrap_or_else(|e| e.into_inner());
+        while max > 0 && *n >= max {
+            n = DECODE_SLOTS.1.wait(n).unwrap_or_else(|e| e.into_inner());
+        }
+        *n += 1;
+        DecodeSlot
+    }
+}
+impl Drop for DecodeSlot {
+    fn drop(&mut self) {
+        *DECODE_SLOTS.0.lock().unwrap_or_else(|e| e.into_inner()) -= 1;
+        DECODE_SLOTS.1.notify_one();
     }
 }
 
@@ -1143,9 +1198,10 @@ fn spawn_decode(bytes: Option<Vec<u8>>, url: &str) -> Option<Decoding> {
     match tokio::runtime::Handle::try_current() {
         Ok(h) if !sync => {
             let url = url.to_string();
-            Some(Decoding::Pool(
-                h.spawn_blocking(move || decode_bitmap(&bytes, &url)),
-            ))
+            Some(Decoding::Pool(h.spawn_blocking(move || {
+                let _slot = DecodeSlot::take();
+                decode_bitmap(&bytes, &url)
+            })))
         }
         _ => Some(Decoding::Done(decode_bitmap(&bytes, url))),
     }
@@ -1297,10 +1353,14 @@ fn decode_svg(bytes: &[u8], url: &str) -> Option<manuk_paint::DecodedImage> {
     if w == 0 || h == 0 || w > 8192 || h > 8192 {
         return None;
     }
+    let (crop_w_px, crop_h_px) = (w, h);
+    // DASH.MEM.1.b: rasterise no larger than the per-image pixel cap (scale the transform, not the vector).
+    let (w, h) = manuk_net::lean::fit_under_cap(w, h, manuk_net::lean::decode_cap_px());
+    let (sx, sy) = (w as f32 / crop_w_px as f32, h as f32 / crop_h_px as f32);
     let mut pixmap = resvg::tiny_skia::Pixmap::new(w, h)?;
     resvg::render(
         &tree,
-        resvg::tiny_skia::Transform::from_translate(-crop_x, -crop_y),
+        resvg::tiny_skia::Transform::from_scale(sx, sy).pre_translate(-crop_x, -crop_y),
         &mut pixmap.as_mut(),
     );
     // resvg output is premultiplied; store straight-alpha RGBA for our blitter.
@@ -7106,7 +7166,12 @@ impl Page {
             if self.dom.tag_name(*node) == Some("canvas") {
                 continue;
             }
-            manuk_js::publish_image_source(node.0, img.width, img.height, &img.rgba);
+            manuk_js::publish_image_source(
+                node.0,
+                img.width,
+                img.height,
+                std::rc::Rc::new(SharedPixels(img.clone())),
+            );
         }
     }
 
@@ -9971,7 +10036,12 @@ impl Page {
             // image would find nothing. Those bytes came with the document; there is nothing to wait
             // for, which is the same reasoning that decodes them ahead of the first layout.
             for (node, img) in &inline_images {
-                manuk_js::publish_image_source(node.0, img.width, img.height, &img.rgba);
+                manuk_js::publish_image_source(
+                    node.0,
+                    img.width,
+                    img.height,
+                    std::rc::Rc::new(SharedPixels(img.clone())),
+                );
             }
             // Taken, not read: the seed belongs to THIS document, and leaving it in place would let
             // a node index from this page fire a `load` on the next one built in this thread.
