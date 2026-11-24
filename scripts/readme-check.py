@@ -5,7 +5,7 @@ no unmeasured claim words may appear outside the Known-gaps quotes.
   readme-check.py --emit        print the table block
   readme-check.py               check README.md (exit 1 on mismatch or banned word)
   readme-check.py --selftest    prove the check goes red on a changed cell and on a banned word
-Rule: the latest row in file order per (arm, slice, task, run) is the measurement; rows at another chrome_ver
+Rule: the latest row in file order per (arm, slice, task, run), from a day that covers the whole slice, is the measurement; rows at another chrome_ver
 (or suite) are ignored. Pass per run = tasks with pass==1 in that run. Run with `python3 -I`.
 """
 import csv, os, re, sys
@@ -20,10 +20,20 @@ BANNED = re.compile(r"\b(faster|lighter|more reliable|fastest|better than|outper
 
 def table():
     last = {}
+    kept = []
     for r in csv.DictReader(open(os.path.join(ROOT, "docs/sprint/SCOREBOARD.tsv")), delimiter="\t"):
         if r["chrome_ver"] != PIN or r["slice"] not in SUITES or not r["suite_hash"].startswith(SUITES[r["slice"]]):
             continue
-        last[(r["arm"], r["slice"], r["task"], r["run"])] = r
+        kept.append(r)
+    # A re-run of only some tasks on one arm must not replace cells beside arms that were not re-run: a day's rows
+    # count only if they hold every (task, run) the arm has ever recorded for that slice.
+    want, have = {}, {}
+    for r in kept:
+        want.setdefault((r["arm"], r["slice"]), set()).add((r["task"], r["run"]))
+        have.setdefault((r["arm"], r["slice"], r["ts"][:10]), set()).add((r["task"], r["run"]))
+    for r in kept:
+        if have[(r["arm"], r["slice"], r["ts"][:10])] == want[(r["arm"], r["slice"])]:
+            last[(r["arm"], r["slice"], r["task"], r["run"])] = r
     out = [BEGIN, "", f"chrome_ver={PIN}, driving model Haiku 5.5, pass count per run (3 runs), from `docs/sprint/SCOREBOARD.tsv`:", "",
            "| arm | own 40 tasks, runs 1/2/3 | external 10 tasks, runs 1/2/3 |", "|---|---|---|"]
     for arm, label in ARMS:
