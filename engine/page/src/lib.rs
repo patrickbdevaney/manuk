@@ -2301,6 +2301,21 @@ fn dyn_script_prefetch_enabled() -> bool {
     std::env::var_os("MANUK_NO_DYN_PREFETCH").is_none()
 }
 
+/// PERF.1.2.b.b: `MANUK_NET_TRACE_NO_EVAL=1` drops the `dynscript_eval` trace lines and nothing else.
+/// It exists so the profiler's sum check can be shown to go red when the eval attribution is missing.
+fn dyn_eval_trace_off() -> bool {
+    static OFF: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *OFF.get_or_init(|| std::env::var_os("MANUK_NET_TRACE_NO_EVAL").is_some())
+}
+
+/// PERF.1.2.b.b: one `MANUK_NET_TRACE` line `<kind>\t<dur_us>` ending now, for a span that began at
+/// `start`. Free when tracing is off (one `OnceLock` read in `nettrace::enabled`).
+fn trace_span(kind: &str, start: std::time::Instant) {
+    if manuk_net::nettrace::enabled() {
+        manuk_net::nettrace::emit(kind, &start.elapsed().as_micros().to_string());
+    }
+}
+
 fn early_scan_enabled() -> bool {
     std::env::var_os("MANUK_NO_EARLY_SCAN").is_none()
 }
@@ -7513,8 +7528,10 @@ impl Page {
         let mut warmed: std::collections::HashSet<String> = std::collections::HashSet::new();
         for round in 0..max_rounds {
             // Links a script inserted since the last round: fetch them, then tell the page.
+            let w0 = std::time::Instant::now();
             self.fetch_and_apply_stylesheets(fonts, viewport_width)
                 .await;
+            trace_span("dynscript_wait", w0);
             let notified = self.fire_stylesheet_link_events(fonts, viewport_width);
             let pending = self.pending_dynamic_scripts(true);
             if pending.is_empty() && notified == 0 {
@@ -7542,8 +7559,15 @@ impl Page {
             // round never runs, so it is not fetched early either.
             let prefetch = round + 1 < max_rounds && dyn_script_prefetch_enabled();
             let mut any = false;
-            while let Some((node, text)) = futures_util::stream::StreamExt::next(&mut fetched).await
-            {
+            loop {
+                // PERF.1.2.b.b: the time this round spends waiting on the next script's bytes.
+                let w0 = std::time::Instant::now();
+                let Some((node, text)) =
+                    futures_util::stream::StreamExt::next(&mut fetched).await
+                else {
+                    break;
+                };
+                trace_span("dynscript_wait", w0);
                 // A runtime-fetched script is a script round like any other: it arms the forced-reflow
                 // hook so its geometry reads see the nodes it just appended (G_RUNTIME_SCRIPT_READS_FRESH_GEOMETRY).
                 let _reflow = ReflowScope::install(
@@ -7571,6 +7595,7 @@ impl Page {
                     .map(|(n, r)| (n, [r.x, r.y, r.width, r.height]))
                     .collect();
                 let fetched_ok = text.is_some();
+                let t_eval = std::time::Instant::now();
                 if let Some(src) = &text {
                     if !src.trim().is_empty() {
                         if let Err(e) = manuk_js::eval_in_page(
@@ -7612,6 +7637,9 @@ impl Page {
                 let ty = if fetched_ok { "load" } else { "error" };
                 let _ =
                     manuk_js::dispatch_event(ctx, &mut self.dom, node, ty, &rects, &self.styles);
+                if !dyn_eval_trace_off() {
+                    trace_span("dynscript_eval", t_eval);
+                }
                 // `src` is dropped HERE rather than before the evaluation, so the post-run document
                 // is exactly what it has always been (`collect_inline_scripts` reads a surviving
                 // `src` as "the fetch failed, nothing to run") while the script itself still saw its
@@ -7665,9 +7693,13 @@ impl Page {
             }
             // Those scripts may have injected <style>/<link> and mutated the tree — restyle before
             // the next round so the next script sees the layout it actually caused.
+            let w0 = std::time::Instant::now();
             self.fetch_and_apply_stylesheets(fonts, viewport_width)
                 .await;
+            trace_span("dynscript_wait", w0);
+            let w0 = std::time::Instant::now();
             self.fetch_and_apply_masks().await;
+            trace_span("dynscript_wait", w0);
         }
         ran
     }

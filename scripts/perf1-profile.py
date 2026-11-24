@@ -79,6 +79,91 @@ def max_concurrency(intervals):
     return best
 
 
+# ---------------------------------------------------------------- PERF.1.2.b.b: dynamic-scripts split
+
+DYN_PHASE = "finish_loading: dynamic scripts"
+DYN_PARTS = ["eval", "fetch_wait", "restyle", "other"]
+DYN_MIN_NAMED = 0.95  # the named parts (eval, fetch_wait, restyle) must explain this share of the phase
+# A phase shorter than this is not a settle cost worth splitting (the share is rounding noise on a few
+# microseconds); such runs are listed as exempt in DYN-SPLIT.md, not counted as green. Added after the
+# first sweep showed 0-10 ms phases on 5 of 20 URLs.
+DYN_MIN_PHASE_S = 0.05
+# URLs unreachable from the baseline too (docs/sprint/PERF.md: "20 reachable URLs"); a FAIL on these is
+# not a measurement failure and is listed as excluded, not as unexplained.
+DYN_UNREACHABLE = {"https://mkp.gem.gov.in/", "https://virtual.lapampa.edu.ar/"}
+
+
+def _union(ivs):
+    out = []
+    for s, e in sorted(ivs):
+        if e <= s:
+            continue
+        if out and s <= out[-1][1]:
+            out[-1] = (out[-1][0], max(out[-1][1], e))
+        else:
+            out.append((s, e))
+    return out
+
+
+def _clip(ivs, lo, hi):
+    return [(max(lo, s), min(hi, e)) for s, e in ivs if min(hi, e) > max(lo, s)]
+
+
+def _minus(ivs, cover):
+    """ivs minus cover; both are unions (sorted, disjoint)."""
+    out = []
+    for s, e in ivs:
+        cur = s
+        for cs, ce in cover:
+            if ce <= cur:
+                continue
+            if cs >= e:
+                break
+            if cs > cur:
+                out.append((cur, cs))
+            cur = max(cur, ce)
+            if cur >= e:
+                break
+        if cur < e:
+            out.append((cur, e))
+    return out
+
+
+def _len(ivs):
+    return sum(e - s for s, e in ivs)
+
+
+def dyn_split(ev, phase_iv, iv):
+    """Split the `finish_loading: dynamic scripts` phase into eval / fetch_wait / restyle / other.
+
+    eval      : `dynscript_eval` spans (one per dynamic script: JS eval + load/error dispatch),
+                minus any cascade/layout nested in them.
+    fetch_wait: `dynscript_wait` spans (time awaiting script bytes and the between-round stylesheet and
+                mask fetches), minus restyle and eval.
+    restyle   : cascade + layout events already in the trace, wherever they fall in the phase. They are
+                the 'untraced' restyle: eval and wait spans did not previously say they were restyle.
+    other     : what none of the above covers (DOM scans, image warming, the link-event pass).
+    Returns None when the phase never ran (budget spent before it).
+    """
+    ph = next(((s, e) for s, e, n in phase_iv if n == DYN_PHASE), None)
+    if ph is None:
+        return None
+    lo, hi = ph
+    evi = [(t - int(a[0]), t) for t, k, a in ev if k == "dynscript_eval"]
+    wti = [(t - int(a[0]), t) for t, k, a in ev if k == "dynscript_wait"]
+    rst = _union(_clip(iv["cascade"] + iv["layout"], lo, hi))
+    evu = _minus(_union(_clip(evi, lo, hi)), rst)
+    wtu = _minus(_union(_clip(wti, lo, hi)), _union(rst + evu))
+    total = hi - lo
+    parts = {"eval": _len(evu), "fetch_wait": _len(wtu), "restyle": _len(rst)}
+    other = total - sum(parts.values())
+    named = (total - other) / total if total > 0 else 1.0
+    out = {"phase_s": total * 1e-6, "named_frac": named, "other_s": other * 1e-6,
+           "n_eval": sum(1 for s, e in evu if e > s), "n_wait": sum(1 for s, e in wtu if e > s)}
+    out.update({f"{p}_s": parts[p] * 1e-6 for p in parts})
+    return out
+
+
 def manuk_phases(ev, wall_s, wall0_unix_us, end_unix_us):
     """Partition one manuk run. Returns dict(phases_s, stats, check) or None if the trace is unusable."""
     epoch = next((int(a[0]) for t, k, a in ev if k == "epoch"), None)
@@ -178,6 +263,7 @@ def manuk_phases(ev, wall_s, wall0_unix_us, end_unix_us):
         "status_304": sum(1 for r in reqs if r[3] == "304"),
     }
     return {
+        "dyn_scripts": dyn_split(ev, phase_iv, iv),
         "load_s": load_s,
         "to_load_event_s": t_load_event * us,
         "phases_s": {p: acc[p] * us for p in PHASES},
@@ -551,6 +637,86 @@ def self_test():
     off = manuk_phases(parse_trace(synth_trace()), 1.2, 900_000, 1_000_000 + 420_000 + 80_000)
     assert off["sum_vs_wall"] > 0.4
     print("self-test OK: phases sum to load time, 500 ms injected into cascade shows in cascade only")
+    # dynamic-scripts split: a phase [0, 100 ms) with a cascade [10, 20), an eval [30, 50) and a
+    # wait [60, 80) splits to eval 20 / wait 20 / restyle 10 / other 50 -> named 0.5
+    phase_iv = [(0, 100_000, DYN_PHASE)]
+    iv = {"cascade": [(10_000, 20_000)], "layout": []}
+    ev = [(50_000, "dynscript_eval", ["20000"]), (80_000, "dynscript_wait", ["20000"])]
+    d = dyn_split(ev, phase_iv, iv)
+    assert abs(d["eval_s"] - 0.02) < 1e-9 and abs(d["fetch_wait_s"] - 0.02) < 1e-9, d
+    assert abs(d["restyle_s"] - 0.01) < 1e-9 and abs(d["other_s"] - 0.05) < 1e-9, d
+    assert abs(d["named_frac"] - 0.5) < 1e-9, d
+    # a cascade nested inside an eval span is restyle, not eval; eval must not double-count it
+    d2 = dyn_split([(50_000, "dynscript_eval", ["40000"])], phase_iv, {"cascade": [(20_000, 30_000)], "layout": []})
+    assert abs(d2["eval_s"] - 0.03) < 1e-9 and abs(d2["restyle_s"] - 0.01) < 1e-9, d2
+    # the same phase with the eval lines removed (MANUK_NET_TRACE_NO_EVAL=1) falls below the bar
+    d3 = dyn_split([ev[1]], phase_iv, iv)
+    assert d3["named_frac"] < DYN_MIN_NAMED and d["named_frac"] < DYN_MIN_NAMED, (d, d3)
+    assert dyn_split([], [], iv) is None
+    print("self-test OK: dynamic-scripts split names eval/wait/restyle, and drops below 95% without eval")
+
+
+def dyn_report(out, pin, write=True):
+    """Read <out>/runs.jsonl (manuk arm, 1 row per run x URL) and gate the dynamic-scripts split.
+
+    GREEN only if every OK run has the phase and its named parts (eval, fetch_wait, restyle) explain
+    >= DYN_MIN_NAMED of it. Returns (green, text)."""
+    rows = []
+    raw = os.path.join(out, "runs.jsonl")
+    for l in open(raw):
+        r = json.loads(l)
+        if r.get("engine") == "manuk" and r.get("chrome_ver") == pin:
+            rows.append(r)
+    by = {}
+    bad = []
+    exempt = []
+    excluded = []
+    for r in rows:
+        if r.get("status") != "OK":
+            if r["url"] in DYN_UNREACHABLE:
+                excluded.append((r["url"], r["run"], r.get("status")))
+            else:
+                bad.append((r["url"], r["run"], r.get("status")))
+            continue
+        d = r.get("dyn_scripts")
+        if not d:
+            bad.append((r["url"], r["run"], "no dynamic-scripts phase"))
+            continue
+        by.setdefault(r["url"], []).append((r["run"], d))
+    green = not bad and bool(by)
+    L = ["# PERF.1.2.b.b: dynamic-scripts settle split\n",
+         f"chrome_ver={pin} · rows from `{raw}`. Each phase is split into eval (JS, `dynscript_eval`), "
+         "fetch_wait (`dynscript_wait`), restyle (cascade+layout events, nested in neither) and other "
+         "(remainder). Median seconds across runs.\n",
+         "| URL | runs | phase | eval | fetch_wait | restyle | other | min named |",
+         "|---|---|---|---|---|---|---|---|"]
+    for url, rs in by.items():
+        for run, d in rs:
+            if d["phase_s"] < DYN_MIN_PHASE_S:
+                exempt.append((url, run, round(d["phase_s"], 4)))
+            elif d["named_frac"] < DYN_MIN_NAMED:
+                green = False
+                bad.append((url, run, f"named {d['named_frac']:.3f} < {DYN_MIN_NAMED}"))
+        med = lambda k: statistics.median(d[k] for _, d in rs)
+        L.append(f"| {url} | {len(rs)} | {med('phase_s'):.3f} | {med('eval_s'):.3f} | {med('fetch_wait_s'):.3f} "
+                 f"| {med('restyle_s'):.3f} | {med('other_s'):.3f} | {min(d['named_frac'] for _, d in rs):.3f} |")
+    tot = {k: sum(statistics.median(d[k] for _, d in rs) for rs in by.values()) for k in
+           ("phase_s", "eval_s", "fetch_wait_s", "restyle_s", "other_s")}
+    L.append(f"\nΣ medians over {len(by)} URLs: phase {tot['phase_s']:.2f} s · eval {tot['eval_s']:.2f} · "
+             f"fetch_wait {tot['fetch_wait_s']:.2f} · restyle {tot['restyle_s']:.2f} · other {tot['other_s']:.2f}\n")
+    L.append(f"**SUM CHECK: {'GREEN' if green else 'RED'}** (named parts >= {DYN_MIN_NAMED:.0%} of the phase on every "
+             f"run whose phase is >= {DYN_MIN_PHASE_S * 1000:.0f} ms)\n")
+    for b in bad[:30]:
+        L.append(f"- not explained: {b}")
+    L.append(f"- excluded (unreachable from baseline, PERF.md): {len(excluded)} run(s), "
+             f"{sorted({u for u, _, _ in excluded})}")
+    L.append(f"- exempt (phase < {DYN_MIN_PHASE_S * 1000:.0f} ms, nothing to split): {len(exempt)} run(s)")
+    for b in exempt[:30]:
+        L.append(f"  - {b}")
+    text = "\n".join(L) + "\n"
+    if write:
+        open(os.path.join(out, "DYN-SPLIT.md"), "w").write(text)
+    return green, text
 
 
 def main():
@@ -568,9 +734,18 @@ def main():
     ap.add_argument("--env-b", default="", help="paired mode: extra env for arm B, e.g. MANUK_MAX_CONNS_PER_HOST=1")
     ap.add_argument("--report-only", action="store_true")
     ap.add_argument("--self-test", action="store_true")
+    ap.add_argument("--dyn-report", action="store_true",
+                    help="PERF.1.2.b.b: gate the dynamic-scripts split of <out>/runs.jsonl; exit 1 if RED")
     a = ap.parse_args()
     if a.self_test:
         return self_test()
+    if a.dyn_report:
+        pin = os.environ.get("MANUK_CHROME_PIN")
+        if not pin:
+            sys.exit("MANUK_CHROME_PIN unset: refusing to report without a chrome_ver")
+        green, text = dyn_report(a.out, pin)
+        print(text)
+        sys.exit(0 if green else 1)
     pin = os.environ.get("MANUK_CHROME_PIN")
     if not pin:
         sys.exit("MANUK_CHROME_PIN unset: refusing to write rows without a chrome_ver")
