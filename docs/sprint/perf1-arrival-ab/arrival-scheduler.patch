@@ -1,0 +1,165 @@
+diff --git a/engine/page/src/lib.rs b/engine/page/src/lib.rs
+index ea37592f..a249ad62 100644
+--- a/engine/page/src/lib.rs
++++ b/engine/page/src/lib.rs
+@@ -2297,6 +2297,12 @@ fn selected_image_urls(
+ /// PERF.1.1.a: the early scan is on unless `MANUK_NO_EARLY_SCAN` is set (the gate's mutant arm).
+ /// `MANUK_NO_DYN_PREFETCH=1` turns off PERF.1.2's early fetch of scripts inserted by a running
+ /// dynamic script (the A/B arm).
++/// PERF.1.2.b.b.a.b: `MANUK_DYN_SCRIPTS_ORDERED=1` restores the old all-document-order execution
++/// (the A/B arm for the arrival-order change).
++fn dyn_scripts_all_ordered() -> bool {
++    std::env::var_os("MANUK_DYN_SCRIPTS_ORDERED").is_some()
++}
++
+ fn dyn_script_prefetch_enabled() -> bool {
+     std::env::var_os("MANUK_NO_DYN_PREFETCH").is_none()
+ }
+@@ -4108,6 +4114,91 @@ thread_local! {
+         std::cell::RefCell::new(None);
+ }
+ 
++/// **PERF.1.2.b.b.a.b: which fetched dynamic script may run now.** Items are indexed in document
++/// order. An async one (force-async from `createElement`, or the `async` attribute) is ready the
++/// moment it arrives; a non-async one (`async = false`) is ready only when every earlier non-async
++/// one has been released, so ordered loader chains keep their order while an unrelated slow tag no
++/// longer holds the rest behind it.
++pub(crate) struct ArrivalScheduler<T> {
++    is_async: Vec<bool>,
++    /// Document-order indices of the non-async items.
++    ordered: Vec<usize>,
++    next_ordered: usize,
++    held: std::collections::HashMap<usize, T>,
++    ready: std::collections::VecDeque<T>,
++}
++
++impl<T> ArrivalScheduler<T> {
++    pub(crate) fn new(is_async: Vec<bool>) -> Self {
++        let ordered = (0..is_async.len()).filter(|&i| !is_async[i]).collect();
++        Self {
++            is_async,
++            ordered,
++            next_ordered: 0,
++            held: Default::default(),
++            ready: Default::default(),
++        }
++    }
++    pub(crate) fn arrive(&mut self, idx: usize, item: T) {
++        if self.is_async[idx] {
++            self.ready.push_back(item);
++            return;
++        }
++        self.held.insert(idx, item);
++        while let Some(&want) = self.ordered.get(self.next_ordered) {
++            match self.held.remove(&want) {
++                Some(it) => {
++                    self.ready.push_back(it);
++                    self.next_ordered += 1;
++                }
++                None => break,
++            }
++        }
++    }
++    pub(crate) fn pop_ready(&mut self) -> Option<T> {
++        self.ready.pop_front()
++    }
++}
++
++#[cfg(test)]
++mod arrival_scheduler_tests {
++    use super::ArrivalScheduler;
++    fn drain(s: &mut ArrivalScheduler<usize>) -> Vec<usize> {
++        std::iter::from_fn(|| s.pop_ready()).collect()
++    }
++    #[test]
++    fn async_scripts_run_in_arrival_order() {
++        let mut s = ArrivalScheduler::new(vec![true, true, true]);
++        let mut out = vec![];
++        for i in [2, 0, 1] {
++            s.arrive(i, i);
++            out.extend(drain(&mut s));
++        }
++        assert_eq!(out, vec![2, 0, 1]);
++    }
++    #[test]
++    fn async_false_scripts_keep_document_order() {
++        let mut s = ArrivalScheduler::new(vec![false, false, false]);
++        let mut out = vec![];
++        for i in [2, 1, 0] {
++            s.arrive(i, i);
++            out.extend(drain(&mut s));
++        }
++        assert_eq!(out, vec![0, 1, 2]);
++    }
++    #[test]
++    fn a_slow_async_does_not_hold_ordered_ones_and_vice_versa() {
++        // 0 = slow async, 1,2 = ordered
++        let mut s = ArrivalScheduler::new(vec![true, false, false]);
++        s.arrive(2, 2);
++        assert!(drain(&mut s).is_empty());
++        s.arrive(1, 1);
++        assert_eq!(drain(&mut s), vec![1, 2]);
++        s.arrive(0, 0);
++        assert_eq!(drain(&mut s), vec![0]);
++    }
++}
++
+ /// Arm the on-demand frame builder for one script round. Cheap; called wherever scripts are about
+ /// to run and a `FontContext` + base URL are in hand.
+ #[cfg(feature = "spidermonkey")]
+@@ -7549,14 +7640,25 @@ impl Page {
+             for (_, url) in &pending {
+                 warmed.insert(url.clone());
+             }
+-            let mut fetched: futures_util::stream::FuturesOrdered<_> = pending
++            // **PERF.1.2.b.b.a.b**: a force-async script (createElement default) runs the moment its
++            // bytes arrive; scripts the page marked `async = false` stay in document order among
++            // themselves. `ArrivalScheduler` owns that rule (unit-tested, mutation-checked).
++            let all_ordered = dyn_scripts_all_ordered();
++            let mut sched = ArrivalScheduler::new(
++                pending
++                    .iter()
++                    .map(|(n, _)| !all_ordered && self.dom.script_is_async(*n))
++                    .collect(),
++            );
++            let mut fetched: futures_util::stream::FuturesUnordered<_> = pending
+                 .into_iter()
+-                .map(|(node, url)| async move {
++                .enumerate()
++                .map(|(i, (node, url))| async move {
+                     let text = manuk_net::fetch(&url)
+                         .await
+                         .ok()
+                         .and_then(|r| subresource_text(&r));
+-                    (node, text)
++                    (i, node, text)
+                 })
+                 .collect();
+             // The next round exists only if this one is not the last; a script inserted in the last
+@@ -7566,11 +7668,23 @@ impl Page {
+             loop {
+                 // PERF.1.2.b.b: the time this round spends waiting on the next script's bytes.
+                 let w0 = std::time::Instant::now();
+-                let Some((node, text)) = futures_util::stream::StreamExt::next(&mut fetched).await
+-                else {
++                let mut waited = false;
++                let next = loop {
++                    if let Some(r) = sched.pop_ready() {
++                        break Some(r);
++                    }
++                    waited = true;
++                    match futures_util::stream::StreamExt::next(&mut fetched).await {
++                        Some((i, node, text)) => sched.arrive(i, (node, text)),
++                        None => break None,
++                    }
++                };
++                let Some((node, text)) = next else {
+                     break;
+                 };
+-                trace_span("dynscript_wait", w0);
++                if waited {
++                    trace_span("dynscript_wait", w0);
++                }
+                 // A runtime-fetched script is a script round like any other: it arms the forced-reflow
+                 // hook so its geometry reads see the nodes it just appended (G_RUNTIME_SCRIPT_READS_FRESH_GEOMETRY).
+                 let _reflow = ReflowScope::install(
