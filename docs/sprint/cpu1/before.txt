@@ -1,0 +1,9 @@
+t400 r1 {"nav": 0.36, "observe": 0.18, "find": 0.15, "click": 0.59}
+t400 r2 {"nav": 0.31, "observe": 0.17, "find": 0.15, "click": 0.61}
+t400 r3 {"nav": 0.36, "observe": 0.19, "find": 0.13, "click": 0.56}
+t800 r1 {"nav": 0.89, "observe": 0.59, "find": 0.56, "click": 2.11}
+t800 r2 {"nav": 0.83, "observe": 0.61, "find": 0.55, "click": 2.08}
+t800 r3 {"nav": 0.81, "observe": 0.56, "find": 0.49, "click": 1.99}
+t1500 r1 {"nav": 2.34, "observe": 2.0, "find": 1.84, "click": 6.6}
+t1500 r2 {"nav": 2.38, "observe": 2.01, "find": 1.92, "click": 6.5}
+t1500 r3 {"nav": 2.37, "observe": 1.91, "find": 1.75, "click": 6.28}

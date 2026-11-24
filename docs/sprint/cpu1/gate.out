@@ -1,0 +1,42 @@
+SAME archive403.html 139123
+SAME b19.html 2273
+SAME b20.html 8140
+SAME b21.html 8520
+SAME hdr.html 1235
+SAME nested.html 11052
+SAME t1500.html 578800
+SAME t400.html 153393
+SAME t800.html 305119
+SAME apache.html 14614
+SAME arstechnica.html 147281
+SAME astro.html 71356
+SAME bootstrap.html 106088
+SAME bulma.html 149720
+SAME chakra.html 227497
+SAME cloudflare.html 76658
+SAME craigslist.html 167439
+SAME github.html 78012
+SAME gnu.html 25493
+SAME hackernews.html 78678
+SAME kernel-org.html 17201
+SAME lobsters.html 58209
+SAME mdn-css.html 196507
+SAME mui.html 114995
+SAME netlify.html 99673
+SAME nextjs.html 5175
+SAME nuxt.html 96293
+SAME pgdocs.html 196860
+SAME python-docs.html 160660
+SAME react.html 143545
+SAME rfc-editor.html 245506
+SAME rustlang.html 21186
+SAME sqlite.html 9749
+SAME stripe-docs.html 82362
+SAME tailwind.html 214979
+SAME vercel.html 40291
+SAME vuejs.html 16668
+NONDET (baseline differs from itself, excluded) w3c.html
+SAME wikipedia.html 98550
+SAME xkcd.html 10302
+pages compared: 40 nondeterministic-baseline excluded: 1
+observe 1500=0.280 (<=0.3)  800=0.123  growth=2.27x (<=2.5)

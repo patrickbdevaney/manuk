@@ -2413,6 +2413,36 @@ fn table_is_data(dom: &Dom, table: NodeId, styles: &NameStyles) -> bool {
     rows >= 20 || (cells > 1 && (attr_border || css_border))
 }
 
+thread_local! {
+    /// One verdict per table per tree build (CPU.1). `table_is_data` walks the whole table, and it
+    /// was called for every row and cell, so a 1500-row table cost O(rows x nodes). Cleared at the
+    /// start and end of `build_tree_inner` (see [`TableMemoGuard`]) so a DOM change between builds
+    /// can never read a stale verdict.
+    static TABLE_MEMO: std::cell::RefCell<HashMap<NodeId, bool>> = std::cell::RefCell::new(HashMap::new());
+}
+
+struct TableMemoGuard;
+impl TableMemoGuard {
+    fn new() -> Self {
+        TABLE_MEMO.with(|m| m.borrow_mut().clear());
+        TableMemoGuard
+    }
+}
+impl Drop for TableMemoGuard {
+    fn drop(&mut self) {
+        TABLE_MEMO.with(|m| m.borrow_mut().clear());
+    }
+}
+
+fn table_is_data_memo(dom: &Dom, table: NodeId, styles: &NameStyles) -> bool {
+    if let Some(v) = TABLE_MEMO.with(|m| m.borrow().get(&table).copied()) {
+        return v;
+    }
+    let v = table_is_data(dom, table, styles);
+    TABLE_MEMO.with(|m| m.borrow_mut().insert(table, v));
+    v
+}
+
 /// The nearest `<table>` at or above `node`, or `None` for the ARIA spellings on plain elements —
 /// a `<div role=row>` has no `<table>` and keeps its role untouched.
 fn nearest_table(dom: &Dom, node: NodeId) -> Option<NodeId> {
@@ -2441,7 +2471,7 @@ fn demote_layout_table(dom: &Dom, node: NodeId, role: Role, styles: &NameStyles)
         return Some(role);
     }
     match nearest_table(dom, node) {
-        Some(t) if !table_is_data(dom, t, styles) => None,
+        Some(t) if !table_is_data_memo(dom, t, styles) => None,
         _ => Some(role),
     }
 }
@@ -3165,6 +3195,7 @@ fn build_tree_inner(
     ctx: &NameCtx<'_>,
     retained: &HashSet<NodeId>,
 ) -> A11yNode {
+    let _memo = TableMemoGuard::new();
     let index = NameIndex::build(dom);
     let root = dom.root();
     let children = build_children(
