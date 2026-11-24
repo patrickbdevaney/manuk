@@ -233,6 +233,9 @@ pub struct Dom {
     /// distinction currently drives. If a limited-quirks-only behaviour is ever needed, this becomes a
     /// three-state enum of our own — but inventing one before anything reads it is speculation.
     quirks: bool,
+    /// `<script>` elements whose HTML **force async** flag is set: `document.createElement('script')` makes one
+    /// force-async, and assigning `script.async` (either value) clears it. A parser-built script never has it.
+    force_async_scripts: std::collections::HashSet<NodeId>,
     /// **The element the pointer is currently over** — the anchor of the `:hover` chain.
     ///
     /// It lives on `Dom` for the same reason `quirks` does: every consumer that needs to answer
@@ -338,6 +341,7 @@ impl Dom {
             // layout tree, `createDocument`) has no doctype to be missing, and treating those as
             // quirks would enable the unitless-length quirk for documents no parser ever saw.
             quirks: false,
+            force_async_scripts: std::collections::HashSet::new(),
             hovered: None,
             focused: None,
             focus_visible: false,
@@ -347,6 +351,21 @@ impl Dom {
             character_sets: std::collections::HashMap::new(),
             referrers: std::collections::HashMap::new(),
         }
+    }
+
+    /// Set or clear a script's force-async flag (HTML "non-blocking" slot).
+    pub fn set_script_force_async(&mut self, n: NodeId, on: bool) {
+        if on {
+            self.force_async_scripts.insert(n);
+        } else {
+            self.force_async_scripts.remove(&n);
+        }
+    }
+
+    /// `script.async` as the page sees it: force-async flag OR the `async` attribute.
+    pub fn script_is_async(&self, n: NodeId) -> bool {
+        self.force_async_scripts.contains(&n)
+            || self.element(n).is_some_and(|e| e.attr("async").is_some())
     }
 
     /// Whether the parser put this document in quirks mode. See the field's note for why it lives here.

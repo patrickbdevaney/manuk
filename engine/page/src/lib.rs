@@ -7716,6 +7716,29 @@ impl Page {
     /// (`log_blocked` reports those; the early-fetch scan passes `false` so each is reported once).
     #[cfg(feature = "spidermonkey")]
     fn pending_dynamic_scripts(&self, log_blocked: bool) -> Vec<(manuk_dom::NodeId, String)> {
+        self.pending_dynamic_scripts_flagged(log_blocked)
+            .into_iter()
+            .map(|(n, url, _)| (n, url))
+            .collect()
+    }
+
+    /// The pending dynamic scripts' `(url, async)` pairs, in document order. `async` is the script's
+    /// `.async` as the page reads it (force-async from `createElement`, or the attribute). Reporting
+    /// only: no script's execution order depends on it yet (PERF.1.2.b.b.a.a).
+    #[cfg(feature = "spidermonkey")]
+    #[doc(hidden)]
+    pub fn pending_dynamic_script_async_flags(&self) -> Vec<(String, bool)> {
+        self.pending_dynamic_scripts_flagged(false)
+            .into_iter()
+            .map(|(_, url, a)| (url, a))
+            .collect()
+    }
+
+    #[cfg(feature = "spidermonkey")]
+    fn pending_dynamic_scripts_flagged(
+        &self,
+        log_blocked: bool,
+    ) -> Vec<(manuk_dom::NodeId, String, bool)> {
         let csp = &self.csp;
         self.dom
             .descendants(self.dom.root())
@@ -7743,6 +7766,7 @@ impl Page {
                 }
                 Err(_) => true,
             })
+            .map(|(n, url)| (n, url, self.dom.script_is_async(n)))
             .collect()
     }
 

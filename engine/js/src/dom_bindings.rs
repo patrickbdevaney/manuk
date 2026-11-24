@@ -5345,6 +5345,7 @@ unsafe fn define_members(
         // Control IDL reflections.
         prop_guarded!(prop, c"value", el_get_value, Some(el_set_value));
         prop_guarded!(prop, c"checked", el_get_checked, Some(el_set_checked));
+        prop_guarded!(prop, c"async", el_get_async, Some(el_set_async));
         // Text-control selection — cursor read/set, select-all, range selection.
         prop_guarded!(
             prop,
@@ -6187,6 +6188,8 @@ unsafe fn doc_create_element(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -
     // it is inserted; anything a PARSER built (the document, `innerHTML`, `DOMParser`, a `<template>`)
     // is not, and gets no mark. See `SCRIPT_CREATED_BY_SCRIPT` for why the flag is positive.
     if (*dom).element(node).is_some_and(|e| e.name == "script") {
+        // createElement('script') is force-async until `.async` is assigned.
+        (*dom).set_script_force_async(node, true);
         SCRIPT_CREATED_BY_SCRIPT.with(|m| {
             m.borrow_mut().insert((dom as usize, node));
         });
@@ -9218,6 +9221,44 @@ unsafe fn el_set_checked(_cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> b
             (*dom).set_attr(node, "checked", "");
         } else {
             (*dom).remove_attr(node, "checked");
+        }
+    }
+    *vp = UndefinedValue();
+    true
+}
+
+/// `script.async` getter: the force-async flag or the `async` attribute; `undefined` off `<script>`.
+unsafe fn el_get_async(_cx: *mut RawJSContext, _argc: u32, vp: *mut Value) -> bool {
+    match this_node(vp) {
+        Some((dom, n)) if (*dom).tag_name(n) == Some("script") => {
+            *vp = BooleanValue((*dom).script_is_async(n));
+        }
+        _ => *vp = UndefinedValue(),
+    }
+    true
+}
+/// `script.async = v`: clears force-async, then reflects `v` onto the attribute.
+unsafe fn el_set_async(_cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> bool {
+    if let Some((dom, n)) = this_node(vp) {
+        if (*dom).tag_name(n) == Some("script") {
+            let v = *vp.add(2);
+            let on = argc > 0
+                && if v.is_boolean() {
+                    v.to_boolean()
+                } else if v.is_int32() {
+                    v.to_int32() != 0
+                } else if v.is_double() {
+                    v.to_double() != 0.0 && !v.to_double().is_nan()
+                } else {
+                    // object/string: truthy except the empty string; null/undefined falsy
+                    v.is_object() || v.is_string()
+                };
+            (*dom).set_script_force_async(n, false);
+            if on {
+                (*dom).set_attr(n, "async", "");
+            } else {
+                (*dom).remove_attr(n, "async");
+            }
         }
     }
     *vp = UndefinedValue();
@@ -24593,5 +24634,39 @@ mod tests {
             globalThis.r = d.get.call(o);";
         let ok = eval_scene(&mut dom, setup, false, "r === null").expect("eval");
         assert!(ok);
+    }
+
+    /// PERF.1.2.b.b.a.a: `createElement('script')` is force-async; `.async = false` clears it; the page
+    /// crate reads it through `Dom::script_is_async`.
+    #[test]
+    #[ignore = "SpiderMonkey multi-Runtime-per-process teardown; run in isolation"]
+    fn script_async_flag_force_async_then_cleared() {
+        let mut dom = Dom::new();
+        let html = dom.create_element("html");
+        dom.append_child(dom.root(), html);
+        let setup = "var s = document.createElement('script'); globalThis.a = s.async;\n\
+            s.async = false; globalThis.b = s.async; globalThis.c = document.createElement('div').async;\n\
+            var t = document.createElement('script'); t.async = true; globalThis.d = t.async; t.async = false; globalThis.e = t.async;\n\
+            document.documentElement.appendChild(s); document.documentElement.appendChild(t);\n\
+            var u = document.createElement('script'); u.src='x.js'; document.documentElement.appendChild(u);";
+        let ok = eval_scene(
+            &mut dom,
+            setup,
+            false,
+            "a === true && b === false && c === undefined && d === true && e === false",
+        )
+        .expect("eval");
+        assert!(ok);
+        let scripts: Vec<_> = dom
+            .descendants(dom.root())
+            .filter(|&n| dom.tag_name(n) == Some("script"))
+            .collect();
+        assert_eq!(scripts.len(), 3);
+        assert!(!dom.script_is_async(scripts[0]));
+        assert!(!dom.script_is_async(scripts[1]));
+        assert!(
+            dom.script_is_async(scripts[2]),
+            "untouched createElement script stays force-async"
+        );
     }
 }
