@@ -343,6 +343,13 @@ pub(crate) fn incr_pick(
     vh: f32,
 ) -> Option<usize> {
     let base = incr_base_key(dom, vw, vh);
+    if env_on("MANUK_INCR_TRACE") {
+        eprintln!(
+            "INCR pick: vw={vw} vh={vh} quirks={} slots={:?}",
+            dom.quirks() as u8,
+            slots.iter().map(|m| m.base == base).collect::<Vec<_>>()
+        );
+    }
     slots
         .iter()
         .enumerate()
@@ -631,6 +638,11 @@ pub(crate) fn incr_fingerprints(
 pub(crate) struct SibKeys {
     all: bool,
     loose: Vec<(Option<String>, Option<String>, Vec<String>)>,
+    /// The sensitive compounds that are NOT the subject of their selector (`a + b c`: `b`). A node
+    /// they match can change what its DESCENDANTS match, so it is re-walked whole; every other
+    /// sensitive match (the subject) only changes its own style and can be settled alone.
+    deep_all: bool,
+    deep: Vec<(Option<String>, Option<String>, Vec<String>)>,
     /// compounds carrying a `:has(...)`: the elements whose style reads what is below/after them
     has_all: bool,
     has_loose: Vec<(Option<String>, Option<String>, Vec<String>)>,
@@ -721,12 +733,21 @@ impl SibKeys {
                             sel.combinators.get(i - 1),
                             Some(Combinator::NextSibling | Combinator::SubsequentSibling)
                         ))
-                        || part.pseudos.iter().any(position_pseudo);
+                        || part.pseudos.iter().any(|p| {
+                            // `:first/:last/:only-child` read only the NEIGHBOURS, whose fingerprints
+                            // (they hold prev/next ids) already moved: no sibling expansion needed.
+                            !matches!(
+                                p,
+                                Pseudo::FirstChild | Pseudo::LastChild | Pseudo::OnlyChild
+                            ) && position_pseudo(p)
+                        });
                     if !sensitive {
                         continue;
                     }
+                    let deep = i + 1 < sel.parts.len();
                     if part.tag.is_none() && part.id.is_none() && part.classes.is_empty() {
                         k.all = true;
+                        k.deep_all |= deep;
                         continue;
                     }
                     let key = (
@@ -734,6 +755,9 @@ impl SibKeys {
                         part.id.clone(),
                         part.classes.clone(),
                     );
+                    if deep && !k.deep.contains(&key) {
+                        k.deep.push(key.clone());
+                    }
                     if seen.insert(key.clone()) {
                         k.loose.push(key);
                     }
@@ -749,6 +773,19 @@ impl SibKeys {
         };
         self.has_all
             || self.has_loose.iter().any(|(tag, id, classes)| {
+                tag.as_ref().is_none_or(|t| el.name.eq_ignore_ascii_case(t))
+                    && id.as_ref().is_none_or(|i| el.id() == Some(i.as_str()))
+                    && classes.iter().all(|c| el.has_class(c))
+            })
+    }
+
+    /// Like [`candidate`](Self::candidate) but only for the compounds whose match can move a descendant.
+    fn deep_candidate(&self, dom: &Dom, n: NodeId) -> bool {
+        let Some(el) = dom.element(n) else {
+            return false;
+        };
+        self.deep_all
+            || self.deep.iter().any(|(tag, id, classes)| {
                 tag.as_ref().is_none_or(|t| el.name.eq_ignore_ascii_case(t))
                     && id.as_ref().is_none_or(|i| el.id() == Some(i.as_str()))
                     && classes.iter().all(|c| el.has_class(c))
@@ -816,7 +853,11 @@ pub(crate) fn incr_plan(
     extra: &[NodeId],
     ignore_html: bool,
     sheets: &[Stylesheet],
-) -> Option<(Vec<NodeId>, Vec<NodeId>)> {
+    // `Some`: a sibling the structural selectors might have moved, whose own style is the only thing
+    // that can have moved (see `SibKeys::deep`), is pushed here for the caller to settle alone
+    // instead of being re-walked whole. `None`: every such sibling is a root.
+    mut settle: Option<&mut Vec<NodeId>>,
+) -> Option<(Vec<NodeId>, Vec<NodeId>, std::collections::HashSet<NodeId>)> {
     let mut changed: std::collections::HashSet<NodeId> = std::collections::HashSet::new();
     for (n, h) in new_fp {
         if cache_fp.get(n) != Some(h) {
@@ -855,12 +896,18 @@ pub(crate) fn incr_plan(
             } else {
                 last + 1
             };
-            changed.extend(
-                kids[from..to]
-                    .iter()
-                    .copied()
-                    .filter(|&k| snapshot.contains(&k) || keys.candidate(dom, k)),
-            );
+            for &k in &kids[from..to] {
+                if snapshot.contains(&k) {
+                    changed.insert(k);
+                } else if keys.candidate(dom, k) {
+                    match settle.as_deref_mut() {
+                        Some(v) if !keys.deep_candidate(dom, k) => v.push(k),
+                        _ => {
+                            changed.insert(k);
+                        }
+                    }
+                }
+            }
         }
     }
     changed.extend(extra.iter().copied());
@@ -916,7 +963,7 @@ pub(crate) fn incr_plan(
             roots.push(c);
         }
     }
-    Some((roots, removed))
+    Some((roots, removed, changed))
 }
 
 /// The counters are process-global, so the tests that diff them take turns.
@@ -989,6 +1036,51 @@ mod tests {
         }
         assert_eq!(after.0, before.0 + 1, "{what}: pass was not incremental");
         after.2 - before.2
+    }
+
+    /// PERF.1.2.b.b.b.a: a node whose OWN style moved carries its children along only while the style
+    /// keeps moving (a non-inherited property stops at the node; an inherited one reaches the leaves),
+    /// and a sibling of a moved node settles alone unless a compound that can move its descendants
+    /// names it. Every pass must still equal the full cascade.
+    #[test]
+    fn pruned_restyle_stops_where_the_style_stops_and_equals_full() {
+        let _g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let kids: String = (0..40).map(|i| format!("<p><b>{i}</b></p>")).collect();
+        let html = format!(
+            "<html><head><style>.pad {{ padding: 3px }} .hot {{ color: red }} \
+             .k + .k {{ margin-top: 2px }} .k:first-child {{ margin-bottom: 1px }}</style></head><body>\
+             <div id=w><div id=b>{kids}</div><div class=k id=k1>a</div><div class=k id=k2>b</div></div></body></html>"
+        );
+        let mut dom = manuk_html::parse(&html);
+        let sheets = MinimalCascade::collect_style_elements(&dom);
+        let _ = MinimalCascade.cascade_incremental(&dom, &sheets, 800.0, 600.0);
+        let subtree = dom.flat_descendants(by_id(&dom, "b")).len() as u64;
+        let b = by_id(&dom, "b");
+        dom.set_attr(b, "class", "pad");
+        let walked = check(
+            &dom,
+            &sheets,
+            "non-inherited property on a big subtree root",
+        );
+        assert!(
+            walked * 2 < subtree, // #b + its 40 children; the 80 grandchildren are skipped
+            "padding moved on #b only, but {walked} nodes were re-derived (subtree {subtree})"
+        );
+        dom.set_attr(b, "class", "hot");
+        let walked = check(&dom, &sheets, "inherited property reaches every descendant");
+        assert!(
+            walked >= subtree,
+            "color is inherited: expected >= {subtree}, got {walked}"
+        );
+        let k1 = by_id(&dom, "k1");
+        dom.set_attr(k1, "class", "k hot");
+        check(&dom, &sheets, "sibling-sensitive neighbour");
+        let w = by_id(&dom, "w");
+        let nk = dom.create_element("div");
+        dom.set_attr(nk, "class", "k");
+        let k1n = by_id(&dom, "k1");
+        dom.insert_before(w, nk, k1n);
+        check(&dom, &sheets, "sibling inserted before .k + .k");
     }
 
     #[test]

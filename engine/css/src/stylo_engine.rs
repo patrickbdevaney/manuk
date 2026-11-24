@@ -859,12 +859,13 @@ pub fn cascade_via_stylo_sized(
                     &prep.extra,
                     prep.ignore_html,
                     sheets,
+                    None,
                 )
             } else {
                 None
             };
             match planned {
-                Some((roots, removed)) => plan = Some((c, roots, removed)),
+                Some((roots, removed, _)) => plan = Some((c, roots, removed)),
                 // untouched by this pass: stays as the second slot
                 None => spare = Some(c),
             }

@@ -5781,6 +5781,9 @@ impl MinimalCascade {
         let new_tracked = incr_tracked(dom);
         let t_b = t0.elapsed();
         let mut extra: Vec<NodeId> = Vec::new();
+        // Nodes in `extra` only because their OWN style moved (re-derived alone): their descendants
+        // can move through inheritance alone, so the re-walk may stop where the style stops moving.
+        let mut prunable: std::collections::HashSet<NodeId> = std::collections::HashSet::new();
         let mut too_many = false;
         if let Some(c) = usable.as_ref() {
             let mut old: AttrOverrides = AttrOverrides::new();
@@ -5877,6 +5880,7 @@ impl MinimalCascade {
                 for (n, st) in self.styles_alone(dom, sheets, &c.map, &check) {
                     if c.map.get(&n).map(|a| &**a) != Some(&st) {
                         extra.push(n);
+                        prunable.insert(n);
                     }
                 }
                 // a node `styles_alone` could not style (text, comment) is not an element: nothing to do
@@ -5894,10 +5898,69 @@ impl MinimalCascade {
                 );
             }
         }
-        let plan = usable
-            .as_ref()
-            .filter(|_| !too_many)
-            .and_then(|c| incr_plan(&c.fp, sib, dom, &new_fp, &extra, false, sheets));
+        let plan = usable.as_ref().filter(|_| !too_many).and_then(|c| {
+            // Siblings the structural selectors might have moved: settle each alone, and re-walk
+            // only the ones whose own style did move (the first plan is run for its list).
+            let mut settle: Vec<NodeId> = Vec::new();
+            let first = incr_plan(
+                &c.fp,
+                sib,
+                dom,
+                &new_fp,
+                &extra,
+                false,
+                sheets,
+                Some(&mut settle),
+            );
+            first.as_ref()?;
+            settle.sort_by_key(|n| n.0);
+            settle.dedup();
+            if settle.is_empty() {
+                return first;
+            }
+            if settle.len() > (new_fp.len() / 8).max(16) {
+                return incr_plan(&c.fp, sib, dom, &new_fp, &extra, false, sheets, None);
+            }
+            let mut moved: Vec<NodeId> = Vec::new();
+            for (n, st) in self.styles_alone(dom, sheets, &c.map, &settle) {
+                if c.map.get(&n).map(|a| &**a) != Some(&st) {
+                    if env_on("MANUK_INCR_TRACE") {
+                        let (a, b) = (format!("{:?}", c.map.get(&n)), format!("{st:?}"));
+                        let diff: Vec<String> = a
+                            .split(", ")
+                            .zip(b.split(", "))
+                            .filter(|(x, y)| x != y)
+                            .map(|(x, y)| format!("{x} -> {y}"))
+                            .take(6)
+                            .collect();
+                        eprintln!("INCR minimal: settled sibling {n:?} moved: {diff:?}");
+                    }
+                    moved.push(n);
+                }
+            }
+            if env_on("MANUK_INCR_TRACE") {
+                eprintln!(
+                    "INCR minimal: settled {} siblings alone, {} moved",
+                    settle.len(),
+                    moved.len()
+                );
+            }
+            if moved.is_empty() {
+                return first;
+            }
+            prunable.extend(moved.iter().copied());
+            extra.extend(moved);
+            incr_plan(
+                &c.fp,
+                sib,
+                dom,
+                &new_fp,
+                &extra,
+                false,
+                sheets,
+                Some(&mut Vec::new()),
+            )
+        });
         let t_plan = t0.elapsed();
         if env_on("MANUK_INCR_TRACE") {
             let moved = usable.as_ref().map(|c| {
@@ -5926,7 +5989,7 @@ impl MinimalCascade {
             (None, None)
         };
         let map = match (usable, plan) {
-            (Some(c), Some((roots, removed))) => {
+            (Some(c), Some((roots, removed, changed))) => {
                 let mut map = c.map;
                 for n in &removed {
                     map.remove(n);
@@ -5943,7 +6006,16 @@ impl MinimalCascade {
                         walked
                     );
                 }
-                self.cascade_subtrees(dom, sheets, &roots, &mut map);
+                // A node whose fingerprint moved (or that is new) is re-walked whole, as before.
+                prunable.retain(|n| {
+                    c.fp.get(n).is_some()
+                        && new_fp.iter().all(|(m, h)| m != n || c.fp.get(m) == Some(h))
+                });
+                if env_on("MANUK_INCR_NOPRUNE") {
+                    prunable.clear();
+                }
+                let walked = self
+                    .cascade_subtrees_pruned(dom, sheets, &roots, &changed, &prunable, &mut map);
                 INCR_PASSES.fetch_add(1, Relaxed);
                 INCR_RESTYLED.fetch_add(walked as u64, Relaxed);
                 if env_on("MANUK_INCR_VERIFY") {
@@ -6168,6 +6240,86 @@ impl MinimalCascade {
                 .unwrap_or_else(ComputedStyle::initial);
             self.cascade_node(dom, r, &parent_style, &index, map);
         }
+    }
+
+    /// [`Self::cascade_subtrees`], but a root in `prunable` (its own style moved, nothing else did) only
+    /// carries its children along while the style keeps moving: a child is re-derived when its parent's
+    /// style differs from the cached one or when it is (or has below it) a changed node, and the walk
+    /// stops at every node whose inputs (own matches + parent style) are what they were. Returns the
+    /// number of nodes derived.
+    pub(crate) fn cascade_subtrees_pruned(
+        &self,
+        dom: &Dom,
+        sheets: &[Stylesheet],
+        roots: &[NodeId],
+        changed: &std::collections::HashSet<NodeId>,
+        prunable: &std::collections::HashSet<NodeId>,
+        map: &mut StyleMap,
+    ) -> usize {
+        let _has_memo = HasMemoScope::new();
+        let scoped: Vec<ScopedSheet> = sheets
+            .iter()
+            .cloned()
+            .map(|sheet| ScopedSheet { scope: None, sheet })
+            .collect();
+        let index = Self::build_index(&scoped);
+        // the changed nodes and everything above them
+        let mut anc: std::collections::HashSet<NodeId> = std::collections::HashSet::new();
+        for &n in changed {
+            let mut x = Some(n);
+            while let Some(a) = x {
+                if !anc.insert(a) {
+                    break;
+                }
+                x = dom.parent(a);
+            }
+        }
+        let mut count = 0usize;
+        // (node, derive its children only if its style moved / they are changed)
+        fn walk(
+            this: &MinimalCascade,
+            dom: &Dom,
+            node: NodeId,
+            index: &RuleIndex<'_>,
+            changed: &std::collections::HashSet<NodeId>,
+            prunable: &std::collections::HashSet<NodeId>,
+            anc: &std::collections::HashSet<NodeId>,
+            map: &mut StyleMap,
+            count: &mut usize,
+        ) {
+            let init = ComputedStyle::initial();
+            let parent_style = dom
+                .parent(node)
+                .and_then(|p| map.get(&p).map(|a| (**a).clone()))
+                .unwrap_or(init);
+            let old = map.get(&node).cloned();
+            if changed.contains(&node) && !prunable.contains(&node) {
+                // re-walked whole, descendants included — but a changed node below it is still its own
+                // case only through this whole walk, so nothing more to do
+                let before = map.len();
+                this.cascade_node(dom, node, &parent_style, index, map);
+                *count += dom.flat_descendants(node).len() + 1;
+                let _ = before;
+                return;
+            }
+            this.cascade_node_inner(dom, node, &parent_style, index, map, false);
+            *count += 1;
+            let moved = match (&old, map.get(&node)) {
+                (Some(o), Some(n)) => o != n,
+                _ => true,
+            };
+            for child in dom.flat_children(node) {
+                if moved || anc.contains(&child) {
+                    walk(this, dom, child, index, changed, prunable, anc, map, count);
+                }
+            }
+        }
+        for &r in roots {
+            walk(
+                self, dom, r, &index, changed, prunable, &anc, map, &mut count,
+            );
+        }
+        count
     }
 
     // `self` (a unit struct) threads through the recursion for call-site symmetry
