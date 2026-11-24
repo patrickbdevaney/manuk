@@ -18,6 +18,7 @@ use std::collections::HashMap;
 
 use manuk_dom::{Dom, ElementData, NodeData, NodeId};
 
+pub mod incr;
 pub mod values;
 
 /// **Selector SYNTAX validation** — a question separate from "can we match it", and the reason
@@ -5502,6 +5503,141 @@ impl MinimalCascade {
             self.cascade_node(dom, child, &ComputedStyle::initial(), &index, &mut map);
         }
         map
+    }
+
+    /// PERF.1.2.b — [`StyleEngine::cascade`], reusing the previous pass's per-node styles for every node
+    /// outside the subtrees whose fingerprint moved (see `incr.rs`). Same result as the full cascade;
+    /// falls back to it for shadow DOM, a changed sheet list/viewport, `<html>` itself changing, or a
+    /// large change. `MANUK_FULL_RESTYLE=1` disables the reuse (the A/B arm).
+    pub fn cascade_incremental(
+        &self,
+        dom: &Dom,
+        sheets: &[Stylesheet],
+        vw: f32,
+        vh: f32,
+    ) -> StyleMap {
+        use crate::incr::*;
+        use std::sync::atomic::Ordering::Relaxed;
+        thread_local! {
+            static CACHE: std::cell::RefCell<Option<MinimalIncr>> =
+                const { std::cell::RefCell::new(None) };
+        }
+        struct MinimalIncr {
+            key: u64,
+            sib: bool,
+            empty: bool,
+            fp: std::collections::HashMap<NodeId, u64>,
+            map: StyleMap,
+        }
+        if env_on("MANUK_FULL_RESTYLE") || !dom.all_shadow_roots().is_empty() {
+            CACHE.with(|c| *c.borrow_mut() = None);
+            return self.cascade(dom, sheets);
+        }
+        let t0 = std::time::Instant::now();
+        let key = incr_key(dom, sheets, vw, vh);
+        let cached = CACHE.with(|c| c.borrow_mut().take());
+        let usable = cached.filter(|c| c.key == key);
+        let (sib, empty) = match &usable {
+            Some(c) => (c.sib, c.empty),
+            None => incr_sheet_flags(sheets),
+        };
+        let new_fp = incr_fingerprints(dom, sib, empty);
+        let plan = usable
+            .as_ref()
+            .and_then(|c| incr_plan(&c.fp, c.sib, dom, &new_fp));
+        let t_plan = t0.elapsed();
+        if env_on("MANUK_INCR_TRACE") {
+            let moved = usable.as_ref().map(|c| {
+                new_fp
+                    .iter()
+                    .filter(|(n, h)| c.fp.get(n) != Some(h))
+                    .count()
+            });
+            eprintln!(
+                "INCR minimal: key_ok={} nodes={} fp_moved={:?} sib={} planned_roots={:?}",
+                usable.is_some(),
+                new_fp.len(),
+                moved,
+                sib,
+                plan.as_ref().map(|p| p.0.len())
+            );
+        }
+        let map = match (usable, plan) {
+            (Some(c), Some((roots, removed))) => {
+                let mut map = c.map;
+                for n in &removed {
+                    map.remove(n);
+                }
+                // The roots are re-walked whole, descendants included.
+                let walked: usize = roots
+                    .iter()
+                    .map(|&r| dom.flat_descendants(r).len() + 1)
+                    .sum();
+                self.cascade_subtrees(dom, sheets, &roots, &mut map);
+                INCR_PASSES.fetch_add(1, Relaxed);
+                INCR_RESTYLED.fetch_add(walked as u64, Relaxed);
+                if env_on("MANUK_INCR_VERIFY") {
+                    let full = self.cascade(dom, sheets);
+                    if full != map {
+                        INCR_MISMATCH.fetch_add(1, Relaxed);
+                        tracing::error!(
+                            "INCR MISMATCH: incremental restyle disagrees with the full cascade"
+                        );
+                    }
+                }
+                map
+            }
+            _ => {
+                INCR_FULL.fetch_add(1, Relaxed);
+                self.cascade(dom, sheets)
+            }
+        };
+        let t_cascade = t0.elapsed();
+        CACHE.with(|c| {
+            *c.borrow_mut() = Some(MinimalIncr {
+                key,
+                sib,
+                empty,
+                fp: new_fp.into_iter().collect(),
+                map: map.clone(),
+            })
+        });
+        if env_on("MANUK_INCR_TRACE") {
+            eprintln!(
+                "INCR minimal timing: plan {:?} +cascade {:?} +cache-clone {:?}",
+                t_plan,
+                t_cascade - t_plan,
+                t0.elapsed() - t_cascade
+            );
+        }
+        map
+    }
+
+    /// PERF.1.2.b — re-cascade only the subtrees rooted at `roots` into `map`, which holds the previous
+    /// pass's styles for every other node. Each root inherits from its parent's entry in `map` (the
+    /// initial style under the document). No shadow roots: the caller falls back to a full cascade for
+    /// those (the flat tree would need its own parent lookup).
+    pub fn cascade_subtrees(
+        &self,
+        dom: &Dom,
+        sheets: &[Stylesheet],
+        roots: &[NodeId],
+        map: &mut StyleMap,
+    ) {
+        let _has_memo = HasMemoScope::new();
+        let scoped: Vec<ScopedSheet> = sheets
+            .iter()
+            .cloned()
+            .map(|sheet| ScopedSheet { scope: None, sheet })
+            .collect();
+        let index = Self::build_index(&scoped);
+        for &r in roots {
+            let parent_style = dom
+                .parent(r)
+                .and_then(|p| map.get(&p).cloned())
+                .unwrap_or_else(ComputedStyle::initial);
+            self.cascade_node(dom, r, &parent_style, &index, map);
+        }
     }
 
     // `self` (a unit struct) threads through the recursion for call-site symmetry

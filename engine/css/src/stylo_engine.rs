@@ -58,7 +58,7 @@ use stylo::stylist::Stylist;
 use stylo::values::computed::font::GenericFontFamily;
 use stylo::values::computed::{CSSPixelLength, Length};
 
-use manuk_dom::{Dom, NodeId};
+use manuk_dom::{Dom, NodeData, NodeId};
 
 use crate::stylo_dom::{ElementDataStore, StyloElement};
 use crate::stylo_map::to_computed_style;
@@ -656,6 +656,50 @@ textarea { white-space: pre-wrap; }
 code, kbd, samp { font-family: monospace; }
 "#;
 
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+// PERF.1.2.b — INCREMENTAL RESTYLE.
+//
+// A script round on Wikipedia mutates a few hundred nodes and used to re-run the whole per-node walk
+// (Stylo match + `to_computed_style` + pseudo + MinimalCascade) over all ~19k: 250-400 ms each.
+//
+// The walk is the only expensive part and it is a pure function of, per node: its own element data
+// (tag, attributes, hover/focus/active state), its ANCESTORS' (descendant combinators, inheritance,
+// `:lang`, presentational hints from a `<table>`), its SIBLINGS' (only for sheets that use sibling
+// combinators / structural pseudo-classes), plus the sheets and the viewport. So the previous pass's
+// per-node results are reused for every node outside the subtrees of the nodes whose fingerprint
+// moved, and everything that runs over the WHOLE map afterwards (`finish_passes`: `:has()`, property
+// recovery, effective opacity, legacy alignment) is re-run in full on a copy, by the SAME function
+// the full cascade calls, so those cannot drift.
+//
+// ⚠ The fingerprint is computed from the `Dom` itself, not read off the dirty bits: the bits are
+// cleared by other consumers (incremental layout) and a mutator that forgot `mark_dirty` would be an
+// invisible stale style. A fingerprint cannot be forgotten.
+//
+// Whenever the reuse argument does not hold the answer is "do the full cascade": shadow DOM, a
+// transition or animation in flight, `<html>` itself changed (root font size feeds every `rem`),
+// the sheets/viewport changed, or more than a third of the document moved.
+// `MANUK_FULL_RESTYLE=1` turns the whole thing off (the A/B arm); `MANUK_INCR_VERIFY=1` runs both and
+// counts disagreements.
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+
+struct IncrCache {
+    key: u64,
+    sib: bool,
+    empty: bool,
+    fp: std::collections::HashMap<NodeId, u64>,
+    /// The style map right after the walk, BEFORE `finish_passes` — what the next pass reuses.
+    walk: StyleMap,
+    minimal: StyleMap,
+    cvs: std::collections::HashMap<NodeId, ServoArc<ComputedValues>>,
+}
+
+thread_local! {
+    static INCR: std::cell::RefCell<Option<IncrCache>> = const { std::cell::RefCell::new(None) };
+    static FORCE_FULL: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+use crate::incr::{INCR_FULL, INCR_MISMATCH, INCR_PASSES, INCR_RESTYLED};
+
 /// The real Stylo value cascade over `sheets`' author rules: build a `Stylist`, and for
 /// each element match rules with Stylo's selector matcher (via our `selectors::Element`),
 /// merge the winning declarations, compute `ComputedValues` with `compute_for_declarations`
@@ -753,6 +797,35 @@ pub fn cascade_via_stylo_sized(
     // themselves (unitless lengths, case-insensitive id/class matching, the `<font size>` table) — this
     // function was simply never telling it which mode the document was in.
     let qm = qm_of(dom);
+    // ── PERF.1.2.b: may this pass reuse (and refresh) the previous pass's per-node results?
+    let force_full = FORCE_FULL.with(|f| f.replace(false));
+    let incr_on = container_sizes.is_none()
+        && !crate::incr::env_on("MANUK_FULL_RESTYLE")
+        && dom.all_shadow_roots().is_empty()
+        && !crate::transition::any_running_realtime();
+    let mut incr_key_v = 0u64;
+    let (mut incr_sib, mut incr_empty) = (false, false);
+    let mut new_fp: Vec<(NodeId, u64)> = Vec::new();
+    let mut plan: Option<(IncrCache, Vec<NodeId>, Vec<NodeId>)> = None;
+    if incr_on {
+        incr_key_v = crate::incr::incr_key(dom, sheets, vw, vh);
+        let cached = INCR.with(|c| c.borrow_mut().take());
+        let usable = cached.filter(|c| c.key == incr_key_v && !force_full);
+        (incr_sib, incr_empty) = match &usable {
+            Some(c) => (c.sib, c.empty),
+            None => crate::incr::incr_sheet_flags(sheets),
+        };
+        new_fp = crate::incr::incr_fingerprints(dom, incr_sib, incr_empty);
+        if let Some(c) = usable {
+            if let Some((roots, removed)) = crate::incr::incr_plan(&c.fp, c.sib, dom, &new_fp) {
+                plan = Some((c, roots, removed));
+            }
+        }
+    }
+    let incr = plan.is_some();
+    let mut dynamic = false;
+    let mut abort_incr = false;
+    let mut walked = 0u64;
     let lock = SharedRwLock::new();
     let Ok(url) = ::url::Url::parse("about:manuk") else {
         return MinimalCascade.cascade(dom, sheets);
@@ -878,92 +951,70 @@ pub fn cascade_via_stylo_sized(
     // because ONE recovered property must be visible to `apply_presentational_hints` inside the
     // walk: `field-sizing: content` stands the UA intrinsic-width hints down, so it has to be on
     // the style before the hint decides to fire (the other recovered properties merge after).
-    let minimal = timed(&mut ph.minimal_ns, || MinimalCascade.cascade(dom, sheets));
-    let mut map: StyleMap = StyleMap::new();
+    let minimal;
+    let mut map: StyleMap;
     // Preorder walk so a parent's ComputedValues exists before its children's cascade.
-    let mut parent_cv: std::collections::HashMap<NodeId, ServoArc<ComputedValues>> =
-        std::collections::HashMap::new();
+    let mut parent_cv: std::collections::HashMap<NodeId, ServoArc<ComputedValues>>;
+    let walk_roots: Vec<NodeId>;
+    if let Some((c, roots, removed)) = plan.take() {
+        let IncrCache {
+            walk,
+            minimal: mut m,
+            cvs,
+            ..
+        } = c;
+        map = walk;
+        parent_cv = cvs;
+        for n in &removed {
+            map.remove(n);
+            m.remove(n);
+            parent_cv.remove(n);
+        }
+        timed(&mut ph.minimal_ns, || {
+            MinimalCascade.cascade_subtrees(dom, sheets, &roots, &mut m)
+        });
+        minimal = m;
+        walk_roots = roots;
+    } else {
+        minimal = timed(&mut ph.minimal_ns, || MinimalCascade.cascade(dom, sheets));
+        map = StyleMap::new();
+        parent_cv = std::collections::HashMap::new();
+        walk_roots = vec![dom.root()];
+    }
     // The BEFORE-CHANGE style table this pass is building — see `crate::transition`. Built fresh
     // and published wholesale at the end of the walk, so a node the document no longer contains
     // stops being remembered in the same instant it stops being cascaded.
     let mut next_prev: std::collections::HashMap<NodeId, ServoArc<ComputedValues>> =
         std::collections::HashMap::new();
-    let mut stack: Vec<NodeId> = vec![dom.root()];
-    while let Some(node) = stack.pop() {
-        // Push children (reverse so we pop them in document order).
-        // **The FLAT tree.** Walking `children()` skips shadow roots entirely — they hang off the
-        // host in their own field — so every node inside every web component went unstyled. And an
-        // unstyled node is not merely mis-styled: `is_rendered` drops it from the render tree, so the
-        // whole component produced ZERO boxes. Lit rendered nothing; so does every design system on
-        // the web.
-        let kids: Vec<NodeId> = dom.flat_children(node);
-        for &k in kids.iter().rev() {
-            stack.push(k);
-        }
-        if !dom.is_element(node) {
-            // Text/other non-element nodes have no cascade of their own but inherit their
-            // parent element's computed style. Layout indexes a style for *every* node it
-            // walks, so — like MinimalCascade — we must give them one. The preorder walk
-            // guarantees the parent is already in `map`.
-            if let Some(parent) = dom.parent(node) {
-                if let Some(ps) = map.get(&parent).cloned() {
-                    map.insert(node, ps);
+    'walk: for walk_root in walk_roots {
+        let mut stack: Vec<NodeId> = vec![walk_root];
+        while let Some(node) = stack.pop() {
+            // Push children (reverse so we pop them in document order).
+            // **The FLAT tree.** Walking `children()` skips shadow roots entirely — they hang off the
+            // host in their own field — so every node inside every web component went unstyled. And an
+            // unstyled node is not merely mis-styled: `is_rendered` drops it from the render tree, so the
+            // whole component produced ZERO boxes. Lit rendered nothing; so does every design system on
+            // the web.
+            let kids: Vec<NodeId> = dom.flat_children(node);
+            for &k in kids.iter().rev() {
+                stack.push(k);
+            }
+            if !dom.is_element(node) {
+                // Text/other non-element nodes have no cascade of their own but inherit their
+                // parent element's computed style. Layout indexes a style for *every* node it
+                // walks, so — like MinimalCascade — we must give them one. The preorder walk
+                // guarantees the parent is already in `map`.
+                if let Some(parent) = dom.parent(node) {
+                    if let Some(ps) = map.get(&parent).cloned() {
+                        map.insert(node, ps);
+                    }
                 }
+                continue;
             }
-            continue;
-        }
-        let el = StyloElement::new(dom, node, &store);
-        let mut cv = timed(&mut ph.element_ns, || {
-            cascade_one_element(
-                &stylist,
-                &index,
-                &mut candidates,
-                &mut caches,
-                &lock,
-                &url_data,
-                &guard,
-                &guards,
-                &el,
-                node,
-                &parent_cv,
-                dom,
-                cq_active,
-                &[],
-            )
-        });
-        // ── **`@keyframes`, INTERPOLATED — see `crate::animation`.**
-        //
-        // Gated on Stylo's own `specifies_animations()`, which is
-        // `animation_name_iter().any(|n| !n.is_none())` — the same predicate `stylo_map.rs` already
-        // uses for the opacity reveal-hack, so the two cannot drift into disagreeing about which
-        // elements are animating. A page with no `animation-name` anywhere pays one bool read per
-        // element and nothing else.
-        if cv.get_ui().specifies_animations() {
-            let samples = crate::animation::samples_for(&stylist, &guard, el, &cv);
-            // **One final cascade for ALL of them, not one per animation.** `animation-name` is a
-            // list and a later entry beats an earlier one on the properties they share; cascading
-            // per-sample would instead throw the earlier sample away, because each sample's own
-            // from/to pair is built from the UNDERLYING style by definition. Appending in list
-            // order and merging once gives the spec's precedence for free — `merge_ascending`
-            // keeps the last-pushed occurrence.
-            let mut mixed: Vec<PropertyDeclaration> = Vec::new();
-            // ⚠⚠⚠ **AN ENDPOINT SHORT-CIRCUIT WAS BUILT HERE, MEASURED, AND REMOVED — read this
-            // before building it again.** The clock is still 0, so every animation on a real page
-            // sits at progress exactly 0; taking the from-side cascade directly there looks exact
-            // and halves the cost. It is NOT exact. `a.animate(&b, 0.0)` is not `a`: interpolating
-            // `transform: none` with `scale(2)` at 0 yields `matrix(1,0,0,1,0,0)`, not `none`, and
-            // the same round-trip through `to_animated_value`/`uncompute` normalises other types
-            // too. **It cost 36 subtests in `css/css-transforms` and this gate did not see it** —
-            // `g_keyframe_interpolation` was byte-identical with the fast path forced off, which is
-            // exactly the "a fast path must be predicate-IDENTICAL" trap: the equivalence was
-            // checked against too small a population. The right cure for the cost is the animation
-            // clock (which makes progress-0 rare) or a memo, never a second answer.
-            for s in &samples {
-                // The two bracketing keyframes as FULLY CASCADED styles, not as declaration
-                // blocks: interpolation is defined on computed values, and re-running the
-                // element's own cascade with the keyframe appended is what makes a property the
-                // keyframe never mentions fall back to the underlying value on both sides.
-                let a = cascade_one_element(
+            walked += 1;
+            let el = StyloElement::new(dom, node, &store);
+            let mut cv = timed(&mut ph.element_ns, || {
+                cascade_one_element(
                     &stylist,
                     &index,
                     &mut candidates,
@@ -977,96 +1028,85 @@ pub fn cascade_via_stylo_sized(
                     &parent_cv,
                     dom,
                     cq_active,
-                    &s.from,
-                );
-                let b = cascade_one_element(
-                    &stylist,
-                    &index,
-                    &mut candidates,
-                    &mut caches,
-                    &lock,
-                    &url_data,
-                    &guard,
-                    &guards,
-                    &el,
-                    node,
-                    &parent_cv,
-                    dom,
-                    cq_active,
-                    &s.to,
-                );
-                // ⚠ `cv` is the element's own cascade with NO keyframe mixed in — the
-                // *underlying* value `animation-composition: add` adds to. It is the same `cv`
-                // that would have been published if this element were not animating, which is
-                // exactly the spec's definition of the underlying value.
-                mixed.extend(crate::animation::interpolate(s, &a, &b, &cv));
-            }
-            if !mixed.is_empty() {
-                cv = cascade_one_element(
-                    &stylist,
-                    &index,
-                    &mut candidates,
-                    &mut caches,
-                    &lock,
-                    &url_data,
-                    &guard,
-                    &guards,
-                    &el,
-                    node,
-                    &parent_cv,
-                    dom,
-                    cq_active,
-                    &mixed,
-                );
-            }
-        }
-        // ── **CSS TRANSITIONS, INTERPOLATED — see `crate::transition`.**
-        //
-        // ⚠ **AFTER the animation mix and not before it**, because CSS Cascade 5 orders the
-        // transition origin ABOVE the animation one. So a property that is both animated and
-        // transitioning interpolates towards its *animated* value, which is what `after` here is.
-        //
-        // ⚠⚠⚠ **THE BEFORE-CHANGE VALUE IS KEPT WHILE THE TRANSITION RUNS, AND THAT IS NOT AN
-        // OPTIMISATION.** Overwriting it every pass makes a transition survive exactly one cascade:
-        // the next recalc would see `before == after` and answer the end state. WPT's
-        // `interpolation-testcommon.js` makes that failure certain rather than unlikely — it runs
-        // `interpolate()` on EVERY target and only then `measure()`s them, so the first target is
-        // re-cascaded once per later target before anybody reads it.
-        let mut transitioning = false;
-        // The cheap gate every element of every page pays: is any transition-delay negative? While
-        // the document clock is 0 nothing else can be running (see `crate::transition`'s guard).
-        if crate::transition::may_be_running_for(node, &cv) {
-            // CSS Transitions §starting: an element with no rendered before-change style (it was
-            // `display:none`) has nothing to transition from — it jumps to the after-change value.
-            // The same holds when the after-change style is not rendered: nothing starts.
-            let not_rendered = |c: &ComputedValues| {
-                c.get_box().clone_display() == stylo::values::specified::box_::Display::None
-            };
-            if let Some(before) = crate::transition::prev_style(node)
-                .filter(|b| !not_rendered(b) && !not_rendered(&cv))
-            {
-                // Memoised on `(before, after, clock)` — see `crate::transition::MEMO`. Without
-                // it the `transition-property: all` expansion is ~200 animated-value pairs per
-                // element per recalc, which WPT's own harness turns quadratic.
-                //
-                // ⚠ The memo can only HIT because of the `next_prev.insert(node, before)` two
-                // lines below: the same `Arc` is handed back every pass while the transition
-                // runs, so the memo's pointer test on `before` holds. Overwrite that and the
-                // memo silently degrades to a full sample on every recalc — and, worse, the
-                // transition itself collapses to its end state (see the note above).
-                //
-                // ⚠⚠ It is a COST reduction and NOT a determinism fix; that was measured at
-                // t1312 and the first version of this comment claimed otherwise.
-                let mixed = if crate::transition::realtime_clock_ms().is_some() {
-                    crate::transition::sample_realtime(node, &before, &cv)
-                } else {
-                    crate::transition::sample_memoized(node, &before, &cv)
-                };
+                    &[],
+                )
+            });
+            // ── **`@keyframes`, INTERPOLATED — see `crate::animation`.**
+            //
+            // Gated on Stylo's own `specifies_animations()`, which is
+            // `animation_name_iter().any(|n| !n.is_none())` — the same predicate `stylo_map.rs` already
+            // uses for the opacity reveal-hack, so the two cannot drift into disagreeing about which
+            // elements are animating. A page with no `animation-name` anywhere pays one bool read per
+            // element and nothing else.
+            if cv.get_ui().specifies_animations() {
+                dynamic = true;
+                if incr {
+                    abort_incr = true;
+                    break 'walk;
+                }
+                let samples = crate::animation::samples_for(&stylist, &guard, el, &cv);
+                // **One final cascade for ALL of them, not one per animation.** `animation-name` is a
+                // list and a later entry beats an earlier one on the properties they share; cascading
+                // per-sample would instead throw the earlier sample away, because each sample's own
+                // from/to pair is built from the UNDERLYING style by definition. Appending in list
+                // order and merging once gives the spec's precedence for free — `merge_ascending`
+                // keeps the last-pushed occurrence.
+                let mut mixed: Vec<PropertyDeclaration> = Vec::new();
+                // ⚠⚠⚠ **AN ENDPOINT SHORT-CIRCUIT WAS BUILT HERE, MEASURED, AND REMOVED — read this
+                // before building it again.** The clock is still 0, so every animation on a real page
+                // sits at progress exactly 0; taking the from-side cascade directly there looks exact
+                // and halves the cost. It is NOT exact. `a.animate(&b, 0.0)` is not `a`: interpolating
+                // `transform: none` with `scale(2)` at 0 yields `matrix(1,0,0,1,0,0)`, not `none`, and
+                // the same round-trip through `to_animated_value`/`uncompute` normalises other types
+                // too. **It cost 36 subtests in `css/css-transforms` and this gate did not see it** —
+                // `g_keyframe_interpolation` was byte-identical with the fast path forced off, which is
+                // exactly the "a fast path must be predicate-IDENTICAL" trap: the equivalence was
+                // checked against too small a population. The right cure for the cost is the animation
+                // clock (which makes progress-0 rare) or a memo, never a second answer.
+                for s in &samples {
+                    // The two bracketing keyframes as FULLY CASCADED styles, not as declaration
+                    // blocks: interpolation is defined on computed values, and re-running the
+                    // element's own cascade with the keyframe appended is what makes a property the
+                    // keyframe never mentions fall back to the underlying value on both sides.
+                    let a = cascade_one_element(
+                        &stylist,
+                        &index,
+                        &mut candidates,
+                        &mut caches,
+                        &lock,
+                        &url_data,
+                        &guard,
+                        &guards,
+                        &el,
+                        node,
+                        &parent_cv,
+                        dom,
+                        cq_active,
+                        &s.from,
+                    );
+                    let b = cascade_one_element(
+                        &stylist,
+                        &index,
+                        &mut candidates,
+                        &mut caches,
+                        &lock,
+                        &url_data,
+                        &guard,
+                        &guards,
+                        &el,
+                        node,
+                        &parent_cv,
+                        dom,
+                        cq_active,
+                        &s.to,
+                    );
+                    // ⚠ `cv` is the element's own cascade with NO keyframe mixed in — the
+                    // *underlying* value `animation-composition: add` adds to. It is the same `cv`
+                    // that would have been published if this element were not animating, which is
+                    // exactly the spec's definition of the underlying value.
+                    mixed.extend(crate::animation::interpolate(s, &a, &b, &cv));
+                }
                 if !mixed.is_empty() {
-                    transitioning = true;
-                    // The before-change style is what this element keeps remembering until the
-                    // transition ends.
-                    next_prev.insert(node, before);
                     cv = cascade_one_element(
                         &stylist,
                         &index,
@@ -1085,180 +1125,361 @@ pub fn cascade_via_stylo_sized(
                     );
                 }
             }
-        }
-        if !transitioning {
-            next_prev.insert(node, cv.clone());
-        }
-        // **`rem` is root-relative.** The device carries the root font size that every `rem` in the
-        // document resolves against, and it starts at the initial 16px. Unless it is updated once
-        // the root element's own font size is known, `html{font-size:62.5%}` — the "1rem = 10px"
-        // idiom half the web is built on — silently leaves every `rem` 60% too large, and
-        // `html{font-size:118%}` leaves them all too small. Set it as soon as the root is cascaded;
-        // the preorder walk reaches `<html>` first, and its OWN `rem` values still resolve against
-        // the initial size, which is exactly what CSS specifies.
-        if dom.tag_name(node) == Some("html") {
-            stylist
-                .device()
-                .set_root_font_size(cv.get_font().clone_font_size().computed_size().px());
-            // **…and `rlh` is root-relative in exactly the same way, which we were not doing.**
+            // ── **CSS TRANSITIONS, INTERPOLATED — see `crate::transition`.**
             //
-            // Stylo's own `matching.rs` sets these two together, four lines apart, under the comments
-            // *"Update root font size for rem units"* and *"Update root line height for rlh units"*.
-            // We had the first and not the second, so `rlh` fell back to the device's initial value
-            // and resolved against **neither** the root's line-height nor the element's.
+            // ⚠ **AFTER the animation mix and not before it**, because CSS Cascade 5 orders the
+            // transition origin ABOVE the animation one. So a property that is both animated and
+            // transitioning interpolates towards its *animated* value, which is what `after` here is.
             //
-            // Chrome-measured, surface audit #44 (t721), root `line-height:2` on `16px` and an
-            // element `line-height:20px`: `width:5rlh` is **160** in Chrome and was **96** here —
-            // `5 x 19.2`, i.e. `5 x (16 x 1.2)`, the INITIAL `normal` line-height. Not root-relative,
-            // not element-relative: initial-relative, which is the one answer no author can predict.
-            //
-            // ⚠ The map called this capability `works` from tick 509 to tick 721 because the probe
-            // behind it tests `width:5lh` and its own receipt says `rlh` was *"not separately
-            // geometry-tested"*. The untested half was the broken half.
-            // Through the DEVICE's `calc_line_height`, not `ComputedValues`': the latter is
-            // gecko-conditional in this build, and the device method is the servo one Stylo itself
-            // calls. ⚠ It returns **0** for `line-height: normal` (`device/servo.rs`: *"TODO: compute
-            // `normal` from the font metrics"*), so a root that never states a line-height leaves
-            // `rlh` at zero rather than at the initial guess — honest, and a named residue, not a
-            // regression: the previous value was wrong for every root.
-            let root_lh = stylist
-                .device()
-                .calc_line_height(cv.get_font(), cv.writing_mode, None)
-                .0
-                .px();
-            stylist.device().set_root_line_height(root_lh);
-            // **…and the THIRD member of the set, which t722 named and did not build.**
-            //
-            // `rcap` / `rch` / `rex` / `ric` resolve against the ROOT's font METRICS, and Stylo reads
-            // those out of `device.root_style` — a field nothing here ever wrote, so every one of
-            // them was measured against the device's default style instead of the document's root.
-            // Chrome-measured, root `32px` / element `16px` sans-serif: `10rch` **178 vs 80**,
-            // `10rex` **169 vs 73**, `10rcap` **220 vs 105**, while their element-relative twins
-            // `10ch`/`10ex`/`10cap` were already **exact** (89/85/110). Every element-relative unit
-            // right and every root-relative one wrong is the signature of a root that was never
-            // published.
-            //
-            // `update_root_font_metrics` queries the font stack, which is not free — so it runs only
-            // when the document has actually used one of these units, exactly as Stylo's own
-            // `matching.rs` gates it (`used_root_font_metrics()`). A page with no `r*` unit pays a
-            // bool read.
-            stylist.device().set_root_style(&cv);
-            if stylist.device().used_root_font_metrics() {
-                stylist.device().update_root_font_metrics();
-            }
-        }
-        let mut cs = timed(&mut ph.computed_ns, || to_computed_style(&cv));
-        // `field-sizing` predates stylo 0.19, so it is recovered from MinimalCascade — and it must
-        // be recovered HERE, before the hints, because its whole job is to veto the UA
-        // intrinsic-width hint below.
-        if let Some(m) = minimal.get(&node) {
-            cs.field_sizing_content = m.field_sizing_content;
-            // `appearance: none` — same gecko-only fence, and it must land before the hints for
-            // the same reason: a `<select>`'s reserved arrow width is decided downstream of it.
-            cs.appearance = m.appearance;
-            // ⚠ Stylo`s `clone_display` is BLOCKIFIED for an out-of-flow box; the MinimalCascade`s
-            // is not, and the static-position rule needs the un-blockified one. Copied for the
-            // same reason `appearance` is: Stylo cannot answer it and the other cascade can.
-            cs.display_in_flow = m.display_in_flow;
-            // ⭐ `counter-set` is `engine = "gecko"` in `longhands.toml` — it does **not exist** in
-            // stylo's servo build, so there is no `clone_counter_set()` to call and no pref that
-            // brings one back. Same fence as `appearance` above, and the same answer: the other
-            // cascade can parse it, so recover it from there.
-            //
-            // ⚠ This is a THIRD shape in the "why is this property missing" family, and the three
-            // are distinguished by where the gate lives: a `servo_pref` row in `longhands.toml`
-            // (t1358 multicol), a `static_prefs::pref!` call inside a value parser (t1369 the
-            // `content` alt syntax), and `engine = "gecko"` — which no flag reaches at all.
-            cs.counter_set = m.counter_set.clone();
-            // ⚠ **A FOURTH MEMBER OF THE SAME FAMILY, AND THE SIMPLEST ONE.** `list-item` is not a
-            // `crate::Display` — it collapses to `Block` in BOTH cascades on purpose, because it is
-            // block-level and the marker is generated elsewhere. So neither `clone_display()` nor
-            // our own enum can carry it, and the *computed value* answered `block` on every `<li>`
-            // and every `<summary>` on the web. The MinimalCascade tracks the keyword beside the
-            // collapse (`ComputedStyle::list_item`); recovered here for exactly the reason
-            // `appearance` and `counter_set` are.
-            cs.list_item = m.list_item;
-        }
-        timed(&mut ph.hints_ns, || {
-            apply_presentational_hints(dom, node, &mut cs)
-        });
-        // `::before` / `::after` — generated content, cascaded against this element as its parent.
-        use stylo::selector_parser::PseudoElement as Pe;
-        if !pseudo_index.is_empty() {
-            timed(&mut ph.pseudo_ns, || {
-                cs.before = cascade_pseudo(
-                    &stylist,
-                    &pseudo_index,
-                    &mut pseudo_caches,
-                    &lock,
-                    &guard,
-                    &guards,
-                    &el,
-                    &cv,
-                    Pe::Before,
-                )
-                .map(Box::new);
-                cs.after = cascade_pseudo(
-                    &stylist,
-                    &pseudo_index,
-                    &mut pseudo_caches,
-                    &lock,
-                    &guard,
-                    &guards,
-                    &el,
-                    &cv,
-                    Pe::After,
-                )
-                .map(Box::new);
-                // ⚠⚠ **AND THE PSEUDOS NEED `counter-set` RECOVERED TOO, WHICH IS WHERE AUTHORS
-                // ACTUALLY WRITE IT.** `li::before { counter-set: item 5; content: counter(item) }`
-                // is the shape; recovering the property only onto the ELEMENT fixes the case nobody
-                // writes — the same half-fix t1372 made with `attr()` one tick earlier, in the same
-                // file, for the same reason. Stylo cannot answer this one at all (`engine = "gecko"`
-                // in `longhands.toml`), so the value comes from the other cascade's pseudo.
-                if let Some(m) = minimal.get(&node) {
-                    for (dst, src) in [
-                        (cs.before.as_mut(), m.before.as_ref()),
-                        (cs.after.as_mut(), m.after.as_ref()),
-                    ] {
-                        if let (Some(d), Some(sm)) = (dst, src) {
-                            d.counter_set = sm.counter_set.clone();
+            // ⚠⚠⚠ **THE BEFORE-CHANGE VALUE IS KEPT WHILE THE TRANSITION RUNS, AND THAT IS NOT AN
+            // OPTIMISATION.** Overwriting it every pass makes a transition survive exactly one cascade:
+            // the next recalc would see `before == after` and answer the end state. WPT's
+            // `interpolation-testcommon.js` makes that failure certain rather than unlikely — it runs
+            // `interpolate()` on EVERY target and only then `measure()`s them, so the first target is
+            // re-cascaded once per later target before anybody reads it.
+            let mut transitioning = false;
+            // The cheap gate every element of every page pays: is any transition-delay negative? While
+            // the document clock is 0 nothing else can be running (see `crate::transition`'s guard).
+            if crate::transition::may_be_running_for(node, &cv) {
+                // CSS Transitions §starting: an element with no rendered before-change style (it was
+                // `display:none`) has nothing to transition from — it jumps to the after-change value.
+                // The same holds when the after-change style is not rendered: nothing starts.
+                let not_rendered = |c: &ComputedValues| {
+                    c.get_box().clone_display() == stylo::values::specified::box_::Display::None
+                };
+                if let Some(before) = crate::transition::prev_style(node)
+                    .filter(|b| !not_rendered(b) && !not_rendered(&cv))
+                {
+                    // Memoised on `(before, after, clock)` — see `crate::transition::MEMO`. Without
+                    // it the `transition-property: all` expansion is ~200 animated-value pairs per
+                    // element per recalc, which WPT's own harness turns quadratic.
+                    //
+                    // ⚠ The memo can only HIT because of the `next_prev.insert(node, before)` two
+                    // lines below: the same `Arc` is handed back every pass while the transition
+                    // runs, so the memo's pointer test on `before` holds. Overwrite that and the
+                    // memo silently degrades to a full sample on every recalc — and, worse, the
+                    // transition itself collapses to its end state (see the note above).
+                    //
+                    // ⚠⚠ It is a COST reduction and NOT a determinism fix; that was measured at
+                    // t1312 and the first version of this comment claimed otherwise.
+                    let mixed = if crate::transition::realtime_clock_ms().is_some() {
+                        crate::transition::sample_realtime(node, &before, &cv)
+                    } else {
+                        crate::transition::sample_memoized(node, &before, &cv)
+                    };
+                    if !mixed.is_empty() {
+                        transitioning = true;
+                        dynamic = true;
+                        if incr {
+                            abort_incr = true;
+                            break 'walk;
                         }
+                        // The before-change style is what this element keeps remembering until the
+                        // transition ends.
+                        next_prev.insert(node, before);
+                        cv = cascade_one_element(
+                            &stylist,
+                            &index,
+                            &mut candidates,
+                            &mut caches,
+                            &lock,
+                            &url_data,
+                            &guard,
+                            &guards,
+                            &el,
+                            node,
+                            &parent_cv,
+                            dom,
+                            cq_active,
+                            &mixed,
+                        );
                     }
                 }
-                // `::first-letter` — NOT generated content: it re-styles the first typographic
-                // letter of the element's first line, and the range it covers is only knowable
-                // once the inline items exist, so the style is carried and layout resolves the
-                // range (CSS 2.1 §5.12.1).
-                cs.first_letter = cascade_pseudo(
-                    &stylist,
-                    &pseudo_index,
-                    &mut pseudo_caches,
-                    &lock,
-                    &guard,
-                    &guards,
-                    &el,
-                    &cv,
-                    Pe::FirstLetter,
-                )
-                .map(Box::new);
-            });
-        }
-        map.insert(node, cs);
-        // On the sized re-pass, publish this element's ComputedValues into Stylo's own data cell:
-        // that is where `ContainerCondition::matches` reads an ancestor's `container-type`/`-name`
-        // from when a descendant's `@container` rule is evaluated (preorder ⇒ ancestors are
-        // published before any descendant asks).
-        if cq_active {
-            if let Some(mut d) = store.borrow_mut(node) {
-                d.styles.primary = Some(cv.clone());
             }
+            if !transitioning {
+                next_prev.insert(node, cv.clone());
+            }
+            // **`rem` is root-relative.** The device carries the root font size that every `rem` in the
+            // document resolves against, and it starts at the initial 16px. Unless it is updated once
+            // the root element's own font size is known, `html{font-size:62.5%}` — the "1rem = 10px"
+            // idiom half the web is built on — silently leaves every `rem` 60% too large, and
+            // `html{font-size:118%}` leaves them all too small. Set it as soon as the root is cascaded;
+            // the preorder walk reaches `<html>` first, and its OWN `rem` values still resolve against
+            // the initial size, which is exactly what CSS specifies.
+            if dom.tag_name(node) == Some("html") {
+                stylist
+                    .device()
+                    .set_root_font_size(cv.get_font().clone_font_size().computed_size().px());
+                // **…and `rlh` is root-relative in exactly the same way, which we were not doing.**
+                //
+                // Stylo's own `matching.rs` sets these two together, four lines apart, under the comments
+                // *"Update root font size for rem units"* and *"Update root line height for rlh units"*.
+                // We had the first and not the second, so `rlh` fell back to the device's initial value
+                // and resolved against **neither** the root's line-height nor the element's.
+                //
+                // Chrome-measured, surface audit #44 (t721), root `line-height:2` on `16px` and an
+                // element `line-height:20px`: `width:5rlh` is **160** in Chrome and was **96** here —
+                // `5 x 19.2`, i.e. `5 x (16 x 1.2)`, the INITIAL `normal` line-height. Not root-relative,
+                // not element-relative: initial-relative, which is the one answer no author can predict.
+                //
+                // ⚠ The map called this capability `works` from tick 509 to tick 721 because the probe
+                // behind it tests `width:5lh` and its own receipt says `rlh` was *"not separately
+                // geometry-tested"*. The untested half was the broken half.
+                // Through the DEVICE's `calc_line_height`, not `ComputedValues`': the latter is
+                // gecko-conditional in this build, and the device method is the servo one Stylo itself
+                // calls. ⚠ It returns **0** for `line-height: normal` (`device/servo.rs`: *"TODO: compute
+                // `normal` from the font metrics"*), so a root that never states a line-height leaves
+                // `rlh` at zero rather than at the initial guess — honest, and a named residue, not a
+                // regression: the previous value was wrong for every root.
+                let root_lh = stylist
+                    .device()
+                    .calc_line_height(cv.get_font(), cv.writing_mode, None)
+                    .0
+                    .px();
+                stylist.device().set_root_line_height(root_lh);
+                // **…and the THIRD member of the set, which t722 named and did not build.**
+                //
+                // `rcap` / `rch` / `rex` / `ric` resolve against the ROOT's font METRICS, and Stylo reads
+                // those out of `device.root_style` — a field nothing here ever wrote, so every one of
+                // them was measured against the device's default style instead of the document's root.
+                // Chrome-measured, root `32px` / element `16px` sans-serif: `10rch` **178 vs 80**,
+                // `10rex` **169 vs 73**, `10rcap` **220 vs 105**, while their element-relative twins
+                // `10ch`/`10ex`/`10cap` were already **exact** (89/85/110). Every element-relative unit
+                // right and every root-relative one wrong is the signature of a root that was never
+                // published.
+                //
+                // `update_root_font_metrics` queries the font stack, which is not free — so it runs only
+                // when the document has actually used one of these units, exactly as Stylo's own
+                // `matching.rs` gates it (`used_root_font_metrics()`). A page with no `r*` unit pays a
+                // bool read.
+                stylist.device().set_root_style(&cv);
+                if stylist.device().used_root_font_metrics() {
+                    stylist.device().update_root_font_metrics();
+                }
+            }
+            let mut cs = timed(&mut ph.computed_ns, || to_computed_style(&cv));
+            // `field-sizing` predates stylo 0.19, so it is recovered from MinimalCascade — and it must
+            // be recovered HERE, before the hints, because its whole job is to veto the UA
+            // intrinsic-width hint below.
+            if let Some(m) = minimal.get(&node) {
+                cs.field_sizing_content = m.field_sizing_content;
+                // `appearance: none` — same gecko-only fence, and it must land before the hints for
+                // the same reason: a `<select>`'s reserved arrow width is decided downstream of it.
+                cs.appearance = m.appearance;
+                // ⚠ Stylo`s `clone_display` is BLOCKIFIED for an out-of-flow box; the MinimalCascade`s
+                // is not, and the static-position rule needs the un-blockified one. Copied for the
+                // same reason `appearance` is: Stylo cannot answer it and the other cascade can.
+                cs.display_in_flow = m.display_in_flow;
+                // ⭐ `counter-set` is `engine = "gecko"` in `longhands.toml` — it does **not exist** in
+                // stylo's servo build, so there is no `clone_counter_set()` to call and no pref that
+                // brings one back. Same fence as `appearance` above, and the same answer: the other
+                // cascade can parse it, so recover it from there.
+                //
+                // ⚠ This is a THIRD shape in the "why is this property missing" family, and the three
+                // are distinguished by where the gate lives: a `servo_pref` row in `longhands.toml`
+                // (t1358 multicol), a `static_prefs::pref!` call inside a value parser (t1369 the
+                // `content` alt syntax), and `engine = "gecko"` — which no flag reaches at all.
+                cs.counter_set = m.counter_set.clone();
+                // ⚠ **A FOURTH MEMBER OF THE SAME FAMILY, AND THE SIMPLEST ONE.** `list-item` is not a
+                // `crate::Display` — it collapses to `Block` in BOTH cascades on purpose, because it is
+                // block-level and the marker is generated elsewhere. So neither `clone_display()` nor
+                // our own enum can carry it, and the *computed value* answered `block` on every `<li>`
+                // and every `<summary>` on the web. The MinimalCascade tracks the keyword beside the
+                // collapse (`ComputedStyle::list_item`); recovered here for exactly the reason
+                // `appearance` and `counter_set` are.
+                cs.list_item = m.list_item;
+            }
+            timed(&mut ph.hints_ns, || {
+                apply_presentational_hints(dom, node, &mut cs)
+            });
+            // `::before` / `::after` — generated content, cascaded against this element as its parent.
+            use stylo::selector_parser::PseudoElement as Pe;
+            if !pseudo_index.is_empty() {
+                timed(&mut ph.pseudo_ns, || {
+                    cs.before = cascade_pseudo(
+                        &stylist,
+                        &pseudo_index,
+                        &mut pseudo_caches,
+                        &lock,
+                        &guard,
+                        &guards,
+                        &el,
+                        &cv,
+                        Pe::Before,
+                    )
+                    .map(Box::new);
+                    cs.after = cascade_pseudo(
+                        &stylist,
+                        &pseudo_index,
+                        &mut pseudo_caches,
+                        &lock,
+                        &guard,
+                        &guards,
+                        &el,
+                        &cv,
+                        Pe::After,
+                    )
+                    .map(Box::new);
+                    // ⚠⚠ **AND THE PSEUDOS NEED `counter-set` RECOVERED TOO, WHICH IS WHERE AUTHORS
+                    // ACTUALLY WRITE IT.** `li::before { counter-set: item 5; content: counter(item) }`
+                    // is the shape; recovering the property only onto the ELEMENT fixes the case nobody
+                    // writes — the same half-fix t1372 made with `attr()` one tick earlier, in the same
+                    // file, for the same reason. Stylo cannot answer this one at all (`engine = "gecko"`
+                    // in `longhands.toml`), so the value comes from the other cascade's pseudo.
+                    if let Some(m) = minimal.get(&node) {
+                        for (dst, src) in [
+                            (cs.before.as_mut(), m.before.as_ref()),
+                            (cs.after.as_mut(), m.after.as_ref()),
+                        ] {
+                            if let (Some(d), Some(sm)) = (dst, src) {
+                                d.counter_set = sm.counter_set.clone();
+                            }
+                        }
+                    }
+                    // `::first-letter` — NOT generated content: it re-styles the first typographic
+                    // letter of the element's first line, and the range it covers is only knowable
+                    // once the inline items exist, so the style is carried and layout resolves the
+                    // range (CSS 2.1 §5.12.1).
+                    cs.first_letter = cascade_pseudo(
+                        &stylist,
+                        &pseudo_index,
+                        &mut pseudo_caches,
+                        &lock,
+                        &guard,
+                        &guards,
+                        &el,
+                        &cv,
+                        Pe::FirstLetter,
+                    )
+                    .map(Box::new);
+                });
+            }
+            map.insert(node, cs);
+            // On the sized re-pass, publish this element's ComputedValues into Stylo's own data cell:
+            // that is where `ContainerCondition::matches` reads an ancestor's `container-type`/`-name`
+            // from when a descendant's `@container` rule is evaluated (preorder ⇒ ancestors are
+            // published before any descendant asks).
+            if cq_active {
+                if let Some(mut d) = store.borrow_mut(node) {
+                    d.styles.primary = Some(cv.clone());
+                }
+            }
+            parent_cv.insert(node, cv);
         }
-        parent_cv.insert(node, cv);
+    }
+    if abort_incr {
+        // A node being restyled is animating/transitioning: the reuse argument does not hold.
+        FORCE_FULL.with(|f| f.set(true));
+        return cascade_via_stylo_sized(dom, sheets, vw, vh, None);
     }
     // The walk is over: this pass's styles become the next pass's before-change values.
-    crate::transition::publish_pass(next_prev);
+    if incr {
+        // Clean nodes keep their before-change style (== their cv); this is `next_prev` of the full walk.
+        crate::transition::publish_pass(parent_cv.clone());
+    } else {
+        crate::transition::publish_pass(next_prev);
+    }
 
+    let keep = incr_on && !dynamic && !crate::transition::any_running_realtime();
+    let mut map = if keep {
+        let mut out = map.clone();
+        finish_passes(dom, sheets, &mut out, &minimal, &mut ph);
+        INCR.with(|c| {
+            *c.borrow_mut() = Some(IncrCache {
+                key: incr_key_v,
+                sib: incr_sib,
+                empty: incr_empty,
+                fp: new_fp.into_iter().collect(),
+                walk: map,
+                minimal,
+                cvs: parent_cv,
+            })
+        });
+        out
+    } else {
+        finish_passes(dom, sheets, &mut map, &minimal, &mut ph);
+        map
+    };
+    if incr_on {
+        use std::sync::atomic::Ordering::Relaxed;
+        if incr {
+            INCR_PASSES.fetch_add(1, Relaxed);
+            INCR_RESTYLED.fetch_add(walked, Relaxed);
+            if crate::incr::env_on("MANUK_INCR_VERIFY") {
+                FORCE_FULL.with(|f| f.set(true));
+                let full = cascade_via_stylo_sized(dom, sheets, vw, vh, None);
+                let n_bad = full
+                    .iter()
+                    .filter(|(n, cs)| map.get(*n) != Some(*cs))
+                    .count();
+                if n_bad > 0 || full.len() != map.len() {
+                    INCR_MISMATCH.fetch_add(1, Relaxed);
+                    tracing::error!(
+                        nodes_differ = n_bad,
+                        full_len = full.len(),
+                        incr_len = map.len(),
+                        "INCR MISMATCH: incremental restyle disagrees with the full cascade"
+                    );
+                }
+            }
+        } else {
+            INCR_FULL.fetch_add(1, Relaxed);
+        }
+    }
+
+    if profiling() {
+        let el_count = map.len();
+        let ms = |ns: u128| ns as f64 / 1.0e6;
+        #[cfg(not(target_arch = "wasm32"))]
+        let total_ns = t_all.elapsed().as_nanos();
+        #[cfg(target_arch = "wasm32")]
+        let total_ns = 0u128;
+        // Whatever the named phases do not account for is reported as its own line rather than
+        // spread across them. An instrument whose parts silently sum to the whole is one that
+        // cannot tell you it is missing something.
+        let (tail_n, tail_m, tail_c, tail_t) = pseudo_tail();
+        let named = ph.flush_ns
+            + ph.minimal_ns
+            + ph.element_ns
+            + ph.pseudo_ns
+            + ph.has_ns
+            + ph.computed_ns
+            + ph.hints_ns
+            + ph.recover_ns;
+        tracing::warn!(
+            nodes = el_count,
+            total_ms = ms(total_ns),
+            flush_ms = ms(ph.flush_ns),
+            computed_ms = ms(ph.computed_ns),
+            hints_ms = ms(ph.hints_ns),
+            recover_ms = ms(ph.recover_ns),
+            minimal_ms = ms(ph.minimal_ns),
+            element_ms = ms(ph.element_ns),
+            pseudo_ms = ms(ph.pseudo_ns),
+            has_ms = ms(ph.has_ns),
+            unattributed_ms = ms(total_ns.saturating_sub(named)),
+            // The split of `pseudo_ms` that bucketing could never reach — see `PSEUDO_TAIL`.
+            pseudo_tail_n = tail_n.saturating_sub(tail0.0),
+            pseudo_merge_ms = ms((tail_m - tail0.1) * 1000),
+            pseudo_compute_ms = ms((tail_c - tail0.2) * 1000),
+            pseudo_tocs_ms = ms((tail_t - tail0.3) * 1000),
+            "CASCADE PHASES"
+        );
+    }
+
+    map
+}
+
+/// The passes that run over the WHOLE style map after the per-node walk: `:has()` supplement,
+/// MinimalCascade property recovery, effective opacity, legacy block alignment, shadow-content fill.
+/// One function so the full cascade and the incremental one (PERF.1.2.b) cannot drift apart.
+fn finish_passes(
+    dom: &Dom,
+    sheets: &[Stylesheet],
+    map: &mut StyleMap,
+    minimal: &StyleMap,
+    ph: &mut Phases,
+) {
     // ── **`:has()` — the rules Stylo THREW AWAY.**
     //
     // Stylo's *servo* build hardcodes `parse_has() -> false` (Gecko's returns `true`), so a selector
@@ -1452,8 +1673,8 @@ pub fn cascade_via_stylo_sized(
     // CSS `opacity` forms a group: it applies to the whole SUBTREE. Fold each element's own opacity
     // with its ancestors' so every box carries an *effective* opacity and paint needs no ancestor
     // context. Walk the flat tree (shadow content included) in preorder.
-    fold_effective_opacity(dom, &mut map);
-    apply_legacy_block_align(dom, &mut map);
+    fold_effective_opacity(dom, map);
+    apply_legacy_block_align(dom, map);
 
     // **Shadow trees.** The walk above is over the *node* tree, and a shadow root is deliberately
     // not a child of its host — so shadow content never got a style here. Layout walks the **flat**
@@ -1465,48 +1686,6 @@ pub fn cascade_via_stylo_sized(
     for (node, m) in minimal.iter() {
         map.entry(*node).or_insert_with(|| m.clone());
     }
-
-    if profiling() {
-        let el_count = map.len();
-        let ms = |ns: u128| ns as f64 / 1.0e6;
-        #[cfg(not(target_arch = "wasm32"))]
-        let total_ns = t_all.elapsed().as_nanos();
-        #[cfg(target_arch = "wasm32")]
-        let total_ns = 0u128;
-        // Whatever the named phases do not account for is reported as its own line rather than
-        // spread across them. An instrument whose parts silently sum to the whole is one that
-        // cannot tell you it is missing something.
-        let (tail_n, tail_m, tail_c, tail_t) = pseudo_tail();
-        let named = ph.flush_ns
-            + ph.minimal_ns
-            + ph.element_ns
-            + ph.pseudo_ns
-            + ph.has_ns
-            + ph.computed_ns
-            + ph.hints_ns
-            + ph.recover_ns;
-        tracing::warn!(
-            nodes = el_count,
-            total_ms = ms(total_ns),
-            flush_ms = ms(ph.flush_ns),
-            computed_ms = ms(ph.computed_ns),
-            hints_ms = ms(ph.hints_ns),
-            recover_ms = ms(ph.recover_ns),
-            minimal_ms = ms(ph.minimal_ns),
-            element_ms = ms(ph.element_ns),
-            pseudo_ms = ms(ph.pseudo_ns),
-            has_ms = ms(ph.has_ns),
-            unattributed_ms = ms(total_ns.saturating_sub(named)),
-            // The split of `pseudo_ms` that bucketing could never reach — see `PSEUDO_TAIL`.
-            pseudo_tail_n = tail_n.saturating_sub(tail0.0),
-            pseudo_merge_ms = ms((tail_m - tail0.1) * 1000),
-            pseudo_compute_ms = ms((tail_c - tail0.2) * 1000),
-            pseudo_tocs_ms = ms((tail_t - tail0.3) * 1000),
-            "CASCADE PHASES"
-        );
-    }
-
-    map
 }
 
 /// Multiply each element's own `opacity` by its ancestors' (CSS opacity applies to the subtree).
@@ -5834,4 +6013,99 @@ pub fn supported_property_names() -> &'static [&'static str] {
             .filter(|p| supports_condition(&format!("{p}: initial")))
             .collect()
     })
+}
+
+/// PERF.1.2.b — the incremental restyle must give, after every kind of script mutation, exactly the
+/// style map a from-scratch cascade gives. The "from scratch" arm runs on a fresh thread, because the
+/// reuse cache is thread-local: an empty cache can only do the full walk.
+#[cfg(test)]
+mod incr_tests {
+    use super::*;
+
+    const HTML: &str = "<html><head><style>\
+        .a .b { color: red } .open > p { margin-left: 7px } li + li { padding-top: 3px }\
+        li:nth-child(odd) { font-weight: 700 } li:last-child { color: blue } p:empty { display: none }\
+        </style></head><body>\
+        <div id=m class=a><span class=b>x</span><span id=s>y</span></div>\
+        <ul id=l><li>1</li><li>2</li><li>3</li></ul>\
+        <div id=o><p>t</p><p></p></div></body></html>";
+
+    fn by_id(dom: &Dom, id: &str) -> NodeId {
+        dom.descendants(dom.root())
+            .find(|&n| dom.element(n).and_then(|e| e.id()) == Some(id))
+            .unwrap()
+    }
+
+    fn full_fresh(dom: &Dom, sheets: &[Stylesheet]) -> StyleMap {
+        std::thread::scope(|s| {
+            s.spawn(|| cascade_via_stylo(dom, sheets, 800.0, 600.0))
+                .join()
+                .unwrap()
+        })
+    }
+
+    /// Returns the number of elements the incremental pass walked.
+    fn check(dom: &Dom, sheets: &[Stylesheet], what: &str) -> u64 {
+        let before = crate::incr::incr_stats();
+        let inc = cascade_via_stylo(dom, sheets, 800.0, 600.0);
+        let after = crate::incr::incr_stats();
+        let full = full_fresh(dom, sheets);
+        assert_eq!(inc.len(), full.len(), "{what}: node count");
+        for (n, cs) in &full {
+            assert!(
+                inc.get(n) == Some(cs),
+                "{what}: node {:?} <{}> differs from the full cascade",
+                n,
+                dom.tag_name(*n).unwrap_or("#text")
+            );
+        }
+        assert_eq!(after.0, before.0 + 1, "{what}: pass was not incremental");
+        after.2 - before.2
+    }
+
+    #[test]
+    fn incremental_restyle_equals_full_cascade_after_mutations() {
+        let mut dom = manuk_html::parse(HTML);
+        let sheets = MinimalCascade::collect_style_elements(&dom);
+        let _ = cascade_via_stylo(&dom, &sheets, 800.0, 600.0); // primes the cache (a full pass)
+        let total = dom.flat_descendants(dom.root()).len() as u64;
+
+        // descendant combinator: the ancestor's class decides a descendant's colour
+        let m = by_id(&dom, "m");
+        dom.set_attr(m, "class", "");
+        check(&dom, &sheets, "class removed (descendant selector)");
+        dom.set_attr(m, "class", "a");
+        check(&dom, &sheets, "class restored");
+
+        // child combinator
+        let o = by_id(&dom, "o");
+        dom.set_attr(o, "class", "open");
+        check(&dom, &sheets, "class added (child combinator)");
+
+        // sibling / nth-child / last-child on insert and on remove
+        let l = by_id(&dom, "l");
+        let li = dom.create_element("li");
+        let t = dom.create_text("4");
+        dom.append_child(li, t);
+        dom.append_child(l, li);
+        check(&dom, &sheets, "li appended (sibling + nth + last-child)");
+        let first = dom.first_child(l).unwrap();
+        dom.detach(first);
+        check(&dom, &sheets, "first li removed (nth-child parity flips)");
+
+        // `:empty`
+        let p2 = dom.children(o).nth(1).unwrap();
+        let tx = dom.create_text("now not empty");
+        dom.append_child(p2, tx);
+        check(&dom, &sheets, "text added to an empty p (:empty)");
+
+        // inline style on one leaf: must walk a handful, not the document
+        let s = by_id(&dom, "s");
+        dom.set_attr(s, "style", "color: green");
+        let walked = check(&dom, &sheets, "inline style on a leaf");
+        assert!(
+            walked * 4 < total,
+            "a one-leaf change walked {walked} of {total} elements"
+        );
+    }
 }

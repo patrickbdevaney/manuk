@@ -79,7 +79,9 @@ fn cascade_styles(dom: &Dom, sheets: &[Stylesheet], viewport_width: f32) -> Styl
     }
     #[cfg(not(feature = "stylo"))]
     {
-        MinimalCascade.cascade(dom, sheets)
+        // PERF.1.2.b: reuse the previous pass's styles outside the mutated subtrees.
+        let (icb_w, icb_h) = manuk_css::values::icb_size();
+        MinimalCascade.cascade_incremental(dom, sheets, icb_w, icb_h)
     }
 }
 

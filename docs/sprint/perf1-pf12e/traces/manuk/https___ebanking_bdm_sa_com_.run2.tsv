@@ -1,0 +1,267 @@
+0	epoch	1795479284824317
+22733	dns	ebanking.bdm-sa.com	22657
+757918	connect	ebanking.bdm-sa.com	757850
+1006920	req	https://ebanking.bdm-sa.com/	0	1006916	302	HTTP/1.1	0	GET
+1007428	body	https://ebanking.bdm-sa.com/	0	302
+1232294	req	https://ebanking.bdm-sa.com/index.ebk	1007544	224746	200	HTTP/1.1	17353	GET
+1449118	body	https://ebanking.bdm-sa.com/index.ebk	17353	200
+1449423	q	https://ebanking.bdm-sa.com/css.ebk?ressource=webBootstrap.css&amp;id=8e90b7a
+1449431	q	https://ebanking.bdm-sa.com/css/bootstrapXL.css?id=8e90b7a
+1449445	q	https://ebanking.bdm-sa.com/css/font-awesome.css?id=8e90b7a
+1449512	q	https://ebanking.bdm-sa.com/webjars/jQuery-ui-Slider-Pips/jquery-ui-slider-pips.min.css?id=8e90b7a
+1449554	q	https://ebanking.bdm-sa.com/webjars/slick-carousel/slick/slick.css?id=8e90b7a
+1449596	q	https://ebanking.bdm-sa.com/webjars/spin.js/spin.css?id=8e90b7a
+1449614	q	https://ebanking.bdm-sa.com/css/animate.css?id=8e90b7a
+1449560	q	https://ebanking.bdm-sa.com/webjars/datatables/1.10.25/css/dataTables.bootstrap.min.css?id=8e90b7a
+1449654	q	https://ebanking.bdm-sa.com/css/sopraIcons.css?id=8e90b7a
+1449581	q	https://ebanking.bdm-sa.com/webjars/bootstrap-select/css/bootstrap-select.min.css?id=8e90b7a
+1449556	q	https://ebanking.bdm-sa.com/webjars/bootstrap-datepicker/dist/css/bootstrap-datepicker3.min.css?id=8e90b7a
+1449618	q	https://ebanking.bdm-sa.com/css/webMainAboV6.css?id=8e90b7a
+1449616	q	https://ebanking.bdm-sa.com/css/waitingPanelAbo.css?id=8e90b7a
+1449557	q	https://ebanking.bdm-sa.com/webjars/smartmenus/dist/addons/bootstrap/jquery.smartmenus.bootstrap.css?id=8e90b7a
+1449796	q	https://ebanking.bdm-sa.com/webjars/smartmenus/dist/css/sm-core-css.css?id=8e90b7a
+1449641	q	https://ebanking.bdm-sa.com/css.ebk?ressource=enCours.css&amp;id=8e90b7a
+1449534	q	https://ebanking.bdm-sa.com/webjars/slick-carousel/slick/slick-theme.css?id=8e90b7a
+1449640	q	https://ebanking.bdm-sa.com/css.ebk?ressource=extra.css&amp;id=8e90b7a
+1449808	q	https://ebanking.bdm-sa.com/css.ebk?ressource=webSpecifAbo.css&amp;id=8e90b7a
+1450658	q	https://ebanking.bdm-sa.com/image.ebk?ressource=fr.gif&id=8e90b7a
+1450681	q	https://ebanking.bdm-sa.com/image.ebk?ressource=headerBanner1170.png&id=8e90b7a
+1450669	q	https://ebanking.bdm-sa.com/image.ebk?ressource=en.gif&id=8e90b7a
+1450710	q	https://ebanking.bdm-sa.com/image.ebk?ressource=headerBanner1000.png&id=8e90b7a
+1450717	q	https://ebanking.bdm-sa.com/image.ebk?ressource=headerBanner1570.png&id=8e90b7a
+1450759	q	https://ebanking.bdm-sa.com/css.ebk?ressource=webSpecifAbo.css&id=8e90b7a
+1450774	q	https://ebanking.bdm-sa.com/css.ebk?ressource=enCours.css&id=8e90b7a
+1450731	q	https://ebanking.bdm-sa.com/css.ebk?ressource=webBootstrap.css&id=8e90b7a
+1450771	q	https://ebanking.bdm-sa.com/css.ebk?ressource=extra.css&id=8e90b7a
+1450760	phase	html parse	1493
+1450967	q	https://ebanking.bdm-sa.com/webjars/jquery/jquery.min.js?id=8e90b7a
+1450984	q	https://ebanking.bdm-sa.com/webjars/jquery-ui/jquery-ui.min.js?id=8e90b7a
+1451000	q	https://ebanking.bdm-sa.com/webjars/jQuery-ui-Slider-Pips/jquery-ui-slider-pips.min.js?id=8e90b7a
+1451016	q	https://ebanking.bdm-sa.com/webjars/sticky-kit/jquery.sticky-kit.min.js?id=8e90b7a
+1451032	q	https://ebanking.bdm-sa.com/scripts/vendor/sticky-footer.min.js?id=8e90b7a
+1451051	q	https://ebanking.bdm-sa.com/webjars/bootstrap/js/bootstrap.min.js?id=8e90b7a
+1451067	q	https://ebanking.bdm-sa.com/webjars/bootbox/bootbox.min.js?id=8e90b7a
+1451083	q	https://ebanking.bdm-sa.com/webjars/datatables/1.10.25/js/jquery.dataTables.min.js?id=8e90b7a
+1451099	q	https://ebanking.bdm-sa.com/webjars/datatables/1.10.25/js/dataTables.bootstrap.min.js?id=8e90b7a
+1451116	q	https://ebanking.bdm-sa.com/webjars/bootstrap-datepicker/dist/js/bootstrap-datepicker.min.js?id=8e90b7a
+1451132	q	https://ebanking.bdm-sa.com/webjars/bootstrap-select/js/bootstrap-select.min.js?id=8e90b7a
+1451147	q	https://ebanking.bdm-sa.com/scripts/externValidator.js?id=8e90b7a
+1451163	q	https://ebanking.bdm-sa.com/webjars/slick-carousel/slick/slick.min.js?id=8e90b7a
+1451178	q	https://ebanking.bdm-sa.com/scripts/spin.umd.js
+1451194	q	https://ebanking.bdm-sa.com/scripts/common.js?id=8e90b7a
+1451222	q	https://ebanking.bdm-sa.com/scripts/cookie.js?id=8e90b7a
+1451238	q	https://ebanking.bdm-sa.com/webjars/smartmenus/dist/jquery.smartmenus.min.js?id=8e90b7a
+1451255	q	https://ebanking.bdm-sa.com/webjars/smartmenus/dist/addons/bootstrap/jquery.smartmenus.bootstrap.min.js?id=8e90b7a
+1666443	req	https://ebanking.bdm-sa.com/css.ebk?ressource=webBootstrap.css&amp;id=8e90b7a	1449511	216925	500	HTTP/1.1	38658	GET
+1884627	body	https://ebanking.bdm-sa.com/css.ebk?ressource=webBootstrap.css&amp;id=8e90b7a	38658	500
+1887355	dns	ebanking.bdm-sa.com	2472
+1887367	dns	ebanking.bdm-sa.com	2460
+1887418	dns	ebanking.bdm-sa.com	2536
+1887446	dns	ebanking.bdm-sa.com	2496
+1887461	dns	ebanking.bdm-sa.com	2603
+1887500	dns	ebanking.bdm-sa.com	2603
+2297150	connect	ebanking.bdm-sa.com	412277
+2298918	connect	ebanking.bdm-sa.com	413978
+2327273	connect	ebanking.bdm-sa.com	442400
+2330758	connect	ebanking.bdm-sa.com	445864
+2332718	connect	ebanking.bdm-sa.com	447821
+2335837	connect	ebanking.bdm-sa.com	450990
+2760675	req	https://ebanking.bdm-sa.com/webjars/jQuery-ui-Slider-Pips/jquery-ui-slider-pips.min.css?id=8e90b7a	1884809	875862	200	HTTP/1.1	6432	GET
+2761463	body	https://ebanking.bdm-sa.com/webjars/jQuery-ui-Slider-Pips/jquery-ui-slider-pips.min.css?id=8e90b7a	6432	200
+2762637	req	https://ebanking.bdm-sa.com/webjars/slick-carousel/slick/slick.css?id=8e90b7a	1884810	877825	200	HTTP/1.1	1767	GET
+2762674	body	https://ebanking.bdm-sa.com/webjars/slick-carousel/slick/slick.css?id=8e90b7a	1767	200
+2819539	req	https://ebanking.bdm-sa.com/webjars/spin.js/spin.css?id=8e90b7a	1884843	934691	200	HTTP/1.1	609	GET
+2819593	body	https://ebanking.bdm-sa.com/webjars/spin.js/spin.css?id=8e90b7a	609	200
+2820354	req	https://ebanking.bdm-sa.com/css/bootstrapXL.css?id=8e90b7a	1884873	935480	200	HTTP/1.1	2321	GET
+2820396	body	https://ebanking.bdm-sa.com/css/bootstrapXL.css?id=8e90b7a	2321	200
+2822108	req	https://ebanking.bdm-sa.com/css/animate.css?id=8e90b7a	1884809	937297	200	HTTP/1.1	56679	GET
+2827600	req	https://ebanking.bdm-sa.com/css/font-awesome.css?id=8e90b7a	1884887	942710	200	HTTP/1.1	30811	GET
+2978730	req	https://ebanking.bdm-sa.com/css/sopraIcons.css?id=8e90b7a	2762749	215978	200	HTTP/1.1	2091	GET
+2978788	body	https://ebanking.bdm-sa.com/css/sopraIcons.css?id=8e90b7a	2091	200
+2978921	req	https://ebanking.bdm-sa.com/webjars/datatables/1.10.25/css/dataTables.bootstrap.min.css?id=8e90b7a	2761605	217314	200	HTTP/1.1	4356	GET
+2978969	body	https://ebanking.bdm-sa.com/webjars/datatables/1.10.25/css/dataTables.bootstrap.min.css?id=8e90b7a	4356	200
+2978972	q	https://ebanking.bdm-sa.com/fonts/Sopra-Banking-icones.ttf?n5puny
+3041312	req	https://ebanking.bdm-sa.com/webjars/bootstrap-datepicker/dist/css/bootstrap-datepicker3.min.css?id=8e90b7a	2820473	220835	200	HTTP/1.1	21129	GET
+3046090	req	https://ebanking.bdm-sa.com/webjars/bootstrap-select/css/bootstrap-select.min.css?id=8e90b7a	2819780	226306	200	HTTP/1.1	11184	GET
+3046873	body	https://ebanking.bdm-sa.com/webjars/bootstrap-select/css/bootstrap-select.min.css?id=8e90b7a	11184	200
+3047699	body	https://ebanking.bdm-sa.com/css/font-awesome.css?id=8e90b7a	30811	200
+3050766	q	https://ebanking.bdm-sa.com/fonts/fontawesome-webfont.woff2?v=4.7.0
+3185324	req	https://ebanking.bdm-sa.com/css/waitingPanelAbo.css?id=8e90b7a	2979026	206293	200	HTTP/1.1	278	GET
+3185379	body	https://ebanking.bdm-sa.com/css/waitingPanelAbo.css?id=8e90b7a	278	200
+3187803	req	https://ebanking.bdm-sa.com/css/webMainAboV6.css?id=8e90b7a	2978893	208909	200	HTTP/1.1	25879	GET
+3258435	body	https://ebanking.bdm-sa.com/webjars/bootstrap-datepicker/dist/css/bootstrap-datepicker3.min.css?id=8e90b7a	21129	200
+3263103	body	https://ebanking.bdm-sa.com/css/animate.css?id=8e90b7a	56679	200
+3268044	req	https://ebanking.bdm-sa.com/webjars/smartmenus/dist/css/sm-core-css.css?id=8e90b7a	3047832	220209	200	HTTP/1.1	966	GET
+3268073	body	https://ebanking.bdm-sa.com/webjars/smartmenus/dist/css/sm-core-css.css?id=8e90b7a	966	200
+3268867	req	https://ebanking.bdm-sa.com/webjars/smartmenus/dist/addons/bootstrap/jquery.smartmenus.bootstrap.css?id=8e90b7a	3047085	221780	200	HTTP/1.1	3632	GET
+3268915	body	https://ebanking.bdm-sa.com/webjars/smartmenus/dist/addons/bootstrap/jquery.smartmenus.bootstrap.css?id=8e90b7a	3632	200
+3386333	req	https://ebanking.bdm-sa.com/css.ebk?ressource=enCours.css&amp;id=8e90b7a	3185498	200812	500	HTTP/1.1	38658	GET
+3389611	body	https://ebanking.bdm-sa.com/css/webMainAboV6.css?id=8e90b7a	25879	200
+3391031	q	https://ebanking.bdm-sa.com/fonts/open-sans-v13-latin_greek_cyrillic_vietnamese_greek-ext_latin-ext_cyrillic-ext-regular.woff2
+3391061	q	https://ebanking.bdm-sa.com/fonts/open-sans-v13-latin_greek_cyrillic_vietnamese_greek-ext_latin-ext_cyrillic-ext-300.woff2
+3391062	q	https://ebanking.bdm-sa.com/fonts/open-sans-v13-latin_greek_cyrillic_vietnamese_greek-ext_latin-ext_cyrillic-ext-300italic.woff2
+3391112	q	https://ebanking.bdm-sa.com/fonts/open-sans-v13-latin_greek_cyrillic_vietnamese_greek-ext_latin-ext_cyrillic-ext-600.woff2
+3391168	q	https://ebanking.bdm-sa.com/fonts/open-sans-v13-latin_greek_cyrillic_vietnamese_greek-ext_latin-ext_cyrillic-ext-italic.woff2
+3391172	q	https://ebanking.bdm-sa.com/fonts/open-sans-v13-latin_greek_cyrillic_vietnamese_greek-ext_latin-ext_cyrillic-ext-600italic.woff2
+3391180	q	https://ebanking.bdm-sa.com/fonts/open-sans-v13-latin_greek_cyrillic_vietnamese_greek-ext_latin-ext_cyrillic-ext-700.woff2
+3391217	q	https://ebanking.bdm-sa.com/fonts/open-sans-v13-latin_greek_cyrillic_vietnamese_greek-ext_latin-ext_cyrillic-ext-700italic.woff2
+3479140	req	https://ebanking.bdm-sa.com/webjars/slick-carousel/slick/slick-theme.css?id=8e90b7a	3258585	220548	200	HTTP/1.1	3155	GET
+3479197	body	https://ebanking.bdm-sa.com/webjars/slick-carousel/slick/slick-theme.css?id=8e90b7a	3155	200
+3479508	q	https://ebanking.bdm-sa.com/webjars/slick-carousel/slick/fonts/slick.woff
+3481519	req	https://ebanking.bdm-sa.com/css.ebk?ressource=extra.css&amp;id=8e90b7a	3263231	218286	500	HTTP/1.1	38658	GET
+3485904	body	https://ebanking.bdm-sa.com/css.ebk?ressource=extra.css&amp;id=8e90b7a	38658	500
+3486087	req	https://ebanking.bdm-sa.com/css.ebk?ressource=webSpecifAbo.css&amp;id=8e90b7a	3268143	217942	500	HTTP/1.1	38658	GET
+3488729	dns	ebanking.bdm-sa.com	2712
+3490061	body	https://ebanking.bdm-sa.com/css.ebk?ressource=webSpecifAbo.css&amp;id=8e90b7a	38658	500
+3494059	dns	ebanking.bdm-sa.com	3922
+3494487	req	https://ebanking.bdm-sa.com/image.ebk?ressource=fr.gif&id=8e90b7a	3268976	225508	200	HTTP/1.1	366	GET
+3494536	body	https://ebanking.bdm-sa.com/image.ebk?ressource=fr.gif&id=8e90b7a	366	200
+3497179	dns	ebanking.bdm-sa.com	2560
+3589242	body	https://ebanking.bdm-sa.com/css.ebk?ressource=enCours.css&amp;id=8e90b7a	38658	500
+3591171	dns	ebanking.bdm-sa.com	1791
+3591908	req	https://ebanking.bdm-sa.com/image.ebk?ressource=headerBanner1170.png&id=8e90b7a	3389788	202118	200	HTTP/1.1	79537	GET
+3699234	req	https://ebanking.bdm-sa.com/image.ebk?ressource=en.gif&id=8e90b7a	3479345	219885	200	HTTP/1.1	382	GET
+3699280	body	https://ebanking.bdm-sa.com/image.ebk?ressource=en.gif&id=8e90b7a	382	200
+3701258	dns	ebanking.bdm-sa.com	1878
+3711005	req	https://ebanking.bdm-sa.com/image.ebk?ressource=headerBanner1000.png&id=8e90b7a	3485987	225016	200	HTTP/1.1	67658	GET
+3798055	body	https://ebanking.bdm-sa.com/image.ebk?ressource=headerBanner1170.png&id=8e90b7a	79537	200
+3800232	dns	ebanking.bdm-sa.com	2007
+3895500	connect	ebanking.bdm-sa.com	409491
+3922246	req	https://ebanking.bdm-sa.com/image.ebk?ressource=headerBanner1570.png&id=8e90b7a	3490125	432116	200	HTTP/1.1	120848	GET
+3926747	connect	ebanking.bdm-sa.com	436612
+3931763	body	https://ebanking.bdm-sa.com/image.ebk?ressource=headerBanner1000.png&id=8e90b7a	67658	200
+3934277	dns	ebanking.bdm-sa.com	2328
+3936277	connect	ebanking.bdm-sa.com	441669
+3999865	req	https://ebanking.bdm-sa.com/css.ebk?ressource=webSpecifAbo.css&id=8e90b7a	3494599	505262	200	HTTP/1.1	13915	GET
+4001104	body	https://ebanking.bdm-sa.com/css.ebk?ressource=webSpecifAbo.css&id=8e90b7a	13915	200
+4028387	connect	ebanking.bdm-sa.com	439008
+4141149	connect	ebanking.bdm-sa.com	441777
+4158543	req	https://ebanking.bdm-sa.com/css.ebk?ressource=extra.css&id=8e90b7a	3798204	360335	200	HTTP/1.1	211	GET
+4158600	body	https://ebanking.bdm-sa.com/css.ebk?ressource=extra.css&id=8e90b7a	211	200
+4237466	req	https://ebanking.bdm-sa.com/webjars/jquery-ui/jquery-ui.min.js?id=8e90b7a	4001274	236188	200	HTTP/1.1	252074	GET
+4238716	connect	ebanking.bdm-sa.com	440495
+4346641	req	https://ebanking.bdm-sa.com/css.ebk?ressource=enCours.css&id=8e90b7a	3589362	757276	200	HTTP/1.1	3194	GET
+4346699	body	https://ebanking.bdm-sa.com/css.ebk?ressource=enCours.css&id=8e90b7a	3194	200
+4357919	body	https://ebanking.bdm-sa.com/image.ebk?ressource=headerBanner1570.png&id=8e90b7a	120848	200
+4378535	connect	ebanking.bdm-sa.com	446587
+4380314	req	https://ebanking.bdm-sa.com/webjars/jQuery-ui-Slider-Pips/jquery-ui-slider-pips.min.js?id=8e90b7a	4158706	221605	200	HTTP/1.1	6645	GET
+4380710	body	https://ebanking.bdm-sa.com/webjars/jQuery-ui-Slider-Pips/jquery-ui-slider-pips.min.js?id=8e90b7a	6645	200
+4426044	req	https://ebanking.bdm-sa.com/webjars/jquery/jquery.min.js?id=8e90b7a	3931924	494117	200	HTTP/1.1	87533	GET
+4431689	req	https://ebanking.bdm-sa.com/css.ebk?ressource=webBootstrap.css&id=8e90b7a	3699359	732329	200	HTTP/1.1	121031	GET
+4554953	req	https://ebanking.bdm-sa.com/webjars/sticky-kit/jquery.sticky-kit.min.js?id=8e90b7a	4346800	208149	200	HTTP/1.1	2798	GET
+4555000	body	https://ebanking.bdm-sa.com/webjars/sticky-kit/jquery.sticky-kit.min.js?id=8e90b7a	2798	200
+4580185	req	https://ebanking.bdm-sa.com/scripts/vendor/sticky-footer.min.js?id=8e90b7a	4358033	222149	200	HTTP/1.1	1462	GET
+4580227	body	https://ebanking.bdm-sa.com/scripts/vendor/sticky-footer.min.js?id=8e90b7a	1462	200
+4599810	req	https://ebanking.bdm-sa.com/webjars/bootstrap/js/bootstrap.min.js?id=8e90b7a	4380764	219043	200	HTTP/1.1	39680	GET
+4604536	body	https://ebanking.bdm-sa.com/webjars/bootstrap/js/bootstrap.min.js?id=8e90b7a	39680	200
+4646083	body	https://ebanking.bdm-sa.com/webjars/jquery-ui/jquery-ui.min.js?id=8e90b7a	252074	200
+4760322	req	https://ebanking.bdm-sa.com/webjars/bootbox/bootbox.min.js?id=8e90b7a	4555071	205247	200	HTTP/1.1	9972	GET
+4761777	body	https://ebanking.bdm-sa.com/webjars/bootbox/bootbox.min.js?id=8e90b7a	9972	200
+4825149	req	https://ebanking.bdm-sa.com/webjars/datatables/1.10.25/js/jquery.dataTables.min.js?id=8e90b7a	4580295	244850	200	HTTP/1.1	86549	GET
+4834334	req	https://ebanking.bdm-sa.com/webjars/datatables/1.10.25/js/dataTables.bootstrap.min.js?id=8e90b7a	4604624	229707	200	HTTP/1.1	4401	GET
+4834713	body	https://ebanking.bdm-sa.com/webjars/datatables/1.10.25/js/dataTables.bootstrap.min.js?id=8e90b7a	4401	200
+4835462	body	https://ebanking.bdm-sa.com/webjars/datatables/1.10.25/js/jquery.dataTables.min.js?id=8e90b7a	86549	200
+4846930	req	https://ebanking.bdm-sa.com/webjars/bootstrap-datepicker/dist/js/bootstrap-datepicker.min.js?id=8e90b7a	4646148	200780	200	HTTP/1.1	33537	GET
+4850496	body	https://ebanking.bdm-sa.com/webjars/bootstrap-datepicker/dist/js/bootstrap-datepicker.min.js?id=8e90b7a	33537	200
+4868587	body	https://ebanking.bdm-sa.com/webjars/jquery/jquery.min.js?id=8e90b7a	87533	200
+4976147	req	https://ebanking.bdm-sa.com/webjars/bootstrap-select/js/bootstrap-select.min.js?id=8e90b7a	4761854	214284	200	HTTP/1.1	53644	GET
+5050458	req	https://ebanking.bdm-sa.com/scripts/spin.umd.js	4850603	199852	200	HTTP/1.1	2864	GET
+5050510	body	https://ebanking.bdm-sa.com/scripts/spin.umd.js	2864	200
+5052595	req	https://ebanking.bdm-sa.com/scripts/externValidator.js?id=8e90b7a	4834779	217815	200	HTTP/1.1	6626	GET
+5053374	body	https://ebanking.bdm-sa.com/scripts/externValidator.js?id=8e90b7a	6626	200
+5061309	req	https://ebanking.bdm-sa.com/webjars/slick-carousel/slick/slick.min.js?id=8e90b7a	4835501	225806	200	HTTP/1.1	40461	GET
+5067466	body	https://ebanking.bdm-sa.com/webjars/slick-carousel/slick/slick.min.js?id=8e90b7a	40461	200
+5084894	body	https://ebanking.bdm-sa.com/css.ebk?ressource=webBootstrap.css&id=8e90b7a	121031	200
+5093026	req	https://ebanking.bdm-sa.com/scripts/common.js?id=8e90b7a	4868635	224233	200	HTTP/1.1	17486	GET
+5093029	q	https://ebanking.bdm-sa.com/fonts/glyphicons-halflings-regular.woff2
+5095194	body	https://ebanking.bdm-sa.com/scripts/common.js?id=8e90b7a	17486	200
+5179344	body	https://ebanking.bdm-sa.com/webjars/bootstrap-select/js/bootstrap-select.min.js?id=8e90b7a	53644	200
+5252053	req	https://ebanking.bdm-sa.com/scripts/cookie.js?id=8e90b7a	5050618	201428	200	HTTP/1.1	967	GET
+5252139	body	https://ebanking.bdm-sa.com/scripts/cookie.js?id=8e90b7a	967	200
+5272513	req	https://ebanking.bdm-sa.com/webjars/smartmenus/dist/jquery.smartmenus.min.js?id=8e90b7a	5053451	219052	200	HTTP/1.1	25202	GET
+5275796	body	https://ebanking.bdm-sa.com/webjars/smartmenus/dist/jquery.smartmenus.min.js?id=8e90b7a	25202	200
+5289346	req	https://ebanking.bdm-sa.com/webjars/smartmenus/dist/addons/bootstrap/jquery.smartmenus.bootstrap.min.js?id=8e90b7a	5067533	221808	200	HTTP/1.1	2915	GET
+5289406	body	https://ebanking.bdm-sa.com/webjars/smartmenus/dist/addons/bootstrap/jquery.smartmenus.bootstrap.min.js?id=8e90b7a	2915	200
+5290097	phase	external scripts	3839252
+5290205	phase	module graph prefetch	95
+5290253	phase	blocking stylesheets	38
+5317673	req	https://ebanking.bdm-sa.com/fonts/Sopra-Banking-icones.ttf?n5puny	5092447	225221	200	HTTP/1.1	9548	GET
+5318467	body	https://ebanking.bdm-sa.com/fonts/Sopra-Banking-icones.ttf?n5puny	9548	200
+5328067	cascade	18187
+5328894	layout	777
+5336424	req	https://ebanking.bdm-sa.com/fonts/fontawesome-webfont.woff2?v=4.7.0	5095260	241159	200	HTTP/1.1	77160	GET
+5346023	body	https://ebanking.bdm-sa.com/fonts/fontawesome-webfont.woff2?v=4.7.0	77160	200
+5387417	req	https://ebanking.bdm-sa.com/fonts/open-sans-v13-latin_greek_cyrillic_vietnamese_greek-ext_latin-ext_cyrillic-ext-regular.woff2	5179455	207959	200	HTTP/1.1	61980	GET
+5395260	body	https://ebanking.bdm-sa.com/fonts/open-sans-v13-latin_greek_cyrillic_vietnamese_greek-ext_latin-ext_cyrillic-ext-regular.woff2	61980	200
+5435172	cascade	13935
+5435520	layout	320
+5435547	reflow	forced
+5444889	cascade	882
+5446013	layout	1093
+5454368	phase	cascade+layout+blocking scripts	164101
+5456110	req	https://ebanking.bdm-sa.com/fonts/open-sans-v13-latin_greek_cyrillic_vietnamese_greek-ext_latin-ext_cyrillic-ext-300.woff2	5252415	203691	200	HTTP/1.1	63180	GET
+5462997	body	https://ebanking.bdm-sa.com/fonts/open-sans-v13-latin_greek_cyrillic_vietnamese_greek-ext_latin-ext_cyrillic-ext-300.woff2	63180	200
+5487417	cascade	4024
+5487682	layout	239
+5489208	phase	deferred scripts	34811
+5492313	req	https://ebanking.bdm-sa.com/fonts/open-sans-v13-latin_greek_cyrillic_vietnamese_greek-ext_latin-ext_cyrillic-ext-300italic.woff2	5275958	216354	200	HTTP/1.1	59176	GET
+5499191	body	https://ebanking.bdm-sa.com/fonts/open-sans-v13-latin_greek_cyrillic_vietnamese_greek-ext_latin-ext_cyrillic-ext-300italic.woff2	59176	200
+5516857	cascade	11732
+5517127	layout	244
+5517138	reflow	forced
+5535061	req	https://ebanking.bdm-sa.com/fonts/open-sans-v13-latin_greek_cyrillic_vietnamese_greek-ext_latin-ext_cyrillic-ext-600.woff2	5289585	245471	200	HTTP/1.1	63736	GET
+5542427	req	https://ebanking.bdm-sa.com/fonts/open-sans-v13-latin_greek_cyrillic_vietnamese_greek-ext_latin-ext_cyrillic-ext-italic.woff2	5318637	223787	200	HTTP/1.1	59912	GET
+5543078	body	https://ebanking.bdm-sa.com/fonts/open-sans-v13-latin_greek_cyrillic_vietnamese_greek-ext_latin-ext_cyrillic-ext-600.woff2	63736	200
+5543204	cascade	10021
+5543506	layout	283
+5543712	reflow	forced
+5549216	body	https://ebanking.bdm-sa.com/fonts/open-sans-v13-latin_greek_cyrillic_vietnamese_greek-ext_latin-ext_cyrillic-ext-italic.woff2	59912	200
+5564572	cascade	6895
+5565009	layout	394
+5565128	req	https://ebanking.bdm-sa.com/fonts/open-sans-v13-latin_greek_cyrillic_vietnamese_greek-ext_latin-ext_cyrillic-ext-600italic.woff2	5346237	218888	200	HTTP/1.1	60928	GET
+5565151	reflow	forced
+5571687	body	https://ebanking.bdm-sa.com/fonts/open-sans-v13-latin_greek_cyrillic_vietnamese_greek-ext_latin-ext_cyrillic-ext-600italic.woff2	60928	200
+5586094	cascade	7348
+5586596	layout	475
+5586790	reflow	forced
+5602498	req	https://ebanking.bdm-sa.com/fonts/open-sans-v13-latin_greek_cyrillic_vietnamese_greek-ext_latin-ext_cyrillic-ext-700.woff2	5395363	207131	200	HTTP/1.1	63732	GET
+5608074	cascade	7917
+5608350	layout	253
+5608482	reflow	forced
+5609456	body	https://ebanking.bdm-sa.com/fonts/open-sans-v13-latin_greek_cyrillic_vietnamese_greek-ext_latin-ext_cyrillic-ext-700.woff2	63732	200
+5631047	cascade	7217
+5631482	layout	408
+5631652	reflow	forced
+5649200	cascade	4879
+5649487	layout	268
+5649571	reflow	forced
+5653030	phase	DOMContentLoaded	163807
+5667782	req	https://ebanking.bdm-sa.com/fonts/open-sans-v13-latin_greek_cyrillic_vietnamese_greek-ext_latin-ext_cyrillic-ext-700italic.woff2	5463077	204702	200	HTTP/1.1	59512	GET
+5674077	body	https://ebanking.bdm-sa.com/fonts/open-sans-v13-latin_greek_cyrillic_vietnamese_greek-ext_latin-ext_cyrillic-ext-700italic.woff2	59512	200
+5719731	req	https://ebanking.bdm-sa.com/webjars/slick-carousel/slick/fonts/slick.woff	5499314	220413	404	HTTP/1.1	13687	GET
+5721637	body	https://ebanking.bdm-sa.com/webjars/slick-carousel/slick/fonts/slick.woff	13687	404
+5721927	q	https://ebanking.bdm-sa.com/webjars/slick-carousel/slick/fonts/slick.ttf
+5776503	req	https://ebanking.bdm-sa.com/fonts/glyphicons-halflings-regular.woff2	5543167	233332	200	HTTP/1.1	18028	GET
+5778888	body	https://ebanking.bdm-sa.com/fonts/glyphicons-halflings-regular.woff2	18028	200
+5943204	req	https://ebanking.bdm-sa.com/webjars/slick-carousel/slick/fonts/slick.ttf	5721980	221218	404	HTTP/1.1	13687	GET
+5944615	body	https://ebanking.bdm-sa.com/webjars/slick-carousel/slick/fonts/slick.ttf	13687	404
+5944693	q	https://ebanking.bdm-sa.com/webjars/slick-carousel/slick/fonts/slick.svg#slick
+6166437	req	https://ebanking.bdm-sa.com/webjars/slick-carousel/slick/fonts/slick.svg#slick	5944748	221685	404	HTTP/1.1	13687	GET
+6167922	body	https://ebanking.bdm-sa.com/webjars/slick-carousel/slick/fonts/slick.svg#slick	13687	404
+6187861	cascade	7086
+6188424	layout	533
+6190999	phase	subframes (pre-load)	537942
+6209172	phase	initial images+masks	18158
+6213141	phase	load event	3944
+6242325	phase	finish_loading: external CSS	29123
+6242362	q	https://ebanking.bdm-sa.com/image.ebk?ressource=back1000.jpg
+6272860	phase	finish_loading: dynamic scripts	30508
+6272936	phase	finish_loading: subframes	44
+6299124	phase	finish_loading: page fetches	26174
+6299192	phase	finish_loading: images	41
+6299208	phase	finish_loading: icon masks	6
+6496239	req	https://ebanking.bdm-sa.com/image.ebk?ressource=back1000.jpg	6242414	253821	200	HTTP/1.1	158198	GET
+6725411	body	https://ebanking.bdm-sa.com/image.ebk?ressource=back1000.jpg	158198	200
+6744727	phase	finish_loading: background images	445506
+6748563	mark	navigate_returned
+6748873	mark	a11y_built

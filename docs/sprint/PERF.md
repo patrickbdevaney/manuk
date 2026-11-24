@@ -880,3 +880,37 @@ failed once in the gate run and gave 2251 = 2251 in 3/3 reruns.
 Measured cost split on Alan_Turing (temporary timers, one run): each forced reflow in `dynamic scripts` = MinimalCascade 300-400 ms +
 layout 90-150 ms + memo clones 110-190 ms (now gone); the closing `apply_stylesheets` (~400 ms cascade+layout) emits no trace line, so it
 counts as settle. What remains is full-document cascades for small script mutations -> incremental restyle (PERF.1.2.b).
+
+## PERF.1.2.b: incremental restyle for script mutations (chrome_ver=145.0.7632.116; manuk only)
+
+What landed: `MinimalCascade::cascade_incremental` (the agent's cascade; `engine/css/src/incr.rs` + `lib.rs`) and the same reuse in the Stylo
+walk (`stylo_engine.rs`, `IncrCache`). A pass reuses the previous pass's per-node styles for every node outside the subtrees whose
+fingerprint moved (tag, attributes, hover/focus/active state, parent; plus element-neighbour ids and a has-children bit only when the sheets
+use sibling combinators / structural pseudo-classes / `:empty`), re-runs the whole-map passes (`:has`, property recovery, opacity fold) in
+full. Full cascade instead when: the sheet list or viewport changed, `<html>` itself moved, a shadow root exists, > 1/3 of the nodes moved,
+an animation/transition is in flight. `MANUK_FULL_RESTYLE=1` = old behaviour (the A/B arm); `MANUK_INCR_VERIFY=1` runs both and logs
+`INCR MISMATCH`; `MANUK_INCR_TRACE=1` prints why each pass was or was not incremental.
+
+Gates: lib tests `incr::tests::incremental_minimal_cascade_equals_full_after_mutations` and `stylo_engine::incr_tests::incremental_restyle_equals_full_cascade_after_mutations`
+(class/attr/style/insert/remove/text mutations on a fixture with descendant, child, sibling, nth-child, last-child and `:empty` selectors; the
+full arm runs on a fresh thread). Mutants: a walk that skips the dirty descendants -> RED (`class removed (descendant selector): ... differs`);
+sibling expansion disabled -> RED (`first li removed (nth-child parity flips)`). `MANUK_INCR_VERIFY=1` over the 20 URLs: 0 mismatches in ~100
+incremental passes. `perf1-settle-gate.py --nodes` (full-restyle arm vs new): a11y node drift 0.00 % on all 20.
+
+Paired interleaved, same binary, arm B = `MANUK_FULL_RESTYLE=1`, 20 URLs x 3 runs (`perf1-profile.py --runs 3 --manuk X --manuk-b X --env-b MANUK_FULL_RESTYLE=1`,
+rows `docs/sprint/perf1-pf12e/paired.jsonl`):
+
+| arm | Σ settle s | Σ cascade s | Σ layout s | Σ wall s |
+|---|---|---|---|---|
+| A incremental | 13.62 | 5.72 | 3.81 | 80.92 |
+| B full | 13.12 | 6.80 | 3.79 | 75.96 |
+
+Bar (Σ settle <= 11 s): **not met, and not movable by this change.** The profiler attributes cascade time to `cascade` (priority above settle),
+so a faster cascade shrinks the `cascade` phase, not `settle`. Per-run pairs: cascade A<B in 33/60, settle A<B in 25/60, median wall diff +0.03 s
+(Σ wall differs by network outliers: admin.zoomph.com +2.2 s, client.dkitrxmdwoqruvsi.net +1.0 s). Where it helps (median cascade s, B -> A):
+Alan_Turing 1.58 -> 1.30, Rust 1.46 -> 1.30, mobile.bg 0.49 -> 0.26, puentedemando.com 0.65 -> 0.46, comix.to 0.63 -> 0.48; pages with no heavy
+script rounds are unchanged. Cost of a pass (Rust page, release, MANUK_INCR_TRACE): incremental = 5 ms plan + 5-12 ms restyle + 32 ms cache clone,
+vs ~220-250 ms full; but 5 of 8 passes on that page are full anyway because the sheet list changed (a script appends a `<style>`/link), and one more
+because 8 moved nodes expand (sibling rule) past 1/3 of the document.
+Settle remainder (Σ over 20 URLs, median s, arm A): `finish_loading: dynamic scripts` 5.91, `page fetches` 2.23, `initial images+masks` 1.84,
+`subframes (pre-load)` 1.32, `external CSS` 0.73: script rounds and fetches, not restyle.
