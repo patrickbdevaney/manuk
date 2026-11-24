@@ -1,0 +1,64 @@
+0	epoch	1795499992857447
+21501	dns	quotes.toscrape.com	21451
+536344	connect	quotes.toscrape.com	536301
+1027754	req	https://quotes.toscrape.com/js/	0	1027750	200	HTTP/2.0	-	GET
+1027952	body	https://quotes.toscrape.com/js/	5808	200
+1028218	q	https://quotes.toscrape.com/static/main.css
+1028222	q	https://quotes.toscrape.com/static/bootstrap.min.css
+1028595	phase	html parse	581
+1028634	q	https://quotes.toscrape.com/static/jquery.js
+1451593	req	https://quotes.toscrape.com/static/main.css	1028278	423311	200	HTTP/2.0	-	GET
+1451770	body	https://quotes.toscrape.com/static/main.css	1368	200
+1759212	req	https://quotes.toscrape.com/static/jquery.js	1451905	307294	200	HTTP/2.0	-	GET
+2066970	req	https://quotes.toscrape.com/static/bootstrap.min.css	1451917	615041	200	HTTP/2.0	-	GET
+2068079	body	https://quotes.toscrape.com/static/jquery.js	84345	200
+2068219	phase	external scripts	1039606
+2068255	phase	module graph prefetch	16
+2373853	body	https://quotes.toscrape.com/static/bootstrap.min.css	125934	200
+2391591	q	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.woff2
+2391833	phase	blocking stylesheets	323553
+2408093	cascade	5024
+2409891	layout	1726
+2464120	cascade	1620
+2466459	layout	2311
+2466605	phase	cascade+layout+blocking scripts	74723
+2477192	phase	deferred scripts	10569
+2479386	phase	DOMContentLoaded	2150
+2479805	q	https://fonts.googleapis.com/css?family=Raleway:400,700
+2497713	dns	fonts.googleapis.com	17800
+2579476	connect	fonts.googleapis.com	99576
+2657797	req	https://fonts.googleapis.com/css?family=Raleway:400,700	2479872	177912	200	HTTP/2.0	-	GET
+2662557	body	https://fonts.googleapis.com/css?family=Raleway:400,700	398	200
+2663174	q	https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVvaorCIPrQ.ttf
+2663316	q	https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVs9pbCIPrQ.ttf
+2664353	dns	fonts.gstatic.com	1068
+2680604	req	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.woff2	2391697	288897	404	HTTP/2.0	-	GET
+2680792	body	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.woff2	207	404
+2680954	q	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.woff
+2759218	connect	fonts.gstatic.com	95940
+2833071	req	https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVvaorCIPrQ.ttf	2663242	169823	200	HTTP/2.0	29379	GET
+2874191	body	https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVvaorCIPrQ.ttf	49552	200
+2874313	req	https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVs9pbCIPrQ.ttf	2759432	114878	200	HTTP/2.0	29703	GET
+2895989	body	https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVs9pbCIPrQ.ttf	49512	200
+2987650	req	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.woff	2681059	306584	404	HTTP/2.0	-	GET
+2987764	body	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.woff	207	404
+2987867	q	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.ttf
+3087967	req	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.ttf	2987911	100045	404	HTTP/2.0	-	GET
+3088218	body	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.ttf	207	404
+3088353	q	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.svg#glyphicons_halflingsregular
+3295099	req	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.svg#glyphicons_halflingsregular	3088470	206619	404	HTTP/2.0	-	GET
+3295321	body	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.svg#glyphicons_halflingsregular	207	404
+3313321	cascade	6104
+3314938	layout	1551
+3315274	phase	subframes (pre-load)	835854
+3315324	phase	initial images+masks	37
+3317645	phase	load event	2307
+3318275	phase	finish_loading: external CSS	580
+3319900	phase	finish_loading: dynamic scripts	1599
+3320022	phase	finish_loading: subframes	93
+3320605	phase	finish_loading: page fetches	563
+3320650	phase	finish_loading: images	29
+3320687	phase	finish_loading: icon masks	22
+3320723	phase	finish_loading: background images	22
+3321252	mark	navigate_returned
+3321741	mark	a11y_built

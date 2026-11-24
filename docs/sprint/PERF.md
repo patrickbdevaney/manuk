@@ -953,3 +953,33 @@ Mutant (`into_fresh` without the `mutation_seq` check): on the live URLs the nod
 (3 -> 10 and 23 -> 3 nodes), correct binary 0 drift. `g_reflow_stale_not_adopted` is RED under it too.
 Other mutants, each RED: sheet cache without the viewport in its key; `descendants` without the sibling push; `has_class` without the whole-token
 rule; decode kept on the caller's thread.
+
+## PERF.1.2.a.c results: settle bar re-judged at HEAD 5b58794c (chrome_ver=145.0.7632.116)
+
+Binary: `cargo build --release -p manuk-agent --bin a11y-dump` at 5b58794c (no engine/ change since b2c7d0e7), copied to `target/perf-pf12ac/a11y-dump-HEAD`.
+Method: `scripts/perf1-profile.py --runs 3`, paired same-minute, arms alternate per URL and run. 22 URLs were tried; 2 (`mkp.gem.gov.in`,
+`virtual.lapampa.edu.ar`) failed in every run on both arms, so the sums cover the same 20 URLs as PERF.1.2.a (`settle_gate` counts OK rows only).
+Load1 was sampled every 30 s in `perf1-pf12ac/load.tsv`: 9 to 43 across the two sessions, median about 26 (the host is shared with other agents).
+
+| session (dir) | arm A | arm B | Σ settle A (median per URL, summed) | Σ settle B | A/B |
+|---|---|---|---|---|---|
+| `ab-fullrestyle` | HEAD default | `MANUK_FULL_RESTYLE=1`, same binary | 13.26 s | 12.74 s | 1.041 |
+| `ab-nosheetcache-syncdecode` | HEAD default | `MANUK_NO_SHEET_CACHE=1 MANUK_SYNC_DECODE=1`, same binary | 16.44 s | 24.87 s | 0.661 |
+
+- **Settle bar (<= 11 s): RED in both sessions.** `perf1-settle-gate.py` on `ab-fullrestyle/paired.jsonl` prints `sum_settle=13.26s`, GATE RED, exit 1.
+- The same HEAD binary measured 8.62 s in PERF.1.2.a (`b2c7d0e7`, lower load). Under load ~26 it measures 13.3 and 16.4 s, so this host cannot
+  judge the 11 s bar; the 8.62 s figure is not reproduced here. A follow-up re-measure is GRAPH row PERF.1.2.a.c.a.
+- PERF.1.2.b's arm (full restyle) is 4% below the default in its session, which is inside the noise of these sessions. The incremental restyle
+  does not change settle time measurably on this host.
+- The sheet-cache + sync-decode switches are worth 1.5x on settle in the same minute (24.87 -> 16.44 s), so they stay on.
+
+Node check (`perf1-settle-gate.py --nodes target/perf-pf12ac/a11y-full-restyle.sh target/perf-pf12ac/a11y-dump-HEAD`, base = full-restyle
+arm, new = default): 21 of 22 inputs at 0.00% drift (20 live URLs + 2 fixtures). `https://www.puentedemando.com/` read 1169 in the base arm and
+1186 in the new arm (1.45%, RED). Re-sampling puentedemando afterwards gave 1186 on all 5+5 base and new runs, and 1186 on 3+3 more while 24
+CPU burners ran. The 1169 is a single transient and is not explained; a follow-up row (PERF.1.2.a.c.b) traces it. The node gate is RED as run.
+Output: `perf1-pf12ac/nodes-fullrestyle-vs-default.txt`.
+
+Gate can go red: `perf1-settle-gate.py docs/sprint/perf1-pf12a/paired.jsonl` (earlier data, Σ 18.88 s) prints GATE RED, exit 1. The node check went red
+on a real 1.45% drift (above).
+
+Verdict: PERF.1.2 and PERF.1.2.b stay BLOCKED on the sum bar, now with 13.26 s (paired HEAD, load ~26) and 16.44 s (second session).

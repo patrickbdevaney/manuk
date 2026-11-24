@@ -1,0 +1,24 @@
+urls=20 sum_settle=13.26s (bar <= 11)
+NODES ok http://127.0.0.1:40569/stale-hide.html base=3 new=3 drift=0.00%
+NODES ok http://127.0.0.1:40569/stale-grow.html base=23 new=23 drift=0.00%
+NODES ok https://admin.zoomph.com/ base=35 new=35 drift=0.00%
+NODES ok https://app.ordertime.com/ base=34 new=34 drift=0.00%
+NODES ok https://basescan.org/ base=4 new=4 drift=0.00%
+NODES ok https://books.toscrape.com/ base=522 new=522 drift=0.00%
+NODES ok https://books.toscrape.com/catalogue/page-2.html base=524 new=524 drift=0.00%
+NODES ok https://client.dkitrxmdwoqruvsi.net/ base=2 new=2 drift=0.00%
+NODES ok https://comix.to/ base=2245 new=2245 drift=0.00%
+NODES ok https://ebanking.bdm-sa.com/ base=32 new=32 drift=0.00%
+NODES ok https://en.wikipedia.org/wiki/Alan_Turing base=7911 new=7911 drift=0.00%
+NODES ok https://en.wikipedia.org/wiki/Main_Page base=887 new=887 drift=0.00%
+NODES ok https://en.wikipedia.org/wiki/Python_(programming_language) base=6794 new=6794 drift=0.00%
+NODES ok https://en.wikipedia.org/wiki/Rust_(programming_language) base=8264 new=8264 drift=0.00%
+NODES ok https://example.com/ base=9 new=9 drift=0.00%
+NODES ok https://httpbin.org/html base=5 new=5 drift=0.00%
+NODES ok https://quotes.toscrape.com/ base=135 new=135 drift=0.00%
+NODES ok https://quotes.toscrape.com/js/ base=101 new=101 drift=0.00%
+NODES ok https://quotes.toscrape.com/scroll base=100 new=100 drift=0.00%
+NODES ok https://www.mobile.bg/ base=418 new=418 drift=0.00%
+NODES RED https://www.puentedemando.com/ base=1169 new=1186 drift=1.45%
+NODES ok https://www.scrapethissite.com/pages/simple/ base=3630 new=3630 drift=0.00%
+GATE RED

@@ -1,0 +1,64 @@
+0	epoch	1795501247502255
+39678	dns	quotes.toscrape.com	39539
+336846	connect	quotes.toscrape.com	336723
+808561	req	https://quotes.toscrape.com/js/	0	808556	200	HTTP/2.0	-	GET
+808776	body	https://quotes.toscrape.com/js/	5808	200
+809180	phase	html parse	326
+809224	q	https://quotes.toscrape.com/static/jquery.js
+809315	q	https://quotes.toscrape.com/static/bootstrap.min.css
+809331	q	https://quotes.toscrape.com/static/main.css
+1422628	req	https://quotes.toscrape.com/static/jquery.js	809269	613355	200	HTTP/2.0	-	GET
+1730648	body	https://quotes.toscrape.com/static/jquery.js	84345	200
+1730825	phase	external scripts	921629
+1730848	phase	module graph prefetch	8
+2036993	req	https://quotes.toscrape.com/static/main.css	1730860	306129	200	HTTP/2.0	-	GET
+2037142	body	https://quotes.toscrape.com/static/main.css	1368	200
+2344690	req	https://quotes.toscrape.com/static/bootstrap.min.css	1730987	613699	200	HTTP/2.0	-	GET
+2346249	body	https://quotes.toscrape.com/static/bootstrap.min.css	125934	200
+2365442	q	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.woff2
+2367774	phase	blocking stylesheets	636912
+2382295	cascade	2886
+2383304	layout	977
+2430812	cascade	1492
+2433362	layout	2519
+2435364	phase	cascade+layout+blocking scripts	67569
+2444875	req	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.woff2	2365515	79326	404	HTTP/2.0	-	GET
+2444993	body	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.woff2	207	404
+2453731	phase	deferred scripts	18350
+2456274	phase	DOMContentLoaded	2503
+2466314	q	https://fonts.googleapis.com/css?family=Raleway:400,700
+2467241	dns	fonts.googleapis.com	835
+2548595	connect	fonts.googleapis.com	82192
+2622939	req	https://fonts.googleapis.com/css?family=Raleway:400,700	2466387	156549	200	HTTP/2.0	-	GET
+2632529	body	https://fonts.googleapis.com/css?family=Raleway:400,700	398	200
+2649572	q	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.woff
+2649702	q	https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVvaorCIPrQ.ttf
+2649769	q	https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVs9pbCIPrQ.ttf
+2650502	dns	fonts.gstatic.com	755
+2732405	connect	fonts.gstatic.com	82662
+2762659	req	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.woff	2649660	112993	404	HTTP/2.0	-	GET
+2762780	body	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.woff	207	404
+2762851	q	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.ttf
+2808107	req	https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVvaorCIPrQ.ttf	2649733	158371	200	HTTP/2.0	29379	GET
+2851349	body	https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVvaorCIPrQ.ttf	49552	200
+2851527	req	https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVs9pbCIPrQ.ttf	2735718	115805	200	HTTP/2.0	29703	GET
+2856222	req	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.ttf	2762903	93314	404	HTTP/2.0	-	GET
+2856315	body	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.ttf	207	404
+2856371	q	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.svg#glyphicons_halflingsregular
+2871677	body	https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVs9pbCIPrQ.ttf	49512	200
+2959520	req	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.svg#glyphicons_halflingsregular	2856419	103093	404	HTTP/2.0	-	GET
+2959655	body	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.svg#glyphicons_halflingsregular	207	404
+2997491	cascade	3571
+2998511	layout	988
+3000382	phase	subframes (pre-load)	544081
+3000431	phase	initial images+masks	33
+3001637	phase	load event	1193
+3018693	phase	finish_loading: external CSS	17027
+3036534	phase	finish_loading: dynamic scripts	17807
+3036687	phase	finish_loading: subframes	125
+3053085	phase	finish_loading: page fetches	16382
+3053173	phase	finish_loading: images	36
+3053199	phase	finish_loading: icon masks	10
+3053229	phase	finish_loading: background images	15
+3053918	mark	navigate_returned
+3054289	mark	a11y_built
