@@ -654,6 +654,19 @@ def self_test():
     assert d3["named_frac"] < DYN_MIN_NAMED and d["named_frac"] < DYN_MIN_NAMED, (d, d3)
     assert dyn_split([], [], iv) is None
     print("self-test OK: dynamic-scripts split names eval/wait/restyle, and drops below 95% without eval")
+    # restyle by location: a cascade [10,20) before the eval [30,50) is between-round; a layout [40,45)
+    # nested in the eval is restyle_eval; a reflow at 45 is inside the eval, one at 90 is between.
+    ev_r = [(100_000, "phase", [DYN_PHASE, "100000"]), (50_000, "dynscript_eval", ["20000"]),
+            (20_000, "cascade", ["10000"]), (45_000, "layout", ["5000"]), (45_000, "reflow", ["forced"]),
+            (90_000, "reflow", ["forced"])]
+    sp = dyn_restyle_split(ev_r)
+    assert abs(sp["restyle_between_s"] - 0.01) < 1e-9 and abs(sp["restyle_eval_s"] - 0.005) < 1e-9, sp
+    assert sp["reflow_eval_n"] == 1 and sp["reflow_between_n"] == 1, sp
+    assert restyle_split_ok(sp, 0.015) and not restyle_split_ok(sp, 0.030)
+    # MUTANT: a split that drops the between-round bucket must be RED on the same stored column
+    mutant = dict(sp, restyle_between_s=0.0)
+    assert not restyle_split_ok(mutant, 0.015), "restyle check must go red when the between bucket is dropped"
+    print("self-test OK: restyle split puts in-eval and between-round work in separate buckets; dropped bucket is RED")
 
 
 def dyn_report(out, pin, write=True):
@@ -719,6 +732,115 @@ def dyn_report(out, pin, write=True):
     return green, text
 
 
+# ---------------------------------------------------------------- PERF.1.2.b.b.b: restyle split by location
+
+DYN_RESTYLE_TOL_S = 0.001  # the split must sum to the stored restyle column within 1 ms, on every OK run
+
+
+def dyn_restyle_split(ev):
+    """Split the restyle share of the dynamic-scripts phase by WHERE it ran, from one run's raw trace.
+
+    restyle_eval    : cascade+layout time inside a `dynscript_eval` span (a script's own forced reflow, or a
+                      restyle a script's mutation triggered while it ran).
+    restyle_between : cascade+layout time in the phase outside every eval span (the between-round
+                      apply_stylesheets and the round barrier work).
+    Both are taken on the union of the cascade/layout intervals, the same way dyn_split takes its
+    restyle column, so eval + between == restyle exactly unless the trace and the stored row disagree.
+    reflow_*        : `reflow forced` events (a script geometry read that forced a restyle + layout pass).
+    Returns None when the phase never ran.
+    """
+    phase_iv = [(t - int(a[1]), t, a[0]) for t, k, a in ev if k == "phase"]
+    ph = next(((s, e) for s, e, n in phase_iv if n == DYN_PHASE), None)
+    if ph is None:
+        return None
+    lo, hi = ph
+    evu = _union(_clip([(t - int(a[0]), t) for t, k, a in ev if k == "dynscript_eval"], lo, hi))
+    raw = _clip([(t - int(a[0]), t) for t, k, a in ev if k in ("cascade", "layout")], lo, hi)
+    rst = _union(raw)
+    between = _minus(rst, evu)
+    in_eval = _len(rst) - _len(between)
+    refl = [t for t, k, a in ev if k == "reflow" and lo <= t <= hi]
+    refl_eval = sum(1 for t in refl if any(s < t <= e for s, e in evu))
+    return {
+        "phase_s": (hi - lo) * 1e-6,
+        "restyle_eval_s": in_eval * 1e-6,
+        "restyle_between_s": _len(between) * 1e-6,
+        "restyle_overlap_s": (sum(e - s for s, e in raw) - _len(rst)) * 1e-6,
+        "reflow_n": len(refl),
+        "reflow_eval_n": refl_eval,
+        "reflow_between_n": len(refl) - refl_eval,
+    }
+
+
+def restyle_split_ok(split, stored_restyle_s):
+    """The gate: eval + between must equal the stored restyle column of the same run within 1 ms."""
+    if split is None or stored_restyle_s is None:
+        return False
+    return abs(split["restyle_eval_s"] + split["restyle_between_s"] - stored_restyle_s) <= DYN_RESTYLE_TOL_S
+
+
+def dyn_restyle_report(out, pin, write=True):
+    """Recompute the restyle split for every OK manuk run in <out>/runs.jsonl from its raw trace
+    (<out>/traces/<slug>.run<N>.tsv) and check it against the stored restyle column. Returns (green, text)."""
+    raw = os.path.join(out, "runs.jsonl")
+    tdir = os.path.join(out, "traces")
+    rows = []
+    for l in open(raw):
+        r = json.loads(l)
+        if r.get("engine") == "manuk" and r.get("chrome_ver") == pin and r.get("status") == "OK":
+            rows.append(r)
+    by = {}
+    bad = []
+    for r in rows:
+        if r["url"] in DYN_UNREACHABLE:
+            continue
+        d = r.get("dyn_scripts")
+        if not d:
+            bad.append((r["url"], r["run"], "no dynamic-scripts phase"))
+            continue
+        slug = "".join(ch if ch.isalnum() else "_" for ch in r["url"])[:80]
+        path = os.path.join(tdir, f"{slug}.run{r['run']}.tsv")
+        if not os.path.exists(path):
+            bad.append((r["url"], r["run"], "trace missing"))
+            continue
+        sp = dyn_restyle_split(parse_trace(open(path).read()))
+        if sp is None:
+            bad.append((r["url"], r["run"], "trace has no dynamic-scripts phase"))
+            continue
+        if not restyle_split_ok(sp, d["restyle_s"]):
+            bad.append((r["url"], r["run"], f"eval+between {sp['restyle_eval_s'] + sp['restyle_between_s']:.4f} "
+                                            f"!= restyle {d['restyle_s']:.4f}"))
+        by.setdefault(r["url"], []).append((r["run"], sp, d))
+    green = not bad and bool(by)
+    L = ["# PERF.1.2.b.b.b: restyle share of the dynamic-scripts phase, by location\n",
+         f"chrome_ver={pin} · recomputed from the raw traces in `{tdir}` for the runs in `{raw}`. "
+         "restyle_eval = cascade+layout inside a `dynscript_eval` span; restyle_between = the same work in the phase "
+         "outside every eval span (between-round apply_stylesheets). eval+between must equal the stored restyle "
+         f"column within {DYN_RESTYLE_TOL_S * 1000:.0f} ms on every run. Median over runs; forced = `reflow forced` events "
+         "(in-eval / between).\n",
+         "| URL | runs | phase | restyle | restyle_eval | restyle_between | forced reflows (eval/between) | overlap |",
+         "|---|---|---|---|---|---|---|---|"]
+    for url, rs in by.items():
+        med = lambda f: statistics.median(f(sp) for _, sp, _ in rs)
+        L.append(f"| {url} | {len(rs)} | {med(lambda x: x['phase_s']):.3f} "
+                 f"| {statistics.median(d['restyle_s'] for _, _, d in rs):.3f} "
+                 f"| {med(lambda x: x['restyle_eval_s']):.3f} | {med(lambda x: x['restyle_between_s']):.3f} "
+                 f"| {med(lambda x: x['reflow_eval_n']):.0f} / {med(lambda x: x['reflow_between_n']):.0f} "
+                 f"| {med(lambda x: x['restyle_overlap_s']):.3f} |")
+    tot = lambda f: sum(statistics.median(f(sp) for _, sp, _ in rs) for rs in by.values())
+    L.append(f"\nΣ medians over {len(by)} URLs: restyle {sum(statistics.median(d['restyle_s'] for _, _, d in rs) for rs in by.values()):.2f} s · "
+             f"restyle_eval {tot(lambda x: x['restyle_eval_s']):.2f} · restyle_between {tot(lambda x: x['restyle_between_s']):.2f} · "
+             f"forced reflows {tot(lambda x: x['reflow_n']):.0f}\n")
+    L.append(f"**RESTYLE SPLIT CHECK: {'GREEN' if green else 'RED'}** (eval+between = stored restyle within "
+             f"{DYN_RESTYLE_TOL_S * 1000:.0f} ms on every OK run)\n")
+    for b in bad[:30]:
+        L.append(f"- not explained: {b}")
+    text = "\n".join(L) + "\n"
+    if write:
+        open(os.path.join(out, "RESTYLE-SPLIT.md"), "w").write(text)
+    return green, text
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--runs", type=int, default=3)
@@ -734,11 +856,21 @@ def main():
     ap.add_argument("--env-b", default="", help="paired mode: extra env for arm B, e.g. MANUK_MAX_CONNS_PER_HOST=1")
     ap.add_argument("--report-only", action="store_true")
     ap.add_argument("--self-test", action="store_true")
+    ap.add_argument("--dyn-restyle", action="store_true",
+                    help="PERF.1.2.b.b.b: recompute the restyle split per run from the raw traces and check it "
+                    "against the stored restyle column; writes <out>/RESTYLE-SPLIT.md; exit 1 if RED")
     ap.add_argument("--dyn-report", action="store_true",
                     help="PERF.1.2.b.b: gate the dynamic-scripts split of <out>/runs.jsonl; exit 1 if RED")
     a = ap.parse_args()
     if a.self_test:
         return self_test()
+    if a.dyn_restyle:
+        pin = os.environ.get("MANUK_CHROME_PIN")
+        if not pin:
+            sys.exit("MANUK_CHROME_PIN unset: refusing to report without a chrome_ver")
+        green, text = dyn_restyle_report(a.out, pin)
+        print(text)
+        sys.exit(0 if green else 1)
     if a.dyn_report:
         pin = os.environ.get("MANUK_CHROME_PIN")
         if not pin:
