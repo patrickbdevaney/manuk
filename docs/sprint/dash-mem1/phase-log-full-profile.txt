@@ -1,0 +1,122 @@
+manuk-mcp: agent profile=full
+2026-11-24T17:30:01.554286Z  INFO serve_inner: rmcp::service: Service initialized as server peer_info=Some(InitializeRequestParams { meta: None, protocol_version: ProtocolVersion("2025-06-18"), capabilities: ClientCapabilities { experimental: None, extensions: None, roots: None, sampling: None, elicitation: None }, client_info: Implementation { name: "claude-code", title: None, version: "0", description: None, icons: None, website_url: None } })
+2026-11-24T17:30:01.554519Z  INFO serve_inner: rmcp::service: received notification notification=InitializedNotification(NotificationNoParam { method: InitializedNotificationMethod, extensions: Extensions })
+2026-11-24T17:30:01.554540Z  INFO serve_inner: rmcp::handler::server: client initialized
+2026-11-24T17:30:01.994503Z  INFO manuk_agent: agent phase done: fetch html + prewarm js ms=417
+2026-11-24T17:30:01.995119Z  INFO manuk_page: load phase done phase="html parse" ms=0 gave_up=0 elapsed_ms=0
+2026-11-24T17:30:02.772433Z  INFO manuk_page: load phase done phase="external scripts" ms=777 gave_up=0 elapsed_ms=777
+2026-11-24T17:30:02.772515Z  INFO manuk_page: load phase done phase="module graph prefetch" ms=0 gave_up=0 elapsed_ms=777
+2026-11-24T17:30:02.772555Z  INFO manuk_page: load phase done phase="blocking stylesheets" ms=0 gave_up=0 elapsed_ms=777
+2026-11-24T17:30:02.774253Z  WARN manuk_layout: LAYOUT PHASES nodes=43 total_ms=0.715799 measure_ms=0.0 measure_n=0 measure_hits=0 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=0.0 taffy_n=0 abs_ms=0.006663 worst_solve_probes=0 worst_solve_node=None unattributed_ms=0.709136
+2026-11-24T17:30:02.810987Z  WARN manuk_layout: LAYOUT PHASES nodes=46 total_ms=0.228333 measure_ms=0.0 measure_n=0 measure_hits=0 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=0.0 taffy_n=0 abs_ms=0.01034 worst_solve_probes=0 worst_solve_node=None unattributed_ms=0.217993
+2026-11-24T17:30:02.811281Z  INFO manuk_page: load phase done phase="cascade+layout+blocking scripts" ms=38 gave_up=0 elapsed_ms=816
+2026-11-24T17:30:02.812035Z  WARN manuk_layout: LAYOUT PHASES nodes=46 total_ms=0.083499 measure_ms=0.0 measure_n=0 measure_hits=0 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=0.0 taffy_n=0 abs_ms=0.006092 worst_solve_probes=0 worst_solve_node=None unattributed_ms=0.077407
+2026-11-24T17:30:02.957228Z  WARN manuk_layout: LAYOUT PHASES nodes=149 total_ms=1.118112 measure_ms=0.0 measure_n=0 measure_hits=0 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=0.0 taffy_n=0 abs_ms=0.021721 worst_solve_probes=0 worst_solve_node=None unattributed_ms=1.096391
+2026-11-24T17:30:02.957363Z  INFO manuk_page: load phase done phase="deferred scripts" ms=146 gave_up=0 elapsed_ms=962
+2026-11-24T17:30:02.959027Z  INFO manuk_page: load phase done phase="DOMContentLoaded" ms=1 gave_up=0 elapsed_ms=964
+2026-11-24T17:30:03.066362Z  WARN manuk_layout: LAYOUT PHASES nodes=149 total_ms=1.145204 measure_ms=0.0 measure_n=0 measure_hits=0 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=0.0 taffy_n=0 abs_ms=0.037772 worst_solve_probes=0 worst_solve_node=None unattributed_ms=1.107432
+2026-11-24T17:30:03.066684Z  INFO manuk_page: load phase done phase="subframes (pre-load)" ms=107 gave_up=0 elapsed_ms=1072
+2026-11-24T17:30:03.066750Z  INFO manuk_page: load phase done phase="initial images+masks" ms=0 gave_up=0 elapsed_ms=1072
+2026-11-24T17:30:03.068994Z  INFO manuk_page: load phase done phase="load event" ms=2 gave_up=0 elapsed_ms=1074
+2026-11-24T17:30:03.069009Z  INFO manuk_page: navigation phases reconciled (load_async; finish_loading keeps its own ledger) total_ms=1074 accounted_ms=1071 unaccounted_ms=3
+2026-11-24T17:30:03.077712Z  INFO manuk_page: load phase done phase="external CSS" ms=8 gave_up=0 elapsed_ms=8
+2026-11-24T17:30:03.402413Z  WARN manuk_layout: LAYOUT PHASES nodes=149 total_ms=0.562127 measure_ms=0.0 measure_n=0 measure_hits=0 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=0.0 taffy_n=0 abs_ms=0.032011 worst_solve_probes=0 worst_solve_node=None unattributed_ms=0.530116
+2026-11-24T17:30:03.421299Z  INFO manuk_page: load phase done phase="dynamic scripts" ms=343 gave_up=0 elapsed_ms=352
+2026-11-24T17:30:03.421348Z  INFO manuk_page: load phase done phase="subframes" ms=0 gave_up=0 elapsed_ms=352
+2026-11-24T17:30:03.431290Z  INFO manuk_page: load phase done phase="page fetches" ms=9 gave_up=0 elapsed_ms=362
+2026-11-24T17:30:03.431417Z  INFO manuk_page: load phase done phase="images" ms=0 gave_up=0 elapsed_ms=362
+2026-11-24T17:30:03.431442Z  INFO manuk_page: load phase done phase="icon masks" ms=0 gave_up=0 elapsed_ms=362
+2026-11-24T17:30:03.431468Z  INFO manuk_page: load phase done phase="background images" ms=0 gave_up=0 elapsed_ms=362
+2026-11-24T17:30:03.432831Z  INFO manuk_agent: agent phase done: service websockets ms=0
+setup-config navigate 2.0s rss=46M
+2026-11-24T17:30:03.677488Z  INFO manuk_agent: agent phase done: fetch html + prewarm js ms=153
+2026-11-24T17:30:03.678169Z  INFO manuk_page: load phase done phase="html parse" ms=0 gave_up=0 elapsed_ms=0
+2026-11-24T17:30:03.869330Z  INFO manuk_page: load phase done phase="external scripts" ms=191 gave_up=0 elapsed_ms=191
+2026-11-24T17:30:03.869357Z  INFO manuk_page: load phase done phase="module graph prefetch" ms=0 gave_up=0 elapsed_ms=191
+2026-11-24T17:30:03.869374Z  INFO manuk_page: load phase done phase="blocking stylesheets" ms=0 gave_up=0 elapsed_ms=191
+2026-11-24T17:30:03.870241Z  WARN manuk_layout: LAYOUT PHASES nodes=43 total_ms=0.185172 measure_ms=0.0 measure_n=0 measure_hits=0 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=0.0 taffy_n=0 abs_ms=0.004799 worst_solve_probes=0 worst_solve_node=None unattributed_ms=0.180373
+2026-11-24T17:30:03.900046Z  WARN manuk_layout: LAYOUT PHASES nodes=46 total_ms=0.267968 measure_ms=0.0 measure_n=0 measure_hits=0 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=0.0 taffy_n=0 abs_ms=0.007884 worst_solve_probes=0 worst_solve_node=None unattributed_ms=0.260084
+2026-11-24T17:30:03.900344Z  INFO manuk_page: load phase done phase="cascade+layout+blocking scripts" ms=30 gave_up=0 elapsed_ms=222
+2026-11-24T17:30:03.900877Z  WARN manuk_layout: LAYOUT PHASES nodes=46 total_ms=0.050887 measure_ms=0.0 measure_n=0 measure_hits=0 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=0.0 taffy_n=0 abs_ms=0.004198 worst_solve_probes=0 worst_solve_node=None unattributed_ms=0.046689
+2026-11-24T17:30:04.044777Z  WARN manuk_layout: LAYOUT PHASES nodes=89 total_ms=0.843852 measure_ms=0.0 measure_n=0 measure_hits=0 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=0.0 taffy_n=0 abs_ms=0.04721 worst_solve_probes=0 worst_solve_node=None unattributed_ms=0.796642
+2026-11-24T17:30:04.045079Z  INFO manuk_page: load phase done phase="deferred scripts" ms=144 gave_up=0 elapsed_ms=367
+2026-11-24T17:30:04.046274Z  INFO manuk_page: load phase done phase="DOMContentLoaded" ms=1 gave_up=0 elapsed_ms=368
+2026-11-24T17:30:04.055509Z  INFO manuk_page: load phase done phase="subframes (pre-load)" ms=9 gave_up=0 elapsed_ms=377
+2026-11-24T17:30:04.055543Z  INFO manuk_page: load phase done phase="initial images+masks" ms=0 gave_up=0 elapsed_ms=377
+2026-11-24T17:30:04.057171Z  INFO manuk_page: load phase done phase="load event" ms=1 gave_up=0 elapsed_ms=379
+2026-11-24T17:30:04.057182Z  INFO manuk_page: navigation phases reconciled (load_async; finish_loading keeps its own ledger) total_ms=379 accounted_ms=376 unaccounted_ms=3
+2026-11-24T17:30:04.066161Z  INFO manuk_page: load phase done phase="external CSS" ms=8 gave_up=0 elapsed_ms=8
+2026-11-24T17:30:04.100518Z  WARN manuk_layout: LAYOUT PHASES nodes=89 total_ms=0.148783 measure_ms=0.0 measure_n=0 measure_hits=0 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=0.0 taffy_n=0 abs_ms=0.017994 worst_solve_probes=0 worst_solve_node=None unattributed_ms=0.130789
+2026-11-24T17:30:04.119520Z  INFO manuk_page: load phase done phase="dynamic scripts" ms=53 gave_up=0 elapsed_ms=62
+2026-11-24T17:30:04.119674Z  INFO manuk_page: load phase done phase="subframes" ms=0 gave_up=0 elapsed_ms=62
+2026-11-24T17:30:04.128545Z  INFO manuk_page: load phase done phase="page fetches" ms=8 gave_up=0 elapsed_ms=71
+2026-11-24T17:30:04.128642Z  INFO manuk_page: load phase done phase="images" ms=0 gave_up=0 elapsed_ms=71
+2026-11-24T17:30:04.128663Z  INFO manuk_page: load phase done phase="icon masks" ms=0 gave_up=0 elapsed_ms=71
+2026-11-24T17:30:04.128684Z  INFO manuk_page: load phase done phase="background images" ms=0 gave_up=0 elapsed_ms=71
+2026-11-24T17:30:04.130073Z  INFO manuk_agent: agent phase done: service websockets ms=0
+setup-finish navigate 0.7s rss=53M
+2026-11-24T17:30:04.291691Z  INFO manuk_agent: agent phase done: fetch html + prewarm js ms=97
+2026-11-24T17:30:04.292307Z  INFO manuk_page: load phase done phase="html parse" ms=0 gave_up=0 elapsed_ms=0
+2026-11-24T17:30:04.614186Z  INFO manuk_page: load phase done phase="external scripts" ms=321 gave_up=0 elapsed_ms=322
+2026-11-24T17:30:04.614264Z  INFO manuk_page: load phase done phase="module graph prefetch" ms=0 gave_up=0 elapsed_ms=322
+2026-11-24T17:30:04.614306Z  INFO manuk_page: load phase done phase="blocking stylesheets" ms=0 gave_up=0 elapsed_ms=322
+2026-11-24T17:30:04.615401Z  WARN manuk_layout: LAYOUT PHASES nodes=53 total_ms=0.30017 measure_ms=0.0 measure_n=0 measure_hits=0 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=0.0 taffy_n=0 abs_ms=0.011391 worst_solve_probes=0 worst_solve_node=None unattributed_ms=0.288779
+2026-11-24T17:30:04.644213Z  WARN manuk_layout: LAYOUT PHASES nodes=56 total_ms=0.370302 measure_ms=0.0 measure_n=0 measure_hits=0 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=0.0 taffy_n=0 abs_ms=0.004779 worst_solve_probes=0 worst_solve_node=None unattributed_ms=0.365523
+2026-11-24T17:30:04.644499Z  INFO manuk_page: load phase done phase="cascade+layout+blocking scripts" ms=30 gave_up=0 elapsed_ms=352
+2026-11-24T17:30:04.645495Z  WARN manuk_layout: LAYOUT PHASES nodes=56 total_ms=0.057509 measure_ms=0.0 measure_n=0 measure_hits=0 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=0.0 taffy_n=0 abs_ms=0.00546 worst_solve_probes=0 worst_solve_node=None unattributed_ms=0.052049
+2026-11-24T17:30:04.922152Z  INFO page.console: Search term in home view: 
+2026-11-24T17:30:07.702359Z  WARN manuk_layout: LAYOUT PHASES nodes=7531 total_ms=701.864428 measure_ms=0.0 measure_n=0 measure_hits=217144 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=693.169416 taffy_n=2 abs_ms=8.533446 worst_solve_probes=216999 worst_solve_node=Some(NodeId(7245)) unattributed_ms=0.161566
+2026-11-24T17:30:07.736729Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=92 layout_ms=701 container_query_ms=0 cq_relaid=false n_sheets=5 nodes=7531 caller=engine/page/src/lib.rs:2632
+2026-11-24T17:30:07.781558Z  INFO manuk_page: SLOW FORCED REFLOW — one geometry read laid out the whole document total_ms=862 sheets_ms=7 n_sheets=5 layout_ms=852 rects_ms=2 n_rects=5728 publish_ms=0 nodes=7531
+2026-11-24T17:30:07.985280Z  INFO manuk_page: SLOW FORCED REFLOW — one geometry read laid out the whole document total_ms=163 sheets_ms=2 n_sheets=5 layout_ms=151 rects_ms=9 n_rects=5728 publish_ms=0 nodes=7531
+2026-11-24T17:30:08.192030Z  INFO manuk_page: SLOW FORCED REFLOW — one geometry read laid out the whole document total_ms=155 sheets_ms=5 n_sheets=5 layout_ms=144 rects_ms=5 n_rects=5728 publish_ms=0 nodes=7531
+2026-11-24T17:30:08.420565Z  INFO manuk_page: SLOW FORCED REFLOW — one geometry read laid out the whole document total_ms=174 sheets_ms=1 n_sheets=5 layout_ms=164 rects_ms=8 n_rects=5728 publish_ms=0 nodes=7531
+2026-11-24T17:30:08.619711Z  INFO manuk_page: SLOW FORCED REFLOW — one geometry read laid out the whole document total_ms=148 sheets_ms=4 n_sheets=5 layout_ms=140 rects_ms=3 n_rects=5728 publish_ms=0 nodes=7531
+2026-11-24T17:30:08.794288Z  INFO manuk_page: SLOW FORCED REFLOW — one geometry read laid out the whole document total_ms=123 sheets_ms=4 n_sheets=5 layout_ms=114 rects_ms=4 n_rects=5728 publish_ms=0 nodes=7531
+2026-11-24T17:30:08.943384Z  INFO manuk_page: SLOW FORCED REFLOW — one geometry read laid out the whole document total_ms=110 sheets_ms=3 n_sheets=5 layout_ms=104 rects_ms=3 n_rects=5728 publish_ms=0 nodes=7531
+2026-11-24T17:30:09.117164Z  INFO manuk_page: SLOW FORCED REFLOW — one geometry read laid out the whole document total_ms=105 sheets_ms=3 n_sheets=5 layout_ms=96 rects_ms=5 n_rects=5728 publish_ms=0 nodes=7531
+2026-11-24T17:30:09.303646Z  INFO manuk_page: SLOW FORCED REFLOW — one geometry read laid out the whole document total_ms=131 sheets_ms=4 n_sheets=5 layout_ms=123 rects_ms=3 n_rects=5728 publish_ms=0 nodes=7531
+2026-11-24T17:30:09.473417Z  INFO manuk_page: SLOW FORCED REFLOW — one geometry read laid out the whole document total_ms=120 sheets_ms=6 n_sheets=5 layout_ms=110 rects_ms=3 n_rects=5728 publish_ms=0 nodes=7531
+2026-11-24T17:30:09.637993Z  INFO manuk_page: SLOW FORCED REFLOW — one geometry read laid out the whole document total_ms=102 sheets_ms=3 n_sheets=5 layout_ms=94 rects_ms=4 n_rects=5728 publish_ms=0 nodes=7531
+2026-11-24T17:30:09.845961Z  INFO manuk_page: SLOW FORCED REFLOW — one geometry read laid out the whole document total_ms=152 sheets_ms=3 n_sheets=5 layout_ms=144 rects_ms=4 n_rects=5728 publish_ms=0 nodes=7531
+2026-11-24T17:30:09.847673Z  WARN mozjs::rust: Warning at https://evals-dashdish.vercel.app/ inline#22:1:49254: Script terminated by timeout at:
+5518/t.getWidth@https://evals-dashdish.vercel.app/ inline#22:1:49254
+5518/t.initializedState@https://evals-dashdish.vercel.app/ inline#22:1:50048
+v/<@https://evals-dashdish.vercel.app/ inline#22:1:23606
+v/<@https://evals-dashdish.vercel.app/ inline#22:1:21116
+uY@https://evals-dashdish.vercel.app/ inline#15:9:90506
+e@https://evals-dashdish.vercel.app/ inline#15:9:111029
+oI/<@https://evals-dashdish.vercel.app/ inline#15:9:111040
+oI@https://evals-dashdish.vercel.app/ inline#15:9:111552
+oS@https://evals-dashdish.vercel.app/ inline#15:9:94924
+x@https://evals-dashdish.vercel.app/ inline#15:33:1365
+T@https://evals-dashdish.vercel.app/ inline#15:33:1894
+globalThis.MessageChannel/p2.postMessage/<@event_loop_prelude.js:5034:89
+@event_loop_micro.js:1:70
+@event_loop_micro.js:1:113
+
+
+2026-11-24T17:30:09.847726Z  WARN manuk_js::event_loop: event loop PREEMPTED a task that was over budget and not returning — painting what we have. The alternative is a frozen tab that no task-boundary check can reach. count=0 elapsed_ms=5129 budget_ms=5000
+2026-11-24T17:30:09.992337Z  INFO manuk_page: load phase done phase="deferred scripts" ms=5347 gave_up=1 elapsed_ms=5700
+2026-11-24T17:30:10.052041Z  INFO manuk_page: load phase done phase="DOMContentLoaded" ms=59 gave_up=0 elapsed_ms=5760
+2026-11-24T17:30:10.110931Z  INFO manuk_page: load phase done phase="subframes (pre-load)" ms=58 gave_up=0 elapsed_ms=5819
+2026-11-24T17:30:21.662293Z  WARN manuk_layout: LAYOUT PHASES nodes=7531 total_ms=907.964902 measure_ms=0.0 measure_n=0 measure_hits=217144 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=892.94786 taffy_n=2 abs_ms=14.575573 worst_solve_probes=216999 worst_solve_node=Some(NodeId(7245)) unattributed_ms=0.441469
+2026-11-24T17:30:21.775767Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=0 layout_ms=1023 container_query_ms=0 cq_relaid=false n_sheets=5 nodes=7531 caller=engine/page/src/lib.rs:7352
+2026-11-24T17:30:21.776467Z  INFO manuk_page: load phase done phase="initial images+masks" ms=11665 gave_up=0 elapsed_ms=17484
+2026-11-24T17:30:25.339011Z  INFO manuk_page: load phase done phase="load event" ms=3562 gave_up=0 elapsed_ms=21047
+2026-11-24T17:30:25.339074Z  INFO manuk_page: navigation phases reconciled (load_async; finish_loading keeps its own ledger) total_ms=21047 accounted_ms=21042 unaccounted_ms=5
+2026-11-24T17:30:25.378810Z  INFO manuk_page: load phase done phase="external CSS" ms=39 gave_up=0 elapsed_ms=39
+2026-11-24T17:30:26.354479Z  WARN manuk_layout: LAYOUT PHASES nodes=7531 total_ms=803.430521 measure_ms=0.0 measure_n=0 measure_hits=217144 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=790.945755 taffy_n=2 abs_ms=12.03421 worst_solve_probes=216999 worst_solve_node=Some(NodeId(7245)) unattributed_ms=0.450556
+2026-11-24T17:30:26.360243Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=75 layout_ms=809 container_query_ms=0 cq_relaid=false n_sheets=5 nodes=7531 caller=engine/page/src/lib.rs:12607
+2026-11-24T17:30:26.455646Z  INFO manuk_page: load phase done phase="dynamic scripts" ms=1076 gave_up=0 elapsed_ms=1116
+2026-11-24T17:30:26.459199Z  INFO manuk_page: load phase done phase="subframes" ms=3 gave_up=0 elapsed_ms=1120
+2026-11-24T17:30:26.506136Z  INFO manuk_page: load phase done phase="page fetches" ms=46 gave_up=0 elapsed_ms=1167
+2026-11-24T17:30:26.508082Z  INFO manuk_page: load phase done phase="images" ms=1 gave_up=0 elapsed_ms=1168
+2026-11-24T17:30:26.508410Z  INFO manuk_page: load phase done phase="icon masks" ms=0 gave_up=0 elapsed_ms=1169
+2026-11-24T17:30:26.509677Z  INFO manuk_page: load phase done phase="background images" ms=1 gave_up=0 elapsed_ms=1170
+2026-11-24T17:30:26.614109Z  INFO manuk_agent: agent phase done: service websockets ms=0
+start navigate 23.4s rss=4490M
+2026-11-24T17:30:28.577478Z  WARN manuk_layout: LAYOUT PHASES nodes=7533 total_ms=748.648888 measure_ms=0.0 measure_n=0 measure_hits=217144 min_content_ms=0.0 min_content_n=0 max_content_ms=0.0 max_content_n=0 taffy_ms=738.934059 taffy_n=2 abs_ms=9.477027 worst_solve_probes=216999 worst_solve_node=Some(NodeId(7245)) unattributed_ms=0.237802
+2026-11-24T17:30:28.582577Z  INFO manuk_page: SLOW RESTYLE+LAYOUT cascade_ms=65 layout_ms=753 container_query_ms=0 cq_relaid=false n_sheets=5 nodes=7533 caller=engine/page/src/lib.rs:12607
+observe-interactive observe 1.6s rss=4507M
+observe-viewport observe 0.7s rss=4507M
