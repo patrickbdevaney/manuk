@@ -671,7 +671,7 @@ pub fn to_computed_style(cv: &ComputedValues) -> ComputedStyle {
             }
         }
         if !names.is_empty() {
-            s.font_family = names;
+            s.font_family = names.into();
         }
     }
     s.text_align = map_text_align(cv.clone_text_align());

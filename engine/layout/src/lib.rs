@@ -2212,12 +2212,12 @@ pub fn reuse_for_opacity_only(
     for (n, v) in new {
         let o = old.get(n)?;
         if v != o {
-            let mut o2 = o.clone();
+            let mut o2: ComputedStyle = (**o).clone();
             o2.opacity = v.opacity;
-            if &o2 != v {
+            if o2 != **v {
                 // `transform-origin` only positions a transform: with none, it moves nothing.
                 o2.transform_origin = v.transform_origin;
-                if &o2 != v || !v.effective_transform().is_empty() {
+                if o2 != **v || !v.effective_transform().is_empty() {
                     return None;
                 }
             }
@@ -2301,7 +2301,7 @@ fn propagate_body_overflow(dom: &Dom, styles: &StyleMap) -> Option<StyleMap> {
         return None;
     }
     let mut m = styles.clone();
-    let b = m.get_mut(&body)?;
+    let b = std::sync::Arc::make_mut(m.get_mut(&body)?);
     b.overflow = Overflow::Visible;
     b.overflow_x = Overflow::Visible;
     b.overflow_y = Overflow::Visible;
@@ -10563,7 +10563,7 @@ impl Ctx<'_> {
                     height: row_h[r],
                 },
                 background: rs.and_then(|s| s.background_color),
-                border: rs.and_then(border_of),
+                border: rs.and_then(|s| border_of(s)),
                 radius: rs.map(|s| s.border_radius).unwrap_or(0.0),
                 shadows: rs.map(|s| s.box_shadows.clone()).unwrap_or_default(),
                 filters: rs.map(|s| s.filter.clone()).unwrap_or_default(),
@@ -20947,7 +20947,11 @@ mod tests {
             .descendants(dom.root())
             .find(|&n| dom.element(n).and_then(|e| e.attr("id")) == Some(img_id))
             .unwrap_or_else(|| panic!("id={img_id}"));
-        manuk_css::fill_natural_size(styles.get_mut(&node).expect("styled"), nw, nh);
+        manuk_css::fill_natural_size(
+            std::sync::Arc::make_mut(styles.get_mut(&node).expect("styled")),
+            nw,
+            nh,
+        );
         let root = TEST_FONTS.with(|fonts| layout_document(&dom, &styles, fonts, width));
         (dom, root)
     }
@@ -22042,7 +22046,7 @@ mod tests {
             .descendants(dom.root())
             .find(|&n| dom.tag_name(n) == Some("img"))
             .expect("img in the tree");
-        if let Some(st) = styles.get_mut(&img) {
+        if let Some(st) = styles.get_mut(&img).map(std::sync::Arc::make_mut) {
             st.aspect_ratio = Some(400.0 / 300.0);
             st.width = Dim::Px(400.0);
         }

@@ -2787,7 +2787,7 @@ fn run_boxes_cmd(args: &[String], fonts: &manuk_text::FontContext) {
         fn walk(
             b: &manuk_layout::LayoutBox,
             dom: &manuk_dom::Dom,
-            styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+            styles: &manuk_css::StyleMap,
             depth: usize,
             hit: bool,
             want_node: manuk_dom::NodeId,

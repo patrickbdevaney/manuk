@@ -1574,7 +1574,7 @@ pub struct ComputedStyle {
     pub font_weight: u16,
     /// The `font-family` list (names in priority order, lowercased; generic keywords kept
     /// literally, e.g. `"sans-serif"`). Resolved to a concrete face by the text layer.
-    pub font_family: Vec<String>,
+    pub font_family: std::sync::Arc<[String]>,
     pub italic: bool,
     pub line_height: f32,
     pub text_align: TextAlign,
@@ -2128,7 +2128,7 @@ impl ComputedStyle {
             background_color: None,
             font_size: 16.0,
             font_weight: 400,
-            font_family: vec!["sans-serif".to_string()],
+            font_family: std::sync::Arc::from(vec!["sans-serif".to_string()]),
             italic: false,
             line_height: 16.0 * 1.2,
             text_align: TextAlign::Left,
@@ -2358,7 +2358,7 @@ impl ComputedStyle {
 }
 
 /// Map from DOM node to its computed style. Text nodes inherit their parent's.
-pub type StyleMap = HashMap<NodeId, ComputedStyle>;
+pub type StyleMap = HashMap<NodeId, std::sync::Arc<ComputedStyle>>;
 
 /// E1 **full-page zoom** — scale every *absolute* length in `style` by `k`.
 ///
@@ -2411,7 +2411,7 @@ pub fn scale_style(style: &ComputedStyle, k: f32) -> ComputedStyle {
 pub fn zoom_styles(styles: &StyleMap, k: f32) -> StyleMap {
     styles
         .iter()
-        .map(|(n, s)| (*n, scale_style(s, k)))
+        .map(|(n, s)| (*n, std::sync::Arc::new(scale_style(s, k))))
         .collect()
 }
 
@@ -5875,7 +5875,7 @@ impl MinimalCascade {
             let cheap = !too_many && check.len() <= limit * 2;
             if cheap {
                 for (n, st) in self.styles_alone(dom, sheets, &c.map, &check) {
-                    if c.map.get(&n) != Some(&st) {
+                    if c.map.get(&n).map(|a| &**a) != Some(&st) {
                         extra.push(n);
                     }
                 }
@@ -6164,7 +6164,7 @@ impl MinimalCascade {
         for &r in roots {
             let parent_style = dom
                 .parent(r)
-                .and_then(|p| map.get(&p).cloned())
+                .and_then(|p| map.get(&p).map(|a| (**a).clone()))
                 .unwrap_or_else(ComputedStyle::initial);
             self.cascade_node(dom, r, &parent_style, &index, map);
         }
@@ -6203,11 +6203,14 @@ impl MinimalCascade {
         let mut out = Vec::with_capacity(nodes.len());
         let mut scratch = StyleMap::new();
         for &n in nodes {
-            let parent = dom.parent(n).and_then(|p| cached.get(&p)).unwrap_or(&init);
+            let parent = dom
+                .parent(n)
+                .and_then(|p| cached.get(&p).map(|a| &**a))
+                .unwrap_or(&init);
             scratch.clear();
             self.cascade_node_inner(dom, n, parent, &index, &mut scratch, false);
             if let Some(s) = scratch.remove(&n) {
-                out.push((n, s));
+                out.push((n, std::sync::Arc::unwrap_or_clone(s)));
             }
         }
         out
@@ -6237,7 +6240,7 @@ impl MinimalCascade {
             &mut scratch,
             false,
         );
-        scratch.remove(&node)
+        scratch.remove(&node).map(std::sync::Arc::unwrap_or_clone)
     }
 
     #[allow(clippy::only_used_in_recursion)]
@@ -6425,7 +6428,7 @@ impl MinimalCascade {
             _ => ComputedStyle::inherit_from(parent_style),
         };
 
-        map.insert(node, style.clone());
+        map.insert(node, std::sync::Arc::new(style.clone()));
         // Recurse over the FLAT tree: shadow content is styled, slotted light-DOM nodes
         // are visited once (through their slot), and unslotted light children are skipped
         // because they do not render.
@@ -6778,7 +6781,7 @@ fn apply_ua_defaults(s: &mut ComputedStyle, el: &ElementData) {
     }
     // UA default: monospace for the code/teletype families.
     if matches!(tag, "pre" | "code" | "kbd" | "samp" | "tt" | "var") {
-        s.font_family = vec!["monospace".to_string()];
+        s.font_family = std::sync::Arc::from(vec!["monospace".to_string()]);
     }
     if matches!(tag, "ul" | "ol") {
         s.padding.left = Dim::Px(40.0);
@@ -7316,7 +7319,7 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
                     }
                 }
             }
-            s.font_family = fam;
+            s.font_family = fam.into();
             let (size, lh) = match size_tok.split_once('/') {
                 Some((a, b)) => (a, Some(b)),
                 None => (size_tok, None),
@@ -7350,7 +7353,7 @@ fn apply_declaration(s: &mut ComputedStyle, d: &Declaration, parent_fs: f32) {
         "font-family" => {
             let list = parse_font_family(v);
             if !list.is_empty() {
-                s.font_family = list;
+                s.font_family = list.into();
             }
         }
         "line-height" => {
@@ -10089,7 +10092,7 @@ mod tests {
                 .descendants(dom.root())
                 .find(|&n| dom.tag_name(n) == Some("p"))
                 .expect("VACUOUS: the fixture has no <p>");
-            map[&p].clone()
+            (*map[&p]).clone()
         };
 
         // ── VACUITY. The context must actually reach the child, or every row below is asserting
@@ -10164,8 +10167,8 @@ mod tests {
                  ones present."
             );
             assert_eq!(
-                c.font_family,
-                vec!["monospace".to_string()],
+                &c.font_family[..],
+                ["monospace".to_string()],
                 "G_MINIMAL_CASCADE_LINE_HEIGHT `{decl}`: the family must survive the shorthand"
             );
         }
@@ -10267,7 +10270,9 @@ mod tests {
         let one = |decl: &str| {
             let (dom, map) = styled(&format!("span {{ {decl} }}"));
             let n = query_selector_all(&dom, dom.root(), "span")[0];
-            map.get(&n).cloned().unwrap_or_else(ComputedStyle::initial)
+            map.get(&n)
+                .map(|a| (**a).clone())
+                .unwrap_or_else(ComputedStyle::initial)
         };
 
         // ── text-transform: the row measured against Chrome, with its three controls.
@@ -10365,7 +10370,9 @@ mod tests {
         let one = |decl: &str| {
             let (dom, map) = styled(&format!("span {{ {decl} }}"));
             let n = query_selector_all(&dom, dom.root(), "span")[0];
-            map.get(&n).cloned().unwrap_or_else(ComputedStyle::initial)
+            map.get(&n)
+                .map(|a| (**a).clone())
+                .unwrap_or_else(ComputedStyle::initial)
         };
 
         // Each longhand reaches its OWN field and leaves the other three at their initial value —
@@ -10436,7 +10443,7 @@ mod tests {
             let (dom, map) = styled(&format!("span {{ {decl} }}"));
             let n = query_selector_all(&dom, dom.root(), "span")[0];
             map.get(&n)
-                .cloned()
+                .map(|a| (**a).clone())
                 .unwrap_or_else(ComputedStyle::initial)
                 .establishes_containing_block
         };
@@ -10490,7 +10497,9 @@ mod tests {
         let one = |decl: &str| {
             let (dom, map) = styled(&format!("span {{ {decl} }}"));
             let n = query_selector_all(&dom, dom.root(), "span")[0];
-            map.get(&n).cloned().unwrap_or_else(ComputedStyle::initial)
+            map.get(&n)
+                .map(|a| (**a).clone())
+                .unwrap_or_else(ComputedStyle::initial)
         };
 
         // A PERCENTAGE survives the cascade instead of collapsing to 0 — the whole point of the
@@ -10527,7 +10536,9 @@ mod tests {
         let one = |decl: &str| {
             let (dom, map) = styled(&format!("span {{ {decl} }}"));
             let n = query_selector_all(&dom, dom.root(), "span")[0];
-            map.get(&n).cloned().unwrap_or_else(ComputedStyle::initial)
+            map.get(&n)
+                .map(|a| (**a).clone())
+                .unwrap_or_else(ComputedStyle::initial)
         };
 
         // `[ row | column ] || dense` — both orders, and `dense` alone meaning `row dense`.
@@ -11149,17 +11160,17 @@ mod shadow_scoping_tests {
         let (dom, map) =
             cascade_of(r#"<div style="font-family:'MyFont', monospace">a<code>b</code></div>"#);
         let div = dom.find_first("div").unwrap();
-        assert_eq!(map[&div].font_family, vec!["myfont", "monospace"]);
+        assert_eq!(&map[&div].font_family[..], ["myfont", "monospace"]);
         assert_eq!(
-            map[&dom.find_first("code").unwrap()].font_family,
-            vec!["monospace"]
+            map[&dom.find_first("code").unwrap()].font_family[..],
+            ["monospace"]
         );
 
         // A bare <pre> is monospace by UA default even without an author rule.
         let (dom, map) = cascade_of("<pre>x</pre>");
         assert_eq!(
-            map[&dom.find_first("pre").unwrap()].font_family,
-            vec!["monospace"]
+            map[&dom.find_first("pre").unwrap()].font_family[..],
+            ["monospace"]
         );
     }
 

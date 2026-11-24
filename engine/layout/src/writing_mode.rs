@@ -174,7 +174,7 @@ pub(crate) fn plan(dom: &Dom, styles: &StyleMap) -> Option<WmPlan> {
                 if out_of_flow {
                     roots.insert(node, pm);
                 } else if let Some(s) = out.get_mut(&node) {
-                    transpose_in_place(s, pm);
+                    transpose_in_place(std::sync::Arc::make_mut(s), pm);
                 }
                 Some(pm)
             }

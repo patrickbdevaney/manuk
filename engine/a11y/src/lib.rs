@@ -2039,7 +2039,7 @@ pub fn empty_name_ctx<'a>(
 }
 
 /// Extract [`NameStyles`] from a computed-style map. One builder, so the two entrances cannot drift.
-pub fn name_styles(dom: &Dom, styles: &HashMap<NodeId, manuk_css::ComputedStyle>) -> NameStyles {
+pub fn name_styles(dom: &Dom, styles: &manuk_css::StyleMap) -> NameStyles {
     dom.descendants(dom.root())
         .filter_map(|n| {
             styles.get(&n).map(|s| {

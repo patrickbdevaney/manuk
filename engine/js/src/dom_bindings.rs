@@ -79,7 +79,7 @@ thread_local! {
     /// exactly the lifetime of `CURRENT_DOM`, and set and cleared at the same places.
     static LAYOUT_RECTS_PTR: std::cell::Cell<*const std::collections::HashMap<NodeId, [f32; 4]>> =
         const { std::cell::Cell::new(std::ptr::null()) };
-    static STYLES_PTR: std::cell::Cell<*const std::collections::HashMap<NodeId, manuk_css::ComputedStyle>> =
+    static STYLES_PTR: std::cell::Cell<*const manuk_css::StyleMap> =
         const { std::cell::Cell::new(std::ptr::null()) };
 
     /// The document's URL — the origin `document.cookie` reads and writes against.
@@ -488,7 +488,7 @@ fn dom_is_live(dom: *mut Dom) -> bool {
 /// The caller owns them and outlives the call; nothing here may retain them past it.
 fn set_view_maps(
     layout: &std::collections::HashMap<NodeId, [f32; 4]>,
-    styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+    styles: &manuk_css::StyleMap,
 ) {
     LAYOUT_RECTS_PTR.with(|c| c.set(layout as *const _));
     STYLES_PTR.with(|c| c.set(styles as *const _));
@@ -505,7 +505,7 @@ fn set_view_maps(
 /// `layout` and `styles` must outlive the current re-entry into JS.
 pub unsafe fn republish_view_maps(
     layout: &std::collections::HashMap<NodeId, [f32; 4]>,
-    styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+    styles: &manuk_css::StyleMap,
 ) {
     set_view_maps(layout, styles);
 }
@@ -518,7 +518,7 @@ pub unsafe fn republish_view_maps(
 #[derive(Clone, Copy)]
 pub struct ViewMaps {
     layout: *const std::collections::HashMap<NodeId, [f32; 4]>,
-    styles: *const std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+    styles: *const manuk_css::StyleMap,
 }
 
 /// Snapshot the currently published view-map pointers.
@@ -1382,7 +1382,7 @@ fn with_style<R>(node: NodeId, f: impl FnOnce(&manuk_css::ComputedStyle) -> R) -
         if p.is_null() {
             return None;
         }
-        unsafe { (*p).get(&node).map(f) }
+        unsafe { (*p).get(&node).map(|a| f(&**a)) }
     })
 }
 
@@ -1416,11 +1416,11 @@ fn with_style_in<R>(
     let frame = FRAME_STYLES.with(|c| c.borrow().get(&(dom as usize)).copied());
     match frame {
         Some(addr) => {
-            let p = addr as *const std::collections::HashMap<NodeId, manuk_css::ComputedStyle>;
+            let p = addr as *const manuk_css::StyleMap;
             if p.is_null() {
                 return None;
             }
-            unsafe { (*p).get(&node).map(f) }
+            unsafe { (*p).get(&node).map(|a| f(&**a)) }
         }
         None => with_style(node, f),
     }
@@ -5560,7 +5560,7 @@ unsafe fn stacking_layer_of(dom: &Dom, node: NodeId) -> i32 {
         let st = if styles.is_null() {
             None
         } else {
-            (*styles).get(n)
+            (*styles).get(n).map(|a| &**a)
         };
         layer = manuk_css::stacking_layer(st, layer);
     }
@@ -14759,7 +14759,7 @@ pub fn run_scripts(
     runtime: &mut Runtime,
     dom: &mut Dom,
     layout: &std::collections::HashMap<NodeId, [f32; 4]>,
-    styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+    styles: &manuk_css::StyleMap,
 ) -> Result<usize, String> {
     // ⚠ **THE EMPTY SET IS CORRECT HERE AND IT IS NOT A SHORTCUT.** This entry point (`run_scripts`)
     // is the one-shot path that never went through `Page`'s external-script fetch, so no node on its
@@ -14896,7 +14896,7 @@ impl PageContext {
         dom: &mut Dom,
         doc_url: &str,
         layout: &std::collections::HashMap<NodeId, [f32; 4]>,
-        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+        styles: &manuk_css::StyleMap,
         external_scripts: std::collections::HashSet<NodeId>,
     ) -> Result<(Self, usize), String> {
         // ⚠ **THE HARVEST IS NOT RESET HERE, AND THAT IS DELIBERATE.** The reset belongs where a
@@ -15132,7 +15132,7 @@ impl PageContext {
         runtime: &mut Runtime,
         dom: &mut Dom,
         layout: &std::collections::HashMap<NodeId, [f32; 4]>,
-        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+        styles: &manuk_css::StyleMap,
     ) -> Result<usize, String> {
         set_view_maps(layout, styles);
         set_current_dom(dom as *mut Dom);
@@ -15202,7 +15202,7 @@ impl PageContext {
         dom: &mut Dom,
         src: &str,
         layout: &std::collections::HashMap<NodeId, [f32; 4]>,
-        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+        styles: &manuk_css::StyleMap,
         // ⚠⚠⚠ **THE SCRIPT ELEMENT THIS SOURCE CAME FROM — and it was the THIRD entry point that
         // did not set it.** `document.currentScript` is the executing `<script>` during a CLASSIC
         // script, external ones included (HTML §4.12.1); the parse path
@@ -15314,7 +15314,7 @@ impl PageContext {
         vh: f32,
         scrolled: bool,
         layout: &std::collections::HashMap<NodeId, [f32; 4]>,
-        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+        styles: &manuk_css::StyleMap,
     ) -> Result<(), String> {
         set_view_maps(layout, styles);
         set_current_dom(dom as *mut Dom);
@@ -15343,7 +15343,7 @@ impl PageContext {
         node: NodeId,
         ty: &str,
         layout: &std::collections::HashMap<NodeId, [f32; 4]>,
-        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+        styles: &manuk_css::StyleMap,
     ) -> Result<bool, String> {
         set_view_maps(layout, styles);
         set_current_dom(dom as *mut Dom);
@@ -15391,7 +15391,7 @@ impl PageContext {
         property: &str,
         elapsed_s: f64,
         layout: &std::collections::HashMap<NodeId, [f32; 4]>,
-        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+        styles: &manuk_css::StyleMap,
     ) -> Result<bool, String> {
         set_view_maps(layout, styles);
         set_current_dom(dom as *mut Dom);
@@ -15444,7 +15444,7 @@ impl PageContext {
         key_code: u32,
         mods: crate::KeyModifiers,
         layout: &std::collections::HashMap<NodeId, [f32; 4]>,
-        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+        styles: &manuk_css::StyleMap,
     ) -> Result<bool, String> {
         set_view_maps(layout, styles);
         set_current_dom(dom as *mut Dom);
@@ -15575,7 +15575,7 @@ impl PageContext {
         node: NodeId,
         files_json: &str,
         layout: &std::collections::HashMap<NodeId, [f32; 4]>,
-        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+        styles: &manuk_css::StyleMap,
     ) -> Result<bool, String> {
         set_view_maps(layout, styles);
         set_current_dom(dom as *mut Dom);
@@ -15639,7 +15639,7 @@ impl PageContext {
         source: NodeId,
         target: NodeId,
         layout: &std::collections::HashMap<NodeId, [f32; 4]>,
-        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+        styles: &manuk_css::StyleMap,
     ) -> Result<bool, String> {
         set_view_maps(layout, styles);
         set_current_dom(dom as *mut Dom);
@@ -15713,7 +15713,7 @@ impl PageContext {
         node: NodeId,
         data: &str,
         layout: &std::collections::HashMap<NodeId, [f32; 4]>,
-        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+        styles: &manuk_css::StyleMap,
     ) -> Result<bool, String> {
         set_view_maps(layout, styles);
         set_current_dom(dom as *mut Dom);
@@ -15782,7 +15782,7 @@ impl PageContext {
         input_type: &str,
         data: &str,
         layout: &std::collections::HashMap<NodeId, [f32; 4]>,
-        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+        styles: &manuk_css::StyleMap,
     ) -> Result<bool, String> {
         set_view_maps(layout, styles);
         set_current_dom(dom as *mut Dom);
@@ -15862,7 +15862,7 @@ impl PageContext {
         detail: u32,
         button: u32,
         layout: &std::collections::HashMap<NodeId, [f32; 4]>,
-        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+        styles: &manuk_css::StyleMap,
     ) -> Result<bool, String> {
         set_view_maps(layout, styles);
         set_current_dom(dom as *mut Dom);
@@ -15895,7 +15895,7 @@ impl PageContext {
         button: u32,
         buttons: u32,
         layout: &std::collections::HashMap<NodeId, [f32; 4]>,
-        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+        styles: &manuk_css::StyleMap,
     ) -> Result<bool, String> {
         set_view_maps(layout, styles);
         set_current_dom(dom as *mut Dom);
@@ -16061,7 +16061,7 @@ impl PageContext {
         state_json: &str,
         url: &str,
         layout: &std::collections::HashMap<NodeId, [f32; 4]>,
-        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+        styles: &manuk_css::StyleMap,
     ) -> Result<(), String> {
         set_view_maps(layout, styles);
         let _ = dom;
@@ -16169,7 +16169,7 @@ impl PageContext {
         origin: &str,
         source_win: u64,
         layout: &std::collections::HashMap<NodeId, [f32; 4]>,
-        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+        styles: &manuk_css::StyleMap,
     ) -> Result<(), String> {
         set_view_maps(layout, styles);
         let _ = dom;
@@ -16215,7 +16215,7 @@ impl PageContext {
         body: &str,
         headers: &[(String, String)],
         layout: &std::collections::HashMap<NodeId, [f32; 4]>,
-        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+        styles: &manuk_css::StyleMap,
     ) -> Result<(), String> {
         self.resolve_fetch_bytes(
             runtime, dom, id, status, body, None, headers, layout, styles,
@@ -16235,7 +16235,7 @@ impl PageContext {
         raw: Option<&[u8]>,
         headers: &[(String, String)],
         layout: &std::collections::HashMap<NodeId, [f32; 4]>,
-        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+        styles: &manuk_css::StyleMap,
     ) -> Result<(), String> {
         set_view_maps(layout, styles);
         let _ = dom; // reflectors cache the stable `*mut Dom` from `load`; kept for API symmetry.
@@ -16267,7 +16267,7 @@ impl PageContext {
         id: u32,
         event: &crate::WsEvent,
         layout: &std::collections::HashMap<NodeId, [f32; 4]>,
-        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+        styles: &manuk_css::StyleMap,
     ) -> Result<(), String> {
         set_view_maps(layout, styles);
         let _ = dom;
@@ -16289,7 +16289,7 @@ impl PageContext {
         id: u32,
         event: &crate::FetchStreamEvent,
         layout: &std::collections::HashMap<NodeId, [f32; 4]>,
-        styles: &std::collections::HashMap<NodeId, manuk_css::ComputedStyle>,
+        styles: &manuk_css::StyleMap,
     ) -> Result<(), String> {
         set_view_maps(layout, styles);
         let _ = dom; // reflectors cache the stable `*mut Dom` from `load`; kept for API symmetry.

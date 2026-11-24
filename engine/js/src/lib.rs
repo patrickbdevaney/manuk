@@ -479,7 +479,7 @@ pub fn esm_page_module_graph_selftest() -> bool {
 pub fn run_document_scripts(
     dom: &mut manuk_dom::Dom,
     layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    styles: &manuk_css::StyleMap,
 ) -> Result<usize, JsError> {
     with_runtime(|rt| {
         dom_bindings::run_scripts(rt, dom, layout, styles).map_err(|message| JsError { message })
@@ -512,7 +512,7 @@ pub fn view_changed(
     vh: f32,
     scrolled: bool,
     layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    styles: &manuk_css::StyleMap,
 ) -> Result<(), JsError> {
     with_runtime(|rt| {
         ctx.view_changed(rt, dom, scroll_y, vw, vh, scrolled, layout, styles)
@@ -863,7 +863,7 @@ pub unsafe fn restore_view_maps(_v: ViewMaps) {}
 #[cfg(feature = "_sm")]
 pub unsafe fn republish_view_maps(
     layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    styles: &manuk_css::StyleMap,
 ) {
     unsafe { dom_bindings::republish_view_maps(layout, styles) }
 }
@@ -871,7 +871,7 @@ pub unsafe fn republish_view_maps(
 #[cfg(not(feature = "_sm"))]
 pub unsafe fn republish_view_maps(
     _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    _styles: &manuk_css::StyleMap,
 ) {
 }
 
@@ -1268,7 +1268,7 @@ pub fn resolve_fetch(
     body: &str,
     headers: &[(String, String)],
     layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    styles: &manuk_css::StyleMap,
 ) -> Result<(), JsError> {
     with_runtime(|rt| {
         ctx.resolve_fetch(rt, dom, id, status, body, headers, layout, styles)
@@ -1290,7 +1290,7 @@ pub fn resolve_fetch_bytes(
     raw: &[u8],
     headers: &[(String, String)],
     layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    styles: &manuk_css::StyleMap,
 ) -> Result<(), JsError> {
     with_runtime(|rt| {
         ctx.resolve_fetch_bytes(
@@ -1317,7 +1317,7 @@ pub fn resolve_fetch(
     _body: &str,
     _headers: &[(String, String)],
     _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    _styles: &manuk_css::StyleMap,
 ) -> Result<(), JsError> {
     Ok(())
 }
@@ -1333,7 +1333,7 @@ pub fn resolve_fetch_bytes(
     _raw: &[u8],
     _headers: &[(String, String)],
     _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    _styles: &manuk_css::StyleMap,
 ) -> Result<(), JsError> {
     Ok(())
 }
@@ -1369,7 +1369,7 @@ pub fn deliver_fetch_stream(
     id: u32,
     event: &FetchStreamEvent,
     layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    styles: &manuk_css::StyleMap,
 ) -> Result<(), JsError> {
     with_runtime(|rt| {
         ctx.deliver_fetch_stream(rt, dom, id, event, layout, styles)
@@ -1384,7 +1384,7 @@ pub fn deliver_fetch_stream(
     _id: u32,
     _event: &FetchStreamEvent,
     _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    _styles: &manuk_css::StyleMap,
 ) -> Result<(), JsError> {
     Ok(())
 }
@@ -1450,7 +1450,7 @@ pub fn deliver_ws_event(
     id: u32,
     event: &WsEvent,
     layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    styles: &manuk_css::StyleMap,
 ) -> Result<(), JsError> {
     with_runtime(|rt| {
         ctx.deliver_ws_event(rt, dom, id, event, layout, styles)
@@ -1465,7 +1465,7 @@ pub fn deliver_ws_event(
     _id: u32,
     _event: &WsEvent,
     _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    _styles: &manuk_css::StyleMap,
 ) -> Result<(), JsError> {
     Ok(())
 }
@@ -1526,7 +1526,7 @@ pub fn fire_popstate(
     state_json: &str,
     url: &str,
     layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    styles: &manuk_css::StyleMap,
 ) -> Result<(), JsError> {
     with_runtime(|rt| {
         ctx.fire_popstate(rt, dom, state_json, url, layout, styles)
@@ -1541,7 +1541,7 @@ pub fn fire_popstate(
     _state_json: &str,
     _url: &str,
     _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    _styles: &manuk_css::StyleMap,
 ) -> Result<(), JsError> {
     Ok(())
 }
@@ -1598,7 +1598,7 @@ pub fn deliver_message(
     origin: &str,
     source_win: u64,
     layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    styles: &manuk_css::StyleMap,
 ) -> Result<(), JsError> {
     with_runtime(|rt| {
         ctx.deliver_message(rt, dom, json, origin, source_win, layout, styles)
@@ -1614,7 +1614,7 @@ pub fn deliver_message(
     _origin: &str,
     _source_win: u64,
     _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    _styles: &manuk_css::StyleMap,
 ) -> Result<(), JsError> {
     Ok(())
 }
@@ -1670,7 +1670,7 @@ pub fn load_document(
     dom: &mut manuk_dom::Dom,
     url: &str,
     layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    styles: &manuk_css::StyleMap,
     external_scripts: std::collections::HashSet<manuk_dom::NodeId>,
 ) -> Result<(PageContext, usize), JsError> {
     with_runtime(|rt| {
@@ -1689,7 +1689,7 @@ pub fn run_deferred_scripts(
     ctx: &PageContext,
     dom: &mut manuk_dom::Dom,
     layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    styles: &manuk_css::StyleMap,
 ) -> Result<usize, JsError> {
     with_runtime(|rt| {
         ctx.run_deferred_scripts(rt, dom, layout, styles)
@@ -1706,7 +1706,7 @@ pub fn eval_in_page(
     dom: &mut manuk_dom::Dom,
     src: &str,
     layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    styles: &manuk_css::StyleMap,
     // The `<script>` element this source was fetched for, so `document.currentScript` can be it —
     // `None` for a host-driven eval with no element behind it. See `PageContext::eval`.
     script_node: Option<manuk_dom::NodeId>,
@@ -1728,7 +1728,7 @@ pub fn dispatch_transition_event(
     property: &str,
     elapsed_s: f64,
     layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    styles: &manuk_css::StyleMap,
 ) -> Result<bool, JsError> {
     let _interaction = crate::event_loop::InteractionScope::enter();
     with_runtime(|rt| {
@@ -1747,7 +1747,7 @@ pub fn dispatch_transition_event(
     _property: &str,
     _elapsed_s: f64,
     _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    _styles: &manuk_css::StyleMap,
 ) -> Result<bool, JsError> {
     Ok(true)
 }
@@ -1759,7 +1759,7 @@ pub fn dispatch_event(
     node: manuk_dom::NodeId,
     ty: &str,
     layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    styles: &manuk_css::StyleMap,
 ) -> Result<bool, JsError> {
     let _interaction = crate::event_loop::InteractionScope::enter();
     with_runtime(|rt| {
@@ -1779,7 +1779,7 @@ pub fn load_document(
     _dom: &mut manuk_dom::Dom,
     _url: &str,
     _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    _styles: &manuk_css::StyleMap,
     _external_scripts: std::collections::HashSet<manuk_dom::NodeId>,
 ) -> Result<(PageContext, usize), JsError> {
     Ok((PageContext, 0))
@@ -1812,7 +1812,7 @@ pub fn eval_in_page(
     _dom: &mut manuk_dom::Dom,
     _src: &str,
     _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    _styles: &manuk_css::StyleMap,
     _script_node: Option<manuk_dom::NodeId>,
 ) -> Result<(), JsError> {
     Ok(())
@@ -1825,7 +1825,7 @@ pub fn dispatch_event(
     _node: manuk_dom::NodeId,
     _ty: &str,
     _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    _styles: &manuk_css::StyleMap,
 ) -> Result<bool, JsError> {
     Ok(true)
 }
@@ -1857,7 +1857,7 @@ pub fn dispatch_key(
     key_code: u32,
     mods: KeyModifiers,
     layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    styles: &manuk_css::StyleMap,
 ) -> Result<bool, JsError> {
     let _interaction = crate::event_loop::InteractionScope::enter();
     with_runtime(|rt| {
@@ -1877,7 +1877,7 @@ pub fn dispatch_key(
     _key_code: u32,
     _mods: KeyModifiers,
     _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    _styles: &manuk_css::StyleMap,
 ) -> Result<bool, JsError> {
     Ok(true)
 }
@@ -1892,7 +1892,7 @@ pub fn dispatch_drop(
     node: manuk_dom::NodeId,
     files_json: &str,
     layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    styles: &manuk_css::StyleMap,
 ) -> Result<bool, JsError> {
     let _interaction = crate::event_loop::InteractionScope::enter();
     with_runtime(|rt| {
@@ -1908,7 +1908,7 @@ pub fn dispatch_drop(
     _node: manuk_dom::NodeId,
     _files_json: &str,
     _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    _styles: &manuk_css::StyleMap,
 ) -> Result<bool, JsError> {
     Ok(true)
 }
@@ -1924,7 +1924,7 @@ pub fn dispatch_drag(
     source: manuk_dom::NodeId,
     target: manuk_dom::NodeId,
     layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    styles: &manuk_css::StyleMap,
 ) -> Result<bool, JsError> {
     let _interaction = crate::event_loop::InteractionScope::enter();
     with_runtime(|rt| {
@@ -1940,7 +1940,7 @@ pub fn dispatch_drag(
     _source: manuk_dom::NodeId,
     _target: manuk_dom::NodeId,
     _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    _styles: &manuk_css::StyleMap,
 ) -> Result<bool, JsError> {
     Ok(true)
 }
@@ -1955,7 +1955,7 @@ pub fn dispatch_composition(
     node: manuk_dom::NodeId,
     data: &str,
     layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    styles: &manuk_css::StyleMap,
 ) -> Result<bool, JsError> {
     let _interaction = crate::event_loop::InteractionScope::enter();
     with_runtime(|rt| {
@@ -1971,7 +1971,7 @@ pub fn dispatch_composition(
     _node: manuk_dom::NodeId,
     _data: &str,
     _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    _styles: &manuk_css::StyleMap,
 ) -> Result<bool, JsError> {
     Ok(true)
 }
@@ -1989,7 +1989,7 @@ pub fn dispatch_input_event(
     input_type: &str,
     data: &str,
     layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    styles: &manuk_css::StyleMap,
 ) -> Result<bool, JsError> {
     let _interaction = crate::event_loop::InteractionScope::enter();
     with_runtime(|rt| {
@@ -2008,7 +2008,7 @@ pub fn dispatch_input_event(
     _input_type: &str,
     _data: &str,
     _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    _styles: &manuk_css::StyleMap,
 ) -> Result<bool, JsError> {
     Ok(true)
 }
@@ -2025,7 +2025,7 @@ pub fn dispatch_mouse(
     detail: u32,
     button: u32,
     layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    styles: &manuk_css::StyleMap,
 ) -> Result<bool, JsError> {
     let _interaction = crate::event_loop::InteractionScope::enter();
     with_runtime(|rt| {
@@ -2044,7 +2044,7 @@ pub fn dispatch_mouse(
     _detail: u32,
     _button: u32,
     _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    _styles: &manuk_css::StyleMap,
 ) -> Result<bool, JsError> {
     Ok(true)
 }
@@ -2061,7 +2061,7 @@ pub fn dispatch_mouse_buttons(
     button: u32,
     buttons: u32,
     layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    styles: &manuk_css::StyleMap,
 ) -> Result<bool, JsError> {
     let _interaction = crate::event_loop::InteractionScope::enter();
     with_runtime(|rt| {
@@ -2081,7 +2081,7 @@ pub fn dispatch_mouse_buttons(
     _button: u32,
     _buttons: u32,
     _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    _styles: &manuk_css::StyleMap,
 ) -> Result<bool, JsError> {
     Ok(true)
 }
@@ -2091,7 +2091,7 @@ pub fn dispatch_mouse_buttons(
 pub fn run_document_scripts(
     _dom: &mut manuk_dom::Dom,
     _layout: &std::collections::HashMap<manuk_dom::NodeId, [f32; 4]>,
-    _styles: &std::collections::HashMap<manuk_dom::NodeId, manuk_css::ComputedStyle>,
+    _styles: &manuk_css::StyleMap,
 ) -> Result<usize, JsError> {
     Ok(0)
 }

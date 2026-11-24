@@ -1391,7 +1391,7 @@ fn apply_natural_sizes(
         if dom.tag_name(*node) == Some("svg") {
             continue;
         }
-        if let Some(style) = styles.get_mut(node) {
+        if let Some(style) = styles.get_mut(node).map(std::sync::Arc::make_mut) {
             apply_natural_size(style, img);
         }
     }
@@ -1447,7 +1447,7 @@ fn decode_inline_images(
             })
             .clone();
         if let Some(img) = decoded {
-            if let Some(style) = styles.get_mut(&node) {
+            if let Some(style) = styles.get_mut(&node).map(std::sync::Arc::make_mut) {
                 apply_natural_size(style, &img);
             }
             out.insert(node, img);
@@ -2484,7 +2484,7 @@ struct ReflowCtx {
     /// reflow worthwhile again once real time has moved on from it.
     laid_out_clock: f64,
     rects: HashMap<NodeId, [f32; 4]>,
-    styles: HashMap<NodeId, manuk_css::ComputedStyle>,
+    styles: manuk_css::StyleMap,
     /// The decoded images as of this script round — a standing layout input the cascade cannot
     /// supply. See `apply_natural_sizes`.
     images: HashMap<NodeId, std::rc::Rc<manuk_paint::DecodedImage>>,
@@ -4467,7 +4467,7 @@ fn build_inline_frame_docs(
         // is the BORDER box, and a default `<iframe>` carries a 2px UA border on each side.
         let (w, h, visible) = match rects.get(&node) {
             Some([_, _, rw, rh]) if *rw >= 1.0 && *rh >= 1.0 => {
-                let (cw, ch) = frame_content_box(styles.get(&node), *rw, *rh);
+                let (cw, ch) = frame_content_box(styles.get(&node).map(|a| &**a), *rw, *rh);
                 (cw.round().max(1.0) as u32, ch.round().max(1.0) as u32, true)
             }
             // The HTML default for an `<iframe>` with no box of its own.
@@ -6324,7 +6324,8 @@ impl Page {
         // 4px error as the inline one; it had simply never been measured.
         let (w, h) = match rects.get(&node) {
             Some(r) if r.width >= 1.0 && r.height >= 1.0 => {
-                let (cw, ch) = frame_content_box(self.styles.get(&node), r.width, r.height);
+                let (cw, ch) =
+                    frame_content_box(self.styles.get(&node).map(|a| &**a), r.width, r.height);
                 (cw.round().max(1.0) as u32, ch.round().max(1.0) as u32)
             }
             _ => (300, 150),
@@ -6462,8 +6463,11 @@ impl Page {
                 .map(|&n| {
                     let wh = match frame_rects.get(&n) {
                         Some(r) if r.width >= 1.0 && r.height >= 1.0 => {
-                            let (cw, ch) =
-                                frame_content_box(self.styles.get(&n), r.width, r.height);
+                            let (cw, ch) = frame_content_box(
+                                self.styles.get(&n).map(|a| &**a),
+                                r.width,
+                                r.height,
+                            );
                             (cw.round(), ch.round())
                         }
                         _ => (300.0, 150.0),
@@ -7413,7 +7417,7 @@ impl Page {
         // model (t389/391 — default object size + viewBox ratio) owns their geometry; the raster
         // only paints into whatever box layout gave them.
         for (&node, img) in &images {
-            if let Some(style) = self.styles.get_mut(&node) {
+            if let Some(style) = self.styles.get_mut(&node).map(std::sync::Arc::make_mut) {
                 apply_natural_size(style, img);
             }
         }
@@ -7562,8 +7566,7 @@ impl Page {
             loop {
                 // PERF.1.2.b.b: the time this round spends waiting on the next script's bytes.
                 let w0 = std::time::Instant::now();
-                let Some((node, text)) =
-                    futures_util::stream::StreamExt::next(&mut fetched).await
+                let Some((node, text)) = futures_util::stream::StreamExt::next(&mut fetched).await
                 else {
                     break;
                 };
@@ -11494,7 +11497,8 @@ impl Page {
             // ⚠ CONTENT box — the fifth and last frame-sizing site, through the same rule. A
             // repaint that laid the child out at the BORDER width would disagree with the pass that
             // built it, and the frame would reflow by 4px the first time anything touched it.
-            let (cw, ch) = frame_content_box(self.styles.get(&node), r.width, r.height);
+            let (cw, ch) =
+                frame_content_box(self.styles.get(&node).map(|a| &**a), r.width, r.height);
             let (w, h) = (cw.round().max(1.0) as u32, ch.round().max(1.0) as u32);
             self.repaint_frame(node, w, h, fonts, false);
         }
@@ -13188,7 +13192,7 @@ impl Page {
             //    (1e9) is unreachable by any z-index a page would write.
             // The shared rule — see `manuk_css::stacking_layer`, which `elementFromPoint`
             // also calls so the two hit-tests cannot drift apart again.
-            let z = manuk_css::stacking_layer(self.styles.get(&node), parent_z);
+            let z = manuk_css::stacking_layer(self.styles.get(&node).map(|a| &**a), parent_z);
             // **The top layer.** A modal dialog paints above the whole document regardless of where it
             // sits in the tree or what z-index the page gave anything else — that is what makes it
             // modal. Without this, `showModal()` on a dialog declared early in the body renders BEHIND
@@ -13318,7 +13322,7 @@ impl Page {
     /// itself a finding: a node with no computed style falls back to a default, so a `<div>` that should
     /// be `block` (or `flex`) renders as `inline`.
     pub fn styles_of(&self, n: manuk_dom::NodeId) -> Option<&manuk_css::ComputedStyle> {
-        self.styles.get(&n)
+        self.styles.get(&n).map(|a| &**a)
     }
 
     pub fn node_rects(&self) -> std::collections::HashMap<manuk_dom::NodeId, manuk_layout::Rect> {

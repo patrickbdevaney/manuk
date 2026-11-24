@@ -1413,7 +1413,7 @@ pub fn cascade_via_stylo_sized(
                     .map(Box::new);
                 });
             }
-            map.insert(node, cs);
+            map.insert(node, std::sync::Arc::new(cs));
             // On the sized re-pass, publish this element's ComputedValues into Stylo's own data cell:
             // that is where `ContainerCondition::matches` reads an ancestor's `container-type`/`-name`
             // from when a descendant's `@container` rule is evaluated (preorder ⇒ ancestors are
@@ -1589,7 +1589,7 @@ fn finish_passes(
                     .parent(node)
                     .and_then(|p| map.get(&p).map(|s| s.font_size))
                     .unwrap_or(16.0);
-                let Some(cs) = map.get_mut(&node) else {
+                let Some(cs) = map.get_mut(&node).map(std::sync::Arc::make_mut) else {
                     continue;
                 };
                 applied += crate::apply_relative_rules(&has_index, dom, node, cs, parent_fs);
@@ -1613,6 +1613,7 @@ fn finish_passes(
     let _recover_guard = ();
     timed(&mut ph.recover_ns, || {
         for (node, cs) in map.iter_mut() {
+            let cs = std::sync::Arc::make_mut(cs);
             if let Some(m) = minimal.get(node) {
                 cs.vertical_align = m.vertical_align;
                 // `visibility` is not exposed by Stylo's servo build. It is NOT optional: the modern
@@ -1758,7 +1759,7 @@ fn finish_passes(
 /// Multiply each element's own `opacity` by its ancestors' (CSS opacity applies to the subtree).
 fn fold_effective_opacity(dom: &Dom, map: &mut StyleMap) {
     fn walk(dom: &Dom, node: NodeId, parent: f32, map: &mut StyleMap) {
-        let eff = match map.get_mut(&node) {
+        let eff = match map.get_mut(&node).map(std::sync::Arc::make_mut) {
             Some(cs) => {
                 cs.opacity = (cs.opacity * parent).clamp(0.0, 1.0);
                 cs.opacity
@@ -1806,7 +1807,7 @@ fn fold_effective_opacity(dom: &Dom, map: &mut StyleMap) {
 fn apply_legacy_block_align(dom: &Dom, map: &mut StyleMap) {
     fn walk(dom: &Dom, node: NodeId, parent_align: Option<crate::TextAlign>, map: &mut StyleMap) {
         let mut own = None;
-        if let Some(cs) = map.get_mut(&node) {
+        if let Some(cs) = map.get_mut(&node).map(std::sync::Arc::make_mut) {
             own = cs.text_align.legacy_block_align();
             // A block-level, in-flow box is what the legacy alignment moves. A float, an
             // absolutely-positioned box and an inline are all placed by other rules, and an

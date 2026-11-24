@@ -2311,7 +2311,7 @@ mod tests {
         let mut cc = ComputedStyle::initial();
         cc.display = CssDisplay::Flex;
         cc.width = Dim::Px(1000.0);
-        styles.insert(container, cc);
+        styles.insert(container, std::sync::Arc::new(cc));
         let mut cs = ComputedStyle::initial();
         cs.display = CssDisplay::Block;
         // calc(100% - 250px): px = -250, pct = 100 (percentages stored 0–100 in Dim).
@@ -2320,7 +2320,7 @@ mod tests {
             pct: 100.0,
         };
         cs.flex_shrink = 0.0; // don't let flex shrink the item below its basis
-        styles.insert(sidebar, cs);
+        styles.insert(sidebar, std::sync::Arc::new(cs));
 
         let (placed, _solved_h, _tracks) =
             solve_subtree(&dom, &styles, container, 1000.0, None, |_n, _p, _k, _a| {
@@ -2358,12 +2358,12 @@ mod tests {
         let mut cc = ComputedStyle::initial();
         cc.display = CssDisplay::Flex;
         cc.width = Dim::Px(300.0);
-        styles.insert(container, cc);
+        styles.insert(container, std::sync::Arc::new(cc));
         for &child in &[a, b] {
             let mut cs = ComputedStyle::initial();
             cs.display = CssDisplay::Block;
             cs.flex_grow = 1.0;
-            styles.insert(child, cs);
+            styles.insert(child, std::sync::Arc::new(cs));
         }
 
         // Leaves measure to zero content (only grow matters here).
@@ -2424,14 +2424,14 @@ mod tests {
         cc.display = CssDisplay::Flex;
         cc.direction = CssDirection::Rtl;
         cc.width = Dim::Px(600.0);
-        styles.insert(container, cc);
+        styles.insert(container, std::sync::Arc::new(cc));
         for &k in &kids {
             let mut cs = ComputedStyle::initial();
             cs.display = CssDisplay::Block;
             cs.direction = CssDirection::Rtl;
             cs.width = Dim::Px(100.0);
             cs.flex_shrink = 0.0;
-            styles.insert(k, cs);
+            styles.insert(k, std::sync::Arc::new(cs));
         }
 
         let (placed, _solved_h, _tracks) =
@@ -2496,12 +2496,12 @@ mod tests {
         cc.flex_direction = CssDir::Column;
         cc.flex_wrap = CssWrap::Wrap;
         cc.width = Dim::Px(600.0);
-        styles.insert(container, cc);
+        styles.insert(container, std::sync::Arc::new(cc));
         for (child, h) in [(a, 100.0), (b, 400.0)] {
             let mut cs = ComputedStyle::initial();
             cs.display = CssDisplay::Block;
             cs.height = Dim::Px(h);
-            styles.insert(child, cs);
+            styles.insert(child, std::sync::Arc::new(cs));
         }
 
         // Height `None` = the container's own height is indefinite, which is the whole point.

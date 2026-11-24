@@ -1009,3 +1009,15 @@ Why the cascade sum moves less than the pass ratio: a pass still pays a fixed ~4
 attributes, class/attribute lookup), the cold pass and the sheet-move pass are full by nature, and one pass per Wikipedia page re-walks the whole document
 (a root near `<body>`). Settle (not the bar of this node): A 13.96 vs B 15.88.
 Verdict: PERF.1.2.b.a BLOCKED on the 20 % cascade bar; follow-ups PERF.1.2.b.a.a (fixed cost per pass) and PERF.1.2.b.a.b (Stylo-path parity, quiet-host re-measure).
+
+## PERF.1.2.b.a.a: the cache store of an incremental restyle no longer copies the style map (chrome_ver=145.0.7632.116; manuk only)
+
+What changed: `StyleMap` is now `HashMap<NodeId, Arc<ComputedStyle>>` (a `ComputedStyle` is 1280 bytes), and `ComputedStyle::font_family` is an `Arc<[String]>`.
+The incremental restyle keeps a copy of the map for the next pass; that copy is now a table of pointer bumps rather than 19k deep copies. Writers that patch a
+style after the cascade go through `Arc::make_mut`.
+Measured, Alan_Turing, `MANUK_INCR_TRACE=1`, same host, base binary vs new: cache-clone per pass 34-48 ms -> 0.7-1.6 ms (8 passes each; plan 5-100 ms unchanged: not touched).
+Gate 1 (`perf1-profile.py --runs 3`, 20 live URLs, same binary both arms, arm B = `MANUK_FULL_RESTYLE=1`, raw rows `docs/sprint/perf1-pf1b2a2/paired.jsonl`; load average
+15-32 during the run, not quiet): cascade phase sum A 4.46 s vs B 6.74 s = 0.662 (-33.8 %; bar -20 %; PERF.1.2.b.a measured 0.848). Wikipedia: Alan_Turing 0.97 vs 1.54,
+Rust 0.91 vs 1.34, Python 0.95 vs 1.40.
+Gate 2: `MANUK_INCR_VERIFY=1` over the 22 URLs of the suite: 0 `INCR MISMATCH` lines. Gate 3: `incr::tests` + `stylo_engine::incr_tests` 9 green; mutant that inverts the
+"style unchanged -> clean" comparison turns 5 of them red.
