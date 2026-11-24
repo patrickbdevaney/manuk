@@ -10,7 +10,7 @@ succeed? How much of any difference comes from the browser rather than from the 
 ## Arms
 | arm | isolation | why it is here |
 |---|---|---|
-| engine-proc | one `manuk-mcp --backend engine` per agent | the lightweight default |
+| engine-proc | one `manuk-mcp --backend engine` per agent, run in both the full and the lean agent profile (reported as two rows) | DASH.MEM.1 measured ~4.5 GB full against ~0.5 GB lean on one dashdish task, so one row would hide the difference |
 | engine-fork | sessions forked with `--zygote` / `--zygote-after-load` | the density case |
 | chrome-mcp | one `manuk-mcp --backend chrome` per agent | the shipped product |
 | pw-proc | one Playwright MCP `--isolated` per agent | how a separate MCP server per agent runs |
@@ -46,9 +46,10 @@ low N and makes no concurrency claim.
 - Against one Chrome process per agent the same numbers are reported separately and labelled that way.
 
 ## Rules
-- Keys: `GROQ_API_KEY` and `OPENROUTER_API_KEY` come from the owner's environment for the run. A missing key is a refusal
-  (exit 3, no rows). No agent looks for keys, reads `.env`, prints a key, or reuses the judge's key. The GroqCloud block
-  does not run while a judged batch is using that quota.
+- Credentials (set before any result): each provider block uses one owner-supplied credential, read inside the driver
+  process only. Limits are per organisation, and credentials are never rotated to get around them. A missing credential is
+  a refusal (exit 3, no rows). No agent looks for credentials elsewhere, prints one, commits one, or reuses the judge's.
+  The GroqCloud block does not run while a judged batch is using that quota. A 429 is recorded as infrastructure.
 - Every run is caged with `MemoryMax` and runs at >= 20 GB available. Chrome keeps its sandbox on.
 - Fix or explain the dashdish memory growth (DASH.MEM.1) before any real-page result is quoted.
 - The host is shared. Load is recorded, and arms are interleaved rather than run on different days.
