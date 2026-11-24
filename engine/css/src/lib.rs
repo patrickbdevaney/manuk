@@ -2643,6 +2643,26 @@ struct Compound {
     pseudos: Vec<Pseudo>,
 }
 
+/// Does `sel` look at any class in `tokens` (see [`MinimalCascade::matches_mentioning`])?
+fn selector_mentions_class(sel: &Selector, tokens: &[String], attrs: &[String]) -> bool {
+    sel.parts.iter().any(|part| {
+        part.classes.iter().any(|c| tokens.contains(c))
+            || part.attrs.iter().any(|a| {
+                a.name.eq_ignore_ascii_case("class")
+                    || attrs.iter().any(|n| a.name.eq_ignore_ascii_case(n))
+            })
+            || part.pseudos.iter().any(|p| match p {
+                Pseudo::Not(v) | Pseudo::Is(v) => {
+                    v.iter().any(|s| selector_mentions_class(s, tokens, attrs))
+                }
+                Pseudo::Has(v) => v
+                    .iter()
+                    .any(|(_, s)| selector_mentions_class(s, tokens, attrs)),
+                _ => false,
+            })
+    })
+}
+
 /// A selector chain; `parts[last]` is the subject (rightmost). `combinators[i]` links
 /// `parts[i]` to `parts[i+1]` (so it has `parts.len() - 1` entries).
 #[derive(Clone, Debug, PartialEq)]
@@ -3187,7 +3207,11 @@ fn attr_matches(a: &AttrSel, dom: &Dom, node: NodeId) -> bool {
     let Some(el) = dom.element(node) else {
         return false;
     };
-    let Some(actual) = el.attr(&a.name) else {
+    let ov = attr_override(node, &a.name);
+    if ov.as_deref() == Some(CLASS_ABSENT) {
+        return false;
+    }
+    let Some(actual) = ov.as_deref().or_else(|| el.attr(&a.name)) else {
         return false;
     };
     // The `i` flag (`[attr=val i]`) makes value matching ASCII case-insensitive. We normalise both
@@ -3215,6 +3239,66 @@ fn attr_matches(a: &AttrSel, dom: &Dom, node: NodeId) -> bool {
     }
 }
 
+/// PERF.1.2.b.a — while set, selector matching sees `node`'s `class` attribute as this string instead of
+/// the one on the `Dom`. It lets the incremental restyle ask "what did the rules match BEFORE `<html>`'s
+/// class list changed?" without a second copy of the document. Off (one relaxed load) otherwise.
+static CLASS_OVERRIDE_ON: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+type AttrOverrides = std::collections::HashMap<(NodeId, String), String>;
+thread_local! {
+    static CLASS_OVERRIDE: std::cell::RefCell<AttrOverrides> =
+        std::cell::RefCell::new(AttrOverrides::new());
+}
+
+/// The override value that says "this node had no such attribute".
+const CLASS_ABSENT: &str = "\u{0}absent";
+
+fn attr_override(node: NodeId, name: &str) -> Option<String> {
+    if !CLASS_OVERRIDE_ON.load(std::sync::atomic::Ordering::Relaxed) {
+        return None;
+    }
+    CLASS_OVERRIDE.with(|o| {
+        let o = o.borrow();
+        if name.bytes().any(|b| b.is_ascii_uppercase()) {
+            o.get(&(node, name.to_ascii_lowercase())).cloned()
+        } else {
+            o.get(&(node, name.to_string())).cloned()
+        }
+    })
+}
+
+/// Run `f` as it would be with the document's attributes as they are NOW and again as they WERE (`old`:
+/// (node, lower-case attribute name) -> its previous value, or [`CLASS_ABSENT`]), and return the union of
+/// the node sets.
+pub(crate) fn matches_with_overrides(
+    old: &AttrOverrides,
+    mut f: impl FnMut() -> Vec<NodeId>,
+) -> Vec<NodeId> {
+    let mut out = f();
+    if !old.is_empty() {
+        CLASS_OVERRIDE.with(|o| *o.borrow_mut() = old.clone());
+        CLASS_OVERRIDE_ON.store(true, std::sync::atomic::Ordering::Relaxed);
+        let before = f();
+        CLASS_OVERRIDE_ON.store(false, std::sync::atomic::Ordering::Relaxed);
+        CLASS_OVERRIDE.with(|o| o.borrow_mut().clear());
+        let have: std::collections::HashSet<NodeId> = out.iter().copied().collect();
+        out.extend(before.into_iter().filter(|n| !have.contains(n)));
+    }
+    out
+}
+
+/// [`matches_with_overrides`] for the one `<html>` node's class list.
+pub(crate) fn matches_before_and_after(
+    html: Option<NodeId>,
+    old_class: Option<&str>,
+    f: impl FnMut() -> Vec<NodeId>,
+) -> Vec<NodeId> {
+    let mut old = AttrOverrides::new();
+    if let (Some(h), Some(c)) = (html, old_class) {
+        old.insert((h, "class".to_string()), c.to_string());
+    }
+    matches_with_overrides(&old, f)
+}
+
 fn compound_matches(c: &Compound, dom: &Dom, node: NodeId) -> bool {
     let Some(el) = dom.element(node) else {
         return false;
@@ -3229,9 +3313,22 @@ fn compound_matches(c: &Compound, dom: &Dom, node: NodeId) -> bool {
             return false;
         }
     }
-    for class in &c.classes {
-        if !el.has_class(class) {
-            return false;
+    if !c.classes.is_empty() {
+        if let Some(ov) = attr_override(node, "class") {
+            if ov == CLASS_ABSENT
+                || !c
+                    .classes
+                    .iter()
+                    .all(|k| ov.split_ascii_whitespace().any(|w| w == k))
+            {
+                return false;
+            }
+        } else {
+            for class in &c.classes {
+                if !el.has_class(class) {
+                    return false;
+                }
+            }
         }
     }
     for a in &c.attrs {
@@ -3725,6 +3822,10 @@ impl Stylesheet {
     }
 
     /// The raw CSS text this sheet was parsed from (for the Stylo cascade path).
+    pub(crate) fn rules(&self) -> &[Rule] {
+        &self.rules
+    }
+
     pub fn source(&self) -> &str {
         &self.source
     }
@@ -5533,6 +5634,15 @@ impl MinimalCascade {
     /// id / classes / tag, plus universal) instead of all of them. Selector matching itself is
     /// unchanged, so results are identical — this only skips rules that provably cannot match.
     fn build_index<'a>(sheets: &'a [ScopedSheet]) -> RuleIndex<'a> {
+        Self::build_index_filtered(sheets, &|_| true)
+    }
+
+    /// [`Self::build_index`] keeping only the selectors `keep` accepts (the incremental restyle's lookups ask
+    /// about a handful of classes/attributes, not about the whole sheet list).
+    fn build_index_filtered<'a>(
+        sheets: &'a [ScopedSheet],
+        keep: &dyn Fn(&Selector) -> bool,
+    ) -> RuleIndex<'a> {
         let mut ix = RuleIndex::default();
         let mut order = 0usize;
         for scoped in sheets {
@@ -5541,6 +5651,10 @@ impl MinimalCascade {
                     continue;
                 }
                 for sel in &rule.selectors {
+                    if !keep(sel) {
+                        order += 1;
+                        continue;
+                    }
                     let entry = IndexedRule {
                         scope: scoped.scope,
                         sel,
@@ -5608,32 +5722,182 @@ impl MinimalCascade {
         use crate::incr::*;
         use std::sync::atomic::Ordering::Relaxed;
         thread_local! {
-            static CACHE: std::cell::RefCell<Option<MinimalIncr>> =
-                const { std::cell::RefCell::new(None) };
+            static CACHE: std::cell::RefCell<Vec<MinimalIncr>> =
+                const { std::cell::RefCell::new(Vec::new()) };
         }
         struct MinimalIncr {
-            key: u64,
-            sib: bool,
+            html: Vec<(String, String)>,
+            tracked: Tracked,
+            base: u64,
+            sheets: Vec<Stylesheet>,
+            sib: u8,
             empty: bool,
             fp: std::collections::HashMap<NodeId, u64>,
             map: StyleMap,
         }
         if env_on("MANUK_FULL_RESTYLE") || !dom.all_shadow_roots().is_empty() {
-            CACHE.with(|c| *c.borrow_mut() = None);
+            CACHE.with(|c| c.borrow_mut().clear());
             return self.cascade(dom, sheets);
         }
         let t0 = std::time::Instant::now();
-        let key = incr_key(dom, sheets, vw, vh);
-        let cached = CACHE.with(|c| c.borrow_mut().take());
-        let usable = cached.filter(|c| c.key == key);
-        let (sib, empty) = match &usable {
-            Some(c) => (c.sib, c.empty),
-            None => incr_sheet_flags(sheets),
+        let mut slots = CACHE.with(|c| std::mem::take(&mut *c.borrow_mut()));
+        let metas: Vec<CacheMeta> = slots
+            .iter()
+            .map(|c| CacheMeta {
+                html: &c.html,
+                base: c.base,
+                sheets: &c.sheets,
+                sib: c.sib,
+                empty: c.empty,
+            })
+            .collect();
+        let pick = incr_pick(&metas, dom, sheets, vw, vh);
+        drop(metas);
+        let cached = pick.map(|i| slots.remove(i));
+        let mut prep = incr_prepare(
+            cached.as_ref().map(|c| CacheMeta {
+                html: &c.html,
+                base: c.base,
+                sheets: &c.sheets,
+                sib: c.sib,
+                empty: c.empty,
+            }),
+            true,
+            dom,
+            sheets,
+            vw,
+            vh,
+        );
+        let (sib, empty) = (prep.sib, prep.empty);
+        let (usable, mut spare) = match cached {
+            Some(c) if prep.usable => (Some(c), None),
+            other => (None, other),
         };
-        let new_fp = incr_fingerprints(dom, sib, empty);
+        // Class attributes are tracked apart from the fingerprint: a node whose ONLY change is its class list
+        // is not a subtree root. What it can change is (a) its own style, re-derived alone below, and (b) the
+        // style of the elements the rules that look at the flipped classes match — before AND after.
+        let new_fp = incr_fingerprints(dom, sib, empty, false);
+        let t_a = t0.elapsed();
+        let new_tracked = incr_tracked(dom);
+        let t_b = t0.elapsed();
+        let mut extra: Vec<NodeId> = Vec::new();
+        let mut too_many = false;
+        if let Some(c) = usable.as_ref() {
+            let mut old: AttrOverrides = AttrOverrides::new();
+            let mut flipped: Vec<NodeId> = Vec::new();
+            let mut forced: Vec<NodeId> = Vec::new();
+            let mut tokens: Vec<String> = Vec::new();
+            let mut attr_names: Vec<String> = Vec::new();
+            let none: Vec<(String, String)> = Vec::new();
+            for (n, h) in &new_fp {
+                if c.fp.get(n) != Some(h) {
+                    continue; // moved some other way: a root through the fingerprint
+                }
+                let (a, b) = (
+                    c.tracked.get(n).unwrap_or(&none),
+                    new_tracked.get(n).unwrap_or(&none),
+                );
+                if a == b {
+                    continue;
+                }
+                flipped.push(*n);
+                let find = |v: &'_ Vec<(String, String)>, name: &str| {
+                    v.iter().find(|(k, _)| k == name).map(|(_, x)| x.clone())
+                };
+                let mut names: Vec<&String> = a.iter().chain(b.iter()).map(|(k, _)| k).collect();
+                names.sort();
+                names.dedup();
+                for name in names {
+                    let (ov, nv) = (find(a, name), find(b, name));
+                    if ov == nv {
+                        continue;
+                    }
+                    old.insert(
+                        (*n, name.to_ascii_lowercase()),
+                        ov.clone().unwrap_or_else(|| CLASS_ABSENT.to_string()),
+                    );
+                    if name == "class" {
+                        let (o, nw) = (ov.unwrap_or_default(), nv.unwrap_or_default());
+                        let (sa, sb): (
+                            std::collections::HashSet<&str>,
+                            std::collections::HashSet<&str>,
+                        ) = (
+                            o.split_ascii_whitespace().collect(),
+                            nw.split_ascii_whitespace().collect(),
+                        );
+                        tokens.extend(sa.symmetric_difference(&sb).map(|t| t.to_string()));
+                    } else {
+                        attr_names.push(name.clone());
+                    }
+                }
+            }
+            tokens.sort();
+            tokens.dedup();
+            attr_names.sort();
+            attr_names.dedup();
+            let trust = (tokens.is_empty() && attr_names.is_empty())
+                || incr_class_rules_parsed(sheets, &tokens, &attr_names);
+            if !trust {
+                forced.extend(flipped.iter().copied());
+                flipped.clear();
+                old.clear();
+            }
+            let t_c = t0.elapsed();
+            let limit = (new_fp.len() / 8).max(16);
+            let moved = std::mem::take(&mut prep.moved);
+            let mut hits = matches_with_overrides(&old, || {
+                let mut v = if (tokens.is_empty() && attr_names.is_empty()) || !trust {
+                    Vec::new()
+                } else {
+                    self.matches_mentioning(dom, sheets, &tokens, &attr_names, limit)
+                };
+                if !moved.is_empty() {
+                    v.extend(self.appended_matches_upto(dom, &moved, limit));
+                }
+                v
+            });
+            let t_d = t0.elapsed();
+            too_many = hits.len() > limit;
+            // forced: roots whatever their own style says (the class attribute appeared/vanished, or the
+            // parser may have dropped a rule naming a flipped class)
+            hits.retain(|n| !forced.contains(n));
+            hits.sort_by_key(|n| n.0);
+            hits.dedup();
+            // The nodes to settle alone: the matched ones and the class-flipped ones. A node whose own style
+            // comes out as it was is clean: its descendants move only through THEIR matched rules (in `hits`),
+            // never through it.
+            let mut check: Vec<NodeId> = hits.clone();
+            check.extend(flipped.iter().copied());
+            check.extend(incr_has_checks(dom, &c.fp, &new_fp, sib, sheets));
+            check.sort_by_key(|n| n.0);
+            check.dedup();
+            extra.extend(forced.iter().copied());
+            let cheap = !too_many && check.len() <= limit * 2;
+            if cheap {
+                for (n, st) in self.styles_alone(dom, sheets, &c.map, &check) {
+                    if c.map.get(&n) != Some(&st) {
+                        extra.push(n);
+                    }
+                }
+                // a node `styles_alone` could not style (text, comment) is not an element: nothing to do
+            } else {
+                extra.extend(check);
+            }
+            if env_on("MANUK_INCR_TRACE") {
+                eprintln!("INCR minimal: stages prep+fp {t_a:?} tracked {:?} flips {:?} match {:?} shallow {:?}", t_b - t_a, t_c - t_b, t_d - t_c, t0.elapsed() - t_d);
+                eprintln!(
+                    "INCR minimal: class flips={} tokens={} matched={} restyle-roots={}",
+                    flipped.len(),
+                    tokens.len(),
+                    hits.len(),
+                    extra.len()
+                );
+            }
+        }
         let plan = usable
             .as_ref()
-            .and_then(|c| incr_plan(&c.fp, c.sib, dom, &new_fp));
+            .filter(|_| !too_many)
+            .and_then(|c| incr_plan(&c.fp, sib, dom, &new_fp, &extra, false, sheets));
         let t_plan = t0.elapsed();
         if env_on("MANUK_INCR_TRACE") {
             let moved = usable.as_ref().map(|c| {
@@ -5643,14 +5907,24 @@ impl MinimalCascade {
                     .count()
             });
             eprintln!(
-                "INCR minimal: key_ok={} nodes={} fp_moved={:?} sib={} planned_roots={:?}",
+                "INCR minimal: key_ok={} nodes={} fp_moved={:?} sib={} extra={} planned_roots={:?}",
                 usable.is_some(),
                 new_fp.len(),
                 moved,
                 sib,
+                extra.len(),
                 plan.as_ref().map(|p| p.0.len())
             );
         }
+        // A cache that did not yield an incremental plan is untouched: keep it as the second slot.
+        let (usable, plan) = if plan.is_some() {
+            (usable, plan)
+        } else {
+            if spare.is_none() {
+                spare = usable;
+            }
+            (None, None)
+        };
         let map = match (usable, plan) {
             (Some(c), Some((roots, removed))) => {
                 let mut map = c.map;
@@ -5662,6 +5936,13 @@ impl MinimalCascade {
                     .iter()
                     .map(|&r| dom.flat_descendants(r).len() + 1)
                     .sum();
+                if env_on("MANUK_INCR_TRACE") {
+                    eprintln!(
+                        "INCR minimal: walking {} roots covering {} nodes",
+                        roots.len(),
+                        walked
+                    );
+                }
                 self.cascade_subtrees(dom, sheets, &roots, &mut map);
                 INCR_PASSES.fetch_add(1, Relaxed);
                 INCR_RESTYLED.fetch_add(walked as u64, Relaxed);
@@ -5669,6 +5950,31 @@ impl MinimalCascade {
                     let full = self.cascade(dom, sheets);
                     if full != map {
                         INCR_MISMATCH.fetch_add(1, Relaxed);
+                        if env_on("MANUK_INCR_TRACE") {
+                            let bad: Vec<NodeId> = full
+                                .iter()
+                                .filter(|(n, cs)| map.get(*n) != Some(*cs))
+                                .map(|(n, _)| *n)
+                                .collect();
+                            eprintln!(
+                                "INCR MISMATCH: {} nodes differ (map {} vs full {})",
+                                bad.len(),
+                                map.len(),
+                                full.len()
+                            );
+                            for &n in bad.iter().take(6) {
+                                let el = dom.element(n);
+                                eprintln!(
+                                    "  node {:?} <{}> id={:?} class={:?} parent={:?} roots_cover_parent={}",
+                                    n,
+                                    dom.tag_name(n).unwrap_or("#text"),
+                                    el.and_then(|e| e.id()),
+                                    el.and_then(|e| e.attr("class")),
+                                    dom.parent(n).map(|p| dom.tag_name(p).unwrap_or("#text")),
+                                    roots.iter().any(|&r| r == n || dom.parent(n) == Some(r))
+                                );
+                            }
+                        }
                         tracing::error!(
                             "INCR MISMATCH: incremental restyle disagrees with the full cascade"
                         );
@@ -5682,15 +5988,24 @@ impl MinimalCascade {
             }
         };
         let t_cascade = t0.elapsed();
-        CACHE.with(|c| {
-            *c.borrow_mut() = Some(MinimalIncr {
-                key,
+        slots.insert(
+            0,
+            MinimalIncr {
+                html: prep.html,
+                tracked: new_tracked,
+                base: prep.base,
+                sheets: prep.sheets,
                 sib,
                 empty,
                 fp: new_fp.into_iter().collect(),
                 map: map.clone(),
-            })
-        });
+            },
+        );
+        if let Some(sp) = spare {
+            slots.insert(1.min(slots.len()), sp);
+        }
+        slots.truncate(INCR_SLOTS);
+        CACHE.with(|c| *c.borrow_mut() = slots);
         if env_on("MANUK_INCR_TRACE") {
             eprintln!(
                 "INCR minimal timing: plan {:?} +cascade {:?} +cache-clone {:?}",
@@ -5700,6 +6015,132 @@ impl MinimalCascade {
             );
         }
         map
+    }
+
+    /// PERF.1.2.b.a — the elements any rule of `fresh` (sheets appended since the last pass) can match.
+    /// A superset-safe over-approximation: pseudo-element rules count for their originating element.
+    pub(crate) fn appended_matches(&self, dom: &Dom, fresh: &[Stylesheet]) -> Vec<NodeId> {
+        self.appended_matches_upto(dom, fresh, usize::MAX)
+    }
+
+    /// [`Self::appended_matches`], giving up once more than `limit` elements matched (the caller then does the
+    /// full cascade: restyling that many nodes one by one costs more than the walk).
+    pub(crate) fn appended_matches_upto(
+        &self,
+        dom: &Dom,
+        fresh: &[Stylesheet],
+        limit: usize,
+    ) -> Vec<NodeId> {
+        let _has_memo = HasMemoScope::new();
+        let scoped: Vec<ScopedSheet> = fresh
+            .iter()
+            .cloned()
+            .map(|sheet| ScopedSheet { scope: None, sheet })
+            .collect();
+        let index = Self::build_index(&scoped);
+        let mut out = Vec::new();
+        for n in dom.flat_descendants(dom.root()) {
+            if !dom.is_element(n) {
+                continue;
+            }
+            let mut hit = false;
+            index.for_each_candidate(dom, n, |cand| {
+                if !hit && selector_matches_scoped(cand.sel, dom, n, cand.scope) {
+                    hit = true;
+                }
+            });
+            if hit {
+                out.push(n);
+                if out.len() > limit {
+                    break;
+                }
+            }
+        }
+        out
+    }
+
+    /// PERF.1.2.b.a — the elements any rule whose selector looks at a class in `tokens` (anywhere in the
+    /// selector, including inside `:not()`/`:is()`/`:has()`, or through a `[class...]` attribute test) can
+    /// match: everything an ancestor's changed class list can restyle without touching its own attributes.
+    pub(crate) fn matches_mentioning(
+        &self,
+        dom: &Dom,
+        sheets: &[Stylesheet],
+        tokens: &[String],
+        attrs: &[String],
+        limit: usize,
+    ) -> Vec<NodeId> {
+        let _has_memo = HasMemoScope::new();
+        let scoped: Vec<ScopedSheet> = sheets
+            .iter()
+            .cloned()
+            .map(|sheet| ScopedSheet { scope: None, sheet })
+            .collect();
+        let index =
+            Self::build_index_filtered(&scoped, &|sel| selector_mentions_class(sel, tokens, attrs));
+        let mut out = Vec::new();
+        for n in dom.flat_descendants(dom.root()) {
+            if !dom.is_element(n) {
+                continue;
+            }
+            let mut hit = false;
+            index.for_each_candidate(dom, n, |cand| {
+                if !hit && selector_matches_scoped(cand.sel, dom, n, cand.scope) {
+                    hit = true;
+                }
+            });
+            if hit {
+                out.push(n);
+                if out.len() > limit {
+                    break;
+                }
+            }
+        }
+        out
+    }
+
+    /// How many times the parsed rules of `sheets` mention a class in `tokens` (all rules, whatever their
+    /// `@media`). The caller compares it with a textual count to notice rules this parser dropped.
+    pub(crate) fn class_mentions(
+        sheets: &[Stylesheet],
+        tokens: &[String],
+        attrs: &[String],
+    ) -> usize {
+        fn count(sel: &Selector, tokens: &[String], attrs: &[String]) -> usize {
+            let mut n = 0;
+            for part in &sel.parts {
+                n += part.classes.iter().filter(|c| tokens.contains(c)).count();
+                n += part
+                    .attrs
+                    .iter()
+                    .filter(|a| {
+                        a.name.eq_ignore_ascii_case("class")
+                            || attrs.iter().any(|x| a.name.eq_ignore_ascii_case(x))
+                    })
+                    .count();
+                for p in &part.pseudos {
+                    match p {
+                        Pseudo::Not(v) | Pseudo::Is(v) => {
+                            n += v.iter().map(|s| count(s, tokens, attrs)).sum::<usize>()
+                        }
+                        Pseudo::Has(v) => {
+                            n += v
+                                .iter()
+                                .map(|(_, s)| count(s, tokens, attrs))
+                                .sum::<usize>()
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            n
+        }
+        sheets
+            .iter()
+            .flat_map(|sh| sh.rules.iter())
+            .flat_map(|r| r.selectors.iter())
+            .map(|s| count(s, tokens, attrs))
+            .sum()
     }
 
     /// PERF.1.2.b — re-cascade only the subtrees rooted at `roots` into `map`, which holds the previous
@@ -5739,6 +6180,75 @@ impl MinimalCascade {
         parent_style: &ComputedStyle,
         index: &RuleIndex<'_>,
         map: &mut StyleMap,
+    ) {
+        self.cascade_node_inner(dom, node, parent_style, index, map, true);
+    }
+
+    /// PERF.1.2.b.a — [`Self::style_of_root_alone`] for many nodes, each under its parent's CACHED style.
+    pub(crate) fn styles_alone(
+        &self,
+        dom: &Dom,
+        sheets: &[Stylesheet],
+        cached: &StyleMap,
+        nodes: &[NodeId],
+    ) -> Vec<(NodeId, ComputedStyle)> {
+        let _has_memo = HasMemoScope::new();
+        let scoped: Vec<ScopedSheet> = sheets
+            .iter()
+            .cloned()
+            .map(|sheet| ScopedSheet { scope: None, sheet })
+            .collect();
+        let index = Self::build_index(&scoped);
+        let init = ComputedStyle::initial();
+        let mut out = Vec::with_capacity(nodes.len());
+        let mut scratch = StyleMap::new();
+        for &n in nodes {
+            let parent = dom.parent(n).and_then(|p| cached.get(&p)).unwrap_or(&init);
+            scratch.clear();
+            self.cascade_node_inner(dom, n, parent, &index, &mut scratch, false);
+            if let Some(s) = scratch.remove(&n) {
+                out.push((n, s));
+            }
+        }
+        out
+    }
+
+    /// PERF.1.2.b.a — the style `node` alone gets (no descendants), as the full cascade would give it
+    /// under the initial style (the `<html>` case: its parent is the document).
+    pub(crate) fn style_of_root_alone(
+        &self,
+        dom: &Dom,
+        sheets: &[Stylesheet],
+        node: NodeId,
+    ) -> Option<ComputedStyle> {
+        let _has_memo = HasMemoScope::new();
+        let scoped: Vec<ScopedSheet> = sheets
+            .iter()
+            .cloned()
+            .map(|sheet| ScopedSheet { scope: None, sheet })
+            .collect();
+        let index = Self::build_index(&scoped);
+        let mut scratch = StyleMap::new();
+        self.cascade_node_inner(
+            dom,
+            node,
+            &ComputedStyle::initial(),
+            &index,
+            &mut scratch,
+            false,
+        );
+        scratch.remove(&node)
+    }
+
+    #[allow(clippy::only_used_in_recursion)]
+    fn cascade_node_inner(
+        &self,
+        dom: &Dom,
+        node: NodeId,
+        parent_style: &ComputedStyle,
+        index: &RuleIndex<'_>,
+        map: &mut StyleMap,
+        recurse: bool,
     ) {
         let style = match dom.data(node) {
             NodeData::Element(el) => {
@@ -5919,8 +6429,10 @@ impl MinimalCascade {
         // Recurse over the FLAT tree: shadow content is styled, slotted light-DOM nodes
         // are visited once (through their slot), and unslotted light children are skipped
         // because they do not render.
-        for child in dom.flat_children(node) {
-            self.cascade_node(dom, child, &style, index, map);
+        if recurse {
+            for child in dom.flat_children(node) {
+                self.cascade_node(dom, child, &style, index, map);
+            }
         }
     }
 }

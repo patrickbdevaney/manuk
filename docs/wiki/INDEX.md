@@ -2150,6 +2150,7 @@
 
   - L7 · Mechanism (engine/css/src/incr.rs, lib.rs cascade_incremental, stylo_engine.rs IncrCache)
   - L21 · Gotchas
+  - L28 · PERF.1.2.b.a: what a pass can now reuse across (chrome_ver=145.0.7632.116)
 
 ## A document whose only JavaScript is an attribute got no JavaScript at all
 `docs/wiki/inline-handler-needs-no-script.md`
@@ -3827,4 +3828,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3110 sections across 178 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3111 sections across 178 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

@@ -24,3 +24,25 @@
   WHOLE subtree; "recompute only if the parent's computed style changed" would be wrong.
 - The profiler counts cascade time as `cascade`, not `settle`: a faster cascade does not move the settle bar.
 - Cost of an incremental pass is dominated by the 32 ms cache clone on a 19k-node page; most remaining full passes are sheet-list changes.
+
+## PERF.1.2.b.a: what a pass can now reuse across (chrome_ver=145.0.7632.116)
+
+- **Sheet list moves.** The cache holds the sheets (not just hashes). A pass reuses it when the list differs only by sheets that appeared or
+  vanished (LCS on source hash, `sheet_diff`); the elements those sheets' rules can match (`appended_matches`, our selector matcher over the
+  moved sheets only) are re-walked, nothing else. A moved sheet with `@import/@layer/@scope/@container/@property/...` is never layered
+  (full pass); `@keyframes` and `@counter-style` are safe (a pass with an animating element is never cached; `@counter-style` defines a name).
+  Sibling flags may not GROW across a move (the fingerprint's shape would change).
+- **Two cache slots** (`INCR_SLOTS`): the page's own callers disagree on the sheet list (some rebuild it from inline `<style>` only), so passes
+  alternate between two lists. `incr_pick` takes the slot with the smallest sheet diff; a slot a pass did not consume is kept.
+- **Sibling expansion by side.** Sheet flags are bits: `+ ~ :nth-child :nth-of-type :first-of-type` read the siblings BEFORE the subject (the
+  LATER ones move), `:nth-last-* :last-of-type` the ones after (EARLIER), `:only-of-type` both, `:first/:last/:only-child` need only the
+  neighbours (already moved through their prev/next ids in the fingerprint). Wikipedia's `:nth-*` used to expand every sibling of a changed node.
+- **`<html>` class flips** (`client-nojs` -> `client-js`, feature flags) no longer force a full pass. When only the class list changed, the
+  elements matched by rules that look at a changed class (`matches_mentioning`, evaluated with `<html>`'s class as it was AND as it is, via
+  `CLASS_OVERRIDE`: a rule that stopped matching must restyle too) are re-walked, and `<html>` itself is restyled alone
+  (`style_of_root_alone`): if its style is unchanged it counts as clean. A parsed-vs-textual `.token` count bails if the parser dropped a rule
+  naming a changed class. Pointer/focus state on `<html>` is part of the snapshot, so a state change is still a full pass.
+- Gotcha: matching "what changed" only in the NEW dom misses the nodes whose rule stopped matching (the old class is gone); that was the first
+  INCR MISMATCH this found (Alan_Turing, `li#ca-bookmark`).
+- The html-alone shortcut is in the MinimalCascade path only; the Stylo path still does a full pass when a rule that names a flipped class
+  matches `<html>`.

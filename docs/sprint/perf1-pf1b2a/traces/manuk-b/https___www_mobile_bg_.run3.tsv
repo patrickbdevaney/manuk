@@ -1,0 +1,423 @@
+0	epoch	1795512300564015
+37285	dns	www.mobile.bg	37233
+63906	connect	www.mobile.bg	63864
+320874	req	https://www.mobile.bg/	0	320868	200	HTTP/2.0	-	GET
+322182	body	https://www.mobile.bg/	116256	200
+323108	q	https://www.mobile.bg/styless/styless.css?8337863036
+330101	q	https://www.mobile.bg/images/picturess/nophoto_490x341.svg
+330149	q	https://www.mobile.bg/images/picturess/icons/hpages/BEST-wrap.svg
+330189	q	https://cdn2.focus.bg/mobile/photosorg/786/1/11791787676458786_M4.webp
+330521	phase	html parse	7798
+331028	q	https://cdn2.focus.bg/mobile/photosorg/403/2/21790242428973403_E8.webp
+331080	q	https://mobistatic3.focus.bg/mobile/photosorg/911/1/11794080775893911_2V.webp
+331168	q	https://cdn.cookie-script.com/s/8386f21f12f80656dc8987daba045d28.js
+331244	q	https://mobistatic1.focus.bg/mobile/photosorg/848/2/21795193865165848_SH.webp
+331336	q	https://www.mobile.bg/jss/jquery/jquery.min.js
+331364	q	https://www.mobile.bg/jss/cmmvars.js?8337863036
+331384	q	https://www.mobile.bg/jss/scripts.js?8337863036
+331405	q	https://www.mobile.bg/jss/mobile-detect.min.js?8337863036
+331432	q	https://www.googletagmanager.com/gtag/js?id=G-1W1ZJ0Y1F5
+331475	q	https://mobistatic1.focus.bg/mobile/photosorg/825/2/21793362754299825_J.webp
+331439	q	https://mobistatic3.focus.bg/mobile/photosorg/873/2/21792582706162873_mU.webp
+331489	q	https://cdn2.focus.bg/mobile/photosorg/774/2/21795179575939774_Nm.webp
+331568	q	https://www.googletagservices.com/tag/js/gpt.js
+331586	q	https://mobistatic1.focus.bg/mobile/photosorg/630/1/11794340439372630_6A.webp
+331592	q	https://mobistatic2.focus.bg/mobile/photosorg/524/2/21734828522555524_D8.webp
+330120	q	https://www.mobile.bg/images/picturess/icons/plus.svg
+331671	q	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/select/1.svg
+331695	q	https://mobistatic3.focus.bg/mobile/photosorg/069/1/11735072806466069_10.webp
+331718	q	https://cdn2.focus.bg/mobile/photosorg/799/1/11734787991674799_V8.webp
+331755	q	https://mobistatic1.focus.bg/mobile/photosorg/325/1/11763642345061325_AY.webp
+331784	q	https://cdn4.focus.bg/fakti/photos/small/be9/maior-oz-inj-kalin-hristov-pred-fakti-ukraina-nama-resursite-na-rusia-kogato-stava-duma-za-jiva-sila-no-kompensira-s-inovacii-1.webp
+330153	q	https://www.mobile.bg/images/picturess/logo-2023.svg
+331997	q	https://cdn4.focus.bg/fakti/photos/small/bcc/balgarskata-sistema-za-proverka-na-servizni-akcii-za-avtomobili-veche-raboti-1.webp
+332025	q	https://cdn4.focus.bg/fakti/collisions/b37/ima-li-myasto-ukrayna-v-nato-_msmall-3.jpg
+332050	q	https://cdn4.focus.bg/fakti/photos/small/2f5/nad-100-000-ruski-zagubi-samo-krai-pokrovsk-cenata-na-ofanzivata-v-donbas-nadminava-bitkite-ot-vtorata-svetovna-voina-2.webp
+332081	q	https://cdn4.focus.bg/fakti/photos/small/0ad/atakite-sreshtu-dvata-ruski-koraba-v-libiiski-vodi-belejat-nov-obrat-vav-voinata-v-ukraina-1.webp
+332108	q	https://www.mobile.bg/images/picturess/icons/statistiki.svg
+332125	q	https://www.mobile.bg/images/picturess/icons/viz.svg
+332141	q	https://www.mobile.bg/images/picturess/icons/brandovi_produkti.svg
+332158	q	https://www.mobile.bg/images/picturess/bulinfo-logo.svg
+331570	q	https://mobistatic1.focus.bg/mobile/photosorg/986/1/11794638416911986_qC.webp
+332355	q	https://www.mobile.bg/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js
+331617	q	https://mobistatic2.focus.bg/mobile/photosorg/966/1/11735078631858966_49.webp
+331619	q	https://cdn2.focus.bg/mobile/photosorg/142/1/11735248561782142_QA.webp
+331543	q	https://mobistatic1.focus.bg/mobile/photosorg/896/1/11783525222246896_pS.webp
+335135	dns	www.googletagservices.com	3522
+335528	req	https://www.mobile.bg/styless/styless.css?8337863036	323319	12205	200	HTTP/2.0	-	GET
+335995	dns	www.googletagmanager.com	4523
+337719	body	https://www.mobile.bg/styless/styless.css?8337863036	310989	200
+341610	dns	mobistatic3.focus.bg	10387
+351472	req	https://www.mobile.bg/jss/mobile-detect.min.js?8337863036	337981	13486	200	HTTP/2.0	-	GET
+353561	req	https://www.mobile.bg/jss/scripts.js?8337863036	337906	15652	200	HTTP/2.0	-	GET
+355466	body	https://www.mobile.bg/jss/mobile-detect.min.js?8337863036	38440	200
+355655	req	https://www.mobile.bg/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js	338013	17638	200	HTTP/2.0	-	GET
+355786	body	https://www.mobile.bg/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js	1239	200
+355864	dns	cdn.cookie-script.com	24631
+356059	req	https://www.mobile.bg/jss/jquery/jquery.min.js	337849	18208	200	HTTP/2.0	-	GET
+356810	body	https://www.mobile.bg/jss/jquery/jquery.min.js	93637	200
+357124	body	https://www.mobile.bg/jss/scripts.js?8337863036	125466	200
+360551	req	https://www.mobile.bg/jss/cmmvars.js?8337863036	337876	22673	200	HTTP/2.0	-	GET
+363353	body	https://www.mobile.bg/jss/cmmvars.js?8337863036	276718	200
+363637	dns	mobistatic2.focus.bg	31932
+374962	dns	cdn2.focus.bg	43476
+384271	dns	mobistatic1.focus.bg	52965
+395831	dns	cdn4.focus.bg	63898
+426276	connect	www.googletagservices.com	94664
+456384	connect	www.googletagmanager.com	124912
+533730	req	https://www.googletagservices.com/tag/js/gpt.js	331606	202108	200	HTTP/2.0	38887	GET
+563836	req	https://www.googletagmanager.com/gtag/js?id=G-1W1ZJ0Y1F5	331466	232357	200	HTTP/2.0	-	GET
+604483	body	https://www.googletagservices.com/tag/js/gpt.js	138887	200
+628299	req	https://www.mobile.bg/images/picturess/icons/viz.svg	338240	290044	200	HTTP/2.0	-	GET
+628578	body	https://www.mobile.bg/images/picturess/icons/viz.svg	375	200
+628653	req	https://www.mobile.bg/images/picturess/logo-2023.svg	338172	290470	200	HTTP/2.0	-	GET
+628737	req	https://www.mobile.bg/images/picturess/icons/brandovi_produkti.svg	338210	290525	200	HTTP/2.0	-	GET
+628844	body	https://www.mobile.bg/images/picturess/icons/brandovi_produkti.svg	2383	200
+628896	req	https://www.mobile.bg/images/picturess/icons/statistiki.svg	338070	290824	200	HTTP/2.0	-	GET
+628911	body	https://www.mobile.bg/images/picturess/logo-2023.svg	6771	200
+628979	body	https://www.mobile.bg/images/picturess/icons/statistiki.svg	1267	200
+628986	req	https://www.mobile.bg/images/picturess/bulinfo-logo.svg	338274	290710	200	HTTP/2.0	-	GET
+629022	req	https://www.mobile.bg/images/picturess/icons/hpages/BEST-wrap.svg	338104	290915	200	HTTP/2.0	-	GET
+629111	body	https://www.mobile.bg/images/picturess/icons/hpages/BEST-wrap.svg	4702	200
+629146	req	https://www.mobile.bg/images/picturess/nophoto_490x341.svg	338013	291132	200	HTTP/2.0	-	GET
+629156	body	https://www.mobile.bg/images/picturess/bulinfo-logo.svg	8720	200
+629214	req	https://www.mobile.bg/images/picturess/icons/plus.svg	338129	291082	200	HTTP/2.0	-	GET
+629244	body	https://www.mobile.bg/images/picturess/nophoto_490x341.svg	6092	200
+629318	body	https://www.mobile.bg/images/picturess/icons/plus.svg	563	200
+631390	connect	cdn2.focus.bg	299909
+742033	body	https://www.googletagmanager.com/gtag/js?id=G-1W1ZJ0Y1F5	574335	200
+906560	connect	cdn.cookie-script.com	575330
+906605	connect	cdn4.focus.bg	574700
+907514	connect	mobistatic1.focus.bg	576213
+907550	connect	mobistatic2.focus.bg	575854
+908381	connect	mobistatic3.focus.bg	577170
+935630	dns	cdn4.focus.bg	28822
+935819	dns	cdn4.focus.bg	29092
+935875	dns	cdn4.focus.bg	29119
+935934	dns	cdn4.focus.bg	29187
+936027	req	https://cdn2.focus.bg/mobile/photosorg/786/1/11791787676458786_M4.webp	330231	605793	200	HTTP/2.0	16214	GET
+936081	req	https://cdn2.focus.bg/mobile/photosorg/799/1/11734787991674799_V8.webp	631783	304296	200	HTTP/2.0	34146	GET
+936177	body	https://cdn2.focus.bg/mobile/photosorg/786/1/11791787676458786_M4.webp	16214	200
+936181	req	https://cdn2.focus.bg/mobile/photosorg/774/2/21795179575939774_Nm.webp	631514	304666	200	HTTP/2.0	14846	GET
+936375	body	https://cdn2.focus.bg/mobile/photosorg/774/2/21795179575939774_Nm.webp	14846	200
+941390	req	https://cdn2.focus.bg/mobile/photosorg/142/1/11735248561782142_QA.webp	631766	309618	200	HTTP/2.0	21414	GET
+941438	body	https://cdn2.focus.bg/mobile/photosorg/799/1/11734787991674799_V8.webp	34146	200
+944074	dns	mobistatic1.focus.bg	36469
+944167	dns	mobistatic1.focus.bg	36585
+944177	dns	mobistatic1.focus.bg	36518
+944232	dns	mobistatic1.focus.bg	36605
+944531	dns	mobistatic1.focus.bg	36869
+947379	body	https://cdn2.focus.bg/mobile/photosorg/142/1/11735248561782142_QA.webp	21414	200
+947858	req	https://cdn2.focus.bg/mobile/photosorg/403/2/21790242428973403_E8.webp	631572	316283	200	HTTP/2.0	28170	GET
+950228	req	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/select/1.svg	631658	318568	200	HTTP/2.0	-	GET
+951298	body	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/select/1.svg	1541	200
+951363	body	https://cdn2.focus.bg/mobile/photosorg/403/2/21790242428973403_E8.webp	28170	200
+954596	dns	mobistatic2.focus.bg	46965
+964378	dns	mobistatic3.focus.bg	56077
+964499	dns	mobistatic3.focus.bg	56053
+1388464	connect	cdn4.focus.bg	481706
+1391317	req	https://mobistatic1.focus.bg/mobile/photosorg/848/2/21795193865165848_SH.webp	331288	1060027	200	HTTP/1.1	13024	GET
+1391446	body	https://mobistatic1.focus.bg/mobile/photosorg/848/2/21795193865165848_SH.webp	13024	200
+1392995	req	https://cdn4.focus.bg/fakti/photos/small/be9/maior-oz-inj-kalin-hristov-pred-fakti-ukraina-nama-resursite-na-rusia-kogato-stava-duma-za-jiva-sila-no-kompensira-s-inovacii-1.webp	331859	1061132	200	HTTP/1.1	2668	GET
+1393046	body	https://cdn4.focus.bg/fakti/photos/small/be9/maior-oz-inj-kalin-hristov-pred-fakti-ukraina-nama-resursite-na-rusia-kogato-stava-duma-za-jiva-sila-no-kompensira-s-inovacii-1.webp	2668	200
+1394458	req	https://mobistatic2.focus.bg/mobile/photosorg/524/2/21734828522555524_D8.webp	331667	1062787	200	HTTP/1.1	20200	GET
+1395421	connect	mobistatic3.focus.bg	486976
+1396833	req	https://mobistatic3.focus.bg/mobile/photosorg/911/1/11794080775893911_2V.webp	331147	1065683	200	HTTP/1.1	21990	GET
+1400360	connect	mobistatic1.focus.bg	492698
+1407482	connect	cdn4.focus.bg	500738
+1408422	connect	cdn4.focus.bg	501622
+1409379	connect	mobistatic1.focus.bg	501776
+1414467	connect	cdn4.focus.bg	507743
+1416376	connect	mobistatic1.focus.bg	508717
+1417336	connect	mobistatic1.focus.bg	509709
+1422494	connect	mobistatic2.focus.bg	514866
+1423409	connect	mobistatic1.focus.bg	515828
+1427375	connect	mobistatic3.focus.bg	519083
+1534668	req	https://mobistatic1.focus.bg/mobile/photosorg/825/2/21793362754299825_J.webp	907575	627087	200	HTTP/1.1	21984	GET
+1535305	body	https://mobistatic1.focus.bg/mobile/photosorg/825/2/21793362754299825_J.webp	21984	200
+1536127	body	https://mobistatic2.focus.bg/mobile/photosorg/524/2/21734828522555524_D8.webp	20200	200
+1537328	req	https://cdn4.focus.bg/fakti/photos/small/2f5/nad-100-000-ruski-zagubi-samo-krai-pokrovsk-cenata-na-ofanzivata-v-donbas-nadminava-bitkite-ot-vtorata-svetovna-voina-2.webp	906717	630608	200	HTTP/1.1	4322	GET
+1537401	body	https://cdn4.focus.bg/fakti/photos/small/2f5/nad-100-000-ruski-zagubi-samo-krai-pokrovsk-cenata-na-ofanzivata-v-donbas-nadminava-bitkite-ot-vtorata-svetovna-voina-2.webp	4322	200
+1537550	body	https://mobistatic3.focus.bg/mobile/photosorg/911/1/11794080775893911_2V.webp	21990	200
+1562530	req	https://cdn.cookie-script.com/s/8386f21f12f80656dc8987daba045d28.js	331218	1231298	200	HTTP/1.1	-	GET
+1701356	body	https://cdn.cookie-script.com/s/8386f21f12f80656dc8987daba045d28.js	262230	200
+1753678	phase	external scripts	1423127
+1754115	q	https://www.mobile.bg/jss/firebase-app.9.6.6.min.js?3
+1766409	req	https://cdn4.focus.bg/fakti/collisions/b37/ima-li-myasto-ukrayna-v-nato-_msmall-3.jpg	906688	859712	200	HTTP/1.1	6485	GET
+1766488	body	https://cdn4.focus.bg/fakti/collisions/b37/ima-li-myasto-ukrayna-v-nato-_msmall-3.jpg	6485	200
+1775350	req	https://www.mobile.bg/jss/firebase-app.9.6.6.min.js?3	1754196	21151	200	HTTP/2.0	-	GET
+1775544	req	https://mobistatic3.focus.bg/mobile/photosorg/069/1/11735072806466069_10.webp	908439	867103	200	HTTP/1.1	45194	GET
+1775571	body	https://www.mobile.bg/jss/firebase-app.9.6.6.min.js?3	31871	200
+1776095	q	https://www.mobile.bg/jss/firebase-messaging.9.6.6.min.js?3
+1785588	req	https://www.mobile.bg/jss/firebase-messaging.9.6.6.min.js?3	1776156	9426	200	HTTP/2.0	-	GET
+1785859	body	https://www.mobile.bg/jss/firebase-messaging.9.6.6.min.js?3	31877	200
+1786289	phase	module graph prefetch	32566
+1786501	phase	blocking stylesheets	201
+1792023	req	https://cdn4.focus.bg/fakti/photos/small/0ad/atakite-sreshtu-dvata-ruski-koraba-v-libiiski-vodi-belejat-nov-obrat-vav-voinata-v-ukraina-1.webp	906738	885280	200	HTTP/1.1	3336	GET
+1792114	body	https://cdn4.focus.bg/fakti/photos/small/0ad/atakite-sreshtu-dvata-ruski-koraba-v-libiiski-vodi-belejat-nov-obrat-vav-voinata-v-ukraina-1.webp	3336	200
+1792227	req	https://cdn4.focus.bg/fakti/photos/small/bcc/balgarskata-sistema-za-proverka-na-servizni-akcii-za-avtomobili-veche-raboti-1.webp	906789	885437	200	HTTP/1.1	4404	GET
+1792264	body	https://cdn4.focus.bg/fakti/photos/small/bcc/balgarskata-sistema-za-proverka-na-servizni-akcii-za-avtomobili-veche-raboti-1.webp	4404	200
+1793935	req	https://mobistatic1.focus.bg/mobile/photosorg/896/1/11783525222246896_pS.webp	907652	886280	200	HTTP/1.1	31960	GET
+1803395	req	https://mobistatic3.focus.bg/mobile/photosorg/873/2/21792582706162873_mU.webp	908267	895125	200	HTTP/1.1	22950	GET
+1805339	req	https://mobistatic1.focus.bg/mobile/photosorg/630/1/11794340439372630_6A.webp	907598	897738	200	HTTP/1.1	24480	GET
+1809577	req	https://mobistatic2.focus.bg/mobile/photosorg/966/1/11735078631858966_49.webp	907620	901955	200	HTTP/1.1	20110	GET
+1811417	req	https://mobistatic1.focus.bg/mobile/photosorg/986/1/11794638416911986_qC.webp	907642	903773	200	HTTP/1.1	15734	GET
+1811509	body	https://mobistatic1.focus.bg/mobile/photosorg/986/1/11794638416911986_qC.webp	15734	200
+1820127	req	https://mobistatic1.focus.bg/mobile/photosorg/325/1/11763642345061325_AY.webp	907621	912494	200	HTTP/1.1	24820	GET
+1875798	cascade	68615
+1904973	layout	28924
+1913339	body	https://mobistatic3.focus.bg/mobile/photosorg/069/1/11735072806466069_10.webp	45194	200
+1933657	body	https://mobistatic1.focus.bg/mobile/photosorg/896/1/11783525222246896_pS.webp	31960	200
+1942771	body	https://mobistatic3.focus.bg/mobile/photosorg/873/2/21792582706162873_mU.webp	22950	200
+1949301	body	https://mobistatic1.focus.bg/mobile/photosorg/630/1/11794340439372630_6A.webp	24480	200
+1952342	body	https://mobistatic2.focus.bg/mobile/photosorg/966/1/11735078631858966_49.webp	20110	200
+1953866	body	https://mobistatic1.focus.bg/mobile/photosorg/325/1/11763642345061325_AY.webp	24820	200
+2022111	cascade	8825
+2031251	layout	8546
+2033571	phase	cascade+layout+blocking scripts	247057
+2322394	cascade	59094
+2345869	layout	22751
+2350024	phase	deferred scripts	316433
+2414492	cascade	57111
+2442712	layout	26595
+2442783	reflow	forced
+2512527	cascade	66094
+2549180	layout	27917
+2555813	reflow	forced
+2615119	cascade	55596
+2641019	layout	24891
+2646608	reflow	forced
+2715144	cascade	61437
+2741350	layout	25184
+2744893	reflow	forced
+2803267	cascade	53591
+2827252	layout	22331
+2830622	reflow	forced
+2890519	cascade	56342
+2919436	layout	27096
+2923632	reflow	forced
+3044263	cascade	67298
+3073597	layout	28457
+3077389	reflow	forced
+3152218	cascade	62637
+3195200	layout	27448
+3203753	reflow	forced
+3221256	phase	DOMContentLoaded	871199
+3223911	cascade	22
+3223966	layout	36
+3225278	cascade	8
+3225304	layout	9
+3226173	phase	subframes (pre-load)	4834
+3357766	phase	initial images+masks	131575
+3373724	phase	load event	15915
+3481938	phase	finish_loading: external CSS	108020
+3482015	q	https://cdn2.focus.bg/mobile/images/picturess/icons/hpages/price-down.svg
+3482238	q	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/9.svg
+3482299	q	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/v.svg
+3482342	q	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/8.svg
+3482382	q	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/8.svg
+3482428	q	https://cdn2.focus.bg/mobile/images/picturess/icons/time.svg
+3482465	q	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/b.svg
+3482503	q	https://cdn2.focus.bg/mobile/images/picturess/icons/search-zoom.svg
+3482544	q	https://cdn2.focus.bg/mobile/images/picturess/icons/arrows-up-down.svg
+3482585	q	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/w.svg
+3482622	q	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/3.svg
+3482659	q	https://www.mobile.bg/images/picturess/icons/close.svg
+3482750	q	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/c.svg
+3482793	q	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/b.svg
+3482892	q	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/5.svg
+3482934	q	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/z.svg
+3482984	q	https://cdn2.focus.bg/mobile/images/picturess/BG-EARTH.svg
+3483021	q	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/4.svg
+3483066	q	https://cdn2.focus.bg/mobile/images/picturess/icons/title-small-arrow.svg
+3483113	q	https://cdn2.focus.bg/mobile/images/picturess/BG.svg
+3483161	q	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/1.svg
+3483210	q	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/u.svg
+3483269	q	https://cdn2.focus.bg/mobile/images/picturess/icons/close-input.svg
+3483325	q	https://cdn2.focus.bg/mobile/images/picturess/icons/hpages/moreFiltersN.svg
+3483374	q	https://cdn2.focus.bg/mobile/assets/svg/follow-us-facebook.svg
+3483423	q	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/z.svg
+3483470	q	https://cdn2.focus.bg/mobile/assets/svg/follow-us-instagram.svg
+3483520	q	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/v.svg
+3483575	q	https://cdn2.focus.bg/mobile/images/picturess/icons/fakti-icon.svg
+3483622	q	https://www.mobile.bg/images/picturess/icons/close-menu.svg
+3483692	q	https://cdn2.focus.bg/mobile/images/picturess/EARTH.svg
+3483747	q	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/1.svg
+3483790	q	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/c.svg
+3483854	q	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/3.svg
+3483903	q	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/9.svg
+3483972	q	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/5.svg
+3484022	q	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/7.svg
+3484070	q	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/a.svg
+3484117	q	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/y.svg
+3484159	q	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/7.svg
+3484195	q	https://gabg.hit.gemius.pl/xgemius.min.js
+3484209	q	https://www.mobile.bg/images/picturess/rentacar-logo.png
+3484276	q	https://securepubads.g.doubleclick.net/pagead/managed/js/gpt/m202611120201/pubads_impl.js
+3484320	q	https://cdn.cookie-script.com/iabtcf/2.3/sdk_cmp.js
+3484367	q	https://fundingchoicesmessages.google.com/f/AGSKWxUhj_7eYc635XnNYNH-ygWhFS9tCvhyKmokZPBCrNDA_f0uCXI1pxrRBO_v0dVPuqBOoy1h85ayswMk9VJITfw=
+3481980	q	https://cdn2.focus.bg/mobile/images/picturess/icons/cats-search.svg
+3488256	q	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/6.svg
+3488369	q	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/6.svg
+3488583	q	https://cdn2.focus.bg/mobile/assets/svg/follow-us-tiktok.svg
+3488788	q	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/w.svg
+3488846	q	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/a.svg
+3488886	q	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/u.svg
+3488929	q	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/y.svg
+3484283	q	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/4.svg
+3489470	q	https://cdn2.focus.bg/mobile/assets/svg/follow-us-youtube.svg
+3490719	dns	securepubads.g.doubleclick.net	6407
+3491485	dns	fundingchoicesmessages.google.com	7067
+3493773	dns	gabg.hit.gemius.pl	9512
+3495249	req	https://cdn2.focus.bg/mobile/images/picturess/icons/hpages/price-down.svg	3482085	13161	200	HTTP/2.0	-	GET
+3495355	body	https://cdn2.focus.bg/mobile/images/picturess/icons/hpages/price-down.svg	610	200
+3501577	req	https://cdn2.focus.bg/mobile/images/picturess/BG.svg	3483134	18437	200	HTTP/2.0	-	GET
+3501859	body	https://cdn2.focus.bg/mobile/images/picturess/BG.svg	5216	200
+3502422	req	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/1.svg	3483183	19237	200	HTTP/2.0	-	GET
+3502495	body	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/1.svg	2744	200
+3503283	req	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/8.svg	3482364	20916	200	HTTP/2.0	-	GET
+3503418	body	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/8.svg	2963	200
+3503926	req	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/u.svg	3483232	20692	200	HTTP/2.0	-	GET
+3504039	body	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/u.svg	3307	200
+3504196	req	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/8.svg	3482404	21774	200	HTTP/2.0	-	GET
+3504261	body	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/8.svg	4279	200
+3504991	req	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/w.svg	3482606	22383	200	HTTP/2.0	-	GET
+3505379	body	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/w.svg	2041	200
+3505798	req	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/z.svg	3482968	22828	200	HTTP/2.0	-	GET
+3506289	req	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/c.svg	3482775	23509	200	HTTP/2.0	-	GET
+3506333	req	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/v.svg	3483542	22785	200	HTTP/2.0	-	GET
+3506430	body	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/c.svg	2446	200
+3506486	req	https://cdn2.focus.bg/mobile/images/picturess/icons/cats-search.svg	3488158	18275	200	HTTP/2.0	-	GET
+3506567	req	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/3.svg	3482643	23922	200	HTTP/2.0	-	GET
+3506711	body	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/3.svg	3245	200
+3506765	body	https://cdn2.focus.bg/mobile/images/picturess/icons/cats-search.svg	1101	200
+3506596	body	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/v.svg	1239	200
+3506877	req	https://cdn2.focus.bg/mobile/images/picturess/icons/arrows-up-down.svg	3482566	24308	200	HTTP/2.0	-	GET
+3506944	req	https://cdn2.focus.bg/mobile/images/picturess/EARTH.svg	3483720	23219	200	HTTP/2.0	-	GET
+3506979	body	https://cdn2.focus.bg/mobile/images/picturess/icons/arrows-up-down.svg	1783	200
+3507020	body	https://cdn2.focus.bg/mobile/images/picturess/EARTH.svg	7164	200
+3507036	req	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/9.svg	3482269	24766	200	HTTP/2.0	-	GET
+3507061	req	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/y.svg	3484139	22921	200	HTTP/2.0	-	GET
+3507126	body	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/y.svg	7183	200
+3507140	body	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/9.svg	3405	200
+3507160	req	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/7.svg	3484182	22977	200	HTTP/2.0	-	GET
+3507178	req	https://cdn2.focus.bg/mobile/assets/svg/follow-us-facebook.svg	3483396	23781	200	HTTP/2.0	-	GET
+3507198	body	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/7.svg	2636	200
+3507220	body	https://cdn2.focus.bg/mobile/assets/svg/follow-us-facebook.svg	742	200
+3507244	req	https://cdn2.focus.bg/mobile/images/picturess/icons/time.svg	3482449	24793	200	HTTP/2.0	-	GET
+3507309	body	https://cdn2.focus.bg/mobile/images/picturess/icons/time.svg	3004	200
+3507359	req	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/b.svg	3482840	24518	200	HTTP/2.0	-	GET
+3507385	req	https://cdn2.focus.bg/mobile/images/picturess/BG-EARTH.svg	3483005	24379	200	HTTP/2.0	-	GET
+3507435	body	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/b.svg	1714	200
+3507472	req	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/y.svg	3488974	18496	200	HTTP/2.0	-	GET
+3507509	body	https://cdn2.focus.bg/mobile/images/picturess/BG-EARTH.svg	12235	200
+3507921	req	https://cdn2.focus.bg/mobile/images/picturess/icons/title-small-arrow.svg	3483088	24831	200	HTTP/2.0	-	GET
+3507985	body	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/y.svg	5121	200
+3506368	req	https://cdn2.focus.bg/mobile/images/picturess/icons/fakti-icon.svg	3483596	22768	200	HTTP/2.0	-	GET
+3508036	req	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/6.svg	3488316	19719	200	HTTP/2.0	-	GET
+3508077	body	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/6.svg	2234	200
+3507995	body	https://cdn2.focus.bg/mobile/images/picturess/icons/title-small-arrow.svg	750	200
+3508108	req	https://cdn2.focus.bg/mobile/assets/svg/follow-us-tiktok.svg	3488761	19346	200	HTTP/2.0	-	GET
+3508129	req	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/b.svg	3482487	25641	200	HTTP/2.0	-	GET
+3508142	body	https://cdn2.focus.bg/mobile/assets/svg/follow-us-tiktok.svg	741	200
+3508174	req	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/a.svg	3488868	19306	200	HTTP/2.0	-	GET
+3508194	body	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/b.svg	1625	200
+3508209	body	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/a.svg	1716	200
+3508230	req	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/u.svg	3488907	19322	200	HTTP/2.0	-	GET
+3508259	req	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/v.svg	3482323	25935	200	HTTP/2.0	-	GET
+3508280	body	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/u.svg	3490	200
+3508307	body	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/v.svg	1120	200
+3508348	req	https://cdn2.focus.bg/mobile/assets/svg/follow-us-instagram.svg	3483492	24856	200	HTTP/2.0	-	GET
+3508315	req	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/3.svg	3483877	24437	200	HTTP/2.0	-	GET
+3508396	body	https://cdn2.focus.bg/mobile/assets/svg/follow-us-instagram.svg	1957	200
+3508417	req	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/9.svg	3483926	24490	200	HTTP/2.0	-	GET
+3508238	req	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/6.svg	3488415	19822	200	HTTP/2.0	-	GET
+3508509	body	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/6.svg	2036	200
+3508536	body	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/z.svg	1458	200
+3508356	body	https://cdn2.focus.bg/mobile/images/picturess/icons/fakti-icon.svg	858	200
+3508669	req	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/c.svg	3483832	24836	200	HTTP/2.0	-	GET
+3508713	body	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/c.svg	2530	200
+3508743	req	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/7.svg	3484044	24698	200	HTTP/2.0	-	GET
+3508784	body	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/7.svg	2911	200
+3508822	req	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/5.svg	3482914	25907	200	HTTP/2.0	-	GET
+3508405	body	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/3.svg	3344	200
+3508512	body	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/9.svg	3631	200
+3506782	req	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/z.svg	3483444	23337	200	HTTP/2.0	-	GET
+3509438	body	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/z.svg	1545	200
+3510942	req	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/1.svg	3483770	27171	200	HTTP/2.0	-	GET
+3511019	body	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/1.svg	3011	200
+3511081	body	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/5.svg	6798	200
+3511110	req	https://cdn2.focus.bg/mobile/images/picturess/icons/hpages/moreFiltersN.svg	3483347	27762	200	HTTP/2.0	-	GET
+3511180	body	https://cdn2.focus.bg/mobile/images/picturess/icons/hpages/moreFiltersN.svg	3424	200
+3511208	req	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/4.svg	3483043	28164	200	HTTP/2.0	-	GET
+3511243	body	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/4.svg	2403	200
+3511268	req	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/w.svg	3488819	22449	200	HTTP/2.0	-	GET
+3511304	body	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/w.svg	2372	200
+3511331	req	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/a.svg	3484091	27239	200	HTTP/2.0	-	GET
+3511362	body	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/row/a.svg	1505	200
+3511391	req	https://cdn2.focus.bg/mobile/assets/svg/follow-us-youtube.svg	3489502	21888	200	HTTP/2.0	-	GET
+3511420	body	https://cdn2.focus.bg/mobile/assets/svg/follow-us-youtube.svg	758	200
+3511447	req	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/4.svg	3489375	22072	200	HTTP/2.0	-	GET
+3511481	body	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/4.svg	2600	200
+3511510	req	https://cdn2.focus.bg/mobile/images/picturess/icons/close-input.svg	3483302	28207	200	HTTP/2.0	-	GET
+3511542	body	https://cdn2.focus.bg/mobile/images/picturess/icons/close-input.svg	1352	200
+3511579	req	https://cdn2.focus.bg/mobile/images/picturess/icons/search-zoom.svg	3482525	25909	200	HTTP/2.0	-	GET
+3511614	body	https://cdn2.focus.bg/mobile/images/picturess/icons/search-zoom.svg	746	200
+3511871	req	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/5.svg	3483994	27875	200	HTTP/2.0	-	GET
+3512042	body	https://cdn2.focus.bg/mobile/images/picturess/icons/cats/5.svg	7215	200
+3592733	connect	securepubads.g.doubleclick.net	108422
+3624824	connect	fundingchoicesmessages.google.com	140407
+3635587	req	https://www.mobile.bg/images/picturess/icons/close.svg	3482689	152891	200	HTTP/2.0	-	GET
+3635678	body	https://www.mobile.bg/images/picturess/icons/close.svg	733	200
+3638472	req	https://www.mobile.bg/images/picturess/rentacar-logo.png	3484237	154231	200	HTTP/2.0	27737	GET
+3639448	body	https://www.mobile.bg/images/picturess/rentacar-logo.png	27737	200
+3643367	req	https://www.mobile.bg/images/picturess/icons/close-menu.svg	3483653	159707	200	HTTP/2.0	-	GET
+3643487	body	https://www.mobile.bg/images/picturess/icons/close-menu.svg	1587	200
+3758481	req	https://cdn.cookie-script.com/iabtcf/2.3/sdk_cmp.js	3484342	274125	200	HTTP/1.1	26037	GET
+3759536	body	https://cdn.cookie-script.com/iabtcf/2.3/sdk_cmp.js	91185	200
+3765110	req	https://securepubads.g.doubleclick.net/pagead/managed/js/gpt/m202611120201/pubads_impl.js	3484305	280801	200	HTTP/2.0	230347	GET
+3789095	req	https://fundingchoicesmessages.google.com/f/AGSKWxUhj_7eYc635XnNYNH-ygWhFS9tCvhyKmokZPBCrNDA_f0uCXI1pxrRBO_v0dVPuqBOoy1h85ayswMk9VJITfw=	3484402	304684	200	HTTP/2.0	-	GET
+3815060	body	https://fundingchoicesmessages.google.com/f/AGSKWxUhj_7eYc635XnNYNH-ygWhFS9tCvhyKmokZPBCrNDA_f0uCXI1pxrRBO_v0dVPuqBOoy1h85ayswMk9VJITfw=	22987	200
+3867910	body	https://securepubads.g.doubleclick.net/pagead/managed/js/gpt/m202611120201/pubads_impl.js	732698	200
+4171730	connect	gabg.hit.gemius.pl	687472
+4602409	req	https://gabg.hit.gemius.pl/xgemius.min.js	3484244	1118144	200	HTTP/2.0	19536	GET
+4815181	body	https://gabg.hit.gemius.pl/xgemius.min.js	61999	200
+5043245	cascade	69334
+5072909	layout	28043
+5072978	reflow	forced
+5270791	phase	finish_loading: dynamic scripts	1788785
+5271610	cascade	31
+5271751	layout	115
+5272339	cascade	6
+5272357	layout	5
+5273859	cascade	7
+5273884	layout	8
+5288018	dns	ls.hit.gemius.pl	13123
+6162947	connect	ls.hit.gemius.pl	888058
+6772882	req	https://ls.hit.gemius.pl/lsget.html#dbg=1	5274861	1498011	200	HTTP/2.0	2809	GET
+6773287	body	https://ls.hit.gemius.pl/lsget.html#dbg=1	5765	200
+6774163	cascade	116
+6774268	layout	78
+6813709	cascade	59
+6813830	layout	94
+6819753	phase	finish_loading: subframes	1548885
+6824832	q	https://securepubads.g.doubleclick.net/pagead/ppub_config?ippd=www.mobile.bg
+6825054	q	https://cdn.cookie-script.com/iabtcf/2.3/vendor-list.json
+6825158	q	https://cdn.cookie-script.com/iabtcf/2.3/google-vendors.json
+6841964	dns	cdn.cookie-script.com	16719
+6852641	req	https://securepubads.g.doubleclick.net/pagead/ppub_config?ippd=www.mobile.bg	6824951	27679	200	HTTP/2.0	565	GET
+6853625	body	https://securepubads.g.doubleclick.net/pagead/ppub_config?ippd=www.mobile.bg	1494	200
+7242551	req	https://cdn.cookie-script.com/iabtcf/2.3/vendor-list.json	6825115	417431	200	HTTP/1.1	-	GET
+7695529	connect	cdn.cookie-script.com	870299
+8002417	body	https://cdn.cookie-script.com/iabtcf/2.3/vendor-list.json	952418	200
+8616776	req	https://cdn.cookie-script.com/iabtcf/2.3/google-vendors.json	6825202	1791570	200	HTTP/1.1	-	GET
+8923877	body	https://cdn.cookie-script.com/iabtcf/2.3/google-vendors.json	179181	200
+9228419	q	https://cdn.cookie-script.com/iabtcf/2.3/purposes-bg.json
+9539111	req	https://cdn.cookie-script.com/iabtcf/2.3/purposes-bg.json	9228549	310557	200	HTTP/1.1	-	GET
+9539693	body	https://cdn.cookie-script.com/iabtcf/2.3/purposes-bg.json	211260	200
+9646075	phase	finish_loading: page fetches	2826274
+9646769	phase	finish_loading: images	611
+9646970	phase	finish_loading: icon masks	180
+9663237	phase	finish_loading: background images	16247
+9675698	mark	navigate_returned
+9684829	mark	a11y_built

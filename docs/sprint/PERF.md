@@ -983,3 +983,29 @@ Gate can go red: `perf1-settle-gate.py docs/sprint/perf1-pf12a/paired.jsonl` (ea
 on a real 1.45% drift (above).
 
 Verdict: PERF.1.2 and PERF.1.2.b stay BLOCKED on the sum bar, now with 13.26 s (paired HEAD, load ~26) and 16.44 s (second session).
+
+## PERF.1.2.b.a: incremental restyle across sheet moves, class/attribute flips, `:has`, sibling sides (chrome_ver=145.0.7632.116; manuk only)
+
+What changed (mechanism in `docs/wiki/incremental-restyle-reuse-by-fingerprint.md`): the reuse cache now survives a sheet list that gained or lost
+sheets (only the elements the moved rules can match are re-derived), keeps two slots (the page's own callers alternate between two sheet lists),
+expands siblings only on the side the sheets' structural selectors read and only to elements such a compound can match, and no longer treats
+`class` / `style` / `data-*` / `aria-*` changes as subtree roots: it finds the elements whose rules look at the flipped name (matched with the
+attribute as it WAS and as it IS) and re-derives each alone; one whose style is unchanged is clean (`<html data-theme=...>` flips stop restyling the
+document). `:has()` ancestors are re-derived alone too (the old pass missed a `:has(> i)` after an insert: found by the new test).
+
+Gate 1, incremental passes / all cascade passes (`MANUK_INCR_TRACE=1`, final binary, same run as the mismatch check): Rust_(programming_language)
+6/8 = 75 % (was 2-3/8), Alan_Turing 6/8 = 75 %, comix.to 21/28 = 75 % (was 14-21 depending on the build), mobile.bg 18/22 = 82 % (was 15/22).
+Gate 2, `MANUK_INCR_VERIFY=1` over the 22 URLs of the current suite (R0.1 + live tasks): 0 `INCR MISMATCH` in 137 incremental passes. The check found
+four real bugs on the way (old-state matches missed after a class flip: Alan_Turing `li#ca-bookmark`; `:has(> i)` after an insert; a presence-only class
+change; text nodes under a re-derived sibling), each now a test.
+Gate 3, unit tests (`incr::tests`, `stylo_engine::incr_tests`, 9 green with `--features stylo`; the counters are process-global, so they take a lock): mutants
+that turn them red: later-sibling expansion off; moved-sheet matches ignored; old-class matching off (`.nojs .q`); attribute override off (`[data-theme=light] .m`);
+`:has` ancestors off; the "style unchanged -> clean" shortcut off; the sibling candidate filter off.
+Gate 4, paired interleaved same binary (`perf1-profile.py --runs 3 --manuk X --manuk-b X --env-b MANUK_FULL_RESTYLE=1`, 20 live URLs, raw rows
+`docs/sprint/perf1-pf1b2a/paired.jsonl`; host load average 30-60 during the run, which inflates both arms): cascade phase sum A 9.57 s vs B 11.29 s
+(A/B 0.848, -15.2 %; the bar is >= 20 %): **NOT met**. Earlier build of the same node in the same session: 9.36 vs 10.09 (-7 %), 10.66 vs 12.39 (-14 %).
+Wikipedia pages: Alan_Turing 2.07 vs 2.66, Rust 1.91 vs 2.37, Python 2.03 vs 2.27; puentedemando 0.71 vs 1.11, mobile.bg 0.38 vs 0.69.
+Why the cascade sum moves less than the pass ratio: a pass still pays a fixed ~45 ms cache clone + ~20-60 ms plan on a 19k-node page (fingerprints, tracked
+attributes, class/attribute lookup), the cold pass and the sheet-move pass are full by nature, and one pass per Wikipedia page re-walks the whole document
+(a root near `<body>`). Settle (not the bar of this node): A 13.96 vs B 15.88.
+Verdict: PERF.1.2.b.a BLOCKED on the 20 % cascade bar; follow-ups PERF.1.2.b.a.a (fixed cost per pass) and PERF.1.2.b.a.b (Stylo-path parity, quiet-host re-measure).

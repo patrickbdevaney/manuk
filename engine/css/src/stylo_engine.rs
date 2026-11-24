@@ -683,8 +683,10 @@ code, kbd, samp { font-family: monospace; }
 // ═══════════════════════════════════════════════════════════════════════════════════════════════
 
 struct IncrCache {
-    key: u64,
-    sib: bool,
+    html: Vec<(String, String)>,
+    base: u64,
+    sheets: Vec<Stylesheet>,
+    sib: u8,
     empty: bool,
     fp: std::collections::HashMap<NodeId, u64>,
     /// The style map right after the walk, BEFORE `finish_passes` — what the next pass reuses.
@@ -694,7 +696,7 @@ struct IncrCache {
 }
 
 thread_local! {
-    static INCR: std::cell::RefCell<Option<IncrCache>> = const { std::cell::RefCell::new(None) };
+    static INCR: std::cell::RefCell<Vec<IncrCache>> = const { std::cell::RefCell::new(Vec::new()) };
     static FORCE_FULL: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
@@ -803,24 +805,81 @@ pub fn cascade_via_stylo_sized(
         && !crate::incr::env_on("MANUK_FULL_RESTYLE")
         && dom.all_shadow_roots().is_empty()
         && !crate::transition::any_running_realtime();
-    let mut incr_key_v = 0u64;
-    let (mut incr_sib, mut incr_empty) = (false, false);
+    let mut incr_base = 0u64;
+    let mut incr_html: Vec<(String, String)> = Vec::new();
+    let mut incr_sheets: Vec<Stylesheet> = Vec::new();
+    let (mut incr_sib, mut incr_empty) = (0u8, false);
     let mut new_fp: Vec<(NodeId, u64)> = Vec::new();
     let mut plan: Option<(IncrCache, Vec<NodeId>, Vec<NodeId>)> = None;
+    let mut slots: Vec<IncrCache> = Vec::new();
+    let mut spare: Option<IncrCache> = None;
     if incr_on {
-        incr_key_v = crate::incr::incr_key(dom, sheets, vw, vh);
-        let cached = INCR.with(|c| c.borrow_mut().take());
-        let usable = cached.filter(|c| c.key == incr_key_v && !force_full);
-        (incr_sib, incr_empty) = match &usable {
-            Some(c) => (c.sib, c.empty),
-            None => crate::incr::incr_sheet_flags(sheets),
-        };
-        new_fp = crate::incr::incr_fingerprints(dom, incr_sib, incr_empty);
-        if let Some(c) = usable {
-            if let Some((roots, removed)) = crate::incr::incr_plan(&c.fp, c.sib, dom, &new_fp) {
-                plan = Some((c, roots, removed));
+        slots = INCR.with(|c| std::mem::take(&mut *c.borrow_mut()));
+        if force_full {
+            slots.clear();
+        }
+        let metas: Vec<crate::incr::CacheMeta> = slots
+            .iter()
+            .map(|c| crate::incr::CacheMeta {
+                html: &c.html,
+                base: c.base,
+                sheets: &c.sheets,
+                sib: c.sib,
+                empty: c.empty,
+            })
+            .collect();
+        let pick = crate::incr::incr_pick(&metas, dom, sheets, vw, vh);
+        drop(metas);
+        let cached = pick.map(|i| slots.remove(i));
+        let prep = crate::incr::incr_prepare(
+            cached.as_ref().map(|c| crate::incr::CacheMeta {
+                html: &c.html,
+                base: c.base,
+                sheets: &c.sheets,
+                sib: c.sib,
+                empty: c.empty,
+            }),
+            false,
+            dom,
+            sheets,
+            vw,
+            vh,
+        );
+        incr_base = prep.base;
+        incr_html = prep.html.clone();
+        (incr_sib, incr_empty) = (prep.sib, prep.empty);
+        new_fp = crate::incr::incr_fingerprints(dom, incr_sib, incr_empty, true);
+        if let Some(c) = cached {
+            let planned = if prep.usable {
+                crate::incr::incr_plan(
+                    &c.fp,
+                    incr_sib,
+                    dom,
+                    &new_fp,
+                    &prep.extra,
+                    prep.ignore_html,
+                    sheets,
+                )
+            } else {
+                None
+            };
+            match planned {
+                Some((roots, removed)) => plan = Some((c, roots, removed)),
+                // untouched by this pass: stays as the second slot
+                None => spare = Some(c),
             }
         }
+        if crate::incr::env_on("MANUK_INCR_TRACE") {
+            eprintln!(
+                "INCR stylo: nodes={} reuse={} sib={} extra={} planned_roots={:?}",
+                new_fp.len(),
+                prep.usable,
+                incr_sib,
+                prep.extra.len(),
+                plan.as_ref().map(|p| p.1.len())
+            );
+        }
+        incr_sheets = prep.sheets;
     }
     let incr = plan.is_some();
     let mut dynamic = false;
@@ -1384,17 +1443,25 @@ pub fn cascade_via_stylo_sized(
     let mut map = if keep {
         let mut out = map.clone();
         finish_passes(dom, sheets, &mut out, &minimal, &mut ph);
-        INCR.with(|c| {
-            *c.borrow_mut() = Some(IncrCache {
-                key: incr_key_v,
+        slots.insert(
+            0,
+            IncrCache {
+                html: incr_html,
+                base: incr_base,
+                sheets: incr_sheets,
                 sib: incr_sib,
                 empty: incr_empty,
                 fp: new_fp.into_iter().collect(),
                 walk: map,
                 minimal,
                 cvs: parent_cv,
-            })
-        });
+            },
+        );
+        if let Some(sp) = spare {
+            slots.insert(1.min(slots.len()), sp);
+        }
+        slots.truncate(crate::incr::INCR_SLOTS);
+        INCR.with(|c| *c.borrow_mut() = slots);
         out
     } else {
         finish_passes(dom, sheets, &mut map, &minimal, &mut ph);
@@ -6065,6 +6132,9 @@ mod incr_tests {
 
     #[test]
     fn incremental_restyle_equals_full_cascade_after_mutations() {
+        let _g = crate::incr::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let mut dom = manuk_html::parse(HTML);
         let sheets = MinimalCascade::collect_style_elements(&dom);
         let _ = cascade_via_stylo(&dom, &sheets, 800.0, 600.0); // primes the cache (a full pass)
@@ -6107,5 +6177,47 @@ mod incr_tests {
             walked * 4 < total,
             "a one-leaf change walked {walked} of {total} elements"
         );
+    }
+
+    #[test]
+    fn appended_sheet_and_later_siblings_equal_full_cascade() {
+        let _g = crate::incr::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let mut dom = manuk_html::parse(
+            "<html><head><style>.x ~ i { color: red }</style></head><body>\
+             <div id=c><u>1</u><u id=x>2</u><i>3</i><i>4</i><i>5</i></div><p id=q class=k>z</p>\
+             <p>a</p><p>b</p><p>c</p><p>d</p><p>e</p><p>f</p></body></html>",
+        );
+        let mut sheets = MinimalCascade::collect_style_elements(&dom);
+        let _ = cascade_via_stylo(&dom, &sheets, 800.0, 600.0);
+        let x = by_id(&dom, "x");
+        dom.set_attr(x, "class", "x");
+        check(&dom, &sheets, "class on an earlier sibling (~)");
+        sheets.push(Stylesheet::parse(".k { color: green } i { opacity: .3 }"));
+        let walked = check(&dom, &sheets, "sheet appended");
+        assert!(walked < 8, "appended sheet re-walked {walked} elements");
+    }
+
+    #[test]
+    fn html_class_flip_equals_full_cascade() {
+        let _g = crate::incr::TEST_LOCK
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let mut dom = manuk_html::parse(
+            "<html class=nojs><head><style>.js .k { color: red } .nojs .k { color: blue } \
+             .z:not(.js) { opacity: .4 } .nojs .q { color: green } p { margin-top: 1px }</style></head><body>\
+             <p class=k>a</p><p id=w class=z>b</p><p class=q>c</p><p>d</p><p>e</p><p>f</p><p>g</p>\
+             <p>h</p><p>i</p><p>j</p></body></html>",
+        );
+        let sheets = MinimalCascade::collect_style_elements(&dom);
+        let _ = cascade_via_stylo(&dom, &sheets, 800.0, 600.0);
+        let html = dom
+            .children(dom.root())
+            .find(|&c| dom.is_element(c))
+            .unwrap();
+        dom.set_attr(html, "class", "js");
+        let walked = check(&dom, &sheets, "html class nojs -> js");
+        assert!(walked <= 3, "html class flip walked {walked} elements");
     }
 }

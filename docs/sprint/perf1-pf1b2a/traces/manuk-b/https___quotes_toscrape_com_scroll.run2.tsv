@@ -1,0 +1,80 @@
+0	epoch	1795512200002578
+47056	dns	quotes.toscrape.com	47010
+150269	connect	quotes.toscrape.com	150225
+290867	req	https://quotes.toscrape.com/scroll	0	290862	200	HTTP/2.0	-	GET
+291034	body	https://quotes.toscrape.com/scroll	2673	200
+291408	phase	html parse	290
+291481	q	https://quotes.toscrape.com/static/jquery.js
+291660	q	https://quotes.toscrape.com/static/bootstrap.min.css
+291701	q	https://quotes.toscrape.com/static/main.css
+418147	req	https://quotes.toscrape.com/static/jquery.js	291569	126567	200	HTTP/2.0	-	GET
+464772	body	https://quotes.toscrape.com/static/jquery.js	84345	200
+464973	phase	external scripts	173546
+464993	phase	module graph prefetch	8
+516307	req	https://quotes.toscrape.com/static/bootstrap.min.css	465208	51086	200	HTTP/2.0	-	GET
+523346	body	https://quotes.toscrape.com/static/bootstrap.min.css	125934	200
+536398	q	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.woff2
+563996	req	https://quotes.toscrape.com/static/main.css	465350	98640	200	HTTP/2.0	-	GET
+564582	body	https://quotes.toscrape.com/static/main.css	1368	200
+564996	phase	blocking stylesheets	99991
+581626	cascade	3726
+582727	layout	1066
+610175	req	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.woff2	536458	73705	404	HTTP/2.0	-	GET
+610837	body	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.woff2	207	404
+640054	cascade	280
+640457	layout	373
+640549	phase	cascade+layout+blocking scripts	75530
+643443	phase	deferred scripts	2880
+658655	phase	DOMContentLoaded	15189
+663676	q	https://fonts.googleapis.com/css?family=Raleway:400,700
+664825	dns	fonts.googleapis.com	1061
+747056	connect	fonts.googleapis.com	83295
+820643	req	https://fonts.googleapis.com/css?family=Raleway:400,700	663743	156896	200	HTTP/2.0	-	GET
+829743	body	https://fonts.googleapis.com/css?family=Raleway:400,700	398	200
+830279	q	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.woff
+830477	q	https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVvaorCIPrQ.ttf
+830617	q	https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVs9pbCIPrQ.ttf
+832146	dns	fonts.gstatic.com	1588
+879816	req	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.woff	830408	49403	404	HTTP/2.0	-	GET
+880046	body	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.woff	207	404
+880191	q	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.ttf
+923874	connect	fonts.gstatic.com	93322
+927429	req	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.ttf	880355	47067	404	HTTP/2.0	-	GET
+927629	body	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.ttf	207	404
+927738	q	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.svg#glyphicons_halflingsregular
+976637	req	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.svg#glyphicons_halflingsregular	927809	48817	404	HTTP/2.0	-	GET
+976865	body	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.svg#glyphicons_halflingsregular	207	404
+999347	req	https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVvaorCIPrQ.ttf	830521	168820	200	HTTP/2.0	29379	GET
+1045670	body	https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVvaorCIPrQ.ttf	49552	200
+1045853	req	https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVs9pbCIPrQ.ttf	924111	121739	200	HTTP/2.0	29703	GET
+1065799	body	https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVs9pbCIPrQ.ttf	49512	200
+1075100	cascade	3342
+1075555	layout	406
+1075658	phase	subframes (pre-load)	416972
+1075689	phase	initial images+masks	17
+1077587	phase	load event	1882
+1078523	phase	finish_loading: external CSS	856
+1079772	phase	finish_loading: dynamic scripts	1226
+1079804	phase	finish_loading: subframes	15
+1128995	req	https://quotes.toscrape.com/api/quotes?page=1	1080643	48347	200	HTTP/2.0	-	GET
+1129126	body	https://quotes.toscrape.com/api/quotes?page=1	2860	200
+1147207	cascade	6755
+1151597	layout	4322
+1151622	reflow	forced
+1162347	cascade	5777
+1164275	layout	1856
+1164764	reflow	forced
+1175209	cascade	6300
+1177048	layout	1793
+1177563	reflow	forced
+1258575	cascade	6243
+1260697	layout	2042
+1260945	reflow	forced
+1266192	cascade	2760
+1267779	layout	1545
+1274621	phase	finish_loading: page fetches	194804
+1274665	phase	finish_loading: images	25
+1274680	phase	finish_loading: icon masks	5
+1274695	phase	finish_loading: background images	4
+1275195	mark	navigate_returned
+1275749	mark	a11y_built
