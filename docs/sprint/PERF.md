@@ -942,7 +942,7 @@ alone, and cascade/script are split differently in the two binaries (PERF.1.4.b 
 comparable with other sweeps). One URL goes the other way against 222dca62: comix.to settle 0.38 -> 1.29 s (its layout went 4.69 -> 1.02 s).
 
 Node check (`perf1-settle-gate.py --nodes`), stated separately because the two baselines disagree:
-- HEAD 17ea8f2b vs new: drift 0.00% on all 20 URLs, gate GREEN.
+- HEAD 17ea8f2b vs new: drift 0.00% on all 20 URLs, gate GREEN. A second run with the two fixtures: GREEN, max drift 0.24% (mobile.bg 418 vs 419, rotating news).
 - 222dca62 vs new: RED on 4 URLs (ebanking 29 -> 32, Wikipedia Main_Page 900 -> 887, quotes/scroll 102 -> 100, mobile.bg 423 -> 418). The
   pre-change HEAD binary has the same counts as new on all four (mobile.bg within its rotating news items), so the drift comes from the commits between
   222dca62 and 17ea8f2b, not from this change. It was not bisected; the nodes are a `Loading...` heading, a `preview settings` list item and generics.
