@@ -28,3 +28,11 @@ build of c31b1481^ was NOT made: the constraints demand >=20G MemAvailable (18G 
 host. The A/B build is follow-up .a; by the diff it should reproduce ~4.5G.
 Implication for the TIMEOUT rows: one task needs ~4.5G for ~25s then stays resident; two in parallel = ~9G > MemoryHigh=8G,
 so cgroup throttling is consistent (still not proven here).
+
+## DASH.MEM.1.a: A/B build of c31b1481^ (done)
+Built `cargo build --release -p manuk-mcp` at c31b1481^ in a git worktree with a separate CARGO_TARGET_DIR (jobs=6,
+MOZJS_ARCHIVE pointed at the verified archive; worktree and target dir removed afterwards). Same driver, same task,
+3 runs (old-dashdish-5-r{1,2,3}.tsv): max RSS 4510 / 4510 / 4505 MB, start-URL navigate 21.2 / 19.6 / 17.5 s, setup 45-54 MB.
+New (current) binary: 4502 / 4569 / 4513 MB. **Verdict confirmed: ALWAYS SO**, not a regression of the 07:34 binary;
+the ~4.5G is the image decode on this page in both builds. chrome_ver=145.0.7632.116 (n/a, no Chrome in the loop).
+
