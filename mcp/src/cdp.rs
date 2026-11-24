@@ -1864,13 +1864,22 @@ fn init_page_session(cdp: &mut Cdp, width: u32, height: u32) -> Result<()> {
 /// both clean from here, so no exit path leaves a profile dir on the RAM-backed /tmp or a Chrome running.
 static LIVE_CHROME: std::sync::Mutex<Vec<(i32, std::path::PathBuf)>> =
     std::sync::Mutex::new(Vec::new());
+#[cfg(unix)]
 static SIGNAL_PIPE_W: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(-1);
 
 fn reap_chrome(pgid: i32, dir: &std::path::Path) {
     if mutated("no-reap") {
         return;
     }
-    unsafe { libc::kill(-pgid, libc::SIGKILL) };
+    #[cfg(unix)]
+    unsafe {
+        libc::kill(-pgid, libc::SIGKILL)
+    };
+    // Windows: the "group id" is the Chrome pid; taskkill /T takes its whole process tree.
+    #[cfg(not(unix))]
+    let _ = std::process::Command::new("taskkill")
+        .args(["/F", "/T", "/PID", &pgid.to_string()])
+        .output();
     let _ = std::fs::remove_dir_all(dir);
     if let Ok(mut l) = LIVE_CHROME.lock() {
         l.retain(|(g, _)| *g != pgid);
@@ -1885,6 +1894,7 @@ pub fn reap_all() {
     }
 }
 
+#[cfg(unix)]
 extern "C" fn on_term_signal(sig: libc::c_int) {
     let fd = SIGNAL_PIPE_W.load(std::sync::atomic::Ordering::SeqCst);
     let b = sig as u8;
@@ -1892,6 +1902,12 @@ extern "C" fn on_term_signal(sig: libc::c_int) {
 }
 
 /// SIGTERM/SIGINT/SIGHUP: a handler (async-signal-safe: one write) wakes a thread that does the cleanup, then exits.
+#[cfg(not(unix))]
+fn install_signal_cleanup() {
+    // No POSIX signals on Windows: cleanup runs from Drop / reap_all only (documented gap).
+}
+
+#[cfg(unix)]
 fn install_signal_cleanup() {
     static ONCE: std::sync::Once = std::sync::Once::new();
     ONCE.call_once(|| unsafe {
@@ -1919,6 +1935,10 @@ fn install_signal_cleanup() {
 
 /// A server killed with SIGKILL cannot clean up; the next launch removes profile dirs whose owner is gone.
 fn sweep_stale_profiles() {
+    // Liveness is read from /proc; on other OSes every dir would look orphaned, so do not sweep.
+    if !cfg!(target_os = "linux") {
+        return;
+    }
     let Ok(rd) = std::fs::read_dir(std::env::temp_dir()) else {
         return;
     };
