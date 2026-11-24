@@ -1,0 +1,359 @@
+0	epoch	1795520543416442
+109845	dns	en.wikipedia.org	109747
+221892	connect	en.wikipedia.org	221814
+370740	req	https://en.wikipedia.org/wiki/Alan_Turing	0	370730	200	HTTP/2.0	213778	GET
+525166	body	https://en.wikipedia.org/wiki/Alan_Turing	1341326	200
+532446	q	https://en.wikipedia.org/w/load.php?lang=en&amp;modules=ext.cite.parsoid.styles%7Cext.cite.styles%7Cext.readingLists.bookmark.icons%2Cstyles%7Cext.uls.interlanguage%7Cext.visualEditor.desktopArticleTarget.noscript%7Cext.wikimediaBadges%7Cext.wikimediaBadges.ulsV2%7Cext.wikimediamessages.styles%7Cjquery.makeCollapsible.styles%7Cskins.vector.icons%2Cstyles%7Cskins.vector.search.codex.styles%7Cwikibase.client.init&amp;only=styles&amp;skin=vector-2022
+532928	q	https://en.wikipedia.org/w/load.php?lang=en&amp;modules=site.styles&amp;only=styles&amp;skin=vector-2022
+565562	req	https://en.wikipedia.org/w/load.php?lang=en&amp;modules=ext.cite.parsoid.styles%7Cext.cite.styles%7Cext.readingLists.bookmark.icons%2Cstyles%7Cext.uls.interlanguage%7Cext.visualEditor.desktopArticleTarget.noscript%7Cext.wikimediaBadges%7Cext.wikimediaBadges.ulsV2%7Cext.wikimediamessages.styles%7Cjquery.makeCollapsible.styles%7Cskins.vector.icons%2Cstyles%7Cskins.vector.search.codex.styles%7Cwikibase.client.init&amp;only=styles&amp;skin=vector-2022	532643	32913	200	HTTP/2.0	196	GET
+565634	body	https://en.wikipedia.org/w/load.php?lang=en&amp;modules=ext.cite.parsoid.styles%7Cext.cite.styles%7Cext.readingLists.bookmark.icons%2Cstyles%7Cext.uls.interlanguage%7Cext.visualEditor.desktopArticleTarget.noscript%7Cext.wikimediaBadges%7Cext.wikimediaBadges.ulsV2%7Cext.wikimediamessages.styles%7Cjquery.makeCollapsible.styles%7Cskins.vector.icons%2Cstyles%7Cskins.vector.search.codex.styles%7Cwikibase.client.init&amp;only=styles&amp;skin=vector-2022	196	200
+597525	req	https://en.wikipedia.org/w/load.php?lang=en&amp;modules=site.styles&amp;only=styles&amp;skin=vector-2022	565872	31643	200	HTTP/2.0	196	GET
+597631	body	https://en.wikipedia.org/w/load.php?lang=en&amp;modules=site.styles&amp;only=styles&amp;skin=vector-2022	196	200
+600958	q	https://en.wikipedia.org/static/images/icons/enwiki-25.svg
+601407	q	https://en.wikipedia.org/static/images/mobile/copyright/wikipedia-wordmark-en-25.svg
+601571	q	https://en.wikipedia.org/static/images/mobile/copyright/wikipedia-tagline-en-25.svg
+601732	q	https://thumb.wikimedia.org/wikipedia/en/thumb/9/94/Symbol_support_vote.svg/40px-Symbol_support_vote.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+601956	q	https://thumb.wikimedia.org/wikipedia/en/thumb/1/1b/Semi-protection-shackle.svg/40px-Semi-protection-shackle.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+602036	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/c/ce/Alan_turing_header.jpg/500px-Alan_turing_header.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+602095	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/8/83/Alan_Turing_signature.svg/330px-Alan_Turing_signature.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+602164	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3c/Alan_Turing_%285025990183%29.jpg/500px-Alan_Turing_%285025990183%29.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+602220	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a1/Alan_Turing_Aged_16.jpg/500px-Alan_Turing_Aged_16.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+602265	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8f/Alan_Turing_in_Cornwall_April_1930_with_Peter_Hogg%2C_Edwin_Davis%2C_John_Bennett%2C_Peter_White%2C_and_Duncan_Carse.jpg/960px-Alan_Turing_in_Cornwall_April_1930_with_Peter_Hogg%2C_Edwin_Davis%2C_John_Bennett%2C_Peter_White%2C_and_Duncan_Carse.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+602300	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/7/79/Alan_Turing_az_1930-as_%C3%A9vekben.jpg/500px-Alan_Turing_az_1930-as_%C3%A9vekben.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+602354	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/4/46/20130808_Kings_College_Front_Court_Fountain_Crop_03.jpg/500px-20130808_Kings_College_Front_Court_Fountain_Crop_03.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+602424	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/c/cd/Turing_flat.jpg/500px-Turing_flat.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+602461	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/5/5c/Bombe-rebuild.jpg/500px-Bombe-rebuild.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+602506	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f5/Turing-statue-Bletchley_14.jpg/500px-Turing-statue-Bletchley_14.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+602548	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/2/2b/Alan_Turing_78_High_Street_Hampton_blue_plaque.jpg/500px-Alan_Turing_78_High_Street_Hampton_blue_plaque.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+602598	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/0/04/Alan_Turing_Blue_Plaque%2C_University_of_Manchester.jpg/500px-Alan_Turing_Blue_Plaque%2C_University_of_Manchester.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+602647	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/9/95/Turing%27s_teddy_bear.jpg/500px-Turing%27s_teddy_bear.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+602702	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/c/cb/Dancehouse.jpg/500px-Dancehouse.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+602743	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f6/Alan_Turing%27s_House_from_1950_to_1954.jpg/500px-Alan_Turing%27s_House_from_1950_to_1954.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+602807	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7a/Alan_Turing_Blue_Plaque_Wilmslow.jpg/500px-Alan_Turing_Blue_Plaque_Wilmslow.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+602878	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7e/Alan_Turing_OBE.jpg/500px-Alan_Turing_OBE.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+602936	q	https://thumb.wikimedia.org/wikipedia/en/thumb/8/8a/OOjs_UI_icon_edit-ltr-progressive.svg/20px-OOjs_UI_icon_edit-ltr-progressive.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+602995	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e8/Gartoon_actions_button_ok.svg/40px-Gartoon_actions_button_ok.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+603034	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/6/65/Lock-green.svg/20px-Lock-green.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+603066	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/7/77/Open_Access_logo_PLoS_transparent.svg/20px-Open_Access_logo_PLoS_transparent.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+603112	q	https://thumb.wikimedia.org/wikipedia/en/thumb/4/4a/Commons-logo.svg/40px-Commons-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+603147	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fa/Wikiquote-logo.svg/60px-Wikiquote-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+603187	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4c/Wikisource-logo.svg/60px-Wikisource-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+603221	q	https://thumb.wikimedia.org/wikipedia/en/thumb/9/96/Symbol_category_class.svg/40px-Symbol_category_class.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+603263	q	https://thumb.wikimedia.org/wikipedia/en/thumb/6/69/P_vip.svg/40px-P_vip.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+603298	q	https://thumb.wikimedia.org/wikipedia/en/thumb/b/be/Flag_of_England.svg/60px-Flag_of_England.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+603345	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0e/Nuvola_LGBT_flag.svg/40px-Nuvola_LGBT_flag.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+603385	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7a/England_Greater_Manchester_numbered.svg/60px-England_Greater_Manchester_numbered.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+603436	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/9/9e/Square_root_of_x.svg/40px-Square_root_of_x.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+603477	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6f/Octicons-terminal.svg/40px-Octicons-terminal.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+603520	q	https://en.wikipedia.org/static/images/footer/wikimedia-button.svg
+603633	q	https://en.wikipedia.org/w/resources/assets/poweredby_mediawiki.svg
+603954	dns	thumb.wikimedia.org	2094
+609010	phase	html parse	81971
+609056	q	https://en.wikipedia.org/w/load.php?lang=en&modules=ext.cite.parsoid.styles%7Cext.cite.styles%7Cext.readingLists.bookmark.icons%2Cstyles%7Cext.uls.interlanguage%7Cext.visualEditor.desktopArticleTarget.noscript%7Cext.wikimediaBadges%7Cext.wikimediaBadges.ulsV2%7Cext.wikimediamessages.styles%7Cjquery.makeCollapsible.styles%7Cskins.vector.icons%2Cstyles%7Cskins.vector.search.codex.styles%7Cwikibase.client.init&only=styles&skin=vector-2022
+609077	q	https://en.wikipedia.org/w/load.php?lang=en&modules=site.styles&only=styles&skin=vector-2022
+611903	q	https://en.wikipedia.org/w/load.php?lang=en&modules=startup&only=scripts&raw=1&skin=vector-2022
+634799	req	https://en.wikipedia.org/static/images/icons/enwiki-25.svg	601088	33704	200	HTTP/2.0	44092	GET
+638081	body	https://en.wikipedia.org/static/images/icons/enwiki-25.svg	115918	200
+645593	req	https://en.wikipedia.org/static/images/mobile/copyright/wikipedia-wordmark-en-25.svg	601461	44128	200	HTTP/2.0	4020	GET
+645925	body	https://en.wikipedia.org/static/images/mobile/copyright/wikipedia-wordmark-en-25.svg	9865	200
+645602	req	https://en.wikipedia.org/w/resources/assets/poweredby_mediawiki.svg	603683	41913	200	HTTP/2.0	4369	GET
+646171	body	https://en.wikipedia.org/w/resources/assets/poweredby_mediawiki.svg	14576	200
+645607	req	https://en.wikipedia.org/static/images/mobile/copyright/wikipedia-tagline-en-25.svg	601630	43973	200	HTTP/2.0	4788	GET
+645663	req	https://en.wikipedia.org/static/images/footer/wikimedia-button.svg	603554	42107	200	HTTP/2.0	1595	GET
+646446	body	https://en.wikipedia.org/static/images/mobile/copyright/wikipedia-tagline-en-25.svg	15219	200
+646454	body	https://en.wikipedia.org/static/images/footer/wikimedia-button.svg	3256	200
+668230	req	https://en.wikipedia.org/w/load.php?lang=en&modules=ext.cite.parsoid.styles%7Cext.cite.styles%7Cext.readingLists.bookmark.icons%2Cstyles%7Cext.uls.interlanguage%7Cext.visualEditor.desktopArticleTarget.noscript%7Cext.wikimediaBadges%7Cext.wikimediaBadges.ulsV2%7Cext.wikimediamessages.styles%7Cjquery.makeCollapsible.styles%7Cskins.vector.icons%2Cstyles%7Cskins.vector.search.codex.styles%7Cwikibase.client.init&only=styles&skin=vector-2022	609142	59074	200	HTTP/2.0	24521	GET
+669294	body	https://en.wikipedia.org/w/load.php?lang=en&modules=ext.cite.parsoid.styles%7Cext.cite.styles%7Cext.readingLists.bookmark.icons%2Cstyles%7Cext.uls.interlanguage%7Cext.visualEditor.desktopArticleTarget.noscript%7Cext.wikimediaBadges%7Cext.wikimediaBadges.ulsV2%7Cext.wikimediamessages.styles%7Cjquery.makeCollapsible.styles%7Cskins.vector.icons%2Cstyles%7Cskins.vector.search.codex.styles%7Cwikibase.client.init&only=styles&skin=vector-2022	205314	200
+691539	req	https://en.wikipedia.org/w/load.php?lang=en&modules=site.styles&only=styles&skin=vector-2022	609176	82359	200	HTTP/2.0	2214	GET
+691676	body	https://en.wikipedia.org/w/load.php?lang=en&modules=site.styles&only=styles&skin=vector-2022	6782	200
+692301	req	https://en.wikipedia.org/w/load.php?lang=en&modules=startup&only=scripts&raw=1&skin=vector-2022	611944	80354	200	HTTP/2.0	22330	GET
+692672	body	https://en.wikipedia.org/w/load.php?lang=en&modules=startup&only=scripts&raw=1&skin=vector-2022	71350	200
+692781	phase	external scripts	83739
+693571	phase	module graph prefetch	776
+693599	phase	blocking stylesheets	14
+721926	dns	thumb.wikimedia.org	791
+722193	connect	thumb.wikimedia.org	120360
+723208	dns	thumb.wikimedia.org	1074
+723310	dns	thumb.wikimedia.org	1223
+890077	connect	thumb.wikimedia.org	168944
+894846	req	https://thumb.wikimedia.org/wikipedia/en/thumb/9/94/Symbol_support_vote.svg/40px-Symbol_support_vote.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	601795	293049	200	HTTP/2.0	2206	GET
+895325	body	https://thumb.wikimedia.org/wikipedia/en/thumb/9/94/Symbol_support_vote.svg/40px-Symbol_support_vote.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2206	200
+895796	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/8/83/Alan_Turing_signature.svg/330px-Alan_Turing_signature.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	722128	173667	200	HTTP/2.0	3119	GET
+896156	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/8/83/Alan_Turing_signature.svg/330px-Alan_Turing_signature.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	3119	200
+910221	connect	thumb.wikimedia.org	188088
+921593	connect	thumb.wikimedia.org	199507
+953577	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3c/Alan_Turing_%285025990183%29.jpg/500px-Alan_Turing_%285025990183%29.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	722288	231285	200	HTTP/2.0	96000	GET
+955136	req	https://thumb.wikimedia.org/wikipedia/en/thumb/1/1b/Semi-protection-shackle.svg/40px-Semi-protection-shackle.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	721117	234016	200	HTTP/2.0	974	GET
+955542	body	https://thumb.wikimedia.org/wikipedia/en/thumb/1/1b/Semi-protection-shackle.svg/40px-Semi-protection-shackle.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	974	200
+972034	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/c/ce/Alan_turing_header.jpg/500px-Alan_turing_header.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	722076	249951	200	HTTP/2.0	82804	GET
+988715	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a1/Alan_Turing_Aged_16.jpg/500px-Alan_Turing_Aged_16.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	722307	266402	200	HTTP/2.0	60297	GET
+1083133	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a1/Alan_Turing_Aged_16.jpg/500px-Alan_Turing_Aged_16.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	60297	200
+1083140	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3c/Alan_Turing_%285025990183%29.jpg/500px-Alan_Turing_%285025990183%29.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	96000	200
+1084789	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7e/Alan_Turing_OBE.jpg/500px-Alan_Turing_OBE.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	896394	188392	200	HTTP/2.0	54300	GET
+1084796	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/c/ce/Alan_turing_header.jpg/500px-Alan_turing_header.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	82804	200
+1087221	req	https://thumb.wikimedia.org/wikipedia/en/thumb/8/8a/OOjs_UI_icon_edit-ltr-progressive.svg/20px-OOjs_UI_icon_edit-ltr-progressive.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	896424	190794	200	HTTP/2.0	512	GET
+1087636	body	https://thumb.wikimedia.org/wikipedia/en/thumb/8/8a/OOjs_UI_icon_edit-ltr-progressive.svg/20px-OOjs_UI_icon_edit-ltr-progressive.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	512	200
+1091791	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/7/79/Alan_Turing_az_1930-as_%C3%A9vekben.jpg/500px-Alan_Turing_az_1930-as_%C3%A9vekben.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	895540	196249	200	HTTP/2.0	85269	GET
+1092216	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/7/77/Open_Access_logo_PLoS_transparent.svg/20px-Open_Access_logo_PLoS_transparent.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	896520	195694	200	HTTP/2.0	1127	GET
+1092532	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/7/77/Open_Access_logo_PLoS_transparent.svg/20px-Open_Access_logo_PLoS_transparent.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	1127	200
+1092611	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/6/65/Lock-green.svg/20px-Lock-green.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	896492	196118	200	HTTP/2.0	1183	GET
+1092876	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/6/65/Lock-green.svg/20px-Lock-green.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	1183	200
+1092947	req	https://thumb.wikimedia.org/wikipedia/en/thumb/4/4a/Commons-logo.svg/40px-Commons-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	896552	196393	200	HTTP/2.0	2189	GET
+1093268	body	https://thumb.wikimedia.org/wikipedia/en/thumb/4/4a/Commons-logo.svg/40px-Commons-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2189	200
+1092960	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e8/Gartoon_actions_button_ok.svg/40px-Gartoon_actions_button_ok.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	896459	196499	200	HTTP/2.0	2198	GET
+1093618	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e8/Gartoon_actions_button_ok.svg/40px-Gartoon_actions_button_ok.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2198	200
+1093693	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6f/Octicons-terminal.svg/40px-Octicons-terminal.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	895471	198219	200	HTTP/2.0	581	GET
+1094153	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6f/Octicons-terminal.svg/40px-Octicons-terminal.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	581	200
+1094274	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8f/Alan_Turing_in_Cornwall_April_1930_with_Peter_Hogg%2C_Edwin_Davis%2C_John_Bennett%2C_Peter_White%2C_and_Duncan_Carse.jpg/960px-Alan_Turing_in_Cornwall_April_1930_with_Peter_Hogg%2C_Edwin_Davis%2C_John_Bennett%2C_Peter_White%2C_and_Duncan_Carse.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	895516	198756	200	HTTP/2.0	123102	GET
+1095850	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/4/46/20130808_Kings_College_Front_Court_Fountain_Crop_03.jpg/500px-20130808_Kings_College_Front_Court_Fountain_Crop_03.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	895565	200283	200	HTTP/2.0	58731	GET
+1098301	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/c/cd/Turing_flat.jpg/500px-Turing_flat.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	895586	202713	200	HTTP/2.0	68069	GET
+1100018	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/5/5c/Bombe-rebuild.jpg/500px-Bombe-rebuild.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	895607	204408	200	HTTP/2.0	96943	GET
+1102405	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f5/Turing-statue-Bletchley_14.jpg/500px-Turing-statue-Bletchley_14.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	895639	206764	200	HTTP/2.0	120713	GET
+1108332	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/2/2b/Alan_Turing_78_High_Street_Hampton_blue_plaque.jpg/500px-Alan_Turing_78_High_Street_Hampton_blue_plaque.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	895670	212657	200	HTTP/2.0	73320	GET
+1110098	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/0/04/Alan_Turing_Blue_Plaque%2C_University_of_Manchester.jpg/500px-Alan_Turing_Blue_Plaque%2C_University_of_Manchester.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	895698	214396	200	HTTP/2.0	111737	GET
+1111972	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/9/95/Turing%27s_teddy_bear.jpg/500px-Turing%27s_teddy_bear.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	896243	215720	200	HTTP/2.0	61226	GET
+1113561	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/c/cb/Dancehouse.jpg/500px-Dancehouse.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	896274	217285	200	HTTP/2.0	65339	GET
+1115490	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f6/Alan_Turing%27s_House_from_1950_to_1954.jpg/500px-Alan_Turing%27s_House_from_1950_to_1954.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	896308	219180	200	HTTP/2.0	102583	GET
+1117325	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7a/Alan_Turing_Blue_Plaque_Wilmslow.jpg/500px-Alan_Turing_Blue_Plaque_Wilmslow.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	896352	220968	200	HTTP/2.0	112726	GET
+1120190	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fa/Wikiquote-logo.svg/60px-Wikiquote-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	896578	223610	200	HTTP/2.0	3414	GET
+1120589	req	https://thumb.wikimedia.org/wikipedia/en/thumb/6/69/P_vip.svg/40px-P_vip.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	896667	223918	200	HTTP/2.0	2401	GET
+1121082	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fa/Wikiquote-logo.svg/60px-Wikiquote-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	3414	200
+1121330	req	https://thumb.wikimedia.org/wikipedia/en/thumb/b/be/Flag_of_England.svg/60px-Flag_of_England.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	896699	224629	200	HTTP/2.0	345	GET
+1121451	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7a/England_Greater_Manchester_numbered.svg/60px-England_Greater_Manchester_numbered.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	896759	224659	200	HTTP/2.0	4425	GET
+1121493	req	https://thumb.wikimedia.org/wikipedia/en/thumb/9/96/Symbol_category_class.svg/40px-Symbol_category_class.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	896641	224849	200	HTTP/2.0	2213	GET
+1121668	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0e/Nuvola_LGBT_flag.svg/40px-Nuvola_LGBT_flag.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	896731	224934	200	HTTP/2.0	2315	GET
+1121735	body	https://thumb.wikimedia.org/wikipedia/en/thumb/6/69/P_vip.svg/40px-P_vip.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2401	200
+1121778	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/9/9e/Square_root_of_x.svg/40px-Square_root_of_x.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	896791	224978	200	HTTP/2.0	849	GET
+1121860	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4c/Wikisource-logo.svg/60px-Wikisource-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	896609	225249	200	HTTP/2.0	4056	GET
+1122866	body	https://thumb.wikimedia.org/wikipedia/en/thumb/9/96/Symbol_category_class.svg/40px-Symbol_category_class.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2213	200
+1122955	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4c/Wikisource-logo.svg/60px-Wikisource-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	4056	200
+1125862	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7a/England_Greater_Manchester_numbered.svg/60px-England_Greater_Manchester_numbered.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	4425	200
+1125935	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0e/Nuvola_LGBT_flag.svg/40px-Nuvola_LGBT_flag.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2315	200
+1125988	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/9/9e/Square_root_of_x.svg/40px-Square_root_of_x.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	849	200
+1126060	body	https://thumb.wikimedia.org/wikipedia/en/thumb/b/be/Flag_of_England.svg/60px-Flag_of_England.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	345	200
+1138151	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7e/Alan_Turing_OBE.jpg/500px-Alan_Turing_OBE.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	54300	200
+1159324	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/9/95/Turing%27s_teddy_bear.jpg/500px-Turing%27s_teddy_bear.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	61226	200
+1163198	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/4/46/20130808_Kings_College_Front_Court_Fountain_Crop_03.jpg/500px-20130808_Kings_College_Front_Court_Fountain_Crop_03.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	58731	200
+1164535	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/c/cd/Turing_flat.jpg/500px-Turing_flat.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	68069	200
+1164624	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/7/79/Alan_Turing_az_1930-as_%C3%A9vekben.jpg/500px-Alan_Turing_az_1930-as_%C3%A9vekben.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	85269	200
+1165277	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/5/5c/Bombe-rebuild.jpg/500px-Bombe-rebuild.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	96943	200
+1168012	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/2/2b/Alan_Turing_78_High_Street_Hampton_blue_plaque.jpg/500px-Alan_Turing_78_High_Street_Hampton_blue_plaque.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	73320	200
+1168092	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/c/cb/Dancehouse.jpg/500px-Dancehouse.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	65339	200
+1169555	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f6/Alan_Turing%27s_House_from_1950_to_1954.jpg/500px-Alan_Turing%27s_House_from_1950_to_1954.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	102583	200
+1171496	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f5/Turing-statue-Bletchley_14.jpg/500px-Turing-statue-Bletchley_14.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	120713	200
+1171606	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8f/Alan_Turing_in_Cornwall_April_1930_with_Peter_Hogg%2C_Edwin_Davis%2C_John_Bennett%2C_Peter_White%2C_and_Duncan_Carse.jpg/960px-Alan_Turing_in_Cornwall_April_1930_with_Peter_Hogg%2C_Edwin_Davis%2C_John_Bennett%2C_Peter_White%2C_and_Duncan_Carse.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	123102	200
+1172220	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7a/Alan_Turing_Blue_Plaque_Wilmslow.jpg/500px-Alan_Turing_Blue_Plaque_Wilmslow.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	112726	200
+1172322	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/0/04/Alan_Turing_Blue_Plaque%2C_University_of_Manchester.jpg/500px-Alan_Turing_Blue_Plaque%2C_University_of_Manchester.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	111737	200
+1173434	cascade	464410
+1395486	layout	220349
+1780152	cascade	247000
+1935162	layout	152548
+1938579	phase	cascade+layout+blocking scripts	1244966
+2275438	cascade	15868
+2375127	layout	97175
+2380147	phase	deferred scripts	441541
+2422664	phase	DOMContentLoaded	42482
+2435650	phase	subframes (pre-load)	12939
+2436928	q	https://thumb.wikimedia.org/wikipedia/en/thumb/9/94/Symbol_support_vote.svg/20px-Symbol_support_vote.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+2437039	q	https://thumb.wikimedia.org/wikipedia/en/thumb/1/1b/Semi-protection-shackle.svg/20px-Semi-protection-shackle.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+2437097	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/c/ce/Alan_turing_header.jpg/250px-Alan_turing_header.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+2437148	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/8/83/Alan_Turing_signature.svg/250px-Alan_Turing_signature.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+2437202	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3c/Alan_Turing_%285025990183%29.jpg/250px-Alan_Turing_%285025990183%29.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+2437251	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a1/Alan_Turing_Aged_16.jpg/250px-Alan_Turing_Aged_16.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+2437300	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8f/Alan_Turing_in_Cornwall_April_1930_with_Peter_Hogg%2C_Edwin_Davis%2C_John_Bennett%2C_Peter_White%2C_and_Duncan_Carse.jpg/330px-Alan_Turing_in_Cornwall_April_1930_with_Peter_Hogg%2C_Edwin_Davis%2C_John_Bennett%2C_Peter_White%2C_and_Duncan_Carse.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+2437374	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/7/79/Alan_Turing_az_1930-as_%C3%A9vekben.jpg/250px-Alan_Turing_az_1930-as_%C3%A9vekben.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+2437432	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/4/46/20130808_Kings_College_Front_Court_Fountain_Crop_03.jpg/250px-20130808_Kings_College_Front_Court_Fountain_Crop_03.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+2437484	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/c/cd/Turing_flat.jpg/250px-Turing_flat.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+2437531	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/5/5c/Bombe-rebuild.jpg/250px-Bombe-rebuild.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+2437576	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f5/Turing-statue-Bletchley_14.jpg/250px-Turing-statue-Bletchley_14.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+2437623	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/2/2b/Alan_Turing_78_High_Street_Hampton_blue_plaque.jpg/250px-Alan_Turing_78_High_Street_Hampton_blue_plaque.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+2437692	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/0/04/Alan_Turing_Blue_Plaque%2C_University_of_Manchester.jpg/250px-Alan_Turing_Blue_Plaque%2C_University_of_Manchester.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+2437751	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/9/95/Turing%27s_teddy_bear.jpg/250px-Turing%27s_teddy_bear.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+2437796	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/c/cb/Dancehouse.jpg/250px-Dancehouse.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+2437843	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f6/Alan_Turing%27s_House_from_1950_to_1954.jpg/250px-Alan_Turing%27s_House_from_1950_to_1954.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+2437890	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7a/Alan_Turing_Blue_Plaque_Wilmslow.jpg/250px-Alan_Turing_Blue_Plaque_Wilmslow.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+2437936	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7e/Alan_Turing_OBE.jpg/250px-Alan_Turing_OBE.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+2438060	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e8/Gartoon_actions_button_ok.svg/20px-Gartoon_actions_button_ok.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+2438265	q	https://thumb.wikimedia.org/wikipedia/en/thumb/4/4a/Commons-logo.svg/20px-Commons-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+2438323	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fa/Wikiquote-logo.svg/40px-Wikiquote-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+2438377	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4c/Wikisource-logo.svg/40px-Wikisource-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+2438426	q	https://thumb.wikimedia.org/wikipedia/en/thumb/9/96/Symbol_category_class.svg/20px-Symbol_category_class.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+2438479	q	https://thumb.wikimedia.org/wikipedia/en/thumb/6/69/P_vip.svg/20px-P_vip.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+2438526	q	https://thumb.wikimedia.org/wikipedia/en/thumb/b/be/Flag_of_England.svg/40px-Flag_of_England.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+2438577	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0e/Nuvola_LGBT_flag.svg/20px-Nuvola_LGBT_flag.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+2438629	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7a/England_Greater_Manchester_numbered.svg/40px-England_Greater_Manchester_numbered.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+2438675	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/9/9e/Square_root_of_x.svg/20px-Square_root_of_x.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+2438719	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6f/Octicons-terminal.svg/20px-Octicons-terminal.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+2438766	q	https://en.wikipedia.org/static/images/footer/wikimedia.svg
+2438816	q	https://en.wikipedia.org/w/resources/assets/mediawiki_compact.svg
+2478543	req	https://en.wikipedia.org/w/resources/assets/mediawiki_compact.svg	2438845	39694	200	HTTP/2.0	1320	GET
+2478641	body	https://en.wikipedia.org/w/resources/assets/mediawiki_compact.svg	3517	200
+2478724	req	https://en.wikipedia.org/static/images/footer/wikimedia.svg	2438801	39922	200	HTTP/2.0	397	GET
+2478765	body	https://en.wikipedia.org/static/images/footer/wikimedia.svg	742	200
+2479283	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/4/46/20130808_Kings_College_Front_Court_Fountain_Crop_03.jpg/250px-20130808_Kings_College_Front_Court_Fountain_Crop_03.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2437469	41812	200	HTTP/2.0	17665	GET
+2479902	req	https://thumb.wikimedia.org/wikipedia/en/thumb/9/94/Symbol_support_vote.svg/20px-Symbol_support_vote.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2436996	42903	200	HTTP/2.0	1180	GET
+2480204	body	https://thumb.wikimedia.org/wikipedia/en/thumb/9/94/Symbol_support_vote.svg/20px-Symbol_support_vote.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	1180	200
+2480280	req	https://thumb.wikimedia.org/wikipedia/en/thumb/1/1b/Semi-protection-shackle.svg/20px-Semi-protection-shackle.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2437084	43195	200	HTTP/2.0	739	GET
+2481611	body	https://thumb.wikimedia.org/wikipedia/en/thumb/1/1b/Semi-protection-shackle.svg/20px-Semi-protection-shackle.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	739	200
+2481694	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/c/ce/Alan_turing_header.jpg/250px-Alan_turing_header.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2437134	44559	200	HTTP/2.0	22070	GET
+2481959	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/c/ce/Alan_turing_header.jpg/250px-Alan_turing_header.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	22070	200
+2482026	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/8/83/Alan_Turing_signature.svg/250px-Alan_Turing_signature.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2437183	44841	200	HTTP/2.0	2374	GET
+2482273	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/8/83/Alan_Turing_signature.svg/250px-Alan_Turing_signature.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2374	200
+2482329	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3c/Alan_Turing_%285025990183%29.jpg/250px-Alan_Turing_%285025990183%29.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2437239	45089	200	HTTP/2.0	29413	GET
+2482608	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3c/Alan_Turing_%285025990183%29.jpg/250px-Alan_Turing_%285025990183%29.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	29413	200
+2482661	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a1/Alan_Turing_Aged_16.jpg/250px-Alan_Turing_Aged_16.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2437286	45373	200	HTTP/2.0	18166	GET
+2482895	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/a/a1/Alan_Turing_Aged_16.jpg/250px-Alan_Turing_Aged_16.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	18166	200
+2482953	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/7/79/Alan_Turing_az_1930-as_%C3%A9vekben.jpg/250px-Alan_Turing_az_1930-as_%C3%A9vekben.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2437413	45539	200	HTTP/2.0	33887	GET
+2483270	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/7/79/Alan_Turing_az_1930-as_%C3%A9vekben.jpg/250px-Alan_Turing_az_1930-as_%C3%A9vekben.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	33887	200
+2483332	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8f/Alan_Turing_in_Cornwall_April_1930_with_Peter_Hogg%2C_Edwin_Davis%2C_John_Bennett%2C_Peter_White%2C_and_Duncan_Carse.jpg/330px-Alan_Turing_in_Cornwall_April_1930_with_Peter_Hogg%2C_Edwin_Davis%2C_John_Bennett%2C_Peter_White%2C_and_Duncan_Carse.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2437343	45988	200	HTTP/2.0	25545	GET
+2483643	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8f/Alan_Turing_in_Cornwall_April_1930_with_Peter_Hogg%2C_Edwin_Davis%2C_John_Bennett%2C_Peter_White%2C_and_Duncan_Carse.jpg/330px-Alan_Turing_in_Cornwall_April_1930_with_Peter_Hogg%2C_Edwin_Davis%2C_John_Bennett%2C_Peter_White%2C_and_Duncan_Carse.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	25545	200
+2483897	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/4/46/20130808_Kings_College_Front_Court_Fountain_Crop_03.jpg/250px-20130808_Kings_College_Front_Court_Fountain_Crop_03.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	17665	200
+2484066	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fa/Wikiquote-logo.svg/40px-Wikiquote-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2438359	45704	200	HTTP/2.0	2375	GET
+2484328	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fa/Wikiquote-logo.svg/40px-Wikiquote-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2375	200
+2484956	req	https://thumb.wikimedia.org/wikipedia/en/thumb/4/4a/Commons-logo.svg/20px-Commons-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2438311	46644	200	HTTP/2.0	1246	GET
+2485187	body	https://thumb.wikimedia.org/wikipedia/en/thumb/4/4a/Commons-logo.svg/20px-Commons-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	1246	200
+2485260	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4c/Wikisource-logo.svg/40px-Wikisource-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2438411	46848	200	HTTP/2.0	2665	GET
+2485543	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4c/Wikisource-logo.svg/40px-Wikisource-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2665	200
+2485825	req	https://thumb.wikimedia.org/wikipedia/en/thumb/9/96/Symbol_category_class.svg/20px-Symbol_category_class.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2438461	47361	200	HTTP/2.0	1208	GET
+2486108	body	https://thumb.wikimedia.org/wikipedia/en/thumb/9/96/Symbol_category_class.svg/20px-Symbol_category_class.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	1208	200
+2486191	req	https://thumb.wikimedia.org/wikipedia/en/thumb/6/69/P_vip.svg/20px-P_vip.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2438513	47677	200	HTTP/2.0	1397	GET
+2486469	body	https://thumb.wikimedia.org/wikipedia/en/thumb/6/69/P_vip.svg/20px-P_vip.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	1397	200
+2486553	req	https://thumb.wikimedia.org/wikipedia/en/thumb/b/be/Flag_of_England.svg/40px-Flag_of_England.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2438559	47992	200	HTTP/2.0	342	GET
+2486799	body	https://thumb.wikimedia.org/wikipedia/en/thumb/b/be/Flag_of_England.svg/40px-Flag_of_England.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	342	200
+2486886	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0e/Nuvola_LGBT_flag.svg/20px-Nuvola_LGBT_flag.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2438610	48275	200	HTTP/2.0	1212	GET
+2487134	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0e/Nuvola_LGBT_flag.svg/20px-Nuvola_LGBT_flag.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	1212	200
+2487275	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/c/cd/Turing_flat.jpg/250px-Turing_flat.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2437517	49756	200	HTTP/2.0	18871	GET
+2487567	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/c/cd/Turing_flat.jpg/250px-Turing_flat.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	18871	200
+2487674	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/5/5c/Bombe-rebuild.jpg/250px-Bombe-rebuild.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2437564	50107	200	HTTP/2.0	26518	GET
+2487938	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/5/5c/Bombe-rebuild.jpg/250px-Bombe-rebuild.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	26518	200
+2488015	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f5/Turing-statue-Bletchley_14.jpg/250px-Turing-statue-Bletchley_14.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2437611	50403	200	HTTP/2.0	37603	GET
+2488245	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f5/Turing-statue-Bletchley_14.jpg/250px-Turing-statue-Bletchley_14.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	37603	200
+2493938	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e8/Gartoon_actions_button_ok.svg/20px-Gartoon_actions_button_ok.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2438101	55834	200	HTTP/2.0	1122	GET
+2494490	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e8/Gartoon_actions_button_ok.svg/20px-Gartoon_actions_button_ok.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	1122	200
+2494584	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/2/2b/Alan_Turing_78_High_Street_Hampton_blue_plaque.jpg/250px-Alan_Turing_78_High_Street_Hampton_blue_plaque.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2437658	56924	200	HTTP/2.0	22102	GET
+2494912	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/2/2b/Alan_Turing_78_High_Street_Hampton_blue_plaque.jpg/250px-Alan_Turing_78_High_Street_Hampton_blue_plaque.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	22102	200
+2495000	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/0/04/Alan_Turing_Blue_Plaque%2C_University_of_Manchester.jpg/250px-Alan_Turing_Blue_Plaque%2C_University_of_Manchester.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2437741	57256	200	HTTP/2.0	31996	GET
+2495346	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/0/04/Alan_Turing_Blue_Plaque%2C_University_of_Manchester.jpg/250px-Alan_Turing_Blue_Plaque%2C_University_of_Manchester.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	31996	200
+2495442	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/9/95/Turing%27s_teddy_bear.jpg/250px-Turing%27s_teddy_bear.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2437785	57654	200	HTTP/2.0	21506	GET
+2495728	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/9/95/Turing%27s_teddy_bear.jpg/250px-Turing%27s_teddy_bear.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	21506	200
+2495826	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/c/cb/Dancehouse.jpg/250px-Dancehouse.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2437831	57994	200	HTTP/2.0	18893	GET
+2496163	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/c/cb/Dancehouse.jpg/250px-Dancehouse.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	18893	200
+2496237	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f6/Alan_Turing%27s_House_from_1950_to_1954.jpg/250px-Alan_Turing%27s_House_from_1950_to_1954.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2437878	58357	200	HTTP/2.0	27307	GET
+2498895	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/f6/Alan_Turing%27s_House_from_1950_to_1954.jpg/250px-Alan_Turing%27s_House_from_1950_to_1954.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	27307	200
+2498994	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7a/Alan_Turing_Blue_Plaque_Wilmslow.jpg/250px-Alan_Turing_Blue_Plaque_Wilmslow.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2437924	61068	200	HTTP/2.0	32729	GET
+2500409	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7a/Alan_Turing_Blue_Plaque_Wilmslow.jpg/250px-Alan_Turing_Blue_Plaque_Wilmslow.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	32729	200
+2500475	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7e/Alan_Turing_OBE.jpg/250px-Alan_Turing_OBE.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2437968	62506	200	HTTP/2.0	16783	GET
+2503822	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7e/Alan_Turing_OBE.jpg/250px-Alan_Turing_OBE.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	16783	200
+2504072	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/9/9e/Square_root_of_x.svg/20px-Square_root_of_x.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2438707	65362	200	HTTP/2.0	527	GET
+2505438	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/9/9e/Square_root_of_x.svg/20px-Square_root_of_x.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	527	200
+2505522	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7a/England_Greater_Manchester_numbered.svg/40px-England_Greater_Manchester_numbered.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2438664	66855	200	HTTP/2.0	2651	GET
+2505822	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7a/England_Greater_Manchester_numbered.svg/40px-England_Greater_Manchester_numbered.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2651	200
+2505891	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6f/Octicons-terminal.svg/20px-Octicons-terminal.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2438753	67136	200	HTTP/2.0	481	GET
+2506158	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6f/Octicons-terminal.svg/20px-Octicons-terminal.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	481	200
+2662105	q	https://en.wikipedia.org/w/load.php?modules=ext.readingLists.bookmark.icons&image=bookmarkOutline&format=original&lang=en&skin=vector-2022&version=karjy
+2662235	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=logIn&format=original&lang=en&skin=vector-2022&version=1o2f1
+2662278	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=language&format=original&lang=en&skin=vector-2022&version=1o2f1
+2662324	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=search&format=original&lang=en&skin=vector-2022&version=1o2f1
+2662381	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=eye&format=original&lang=en&skin=vector-2022&version=1o2f1
+2662461	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=userAvatar&format=original&lang=en&skin=vector-2022&version=1o2f1
+2662511	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=listBullet&format=original&lang=en&skin=vector-2022&version=1o2f1
+2662557	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=verticalEllipsis&format=original&lang=en&skin=vector-2022&version=1o2f1
+2662604	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=menu&format=original&lang=en&skin=vector-2022&version=1o2f1
+2662652	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=star&format=original&lang=en&skin=vector-2022&version=1o2f1
+2662701	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=language&variant=progressive&format=original&lang=en&skin=vector-2022&version=1o2f1
+2662749	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=heart&format=original&lang=en&skin=vector-2022&version=1o2f1
+2697023	req	https://en.wikipedia.org/w/load.php?modules=ext.readingLists.bookmark.icons&image=bookmarkOutline&format=original&lang=en&skin=vector-2022&version=karjy	2662195	34823	200	HTTP/2.0	209	GET
+2697123	body	https://en.wikipedia.org/w/load.php?modules=ext.readingLists.bookmark.icons&image=bookmarkOutline&format=original&lang=en&skin=vector-2022&version=karjy	232	200
+2697481	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=language&format=original&lang=en&skin=vector-2022&version=1o2f1	2662309	35171	200	HTTP/2.0	447	GET
+2697563	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=language&format=original&lang=en&skin=vector-2022&version=1o2f1	641	200
+2697667	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=logIn&format=original&lang=en&skin=vector-2022&version=1o2f1	2662268	35398	200	HTTP/2.0	240	GET
+2697711	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=logIn&format=original&lang=en&skin=vector-2022&version=1o2f1	292	200
+2697933	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=userAvatar&format=original&lang=en&skin=vector-2022&version=1o2f1	2662495	35436	200	HTTP/2.0	218	GET
+2697986	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=userAvatar&format=original&lang=en&skin=vector-2022&version=1o2f1	256	200
+2698239	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=search&format=original&lang=en&skin=vector-2022&version=1o2f1	2662358	35880	200	HTTP/2.0	232	GET
+2698291	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=search&format=original&lang=en&skin=vector-2022&version=1o2f1	296	200
+2698542	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=eye&format=original&lang=en&skin=vector-2022&version=1o2f1	2662416	36125	200	HTTP/2.0	284	GET
+2698594	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=eye&format=original&lang=en&skin=vector-2022&version=1o2f1	385	200
+2698681	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=verticalEllipsis&format=original&lang=en&skin=vector-2022&version=1o2f1	2662593	36086	200	HTTP/2.0	203	GET
+2698730	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=verticalEllipsis&format=original&lang=en&skin=vector-2022&version=1o2f1	243	200
+2698842	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=listBullet&format=original&lang=en&skin=vector-2022&version=1o2f1	2662544	36296	200	HTTP/2.0	203	GET
+2698891	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=listBullet&format=original&lang=en&skin=vector-2022&version=1o2f1	260	200
+2698977	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=menu&format=original&lang=en&skin=vector-2022&version=1o2f1	2662639	36337	200	HTTP/2.0	187	GET
+2699034	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=menu&format=original&lang=en&skin=vector-2022&version=1o2f1	220	200
+2699217	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=star&format=original&lang=en&skin=vector-2022&version=1o2f1	2662687	36529	200	HTTP/2.0	290	GET
+2699327	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=star&format=original&lang=en&skin=vector-2022&version=1o2f1	371	200
+2699384	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=language&variant=progressive&format=original&lang=en&skin=vector-2022&version=1o2f1	2662736	36647	200	HTTP/2.0	448	GET
+2699427	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=language&variant=progressive&format=original&lang=en&skin=vector-2022&version=1o2f1	641	200
+2725457	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=heart&format=original&lang=en&skin=vector-2022&version=1o2f1	2662783	62670	200	HTTP/2.0	276	GET
+2732445	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=heart&format=original&lang=en&skin=vector-2022&version=1o2f1	358	200
+2733821	phase	initial images+masks	298141
+2782857	phase	load event	49018
+2790972	q	https://upload.wikimedia.org/wikipedia/commons/d/d6/Lock-gray-alt-2.svg
+2791111	q	https://en.wikipedia.org/w/skins/Vector/resources/skins.vector.styles/images/link-external-small-ltr-progressive.svg?fb64d
+2791340	phase	finish_loading: external CSS	8434
+2794402	q	https://upload.wikimedia.org/wikipedia/commons/4/4d/Icon_pdf_file.png
+2794474	q	https://upload.wikimedia.org/wikipedia/commons/6/65/Lock-green.svg
+2794564	dns	upload.wikimedia.org	3505
+2796971	dynscript_wait	5616
+2824506	q	https://en.wikipedia.org/w/load.php?lang=en&modules=ext.scribunto.logs%7Cjquery&skin=vector-2022&version=jlsqb
+2824822	req	https://en.wikipedia.org/w/skins/Vector/resources/skins.vector.styles/images/link-external-small-ltr-progressive.svg?fb64d	2791151	33669	200	HTTP/2.0	241	GET
+2824887	body	https://en.wikipedia.org/w/skins/Vector/resources/skins.vector.styles/images/link-external-small-ltr-progressive.svg?fb64d	298	200
+2860421	req	https://en.wikipedia.org/w/load.php?lang=en&modules=ext.scribunto.logs%7Cjquery&skin=vector-2022&version=jlsqb	2824582	35833	200	HTTP/2.0	39959	GET
+2862104	body	https://en.wikipedia.org/w/load.php?lang=en&modules=ext.scribunto.logs%7Cjquery&skin=vector-2022&version=jlsqb	140844	200
+2862343	dynscript_wait	37858
+2919738	connect	upload.wikimedia.org	128681
+3052583	req	https://upload.wikimedia.org/wikipedia/commons/4/4d/Icon_pdf_file.png	2919846	132729	200	HTTP/2.0	225	GET
+3052693	body	https://upload.wikimedia.org/wikipedia/commons/4/4d/Icon_pdf_file.png	225	200
+3052886	req	https://upload.wikimedia.org/wikipedia/commons/d/d6/Lock-gray-alt-2.svg	2791042	261843	200	HTTP/2.0	318	GET
+3052898	req	https://upload.wikimedia.org/wikipedia/commons/6/65/Lock-green.svg	2919943	132954	200	HTTP/2.0	272	GET
+3052948	body	https://upload.wikimedia.org/wikipedia/commons/d/d6/Lock-gray-alt-2.svg	516	200
+3052956	body	https://upload.wikimedia.org/wikipedia/commons/6/65/Lock-green.svg	432	200
+3793092	cascade	551080
+3927001	layout	130513
+3927039	reflow	forced
+3993946	cascade	35498
+4120426	layout	122666
+4121291	reflow	forced
+4176245	cascade	28130
+4302150	layout	121385
+4314724	reflow	forced
+4382294	dynscript_eval	1511238
+4595961	dynscript_wait	212796
+4597064	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=speechBubbles&format=original&lang=en&skin=vector-2022&version=9vsx3
+4597166	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=speechBubbleAdd&variant=progressive&format=original&lang=en&skin=vector-2022&version=9vsx3
+4597213	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=history&format=original&lang=en&skin=vector-2022&version=9vsx3
+4597251	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=appearance&format=original&lang=en&skin=vector-2022&version=9vsx3
+4597293	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=article&format=original&lang=en&skin=vector-2022&version=9vsx3
+4597332	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=editLock&format=original&lang=en&skin=vector-2022&version=9vsx3
+4597382	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=edit&format=original&lang=en&skin=vector-2022&version=9vsx3
+4597423	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=wikiText&format=original&lang=en&skin=vector-2022&version=9vsx3
+4629940	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=speechBubbles&format=original&lang=en&skin=vector-2022&version=9vsx3	4597135	32797	200	HTTP/2.0	278	GET
+4630090	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=speechBubbles&format=original&lang=en&skin=vector-2022&version=9vsx3	331	200
+4664424	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=speechBubbleAdd&variant=progressive&format=original&lang=en&skin=vector-2022&version=9vsx3	4597206	67212	200	HTTP/2.0	256	GET
+4664532	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=speechBubbleAdd&variant=progressive&format=original&lang=en&skin=vector-2022&version=9vsx3	302	200
+4664602	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=history&format=original&lang=en&skin=vector-2022&version=9vsx3	4597242	67359	200	HTTP/2.0	256	GET
+4664643	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=history&format=original&lang=en&skin=vector-2022&version=9vsx3	327	200
+4664687	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=appearance&format=original&lang=en&skin=vector-2022&version=9vsx3	4597283	67402	200	HTTP/2.0	273	GET
+4664726	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=appearance&format=original&lang=en&skin=vector-2022&version=9vsx3	416	200
+4664764	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=article&format=original&lang=en&skin=vector-2022&version=9vsx3	4597324	67439	200	HTTP/2.0	222	GET
+4664802	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=article&format=original&lang=en&skin=vector-2022&version=9vsx3	292	200
+4664840	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=editLock&format=original&lang=en&skin=vector-2022&version=9vsx3	4597370	67469	200	HTTP/2.0	292	GET
+4664871	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=editLock&format=original&lang=en&skin=vector-2022&version=9vsx3	387	200
+4664905	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=wikiText&format=original&lang=en&skin=vector-2022&version=9vsx3	4597454	67450	200	HTTP/2.0	219	GET
+4664934	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=wikiText&format=original&lang=en&skin=vector-2022&version=9vsx3	273	200
+4664969	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=edit&format=original&lang=en&skin=vector-2022&version=9vsx3	4597412	67556	200	HTTP/2.0	218	GET
+4664999	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=edit&format=original&lang=en&skin=vector-2022&version=9vsx3	264	200
+4666129	dynscript_wait	70129
+4671673	dynscript_wait	5530
+4675555	phase	finish_loading: dynamic scripts	1884198
+4681949	phase	finish_loading: subframes	6373
+4686874	dynscript_wait	4906
+4756544	req	https://en.wikipedia.org/ins-502b/v2/events?hasty=true	4687723	68817	202	HTTP/2.0	0	POST
+4756609	body	https://en.wikipedia.org/ins-502b/v2/events?hasty=true	0	202
+4771695	dynscript_wait	8369
+4772659	phase	finish_loading: page fetches	90691
+4774264	phase	finish_loading: images	1573
+4774978	phase	finish_loading: icon masks	698
+4798510	phase	finish_loading: background images	23513
+4913823	mark	navigate_returned
+4981439	mark	a11y_built

@@ -1,0 +1,66 @@
+0	epoch	1795520006970326
+16880	dns	quotes.toscrape.com	16850
+117914	connect	quotes.toscrape.com	117889
+257632	req	https://quotes.toscrape.com/js/	0	257628	200	HTTP/2.0	-	GET
+258477	body	https://quotes.toscrape.com/js/	5808	200
+258622	q	https://quotes.toscrape.com/static/main.css
+258627	q	https://quotes.toscrape.com/static/bootstrap.min.css
+258786	phase	html parse	250
+258818	q	https://quotes.toscrape.com/static/jquery.js
+392086	req	https://quotes.toscrape.com/static/main.css	258666	133416	200	HTTP/2.0	-	GET
+392640	body	https://quotes.toscrape.com/static/main.css	1368	200
+438668	req	https://quotes.toscrape.com/static/jquery.js	392750	45916	200	HTTP/2.0	-	GET
+485664	req	https://quotes.toscrape.com/static/bootstrap.min.css	392755	92906	200	HTTP/2.0	-	GET
+486254	body	https://quotes.toscrape.com/static/jquery.js	84345	200
+486341	phase	external scripts	227540
+486362	phase	module graph prefetch	7
+528913	body	https://quotes.toscrape.com/static/bootstrap.min.css	125934	200
+536527	q	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.woff2
+536533	phase	blocking stylesheets	50156
+543663	cascade	1022
+544294	layout	614
+572081	cascade	302
+573883	layout	1784
+573930	phase	cascade+layout+blocking scripts	37356
+577647	phase	deferred scripts	3706
+578924	phase	DOMContentLoaded	1261
+579235	q	https://fonts.googleapis.com/css?family=Raleway:400,700
+579864	dns	fonts.googleapis.com	585
+581955	req	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.woff2	536582	45371	404	HTTP/2.0	-	GET
+582467	body	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.woff2	207	404
+663018	connect	fonts.googleapis.com	83741
+736588	req	https://fonts.googleapis.com/css?family=Raleway:400,700	579266	157319	200	HTTP/2.0	-	GET
+746248	body	https://fonts.googleapis.com/css?family=Raleway:400,700	398	200
+746575	q	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.woff
+746634	q	https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVvaorCIPrQ.ttf
+746693	q	https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVs9pbCIPrQ.ttf
+747222	dns	fonts.gstatic.com	543
+796365	req	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.woff	746613	49747	404	HTTP/2.0	-	GET
+796480	body	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.woff	207	404
+796531	q	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.ttf
+842658	connect	fonts.gstatic.com	95981
+844886	req	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.ttf	796633	48251	404	HTTP/2.0	-	GET
+844944	body	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.ttf	207	404
+844975	q	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.svg#glyphicons_halflingsregular
+891688	req	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.svg#glyphicons_halflingsregular	845002	46683	404	HTTP/2.0	-	GET
+891746	body	https://quotes.toscrape.com/fonts/glyphicons-halflings-regular.svg#glyphicons_halflingsregular	207	404
+921903	req	https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVvaorCIPrQ.ttf	746666	175234	200	HTTP/2.0	29379	GET
+966498	body	https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVvaorCIPrQ.ttf	49552	200
+966607	req	https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVs9pbCIPrQ.ttf	842772	123833	200	HTTP/2.0	29703	GET
+987221	body	https://fonts.gstatic.com/s/raleway/v37/1Ptxg8zYS_SKggPN4iEgvnHyvveLxVs9pbCIPrQ.ttf	49512	200
+991972	cascade	1118
+992571	layout	585
+992658	phase	subframes (pre-load)	413717
+992688	phase	initial images+masks	20
+993545	phase	load event	846
+993958	phase	finish_loading: external CSS	389
+994259	dynscript_wait	289
+994720	phase	finish_loading: dynamic scripts	750
+994766	phase	finish_loading: subframes	33
+995140	dynscript_wait	363
+995181	phase	finish_loading: page fetches	404
+995207	phase	finish_loading: images	15
+995218	phase	finish_loading: icon masks	1
+995232	phase	finish_loading: background images	4
+995534	mark	navigate_returned
+995747	mark	a11y_built

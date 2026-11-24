@@ -1,0 +1,265 @@
+0	epoch	1795520273061522
+18071	dns	en.wikipedia.org	18038
+126638	connect	en.wikipedia.org	126612
+272817	req	https://en.wikipedia.org/wiki/Python_(programming_language)	0	272812	200	HTTP/2.0	163939	GET
+412226	body	https://en.wikipedia.org/wiki/Python_(programming_language)	1025435	200
+415042	q	https://en.wikipedia.org/w/load.php?lang=en&amp;modules=ext.cite.parsoid.styles%7Cext.cite.styles%7Cext.pygments%2CwikimediaBadges%7Cext.readingLists.bookmark.icons%2Cstyles%7Cext.uls.interlanguage%7Cext.visualEditor.desktopArticleTarget.noscript%7Cext.wikimediaBadges.ulsV2%7Cext.wikimediamessages.styles%7Cjquery.makeCollapsible.styles%7Cskins.vector.icons%2Cstyles%7Cskins.vector.search.codex.styles%7Cwikibase.client.init&amp;only=styles&amp;skin=vector-2022
+415042	q	https://en.wikipedia.org/w/load.php?lang=en&amp;modules=site.styles&amp;only=styles&amp;skin=vector-2022
+448223	req	https://en.wikipedia.org/w/load.php?lang=en&amp;modules=ext.cite.parsoid.styles%7Cext.cite.styles%7Cext.pygments%2CwikimediaBadges%7Cext.readingLists.bookmark.icons%2Cstyles%7Cext.uls.interlanguage%7Cext.visualEditor.desktopArticleTarget.noscript%7Cext.wikimediaBadges.ulsV2%7Cext.wikimediamessages.styles%7Cjquery.makeCollapsible.styles%7Cskins.vector.icons%2Cstyles%7Cskins.vector.search.codex.styles%7Cwikibase.client.init&amp;only=styles&amp;skin=vector-2022	415156	33064	200	HTTP/2.0	196	GET
+448275	body	https://en.wikipedia.org/w/load.php?lang=en&amp;modules=ext.cite.parsoid.styles%7Cext.cite.styles%7Cext.pygments%2CwikimediaBadges%7Cext.readingLists.bookmark.icons%2Cstyles%7Cext.uls.interlanguage%7Cext.visualEditor.desktopArticleTarget.noscript%7Cext.wikimediaBadges.ulsV2%7Cext.wikimediamessages.styles%7Cjquery.makeCollapsible.styles%7Cskins.vector.icons%2Cstyles%7Cskins.vector.search.codex.styles%7Cwikibase.client.init&amp;only=styles&amp;skin=vector-2022	196	200
+449536	q	https://en.wikipedia.org/static/images/icons/enwiki-25.svg
+449543	q	https://en.wikipedia.org/static/images/mobile/copyright/wikipedia-wordmark-en-25.svg
+449600	q	https://thumb.wikimedia.org/wikipedia/en/thumb/1/1b/Semi-protection-shackle.svg/40px-Semi-protection-shackle.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+449626	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c3/Python-logo-notext.svg/330px-Python-logo-notext.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+449650	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fa/Wikibooks-logo.svg/40px-Wikibooks-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+449676	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/3/31/Free_and_open-source_software_logo_%282009%29.svg/60px-Free_and_open-source_software_logo_%282009%29.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+449691	q	https://thumb.wikimedia.org/wikipedia/en/thumb/4/4a/Commons-logo.svg/40px-Commons-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+449710	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fa/Wikibooks-logo.svg/60px-Wikibooks-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+449726	q	https://thumb.wikimedia.org/wikipedia/en/thumb/e/e2/Symbol_portal_class.svg/40px-Symbol_portal_class.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+449688	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6f/Octicons-terminal.svg/60px-Octicons-terminal.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+449641	q	https://thumb.wikimedia.org/wikipedia/en/thumb/8/8a/OOjs_UI_icon_edit-ltr-progressive.svg/20px-OOjs_UI_icon_edit-ltr-progressive.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+449543	q	https://en.wikipedia.org/static/images/mobile/copyright/wikipedia-tagline-en-25.svg
+449711	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/ff/Wikidata-logo.svg/60px-Wikidata-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+449671	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c3/Python-logo-notext.svg/120px-Python-logo-notext.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+449721	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/2/21/Guido_van_Rossum_in_PyConUS24.jpg/500px-Guido_van_Rossum_in_PyConUS24.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+449728	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0b/Wikiversity_logo_2017.svg/60px-Wikiversity_logo_2017.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+449730	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fa/Wikiquote-logo.svg/60px-Wikiquote-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+450156	q	https://en.wikipedia.org/w/load.php?lang=en&modules=ext.cite.parsoid.styles%7Cext.cite.styles%7Cext.pygments%2CwikimediaBadges%7Cext.readingLists.bookmark.icons%2Cstyles%7Cext.uls.interlanguage%7Cext.visualEditor.desktopArticleTarget.noscript%7Cext.wikimediaBadges.ulsV2%7Cext.wikimediamessages.styles%7Cjquery.makeCollapsible.styles%7Cskins.vector.icons%2Cstyles%7Cskins.vector.search.codex.styles%7Cwikibase.client.init&only=styles&skin=vector-2022
+449739	q	https://thumb.wikimedia.org/wikipedia/en/thumb/d/db/Symbol_list_class.svg/40px-Symbol_list_class.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+449741	q	https://thumb.wikimedia.org/wikipedia/en/thumb/9/96/Symbol_category_class.svg/40px-Symbol_category_class.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+449741	q	https://en.wikipedia.org/static/images/footer/wikimedia-button.svg
+449754	q	https://en.wikipedia.org/w/resources/assets/poweredby_mediawiki.svg
+450003	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6f/Octicons-terminal.svg/40px-Octicons-terminal.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+450142	phase	html parse	36979
+450164	q	https://en.wikipedia.org/w/load.php?lang=en&modules=site.styles&only=styles&skin=vector-2022
+449678	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e0/Python_3.13_Standrd_Type_Hierarchy-en.svg/500px-Python_3.13_Standrd_Type_Hierarchy-en.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+450487	dns	thumb.wikimedia.org	784
+450684	q	https://en.wikipedia.org/w/load.php?lang=en&modules=startup&only=scripts&raw=1&skin=vector-2022
+479908	req	https://en.wikipedia.org/w/load.php?lang=en&amp;modules=site.styles&amp;only=styles&amp;skin=vector-2022	448396	31507	200	HTTP/2.0	196	GET
+479961	body	https://en.wikipedia.org/w/load.php?lang=en&amp;modules=site.styles&amp;only=styles&amp;skin=vector-2022	196	200
+486589	req	https://en.wikipedia.org/static/images/icons/enwiki-25.svg	449623	36963	200	HTTP/2.0	44092	GET
+487068	req	https://en.wikipedia.org/static/images/mobile/copyright/wikipedia-tagline-en-25.svg	449837	37229	200	HTTP/2.0	4788	GET
+487237	body	https://en.wikipedia.org/static/images/mobile/copyright/wikipedia-tagline-en-25.svg	15219	200
+492230	body	https://en.wikipedia.org/static/images/icons/enwiki-25.svg	115918	200
+492878	req	https://en.wikipedia.org/static/images/mobile/copyright/wikipedia-wordmark-en-25.svg	449642	43235	200	HTTP/2.0	4020	GET
+492953	body	https://en.wikipedia.org/static/images/mobile/copyright/wikipedia-wordmark-en-25.svg	9865	200
+494525	req	https://en.wikipedia.org/w/load.php?lang=en&modules=ext.cite.parsoid.styles%7Cext.cite.styles%7Cext.pygments%2CwikimediaBadges%7Cext.readingLists.bookmark.icons%2Cstyles%7Cext.uls.interlanguage%7Cext.visualEditor.desktopArticleTarget.noscript%7Cext.wikimediaBadges.ulsV2%7Cext.wikimediamessages.styles%7Cjquery.makeCollapsible.styles%7Cskins.vector.icons%2Cstyles%7Cskins.vector.search.codex.styles%7Cwikibase.client.init&only=styles&skin=vector-2022	450208	44315	200	HTTP/2.0	26053	GET
+496447	body	https://en.wikipedia.org/w/load.php?lang=en&modules=ext.cite.parsoid.styles%7Cext.cite.styles%7Cext.pygments%2CwikimediaBadges%7Cext.readingLists.bookmark.icons%2Cstyles%7Cext.uls.interlanguage%7Cext.visualEditor.desktopArticleTarget.noscript%7Cext.wikimediaBadges.ulsV2%7Cext.wikimediamessages.styles%7Cjquery.makeCollapsible.styles%7Cskins.vector.icons%2Cstyles%7Cskins.vector.search.codex.styles%7Cwikibase.client.init&only=styles&skin=vector-2022	219898	200
+512067	req	https://en.wikipedia.org/static/images/footer/wikimedia-button.svg	450268	61795	200	HTTP/2.0	1595	GET
+512203	body	https://en.wikipedia.org/static/images/footer/wikimedia-button.svg	3256	200
+512330	req	https://en.wikipedia.org/w/resources/assets/poweredby_mediawiki.svg	450294	62035	200	HTTP/2.0	4369	GET
+512458	body	https://en.wikipedia.org/w/resources/assets/poweredby_mediawiki.svg	14576	200
+512933	req	https://en.wikipedia.org/w/load.php?lang=en&modules=site.styles&only=styles&skin=vector-2022	450362	62569	200	HTTP/2.0	2214	GET
+513134	body	https://en.wikipedia.org/w/load.php?lang=en&modules=site.styles&only=styles&skin=vector-2022	6782	200
+515195	req	https://en.wikipedia.org/w/load.php?lang=en&modules=startup&only=scripts&raw=1&skin=vector-2022	450711	64481	200	HTTP/2.0	22330	GET
+516821	body	https://en.wikipedia.org/w/load.php?lang=en&modules=startup&only=scripts&raw=1&skin=vector-2022	71350	200
+516968	phase	external scripts	66660
+518962	phase	module graph prefetch	1974
+518999	phase	blocking stylesheets	20
+557472	connect	thumb.wikimedia.org	107775
+636213	req	https://thumb.wikimedia.org/wikipedia/en/thumb/1/1b/Semi-protection-shackle.svg/40px-Semi-protection-shackle.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	449671	186538	200	HTTP/2.0	974	GET
+636677	body	https://thumb.wikimedia.org/wikipedia/en/thumb/1/1b/Semi-protection-shackle.svg/40px-Semi-protection-shackle.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	974	200
+637076	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/3/31/Free_and_open-source_software_logo_%282009%29.svg/60px-Free_and_open-source_software_logo_%282009%29.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	557569	79505	200	HTTP/2.0	3597	GET
+637369	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/3/31/Free_and_open-source_software_logo_%282009%29.svg/60px-Free_and_open-source_software_logo_%282009%29.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	3597	200
+641023	req	https://thumb.wikimedia.org/wikipedia/en/thumb/4/4a/Commons-logo.svg/40px-Commons-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	557579	83443	200	HTTP/2.0	2189	GET
+641290	body	https://thumb.wikimedia.org/wikipedia/en/thumb/4/4a/Commons-logo.svg/40px-Commons-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2189	200
+680326	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fa/Wikibooks-logo.svg/40px-Wikibooks-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	557572	122745	200	HTTP/2.0	2638	GET
+681059	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fa/Wikibooks-logo.svg/40px-Wikibooks-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2638	200
+694322	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c3/Python-logo-notext.svg/330px-Python-logo-notext.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	557612	136702	200	HTTP/2.0	12331	GET
+694823	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c3/Python-logo-notext.svg/330px-Python-logo-notext.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	12331	200
+699878	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fa/Wikibooks-logo.svg/60px-Wikibooks-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	557612	142262	200	HTTP/2.0	3747	GET
+700468	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fa/Wikibooks-logo.svg/60px-Wikibooks-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	3747	200
+727775	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e0/Python_3.13_Standrd_Type_Hierarchy-en.svg/500px-Python_3.13_Standrd_Type_Hierarchy-en.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	636769	91001	200	HTTP/2.0	169190	GET
+733359	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c3/Python-logo-notext.svg/120px-Python-logo-notext.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	636783	96574	200	HTTP/2.0	4112	GET
+733709	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c3/Python-logo-notext.svg/120px-Python-logo-notext.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	4112	200
+739019	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fa/Wikiquote-logo.svg/60px-Wikiquote-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	636813	102203	200	HTTP/2.0	3414	GET
+739397	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fa/Wikiquote-logo.svg/60px-Wikiquote-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	3414	200
+742048	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6f/Octicons-terminal.svg/60px-Octicons-terminal.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	636836	105211	200	HTTP/2.0	652	GET
+742360	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6f/Octicons-terminal.svg/60px-Octicons-terminal.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	652	200
+744649	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0b/Wikiversity_logo_2017.svg/60px-Wikiversity_logo_2017.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	636845	107802	200	HTTP/2.0	1408	GET
+744944	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0b/Wikiversity_logo_2017.svg/60px-Wikiversity_logo_2017.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	1408	200
+747465	req	https://thumb.wikimedia.org/wikipedia/en/thumb/d/db/Symbol_list_class.svg/40px-Symbol_list_class.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	636845	110618	200	HTTP/2.0	2394	GET
+747701	body	https://thumb.wikimedia.org/wikipedia/en/thumb/d/db/Symbol_list_class.svg/40px-Symbol_list_class.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2394	200
+756662	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/2/21/Guido_van_Rossum_in_PyConUS24.jpg/500px-Guido_van_Rossum_in_PyConUS24.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	636855	119804	200	HTTP/2.0	98522	GET
+758090	req	https://thumb.wikimedia.org/wikipedia/en/thumb/8/8a/OOjs_UI_icon_edit-ltr-progressive.svg/20px-OOjs_UI_icon_edit-ltr-progressive.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	636868	121219	200	HTTP/2.0	512	GET
+758385	body	https://thumb.wikimedia.org/wikipedia/en/thumb/8/8a/OOjs_UI_icon_edit-ltr-progressive.svg/20px-OOjs_UI_icon_edit-ltr-progressive.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	512	200
+758594	cascade	228987
+759572	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/ff/Wikidata-logo.svg/60px-Wikidata-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	636869	122700	200	HTTP/2.0	591	GET
+759857	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/ff/Wikidata-logo.svg/60px-Wikidata-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	591	200
+808174	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6f/Octicons-terminal.svg/40px-Octicons-terminal.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	636882	171287	200	HTTP/2.0	581	GET
+808183	req	https://thumb.wikimedia.org/wikipedia/en/thumb/9/96/Symbol_category_class.svg/40px-Symbol_category_class.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	636873	171307	200	HTTP/2.0	2213	GET
+808675	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6f/Octicons-terminal.svg/40px-Octicons-terminal.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	581	200
+808884	body	https://thumb.wikimedia.org/wikipedia/en/thumb/9/96/Symbol_category_class.svg/40px-Symbol_category_class.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2213	200
+809070	req	https://thumb.wikimedia.org/wikipedia/en/thumb/e/e2/Symbol_portal_class.svg/40px-Symbol_portal_class.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	636893	172174	200	HTTP/2.0	2538	GET
+809404	body	https://thumb.wikimedia.org/wikipedia/en/thumb/e/e2/Symbol_portal_class.svg/40px-Symbol_portal_class.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2538	200
+820187	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/2/21/Guido_van_Rossum_in_PyConUS24.jpg/500px-Guido_van_Rossum_in_PyConUS24.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	98522	200
+829196	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e0/Python_3.13_Standrd_Type_Hierarchy-en.svg/500px-Python_3.13_Standrd_Type_Hierarchy-en.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	169190	200
+909326	layout	149890
+1171772	cascade	156912
+1278218	layout	104438
+1281900	phase	cascade+layout+blocking scripts	762888
+1558536	cascade	17460
+1639565	layout	78880
+1644297	phase	deferred scripts	362371
+1675151	phase	DOMContentLoaded	30827
+1682163	phase	subframes (pre-load)	6984
+1683106	q	https://thumb.wikimedia.org/wikipedia/en/thumb/1/1b/Semi-protection-shackle.svg/20px-Semi-protection-shackle.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+1683210	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c3/Python-logo-notext.svg/250px-Python-logo-notext.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+1683354	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fa/Wikibooks-logo.svg/20px-Wikibooks-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+1683416	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c3/Python-logo-notext.svg/60px-Python-logo-notext.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+1683462	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6f/Octicons-terminal.svg/20px-Octicons-terminal.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+1683505	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/2/21/Guido_van_Rossum_in_PyConUS24.jpg/250px-Guido_van_Rossum_in_PyConUS24.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+1683556	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e0/Python_3.13_Standrd_Type_Hierarchy-en.svg/250px-Python_3.13_Standrd_Type_Hierarchy-en.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+1683622	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/3/31/Free_and_open-source_software_logo_%282009%29.svg/40px-Free_and_open-source_software_logo_%282009%29.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+1683675	q	https://thumb.wikimedia.org/wikipedia/en/thumb/4/4a/Commons-logo.svg/20px-Commons-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+1683722	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fa/Wikiquote-logo.svg/40px-Wikiquote-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+1683780	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0b/Wikiversity_logo_2017.svg/40px-Wikiversity_logo_2017.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+1683823	q	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/ff/Wikidata-logo.svg/40px-Wikidata-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+1683867	q	https://thumb.wikimedia.org/wikipedia/en/thumb/d/db/Symbol_list_class.svg/20px-Symbol_list_class.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+1683913	q	https://thumb.wikimedia.org/wikipedia/en/thumb/9/96/Symbol_category_class.svg/20px-Symbol_category_class.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+1683968	q	https://thumb.wikimedia.org/wikipedia/en/thumb/e/e2/Symbol_portal_class.svg/20px-Symbol_portal_class.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail
+1684012	q	https://en.wikipedia.org/static/images/footer/wikimedia.svg
+1684053	q	https://en.wikipedia.org/w/resources/assets/mediawiki_compact.svg
+1716442	req	https://en.wikipedia.org/static/images/footer/wikimedia.svg	1684043	32394	200	HTTP/2.0	397	GET
+1716524	body	https://en.wikipedia.org/static/images/footer/wikimedia.svg	742	200
+1718724	req	https://thumb.wikimedia.org/wikipedia/en/thumb/1/1b/Semi-protection-shackle.svg/20px-Semi-protection-shackle.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	1683179	35543	200	HTTP/2.0	739	GET
+1719147	body	https://thumb.wikimedia.org/wikipedia/en/thumb/1/1b/Semi-protection-shackle.svg/20px-Semi-protection-shackle.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	739	200
+1719229	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c3/Python-logo-notext.svg/250px-Python-logo-notext.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	1683248	35979	200	HTTP/2.0	8528	GET
+1719495	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c3/Python-logo-notext.svg/250px-Python-logo-notext.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	8528	200
+1719568	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fa/Wikibooks-logo.svg/20px-Wikibooks-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	1683395	36171	200	HTTP/2.0	1381	GET
+1719899	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fa/Wikibooks-logo.svg/20px-Wikibooks-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	1381	200
+1719972	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c3/Python-logo-notext.svg/60px-Python-logo-notext.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	1683452	36518	200	HTTP/2.0	2275	GET
+1720240	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c3/Python-logo-notext.svg/60px-Python-logo-notext.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2275	200
+1720299	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6f/Octicons-terminal.svg/20px-Octicons-terminal.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	1683495	36803	200	HTTP/2.0	481	GET
+1720569	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/6/6f/Octicons-terminal.svg/20px-Octicons-terminal.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	481	200
+1721164	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/2/21/Guido_van_Rossum_in_PyConUS24.jpg/250px-Guido_van_Rossum_in_PyConUS24.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	1683542	37620	200	HTTP/2.0	31291	GET
+1722457	req	https://thumb.wikimedia.org/wikipedia/en/thumb/4/4a/Commons-logo.svg/20px-Commons-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	1683711	38743	200	HTTP/2.0	1246	GET
+1722809	body	https://thumb.wikimedia.org/wikipedia/en/thumb/4/4a/Commons-logo.svg/20px-Commons-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	1246	200
+1722901	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e0/Python_3.13_Standrd_Type_Hierarchy-en.svg/250px-Python_3.13_Standrd_Type_Hierarchy-en.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	1683593	39306	200	HTTP/2.0	65852	GET
+1723208	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/3/31/Free_and_open-source_software_logo_%282009%29.svg/40px-Free_and_open-source_software_logo_%282009%29.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	1683660	39544	200	HTTP/2.0	2225	GET
+1723510	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/3/31/Free_and_open-source_software_logo_%282009%29.svg/40px-Free_and_open-source_software_logo_%282009%29.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2225	200
+1723608	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/ff/Wikidata-logo.svg/40px-Wikidata-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	1683856	39750	200	HTTP/2.0	605	GET
+1723883	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/ff/Wikidata-logo.svg/40px-Wikidata-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	605	200
+1723964	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fa/Wikiquote-logo.svg/40px-Wikiquote-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	1683755	40206	200	HTTP/2.0	2375	GET
+1724213	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/f/fa/Wikiquote-logo.svg/40px-Wikiquote-logo.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	2375	200
+1724259	req	https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0b/Wikiversity_logo_2017.svg/40px-Wikiversity_logo_2017.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	1683813	40445	200	HTTP/2.0	1095	GET
+1724468	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/0/0b/Wikiversity_logo_2017.svg/40px-Wikiversity_logo_2017.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	1095	200
+1724681	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/2/21/Guido_van_Rossum_in_PyConUS24.jpg/250px-Guido_van_Rossum_in_PyConUS24.jpg?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	31291	200
+1728116	body	https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e0/Python_3.13_Standrd_Type_Hierarchy-en.svg/250px-Python_3.13_Standrd_Type_Hierarchy-en.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	65852	200
+1747567	req	https://thumb.wikimedia.org/wikipedia/en/thumb/d/db/Symbol_list_class.svg/20px-Symbol_list_class.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	1683901	63651	200	HTTP/2.0	1326	GET
+1748038	body	https://thumb.wikimedia.org/wikipedia/en/thumb/d/db/Symbol_list_class.svg/20px-Symbol_list_class.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	1326	200
+1748112	req	https://en.wikipedia.org/w/resources/assets/mediawiki_compact.svg	1684083	64025	200	HTTP/2.0	1320	GET
+1748183	body	https://en.wikipedia.org/w/resources/assets/mediawiki_compact.svg	3517	200
+1748216	req	https://thumb.wikimedia.org/wikipedia/en/thumb/9/96/Symbol_category_class.svg/20px-Symbol_category_class.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	1683956	64259	200	HTTP/2.0	1208	GET
+1748439	body	https://thumb.wikimedia.org/wikipedia/en/thumb/9/96/Symbol_category_class.svg/20px-Symbol_category_class.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	1208	200
+1748490	req	https://thumb.wikimedia.org/wikipedia/en/thumb/e/e2/Symbol_portal_class.svg/20px-Symbol_portal_class.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	1684002	64486	200	HTTP/2.0	1279	GET
+1748694	body	https://thumb.wikimedia.org/wikipedia/en/thumb/e/e2/Symbol_portal_class.svg/20px-Symbol_portal_class.svg.png?utm_source=en.wikipedia.org&utm_campaign=parser&utm_content=thumbnail	1279	200
+1842478	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=logIn&format=original&lang=en&skin=vector-2022&version=1o2f1
+1842583	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=userAvatar&format=original&lang=en&skin=vector-2022&version=1o2f1
+1842627	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=search&format=original&lang=en&skin=vector-2022&version=1o2f1
+1842676	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=language&format=original&lang=en&skin=vector-2022&version=1o2f1
+1842721	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=eye&format=original&lang=en&skin=vector-2022&version=1o2f1
+1842764	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=language&variant=progressive&format=original&lang=en&skin=vector-2022&version=1o2f1
+1842815	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=menu&format=original&lang=en&skin=vector-2022&version=1o2f1
+1842867	q	https://en.wikipedia.org/w/load.php?modules=ext.readingLists.bookmark.icons&image=bookmarkOutline&format=original&lang=en&skin=vector-2022&version=karjy
+1842912	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=listBullet&format=original&lang=en&skin=vector-2022&version=1o2f1
+1842955	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=star&format=original&lang=en&skin=vector-2022&version=1o2f1
+1843000	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=heart&format=original&lang=en&skin=vector-2022&version=1o2f1
+1843069	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=verticalEllipsis&format=original&lang=en&skin=vector-2022&version=1o2f1
+1876896	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=logIn&format=original&lang=en&skin=vector-2022&version=1o2f1	1842554	34333	200	HTTP/2.0	240	GET
+1877016	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=logIn&format=original&lang=en&skin=vector-2022&version=1o2f1	292	200
+1880374	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=userAvatar&format=original&lang=en&skin=vector-2022&version=1o2f1	1842616	37754	200	HTTP/2.0	218	GET
+1880474	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=userAvatar&format=original&lang=en&skin=vector-2022&version=1o2f1	256	200
+1880554	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=language&format=original&lang=en&skin=vector-2022&version=1o2f1	1842707	37846	200	HTTP/2.0	447	GET
+1880613	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=language&format=original&lang=en&skin=vector-2022&version=1o2f1	641	200
+1880663	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=search&format=original&lang=en&skin=vector-2022&version=1o2f1	1842657	38005	200	HTTP/2.0	232	GET
+1880714	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=search&format=original&lang=en&skin=vector-2022&version=1o2f1	296	200
+1880769	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=eye&format=original&lang=en&skin=vector-2022&version=1o2f1	1842751	38017	200	HTTP/2.0	284	GET
+1880820	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=eye&format=original&lang=en&skin=vector-2022&version=1o2f1	385	200
+1880868	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=menu&format=original&lang=en&skin=vector-2022&version=1o2f1	1842845	38022	200	HTTP/2.0	187	GET
+1880914	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=menu&format=original&lang=en&skin=vector-2022&version=1o2f1	220	200
+1880965	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=language&variant=progressive&format=original&lang=en&skin=vector-2022&version=1o2f1	1842803	38161	200	HTTP/2.0	448	GET
+1881013	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=language&variant=progressive&format=original&lang=en&skin=vector-2022&version=1o2f1	641	200
+1908584	req	https://en.wikipedia.org/w/load.php?modules=ext.readingLists.bookmark.icons&image=bookmarkOutline&format=original&lang=en&skin=vector-2022&version=karjy	1842898	65681	200	HTTP/2.0	209	GET
+1908686	body	https://en.wikipedia.org/w/load.php?modules=ext.readingLists.bookmark.icons&image=bookmarkOutline&format=original&lang=en&skin=vector-2022&version=karjy	232	200
+1908808	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=listBullet&format=original&lang=en&skin=vector-2022&version=1o2f1	1842943	65863	200	HTTP/2.0	203	GET
+1908863	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=listBullet&format=original&lang=en&skin=vector-2022&version=1o2f1	260	200
+1908909	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=star&format=original&lang=en&skin=vector-2022&version=1o2f1	1842986	65922	200	HTTP/2.0	290	GET
+1908967	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=star&format=original&lang=en&skin=vector-2022&version=1o2f1	371	200
+1909012	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=heart&format=original&lang=en&skin=vector-2022&version=1o2f1	1843031	65980	200	HTTP/2.0	276	GET
+1909052	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=heart&format=original&lang=en&skin=vector-2022&version=1o2f1	358	200
+1909098	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=verticalEllipsis&format=original&lang=en&skin=vector-2022&version=1o2f1	1843113	65983	200	HTTP/2.0	203	GET
+1909139	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons&image=verticalEllipsis&format=original&lang=en&skin=vector-2022&version=1o2f1	243	200
+1910051	phase	initial images+masks	227868
+1943540	phase	load event	33472
+1948834	q	https://en.wikipedia.org/w/skins/Vector/resources/skins.vector.styles/images/link-external-small-ltr-progressive.svg?fb64d
+1948875	q	https://upload.wikimedia.org/wikipedia/commons/4/4d/Icon_pdf_file.png
+1948899	q	https://upload.wikimedia.org/wikipedia/commons/d/d6/Lock-gray-alt-2.svg
+1948892	q	https://upload.wikimedia.org/wikipedia/commons/6/65/Lock-green.svg
+1948840	phase	finish_loading: external CSS	5260
+1949870	dns	upload.wikimedia.org	750
+1952382	dynscript_wait	3404
+1961622	q	https://en.wikipedia.org/w/load.php?lang=en&modules=ext.pygments.view%7Cext.scribunto.logs%7Cjquery&skin=vector-2022&version=1w11q
+1980746	req	https://en.wikipedia.org/w/skins/Vector/resources/skins.vector.styles/images/link-external-small-ltr-progressive.svg?fb64d	1949059	31681	200	HTTP/2.0	241	GET
+1980885	body	https://en.wikipedia.org/w/skins/Vector/resources/skins.vector.styles/images/link-external-small-ltr-progressive.svg?fb64d	298	200
+2012632	req	https://en.wikipedia.org/w/load.php?lang=en&modules=ext.pygments.view%7Cext.scribunto.logs%7Cjquery&skin=vector-2022&version=1w11q	1961710	50918	200	HTTP/2.0	42400	GET
+2016215	body	https://en.wikipedia.org/w/load.php?lang=en&modules=ext.pygments.view%7Cext.scribunto.logs%7Cjquery&skin=vector-2022&version=1w11q	148437	200
+2016296	dynscript_wait	54695
+2054135	connect	upload.wikimedia.org	105054
+2054980	dns	upload.wikimedia.org	761
+2168881	connect	upload.wikimedia.org	114663
+2218691	req	https://upload.wikimedia.org/wikipedia/commons/d/d6/Lock-gray-alt-2.svg	2054203	164485	200	HTTP/2.0	318	GET
+2218839	body	https://upload.wikimedia.org/wikipedia/commons/d/d6/Lock-gray-alt-2.svg	516	200
+2218969	req	https://upload.wikimedia.org/wikipedia/commons/6/65/Lock-green.svg	2054289	164678	200	HTTP/2.0	272	GET
+2218986	req	https://upload.wikimedia.org/wikipedia/commons/4/4d/Icon_pdf_file.png	1949046	269937	200	HTTP/2.0	225	GET
+2219014	body	https://upload.wikimedia.org/wikipedia/commons/6/65/Lock-green.svg	432	200
+2219024	body	https://upload.wikimedia.org/wikipedia/commons/4/4d/Icon_pdf_file.png	225	200
+2664794	cascade	321330
+2752783	layout	85674
+2752812	reflow	forced
+2806355	cascade	29433
+2882860	layout	74433
+2883426	reflow	forced
+2919085	cascade	19631
+2994211	layout	73060
+3004325	reflow	forced
+3047384	dynscript_eval	1026575
+3225601	dynscript_wait	177653
+3227123	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=editLock&format=original&lang=en&skin=vector-2022&version=9vsx3
+3227245	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=history&format=original&lang=en&skin=vector-2022&version=9vsx3
+3227296	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=speechBubbles&format=original&lang=en&skin=vector-2022&version=9vsx3
+3227337	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=wikiText&format=original&lang=en&skin=vector-2022&version=9vsx3
+3227389	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=appearance&format=original&lang=en&skin=vector-2022&version=9vsx3
+3227532	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=speechBubbleAdd&variant=progressive&format=original&lang=en&skin=vector-2022&version=9vsx3
+3227601	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=edit&format=original&lang=en&skin=vector-2022&version=9vsx3
+3227642	q	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=article&format=original&lang=en&skin=vector-2022&version=9vsx3
+3261605	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=editLock&format=original&lang=en&skin=vector-2022&version=9vsx3	3227204	34386	200	HTTP/2.0	292	GET
+3261861	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=editLock&format=original&lang=en&skin=vector-2022&version=9vsx3	387	200
+3262062	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=history&format=original&lang=en&skin=vector-2022&version=9vsx3	3227284	34775	200	HTTP/2.0	256	GET
+3262130	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=history&format=original&lang=en&skin=vector-2022&version=9vsx3	327	200
+3262194	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=speechBubbles&format=original&lang=en&skin=vector-2022&version=9vsx3	3227326	34866	200	HTTP/2.0	278	GET
+3262296	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=speechBubbles&format=original&lang=en&skin=vector-2022&version=9vsx3	331	200
+3262368	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=wikiText&format=original&lang=en&skin=vector-2022&version=9vsx3	3227379	34985	200	HTTP/2.0	219	GET
+3262476	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=wikiText&format=original&lang=en&skin=vector-2022&version=9vsx3	273	200
+3262570	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=appearance&format=original&lang=en&skin=vector-2022&version=9vsx3	3227495	35071	200	HTTP/2.0	273	GET
+3262625	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=appearance&format=original&lang=en&skin=vector-2022&version=9vsx3	416	200
+3262710	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=speechBubbleAdd&variant=progressive&format=original&lang=en&skin=vector-2022&version=9vsx3	3227588	35120	200	HTTP/2.0	256	GET
+3262857	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=speechBubbleAdd&variant=progressive&format=original&lang=en&skin=vector-2022&version=9vsx3	302	200
+3291748	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=article&format=original&lang=en&skin=vector-2022&version=9vsx3	3227670	64071	200	HTTP/2.0	222	GET
+3291851	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=article&format=original&lang=en&skin=vector-2022&version=9vsx3	292	200
+3291920	req	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=edit&format=original&lang=en&skin=vector-2022&version=9vsx3	3227632	64286	200	HTTP/2.0	218	GET
+3291957	body	https://en.wikipedia.org/w/load.php?modules=skins.vector.icons.js&image=edit&format=original&lang=en&skin=vector-2022&version=9vsx3	264	200
+3292774	dynscript_wait	67122
+3300731	dynscript_wait	7939
+3303806	phase	finish_loading: dynamic scripts	1354827
+3308143	phase	finish_loading: subframes	4318
+3311817	dynscript_wait	3653
+3377972	req	https://en.wikipedia.org/ins-502b/v2/events?hasty=true	3312486	65481	202	HTTP/2.0	0	POST
+3378032	body	https://en.wikipedia.org/ins-502b/v2/events?hasty=true	0	202
+3389683	dynscript_wait	5585
+3390252	phase	finish_loading: page fetches	82088
+3391176	phase	finish_loading: images	911
+3391755	phase	finish_loading: icon masks	568
+3406915	phase	finish_loading: background images	15147
+3453636	mark	navigate_returned
+3507258	mark	a11y_built

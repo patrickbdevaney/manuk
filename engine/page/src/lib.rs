@@ -3397,6 +3397,8 @@ fn scroll_geometry_of(
     }
     let mut boxes = std::collections::HashMap::new();
     index_boxes(root_box, &mut boxes);
+    let rel = manuk_layout::relative_offsets();
+    let used_mb = manuk_layout::used_end_margins();
     for (node, st) in styles.iter() {
         // A non-replaced INLINE box has no padding box, reports 0/0 for both pairs per CSSOM, and is
         // answered by the binding's own fallback. Mapping it here would replace that zero with a
@@ -3472,11 +3474,10 @@ fn scroll_geometry_of(
         // so `top: -1000px` does not shrink the scroller — and only the in-flow rectangle is
         // inflated by this container's own end padding. See `OverflowContribution` for the Chrome
         // table; `relative_offsets()` is what makes the in-flow position recoverable at all.
-        let rel = manuk_layout::relative_offsets();
+        // CPU.1.a: `rel` and `used_mb` are thread-local CLONES with one entry per box; fetched per element they cost O(n^2) (observe on a 6000-row table: ~0.25 s per script round). Fetched once, above the loop.
         // ⭐ The USED (post-collapse) block-end margin, which the style map cannot supply: a margin
         //   that collapses THROUGH an auto-height wrapper belongs to the wrapper and its style says
         //   zero. See `manuk_layout::USED_END_MARGINS`.
-        let used_mb = manuk_layout::used_end_margins();
         // ── ⚠⚠⚠ **THE END-PADDING INFLATION BELONGS TO SCROLL CONTAINERS, AND ONLY TO THEM.**
         //    CSS Overflow 3 §3.1's clause that inflates a descendant's contribution by the
         //    container's end padding is written for the *scrollable* overflow region. A box with
@@ -3848,6 +3849,13 @@ fn snap_candidates_of(
     offsets: &std::collections::HashMap<manuk_dom::NodeId, (f32, f32)>,
 ) -> std::collections::HashMap<manuk_dom::NodeId, (Vec<f32>, Vec<f32>)> {
     use manuk_css::Overflow;
+    // CPU.1.a: no snap container, no candidates; skip the whole-page scroll-geometry pass (a second copy of the one the caller just ran).
+    if styles
+        .values()
+        .all(|st| st.scroll_snap_type == manuk_css::ScrollSnapAxis::None)
+    {
+        return std::collections::HashMap::new();
+    }
     let geom = scroll_geometry_of(dom, root_box, styles, offsets);
     let mut m = std::collections::HashMap::new();
     for (node, st) in styles.iter() {

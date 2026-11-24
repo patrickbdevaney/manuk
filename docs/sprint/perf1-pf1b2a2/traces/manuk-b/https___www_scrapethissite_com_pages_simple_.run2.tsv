@@ -1,0 +1,178 @@
+0	epoch	1795520297496828
+22718	dns	www.scrapethissite.com	22686
+77226	connect	www.scrapethissite.com	77200
+477195	req	https://www.scrapethissite.com/pages/simple/	0	477192	200	HTTP/2.0	-	GET
+536949	body	https://www.scrapethissite.com/pages/simple/	203728	200
+537525	q	https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css
+537525	q	https://fonts.googleapis.com/css?family=Lato:400,700
+537587	q	https://www.scrapethissite.com/static/css/styles.css
+537599	q	https://lipis.github.io/flag-icon-css/css/flag-icon.css
+537602	q	https://cdnjs.cloudflare.com/ajax/libs/pnotify/2.1.0/pnotify.core.min.css
+538517	dns	fonts.googleapis.com	856
+539215	dns	lipis.github.io	1501
+545982	q	https://www.scrapethissite.com/static/images/scraper-icon.png
+546257	phase	html parse	9073
+546468	q	https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092
+546513	q	https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js
+546541	q	https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js
+546556	q	https://cdnjs.cloudflare.com/ajax/libs/pnotify/2.1.0/pnotify.core.min.js
+546571	q	https://www.googleadservices.com/pagead/conversion.js
+546659	q	https://www.googletagmanager.com/gtag/js?id=AW-950945448
+560771	req	https://www.scrapethissite.com/static/css/styles.css	537673	23096	200	HTTP/2.0	-	GET
+560962	body	https://www.scrapethissite.com/static/css/styles.css	2922	200
+561181	q	https://www.scrapethissite.com/static/css/$baseurl%20+%20%22assets/et-book/et-book-roman-line-figures/et-book-roman-line-figures.woff
+577787	dns	cdnjs.cloudflare.com	40057
+582964	req	https://www.scrapethissite.com/static/images/scraper-icon.png	561056	21904	200	HTTP/2.0	4641	GET
+583248	body	https://www.scrapethissite.com/static/images/scraper-icon.png	4641	200
+629509	connect	lipis.github.io	91803
+648142	req	https://www.scrapethissite.com/static/css/$baseurl%20+%20%22assets/et-book/et-book-roman-line-figures/et-book-roman-line-figures.woff	561214	86923	404	HTTP/2.0	-	GET
+648301	body	https://www.scrapethissite.com/static/css/$baseurl%20+%20%22assets/et-book/et-book-roman-line-figures/et-book-roman-line-figures.woff	8018	404
+667286	connect	fonts.googleapis.com	129636
+730812	connect	cdnjs.cloudflare.com	193089
+764813	dns	ajax.googleapis.com	218275
+779838	req	https://lipis.github.io/flag-icon-css/css/flag-icon.css	537679	242156	404	HTTP/2.0	5254	GET
+780597	body	https://lipis.github.io/flag-icon-css/css/flag-icon.css	9379	404
+817663	req	https://fonts.googleapis.com/css?family=Lato:400,700	537613	280046	200	HTTP/2.0	-	GET
+823259	body	https://fonts.googleapis.com/css?family=Lato:400,700	348	200
+823374	q	https://fonts.gstatic.com/s/lato/v25/S6u9w4BMUTPHh6UVSwiPHA.ttf
+823394	q	https://fonts.gstatic.com/s/lato/v25/S6uyw4BMUTPHjx4wWw.ttf
+823748	dns	maxcdn.bootstrapcdn.com	286070
+837706	dns	www.googleadservices.com	291108
+855276	dns	static.cloudflareinsights.com	308771
+867402	dns	www.googletagmanager.com	320715
+907553	req	https://cdnjs.cloudflare.com/ajax/libs/pnotify/2.1.0/pnotify.core.min.css	537704	369845	200	HTTP/2.0	260	GET
+913540	body	https://cdnjs.cloudflare.com/ajax/libs/pnotify/2.1.0/pnotify.core.min.css	789	200
+919220	req	https://cdnjs.cloudflare.com/ajax/libs/pnotify/2.1.0/pnotify.core.min.js	730909	188308	200	HTTP/2.0	3215	GET
+919527	body	https://cdnjs.cloudflare.com/ajax/libs/pnotify/2.1.0/pnotify.core.min.js	14035	200
+957604	connect	ajax.googleapis.com	411067
+1011308	connect	maxcdn.bootstrapcdn.com	473633
+1012798	dns	maxcdn.bootstrapcdn.com	1242
+1030713	dns	fonts.gstatic.com	207262
+1059628	connect	static.cloudflareinsights.com	513124
+1120887	connect	www.googletagmanager.com	574201
+1214856	req	https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js	546532	668319	200	HTTP/2.0	33507	GET
+1257092	connect	maxcdn.bootstrapcdn.com	245541
+1282003	connect	fonts.gstatic.com	458558
+1321017	body	https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js	95992	200
+1321304	req	https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css	537613	783688	200	HTTP/2.0	-	GET
+1332834	req	https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js	1011525	321305	200	HTTP/2.0	-	GET
+1332967	body	https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css	122540	200
+1333451	body	https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js	36816	200
+1341462	q	https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/fonts/glyphicons-halflings-regular.woff2
+1357170	req	https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092	546494	810673	200	HTTP/2.0	-	GET
+1372730	body	https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092	31853	200
+1374865	connect	www.googleadservices.com	828269
+1438322	req	https://www.googletagmanager.com/gtag/js?id=AW-950945448	546681	891637	200	HTTP/2.0	150639	GET
+1445130	req	https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/fonts/glyphicons-halflings-regular.woff2	1341563	103565	200	HTTP/2.0	18028	GET
+1450720	body	https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/fonts/glyphicons-halflings-regular.woff2	18028	200
+1555739	req	https://fonts.gstatic.com/s/lato/v25/S6u9w4BMUTPHh6UVSwiPHA.ttf	823414	732322	200	HTTP/2.0	29896	GET
+1610020	req	https://fonts.gstatic.com/s/lato/v25/S6uyw4BMUTPHjx4wWw.ttf	1282155	327858	200	HTTP/2.0	30418	GET
+1610314	body	https://fonts.gstatic.com/s/lato/v25/S6u9w4BMUTPHh6UVSwiPHA.ttf	59048	200
+1632019	body	https://www.googletagmanager.com/gtag/js?id=AW-950945448	438485	200
+1643845	body	https://fonts.gstatic.com/s/lato/v25/S6uyw4BMUTPHjx4wWw.ttf	60540	200
+1708670	req	https://www.googleadservices.com/pagead/conversion.js	546592	1162073	200	HTTP/2.0	23953	GET
+1771777	body	https://www.googleadservices.com/pagead/conversion.js	67483	200
+1773218	phase	external scripts	1226942
+1774222	phase	module graph prefetch	980
+1774280	phase	blocking stylesheets	26
+1802367	cascade	20235
+1833384	layout	30826
+1901212	cascade	12033
+1932553	layout	30721
+1937250	phase	cascade+layout+blocking scripts	162956
+2106141	cascade	15509
+2128281	layout	21538
+2132192	phase	deferred scripts	194922
+2153686	cascade	13776
+2175891	layout	21610
+2175919	reflow	forced
+2190115	phase	DOMContentLoaded	57905
+2235542	q	https://www.scrapethissite.com/static/css/$baseurl%20+%20%22assets/et-book/et-book-roman-line-figures/et-book-roman-line-figures.ttf
+2299815	req	https://www.scrapethissite.com/static/css/$baseurl%20+%20%22assets/et-book/et-book-roman-line-figures/et-book-roman-line-figures.ttf	2235601	64208	404	HTTP/2.0	-	GET
+2299982	body	https://www.scrapethissite.com/static/css/$baseurl%20+%20%22assets/et-book/et-book-roman-line-figures/et-book-roman-line-figures.ttf	8018	404
+2300057	q	https://www.scrapethissite.com/static/css/$baseurl%20+%20%22assets/et-book/et-book-roman-line-figures/et-book-roman-line-figures.svg#etbookromanosf
+2370201	req	https://www.scrapethissite.com/static/css/$baseurl%20+%20%22assets/et-book/et-book-roman-line-figures/et-book-roman-line-figures.svg#etbookromanosf	2300110	70087	404	HTTP/2.0	-	GET
+2370327	body	https://www.scrapethissite.com/static/css/$baseurl%20+%20%22assets/et-book/et-book-roman-line-figures/et-book-roman-line-figures.svg#etbookromanosf	8018	404
+2387983	cascade	16103
+2415410	layout	26658
+2422964	phase	subframes (pre-load)	232817
+2448792	phase	initial images+masks	25800
+2462146	phase	load event	13325
+2464372	phase	finish_loading: external CSS	2182
+2465821	dynscript_wait	1434
+2473609	q	https://connect.facebook.net/en_US/fbevents.js
+2473724	q	https://www.google-analytics.com/analytics.js
+2473768	q	https://googleads.g.doubleclick.net/pagead/viewthroughconversion/950945448/?random=1795520299380&cv=9&fst=1795520299380&num=1&guid=ON&resp=GooglemKTybQhCsO&eid=375603260%2C466465926%2C512247839%2C658953495&u_h=768&u_w=1024&ig=1&frm=0&url=https%3A%2F%2Fwww.scrapethissite.com%2Fpages%2Fsimple%2F&tiba=Countries%20of%20the%20World%3A%20A%20Simple%20Example%20%7C%20Scrape%20This%20Site%20%7C%20A%20public%20sandbox%20for%20learning%20web%20scraping&hn=www.googleadservices.com&rfmt=3&fmt=4
+2473828	q	https://googleads.g.doubleclick.net/pagead/viewthroughconversion/950945448/?random=1795520299546&cv=11&fst=1795520299546&bg=ffffff&guid=ON&async=1&en=gtag.config&gtm=45be6bh1z8d_AW-950945448za208xecxf1&gcd=13l3l3l3l1l1&dma=0&tag_exp=115938466~115938468~120385422~120469145~120469153~121246026~121246034~123322202&u_w=1024&u_h=768&url=https%3A%2F%2Fwww.scrapethissite.com%2Fpages%2Fsimple%2F&rcb=13&frm=0&tiba=Countries%20of%20the%20World%3A%20A%20Simple%20Example%20%7C%20Scrape%20This%20Site%20%7C%20A%20public%20sandbox%20for%20learning%20web%20scraping&hn=www.googleadservices.com&npa=0&pscdl=noapi&auid=521936676.1794015900&uaa=x86_64&uab=64&uafvl=Manuk%3B1.0.0%7CNot.A%252FBrand%3B24.0.0.0&uamb=0&uam=&uap=Linux&uapv=&uaw=0&data=event%3Dgtag.config&ept=9&rfmt=3&fmt=4
+2501404	dns	googleads.g.doubleclick.net	27591
+2533573	dns	www.google-analytics.com	59814
+2544348	dns	connect.facebook.net	70641
+2580605	connect	googleads.g.doubleclick.net	106796
+2657494	connect	www.google-analytics.com	183736
+2677203	connect	connect.facebook.net	203499
+2720593	req	https://googleads.g.doubleclick.net/pagead/viewthroughconversion/950945448/?random=1795520299380&cv=9&fst=1795520299380&num=1&guid=ON&resp=GooglemKTybQhCsO&eid=375603260%2C466465926%2C512247839%2C658953495&u_h=768&u_w=1024&ig=1&frm=0&url=https%3A%2F%2Fwww.scrapethissite.com%2Fpages%2Fsimple%2F&tiba=Countries%20of%20the%20World%3A%20A%20Simple%20Example%20%7C%20Scrape%20This%20Site%20%7C%20A%20public%20sandbox%20for%20learning%20web%20scraping&hn=www.googleadservices.com&rfmt=3&fmt=4	2473804	246784	200	HTTP/2.0	2912	GET
+2730369	body	https://googleads.g.doubleclick.net/pagead/viewthroughconversion/950945448/?random=1795520299380&cv=9&fst=1795520299380&num=1&guid=ON&resp=GooglemKTybQhCsO&eid=375603260%2C466465926%2C512247839%2C658953495&u_h=768&u_w=1024&ig=1&frm=0&url=https%3A%2F%2Fwww.scrapethissite.com%2Fpages%2Fsimple%2F&tiba=Countries%20of%20the%20World%3A%20A%20Simple%20Example%20%7C%20Scrape%20This%20Site%20%7C%20A%20public%20sandbox%20for%20learning%20web%20scraping&hn=www.googleadservices.com&rfmt=3&fmt=4	6294	200
+2730452	req	https://googleads.g.doubleclick.net/pagead/viewthroughconversion/950945448/?random=1795520299546&cv=11&fst=1795520299546&bg=ffffff&guid=ON&async=1&en=gtag.config&gtm=45be6bh1z8d_AW-950945448za208xecxf1&gcd=13l3l3l3l1l1&dma=0&tag_exp=115938466~115938468~120385422~120469145~120469153~121246026~121246034~123322202&u_w=1024&u_h=768&url=https%3A%2F%2Fwww.scrapethissite.com%2Fpages%2Fsimple%2F&rcb=13&frm=0&tiba=Countries%20of%20the%20World%3A%20A%20Simple%20Example%20%7C%20Scrape%20This%20Site%20%7C%20A%20public%20sandbox%20for%20learning%20web%20scraping&hn=www.googleadservices.com&npa=0&pscdl=noapi&auid=521936676.1794015900&uaa=x86_64&uab=64&uafvl=Manuk%3B1.0.0%7CNot.A%252FBrand%3B24.0.0.0&uamb=0&uam=&uap=Linux&uapv=&uaw=0&data=event%3Dgtag.config&ept=9&rfmt=3&fmt=4	2580739	149709	200	HTTP/2.0	3095	GET
+2739974	body	https://googleads.g.doubleclick.net/pagead/viewthroughconversion/950945448/?random=1795520299546&cv=11&fst=1795520299546&bg=ffffff&guid=ON&async=1&en=gtag.config&gtm=45be6bh1z8d_AW-950945448za208xecxf1&gcd=13l3l3l3l1l1&dma=0&tag_exp=115938466~115938468~120385422~120469145~120469153~121246026~121246034~123322202&u_w=1024&u_h=768&url=https%3A%2F%2Fwww.scrapethissite.com%2Fpages%2Fsimple%2F&rcb=13&frm=0&tiba=Countries%20of%20the%20World%3A%20A%20Simple%20Example%20%7C%20Scrape%20This%20Site%20%7C%20A%20public%20sandbox%20for%20learning%20web%20scraping&hn=www.googleadservices.com&npa=0&pscdl=noapi&auid=521936676.1794015900&uaa=x86_64&uab=64&uafvl=Manuk%3B1.0.0%7CNot.A%252FBrand%3B24.0.0.0&uamb=0&uam=&uap=Linux&uapv=&uaw=0&data=event%3Dgtag.config&ept=9&rfmt=3&fmt=4	6653	200
+2810613	req	https://www.google-analytics.com/analytics.js	2473751	336857	200	HTTP/2.0	-	GET
+2886332	body	https://www.google-analytics.com/analytics.js	52310	200
+2892509	req	https://connect.facebook.net/en_US/fbevents.js	2473685	418822	200	HTTP/2.0	98870	GET
+2989141	body	https://connect.facebook.net/en_US/fbevents.js	433362	200
+2989292	dynscript_wait	515706
+3038952	dynscript_eval	48018
+3039133	dynscript_wait	0
+3039178	q	https://connect.facebook.net/signals/config/764287443701341?v=2.9.441&r=stable&domain=www.scrapethissite.com&hme=abf59d235177e3601acac6035d7c2a28fadbda4b0c64009bc203ceed9fa8bb90&ex_m=119%2C243%2C172%2C27%2C82%2C83%2C163%2C78%2C77%2C11%2C182%2C102%2C20%2C154%2C142%2C46%2C85%2C90%2C184%2C111%2C150%2C177%2C8%2C4%2C5%2C7%2C6%2C3%2C103%2C116%2C162%2C72%2C186%2C110%2C185%2C212%2C264%2C37%2C84%2C284%2C283%2C282%2C14%2C25%2C28%2C40%2C62%2C118%2C68%2C10%2C73%2C112%2C113%2C114%2C120%2C145%2C38%2C36%2C147%2C148%2C149%2C144%2C143%2C173%2C86%2C176%2C174%2C175%2C57%2C69%2C67%2C138%2C19%2C180%2C52%2C335%2C336%2C337%2C334%2C32%2C17%2C31%2C18%2C33%2C34%2C35%2C55%2C164%2C87%2C127%2C22%2C24%2C51%2C47%2C49%2C48%2C95%2C104%2C108%2C125%2C161%2C165%2C53%2C126%2C29%2C26%2C134%2C79%2C43%2C167%2C166%2C168%2C158%2C156%2C30%2C42%2C66%2C124%2C179%2C80%2C21%2C129%2C93%2C76%2C23%2C97%2C98%2C131%2C96%2C152%2C151%2C155%2C109%2C178%2C181%2C41%2C351%2C353%2C374%2C257%2C239%2C70%2C240%2C238%2C377%2C368%2C59%2C258%2C122%2C146%2C92%2C136%2C61%2C54%2C56%2C128%2C135%2C141%2C140%2C65%2C74%2C169%2C88%2C89%2C130%2C44%2C39%2C60%2C63%2C115%2C183%2C1%2C139%2C16%2C137%2C12%2C2%2C64%2C105%2C15%2C75%2C71%2C133%2C101%2C100%2C188%2C189%2C106%2C107%2C9%2C117%2C187%2C58%2C159%2C99%2C91%2C81%2C132%2C121%2C170%2C50%2C160%2C0%2C94%2C153%2C157%2C171%2C45%2C123%2C13%2C190
+3051339	dynscript_eval	11023
+3051555	dynscript_wait	0
+3054451	dynscript_eval	1708
+3054588	dynscript_wait	0
+3056963	dynscript_eval	1569
+3062017	req	https://connect.facebook.net/signals/config/764287443701341?v=2.9.441&r=stable&domain=www.scrapethissite.com&hme=abf59d235177e3601acac6035d7c2a28fadbda4b0c64009bc203ceed9fa8bb90&ex_m=119%2C243%2C172%2C27%2C82%2C83%2C163%2C78%2C77%2C11%2C182%2C102%2C20%2C154%2C142%2C46%2C85%2C90%2C184%2C111%2C150%2C177%2C8%2C4%2C5%2C7%2C6%2C3%2C103%2C116%2C162%2C72%2C186%2C110%2C185%2C212%2C264%2C37%2C84%2C284%2C283%2C282%2C14%2C25%2C28%2C40%2C62%2C118%2C68%2C10%2C73%2C112%2C113%2C114%2C120%2C145%2C38%2C36%2C147%2C148%2C149%2C144%2C143%2C173%2C86%2C176%2C174%2C175%2C57%2C69%2C67%2C138%2C19%2C180%2C52%2C335%2C336%2C337%2C334%2C32%2C17%2C31%2C18%2C33%2C34%2C35%2C55%2C164%2C87%2C127%2C22%2C24%2C51%2C47%2C49%2C48%2C95%2C104%2C108%2C125%2C161%2C165%2C53%2C126%2C29%2C26%2C134%2C79%2C43%2C167%2C166%2C168%2C158%2C156%2C30%2C42%2C66%2C124%2C179%2C80%2C21%2C129%2C93%2C76%2C23%2C97%2C98%2C131%2C96%2C152%2C151%2C155%2C109%2C178%2C181%2C41%2C351%2C353%2C374%2C257%2C239%2C70%2C240%2C238%2C377%2C368%2C59%2C258%2C122%2C146%2C92%2C136%2C61%2C54%2C56%2C128%2C135%2C141%2C140%2C65%2C74%2C169%2C88%2C89%2C130%2C44%2C39%2C60%2C63%2C115%2C183%2C1%2C139%2C16%2C137%2C12%2C2%2C64%2C105%2C15%2C75%2C71%2C133%2C101%2C100%2C188%2C189%2C106%2C107%2C9%2C117%2C187%2C58%2C159%2C99%2C91%2C81%2C132%2C121%2C170%2C50%2C160%2C0%2C94%2C153%2C157%2C171%2C45%2C123%2C13%2C190	3039255	22760	200	HTTP/2.0	107577	GET
+3081080	body	https://connect.facebook.net/signals/config/764287443701341?v=2.9.441&r=stable&domain=www.scrapethissite.com&hme=abf59d235177e3601acac6035d7c2a28fadbda4b0c64009bc203ceed9fa8bb90&ex_m=119%2C243%2C172%2C27%2C82%2C83%2C163%2C78%2C77%2C11%2C182%2C102%2C20%2C154%2C142%2C46%2C85%2C90%2C184%2C111%2C150%2C177%2C8%2C4%2C5%2C7%2C6%2C3%2C103%2C116%2C162%2C72%2C186%2C110%2C185%2C212%2C264%2C37%2C84%2C284%2C283%2C282%2C14%2C25%2C28%2C40%2C62%2C118%2C68%2C10%2C73%2C112%2C113%2C114%2C120%2C145%2C38%2C36%2C147%2C148%2C149%2C144%2C143%2C173%2C86%2C176%2C174%2C175%2C57%2C69%2C67%2C138%2C19%2C180%2C52%2C335%2C336%2C337%2C334%2C32%2C17%2C31%2C18%2C33%2C34%2C35%2C55%2C164%2C87%2C127%2C22%2C24%2C51%2C47%2C49%2C48%2C95%2C104%2C108%2C125%2C161%2C165%2C53%2C126%2C29%2C26%2C134%2C79%2C43%2C167%2C166%2C168%2C158%2C156%2C30%2C42%2C66%2C124%2C179%2C80%2C21%2C129%2C93%2C76%2C23%2C97%2C98%2C131%2C96%2C152%2C151%2C155%2C109%2C178%2C181%2C41%2C351%2C353%2C374%2C257%2C239%2C70%2C240%2C238%2C377%2C368%2C59%2C258%2C122%2C146%2C92%2C136%2C61%2C54%2C56%2C128%2C135%2C141%2C140%2C65%2C74%2C169%2C88%2C89%2C130%2C44%2C39%2C60%2C63%2C115%2C183%2C1%2C139%2C16%2C137%2C12%2C2%2C64%2C105%2C15%2C75%2C71%2C133%2C101%2C100%2C188%2C189%2C106%2C107%2C9%2C117%2C187%2C58%2C159%2C99%2C91%2C81%2C132%2C121%2C170%2C50%2C160%2C0%2C94%2C153%2C157%2C171%2C45%2C123%2C13%2C190	464285	200
+3114710	dynscript_wait	57622
+3114885	dynscript_wait	148
+3116337	dynscript_wait	1441
+3116683	dynscript_wait	91
+3182607	dynscript_eval	65066
+3229772	dynscript_wait	47025
+3229988	dynscript_wait	184
+3231842	dynscript_wait	1841
+3232836	phase	finish_loading: dynamic scripts	768449
+3234381	phase	finish_loading: subframes	1531
+3235843	dynscript_wait	1448
+3249638	req	https://www.scrapethissite.com/cdn-cgi/rum?	3236354	13279	404	HTTP/2.0	-	POST
+3249753	body	https://www.scrapethissite.com/cdn-cgi/rum?	518	404
+3257785	req	https://www.google-analytics.com/j/collect?v=1&_v=j102&a=1465721092&t=pageview&_s=1&dl=https%3A%2F%2Fwww.scrapethissite.com%2Fpages%2Fsimple%2F&ul=en-us&dt=Countries%20of%20the%20World%3A%20A%20Simple%20Example%20%7C%20Scrape%20This%20Site%20%7C%20A%20public%20sandbox%20for%20learning%20web%20scraping&sr=1024x768&vp=1024x768&_u=AACAAEABAAAAACAAI~&jid=878235538&gjid=1665095539&cid=688220394.1795501329&tid=UA-41551755-8&_gid=1773582886.1795501329&_r=1&_slc=1&z=1250186607	3236398	21384	200	HTTP/2.0	15	POST
+3257827	body	https://www.google-analytics.com/j/collect?v=1&_v=j102&a=1465721092&t=pageview&_s=1&dl=https%3A%2F%2Fwww.scrapethissite.com%2Fpages%2Fsimple%2F&ul=en-us&dt=Countries%20of%20the%20World%3A%20A%20Simple%20Example%20%7C%20Scrape%20This%20Site%20%7C%20A%20public%20sandbox%20for%20learning%20web%20scraping&sr=1024x768&vp=1024x768&_u=AACAAEABAAAAACAAI~&jid=878235538&gjid=1665095539&cid=688220394.1795501329&tid=UA-41551755-8&_gid=1773582886.1795501329&_r=1&_slc=1&z=1250186607	15	200
+3271833	dns	www.google.com	35555
+3271981	dns	www.google.com	35679
+3293278	dns	ad.doubleclick.net	56947
+3344545	connect	www.google.com	108269
+3370344	connect	www.google.com	134040
+3456643	req	https://www.google.com/ccm/collect?rcb=13&frm=0&apvc=1&auid=521936676.1794015900&dt=Countries%20of%20the%20World%3A%20A%20Simple%20Example%20%7C%20Scrape%20This%20Site%20%7C%20A%20public%20sandbox%20for%20learning%20web%20scraping&tid=AW-950945448&en=page_view&dl=https%3A%2F%2Fwww.scrapethissite.com%2Fpages%2Fsimple%2F&scrsrc=www.googletagmanager.com&rnd=266795676.1795520300&navt=n&npa=0&gtm=45be6bh1z8d_AW-950945448za208xecxf1&gcd=13l3l3l3l1l1&dma=0&tag_exp=115938466~115938468~120385422~120469145~120469153~121246026~121246034~123322202&tft=1795520299585&tfd=236&tids=AW-950945448&fmt=8	3236298	220340	200	HTTP/2.0	0	POST
+3461546	body	https://www.google.com/ccm/collect?rcb=13&frm=0&apvc=1&auid=521936676.1794015900&dt=Countries%20of%20the%20World%3A%20A%20Simple%20Example%20%7C%20Scrape%20This%20Site%20%7C%20A%20public%20sandbox%20for%20learning%20web%20scraping&tid=AW-950945448&en=page_view&dl=https%3A%2F%2Fwww.scrapethissite.com%2Fpages%2Fsimple%2F&scrsrc=www.googletagmanager.com&rnd=266795676.1795520300&navt=n&npa=0&gtm=45be6bh1z8d_AW-950945448za208xecxf1&gcd=13l3l3l3l1l1&dma=0&tag_exp=115938466~115938468~120385422~120469145~120469153~121246026~121246034~123322202&tft=1795520299585&tfd=236&tids=AW-950945448&fmt=8	0	200
+3461829	req	https://www.google.com/rmkt/collect/950945448/?random=1795520299546&cv=11&fst=1795520299546&fmt=8&bg=ffffff&guid=ON&async=1&en=gtag.config&gtm=45be6bh1z8d_AW-950945448za208xecxf1&gcd=13l3l3l3l1l1&dma=0&tag_exp=115938466~115938468~120385422~120469145~120469153~121246026~121246034~123322202&u_w=1024&u_h=768&url=https%3A%2F%2Fwww.scrapethissite.com%2Fpages%2Fsimple%2F&rcb=13&frm=0&tiba=Countries%20of%20the%20World%3A%20A%20Simple%20Example%20%7C%20Scrape%20This%20Site%20%7C%20A%20public%20sandbox%20for%20learning%20web%20scraping&hn=www.googleadservices.com&npa=0&pscdl=noapi&auid=521936676.1794015900&uaa=x86_64&uab=64&uafvl=Manuk%3B1.0.0%7CNot.A%252FBrand%3B24.0.0.0&uamb=0&uam=&uap=Linux&uapv=&uaw=0&data=event%3Dgtag.config&ept=68&gcp=5	3236265	225562	200	HTTP/2.0	0	POST
+3461852	body	https://www.google.com/rmkt/collect/950945448/?random=1795520299546&cv=11&fst=1795520299546&fmt=8&bg=ffffff&guid=ON&async=1&en=gtag.config&gtm=45be6bh1z8d_AW-950945448za208xecxf1&gcd=13l3l3l3l1l1&dma=0&tag_exp=115938466~115938468~120385422~120469145~120469153~121246026~121246034~123322202&u_w=1024&u_h=768&url=https%3A%2F%2Fwww.scrapethissite.com%2Fpages%2Fsimple%2F&rcb=13&frm=0&tiba=Countries%20of%20the%20World%3A%20A%20Simple%20Example%20%7C%20Scrape%20This%20Site%20%7C%20A%20public%20sandbox%20for%20learning%20web%20scraping&hn=www.googleadservices.com&npa=0&pscdl=noapi&auid=521936676.1794015900&uaa=x86_64&uab=64&uafvl=Manuk%3B1.0.0%7CNot.A%252FBrand%3B24.0.0.0&uamb=0&uam=&uap=Linux&uapv=&uaw=0&data=event%3Dgtag.config&ept=68&gcp=5	0	200
+3832546	connect	ad.doubleclick.net	596216
+4138531	req	https://ad.doubleclick.net/ccm/s/collect?auid=521936676.1794015900&gtm=45be6bh1z8d_AW-950945448za208xecxf1&fmt=8	3236325	902202	204	HTTP/2.0	0	POST
+4138584	body	https://ad.doubleclick.net/ccm/s/collect?auid=521936676.1794015900&gtm=45be6bh1z8d_AW-950945448za208xecxf1&fmt=8	0	204
+4164284	cascade	16862
+4192417	layout	27520
+4251271	dynscript_wait	53873
+4251577	q	https://www.googletagmanager.com/gtag/js?id=G-09N5RQCFG4&cx=c&_slc=1
+4290588	req	https://www.googletagmanager.com/gtag/js?id=G-09N5RQCFG4&cx=c&_slc=1	4251615	38968	200	HTTP/2.0	167318	GET
+4318098	body	https://www.googletagmanager.com/gtag/js?id=G-09N5RQCFG4&cx=c&_slc=1	497278	200
+4318341	dynscript_wait	66778
+4409414	dynscript_eval	87915
+4464440	dynscript_wait	54721
+4464846	dynscript_wait	373
+4466484	dynscript_wait	1624
+4486611	req	https://www.google-analytics.com/g/collect?v=2&tid=G-09N5RQCFG4&gtm=45je6bi0h2v9115415087za20gxf1&_p=1795520299385&gcd=13l3l3l3l2l1&npa=0&dma=0&_eu=EBAI&cid=688220394.1795501329&frm=0&ir=1&ngs=1&pscdl=noapi&rcb=17&sr=1024x768&uaa=x86_64&uab=64&uafvl=Manuk%3B1.0.0%7CNot.A%252FBrand%3B24.0.0.0&uam=&uamb=0&uap=Linux&uapv=&uaw=0&ul=en-us&_s=1&tag_exp=115938466~115938469~120213116~120385422~120469145~120469153~121246026~121246034&dl=https%3A%2F%2Fwww.scrapethissite.com%2Fpages%2Fsimple%2F&dt=Countries%20of%20the%20World%3A%20A%20Simple%20Example%20%7C%20Scrape%20This%20Site%20%7C%20A%20public%20sandbox%20for%20learning%20web%20scraping&sid=1795520301&sct=1&seg=0&en=page_view&_fv=1&_ss=1&_ee=1&tfd=2550	4467174	19430	204	HTTP/2.0	0	POST
+4486673	body	https://www.google-analytics.com/g/collect?v=2&tid=G-09N5RQCFG4&gtm=45je6bi0h2v9115415087za20gxf1&_p=1795520299385&gcd=13l3l3l3l2l1&npa=0&dma=0&_eu=EBAI&cid=688220394.1795501329&frm=0&ir=1&ngs=1&pscdl=noapi&rcb=17&sr=1024x768&uaa=x86_64&uab=64&uafvl=Manuk%3B1.0.0%7CNot.A%252FBrand%3B24.0.0.0&uam=&uamb=0&uap=Linux&uapv=&uaw=0&ul=en-us&_s=1&tag_exp=115938466~115938469~120213116~120385422~120469145~120469153~121246026~121246034&dl=https%3A%2F%2Fwww.scrapethissite.com%2Fpages%2Fsimple%2F&dt=Countries%20of%20the%20World%3A%20A%20Simple%20Example%20%7C%20Scrape%20This%20Site%20%7C%20A%20public%20sandbox%20for%20learning%20web%20scraping&sid=1795520301&sct=1&seg=0&en=page_view&_fv=1&_ss=1&_ee=1&tfd=2550	0	204
+4491898	dynscript_wait	2329
+4492214	phase	finish_loading: page fetches	1257819
+4492692	phase	finish_loading: images	466
+4492938	phase	finish_loading: icon masks	235
+4494378	phase	finish_loading: background images	1429
+4501154	mark	navigate_returned
+4511602	mark	a11y_built

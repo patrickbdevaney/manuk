@@ -1,0 +1,9 @@
+t1500 {"nav": 0.72, "observe": 0.22, "find": 0.11, "click": 0.67}
+t1500 {"nav": 0.73, "observe": 0.2, "find": 0.12, "click": 0.72}
+t1500 {"nav": 0.71, "observe": 0.22, "find": 0.11, "click": 0.73}
+t3000 {"nav": 1.94, "observe": 0.56, "find": 0.37, "click": 1.8}
+t3000 {"nav": 1.92, "observe": 0.55, "find": 0.29, "click": 1.91}
+t3000 {"nav": 1.89, "observe": 0.54, "find": 0.35, "click": 1.85}
+t6000 {"nav": 4.87, "observe": 1.38, "find": 0.98, "click": 5.02}
+t6000 {"nav": 4.85, "observe": 1.39, "find": 0.97, "click": 4.89}
+t6000 {"nav": 4.91, "observe": 1.4, "find": 0.96, "click": 5.01}
