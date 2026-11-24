@@ -3314,8 +3314,11 @@ pub fn query_selector_all(dom: &Dom, root: NodeId, sel: &str) -> Vec<NodeId> {
     if sels.is_empty() {
         return Vec::new();
     }
+    let any_element = sel.trim() == "*";
     dom.descendants(root)
-        .filter(|&n| dom.is_element(n) && sels.iter().any(|s| selector_matches(s, dom, n)))
+        .filter(|&n| {
+            dom.is_element(n) && (any_element || sels.iter().any(|s| selector_matches(s, dom, n)))
+        })
         .collect()
 }
 
@@ -3589,25 +3592,72 @@ impl<'a> RuleIndex<'a> {
 /// A parsed stylesheet (subset). Build one with [`Stylesheet::parse`].
 #[derive(Clone, Debug, Default)]
 pub struct Stylesheet {
-    rules: Vec<Rule>,
+    rules: std::sync::Arc<Vec<Rule>>,
     /// The original CSS source, retained so the Stylo engine can re-parse it with
     /// Stylo's own (spec-complete) parser. Empty for programmatically-built sheets.
-    source: String,
+    source: std::sync::Arc<String>,
     /// `@font-face` rules captured during parse (for web-font loading).
-    font_faces: Vec<FontFace>,
+    font_faces: std::sync::Arc<Vec<FontFace>>,
+    /// Hash of `source`, taken once at parse: the restyle paths ask for it on every pass, and the
+    /// CSS of a real page is hundreds of KB.
+    source_hash: u64,
+}
+
+/// PERF.1.2.a: the parsed form of recently seen CSS text, so a restyle does not parse the page's
+/// (unchanged) stylesheets again. Every restyle rebuilds its sheet list from source, and on
+/// puentedemando.com that parse plus the drop of the previous list was ~40% of the settle CPU.
+///
+/// A parse is a pure function of the text and of the viewport (`@supports` probes a declaration, and
+/// a probed `vw`/`vh` length resolves against it), so both are in the key and the text is compared
+/// whole: a hit is the same sheet, not a likely one. `MANUK_NO_SHEET_CACHE=1` turns it off.
+#[derive(Default)]
+struct SheetCache {
+    by_hash: std::collections::HashMap<u64, Vec<SheetCacheEntry>>,
+    bytes: usize,
+}
+
+struct SheetCacheEntry {
+    raw: Box<str>,
+    env: [u32; 4],
+    sheet: Stylesheet,
+}
+
+/// Source bytes held before the cache is emptied. The working set is one document's CSS.
+const SHEET_CACHE_MAX_BYTES: usize = 8 << 20;
+
+thread_local! {
+    static SHEET_CACHE: std::cell::RefCell<SheetCache> = std::cell::RefCell::new(SheetCache::default());
+    static SHEET_CACHE_HITS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// How many [`Stylesheet::parse`] calls on this thread were answered from the cache.
+pub fn sheet_cache_hits() -> u64 {
+    SHEET_CACHE_HITS.with(|c| c.get())
+}
+
+fn sheet_cache_enabled() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| !incr::env_on("MANUK_NO_SHEET_CACHE"))
+}
+
+fn sheet_cache_env() -> [u32; 4] {
+    let (vw, vh) = values::viewport_size();
+    let (iw, ih) = values::icb_size();
+    [vw.to_bits(), vh.to_bits(), iw.to_bits(), ih.to_bits()]
+}
+
+fn hash_str(s: &str) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    s.hash(&mut h);
+    h.finish()
 }
 
 impl Stylesheet {
     /// A hash of the CSS source this sheet was parsed from, or `None` for a programmatically-built
     /// sheet (no source to vouch for its rules). Two sheets with the same hash cascade identically.
     pub fn source_hash(&self) -> Option<u64> {
-        use std::hash::{Hash, Hasher};
-        if self.source.is_empty() {
-            return None;
-        }
-        let mut h = std::collections::hash_map::DefaultHasher::new();
-        self.source.hash(&mut h);
-        Some(h.finish())
+        (!self.source.is_empty()).then_some(self.source_hash)
     }
 
     /// **Apply this sheet's `:has()` rules to `style` — the rules Stylo THREW AWAY.**
@@ -3922,16 +3972,55 @@ impl Stylesheet {
     /// Parse CSS source into rules. Comments and `@`-rules are skipped; unknown
     /// selectors/properties are ignored rather than aborting the sheet (CSS's
     /// forward-compatible error recovery).
+    ///
+    /// Text parsed before on this thread is answered from [`SheetCache`].
     pub fn parse(src: &str) -> Stylesheet {
+        if src.is_empty() || !sheet_cache_enabled() {
+            return Self::parse_uncached(src);
+        }
+        let key = hash_str(src);
+        let env = sheet_cache_env();
+        let hit = SHEET_CACHE.with(|c| {
+            c.borrow().by_hash.get(&key).and_then(|v| {
+                v.iter()
+                    .find(|e| e.env == env && *e.raw == *src)
+                    .map(|e| e.sheet.clone())
+            })
+        });
+        if let Some(sheet) = hit {
+            SHEET_CACHE_HITS.with(|c| c.set(c.get() + 1));
+            return sheet;
+        }
+        let sheet = Self::parse_uncached(src);
+        if src.len() <= SHEET_CACHE_MAX_BYTES {
+            SHEET_CACHE.with(|c| {
+                let mut c = c.borrow_mut();
+                if c.bytes + src.len() > SHEET_CACHE_MAX_BYTES {
+                    *c = SheetCache::default();
+                }
+                c.bytes += src.len();
+                c.by_hash.entry(key).or_default().push(SheetCacheEntry {
+                    raw: src.into(),
+                    env,
+                    sheet: sheet.clone(),
+                });
+            });
+        }
+        sheet
+    }
+
+    fn parse_uncached(src: &str) -> Stylesheet {
         let src = strip_cdata(src);
         let src = strip_comments(&src);
         let mut rules = Vec::new();
         let mut font_faces = Vec::new();
         parse_rules_into(&src, &[], &mut rules, &mut font_faces);
+        let source_hash = hash_str(&src);
         Stylesheet {
-            rules,
-            source: src,
-            font_faces,
+            rules: std::sync::Arc::new(rules),
+            source: std::sync::Arc::new(src),
+            font_faces: std::sync::Arc::new(font_faces),
+            source_hash,
         }
     }
 }
@@ -5447,7 +5536,7 @@ impl MinimalCascade {
         let mut ix = RuleIndex::default();
         let mut order = 0usize;
         for scoped in sheets {
-            for rule in &scoped.sheet.rules {
+            for rule in scoped.sheet.rules.iter() {
                 if !rule.media_applies() {
                     continue;
                 }
@@ -10755,6 +10844,34 @@ main:has(span) span { color: black }
     /// recovery, and what makes the page render completely unstyled rather than slightly wrong.
     /// It is the standard XHTML idiom and **2,191 of the CSS 2.1 conformance suite's 10,501 files
     /// use it**, tests and references alike; Chrome applies all three rules of the fixture below.
+    /// PERF.1.2.a: text parsed before is answered from the cache with an equal sheet; different text
+    /// and a different viewport (which `@supports` probes resolve against) are not.
+    #[test]
+    fn sheet_cache_answers_the_same_text_in_the_same_viewport_only() {
+        let css = "#cache-probe { width: 10px } @supports (display: grid) { #cp { width: 2px } }";
+        let hits = sheet_cache_hits;
+        values::set_viewport_width(801.0);
+        let h0 = hits();
+        let a = Stylesheet::parse(css);
+        assert_eq!(hits(), h0, "first sight of this text is a real parse");
+        let b = Stylesheet::parse(css);
+        assert_eq!(hits(), h0 + 1, "the same text again is a hit");
+        assert_eq!(format!("{a:?}"), format!("{b:?}"));
+        assert_eq!(
+            format!("{:?}", Stylesheet::parse_uncached(css)),
+            format!("{b:?}"),
+            "a hit is what a parse would have produced"
+        );
+        // One byte moves: not a hit, and the new rule is what comes back.
+        let c = Stylesheet::parse(&css.replace("10px", "11px"));
+        assert_eq!(hits(), h0 + 1);
+        assert_ne!(format!("{a:?}"), format!("{c:?}"));
+        assert_ne!(a.source_hash(), c.source_hash());
+        values::set_viewport_width(402.0);
+        let _ = Stylesheet::parse(css);
+        assert_eq!(hits(), h0 + 1, "another viewport re-parses");
+    }
+
     #[test]
     fn a_cdata_wrapped_stylesheet_is_parsed_in_full() {
         let wrapped = Stylesheet::parse(

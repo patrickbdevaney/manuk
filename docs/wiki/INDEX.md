@@ -326,6 +326,7 @@
   - L16 · What is NOT fixed (the remaining settle)
   - L22 · Gate hygiene
   - L27 · PERF.1.2.a: a forced reflow's result is adopted, but only while mutation_seq still matches
+  - L38 · PERF.1.2.a second pass: the settle cost that was not a restyle
 
 ## A rollback that only rewinds the client must say so, and a branch must not write
 `docs/wiki/a-rollback-that-only-rewinds-the-client-must-say-so.md`
@@ -3826,4 +3827,4 @@
   - L89 · The wall audit (due t1388)
 
 ---
-3109 sections across 178 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.
+3110 sections across 178 topic files. Retrieve with `scripts/wiki-lookup.sh <terms>`.

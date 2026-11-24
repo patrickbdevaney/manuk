@@ -10055,17 +10055,14 @@ unsafe fn el_get_by_class(cx: *mut RawJSContext, argc: u32, vp: *mut Value) -> b
     let matches: Vec<NodeId> = if tokens.is_empty() {
         Vec::new()
     } else {
-        manuk_css::query_selector_all(&*dom, root, "*")
-            .into_iter()
+        // One walk, no selector engine (`"*"` went through a full compound match per element) and no
+        // list per element: `has_class` splits on the same ASCII whitespace set.
+        (*dom)
+            .descendants(root)
             .filter(|&n| {
                 (*dom)
                     .element(n)
-                    .and_then(|e| e.attr("class"))
-                    .is_some_and(|cls| {
-                        let have: Vec<&str> =
-                            cls.split(ascii_ws).filter(|s| !s.is_empty()).collect();
-                        tokens.iter().all(|t| have.contains(t))
-                    })
+                    .is_some_and(|e| tokens.iter().all(|t| e.has_class(t)))
             })
             .collect()
     };

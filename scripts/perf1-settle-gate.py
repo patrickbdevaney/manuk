@@ -2,10 +2,12 @@
 """PERF.1.2 gate: sum per-URL median settle (manuk), and the a11y node-count drift vs a baseline binary.
 
 Usage: python3 -I scripts/perf1-settle-gate.py <runs.jsonl> [--nodes BASE_BIN NEW_BIN]
+With --nodes the two local fixtures (stale-hide.html, stale-grow.html: a `load` handler that reads geometry and
+THEN mutates) are compared too; the live URLs do not exercise a layout adopted over a later mutation.
 Exit 1 when sum settle > 11 s, or (with --nodes) any URL's a11y node count differs by > 1 % between
 the two binaries (a binary that skips settle work shows up here: the tree it leaves is smaller).
 """
-import collections, json, statistics, subprocess, sys
+import collections, functools, http.server, json, os, statistics, subprocess, sys, threading
 
 rows = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
 rows = [r for r in rows if r["engine"] == "manuk" and r["status"] == "OK"]
@@ -26,7 +28,16 @@ if "--nodes" in sys.argv:
         except Exception:
             return None
 
-    for u in sorted(by):
+    fx = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "docs/sprint/perf1-fixtures")
+
+    class Quiet(http.server.SimpleHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(Quiet, directory=fx))
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    fixtures = [f"http://127.0.0.1:{srv.server_port}/{f}" for f in ("stale-hide.html", "stale-grow.html")]
+    for u in fixtures + sorted(by):
         a, b = count(base, u), count(new, u)
         if a is None or b is None:
             print(f"NODES {u}: unreadable base={a} new={b}")

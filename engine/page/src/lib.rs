@@ -1032,7 +1032,8 @@ async fn fetch_images_owned(
         }
     }
 
-    // Concurrent (I/O-bound; the shared client pools + multiplexes), then decode sequentially (CPU).
+    // Concurrent (I/O-bound; the shared client pools + multiplexes); each decode starts on the blocking
+    // pool the moment its bytes are here, and is collected below.
     //
     // **Against the load deadline, not to completion.** This was `join_all`, and `join_all` yields its
     // vector only when the LAST fetch settles — so under `finish_loading`'s cancelling deadline a
@@ -1040,40 +1041,26 @@ async fn fetch_images_owned(
     // pictures are the content that is not a lost enhancement; it is the page. See
     // [`collect_before_deadline`].
     let fetched = collect_before_deadline(
-        wanted
-            .into_iter()
-            .map(|url| async move { (url.clone(), fetch_image_bytes(&url).await, url) }),
+        wanted.into_iter().map(|url| async move {
+            let d = spawn_decode(fetch_image_bytes(&url).await, &url);
+            (url, d)
+        }),
         deadline,
     )
     .await;
     // Only the URLs that actually answered — see `fetch_images_except`, which turns this into the
     // "we already asked" record. A fetch the deadline interrupted must not be remembered as a failure.
     let settled: std::collections::HashSet<String> =
-        fetched.iter().map(|(k, _, _)| k.clone()).collect();
+        fetched.iter().map(|(k, _)| k.clone()).collect();
     let tried: Vec<(manuk_dom::NodeId, String)> = targets
         .into_iter()
         .filter(|(_, url)| known_urls.contains(url) || settled.contains(url))
         .collect();
-    for (node, bytes, url) in fetched {
-        let Some(bytes) = bytes else {
-            continue;
-        };
-        // Try raster decode; fall back to SVG (usvg/resvg) for vector sources.
-        let decoded = match image::load_from_memory(&bytes) {
-            Ok(img) => {
-                let rgba = img.to_rgba8();
-                let (w, h) = rgba.dimensions();
-                Some(manuk_paint::DecodedImage {
-                    width: w,
-                    height: h,
-                    rgba: rgba.into_raw(),
-                })
-            }
-            Err(_) => decode_svg(&bytes, &url),
-        };
-        if let Some(img) = decoded {
-            if img.width > 0 && img.height > 0 {
-                out.insert(node, img); // `node` is the URL key here — see the signature
+    for (url, d) in fetched {
+        // Raster first, SVG (usvg/resvg) for vector sources; a zero-sized bitmap is not an image.
+        if let Some(d) = d {
+            if let Some(img) = d.wait().await {
+                out.insert(url, img);
             }
         }
     }
@@ -1127,6 +1114,43 @@ fn decode_bitmap(bytes: &[u8], url: &str) -> Option<manuk_paint::DecodedImage> {
     }
 }
 
+/// A bitmap being decoded on the blocking pool — see [`spawn_decode`].
+enum Decoding {
+    Pool(tokio::task::JoinHandle<Option<manuk_paint::DecodedImage>>),
+    Done(Option<manuk_paint::DecodedImage>),
+}
+
+impl Decoding {
+    async fn wait(self) -> Option<manuk_paint::DecodedImage> {
+        match self {
+            // A decoder that panics on hostile bytes is a picture that does not show.
+            Decoding::Pool(h) => h.await.ok().flatten(),
+            Decoding::Done(d) => d,
+        }
+    }
+}
+
+/// **Decode an image on the blocking pool from the moment its bytes land** (PERF.1.2.a). The fan-outs
+/// decoded one image after another on the main thread once the LAST fetch had settled, so a page of
+/// photographs waited for the network and then for the codec (puentedemando.com: 25 of 38 samples of
+/// the image phase in the WebP decoder). Decoding is a pure function of the bytes, so where it runs is
+/// not observable. The caller collects the handles at its deadline and then awaits them, so what
+/// arrived by the deadline is still committed exactly as before. `MANUK_SYNC_DECODE=1` = old order.
+fn spawn_decode(bytes: Option<Vec<u8>>, url: &str) -> Option<Decoding> {
+    let bytes = bytes?;
+    static SYNC: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    let sync = *SYNC.get_or_init(|| std::env::var_os("MANUK_SYNC_DECODE").is_some());
+    match tokio::runtime::Handle::try_current() {
+        Ok(h) if !sync => {
+            let url = url.to_string();
+            Some(Decoding::Pool(
+                h.spawn_blocking(move || decode_bitmap(&bytes, &url)),
+            ))
+        }
+        _ => Some(Decoding::Done(decode_bitmap(&bytes, url))),
+    }
+}
+
 /// Fetch + decode a set of **mask images**, keyed by the raw `url(...)` string exactly as it
 /// appears in the CSS (so a computed `mask-image` can be looked up directly).
 ///
@@ -1141,20 +1165,25 @@ async fn fetch_masks_owned(
     std::collections::HashSet<String>,
 ) {
     let fetched = collect_before_deadline(
-        targets
-            .into_iter()
-            .map(|(raw, abs)| async move { (raw, fetch_image_bytes(&abs).await, abs) }),
+        targets.into_iter().map(|(raw, abs)| async move {
+            let d = spawn_decode(fetch_image_bytes(&abs).await, &abs);
+            (raw, d)
+        }),
         deadline,
     )
     .await;
     // The second half is the URLs that ACTUALLY ANSWERED — success or honest failure. The caller
     // records those as asked-and-answered; a request the deadline interrupted is not one of them, and
     // marking it would retire an icon nobody ever declined to send.
-    let settled = fetched.iter().map(|(raw, _, _)| raw.clone()).collect();
-    let decoded = fetched
-        .into_iter()
-        .filter_map(|(raw, bytes, abs)| Some((raw, decode_bitmap(&bytes?, &abs)?)))
-        .collect();
+    let settled = fetched.iter().map(|(raw, _)| raw.clone()).collect();
+    let mut decoded = HashMap::new();
+    for (raw, d) in fetched {
+        if let Some(d) = d {
+            if let Some(img) = d.wait().await {
+                decoded.insert(raw, img);
+            }
+        }
+    }
     (decoded, settled)
 }
 
@@ -9485,17 +9514,18 @@ impl Page {
         let fetched = collect_before_deadline(
             distinct
                 .into_iter()
-                .map(|url| async move { (fetch_image_bytes(&url).await, url) }),
+                .map(|url| async move { (spawn_decode(fetch_image_bytes(&url).await, &url), url) }),
             self.load_deadline,
         )
         .await;
-        let decoded: HashMap<String, std::rc::Rc<manuk_paint::DecodedImage>> = fetched
-            .into_iter()
-            .filter_map(|(bytes, url)| {
-                let img = decode_bitmap(&bytes?, &url)?;
-                Some((url, std::rc::Rc::new(img)))
-            })
-            .collect();
+        let mut decoded: HashMap<String, std::rc::Rc<manuk_paint::DecodedImage>> = HashMap::new();
+        for (d, url) in fetched {
+            if let Some(d) = d {
+                if let Some(img) = d.wait().await {
+                    decoded.insert(url, std::rc::Rc::new(img));
+                }
+            }
+        }
         let mut count = 0usize;
         for (node, url) in targets {
             if let Some(img) = decoded.get(&url) {
@@ -16178,6 +16208,35 @@ mod sec_did_2_loader_filter {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// PERF.1.2.a: an image decodes on the blocking pool from the moment its bytes land, with the same
+    /// pixels as a decode in place; undecodable bytes and a missing body are still "no picture".
+    #[test]
+    fn spawned_decode_runs_off_thread_and_equals_the_decode_in_place() {
+        let svg = br##"<svg xmlns="http://www.w3.org/2000/svg" width="4" height="3"><rect width="2" height="3" fill="#f00"/></svg>"##;
+        let want = decode_bitmap(svg, "a.svg").expect("fixture decodes");
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+        rt.block_on(async {
+            let d = spawn_decode(Some(svg.to_vec()), "a.svg").unwrap();
+            assert!(
+                matches!(d, Decoding::Pool(_)),
+                "inside a runtime the decode must not run on the caller's thread"
+            );
+            let got = d.wait().await.expect("decodes");
+            assert_eq!(
+                (got.width, got.height, &got.rgba),
+                (want.width, want.height, &want.rgba)
+            );
+            let bad = spawn_decode(Some(b"not an image".to_vec()), "a.png").unwrap();
+            assert!(bad.wait().await.is_none());
+            assert!(spawn_decode(None, "a.png").is_none());
+        });
+        // No runtime (the sync construction paths): decoded in place.
+        let d = spawn_decode(Some(svg.to_vec()), "a.svg").unwrap();
+        assert!(matches!(d, Decoding::Done(Some(_))));
+    }
 
     /// # G_CONTAINER_REPASS_KEEPS_NATURAL_SIZE — `@container` must not erase an image's intrinsic size
     ///

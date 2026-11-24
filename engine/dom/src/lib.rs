@@ -100,7 +100,16 @@ impl ElementData {
     }
 
     pub fn has_class(&self, class: &str) -> bool {
-        self.classes().any(|c| c == class)
+        let Some(have) = self.attr("class") else {
+            return false;
+        };
+        // Length first: it settles most selector tests without splitting the attribute.
+        if have.len() <= class.len() {
+            return have == class && self.classes().any(|c| c == class);
+        }
+        have.as_bytes()
+            .split(u8::is_ascii_whitespace)
+            .any(|t| !t.is_empty() && t == class.as_bytes())
     }
 }
 
@@ -1724,10 +1733,9 @@ impl Dom {
 
     /// Depth-first (pre-order) descendants of `id`, not including `id` itself.
     pub fn descendants(&self, id: NodeId) -> Descendants<'_> {
-        // Seed with all direct children (reversed) so we pop them left-to-right.
-        // Seeding with only `first_child` would drop its siblings' subtrees.
-        let mut stack: Vec<NodeId> = self.children(id).collect();
-        stack.reverse();
+        // Seed with the first child only: `next` pushes each node's following sibling before its
+        // first child, so the siblings' subtrees are reached without listing the children up front.
+        let stack: Vec<NodeId> = self.nodes[id.index()].first_child.into_iter().collect();
         Descendants { dom: self, stack }
     }
 
@@ -1815,10 +1823,13 @@ impl Iterator for Descendants<'_> {
     type Item = NodeId;
     fn next(&mut self) -> Option<NodeId> {
         let cur = self.stack.pop()?;
-        // Push children in reverse so we pop them left-to-right (document order).
-        let mut kids: Vec<NodeId> = self.dom.children(cur).collect();
-        kids.reverse();
-        self.stack.extend(kids);
+        // The sibling waits UNDER the first child, so the subtree comes first (document order). No
+        // per-node `Vec`: the walk is inside `getElementsByClassName`/`querySelectorAll`, which a
+        // page calls thousands of times, and the allocation per visited node was a third of the
+        // dynamic-script phase on Wikipedia (PERF.1.2.a).
+        let node = &self.dom.nodes[cur.index()];
+        self.stack.extend(node.next_sibling);
+        self.stack.extend(node.first_child);
         Some(cur)
     }
 }
@@ -1826,6 +1837,60 @@ impl Iterator for Descendants<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// PERF.1.2.a: the allocation-free `Descendants` is the recursive document-order walk, from every
+    /// root — in particular it stays inside the subtree (the root's own siblings are not visited).
+    #[test]
+    fn descendants_is_the_recursive_preorder_from_every_root() {
+        fn walk(dom: &Dom, n: NodeId, out: &mut Vec<NodeId>) {
+            for c in dom.children(n) {
+                out.push(c);
+                walk(dom, c, out);
+            }
+        }
+        let mut dom = Dom::new();
+        let mut all = vec![dom.root()];
+        for i in 0..200usize {
+            let e = dom.create_element("div");
+            // A fixed, irregular shape: deep chains, wide fans and leaves.
+            let parent = all[(i * 7 + i / 3) % all.len()];
+            dom.append_child(parent, e);
+            all.push(e);
+        }
+        for &root in &all {
+            let mut want = Vec::new();
+            walk(&dom, root, &mut want);
+            let got: Vec<NodeId> = dom.descendants(root).collect();
+            assert_eq!(got, want);
+        }
+    }
+
+    #[test]
+    fn has_class_matches_whole_ascii_whitespace_separated_tokens() {
+        let mut dom = Dom::new();
+        let e = dom.create_element("div");
+        let cases: &[(&str, &str, bool)] = &[
+            ("a", "a", true),
+            ("a b", "b", true),
+            ("ab", "a", false),
+            ("a", "ab", false),
+            ("  x\ty\n", "y", true),
+            ("x\u{0C}y", "x", true),
+            ("x\u{a0}y", "x", false),
+            ("a b", "a b", false),
+            ("", "", false),
+            ("a", "", false),
+            ("a  b", "", false),
+        ];
+        for (attr, class, want) in cases {
+            dom.set_attr(e, "class", *attr);
+            assert_eq!(
+                dom.element(e).unwrap().has_class(class),
+                *want,
+                "class={attr:?} has {class:?}"
+            );
+        }
+    }
 
     #[test]
     fn generational_nodeid_reclaims_slots_and_detects_stale() {

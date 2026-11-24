@@ -914,3 +914,42 @@ vs ~220-250 ms full; but 5 of 8 passes on that page are full anyway because the 
 because 8 moved nodes expand (sibling rule) past 1/3 of the document.
 Settle remainder (Σ over 20 URLs, median s, arm A): `finish_loading: dynamic scripts` 5.91, `page fetches` 2.23, `initial images+masks` 1.84,
 `subframes (pre-load)` 1.32, `external CSS` 0.73: script rounds and fetches, not restyle.
+
+## PERF.1.2.a second pass: what the settle CPU was actually doing (chrome_ver=145.0.7632.116; manuk only)
+
+The adoption itself landed earlier (24a1084d). Stack samples of `a11y-dump` (gdb, 30-40 ms period, 133 samples in Rust's `dynamic scripts`)
+named costs no trace line showed, in settle and not in restyle:
+
+- `getElementsByClassName`: 45 of 133 samples. It ran the selector engine for `*` and `Descendants::next` allocated a `Vec` per visited node.
+  `Dom::descendants` now keeps only (next sibling, first child) on its stack; the class test is one walk with `has_class`.
+- `Stylesheet::parse` of unchanged text on every restyle, plus the drop of the previous list (puentedemando: parse 26 of 82 samples in
+  `dynamic scripts`, 26 of 127 in `page fetches`). A parsed sheet is shared (`Arc`) and a thread-local cache keyed by text + viewport answers
+  the same text; the text is compared whole on a hit. `MANUK_NO_SHEET_CACHE=1` = off.
+- Image decode on the main thread after the last fetch (puentedemando: 25 of 38 samples of `initial images+masks` in the WebP decoder). Decode
+  now starts on the blocking pool when the bytes land and is collected after the deadline, as before. `MANUK_SYNC_DECODE=1` = off.
+
+Gate: paired interleaved, 20 URLs x 3 runs, arm B = `a11y-dump` built from 222dca62 (mozjs 140, its own pinned archive), rows
+`docs/sprint/perf1-pf12a2/paired.jsonl` (traces not committed: they record live OAuth redirect URLs). 60 of 60 runs OK per arm (the two suite URLs that fail, fail in both arms).
+
+| arm | Σ settle s | Σ cascade s | Σ layout s | Σ script s | Σ load s |
+|---|---|---|---|---|---|
+| new | 8.62 | 5.58 | 4.18 | 3.66 | 70.42 |
+| B (222dca62) | 18.86 | 2.91 | 10.36 | 12.10 | 88.00 |
+
+Bars: Σ settle <= 11 s **met** (8.62), <= 0.85x baseline **met** (0.457x). The two arms are a month of commits apart, so the ratio is not this change
+alone, and cascade/script are split differently in the two binaries (PERF.1.4.b moved the initial pass out of `script`). This change alone, HEAD
+17ea8f2b vs new, same load, the 7 heaviest URLs x 3 runs: Σ settle 17.12 -> 9.44 s (0.551x; machine load average 16-27, so only the ratio is
+comparable with other sweeps). One URL goes the other way against 222dca62: comix.to settle 0.38 -> 1.29 s (its layout went 4.69 -> 1.02 s).
+
+Node check (`perf1-settle-gate.py --nodes`), stated separately because the two baselines disagree:
+- HEAD 17ea8f2b vs new: drift 0.00% on all 20 URLs, gate GREEN.
+- 222dca62 vs new: RED on 4 URLs (ebanking 29 -> 32, Wikipedia Main_Page 900 -> 887, quotes/scroll 102 -> 100, mobile.bg 423 -> 418). The
+  pre-change HEAD binary has the same counts as new on all four (mobile.bg within its rotating news items), so the drift comes from the commits between
+  222dca62 and 17ea8f2b, not from this change. It was not bisected; the nodes are a `Loading...` heading, a `preview settings` list item and generics.
+
+Mutant (`into_fresh` without the `mutation_seq` check): on the live URLs the node check did NOT move (19 URLs, 0 drift; ebanking was down in both arms) and
+`g_load_budget` stayed green, so the live URLs could not see it. Two local fixtures were added to the node check
+(`docs/sprint/perf1-fixtures/stale-hide.html`, `stale-grow.html`: a `load` handler that reads geometry and then mutates): mutant RED
+(3 -> 10 and 23 -> 3 nodes), correct binary 0 drift. `g_reflow_stale_not_adopted` is RED under it too.
+Other mutants, each RED: sheet cache without the viewport in its key; `descendants` without the sibling push; `has_class` without the whole-token
+rule; decode kept on the caller's thread.

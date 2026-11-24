@@ -28,7 +28,7 @@ pub(crate) fn incr_key(dom: &Dom, sheets: &[Stylesheet], vw: f32, vh: f32) -> u6
     fnv(&mut h, &[dom.quirks() as u8]);
     fnv(&mut h, &(sheets.len() as u64).to_le_bytes());
     for sh in sheets {
-        fnv(&mut h, sh.source().as_bytes());
+        fnv(&mut h, &sh.source_hash().unwrap_or(0).to_le_bytes());
     }
     h
 }

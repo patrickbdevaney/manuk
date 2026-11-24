@@ -34,3 +34,17 @@ fingerprint is computed from the CURRENT tree, so adopting a layout that predate
 (`g_reflow_stale_not_adopted`). A read only forces a reflow if something was mutated since install (else it is already fresh), so tests
 need a mutation before the read. `MANUK_NO_ADOPT_REFLOW=1` is the A/B switch. Consuming the scope matters: the view maps point into the
 taken buffers until `Drop` restores them.
+
+## PERF.1.2.a second pass: the settle cost that was not a restyle
+
+Phase timers say where a load waits, not what it computes. Stack samples did: `getElementsByClassName` (selector engine for `*`, one
+`Vec` per node in `Dom::descendants`), re-parsing unchanged stylesheets on every restyle, and decoding images on the main thread.
+
+- `Dom::descendants` pushes `next_sibling` then `first_child`: document order, no per-node allocation, and it never leaves the root's subtree
+  because the root's own sibling is never pushed.
+- `Stylesheet` is `Arc`-shared and `Stylesheet::parse` is memoised per thread by (text, viewport, ICB). The viewport is in the key because
+  `@supports` probes a declaration, and a probed `vw`/`vh` value resolves against it.
+- `spawn_decode` (engine/page) decodes on the blocking pool; the handles are awaited AFTER the load deadline's collection, so what arrived in time
+  is still committed.
+- A node-count gate over live pages cannot see a stale layout adoption (a later phase repairs the tree). Use the two
+  `perf1-fixtures/stale-*.html` pages, which the `--nodes` check now includes.
