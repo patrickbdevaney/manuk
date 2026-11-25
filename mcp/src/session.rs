@@ -1343,7 +1343,24 @@ impl<B: Backend> Session<B> {
         }
     }
 
+    /// CPU.2: with `MANUK_BUILD_TRACE` set, one stderr line per call with the a11y-tree builds, cascades and
+    /// layout installs it cost (process-wide counters in `manuk_page`), so the count is measured, not argued.
     pub async fn call(&mut self, tool: &str, a: &Map<String, Value>) -> Result<Output> {
+        let trace = std::env::var_os("MANUK_BUILD_TRACE").is_some();
+        let before = manuk_agent::build_counts();
+        let r = self.call_traced(tool, a).await;
+        if trace {
+            eprintln!(
+                "BUILDS {tool} trees={} cascades={} layouts={}",
+                manuk_agent::build_counts().0 - before.0,
+                manuk_agent::build_counts().1 - before.1,
+                manuk_agent::build_counts().2 - before.2
+            );
+        }
+        r
+    }
+
+    async fn call_traced(&mut self, tool: &str, a: &Map<String, Value>) -> Result<Output> {
         self.include_hidden = a
             .get("include_hidden")
             .and_then(Value::as_bool)

@@ -1243,6 +1243,16 @@ impl AgentBrowser {
     }
 
     /// The page's §4a accessibility tree (with geometry).
+    /// CPU.2: process-wide (a11y tree builds, cascades, layout installs) so far; see `manuk_page::A11Y_BUILDS`.
+    pub fn build_counts_inner() -> (u64, u64, u64) {
+        use std::sync::atomic::Ordering::Relaxed;
+        (
+            manuk_page::A11Y_BUILDS.load(Relaxed),
+            manuk_page::CASCADES.load(Relaxed),
+            manuk_page::LAYOUTS.load(Relaxed),
+        )
+    }
+
     pub fn a11y_tree(&self) -> Result<manuk_a11y::A11yNode> {
         Ok(self.page.as_ref().context("no page loaded")?.a11y_tree())
     }
@@ -4207,4 +4217,9 @@ pub fn phase_log(name: &str, ms: f64) {
     if *ON.get_or_init(|| std::env::var_os("MANUK_PHASE_TIMING").is_some()) {
         eprintln!("phase {name} {ms:.3}");
     }
+}
+
+/// CPU.2: see [`AgentBrowser::build_counts_inner`].
+pub fn build_counts() -> (u64, u64, u64) {
+    AgentBrowser::build_counts_inner()
 }
