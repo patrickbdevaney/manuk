@@ -40,7 +40,7 @@ several model families, is designed in [`docs/sprint/CONCURRENCY-PLAN.md`](docs/
 
 ## Use it
 
-Pre-release: build from source.
+Pre-release: build from source, or install a dispatch-built artifact ([`docs/MCP-INSTALL.md`](docs/MCP-INSTALL.md)).
 
 ```bash
 ./scripts/mozjs-fetch.sh                      # once: pinned SpiderMonkey prebuilt (a clean-clone build needs it)

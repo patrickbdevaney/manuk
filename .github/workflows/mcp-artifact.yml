@@ -1,0 +1,72 @@
+name: mcp-artifact
+
+# SHIP.2: manuk-mcp release ARTIFACTS. Manual dispatch only; it builds, packages and verifies. It never tags,
+# never creates a GitHub release and never uploads to a registry: the owner approves the tag.
+# Linux x86_64 and macOS arm64. Each artifact ships with a CycloneDX 1.5 SBOM and a sha256 file.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_BUILD_JOBS: 2
+  CARGO_NET_RETRY: 10
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, target: x86_64-unknown-linux-gnu, name: manuk-mcp-linux-x86_64 }
+          - { os: macos-latest, target: aarch64-apple-darwin, name: manuk-mcp-macos-arm64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with: { targets: "${{ matrix.target }}" }
+      - uses: Swatinem/rust-cache@v2
+      - name: fetch pinned SpiderMonkey (sha256 pin; exports MOZJS_ARCHIVE)
+        shell: bash
+        run: MOZJS_TRIPLE=${{ matrix.target }} ./scripts/mozjs-fetch.sh
+      - name: tools
+        run: cargo install cargo-cyclonedx cargo-auditable --locked
+      - name: build (cargo auditable embeds the dependency list in the binary)
+        run: cargo auditable build --release -p manuk-mcp --target ${{ matrix.target }}
+      - name: package + SBOM + sha256
+        run: scripts/mcp-package.sh target/${{ matrix.target }}/release/manuk-mcp ${{ matrix.name }} dist
+      - uses: actions/upload-artifact@v4
+        with: { name: "${{ matrix.name }}", path: dist/* }
+
+  # A CLEAN container: nothing but the distro, the downloaded artifact, the installer and the pinned Chrome.
+  verify-linux:
+    needs: build
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:24.04
+      # Chrome's own sandbox stays ON; the container just has to allow the user namespaces it needs.
+      options: --security-opt seccomp=unconfined --security-opt apparmor=unconfined
+    steps:
+      - name: clean-container prerequisites (no Rust, no compiler)
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates curl unzip python3 nodejs npm libstdc++6 \
+            libnss3 libatk1.0-0t64 libatk-bridge2.0-0t64 libcups2t64 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 \
+            libxfixes3 libxrandr2 libgbm1 libasound2t64 libpango-1.0-0 libcairo2 fonts-liberation
+      - uses: actions/download-artifact@v4
+        with: { name: manuk-mcp-linux-x86_64, path: rel }
+      - uses: actions/checkout@v4   # only for scripts/ (installer, smoke) and the pin; no build happens here
+        with: { path: src }
+      - name: checksum verifies
+        run: cd rel && sha256sum -c manuk-mcp-linux-x86_64.tar.gz.sha256
+      - name: install (verifies the checksum again, fetches the pinned Chrome for Testing)
+        run: MANUK_BASE_URL=$PWD/rel MANUK_PREFIX=/usr/local MANUK_INSTALL_CHROME=1 sh src/scripts/install-mcp.sh
+      - name: claude mcp add
+        run: |
+          npm install -g @anthropic-ai/claude-code
+          claude mcp add manuk -- /usr/local/bin/manuk-mcp
+          claude mcp list
+      - name: tools listed + one Chrome task
+        run: python3 -I src/scripts/mcp-smoke.py /usr/local/bin/manuk-mcp
