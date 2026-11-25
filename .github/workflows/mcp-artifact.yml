@@ -79,5 +79,10 @@ jobs:
           chmod -R a+rX /opt/manuk-home
           CH=$(find /opt/manuk-home/.local/chrome-cft -type f -name chrome | head -1)
           test -x "$CH"
+          # diagnostics: Chrome's own stderr (manuk-mcp does not surface it), with its sandbox ON
+          cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null || true
+          runuser -u smokeuser -- unshare -U -r true && echo "userns: ok" || echo "userns: BLOCKED"
+          runuser -u smokeuser -- env HOME=/home/smokeuser timeout 60 "$CH" --headless=new --disable-gpu \
+            --user-data-dir=/tmp/chrome-diag --dump-dom about:blank 2>&1 | tail -30 || true
           runuser -u smokeuser -- env HOME=/home/smokeuser MANUK_CHROME="$CH" \
             python3 -I src/scripts/mcp-smoke.py /usr/local/bin/manuk-mcp
