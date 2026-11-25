@@ -143,7 +143,13 @@ jobs:
       - name: crate tests (the wall's list)
         run: |
           for c in manuk-css manuk-layout manuk-paint manuk-dom manuk-net manuk-agent manuk-shell; do
-            ./scripts/ci-run.sh "tests: $c" cargo test -p "$c"
+            # SpiderMonkey allows ONE JS thread per process: with parallel test threads, the first to exit
+            # shuts the engine down under the others ("outstanding JS engine handles", seen on the 4-core runner,
+            # not reproducible on the dev box). The JS-bearing crates run one test at a time, as gate-sweep.sh does.
+            case "$c" in
+              manuk-agent|manuk-shell) ./scripts/ci-run.sh "tests: $c" cargo test -p "$c" -- --test-threads=1 ;;
+              *) ./scripts/ci-run.sh "tests: $c" cargo test -p "$c" ;;
+            esac
           done
       # The full gate wall in its shipping configuration (stylo + spidermonkey) — the REAL verification,
       # which the headless test run above cannot exercise (the feature-gated gates need the JS engine).
