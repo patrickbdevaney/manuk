@@ -140,6 +140,18 @@ jobs:
       # `#[ignore]`d and run in isolation). `cargo test --workspace` therefore CRASHES — no test fails,
       # the output simply stops — and the local wall has never run it. If CI and the wall test different
       # things, they disagree about what "green" means, and one of them is lying.
+      # The shell's human-view gate (w6d1b_human_view) drives the PINNED Chrome-for-Testing build; without it the
+      # test cannot pass, so CI installs the same build the sprint measures against (docs/sprint/CHROME_PIN).
+      # Ubuntu 24.04 runners restrict unprivileged user namespaces, which Chrome's sandbox needs; the sandbox
+      # stays ON (we lift the host restriction, not Chrome's flag).
+      - name: pinned Chrome for Testing (docs/sprint/CHROME_PIN)
+        run: |
+          pin=$(tr -d '[:space:]' < docs/sprint/CHROME_PIN)
+          mkdir -p "$HOME/.local/chrome-cft/$pin"
+          curl -fsSL "https://storage.googleapis.com/chrome-for-testing-public/$pin/linux64/chrome-linux64.zip" -o "$RUNNER_TEMP/cft.zip"
+          unzip -q "$RUNNER_TEMP/cft.zip" -d "$HOME/.local/chrome-cft/$pin"
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          "$HOME/.local/chrome-cft/$pin/chrome-linux64/chrome" --version
       - name: crate tests (the wall's list)
         run: |
           for c in manuk-css manuk-layout manuk-paint manuk-dom manuk-net manuk-agent manuk-shell; do
