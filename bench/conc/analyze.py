@@ -64,16 +64,47 @@ for a in ARMS:
         else: break
     rcap[a] = c; out.append(f"- {a}: capacity {c} (N=1 {base:.2f}; by N: " + ", ".join(f"{n}:{rsucc(a,n):.2f}" for n in NS) + ")")
 cap_all = cap; cap = rcap
-bestc = max(CHROME, key=lambda a: cap[a]); 
-out.append(f"\n## Pre-registered bars\n\nbest Chrome arm by capacity: {bestc} ({cap[bestc]}). capacity above uses real-page traces; ladder resolution only.")
+# bisection rows (CONC.2.a): optional 2nd arg = capacity.tsv (+ .infra); infra (OOM-killed) runs count as success 0 per run
+brows = list(csv.DictReader(open(sys.argv[2]), delimiter="\t")) if len(sys.argv) > 2 else []
+binfra = [json.loads(l) for l in open(sys.argv[2] + ".infra")] if len(sys.argv) > 2 and os.path.exists(sys.argv[2] + ".infra") else []
+def rreal(r):
+    pt = json.loads(r["per_trace"]); return sum(int(pt[t].split("/")[0]) for t in REAL) / sum(int(pt[t].split("/")[1]) for t in REAL)
+def bsucc(a, n):
+    xs = [rreal(r) for r in rows + brows if r["arm"] == a and int(r["n"]) == n] + [0.0] * len([i for i in infra + binfra if i["arm"] == a and i["n"] == n])
+    return st.mean(xs) if xs else None
+def brackets(a):
+    """-> (lo, hi): lo = largest tested N holding success within 5 points of N=1 (scanning up, stop at first miss), hi = that first miss (None if none)."""
+    base = bsucc(a, 1); lo, hi = 1, None
+    for n in sorted({int(r["n"]) for r in rows + brows if r["arm"] == a} | {i["n"] for i in infra + binfra if i["arm"] == a}):
+        if n == 1: continue
+        if bsucc(a, n) >= base - 0.05: lo = n
+        else: hi = n; break
+    return lo, hi
+if brows:
+    out.append("\n## Bisection (CONC.2.a): real-page success by tested N, OOM-killed runs counted 0; bracket = [largest ok N, first bad N)\n")
+    cap = {}
+    for a in ARMS:
+        lo, hi = brackets(a); cap[a] = (lo, hi)
+        ns = sorted({int(r["n"]) for r in rows + brows if r["arm"] == a} | {i["n"] for i in infra + binfra if i["arm"] == a})
+        out.append(f"- {a}: capacity in [{lo},{(hi - 1) if hi else 'inf'}] ({'width %d' % (hi - 1 - lo) if hi else 'open'}); by N: " + ", ".join(f"{n}:{bsucc(a, n):.2f}" for n in ns))
+    bestc = max(CHROME, key=lambda a: cap[a][0])
+    out.append(f"\n## Pre-registered bars (after bisection)\n\nbest Chrome arm by capacity: {bestc} (in [{cap[bestc][0]},{cap[bestc][1] - 1}]).")
+    for a in ["engine-proc-full", "engine-proc-lean", "engine-fork"]:
+        lo_a, hi_a, lo_b, hi_b = cap[a][0], (cap[a][1] - 1 if cap[a][1] else None), cap[bestc][0], cap[bestc][1] - 1
+        sure = lo_a / hi_b >= 1.5; possible = hi_a is None or hi_a / lo_b >= 1.5
+        verdict = "PASS" if sure else ("UNRESOLVED (bracket still straddles 1.5x)" if possible else "FAIL")
+        out.append(f"- **Capacity win ({a}): capacity in [{lo_a},{hi_a}] vs {bestc} in [{lo_b},{hi_b}]; ratio between {lo_a/hi_b:.2f}x and {(hi_a or 999)/lo_b:.2f}x (need >=1.5x): {verdict}**")
+else:
+    bestc = max(CHROME, key=lambda a: cap[a])
+    out.append(f"\n## Pre-registered bars\n\nbest Chrome arm by capacity: {bestc} ({cap[bestc]}). capacity above uses real-page traces; ladder resolution only.")
+    def hi(c): return (NS[NS.index(c) + 1] - 1) if c != NS[-1] else None  # largest N the true capacity could be (ladder only)
+    for a in ["engine-proc-full", "engine-proc-lean", "engine-fork"]:
+        lo_a, hi_a, lo_b, hi_b = cap[a], hi(cap[a]), cap[bestc], hi(cap[bestc])
+        sure = hi_b is not None and lo_a / hi_b >= 1.5
+        possible = hi_a is None or hi_a / lo_b >= 1.5
+        verdict = "PASS" if sure else ("UNRESOLVED (ladder bracket straddles 1.5x; bisection needed)" if possible else "FAIL")
+        out.append(f"- **Capacity win ({a}): capacity in [{lo_a},{hi_a}] vs {bestc} in [{lo_b},{hi_b}]; ratio between {lo_a/hi_b if hi_b else 0:.2f}x and {(hi_a or 999)/lo_b:.2f}x (need >=1.5x): {verdict}**")
 def v(name, ok): out.append(f"- **{name}: {'PASS' if ok else 'FAIL'}**")
-def hi(c): return (NS[NS.index(c) + 1] - 1) if c != NS[-1] else None  # largest N the true capacity could be (ladder only)
-for a in ["engine-proc-full", "engine-proc-lean", "engine-fork"]:
-    lo_a, hi_a, lo_b, hi_b = cap[a], hi(cap[a]), cap[bestc], hi(cap[bestc])
-    sure = hi_b is not None and lo_a / hi_b >= 1.5          # even the worst case in the bracket passes
-    possible = hi_a is None or hi_a / lo_b >= 1.5            # the best case in the bracket passes
-    verdict = "PASS" if sure else ("UNRESOLVED (ladder bracket straddles 1.5x; bisection needed)" if possible else "FAIL")
-    out.append(f"- **Capacity win ({a}): capacity in [{lo_a},{hi_a}] vs {bestc} in [{lo_b},{hi_b}]; ratio between {lo_a/hi_b if hi_b else 0:.2f}x and {(hi_a or 999)/lo_b:.2f}x (need >=1.5x): {verdict}**")
 def pps(a):
     x = [fl(r, "pss_per_ok_mb") for r in cell(a, 50) if r["pss_per_ok_mb"] not in ("None", "")]
     return st.mean(x) if x else None

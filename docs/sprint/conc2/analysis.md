@@ -82,12 +82,21 @@
 - pw-proc: capacity 10 (N=1 1.00; by N: 1:1.00, 5:1.00, 10:1.00, 25:0.00, 50:0.00, 100:0.00)
 - pw-shared: capacity 25 (N=1 1.00; by N: 1:1.00, 5:1.00, 10:1.00, 25:1.00, 50:0.00, 100:0.00)
 
-## Pre-registered bars
+## Bisection (CONC.2.a): real-page success by tested N, OOM-killed runs counted 0; bracket = [largest ok N, first bad N)
 
-best Chrome arm by capacity: pw-shared (25). capacity above uses real-page traces; ladder resolution only.
-- **Capacity win (engine-proc-full): capacity in [50,99] vs pw-shared in [25,49]; ratio between 1.02x and 3.96x (need >=1.5x): UNRESOLVED (ladder bracket straddles 1.5x; bisection needed)**
-- **Capacity win (engine-proc-lean): capacity in [25,49] vs pw-shared in [25,49]; ratio between 0.51x and 1.96x (need >=1.5x): UNRESOLVED (ladder bracket straddles 1.5x; bisection needed)**
-- **Capacity win (engine-fork): capacity in [50,99] vs pw-shared in [25,49]; ratio between 1.02x and 3.96x (need >=1.5x): UNRESOLVED (ladder bracket straddles 1.5x; bisection needed)**
+- engine-proc-full: capacity in [59,61] (width 2); by N: 1:1.00, 5:1.00, 10:1.00, 25:1.00, 50:1.00, 56:0.96, 59:0.97, 62:0.94, 75:0.84, 100:0.85
+- engine-proc-lean: capacity in [28,28] (width 0); by N: 1:1.00, 5:1.00, 10:1.00, 25:0.96, 28:1.00, 29:0.91, 31:0.87, 37:0.87, 50:0.88, 100:0.75
+- engine-fork: capacity in [68,70] (width 2); by N: 1:1.00, 5:1.00, 10:1.00, 25:1.00, 50:1.00, 62:1.00, 68:0.99, 71:0.94, 75:0.84, 100:0.91
+- chrome-mcp: capacity in [21,22] (width 1); by N: 1:1.00, 5:1.00, 10:1.00, 17:1.00, 21:1.00, 23:0.00, 25:0.00, 50:0.00, 100:0.00
+- pw-proc: capacity in [18,18] (width 0); by N: 1:1.00, 5:1.00, 10:1.00, 17:1.00, 18:1.00, 19:0.00, 21:0.00, 25:0.00, 50:0.00, 100:0.00
+- pw-shared: capacity in [37,39] (width 2); by N: 1:1.00, 5:1.00, 10:1.00, 25:1.00, 37:1.00, 40:0.33, 43:0.33, 50:0.00, 100:0.00
+
+## Pre-registered bars (after bisection)
+
+best Chrome arm by capacity: pw-shared (in [37,39]).
+- **Capacity win (engine-proc-full): capacity in [59,61] vs pw-shared in [37,39]; ratio between 1.51x and 1.65x (need >=1.5x): PASS**
+- **Capacity win (engine-proc-lean): capacity in [28,28] vs pw-shared in [37,39]; ratio between 0.72x and 0.76x (need >=1.5x): FAIL**
+- **Capacity win (engine-fork): capacity in [68,70] vs pw-shared in [37,39]; ratio between 1.74x and 1.89x (need >=1.5x): PASS**
 - **Cost win (registered, N=50): NOT EVALUABLE - no Chrome arm survived N=50 in the 8 GB cage (24 cells OOM-killed; journal shows 24 oom-kill scopes). Not scored as a pass.**
 
 Exploratory, NOT the registered test (registered N=50 is unmeasurable: every Chrome arm is OOM-killed at N=50 in the 8 GB cage). Largest N where a Chrome arm survived all runs (pw-shared N=25):
