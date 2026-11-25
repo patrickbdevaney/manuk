@@ -1,0 +1,218 @@
+{
+ "small.html|on": {
+  "navigate": {
+   "trees": 1,
+   "cascades": 3,
+   "layouts": 1,
+   "cpu": 0.06
+  },
+  "observe": {
+   "trees": 0,
+   "cascades": 1,
+   "layouts": 1,
+   "cpu": 0.0
+  },
+  "find": {
+   "trees": 0,
+   "cascades": 0,
+   "layouts": 0,
+   "cpu": 0.01
+  },
+  "act": {
+   "trees": 0,
+   "cascades": 2,
+   "layouts": 0,
+   "cpu": 0.0
+  },
+  "observe2": {
+   "trees": 0,
+   "cascades": 1,
+   "layouts": 1,
+   "cpu": 0.0
+  },
+  "find2": {
+   "trees": 0,
+   "cascades": 0,
+   "layouts": 0,
+   "cpu": 0.0
+  },
+  "type": {
+   "trees": 0,
+   "cascades": 2,
+   "layouts": 6,
+   "cpu": 0.01
+  }
+ },
+ "small.html|off": {
+  "navigate": {
+   "trees": 2,
+   "cascades": 3,
+   "layouts": 1,
+   "cpu": 0.05
+  },
+  "observe": {
+   "trees": 2,
+   "cascades": 1,
+   "layouts": 1,
+   "cpu": 0.02
+  },
+  "find": {
+   "trees": 2,
+   "cascades": 0,
+   "layouts": 0,
+   "cpu": 0.0
+  },
+  "act": {
+   "trees": 7,
+   "cascades": 2,
+   "layouts": 0,
+   "cpu": 0.0
+  },
+  "observe2": {
+   "trees": 2,
+   "cascades": 1,
+   "layouts": 1,
+   "cpu": 0.01
+  },
+  "find2": {
+   "trees": 2,
+   "cascades": 0,
+   "layouts": 0,
+   "cpu": 0.0
+  },
+  "type": {
+   "trees": 6,
+   "cascades": 2,
+   "layouts": 6,
+   "cpu": 0.0
+  }
+ },
+ "div1500.html|on": {
+  "navigate": {
+   "trees": 1,
+   "cascades": 3,
+   "layouts": 1,
+   "cpu": 0.29
+  },
+  "observe": {
+   "trees": 0,
+   "cascades": 1,
+   "layouts": 1,
+   "cpu": 0.08
+  },
+  "find": {
+   "trees": 0,
+   "cascades": 0,
+   "layouts": 0,
+   "cpu": 0.02
+  },
+  "act": {
+   "trees": 0,
+   "cascades": 2,
+   "layouts": 0,
+   "cpu": 0.14
+  },
+  "observe2": {
+   "trees": 0,
+   "cascades": 1,
+   "layouts": 1,
+   "cpu": 0.08
+  }
+ },
+ "div1500.html|off": {
+  "navigate": {
+   "trees": 2,
+   "cascades": 3,
+   "layouts": 1,
+   "cpu": 0.3
+  },
+  "observe": {
+   "trees": 2,
+   "cascades": 1,
+   "layouts": 1,
+   "cpu": 0.09
+  },
+  "find": {
+   "trees": 2,
+   "cascades": 0,
+   "layouts": 0,
+   "cpu": 0.04
+  },
+  "act": {
+   "trees": 7,
+   "cascades": 2,
+   "layouts": 0,
+   "cpu": 0.2
+  },
+  "observe2": {
+   "trees": 2,
+   "cascades": 1,
+   "layouts": 1,
+   "cpu": 0.07
+  }
+ },
+ "t1500.html|on": {
+  "navigate": {
+   "trees": 1,
+   "cascades": 3,
+   "layouts": 1,
+   "cpu": 0.44
+  },
+  "observe": {
+   "trees": 0,
+   "cascades": 1,
+   "layouts": 1,
+   "cpu": 0.12
+  },
+  "find": {
+   "trees": 0,
+   "cascades": 0,
+   "layouts": 0,
+   "cpu": 0.04
+  },
+  "act": {
+   "trees": 0,
+   "cascades": 2,
+   "layouts": 0,
+   "cpu": 0.21
+  },
+  "observe2": {
+   "trees": 0,
+   "cascades": 1,
+   "layouts": 1,
+   "cpu": 0.11
+  }
+ },
+ "t1500.html|off": {
+  "navigate": {
+   "trees": 2,
+   "cascades": 3,
+   "layouts": 1,
+   "cpu": 0.46
+  },
+  "observe": {
+   "trees": 2,
+   "cascades": 1,
+   "layouts": 1,
+   "cpu": 0.15
+  },
+  "find": {
+   "trees": 2,
+   "cascades": 0,
+   "layouts": 0,
+   "cpu": 0.07
+  },
+  "act": {
+   "trees": 7,
+   "cascades": 2,
+   "layouts": 0,
+   "cpu": 0.33
+  },
+  "observe2": {
+   "trees": 2,
+   "cascades": 1,
+   "layouts": 1,
+   "cpu": 0.14
+  }
+ }
+}

@@ -1,0 +1,301 @@
+diff --git a/agent/src/lib.rs b/agent/src/lib.rs
+index 2755c93d..caaefc23 100644
+--- a/agent/src/lib.rs
++++ b/agent/src/lib.rs
+@@ -1243,6 +1243,16 @@ impl AgentBrowser {
+     }
+ 
+     /// The page's §4a accessibility tree (with geometry).
++    /// CPU.2: process-wide (a11y tree builds, cascades, layout installs) so far; see `manuk_page::A11Y_BUILDS`.
++    pub fn build_counts_inner() -> (u64, u64, u64) {
++        use std::sync::atomic::Ordering::Relaxed;
++        (
++            manuk_page::A11Y_BUILDS.load(Relaxed),
++            manuk_page::CASCADES.load(Relaxed),
++            manuk_page::LAYOUTS.load(Relaxed),
++        )
++    }
++
+     pub fn a11y_tree(&self) -> Result<manuk_a11y::A11yNode> {
+         Ok(self.page.as_ref().context("no page loaded")?.a11y_tree())
+     }
+@@ -4208,3 +4218,8 @@ pub fn phase_log(name: &str, ms: f64) {
+         eprintln!("phase {name} {ms:.3}");
+     }
+ }
++
++/// CPU.2: see [`AgentBrowser::build_counts_inner`].
++pub fn build_counts() -> (u64, u64, u64) {
++    AgentBrowser::build_counts_inner()
++}
+diff --git a/engine/page/src/lib.rs b/engine/page/src/lib.rs
+index 1fa11ec2..b6978321 100644
+--- a/engine/page/src/lib.rs
++++ b/engine/page/src/lib.rs
+@@ -52,7 +52,9 @@ use url::Url;
+ /// correct specificity); otherwise the from-scratch [`MinimalCascade`]. Both consume the
+ /// same `Stylesheet`s (collected via [`MinimalCascade::collect_style_elements`]), so only
+ /// the cascade step swaps — the rest of the pipeline is engine-agnostic.
++#[track_caller]
+ fn cascade_styles(dom: &Dom, sheets: &[Stylesheet], viewport_width: f32) -> StyleMap {
++    CASCADES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+     manuk_css::values::set_viewport_width(viewport_width);
+     #[cfg(feature = "stylo")]
+     {
+@@ -264,6 +266,15 @@ fn log_slow_restyle(
+     n_sheets: usize,
+     nodes: usize,
+ ) {
++    if std::env::var_os("MANUK_RESTYLE_TRACE").is_some() {
++        eprintln!(
++            "RESTYLE {}:{} cascade_ms={} layout_ms={}",
++            caller.file(),
++            caller.line(),
++            us_cascade / 1000,
++            us_layout / 1000
++        );
++    }
+     if (us_cascade + us_layout) / 1000 >= 100 {
+         tracing::info!(
+             cascade_ms = us_cascade / 1000,
+@@ -3007,7 +3018,21 @@ const DATA_LOG_BODY_MAX: usize = 1 << 20;
+ /// A loaded, styled, laid-out page. Retains the DOM + computed styles so it can be
+ /// re-laid-out at a new width (window resize / different agent viewport) and
+ /// queried for links/text without re-fetching.
++/// CPU.2: how many a11y trees were BUILT (not served from the page cache), cascades and layout installs this
++/// process ran. Read by `manuk-mcp` under `MANUK_BUILD_TRACE` so a per-call count can be published.
++pub static A11Y_BUILDS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
++pub static CASCADES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
++pub static LAYOUTS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
++
++/// What the cached a11y tree was built from: DOM mutation sequence, style/layout generation, focus, zoom.
++type A11yKey = (u64, u64, u64, Option<manuk_dom::NodeId>, u32);
++
+ pub struct Page {
++    /// CPU.2: the last `a11y_tree()` and the state it was built from. Every input of the tree (DOM, computed
++    /// styles, fragment tree, focus) moves `A11yKey`, so a hit is byte-identical to a rebuild.
++    a11y_cache: std::cell::RefCell<Option<(A11yKey, manuk_a11y::A11yNode)>>,
++    /// Bumped whenever `styles` or `root_box` is replaced.
++    layout_gen: u64,
+     pub final_url: String,
+     pub title: String,
+     pub content_height: f32,
+@@ -4428,6 +4453,7 @@ unsafe extern "C" fn frame_forced_reflow(
+             restyle_and_layout(&child.dom, &sheets, fonts, e.width, &child.images);
+         // ⚠ Assigned IN PLACE. `&Page::styles` is what `FRAME_STYLES` published; replacing the map's
+         // contents keeps that address valid, and is what makes this reflow need no republish.
++        child.layout_gen += 1;
+         child.styles = styles;
+         child.root_box = root_box;
+         child.content_height = child.root_box.content_bottom();
+@@ -6104,6 +6130,25 @@ impl Page {
+     /// every `<link>`ed stylesheet from the page, which is a far worse bug than the one being
+     /// fixed"*). One rule with N implementations is one rule that is wrong N−1 times; this is the
+     /// implementation, and there is now only one.
++    /// CPU.2: a full cascade over this page's own sources just ran (`recascade_all_sources` or
++    /// `restyle_and_layout`) with no dirt left, so `styles` IS what [`apply_stylesheets`] would compute for
++    /// these inputs. Record that, else the settle that follows a click re-runs an identical full cascade +
++    /// layout (the third of three per `act`, ~0.2 cpu-s on a 1500-row table). The fingerprint still covers
++    /// sources, node count, viewport and dirt, so any later change misses it and restyles.
++    fn note_cascade_current(&mut self, viewport_width: f32) {
++        if std::env::var_os("MANUK_NO_CASCADE_NOTE").is_some() || self.styles.is_empty() {
++            return;
++        }
++        let sources = self.cascade_sources(&self.external_css);
++        self.last_cascade = Some(cascade_fingerprint(
++            &self.dom,
++            &sources,
++            &self.external_css,
++            viewport_width,
++            false,
++        ));
++    }
++
+     fn all_sheets(&self) -> Vec<Stylesheet> {
+         sheets_of(&self.dom, &self.final_url, &self.external_css)
+     }
+@@ -6192,6 +6237,7 @@ impl Page {
+             let sheets: Vec<Stylesheet> = self.all_sheets();
+             (self.styles, self.root_box) =
+                 restyle_and_layout(&self.dom, &sheets, fonts, viewport_width, &self.images);
++            self.layout_gen += 1;
+             self.reapply_scroll_offsets();
+             self.content_height = self.root_box.rect.height;
+             // **This pass IS the full restyle the next `apply_stylesheets` would run, so say so**
+@@ -9413,6 +9459,7 @@ impl Page {
+         // the next phase redo the identical cascade+layout (PERF.1.2.a).
+         if self.zoom == 1.0 && std::env::var_os("MANUK_NO_ADOPT_REFLOW").is_none() {
+             if let Some((styles, root)) = _reflow.into_fresh(&self.dom) {
++                self.layout_gen += 1;
+                 self.styles = styles;
+                 self.set_root_box(root);
+                 self.content_height = self.root_box.content_bottom();
+@@ -10144,6 +10191,8 @@ impl Page {
+             std::collections::HashMap::new(),
+         );
+         let mut page = Page {
++            a11y_cache: std::cell::RefCell::new(None),
++            layout_gen: 0,
+             pending_submits: std::cell::RefCell::new(Vec::new()),
+             data_log: std::cell::RefCell::new(Vec::new()),
+             final_url: final_url.to_string(),
+@@ -10318,9 +10367,24 @@ impl Page {
+         // move, then the press. MANUK_HOVER_CLICK_MUTATE=off skips it (gate mutant).
+         if std::env::var("MANUK_HOVER_CLICK_MUTATE").as_deref() != Ok("off") {
+             let previous = self.dom.hovered();
++            // CPU.2: a pointer entering a button on a page with no `:hover` rule that matches changes no
++            // style, so the layout pass after the recascade is the same layout again (70 ms on 1500 rows).
++            // Only taken when the tree was clean before the hover (so no unrelated dirt is left unlaid) and
++            // the recascade left the style map byte-equal; otherwise the full pass runs as before.
++            let root = self.dom.root();
++            let was_clean = !(self.dom.is_dirty(root) || self.dom.has_dirty_descendants(root));
++            let styles_before = (was_clean
++                && std::env::var_os("MANUK_NO_HOVER_SKIP").is_none()
++                && self.zoom == 1.0)
++                .then(|| self.styles.clone());
+             if self.dom.set_hovered(Some(node)) {
+                 self.recascade_all_sources(viewport_width);
+-                self.relayout(fonts, viewport_width);
++                if styles_before.is_some_and(|b| b == self.styles) {
++                    self.dom.clear_all_dirty();
++                } else {
++                    self.relayout(fonts, viewport_width);
++                }
++                self.note_cascade_current(viewport_width);
+             }
+             self.fire_hover_events(previous, Some(node), fonts, viewport_width);
+         }
+@@ -10732,6 +10796,8 @@ impl Page {
+             self.reapply_scroll_offsets();
+             self.content_height = self.root_box.content_bottom();
+             self.dom.clear_all_dirty();
++            self.layout_gen += 1;
++            self.note_cascade_current(viewport_width);
+         }
+         // A script round can mutate ONLY a child frame, leaving the parent clean — so this sits
+         // OUTSIDE the parent dirty guard above. It is a flag check per frame when nothing changed.
+@@ -11719,7 +11785,10 @@ impl Page {
+     /// three is a pass that silently does not run on the third — the shape of bug this codebase has
+     /// paid for repeatedly ("one rule, N implementations"). Adding the next such pass here makes it
+     /// run everywhere by construction.
++    #[track_caller]
+     fn set_root_box(&mut self, root: LayoutBox) {
++        self.layout_gen += 1;
++        LAYOUTS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+         self.root_box = root;
+         // The inside of an `<svg>` is not laid out by CSS; its boxes come from path data and the
+         // `viewBox` transform, and both need the svg's USED box, which exists only now.
+@@ -11749,6 +11818,7 @@ impl Page {
+         // correct, like the tree-grew site, and both of them being correct in private is how the
+         // other eight stayed wrong. There is one implementation now.
+         let sheets: Vec<Stylesheet> = self.all_sheets();
++        self.layout_gen += 1;
+         self.styles = cascade_styles(&self.dom, &sheets, viewport_width);
+         // The intrinsic size of a decoded image is not in any stylesheet, so a rebuilt style
+         // map has lost it. Restate it here, before the layout that consumes it.
+@@ -11813,6 +11883,7 @@ impl Page {
+             // this rule's ONE implementation. This site had its own copy of it, and being the only
+             // site that was right is how the other eight stayed wrong.
+             let sheets: Vec<Stylesheet> = self.all_sheets();
++            self.layout_gen += 1;
+             self.styles = cascade_styles(&self.dom, &sheets, viewport_width);
+             // The intrinsic size of a decoded image is not in any stylesheet, so a rebuilt style
+             // map has lost it. Restate it here, before the layout that consumes it.
+@@ -11953,6 +12024,7 @@ impl Page {
+             };
+             damage = damage.max(d);
+         }
++        self.layout_gen += 1;
+         self.styles = new_styles;
+ 
+         // Geometry-affecting change → full relayout. A repaint-only change (color /
+@@ -12343,6 +12415,52 @@ impl Page {
+     }
+ 
+     pub fn a11y_tree(&self) -> manuk_a11y::A11yNode {
++        let stale = std::env::var("MANUK_A11Y_CACHE_MUTATE").is_ok_and(|v| v == "stale");
++        // MANUK_A11Y_CACHE_MUTATE=stale (gate mutant): the key never moves, so a DOM change reads the old tree.
++        let key: A11yKey = if stale {
++            (0, 0, 0, None, 0)
++        } else {
++            (
++                self.dom.mutation_seq(),
++                self.layout_gen,
++                self.layout_hash(),
++                self.dom.focused(),
++                self.zoom.to_bits(),
++            )
++        };
++        let off = std::env::var_os("MANUK_NO_A11Y_CACHE").is_some();
++        if !off {
++            if let Some((k, t)) = self.a11y_cache.borrow().as_ref() {
++                if *k == key {
++                    return t.clone();
++                }
++            }
++        }
++        let t = self.a11y_tree_uncached();
++        if !off {
++            *self.a11y_cache.borrow_mut() = Some((key, t.clone()));
++        }
++        t
++    }
++
++    /// Hash of every box's node and border rect. `root_box` is mutated in place at many sites (sticky,
++    /// element scroll offsets, svg geometry, ...) that no counter of mine can enumerate, so geometry is
++    /// part of the cache key by value: one pass over the fragment tree, far cheaper than a tree build.
++    fn layout_hash(&self) -> u64 {
++        use std::hash::{Hash, Hasher};
++        let mut h = std::collections::hash_map::DefaultHasher::new();
++        self.root_box.walk(&mut |b| {
++            b.node.hash(&mut h);
++            b.rect.x.to_bits().hash(&mut h);
++            b.rect.y.to_bits().hash(&mut h);
++            b.rect.width.to_bits().hash(&mut h);
++            b.rect.height.to_bits().hash(&mut h);
++        });
++        h.finish()
++    }
++
++    fn a11y_tree_uncached(&self) -> manuk_a11y::A11yNode {
++        A11Y_BUILDS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+         let rects: std::collections::HashMap<_, _> = self
+             .root_box
+             .node_rects(&self.dom)
+@@ -12624,6 +12742,7 @@ impl Page {
+             };
+             damage = damage.max(d);
+         }
++        self.layout_gen += 1;
+         self.styles = new_styles;
+         self.has_sticky = self
+             .styles
+diff --git a/mcp/src/session.rs b/mcp/src/session.rs
+index d89002a0..371b2451 100644
+--- a/mcp/src/session.rs
++++ b/mcp/src/session.rs
+@@ -1343,7 +1343,24 @@ impl<B: Backend> Session<B> {
+         }
+     }
+ 
++    /// CPU.2: with `MANUK_BUILD_TRACE` set, one stderr line per call with the a11y-tree builds, cascades and
++    /// layout installs it cost (process-wide counters in `manuk_page`), so the count is measured, not argued.
+     pub async fn call(&mut self, tool: &str, a: &Map<String, Value>) -> Result<Output> {
++        let trace = std::env::var_os("MANUK_BUILD_TRACE").is_some();
++        let before = manuk_agent::build_counts();
++        let r = self.call_traced(tool, a).await;
++        if trace {
++            eprintln!(
++                "BUILDS {tool} trees={} cascades={} layouts={}",
++                manuk_agent::build_counts().0 - before.0,
++                manuk_agent::build_counts().1 - before.1,
++                manuk_agent::build_counts().2 - before.2
++            );
++        }
++        r
++    }
++
++    async fn call_traced(&mut self, tool: &str, a: &Map<String, Value>) -> Result<Output> {
+         self.include_hidden = a
+             .get("include_hidden")
+             .and_then(Value::as_bool)
