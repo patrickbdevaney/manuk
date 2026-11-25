@@ -1,0 +1,12 @@
+load1=18.12 variant=s round=0
+load1=17.56 variant=2 round=0
+load1=17.84 variant=3 round=0
+load1=17.53 variant=hot3 round=0
+load1=16.74 variant=2 round=1
+load1=16.12 variant=3 round=1
+load1=16.43 variant=hot3 round=1
+load1=16.12 variant=s round=1
+load1=15.79 variant=3 round=2
+load1=14.90 variant=hot3 round=2
+load1=15.23 variant=s round=2
+load1=16.17 variant=2 round=2
