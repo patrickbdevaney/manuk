@@ -16,6 +16,11 @@ if MANUK_BASE_URL="$W/bad" MANUK_PREFIX="$W/p2" sh "$R/scripts/install-mcp.sh" >
 echo '{}' > "$W/junk.json"
 if MANUK_SBOM_SRC="$W/junk.json" "$R/scripts/mcp-package.sh" "$BIN" "$N" "$W/rel2" >/dev/null 2>&1; then bad "junk SBOM accepted"; else ok "junk SBOM refused"; fi
 python3 -I -c "import json,sys;d=json.load(open(sys.argv[1]));print('sbom components',len(d['components']))" "$W/rel/$N.cdx.json"
+# glibc bound (SHIP.2.a): the verify container is ubuntu:24.04 (glibc 2.39); the binary must not need newer symbols
+if [ "$(uname -s)" = Linux ]; then
+  GMAX=$(objdump -T "$BIN" | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -uV | tail -1)
+  [ -n "$GMAX" ] && [ "$(printf '%s\n2.39\n' "$GMAX" | sort -V | tail -1)" = 2.39 ] && ok "binary needs glibc <= 2.39 (max $GMAX)" || bad "binary needs glibc ${GMAX:-?} > 2.39"
+fi
 # regression (SHIP.2.a): CI packages into dist/ INSIDE the repo; the SBOM must survive the cleanup
 IP="$R/ship2-probe-$$"; "$R/scripts/mcp-package.sh" "$BIN" "$N" "$IP" >/dev/null 2>&1 && [ -s "$IP/$N.cdx.json" ] && ok "in-repo output keeps SBOM" || bad "in-repo output lost SBOM"
 rm -rf "$IP"
