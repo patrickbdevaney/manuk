@@ -43,46 +43,21 @@ jobs:
         with: { name: "${{ matrix.name }}", path: dist/* }
 
   # A CLEAN container: nothing but the distro, the downloaded artifact, the installer and the pinned Chrome.
+  # Two levels: this host step only relaxes the kernel's unprivileged-userns restriction (a read-only /proc/sys in a
+  # container cannot), so Chrome's sandbox can start; the verify itself runs in a fresh ubuntu:24.04 container.
   verify-linux:
     needs: build
-    runs-on: ubuntu-latest
-    container:
-      image: ubuntu:24.04
-      # Chrome's own sandbox stays ON; the container just has to allow the user namespaces it needs.
-      options: --security-opt seccomp=unconfined --security-opt apparmor=unconfined
+    runs-on: ubuntu-24.04
     steps:
-      - name: clean-container prerequisites (no Rust, no compiler)
-        run: |
-          apt-get update
-          apt-get install -y --no-install-recommends ca-certificates curl unzip python3 nodejs npm libstdc++6 \
-            libnss3 libatk1.0-0t64 libatk-bridge2.0-0t64 libcups2t64 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 \
-            libxfixes3 libxrandr2 libgbm1 libasound2t64 libpango-1.0-0 libcairo2 fonts-liberation
       - uses: actions/download-artifact@v4
         with: { name: manuk-mcp-linux-x86_64, path: rel }
-      - uses: actions/checkout@v4   # only for scripts/ (installer, smoke) and the pin; no build happens here
+      - uses: actions/checkout@v4   # only for scripts/ (installer, smoke, verify) and the pin; no build happens here
         with: { path: src }
-      - name: checksum verifies
-        run: cd rel && sha256sum -c manuk-mcp-linux-x86_64.tar.gz.sha256
-      - name: install (verifies the checksum again, fetches the pinned Chrome for Testing)
-        # HOME is a shared dir, not /root: the smoke runs as an unprivileged user below (Chrome refuses its sandbox as root)
+      - name: 'host: allow the unprivileged user namespaces Chrome sandbox needs (CI VM only)'
         run: |
-          mkdir -p /opt/manuk-home
-          HOME=/opt/manuk-home MANUK_BASE_URL=$PWD/rel MANUK_PREFIX=/usr/local MANUK_INSTALL_CHROME=1 sh src/scripts/install-mcp.sh
-      - name: claude mcp add
+          echo "before: $(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null || echo n/a)"
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: 'clean ubuntu:24.04 container: checksum, install, claude mcp add, smoke (sandbox on)'
         run: |
-          npm install -g @anthropic-ai/claude-code
-          claude mcp add manuk -- /usr/local/bin/manuk-mcp
-          claude mcp list
-      - name: tools listed + one Chrome task (unprivileged user; Chrome's sandbox stays on)
-        run: |
-          useradd -m smokeuser
-          chmod -R a+rX /opt/manuk-home
-          CH=$(find /opt/manuk-home/.local/chrome-cft -type f -name chrome | head -1)
-          test -x "$CH"
-          # Ubuntu 24.04 restricts unprivileged user namespaces (AppArmor); Chrome's namespace sandbox then fails
-          # ("No usable sandbox"). This Chrome build has no setuid-helper fallback. Diagnose what the container can change:
-          echo "restrict_unprivileged_userns=$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>&1)"
-          if echo 0 > /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null; then echo "sysctl: writable from container"; else echo "sysctl: NOT writable from container"; fi
-          runuser -u smokeuser -- unshare -U -r true && echo "userns (smokeuser): ok" || echo "userns (smokeuser): BLOCKED"
-          runuser -u smokeuser -- env HOME=/home/smokeuser MANUK_CHROME="$CH" \
-            python3 -I src/scripts/mcp-smoke.py /usr/local/bin/manuk-mcp
+          docker run --rm --security-opt seccomp=unconfined --security-opt apparmor=unconfined \
+            -v "$GITHUB_WORKSPACE:/w" -w /w ubuntu:24.04 sh src/scripts/mcp-verify-clean.sh
