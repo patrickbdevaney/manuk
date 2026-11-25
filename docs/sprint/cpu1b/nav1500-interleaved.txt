@@ -1,0 +1,16 @@
+before 0.67
+after 0.68
+before 0.83
+after 0.88
+before 0.91
+after 0.79
+before 0.77
+after 0.92
+before 0.78
+after 0.94
+before 0.89
+after 0.77
+before 0.81
+after 0.92
+before 1.08
+after 1.05
