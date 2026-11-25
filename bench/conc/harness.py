@@ -18,7 +18,8 @@ from mcp_readline import readline as _rl
 
 ARMS = ["engine-proc-full", "engine-proc-lean", "engine-fork", "chrome-mcp", "pw-proc", "pw-shared"]
 NS = [1, 5, 10, 25, 50, 100]
-CAGE = ["systemd-run", "--user", "--scope", "--quiet", "-p", "MemoryMax=8G", "-p", "MemorySwapMax=0"]
+CAGE_GB = int(os.environ.get("CONC_CAGE_GB", "8"))  # registered cage is 8; any other value is a labelled deviation (CONC.2.b)
+CAGE = ["systemd-run", "--user", "--scope", "--quiet", "-p", f"MemoryMax={CAGE_GB}G", "-p", "MemorySwapMax=0"]
 MIN_AVAIL_GB = 20
 TOOL = {  # abstract op -> tool names per surface
     "manuk": dict(nav="navigate", snap="observe", click="act", type="type", find="find"),
@@ -336,7 +337,7 @@ def run_cell(armname, n, run, traces=None, with_iso=True):
                cold_p50_ms=round(pct(cold, .5), 1) if cold else None, zygote_start_ms=round(zyg, 1) if zyg else None,
                peak_pss_mb=round(samp.peak / 1024, 1), peak_procs=samp.nproc, pss_per_ok_mb=round(samp.peak / 1024 / npass, 2) if npass else None,
                cpu_s=round(((cpu1 - cpu0) / 1e6) - time.process_time(), 2) if cpu0 is not None and cpu1 is not None else None,
-               oom_kill=(oom1 - oom0) if oom0 is not None and oom1 is not None else None, caged=bool(cg) and cg_read(cg, "memory.max") == 8 << 30 and cg_read(cg, "memory.swap.max") == 0, isolation_ok=iso_ok,
+               oom_kill=(oom1 - oom0) if oom0 is not None and oom1 is not None else None, caged=bool(cg) and cg_read(cg, "memory.max") == 8 << 30 and cg_read(cg, "memory.swap.max") == 0, cage_gb=(cg_read(cg, "memory.max") >> 30) if cg and isinstance(cg_read(cg, "memory.max"), int) else None, isolation_ok=iso_ok,
                per_trace={k: f"{sum(v)}/{len(v)}" for k, v in sorted(per.items())},
                fail_reasons=sorted({r[3] for r in results if not r[2]})[:4])
     srv.shutdown(); return row
@@ -347,7 +348,7 @@ def mem_available_gb():
         if l.startswith("MemAvailable:"): return int(l.split()[1]) / 1048576
 
 COLS = ["chrome_ver", "commit", "arm", "n", "run", "host_load1", "traces_expected", "traces_recorded", "traces_pass", "success", "wall_s", "ok_per_min",
-        "p50_ms", "p95_ms", "cold_p50_ms", "zygote_start_ms", "peak_pss_mb", "peak_procs", "pss_per_ok_mb", "cpu_s", "oom_kill", "caged", "isolation_ok", "per_trace", "fail_reasons"]
+        "p50_ms", "p95_ms", "cold_p50_ms", "zygote_start_ms", "peak_pss_mb", "peak_procs", "pss_per_ok_mb", "cpu_s", "oom_kill", "caged", "cage_gb", "isolation_ok", "per_trace", "fail_reasons"]
 
 def tsv(row): return "\t".join(json.dumps(row[c]) if isinstance(row[c], (dict, list)) else str(row[c]) for c in COLS)
 

@@ -205,3 +205,10 @@ best Chrome arm by capacity: pw-shared (in [37,39]).
 - **Capacity win (engine-fork): capacity in [68,70] vs pw-shared in [37,39]; ratio between 1.74x and 1.89x (need >=1.5x): PASS**
 - **Cost win (registered, N=50): NOT EVALUABLE - no Chrome arm survived N=50 in the 8 GB cage (24 cells OOM-killed; journal shows 24 oom-kill scopes). Not scored as a pass.**
 
+
+## CONC.2.b - registered cost bar at N=50 (DEVIATION: raised cage)
+
+The registered N=50 cost bar was unevaluable in the 8 GB cage (all Chrome cells OOM-killed). Chrome arms were re-measured at N=50 in a **24 GB cage** (`CONC_CAGE_GB=24`, swap 0, `caged=False`, `cage_gb=24` in `docs/sprint/conc2/chrome-n50-uncaged.tsv`), 3 runs per arm, real-page traces, chrome_ver=145.0.7632.116, MemAvailable >= 20 GB at start. Engine rows are the existing 8 GB-cage N=50 rows. All three Chrome arms succeeded 1.00 in all runs. Peak PSS per successful task (`bench/conc/cost_n50.py`, output in `docs/sprint/conc2/cost-n50.md`):
+
+- chrome-mcp 51.0 MB/ok, pw-proc 56.0, pw-shared 25.6 (best Chrome arm); engine-proc-full 9.8, engine-proc-lean 10.4, engine-fork 9.8.
+- **Cost win (registered, N=50): PASS** for all three engine rows (59-62% lower than pw-shared; need >=30%). Deviation: Chrome cage 24 GB vs engine cage 8 GB. The engine rows' success at N=50 is 0.88-0.97 (not 1.00), so the per-ok denominator is passed tasks only. Peak PSS is process-tree memory, unaffected by cage size unless the cage kills the run (none did here).
