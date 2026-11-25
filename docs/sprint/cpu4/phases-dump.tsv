@@ -1,0 +1,222 @@
+0	mdn-css	startup (before first trace event, incl. JS prewarm)	0.066
+0	mdn-css	  pass[cascade@page/lib.rs:9952] n	2.000
+0	mdn-css	  pass[cascade@page/lib.rs:9952] cpu	0.147
+0	mdn-css	  pass[layout@page/lib.rs:9963] n	2.000
+0	mdn-css	  pass[layout@page/lib.rs:9963] cpu	0.242
+0	mdn-css	  pass[cascade@page/lib.rs:13005] n	2.000
+0	mdn-css	  pass[cascade@page/lib.rs:13005] cpu	0.297
+0	mdn-css	  pass[layout@page/lib.rs:13005] n	2.000
+0	mdn-css	  pass[layout@page/lib.rs:13005] cpu	0.514
+0	mdn-css	  pass[cascade@page/lib.rs:7595] n	1.000
+0	mdn-css	  pass[cascade@page/lib.rs:7595] cpu	0.153
+0	mdn-css	  pass[layout@page/lib.rs:7595] n	1.000
+0	mdn-css	  pass[layout@page/lib.rs:7595] cpu	0.257
+0	mdn-css	cascade	0.597
+0	mdn-css	layout	1.013
+0	mdn-css	parse (html)	0.027
+0	mdn-css	script (JS exec + script fetch/compile)	0.022
+0	mdn-css	stylesheet fetch+parse	0.034
+0	mdn-css	subframes	0.056
+0	mdn-css	images/masks/fetch (decode)	0.035
+0	mdn-css	  thread[cascade+layout+blocking scripts] a11y-dump	0.399
+0	mdn-css	  thread[subframes (pre-load)] a11y-dump	0.478
+0	mdn-css	  thread[initial images+masks] a11y-dump	0.436
+0	mdn-css	  thread[finish_loading: external CSS] a11y-dump	0.422
+0	mdn-css	a11y tree (+ observe serialisation under mcp)	0.030
+0	mdn-css	serialise+exit	0.029
+0	mdn-css	TOTAL_rusage	1.916
+0	mdn-css	SUM_attributed	1.908
+0	w3c	startup (before first trace event, incl. JS prewarm)	0.048
+0	w3c	  pass[cascade@page/lib.rs:9952] n	1.000
+0	w3c	  pass[cascade@page/lib.rs:9952] cpu	0.021
+0	w3c	  pass[layout@page/lib.rs:9963] n	1.000
+0	w3c	  pass[layout@page/lib.rs:9963] cpu	0.011
+0	w3c	  pass[cascade@page/lib.rs:13005] n	1.000
+0	w3c	  pass[cascade@page/lib.rs:13005] cpu	0.002
+0	w3c	  pass[layout@page/lib.rs:13005] n	1.000
+0	w3c	  pass[layout@page/lib.rs:13005] cpu	0.008
+0	w3c	  pass[layout@page/lib.rs:7595] n	1.000
+0	w3c	  pass[layout@page/lib.rs:7595] cpu	0.007
+0	w3c	cascade	0.023
+0	w3c	layout	0.026
+0	w3c	parse (html)	0.005
+0	w3c	script (JS exec + script fetch/compile)	0.010
+0	w3c	stylesheet fetch+parse	0.001
+0	w3c	subframes	0.006
+0	w3c	images/masks/fetch (decode)	0.146
+0	w3c	  thread[initial images+masks] a11y-dump	0.018
+0	w3c	  thread[initial images+masks] tokio-rt-worker	0.134
+0	w3c	a11y tree (+ observe serialisation under mcp)	0.001
+0	w3c	serialise+exit	0.022
+0	w3c	TOTAL_rusage	0.294
+0	w3c	SUM_attributed	0.289
+0	rfc-editor	startup (before first trace event, incl. JS prewarm)	0.049
+0	rfc-editor	  pass[cascade@page/lib.rs:9952] n	1.000
+0	rfc-editor	  pass[cascade@page/lib.rs:9952] cpu	0.018
+0	rfc-editor	  pass[layout@page/lib.rs:9963] n	1.000
+0	rfc-editor	  pass[layout@page/lib.rs:9963] cpu	0.131
+0	rfc-editor	  pass[cascade@page/lib.rs:13005] n	1.000
+0	rfc-editor	  pass[cascade@page/lib.rs:13005] cpu	0.005
+0	rfc-editor	  pass[layout@page/lib.rs:13005] n	1.000
+0	rfc-editor	  pass[layout@page/lib.rs:13005] cpu	0.039
+0	rfc-editor	cascade	0.023
+0	rfc-editor	layout	0.170
+0	rfc-editor	parse (html)	0.014
+0	rfc-editor	script (JS exec + script fetch/compile)	0.008
+0	rfc-editor	stylesheet fetch+parse	0.010
+0	rfc-editor	subframes	0.003
+0	rfc-editor	images/masks/fetch (decode)	0.003
+0	rfc-editor	  thread[cascade+layout+blocking scripts] a11y-dump	0.153
+0	rfc-editor	  thread[finish_loading: external CSS] a11y-dump	0.055
+0	rfc-editor	a11y tree (+ observe serialisation under mcp)	0.014
+0	rfc-editor	serialise+exit	0.033
+0	rfc-editor	TOTAL_rusage	0.332
+0	rfc-editor	SUM_attributed	0.328
+1	mdn-css	startup (before first trace event, incl. JS prewarm)	0.052
+1	mdn-css	  pass[cascade@page/lib.rs:9952] n	2.000
+1	mdn-css	  pass[cascade@page/lib.rs:9952] cpu	0.147
+1	mdn-css	  pass[layout@page/lib.rs:9963] n	2.000
+1	mdn-css	  pass[layout@page/lib.rs:9963] cpu	0.229
+1	mdn-css	  pass[cascade@page/lib.rs:13005] n	2.000
+1	mdn-css	  pass[cascade@page/lib.rs:13005] cpu	0.294
+1	mdn-css	  pass[layout@page/lib.rs:13005] n	2.000
+1	mdn-css	  pass[layout@page/lib.rs:13005] cpu	0.452
+1	mdn-css	  pass[cascade@page/lib.rs:7595] n	1.000
+1	mdn-css	  pass[cascade@page/lib.rs:7595] cpu	0.145
+1	mdn-css	  pass[layout@page/lib.rs:7595] n	1.000
+1	mdn-css	  pass[layout@page/lib.rs:7595] cpu	0.205
+1	mdn-css	cascade	0.586
+1	mdn-css	layout	0.886
+1	mdn-css	parse (html)	0.018
+1	mdn-css	script (JS exec + script fetch/compile)	0.019
+1	mdn-css	stylesheet fetch+parse	0.024
+1	mdn-css	subframes	0.038
+1	mdn-css	images/masks/fetch (decode)	0.028
+1	mdn-css	  thread[cascade+layout+blocking scripts] a11y-dump	0.387
+1	mdn-css	  thread[subframes (pre-load)] a11y-dump	0.423
+1	mdn-css	  thread[initial images+masks] a11y-dump	0.371
+1	mdn-css	  thread[finish_loading: external CSS] a11y-dump	0.380
+1	mdn-css	a11y tree (+ observe serialisation under mcp)	0.017
+1	mdn-css	serialise+exit	0.027
+1	mdn-css	TOTAL_rusage	1.699
+1	mdn-css	SUM_attributed	1.694
+1	w3c	startup (before first trace event, incl. JS prewarm)	0.048
+1	w3c	  pass[cascade@page/lib.rs:9952] n	1.000
+1	w3c	  pass[cascade@page/lib.rs:9952] cpu	0.019
+1	w3c	  pass[layout@page/lib.rs:9963] n	1.000
+1	w3c	  pass[layout@page/lib.rs:9963] cpu	0.009
+1	w3c	  pass[cascade@page/lib.rs:13005] n	1.000
+1	w3c	  pass[cascade@page/lib.rs:13005] cpu	0.002
+1	w3c	  pass[layout@page/lib.rs:13005] n	1.000
+1	w3c	  pass[layout@page/lib.rs:13005] cpu	0.008
+1	w3c	  pass[layout@page/lib.rs:7595] n	1.000
+1	w3c	  pass[layout@page/lib.rs:7595] cpu	0.006
+1	w3c	cascade	0.021
+1	w3c	layout	0.024
+1	w3c	parse (html)	0.005
+1	w3c	script (JS exec + script fetch/compile)	0.008
+1	w3c	stylesheet fetch+parse	0.000
+1	w3c	subframes	0.007
+1	w3c	images/masks/fetch (decode)	0.147
+1	w3c	  thread[initial images+masks] a11y-dump	0.014
+1	w3c	  thread[initial images+masks] tokio-rt-worker	0.140
+1	w3c	a11y tree (+ observe serialisation under mcp)	0.001
+1	w3c	serialise+exit	0.021
+1	w3c	TOTAL_rusage	0.286
+1	w3c	SUM_attributed	0.283
+1	rfc-editor	startup (before first trace event, incl. JS prewarm)	0.029
+1	rfc-editor	  pass[cascade@page/lib.rs:9952] n	1.000
+1	rfc-editor	  pass[cascade@page/lib.rs:9952] cpu	0.017
+1	rfc-editor	  pass[layout@page/lib.rs:9963] n	1.000
+1	rfc-editor	  pass[layout@page/lib.rs:9963] cpu	0.132
+1	rfc-editor	  pass[cascade@page/lib.rs:13005] n	1.000
+1	rfc-editor	  pass[cascade@page/lib.rs:13005] cpu	0.006
+1	rfc-editor	  pass[layout@page/lib.rs:13005] n	1.000
+1	rfc-editor	  pass[layout@page/lib.rs:13005] cpu	0.045
+1	rfc-editor	cascade	0.023
+1	rfc-editor	layout	0.176
+1	rfc-editor	parse (html)	0.013
+1	rfc-editor	script (JS exec + script fetch/compile)	0.011
+1	rfc-editor	stylesheet fetch+parse	0.017
+1	rfc-editor	subframes	0.005
+1	rfc-editor	images/masks/fetch (decode)	0.004
+1	rfc-editor	  thread[cascade+layout+blocking scripts] a11y-dump	0.152
+1	rfc-editor	  thread[finish_loading: external CSS] a11y-dump	0.069
+1	rfc-editor	a11y tree (+ observe serialisation under mcp)	0.026
+1	rfc-editor	serialise+exit	0.034
+1	rfc-editor	TOTAL_rusage	0.366
+1	rfc-editor	SUM_attributed	0.338
+2	mdn-css	startup (before first trace event, incl. JS prewarm)	0.051
+2	mdn-css	  pass[cascade@page/lib.rs:9952] n	2.000
+2	mdn-css	  pass[cascade@page/lib.rs:9952] cpu	0.139
+2	mdn-css	  pass[layout@page/lib.rs:9963] n	2.000
+2	mdn-css	  pass[layout@page/lib.rs:9963] cpu	0.271
+2	mdn-css	  pass[cascade@page/lib.rs:13005] n	2.000
+2	mdn-css	  pass[cascade@page/lib.rs:13005] cpu	0.297
+2	mdn-css	  pass[layout@page/lib.rs:13005] n	2.000
+2	mdn-css	  pass[layout@page/lib.rs:13005] cpu	0.445
+2	mdn-css	  pass[cascade@page/lib.rs:7595] n	1.000
+2	mdn-css	  pass[cascade@page/lib.rs:7595] cpu	0.144
+2	mdn-css	  pass[layout@page/lib.rs:7595] n	1.000
+2	mdn-css	  pass[layout@page/lib.rs:7595] cpu	0.228
+2	mdn-css	cascade	0.580
+2	mdn-css	layout	0.944
+2	mdn-css	parse (html)	0.023
+2	mdn-css	script (JS exec + script fetch/compile)	0.022
+2	mdn-css	stylesheet fetch+parse	0.028
+2	mdn-css	subframes	0.033
+2	mdn-css	images/masks/fetch (decode)	0.027
+2	mdn-css	  thread[cascade+layout+blocking scripts] a11y-dump	0.420
+2	mdn-css	  thread[subframes (pre-load)] a11y-dump	0.387
+2	mdn-css	  thread[initial images+masks] a11y-dump	0.393
+2	mdn-css	  thread[finish_loading: external CSS] a11y-dump	0.411
+2	mdn-css	a11y tree (+ observe serialisation under mcp)	0.029
+2	mdn-css	serialise+exit	0.032
+2	mdn-css	TOTAL_rusage	1.774
+2	mdn-css	SUM_attributed	1.769
+2	w3c	startup (before first trace event, incl. JS prewarm)	0.049
+2	w3c	  pass[cascade@page/lib.rs:9952] n	1.000
+2	w3c	  pass[cascade@page/lib.rs:9952] cpu	0.021
+2	w3c	  pass[layout@page/lib.rs:9963] n	1.000
+2	w3c	  pass[layout@page/lib.rs:9963] cpu	0.012
+2	w3c	  pass[cascade@page/lib.rs:13005] n	1.000
+2	w3c	  pass[cascade@page/lib.rs:13005] cpu	0.002
+2	w3c	  pass[layout@page/lib.rs:13005] n	1.000
+2	w3c	  pass[layout@page/lib.rs:13005] cpu	0.010
+2	w3c	  pass[layout@page/lib.rs:7595] n	1.000
+2	w3c	  pass[layout@page/lib.rs:7595] cpu	0.009
+2	w3c	cascade	0.023
+2	w3c	layout	0.030
+2	w3c	parse (html)	0.004
+2	w3c	script (JS exec + script fetch/compile)	0.009
+2	w3c	stylesheet fetch+parse	0.000
+2	w3c	subframes	0.009
+2	w3c	images/masks/fetch (decode)	0.136
+2	w3c	  thread[initial images+masks] a11y-dump	0.017
+2	w3c	  thread[initial images+masks] tokio-rt-worker	0.128
+2	w3c	a11y tree (+ observe serialisation under mcp)	0.001
+2	w3c	serialise+exit	0.016
+2	w3c	TOTAL_rusage	0.281
+2	w3c	SUM_attributed	0.276
+2	rfc-editor	startup (before first trace event, incl. JS prewarm)	0.047
+2	rfc-editor	  pass[cascade@page/lib.rs:9952] n	1.000
+2	rfc-editor	  pass[cascade@page/lib.rs:9952] cpu	0.014
+2	rfc-editor	  pass[layout@page/lib.rs:9963] n	1.000
+2	rfc-editor	  pass[layout@page/lib.rs:9963] cpu	0.123
+2	rfc-editor	  pass[cascade@page/lib.rs:13005] n	1.000
+2	rfc-editor	  pass[cascade@page/lib.rs:13005] cpu	0.005
+2	rfc-editor	  pass[layout@page/lib.rs:13005] n	1.000
+2	rfc-editor	  pass[layout@page/lib.rs:13005] cpu	0.036
+2	rfc-editor	cascade	0.018
+2	rfc-editor	layout	0.159
+2	rfc-editor	parse (html)	0.012
+2	rfc-editor	script (JS exec + script fetch/compile)	0.007
+2	rfc-editor	stylesheet fetch+parse	0.010
+2	rfc-editor	subframes	0.003
+2	rfc-editor	images/masks/fetch (decode)	0.003
+2	rfc-editor	  thread[cascade+layout+blocking scripts] a11y-dump	0.137
+2	rfc-editor	  thread[finish_loading: external CSS] a11y-dump	0.051
+2	rfc-editor	a11y tree (+ observe serialisation under mcp)	0.013
+2	rfc-editor	serialise+exit	0.026
+2	rfc-editor	TOTAL_rusage	0.303
+2	rfc-editor	SUM_attributed	0.298

@@ -1,0 +1,14 @@
+== green
+CPU.4 gate: ok
+rc=0
+== mutant 1: drop mdn-css layout rows
+mcp round 0 mdn-css: phases sum 1.679 vs total 3.070
+mcp round 1 mdn-css: phases sum 1.563 vs total 2.978
+mcp round 2 mdn-css: phases sum 1.571 vs total 2.958
+rc=0
+== mutant 2: unroute a mechanism
+mechanism >=15% not routed: w3c / images/masks/fetch (decode) (0.613 of 0.833)
+== mutant 3: no chrome rows
+no chrome row for mdn-css
+no chrome row for w3c
+no chrome row for rfc-editor

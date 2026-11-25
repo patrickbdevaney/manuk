@@ -40,7 +40,30 @@ use manuk_css::{
     diff_style, MinimalCascade, RestyleDamage, Rgba, StyleEngine, StyleMap, Stylesheet,
 };
 use manuk_dom::{Dom, NodeId};
-use manuk_layout::{layout_document, BoxContent, LayoutBox};
+use manuk_layout::{layout_document as layout_document_raw, BoxContent, LayoutBox};
+
+/// CPU.4: `layout_document` with a `MANUK_NET_TRACE` line `layout_pass\t<us>\t<caller>` for EVERY layout pass (the existing
+/// `layout` lines only cover the restyle/initial paths), so the attribution can name the passes that happen inside
+/// the subresource phases. Disabled: one `OnceLock` read.
+#[track_caller]
+fn layout_document(
+    dom: &Dom,
+    styles: &StyleMap,
+    fonts: &FontContext,
+    viewport_width: f32,
+) -> LayoutBox {
+    if !manuk_net::nettrace::enabled() {
+        return layout_document_raw(dom, styles, fonts, viewport_width);
+    }
+    let caller = std::panic::Location::caller();
+    let t = std::time::Instant::now();
+    let r = layout_document_raw(dom, styles, fonts, viewport_width);
+    manuk_net::nettrace::emit(
+        "layout_pass",
+        &format!("{}\t{}", t.elapsed().as_micros(), caller.line()),
+    );
+    r
+}
 use manuk_net::csp::Csp;
 use manuk_paint::{Canvas, CpuPainter, Painter};
 use manuk_text::FontContext;
@@ -54,6 +77,22 @@ use url::Url;
 /// the cascade step swaps — the rest of the pipeline is engine-agnostic.
 #[track_caller]
 fn cascade_styles(dom: &Dom, sheets: &[Stylesheet], viewport_width: f32) -> StyleMap {
+    if !manuk_net::nettrace::enabled() {
+        return cascade_styles_inner(dom, sheets, viewport_width);
+    }
+    // CPU.4: one `cascade_pass\t<us>\t<caller line>` per cascade, wherever it runs (see `layout_document`).
+    let caller = std::panic::Location::caller();
+    let t = std::time::Instant::now();
+    let r = cascade_styles_inner(dom, sheets, viewport_width);
+    manuk_net::nettrace::emit(
+        "cascade_pass",
+        &format!("{}\t{}", t.elapsed().as_micros(), caller.line()),
+    );
+    r
+}
+
+#[track_caller]
+fn cascade_styles_inner(dom: &Dom, sheets: &[Stylesheet], viewport_width: f32) -> StyleMap {
     CASCADES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     manuk_css::values::set_viewport_width(viewport_width);
     #[cfg(feature = "stylo")]
