@@ -16,6 +16,9 @@ if MANUK_BASE_URL="$W/bad" MANUK_PREFIX="$W/p2" sh "$R/scripts/install-mcp.sh" >
 echo '{}' > "$W/junk.json"
 if MANUK_SBOM_SRC="$W/junk.json" "$R/scripts/mcp-package.sh" "$BIN" "$N" "$W/rel2" >/dev/null 2>&1; then bad "junk SBOM accepted"; else ok "junk SBOM refused"; fi
 python3 -I -c "import json,sys;d=json.load(open(sys.argv[1]));print('sbom components',len(d['components']))" "$W/rel/$N.cdx.json"
+# regression (SHIP.2.a): CI packages into dist/ INSIDE the repo; the SBOM must survive the cleanup
+IP="$R/ship2-probe-$$"; "$R/scripts/mcp-package.sh" "$BIN" "$N" "$IP" >/dev/null 2>&1 && [ -s "$IP/$N.cdx.json" ] && ok "in-repo output keeps SBOM" || bad "in-repo output lost SBOM"
+rm -rf "$IP"
 # the smoke on the INSTALLED binary
 python3 -I "$R/scripts/mcp-smoke.py" "$W/p/bin/manuk-mcp" > "$W/smoke.out" 2>&1 && ok "installed binary: tools listed, Chrome task passes" || { bad "smoke"; tail -5 "$W/smoke.out"; }
 # mutation 3: no Chrome -> smoke must fail

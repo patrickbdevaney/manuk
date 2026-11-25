@@ -15,7 +15,8 @@ else
   (cd "$R" && cargo cyclonedx --manifest-path mcp/Cargo.toml --format json --spec-version 1.5 --override-filename "$NAME.cdx" >/dev/null)
   # cargo-cyclonedx writes one file per workspace member; keep manuk-mcp's, drop the rest
   mv "$R/mcp/$NAME.cdx.json" "$OUT/$NAME.cdx.json"
-  find "$R" -name "$NAME.cdx.json" -not -path "$R/target/*" -delete
+  # never delete the copy we just moved: $OUT may itself live inside the repo (CI uses dist/)
+  find "$R" -name "$NAME.cdx.json" -not -path "$R/target/*" -not -path "$OUT/*" -delete
 fi
 python3 -I -c "import json,sys; d=json.load(open(sys.argv[1])); assert d['bomFormat']=='CycloneDX' and d['specVersion']=='1.5' and len(d['components'])>10, 'bad SBOM'" "$OUT/$NAME.cdx.json"
 (cd "$OUT" && sha256sum "$NAME.tar.gz" > "$NAME.tar.gz.sha256")
