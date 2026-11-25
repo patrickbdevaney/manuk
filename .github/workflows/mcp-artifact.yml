@@ -79,12 +79,10 @@ jobs:
           chmod -R a+rX /opt/manuk-home
           CH=$(find /opt/manuk-home/.local/chrome-cft -type f -name chrome | head -1)
           test -x "$CH"
-          # Ubuntu 24.04 restricts unprivileged user namespaces (AppArmor), so Chrome's namespace sandbox is
-          # unavailable here ("No usable sandbox"). Its setuid helper (shipped in the same zip) needs no namespaces:
-          # install it setuid-root and point Chrome at it. The sandbox stays ON; nothing runs with --no-sandbox.
-          install -o root -g root -m 4755 "$(dirname "$CH")/chrome_sandbox" /usr/local/sbin/chrome-sandbox
-          cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null || true
-          runuser -u smokeuser -- env HOME=/home/smokeuser CHROME_DEVEL_SANDBOX=/usr/local/sbin/chrome-sandbox \
-            timeout 60 "$CH" --headless=new --disable-gpu --enable-logging=stderr --v=0 --user-data-dir=/tmp/chrome-diag --dump-dom about:blank 2>&1 | grep -vE 'cpufreq' | head -60 || true
-          runuser -u smokeuser -- env HOME=/home/smokeuser CHROME_DEVEL_SANDBOX=/usr/local/sbin/chrome-sandbox MANUK_CHROME="$CH" \
+          # Ubuntu 24.04 restricts unprivileged user namespaces (AppArmor); Chrome's namespace sandbox then fails
+          # ("No usable sandbox"). This Chrome build has no setuid-helper fallback. Diagnose what the container can change:
+          echo "restrict_unprivileged_userns=$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>&1)"
+          if echo 0 > /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null; then echo "sysctl: writable from container"; else echo "sysctl: NOT writable from container"; fi
+          runuser -u smokeuser -- unshare -U -r true && echo "userns (smokeuser): ok" || echo "userns (smokeuser): BLOCKED"
+          runuser -u smokeuser -- env HOME=/home/smokeuser MANUK_CHROME="$CH" \
             python3 -I src/scripts/mcp-smoke.py /usr/local/bin/manuk-mcp
