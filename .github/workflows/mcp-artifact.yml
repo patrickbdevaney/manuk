@@ -64,11 +64,20 @@ jobs:
       - name: checksum verifies
         run: cd rel && sha256sum -c manuk-mcp-linux-x86_64.tar.gz.sha256
       - name: install (verifies the checksum again, fetches the pinned Chrome for Testing)
-        run: MANUK_BASE_URL=$PWD/rel MANUK_PREFIX=/usr/local MANUK_INSTALL_CHROME=1 sh src/scripts/install-mcp.sh
+        # HOME is a shared dir, not /root: the smoke runs as an unprivileged user below (Chrome refuses its sandbox as root)
+        run: |
+          mkdir -p /opt/manuk-home
+          HOME=/opt/manuk-home MANUK_BASE_URL=$PWD/rel MANUK_PREFIX=/usr/local MANUK_INSTALL_CHROME=1 sh src/scripts/install-mcp.sh
       - name: claude mcp add
         run: |
           npm install -g @anthropic-ai/claude-code
           claude mcp add manuk -- /usr/local/bin/manuk-mcp
           claude mcp list
-      - name: tools listed + one Chrome task
-        run: python3 -I src/scripts/mcp-smoke.py /usr/local/bin/manuk-mcp
+      - name: tools listed + one Chrome task (unprivileged user; Chrome's sandbox stays on)
+        run: |
+          useradd -m smokeuser
+          chmod -R a+rX /opt/manuk-home
+          CH=$(find /opt/manuk-home/.local/chrome-cft -type f -name chrome | head -1)
+          test -x "$CH"
+          runuser -u smokeuser -- env HOME=/home/smokeuser MANUK_CHROME="$CH" \
+            python3 -I src/scripts/mcp-smoke.py /usr/local/bin/manuk-mcp
