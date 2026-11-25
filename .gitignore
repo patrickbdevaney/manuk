@@ -74,3 +74,9 @@ scripts/botauth-verify/node_modules/
 docs/sprint/w4/transcripts-keep/
 bench-queue/pending/
 bench-queue/results/*/worker.log
+
+# bench/scratch leftovers that tick.sh git add -A once published
+/stay22-*.md
+/wk-*.md
+/wk[0-9]*.md
+bench-queue/results/*/RUNNING*
