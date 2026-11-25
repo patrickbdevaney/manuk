@@ -85,6 +85,6 @@ jobs:
           install -o root -g root -m 4755 "$(dirname "$CH")/chrome_sandbox" /usr/local/sbin/chrome-sandbox
           cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null || true
           runuser -u smokeuser -- env HOME=/home/smokeuser CHROME_DEVEL_SANDBOX=/usr/local/sbin/chrome-sandbox \
-            timeout 60 "$CH" --headless=new --disable-gpu --user-data-dir=/tmp/chrome-diag --dump-dom about:blank 2>&1 | tail -5 || true
+            timeout 60 "$CH" --headless=new --disable-gpu --enable-logging=stderr --v=0 --user-data-dir=/tmp/chrome-diag --dump-dom about:blank 2>&1 | grep -vE 'cpufreq' | head -60 || true
           runuser -u smokeuser -- env HOME=/home/smokeuser CHROME_DEVEL_SANDBOX=/usr/local/sbin/chrome-sandbox MANUK_CHROME="$CH" \
             python3 -I src/scripts/mcp-smoke.py /usr/local/bin/manuk-mcp
