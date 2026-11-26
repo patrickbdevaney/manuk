@@ -1150,26 +1150,86 @@ fn scan_mask_urls(css: &str) -> Vec<String> {
 
 /// Decode fetched bytes as a raster image, falling back to SVG (icons are overwhelmingly SVG).
 fn decode_bitmap(bytes: &[u8], url: &str) -> Option<manuk_paint::DecodedImage> {
+    // CPU.4.b: under MANUK_IMG_LOG the line also carries this thread's own cpu time for the decode
+    // (`/proc/thread-self/schedstat`, ns on-cpu; Linux only, 0 elsewhere) and the source byte count.
+    let log = std::env::var_os("MANUK_IMG_LOG").is_some();
+    let thread_cpu_ns = || {
+        std::fs::read_to_string("/proc/thread-self/schedstat")
+            .ok()
+            .and_then(|s| s.split_whitespace().next()?.parse::<u64>().ok())
+            .unwrap_or(0)
+    };
+    let c0 = if log { thread_cpu_ns() } else { 0 };
     let d = decode_bitmap_uncapped(bytes, url);
-    if std::env::var_os("MANUK_IMG_LOG").is_some() {
+    if log {
         if let Some(i) = &d {
-            eprintln!("IMGLOG {} {}x{} {}", i.rgba.len(), i.width, i.height, url);
+            eprintln!(
+                "IMGLOG {} {}x{} {} src_bytes={} cpu_ms={:.1}",
+                i.rgba.len(),
+                i.width,
+                i.height,
+                url,
+                bytes.len(),
+                (thread_cpu_ns().saturating_sub(c0)) as f64 / 1e6
+            );
         }
     }
     d
 }
 
+/// Area-average downscale of straight-alpha RGBA8 (`dw <= sw`, `dh <= sh`). Alpha-weighted so a transparent
+/// pixel's colour does not bleed into its neighbours.
+fn box_downscale(src: &[u8], sw: u32, sh: u32, dw: u32, dh: u32) -> Vec<u8> {
+    let (sw, sh, dw, dh) = (sw as usize, sh as usize, dw as usize, dh as usize);
+    let mut out = vec![0u8; dw * dh * 4];
+    for dy in 0..dh {
+        let y0 = dy * sh / dh;
+        let y1 = ((dy + 1) * sh).div_ceil(dh).clamp(y0 + 1, sh);
+        for dx in 0..dw {
+            let x0 = dx * sw / dw;
+            let x1 = ((dx + 1) * sw).div_ceil(dw).clamp(x0 + 1, sw);
+            let (mut r, mut g, mut b, mut a) = (0u64, 0u64, 0u64, 0u64);
+            for y in y0..y1 {
+                let row = &src[(y * sw + x0) * 4..(y * sw + x1) * 4];
+                for px in row.chunks_exact(4) {
+                    let al = px[3] as u64;
+                    r += px[0] as u64 * al;
+                    g += px[1] as u64 * al;
+                    b += px[2] as u64 * al;
+                    a += al;
+                }
+            }
+            let n = ((y1 - y0) * (x1 - x0)) as u64;
+            let o = (dy * dw + dx) * 4;
+            if a > 0 {
+                out[o] = ((r + a / 2) / a) as u8;
+                out[o + 1] = ((g + a / 2) / a) as u8;
+                out[o + 2] = ((b + a / 2) / a) as u8;
+                out[o + 3] = ((a + n / 2) / n) as u8;
+            }
+        }
+    }
+    out
+}
+
 fn decode_bitmap_uncapped(bytes: &[u8], url: &str) -> Option<manuk_paint::DecodedImage> {
     let cap = manuk_net::lean::decode_cap_px();
     match image::load_from_memory(bytes) {
-        Ok(mut img) => {
+        Ok(img) => {
             // DASH.MEM.1.b: bound one image's decoded pixels BEFORE the RGBA conversion (which copies).
             let (iw, ih) = (img.width(), img.height());
             let (tw, th) = manuk_net::lean::fit_under_cap(iw, ih, cap);
-            if (tw, th) != (iw, ih) {
-                img = img.resize_exact(tw, th, image::imageops::FilterType::Triangle);
-            }
             let rgba = img.into_rgba8();
+            if (tw, th) != (iw, ih) {
+                // CPU.4.b: `resize_exact(Triangle)` cost ~0.15 cpu-s per 1920x1280 photo (two of them were
+                // 0.3 of w3c's 0.6 image cpu-s under manuk-mcp); an area average is one pass over the source.
+                return Some(manuk_paint::DecodedImage {
+                    width: tw,
+                    height: th,
+                    rgba: box_downscale(rgba.as_raw(), iw, ih, tw, th),
+                })
+                .filter(|i| i.width > 0 && i.height > 0);
+            }
             let (w, h) = rgba.dimensions();
             (w > 0 && h > 0).then(|| manuk_paint::DecodedImage {
                 width: w,
@@ -17803,4 +17863,34 @@ thread_local! {
     /// the phase it cancelled (that phase's own closing `phase()` call never runs).
     static FL_PHASE: std::cell::Cell<(&'static str, std::time::Instant)> =
         std::cell::Cell::new(("<none>", std::time::Instant::now()));
+}
+
+#[cfg(test)]
+mod cpu4b_box_downscale {
+    use super::*;
+
+    /// CPU.4.b: the decode-cap downscale is an area average — a 4x4 of two flat halves halves to the two
+    /// flat colours exactly, and a fully transparent source pixel does not tint its opaque neighbour.
+    /// Mutation: dropping the alpha weighting (`* al`) makes the second assertion go red.
+    #[test]
+    fn halves_flat_regions_exactly_and_weights_by_alpha() {
+        let mut src = Vec::new();
+        for _y in 0..4 {
+            for x in 0..4 {
+                src.extend_from_slice(if x < 2 {
+                    &[255, 0, 0, 255]
+                } else {
+                    &[0, 0, 255, 255]
+                });
+            }
+        }
+        let out = box_downscale(&src, 4, 4, 2, 2);
+        assert_eq!(
+            out,
+            [255, 0, 0, 255, 0, 0, 255, 255, 255, 0, 0, 255, 0, 0, 255, 255]
+        );
+        // one opaque white + one transparent black pixel -> white at half alpha, not grey
+        let out = box_downscale(&[255, 255, 255, 255, 0, 0, 0, 0], 2, 1, 1, 1);
+        assert_eq!(out, [255, 255, 255, 128]);
+    }
 }
