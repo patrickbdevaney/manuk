@@ -5,6 +5,13 @@
 R=$(cd "$(dirname "$0")/../.." && pwd); BIN=${1:-$R/target/release/manuk-mcp}
 fail=0; ok(){ echo "ok   $*"; }; bad(){ echo "FAIL $*"; fail=1; }
 W=$(mktemp -d); trap 'rm -rf "$W"' EXIT
+# SHIP.2.a.a: the install doc names the Ubuntu 24.04 userns requirement, the sysctl and the symptom
+doc_ok(){ grep -q 'kernel.apparmor_restrict_unprivileged_userns=0' "$1" && grep -q 'No usable sandbox' "$1" && grep -q 'DevToolsActivePort' "$1" && grep -q 'apparmor_parser -r' "$1"; }
+DOC="$R/docs/MCP-INSTALL.md"
+doc_ok "$DOC" && ok "MCP-INSTALL.md names the userns sysctl, the symptom and the AppArmor reload" || bad "MCP-INSTALL.md lacks the userns sysctl or symptom"
+# mutant: the doc with the sysctl line removed must be red
+sed '/kernel.apparmor_restrict_unprivileged_userns=0/d' "$DOC" > "$W/nosysctl.md"
+if doc_ok "$W/nosysctl.md"; then bad "mutant: doc without sysctl passed"; else ok "mutant: doc without sysctl is red"; fi
 case "$(uname -s)-$(uname -m)" in Linux-x86_64) N=manuk-mcp-linux-x86_64;; Darwin-arm64) N=manuk-mcp-macos-arm64;; *) echo skip; exit 0;; esac
 "$R/scripts/mcp-package.sh" "$BIN" "$N" "$W/rel" >/dev/null && ok "package built (tar.gz, sha256, SBOM)" || bad "package"
 (cd "$W/rel" && sha256sum -c "$N.tar.gz.sha256" >/dev/null) && ok "sha256sum -c verifies" || bad "checksum"

@@ -28,8 +28,44 @@ curl -fsSL https://storage.googleapis.com/chrome-for-testing-public/$pin/linux64
 unzip -q cft.zip -d ~/.local/chrome-cft/$pin
 ```
 
-Or point `MANUK_CHROME` at any Chrome binary. On Ubuntu 24.04 the host restricts unprivileged user namespaces, which
-Chrome's sandbox needs; lift the host restriction rather than Chrome's flag.
+Or point `MANUK_CHROME` at any Chrome binary. On Ubuntu 24.04 the host may block the user namespaces Chrome's sandbox
+needs; see the next section before trying anything else.
+
+## Ubuntu 24.04 (and 23.10+): user namespaces for Chrome's sandbox
+
+Symptom: manuk-mcp fails to start its Chrome task, and the Chrome log shows `No usable sandbox!` (Chrome exits at
+startup), or manuk-mcp reports that Chrome did not publish DevToolsActivePort. Cause: Ubuntu sets
+`kernel.apparmor_restrict_unprivileged_userns=1`, which blocks the unprivileged user namespaces Chrome's sandbox
+uses. Check it with `sysctl kernel.apparmor_restrict_unprivileged_userns` (`1` = blocked, `0` = allowed).
+
+Chrome for Testing 145 has no setuid-sandbox fallback, so the fix is on the host, not in Chrome. Do not run Chrome with
+`--no-sandbox`. Both fixes below need root.
+
+**Option 1 (narrow, recommended): an AppArmor profile for the installed Chrome binary only.** This is the same kind of
+profile Google's `.deb` ships in `/etc/apparmor.d`. It grants `userns` to the pinned Chrome for Testing path and to
+nothing else. Replace `YOUR_USER` with your login name (AppArmor does not expand `$HOME`), then save as
+`/etc/apparmor.d/manuk-chrome-cft`:
+
+```
+abi <abi/4.0>,
+include <tunables/global>
+
+profile manuk-chrome-cft /home/YOUR_USER/.local/chrome-cft/*/chrome-linux64/chrome{,.real} flags=(unconfined) {
+  userns,
+}
+```
+
+Load it, then re-run the smoke:
+
+```bash
+sudo apparmor_parser -r /etc/apparmor.d/manuk-chrome-cft
+python3 -I scripts/mcp-smoke.py ~/.local/bin/manuk-mcp
+```
+
+**Option 2 (blunt): relax the restriction for every program on the machine.** This sets
+`kernel.apparmor_restrict_unprivileged_userns=0` system-wide, so any program may create unprivileged user namespaces.
+That is what the CI verify VM does. Apply it for the session with `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`,
+or persist it with a file in `/etc/sysctl.d/` that contains `kernel.apparmor_restrict_unprivileged_userns=0`.
 
 ## Verify an install
 
@@ -37,5 +73,5 @@ Chrome's sandbox needs; lift the host restriction rather than Chrome's flag.
 click, observe the page change). `tests/sprint/test_ship2.sh` runs package, checksum, install and smoke end to end, and is red on a
 tampered tarball, a junk SBOM, or a missing Chrome.
 
-Status: the `verify-linux` job (clean `ubuntu:24.04` container, `claude mcp add`, smoke) has not yet been run from a dispatch.
-Dispatching it is a network action for the owner or the follow-up node SHIP.2.a.
+Status: the `verify-linux` job (clean `ubuntu:24.04` container, `claude mcp add`, smoke) passed in dispatch run
+45718101927 (SHIP.2.a). Its CI VM uses Option 2 above.
