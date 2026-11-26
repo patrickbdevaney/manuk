@@ -1,0 +1,91 @@
+engine-proc-full N=75 run=1 real_success=1.000
+engine-fork N=75 run=1 real_success=1.000
+engine-proc-lean N=37 run=1 real_success=1.000
+pw-shared N=37 run=1 real_success=1.000
+chrome-mcp N=17 run=1 real_success=1.000
+pw-proc N=17 run=1 real_success=1.000
+engine-proc-full N=75 run=2 real_success=1.000
+engine-fork N=75 run=2 real_success=1.000
+engine-proc-lean N=37 run=2 real_success=1.000
+pw-shared N=37 run=2 real_success=1.000
+chrome-mcp N=17 run=2 real_success=1.000
+pw-proc N=17 run=2 real_success=1.000
+engine-proc-full N=75 run=3 real_success=1.000
+engine-fork N=75 run=3 real_success=1.000
+engine-proc-lean N=37 run=3 real_success=1.000
+pw-shared N=37 run=3 real_success=1.000
+chrome-mcp N=17 run=3 real_success=1.000
+pw-proc N=17 run=3 real_success=1.000
+== engine-proc-full N=75 mean 1.000 -> ok
+engine-proc-full N=87 run=1 real_success=1.000
+== engine-fork N=75 mean 1.000 -> ok
+engine-fork N=87 run=1 real_success=1.000
+== engine-proc-lean N=37 mean 1.000 -> ok
+engine-proc-lean N=43 run=1 real_success=1.000
+== pw-shared N=37 mean 1.000 -> ok
+INFRA pw-shared 43 1
+pw-shared N=43 run=1 real_success=0.000
+== chrome-mcp N=17 mean 1.000 -> ok
+chrome-mcp N=21 run=1 real_success=1.000
+== pw-proc N=17 mean 1.000 -> ok
+INFRA pw-proc 21 1
+pw-proc N=21 run=1 real_success=0.000
+engine-proc-full N=87 run=2 real_success=1.000
+engine-fork N=87 run=2 real_success=1.000
+engine-proc-lean N=43 run=2 real_success=1.000
+INFRA pw-shared 43 2
+pw-shared N=43 run=2 real_success=0.000
+chrome-mcp N=21 run=2 real_success=1.000
+INFRA pw-proc 21 2
+pw-proc N=21 run=2 real_success=0.000
+engine-proc-full N=87 run=3 real_success=1.000
+engine-fork N=87 run=3 real_success=1.000
+engine-proc-lean N=43 run=3 real_success=1.000
+INFRA pw-shared 43 3
+pw-shared N=43 run=3 real_success=0.000
+chrome-mcp N=21 run=3 real_success=1.000
+INFRA pw-proc 21 3
+pw-proc N=21 run=3 real_success=0.000
+== engine-proc-full N=87 mean 1.000 -> ok
+engine-proc-full N=93 run=1 real_success=1.000
+== engine-fork N=87 mean 1.000 -> ok
+engine-fork N=93 run=1 real_success=1.000
+== engine-proc-lean N=43 mean 1.000 -> ok
+engine-proc-lean N=46 run=1 real_success=1.000
+== pw-shared N=43 mean 0.000 -> bad
+INFRA pw-shared 40 1
+pw-shared N=40 run=1 real_success=0.000
+== chrome-mcp N=21 mean 1.000 -> ok
+INFRA chrome-mcp 23 1
+chrome-mcp N=23 run=1 real_success=0.000
+== pw-proc N=21 mean 0.000 -> bad
+INFRA pw-proc 19 1
+pw-proc N=19 run=1 real_success=0.000
+engine-proc-full N=93 run=2 real_success=1.000
+engine-fork N=93 run=2 real_success=1.000
+engine-proc-lean N=46 run=2 real_success=1.000
+pw-shared N=40 run=2 real_success=1.000
+INFRA chrome-mcp 23 2
+chrome-mcp N=23 run=2 real_success=0.000
+INFRA pw-proc 19 2
+pw-proc N=19 run=2 real_success=0.000
+engine-proc-full N=93 run=3 real_success=1.000
+engine-fork N=93 run=3 real_success=1.000
+engine-proc-lean N=46 run=3 real_success=1.000
+pw-shared N=40 run=3 real_success=1.000
+INFRA chrome-mcp 23 3
+chrome-mcp N=23 run=3 real_success=0.000
+INFRA pw-proc 19 3
+pw-proc N=19 run=3 real_success=0.000
+== engine-proc-full N=93 mean 1.000 -> ok
+== engine-fork N=93 mean 1.000 -> ok
+== engine-proc-lean N=46 mean 1.000 -> ok
+== pw-shared N=40 mean 0.667 -> bad
+== chrome-mcp N=23 mean 0.000 -> bad
+== pw-proc N=19 mean 0.000 -> bad
+pw-proc N=18 run=1 real_success=1.000
+pw-proc N=18 run=2 real_success=1.000
+pw-proc N=18 run=3 real_success=1.000
+== pw-proc N=18 mean 1.000 -> ok
+DONE
+BISECT_DONE

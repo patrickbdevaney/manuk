@@ -1,0 +1,109 @@
+engine-proc-lean N=1 run=1 success=1.0 pss=112.3MB p95=409.3ms iso=True
+engine-proc-full N=5 run=1 success=1.0 pss=594.0MB p95=479.9ms iso=True
+pw-shared N=10 run=1 success=1.0 pss=2737.7MB p95=1164.0ms iso=True
+INFRA {'chrome_ver': '145.0.7632.116', 'commit': '32299c4e', 'arm': 'chrome-mcp', 'n': 50, 'run': 1, 'infra': 'cell died: '}
+INFRA {'chrome_ver': '145.0.7632.116', 'commit': '32299c4e', 'arm': 'pw-proc', 'n': 25, 'run': 1, 'infra': 'cell died: '}
+chrome-mcp N=1 run=1 success=1.0 pss=653.4MB p95=2603.6ms iso=True
+engine-proc-full N=25 run=1 success=1.0 pss=2589.5MB p95=1614.1ms iso=True
+engine-fork N=1 run=1 success=1.0 pss=139.0MB p95=735.0ms iso=True
+engine-fork N=10 run=1 success=1.0 pss=1133.0MB p95=926.9ms iso=True
+engine-proc-lean N=25 run=1 success=1.0 pss=2111.0MB p95=1336.1ms iso=True
+engine-proc-full N=50 run=1 success=1.0 pss=5011.7MB p95=3646.9ms iso=True
+pw-proc N=1 run=1 success=1.0 pss=699.4MB p95=774.5ms iso=True
+pw-shared N=5 run=1 success=1.0 pss=1650.3MB p95=1138.4ms iso=True
+INFRA {'chrome_ver': '145.0.7632.116', 'commit': '32299c4e', 'arm': 'pw-proc', 'n': 100, 'run': 1, 'infra': 'cell died: '}
+pw-shared N=1 run=1 success=1.0 pss=689.0MB p95=1090.2ms iso=True
+engine-proc-full N=10 run=1 success=1.0 pss=1057.2MB p95=1061.2ms iso=True
+INFRA {'chrome_ver': '145.0.7632.116', 'commit': '32299c4e', 'arm': 'engine-proc-full', 'n': 100, 'run': 1, 'infra': 'cell died: '}
+engine-fork N=5 run=1 success=1.0 pss=582.8MB p95=698.1ms iso=True
+engine-proc-lean N=100 run=1 success=1.0 pss=7522.9MB p95=5690.4ms iso=True
+pw-shared N=25 run=1 success=1.0 pss=5790.3MB p95=2983.9ms iso=True
+engine-fork N=50 run=1 success=1.0 pss=4527.6MB p95=2875.3ms iso=True
+INFRA {'chrome_ver': '145.0.7632.116', 'commit': '32299c4e', 'arm': 'pw-shared', 'n': 50, 'run': 1, 'infra': 'cell died: '}
+chrome-mcp N=5 run=1 success=1.0 pss=2423.4MB p95=3246.5ms iso=True
+engine-proc-lean N=50 run=1 success=1.0 pss=3781.1MB p95=2333.3ms iso=True
+INFRA {'chrome_ver': '145.0.7632.116', 'commit': '32299c4e', 'arm': 'chrome-mcp', 'n': 100, 'run': 1, 'infra': 'cell died: '}
+INFRA {'chrome_ver': '145.0.7632.116', 'commit': '32299c4e', 'arm': 'pw-proc', 'n': 50, 'run': 1, 'infra': 'cell died: '}
+pw-proc N=5 run=1 success=1.0 pss=2556.0MB p95=1099.9ms iso=True
+chrome-mcp N=10 run=1 success=1.0 pss=4513.0MB p95=3238.0ms iso=True
+engine-fork N=25 run=1 success=1.0 pss=2400.2MB p95=1404.1ms iso=True
+engine-proc-full N=1 run=1 success=1.0 pss=106.2MB p95=635.3ms iso=True
+pw-proc N=10 run=1 success=1.0 pss=4779.0MB p95=1195.7ms iso=True
+engine-fork N=100 run=1 success=1.0 pss=7464.1MB p95=5485.3ms iso=True
+engine-proc-lean N=10 run=1 success=1.0 pss=880.2MB p95=1013.1ms iso=True
+INFRA {'chrome_ver': '145.0.7632.116', 'commit': '32299c4e', 'arm': 'pw-shared', 'n': 100, 'run': 1, 'infra': 'cell died: '}
+INFRA {'chrome_ver': '145.0.7632.116', 'commit': '32299c4e', 'arm': 'chrome-mcp', 'n': 25, 'run': 1, 'infra': 'cell died: '}
+engine-proc-lean N=5 run=1 success=1.0 pss=451.4MB p95=754.3ms iso=True
+engine-proc-full N=1 run=2 success=1.0 pss=111.6MB p95=410.0ms iso=True
+pw-proc N=5 run=2 success=1.0 pss=2436.7MB p95=917.2ms iso=True
+engine-fork N=25 run=2 success=1.0 pss=2003.0MB p95=1217.7ms iso=True
+engine-proc-full N=10 run=2 success=1.0 pss=872.7MB p95=913.1ms iso=True
+engine-proc-full N=100 run=2 success=1.0 pss=7141.3MB p95=4540.3ms iso=True
+INFRA {'chrome_ver': '145.0.7632.116', 'commit': '32299c4e', 'arm': 'chrome-mcp', 'n': 25, 'run': 2, 'infra': 'cell died: '}
+engine-fork N=100 run=2 success=0.9988 pss=7915.4MB p95=6462.2ms iso=True
+engine-fork N=50 run=2 success=1.0 pss=3988.0MB p95=3100.5ms iso=True
+engine-proc-lean N=100 run=2 success=1.0 pss=7899.9MB p95=6058.4ms iso=True
+engine-proc-full N=25 run=2 success=1.0 pss=2061.9MB p95=1382.3ms iso=True
+INFRA {'chrome_ver': '145.0.7632.116', 'commit': '32299c4e', 'arm': 'pw-proc', 'n': 50, 'run': 2, 'infra': 'cell died: '}
+pw-shared N=1 run=2 success=1.0 pss=706.2MB p95=587.6ms iso=True
+engine-proc-lean N=25 run=2 success=1.0 pss=2043.3MB p95=1235.3ms iso=True
+engine-proc-lean N=50 run=2 success=1.0 pss=4036.4MB p95=2733.4ms iso=True
+pw-proc N=10 run=2 success=1.0 pss=4735.9MB p95=1161.4ms iso=True
+engine-proc-full N=50 run=2 success=1.0 pss=4167.4MB p95=3153.2ms iso=True
+engine-fork N=10 run=2 success=1.0 pss=860.2MB p95=835.1ms iso=True
+pw-shared N=10 run=2 success=1.0 pss=2633.2MB p95=1362.8ms iso=True
+pw-shared N=25 run=2 success=1.0 pss=5130.0MB p95=2866.6ms iso=True
+engine-fork N=1 run=2 success=1.0 pss=111.7MB p95=604.9ms iso=True
+chrome-mcp N=5 run=2 success=1.0 pss=2385.2MB p95=3256.3ms iso=True
+INFRA {'chrome_ver': '145.0.7632.116', 'commit': '32299c4e', 'arm': 'pw-shared', 'n': 100, 'run': 2, 'infra': 'cell died: '}
+pw-proc N=1 run=2 success=1.0 pss=713.6MB p95=631.2ms iso=True
+engine-proc-lean N=1 run=2 success=1.0 pss=110.8MB p95=493.0ms iso=True
+chrome-mcp N=1 run=2 success=1.0 pss=644.9MB p95=2535.0ms iso=True
+INFRA {'chrome_ver': '145.0.7632.116', 'commit': '32299c4e', 'arm': 'chrome-mcp', 'n': 100, 'run': 2, 'infra': 'cell died: '}
+chrome-mcp N=10 run=2 success=1.0 pss=4436.5MB p95=3241.4ms iso=True
+INFRA {'chrome_ver': '145.0.7632.116', 'commit': '32299c4e', 'arm': 'pw-shared', 'n': 50, 'run': 2, 'infra': 'cell died: '}
+INFRA {'chrome_ver': '145.0.7632.116', 'commit': '32299c4e', 'arm': 'pw-proc', 'n': 100, 'run': 2, 'infra': 'cell died: '}
+engine-fork N=5 run=2 success=1.0 pss=446.2MB p95=582.3ms iso=True
+engine-proc-lean N=5 run=2 success=1.0 pss=450.8MB p95=734.6ms iso=True
+INFRA {'chrome_ver': '145.0.7632.116', 'commit': '32299c4e', 'arm': 'chrome-mcp', 'n': 50, 'run': 2, 'infra': 'cell died: '}
+INFRA {'chrome_ver': '145.0.7632.116', 'commit': '32299c4e', 'arm': 'pw-proc', 'n': 25, 'run': 2, 'infra': 'cell died: '}
+engine-proc-full N=5 run=2 success=1.0 pss=449.9MB p95=493.6ms iso=True
+pw-shared N=5 run=2 success=1.0 pss=1615.4MB p95=1081.0ms iso=True
+engine-proc-lean N=10 run=2 success=1.0 pss=879.3MB p95=832.7ms iso=True
+engine-fork N=5 run=3 success=1.0 pss=446.2MB p95=542.0ms iso=True
+pw-shared N=1 run=3 success=1.0 pss=721.4MB p95=589.2ms iso=True
+pw-proc N=5 run=3 success=1.0 pss=2602.1MB p95=1088.9ms iso=True
+engine-fork N=100 run=3 success=1.0 pss=7601.6MB p95=5646.6ms iso=True
+engine-proc-full N=10 run=3 success=1.0 pss=882.9MB p95=1067.2ms iso=True
+engine-proc-full N=5 run=3 success=1.0 pss=456.3MB p95=536.3ms iso=True
+engine-proc-lean N=5 run=3 success=1.0 pss=454.8MB p95=779.7ms iso=True
+INFRA {'chrome_ver': '145.0.7632.116', 'commit': '32299c4e', 'arm': 'pw-proc', 'n': 100, 'run': 3, 'infra': 'cell died: '}
+engine-fork N=10 run=3 success=1.0 pss=863.5MB p95=667.5ms iso=True
+pw-shared N=25 run=3 success=1.0 pss=5850.7MB p95=2300.2ms iso=True
+INFRA {'chrome_ver': '145.0.7632.116', 'commit': '32299c4e', 'arm': 'chrome-mcp', 'n': 100, 'run': 3, 'infra': 'cell died: '}
+chrome-mcp N=5 run=3 success=1.0 pss=2400.0MB p95=3189.4ms iso=True
+INFRA {'chrome_ver': '145.0.7632.116', 'commit': '32299c4e', 'arm': 'chrome-mcp', 'n': 50, 'run': 3, 'infra': 'cell died: '}
+pw-proc N=1 run=3 success=1.0 pss=712.0MB p95=612.5ms iso=True
+engine-proc-full N=25 run=3 success=1.0 pss=2119.0MB p95=1268.5ms iso=True
+pw-shared N=10 run=3 success=1.0 pss=2750.1MB p95=1179.9ms iso=True
+pw-proc N=10 run=3 success=1.0 pss=4522.3MB p95=1127.4ms iso=True
+engine-fork N=1 run=3 success=1.0 pss=112.7MB p95=425.0ms iso=True
+engine-proc-lean N=1 run=3 success=1.0 pss=109.9MB p95=485.8ms iso=True
+engine-fork N=50 run=3 success=1.0 pss=3818.3MB p95=2347.4ms iso=True
+engine-proc-lean N=50 run=3 success=1.0 pss=4111.8MB p95=2481.7ms iso=True
+INFRA {'chrome_ver': '145.0.7632.116', 'commit': '32299c4e', 'arm': 'pw-shared', 'n': 50, 'run': 3, 'infra': 'cell died: '}
+engine-proc-full N=50 run=3 success=1.0 pss=3665.6MB p95=2625.5ms iso=True
+pw-shared N=5 run=3 success=1.0 pss=1668.7MB p95=1094.5ms iso=True
+INFRA {'chrome_ver': '145.0.7632.116', 'commit': '32299c4e', 'arm': 'pw-proc', 'n': 50, 'run': 3, 'infra': 'cell died: '}
+INFRA {'chrome_ver': '145.0.7632.116', 'commit': '32299c4e', 'arm': 'chrome-mcp', 'n': 25, 'run': 3, 'infra': 'cell died: '}
+INFRA {'chrome_ver': '145.0.7632.116', 'commit': '32299c4e', 'arm': 'pw-proc', 'n': 25, 'run': 3, 'infra': 'cell died: '}
+INFRA {'chrome_ver': '145.0.7632.116', 'commit': '32299c4e', 'arm': 'pw-shared', 'n': 100, 'run': 3, 'infra': 'cell died: '}
+chrome-mcp N=10 run=3 success=1.0 pss=4459.5MB p95=3369.6ms iso=True
+engine-fork N=25 run=3 success=1.0 pss=2034.9MB p95=1444.7ms iso=True
+engine-proc-lean N=25 run=3 success=1.0 pss=2098.2MB p95=1457.5ms iso=True
+engine-proc-full N=100 run=3 success=1.0 pss=7610.7MB p95=6460.2ms iso=True
+engine-proc-full N=1 run=3 success=1.0 pss=106.3MB p95=504.4ms iso=True
+engine-proc-lean N=10 run=3 success=1.0 pss=874.2MB p95=776.5ms iso=True
+engine-proc-lean N=100 run=3 success=0.9825 pss=5850.4MB p95=3711.5ms iso=False
+chrome-mcp N=1 run=3 success=1.0 pss=633.6MB p95=2549.0ms iso=True
+GRID_DONE

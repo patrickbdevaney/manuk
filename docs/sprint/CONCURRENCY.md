@@ -212,3 +212,80 @@ The registered N=50 cost bar was unevaluable in the 8 GB cage (all Chrome cells 
 
 - chrome-mcp 51.0 MB/ok, pw-proc 56.0, pw-shared 25.6 (best Chrome arm); engine-proc-full 9.8, engine-proc-lean 10.4, engine-fork 9.8.
 - **Cost win (registered, N=50): PASS** for all three engine rows (59-62% lower than pw-shared; need >=30%). Deviation: Chrome cage 24 GB vs engine cage 8 GB. The engine rows' success at N=50 is 0.88-0.97 (not 1.00), so the per-ok denominator is passed tasks only. Peak PSS is process-tree memory, unaffected by cage size unless the cage kills the run (none did here).
+
+
+## CONC.5 - layer-1 grid re-run on the build with CPU.1 and CPU.2 (side by side with CONC.2; CONC.2 rows above are unchanged)
+
+Same plan, same bars (`CONCURRENCY-PLAN.md`), same harness (`bench/conc/harness.py`), 8 GB cage, 3 runs per (arm, N), all 6 arms re-run (Chrome arms too), arms in randomised blocks (seed `conc5`), chrome_ver=145.0.7632.116.
+Binary: `/tmp/manuk-mcp-conc5`, `cargo build --release -p manuk-mcp` at commit 32299c4e (contains CPU.1 and CPU.2), **sha256 3005846f33b39ebfb73efeb4fbabcc196b6581eb2a3fa403dea5ff56b300bdc8**. (CONC.2 binary: sha256 619608f1..., commit 749d97ef-era.)
+Data (26 columns, with `cage_gb`; new files, the 25-column CONC.2 files were not appended to): `conc5/layer1-grid.tsv` (+`.infra`), Chrome N=50 in a 24 GB cage `conc5/chrome-n50-uncaged.tsv` (labelled deviation as in CONC.2.b), bisection `conc5/capacity.tsv` (+`.infra`, `.brackets`; `bisect.py` with the CONC.2 ladder brackets).
+Generated: `conc5/analysis.md` (`analyze.py`), `conc5/cost-n50.md` (`cost_n50.py`), `conc5/compare.md` (`compare.py`, tables below). Gate: `tests/sprint/test_conc5.sh`.
+Host load (`host_load1`, shared host with a running benchmark worker and another cargo build at start): CONC.5 grid min 13.9, median 33.8, p90 50.2, max 64.7 (CONC.2: 11.2 / 23.5 / 52.7 / 89.9). CONC.2 rows from 15:06-15:10 on 2026-11-24 carried one extra busy core.
+Caveat: the two runs were on different days under different, uncontrolled load; the engine-side change is large (CPU seconds ~6-8x lower), the Chrome-side change is within load noise (CPU s 7-8 -> 8 at N=1, 90 -> 95 at N=10 for pw-proc).
+
+### Verdicts, as pre-registered, on the CONC.5 data
+
+- **Capacity win (bisection, real-page traces, OOM-killed runs count 0):** pw-shared stays best Chrome arm, capacity [37,39] (same as CONC.2). engine-proc-full capacity [93,99] (one N=100 run cell was OOM-killed by the 8 GB cage, the other two held 1.00; N=93 held 1.00), ratio 2.38x-2.68x: **PASS** (CONC.2: 1.51x-1.65x). engine-fork capacity >= 100 (no failure found at the top of the ladder, N=100 all 3 runs success 1.00), ratio >= 2.56x: **PASS** (CONC.2: 1.74x-1.89x). engine-proc-lean capacity >= 100 (N=100: real-page success 1.00, all traces 0.99), ratio >= 2.56x: **PASS** (CONC.2: FAIL, 0.72x-0.76x). Engine-fork and lean are lower bounds: the ladder stops at N=100 and bisection was not extended above it.
+- **Success within 5 points of best Chrome arm at the same N:** holds at N=1..25 for every arm. At N=50 and 100 no Chrome arm survives the 8 GB cage; engine success is 1.00/1.00/1.00 (full/lean/fork) at N=50 and 1.00/0.99/1.00 at N=100 (CONC.2: 0.94/0.88/0.97 and 0.82/0.79/0.85). Against Chrome in a 24 GB cage at N=50 every Chrome arm scores 1.00, so the engine rows are now within the 5-point bar there (the CONC.2 OBSERVER finding that full and lean lose this axis at N=50 is reversed on this build).
+- **Cost win (registered, N=50, Chrome in a 24 GB cage - deviation):** PASS for all three engine rows against pw-shared 26.1 MB/ok: full 10.7 (59% lower), lean 9.9 (62%), fork 10.3 (61%). Same deviation and caveat as CONC.2.b.
+- Against one Chrome per agent: chrome-mcp capacity [21,22], pw-proc 18 (CONC.2 identical).
+- Throughput: the CONC.2 statement "Throughput is NOT a manuk win at small N" no longer holds on this build. At N=1 engine rows complete 95-113 ok traces/min against 45-46 (pw-proc, pw-shared) and 15 (chrome-mcp); at N=10 670-706 against 293-336. Throughput no longer flattens at N=25: engine rows reach 1.2-1.3k traces/min at N=100.
+- Not improved: engine peak PSS at N=50 is 4.0-4.3 GB against 3.6-3.8 GB in CONC.2 (+9% to +17%), at N=100 7.1-7.7 GB against 7.0-7.2 GB; a run is faster so more is resident at once, but this was not isolated. Chrome rows are unchanged within noise.
+
+### Side by side (CONC.2 -> CONC.5; `x` = every run OOM-killed by the 8 GB cage)
+
+
+#### Success: CONC.2 -> CONC.5 (mean over surviving runs)
+
+| arm | N=1 | N=5 | N=10 | N=25 | N=50 | N=100 |
+|---|---|---|---|---|---|---|
+| engine-proc-full | 1.00 -> 1.00 | 1.00 -> 1.00 | 1.00 -> 1.00 | 1.00 -> 1.00 | 0.94 -> 1.00 | 0.82 -> 1.00 |
+| engine-proc-lean | 1.00 -> 1.00 | 1.00 -> 1.00 | 1.00 -> 1.00 | 0.98 -> 1.00 | 0.88 -> 1.00 | 0.79 -> 0.99 |
+| engine-fork | 1.00 -> 1.00 | 1.00 -> 1.00 | 1.00 -> 1.00 | 1.00 -> 1.00 | 0.97 -> 1.00 | 0.85 -> 1.00 |
+| chrome-mcp | 1.00 -> 1.00 | 1.00 -> 1.00 | 1.00 -> 1.00 | x -> x | x -> x | x -> x |
+| pw-proc | 1.00 -> 1.00 | 1.00 -> 1.00 | 1.00 -> 1.00 | x -> x | x -> x | x -> x |
+| pw-shared | 1.00 -> 1.00 | 1.00 -> 1.00 | 1.00 -> 1.00 | 1.00 -> 1.00 | x -> x | x -> x |
+
+#### Peak PSS MB: CONC.2 -> CONC.5 (mean over surviving runs)
+
+| arm | N=1 | N=5 | N=10 | N=25 | N=50 | N=100 |
+|---|---|---|---|---|---|---|
+| engine-proc-full | 126 -> 108 | 542 -> 500 | 1029 -> 938 | 2216 -> 2257 | 3668 -> 4282 | 7241 -> 7376 |
+| engine-proc-lean | 115 -> 111 | 457 -> 452 | 880 -> 878 | 2118 -> 2084 | 3640 -> 3976 | 6986 -> 7091 |
+| engine-fork | 127 -> 121 | 538 -> 492 | 1027 -> 952 | 2137 -> 2146 | 3785 -> 4111 | 7040 -> 7660 |
+| chrome-mcp | 657 -> 644 | 2326 -> 2403 | 4369 -> 4470 | x -> x | x -> x | x -> x |
+| pw-proc | 706 -> 708 | 2550 -> 2532 | 4812 -> 4679 | x -> x | x -> x | x -> x |
+| pw-shared | 711 -> 706 | 1652 -> 1645 | 2745 -> 2707 | 5896 -> 5590 | x -> x | x -> x |
+
+#### Successful traces per minute: CONC.2 -> CONC.5 (mean over surviving runs)
+
+| arm | N=1 | N=5 | N=10 | N=25 | N=50 | N=100 |
+|---|---|---|---|---|---|---|
+| engine-proc-full | 22.7 -> 100.7 | 103.6 -> 441.8 | 169.5 -> 670.4 | 231.8 -> 1028.5 | 170.0 -> 1177.1 | 219.5 -> 1318.2 |
+| engine-proc-lean | 21.8 -> 112.5 | 75.8 -> 412.1 | 111.4 -> 705.5 | 122.9 -> 965.3 | 105.5 -> 1200.4 | 133.2 -> 1224.9 |
+| engine-fork | 22.3 -> 94.6 | 96.7 -> 386.7 | 170.8 -> 702.1 | 223.1 -> 1074.4 | 183.2 -> 1221.6 | 166.2 -> 1261.9 |
+| chrome-mcp | 14.2 -> 15.3 | 37.9 -> 72.9 | 66.7 -> 135.3 | x -> x | x -> x | x -> x |
+| pw-proc | 39.6 -> 44.8 | 124.5 -> 202.0 | 218.2 -> 335.8 | x -> x | x -> x | x -> x |
+| pw-shared | 39.9 -> 45.7 | 113.3 -> 177.1 | 181.8 -> 293.0 | 301.6 -> 368.4 | x -> x | x -> x |
+
+#### p95 ms per call: CONC.2 -> CONC.5 (mean over surviving runs)
+
+| arm | N=1 | N=5 | N=10 | N=25 | N=50 | N=100 |
+|---|---|---|---|---|---|---|
+| engine-proc-full | 2637 -> 517 | 2761 -> 503 | 3272 -> 1014 | 6345 -> 1422 | 27739 -> 3142 | 45417 -> 5500 |
+| engine-proc-lean | 2564 -> 463 | 8382 -> 756 | 10890 -> 874 | 21366 -> 1343 | 42094 -> 2516 | 50095 -> 5153 |
+| engine-fork | 2419 -> 588 | 3236 -> 607 | 3207 -> 810 | 6719 -> 1356 | 24025 -> 2774 | 57731 -> 5865 |
+| chrome-mcp | 3068 -> 2563 | 12708 -> 3231 | 15780 -> 3283 | x -> x | x -> x | x -> x |
+| pw-proc | 957 -> 673 | 2929 -> 1035 | 5190 -> 1162 | x -> x | x -> x | x -> x |
+| pw-shared | 1012 -> 756 | 4562 -> 1105 | 4119 -> 1236 | 5555 -> 2717 | x -> x | x -> x |
+
+#### CPU seconds: CONC.2 -> CONC.5 (mean over surviving runs)
+
+| arm | N=1 | N=5 | N=10 | N=25 | N=50 | N=100 |
+|---|---|---|---|---|---|---|
+| engine-proc-full | 19 -> 3 | 105 -> 15 | 246 -> 36 | 794 -> 115 | 2009 -> 259 | 3313 -> 524 |
+| engine-proc-lean | 19 -> 2 | 105 -> 14 | 235 -> 29 | 814 -> 106 | 1950 -> 211 | 2980 -> 458 |
+| engine-fork | 20 -> 3 | 113 -> 16 | 241 -> 41 | 813 -> 116 | 1974 -> 242 | 3708 -> 494 |
+| chrome-mcp | 8 -> 6 | 42 -> 36 | 92 -> 91 | x -> x | x -> x | x -> x |
+| pw-proc | 7 -> 8 | 41 -> 43 | 90 -> 95 | x -> x | x -> x | x -> x |
+| pw-shared | 8 -> 8 | 31 -> 35 | 73 -> 66 | 190 -> 189 | x -> x | x -> x |

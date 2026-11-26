@@ -1,0 +1,10 @@
+pw-shared N=50 run=1 success=1.0 pss=11109.6MB p95=4819.8ms iso=True
+chrome-mcp N=50 run=1 success=1.0 pss=18110.8MB p95=6956.4ms iso=True
+pw-proc N=50 run=1 success=1.0 pss=18033.3MB p95=4232.7ms iso=True
+pw-shared N=50 run=2 success=1.0 pss=9802.1MB p95=6725.8ms iso=True
+chrome-mcp N=50 run=2 success=1.0 pss=19232.5MB p95=6070.8ms iso=True
+pw-proc N=50 run=2 success=1.0 pss=20014.7MB p95=3910.7ms iso=True
+pw-shared N=50 run=3 success=1.0 pss=10375.6MB p95=6140.5ms iso=True
+pw-proc N=50 run=3 success=1.0 pss=19280.2MB p95=4013.5ms iso=True
+chrome-mcp N=50 run=3 success=1.0 pss=18740.9MB p95=6810.1ms iso=True
+N50_DONE
