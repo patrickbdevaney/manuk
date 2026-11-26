@@ -179,11 +179,13 @@ class Agent:
     def __init__(self, arm, idx, base, barrier, lat):
         self.arm, self.i, self.base, self.barrier, self.lat = arm, idx, base, barrier, lat
         self.t = TOOL[arm.surface]; self.cold_ms = None; self.cli = None
+        self.calls = []; self.ctx = ["-", "-", "step"]  # per-call record for AXES.1.a: (trace, step kind, phase, op, ms)
 
     def act(self, op, args):
         t0 = time.time()
         try: return self.cli.tool(self.t[op], args)
-        finally: self.lat.append((time.time() - t0) * 1000)
+        finally:
+            ms = (time.time() - t0) * 1000; self.lat.append(ms); self.calls.append((self.ctx[0], self.ctx[1], self.ctx[2], op, ms))
 
     def find(self, snap, role, label):
         for l in snap.splitlines():
@@ -216,16 +218,19 @@ class Agent:
 
     def poll(self, first, token, secs=6.0):
         if token in first: return True
-        end = time.time() + secs
-        while time.time() < end:
-            time.sleep(0.25)
-            out, err = self.act("snap", {})
-            if token in out: return True
-        return False
+        end = time.time() + secs; prev = self.ctx[2]; self.ctx[2] = "poll"
+        try:
+            while time.time() < end:
+                time.sleep(0.25)
+                out, err = self.act("snap", {})
+                if token in out: return True
+            return False
+        finally: self.ctx[2] = prev
 
     def run_trace(self, steps):
         # a click's expectation is polled on the snapshots that follow it; nav carries its own token
         for kind, target, arg in steps:
+            self.ctx[1] = kind; self.ctx[2] = "step"
             if not self.step(kind, target, arg): return False
             if kind == "click" and not self.poll("", arg): return False
         return True
@@ -243,6 +248,7 @@ class Agent:
         try:
             start_gate.wait(600)
             for name, steps in traces.items():
+                self.ctx[0] = name
                 try: ok = self.run_trace(steps); why = "" if ok else "expectation unmet"
                 except Exception as e: ok, why = False, f"{type(e).__name__}: {e}"[:120]
                 if MUTATE == "skip-failed" and not ok: continue  # mutant: failed traces vanish from the books
@@ -340,6 +346,11 @@ def run_cell(armname, n, run, traces=None, with_iso=True):
                oom_kill=(oom1 - oom0) if oom0 is not None and oom1 is not None else None, caged=bool(cg) and cg_read(cg, "memory.max") == 8 << 30 and cg_read(cg, "memory.swap.max") == 0, cage_gb=(cg_read(cg, "memory.max") >> 30) if cg and isinstance(cg_read(cg, "memory.max"), int) else None, isolation_ok=iso_ok,
                per_trace={k: f"{sum(v)}/{len(v)}" for k, v in sorted(per.items())},
                fail_reasons=sorted({r[3] for r in results if not r[2]})[:4])
+    if os.environ.get("CONC_CALLS_OUT"):  # AXES.1.a: every tool call, so p95 can be attributed to a tool/trace/phase
+        with open(os.environ["CONC_CALLS_OUT"], "a") as f:
+            for a in agents:
+                for tr, kind, ph, op, ms in a.calls:
+                    f.write("\t".join(map(str, [pin(), armname, n, run, a.i, tr, kind, ph, op, round(ms, 1)])) + "\n")
     srv.shutdown(); return row
 
 
