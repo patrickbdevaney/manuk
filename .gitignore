@@ -89,3 +89,5 @@ bench-queue/results/*/RUNNING*
 !/STATUS.md
 /0
 /{}
+/*.yml
+/*.txt
