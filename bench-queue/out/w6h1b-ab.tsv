@@ -1,0 +1,33 @@
+task	run	pass	judge_model	arm	driver	attempt	rc	infra	steps	answer	reasons	act_seq	observe_n	wall_s	chrome_ver
+L01	1	1	verify.py	taskrun	taskrun	1	0	0	1	A Light in the Attic			0	2	145.0.7632.116
+L01	1	1	verify.py	hub	hub	1	0	0	1	A Light in the Attic			1	2	145.0.7632.116
+L02	1	1	verify.py	taskrun	taskrun	1	0	0	1	£53.74			0	2	145.0.7632.116
+L02	1	1	verify.py	hub	hub	1	0	0	1	£53.74			1	2	145.0.7632.116
+L03	1		verify.py	taskrun	taskrun	1	1	1	2			click	0	5	145.0.7632.116
+L03	1		verify.py	taskrun	taskrun	2	1	1	1				0	4	145.0.7632.116
+L03	1		verify.py	taskrun	taskrun	3	1	1	2			click	0	6	145.0.7632.116
+L03	1		verify.py	taskrun	taskrun	4	1	1	2		infra: unscored after 4 attempts	click	0	6	145.0.7632.116
+L03	1		verify.py	hub	hub	1	1	1	1			act>act	1	9	145.0.7632.116
+L03	1		verify.py	hub	hub	2	1	1	0				1	4	145.0.7632.116
+L03	1		verify.py	hub	hub	3	1	1	1			act>act	1	10	145.0.7632.116
+L03	1		verify.py	hub	hub	4	1	1	1		infra: unscored after 4 attempts	act>act	1	9	145.0.7632.116
+L04	1		verify.py	taskrun	taskrun	1	1	1	1				0	6	145.0.7632.116
+L04	1		verify.py	taskrun	taskrun	2	1	1	2			navigate	0	7	145.0.7632.116
+L04	1		verify.py	taskrun	taskrun	3	1	1	2			clickat	0	6	145.0.7632.116
+L04	1		verify.py	taskrun	taskrun	4	1	1	2		infra: unscored after 4 attempts	clicktext	0	4	145.0.7632.116
+L04	1		verify.py	hub	hub	1	1	1	0				1	3	145.0.7632.116
+L04	1		verify.py	hub	hub	2	1	1	1			act>act	1	8	145.0.7632.116
+L04	1		verify.py	hub	hub	3	1	1	1			act>act	1	8	145.0.7632.116
+L04	1		verify.py	hub	hub	4	1	1	1		infra: unscored after 4 attempts	act>act	1	5	145.0.7632.116
+L05	1		verify.py	taskrun	taskrun	1	1	1	2			clickat	0	4	145.0.7632.116
+L05	1		verify.py	taskrun	taskrun	2	1	1	2			navigate	0	4	145.0.7632.116
+L05	1		verify.py	taskrun	taskrun	3	1	1	2			clickat	0	6	145.0.7632.116
+L05	1		verify.py	taskrun	taskrun	4	1	1	2		infra: unscored after 4 attempts	clickat	0	6	145.0.7632.116
+L05	1		verify.py	hub	hub	1	1	1	1			act>act	1	9	145.0.7632.116
+L05	1		verify.py	hub	hub	2	1	1	1			act>act	1	8	145.0.7632.116
+L05	1		verify.py	hub	hub	3	1	1	1			act>act	1	6	145.0.7632.116
+L05	1		verify.py	hub	hub	4	1	1	1		infra: unscored after 4 attempts	act>act	1	6	145.0.7632.116
+L06	1		verify.py	taskrun	taskrun	1	1	1	2			navigate	0	5	145.0.7632.116
+L06	1		verify.py	taskrun	taskrun	2	1	1	2			navigate	0	4	145.0.7632.116
+L06	1		verify.py	taskrun	taskrun	3	1	1	2			navigate	0	4	145.0.7632.116
+L06	1		verify.py	taskrun	taskrun	4	1	1	2		infra: unscored after 4 attempts	navigate	0	6	145.0.7632.116

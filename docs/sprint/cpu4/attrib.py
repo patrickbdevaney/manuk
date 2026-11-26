@@ -146,7 +146,7 @@ with open(out,"a") as f:
             tn,samples,tot=run(pg);TOTAL[0]=tot
             try:C=attribute(tn,samples)
             except Exception as e:C={"error "+str(e):0}
-            os.unlink(tn)
+            (os.environ.get("KEEP_TRACE") and os.system(f"cp {tn} /tmp/keep-{pg}.trace")); os.unlink(tn)
             s=sum(v for k,v in C.items() if not k.startswith("  "))
             for k,v in C.items():f.write("\t".join([str(rd),pg,k,f"{v:.3f}"])+"\n")
             f.write("\t".join([str(rd),pg,"TOTAL_rusage",f"{tot:.3f}"])+"\n")

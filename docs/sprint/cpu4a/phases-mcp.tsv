@@ -1,0 +1,153 @@
+0	mdn-css	startup (before first trace event, incl. JS prewarm)	0.043
+0	mdn-css	  pass[cascade@page/lib.rs:9952] n	2.000
+0	mdn-css	  pass[cascade@page/lib.rs:9952] cpu	0.512
+0	mdn-css	  pass[layout@page/lib.rs:9963] n	2.000
+0	mdn-css	  pass[layout@page/lib.rs:9963] cpu	0.267
+0	mdn-css	  pass[cascade@page/lib.rs:13015] n	1.000
+0	mdn-css	  pass[cascade@page/lib.rs:13015] cpu	0.515
+0	mdn-css	  pass[layout@page/lib.rs:13015] n	1.000
+0	mdn-css	  pass[layout@page/lib.rs:13015] cpu	0.385
+0	mdn-css	  pass[cascade@page/lib.rs:7595] n	1.000
+0	mdn-css	  pass[cascade@page/lib.rs:7595] cpu	0.562
+0	mdn-css	  pass[layout@page/lib.rs:7595] n	1.000
+0	mdn-css	  pass[layout@page/lib.rs:7595] cpu	0.318
+0	mdn-css	cascade	1.589
+0	mdn-css	layout	0.969
+0	mdn-css	parse (html)	0.019
+0	mdn-css	script (JS exec + script fetch/compile)	0.070
+0	mdn-css	stylesheet fetch+parse	0.005
+0	mdn-css	subframes	0.073
+0	mdn-css	images/masks/fetch (decode)	0.049
+0	mdn-css	  thread[cascade+layout+blocking scripts] manuk-session	0.820
+0	mdn-css	  thread[subframes (pre-load)] manuk-session	0.970
+0	mdn-css	  thread[initial images+masks] manuk-session	0.920
+0	mdn-css	a11y tree (+ observe serialisation under mcp)	0.076
+0	mdn-css	mcp shutdown	0.026
+0	mdn-css	navigate tail after last load phase (tree seed, snapshot, settle)	0.179
+0	mdn-css	TOTAL_rusage	3.101
+0	mdn-css	SUM_attributed	3.099
+0	rfc-editor	startup (before first trace event, incl. JS prewarm)	0.049
+0	rfc-editor	  pass[cascade@page/lib.rs:9952] n	1.000
+0	rfc-editor	  pass[cascade@page/lib.rs:9952] cpu	0.067
+0	rfc-editor	  pass[layout@page/lib.rs:9963] n	1.000
+0	rfc-editor	  pass[layout@page/lib.rs:9963] cpu	0.143
+0	rfc-editor	  pass[cascade@page/lib.rs:13015] n	1.000
+0	rfc-editor	  pass[cascade@page/lib.rs:13015] cpu	0.026
+0	rfc-editor	  pass[layout@page/lib.rs:13015] n	1.000
+0	rfc-editor	  pass[layout@page/lib.rs:13015] cpu	0.036
+0	rfc-editor	cascade	0.093
+0	rfc-editor	layout	0.179
+0	rfc-editor	parse (html)	0.015
+0	rfc-editor	script (JS exec + script fetch/compile)	0.050
+0	rfc-editor	stylesheet fetch+parse	0.009
+0	rfc-editor	subframes	0.004
+0	rfc-editor	images/masks/fetch (decode)	0.004
+0	rfc-editor	  thread[cascade+layout+blocking scripts] manuk-session	0.243
+0	rfc-editor	  thread[finish_loading: external CSS] manuk-session	0.070
+0	rfc-editor	a11y tree (+ observe serialisation under mcp)	0.070
+0	rfc-editor	mcp shutdown	0.013
+0	rfc-editor	navigate tail after last load phase (tree seed, snapshot, settle)	0.130
+0	rfc-editor	TOTAL_rusage	0.621
+0	rfc-editor	SUM_attributed	0.615
+1	mdn-css	startup (before first trace event, incl. JS prewarm)	0.051
+1	mdn-css	  pass[cascade@page/lib.rs:9952] n	2.000
+1	mdn-css	  pass[cascade@page/lib.rs:9952] cpu	0.594
+1	mdn-css	  pass[layout@page/lib.rs:9963] n	2.000
+1	mdn-css	  pass[layout@page/lib.rs:9963] cpu	0.300
+1	mdn-css	  pass[cascade@page/lib.rs:13015] n	1.000
+1	mdn-css	  pass[cascade@page/lib.rs:13015] cpu	0.632
+1	mdn-css	  pass[layout@page/lib.rs:13015] n	1.000
+1	mdn-css	  pass[layout@page/lib.rs:13015] cpu	0.309
+1	mdn-css	  pass[cascade@page/lib.rs:7595] n	1.000
+1	mdn-css	  pass[cascade@page/lib.rs:7595] cpu	0.577
+1	mdn-css	  pass[layout@page/lib.rs:7595] n	1.000
+1	mdn-css	  pass[layout@page/lib.rs:7595] cpu	0.316
+1	mdn-css	cascade	1.802
+1	mdn-css	layout	0.925
+1	mdn-css	parse (html)	0.022
+1	mdn-css	script (JS exec + script fetch/compile)	0.072
+1	mdn-css	stylesheet fetch+parse	0.006
+1	mdn-css	subframes	0.051
+1	mdn-css	images/masks/fetch (decode)	0.042
+1	mdn-css	  thread[cascade+layout+blocking scripts] manuk-session	0.936
+1	mdn-css	  thread[subframes (pre-load)] manuk-session	0.989
+1	mdn-css	  thread[initial images+masks] manuk-session	0.928
+1	mdn-css	a11y tree (+ observe serialisation under mcp)	0.062
+1	mdn-css	mcp shutdown	0.019
+1	mdn-css	navigate tail after last load phase (tree seed, snapshot, settle)	0.156
+1	mdn-css	TOTAL_rusage	3.210
+1	mdn-css	SUM_attributed	3.207
+1	rfc-editor	startup (before first trace event, incl. JS prewarm)	0.054
+1	rfc-editor	  pass[cascade@page/lib.rs:9952] n	1.000
+1	rfc-editor	  pass[cascade@page/lib.rs:9952] cpu	0.085
+1	rfc-editor	  pass[layout@page/lib.rs:9963] n	1.000
+1	rfc-editor	  pass[layout@page/lib.rs:9963] cpu	0.107
+1	rfc-editor	  pass[cascade@page/lib.rs:13015] n	1.000
+1	rfc-editor	  pass[cascade@page/lib.rs:13015] cpu	0.027
+1	rfc-editor	  pass[layout@page/lib.rs:13015] n	1.000
+1	rfc-editor	  pass[layout@page/lib.rs:13015] cpu	0.030
+1	rfc-editor	cascade	0.111
+1	rfc-editor	layout	0.137
+1	rfc-editor	parse (html)	0.016
+1	rfc-editor	script (JS exec + script fetch/compile)	0.045
+1	rfc-editor	stylesheet fetch+parse	0.009
+1	rfc-editor	subframes	0.003
+1	rfc-editor	images/masks/fetch (decode)	0.002
+1	rfc-editor	  thread[cascade+layout+blocking scripts] manuk-session	0.220
+1	rfc-editor	  thread[finish_loading: external CSS] manuk-session	0.066
+1	rfc-editor	a11y tree (+ observe serialisation under mcp)	0.065
+1	rfc-editor	mcp shutdown	0.013
+1	rfc-editor	navigate tail after last load phase (tree seed, snapshot, settle)	0.121
+1	rfc-editor	TOTAL_rusage	0.582
+1	rfc-editor	SUM_attributed	0.577
+2	mdn-css	startup (before first trace event, incl. JS prewarm)	0.038
+2	mdn-css	  pass[cascade@page/lib.rs:9952] n	2.000
+2	mdn-css	  pass[cascade@page/lib.rs:9952] cpu	0.478
+2	mdn-css	  pass[layout@page/lib.rs:9963] n	2.000
+2	mdn-css	  pass[layout@page/lib.rs:9963] cpu	0.274
+2	mdn-css	  pass[cascade@page/lib.rs:13015] n	1.000
+2	mdn-css	  pass[cascade@page/lib.rs:13015] cpu	0.491
+2	mdn-css	  pass[layout@page/lib.rs:13015] n	1.000
+2	mdn-css	  pass[layout@page/lib.rs:13015] cpu	0.271
+2	mdn-css	  pass[cascade@page/lib.rs:7595] n	1.000
+2	mdn-css	  pass[cascade@page/lib.rs:7595] cpu	0.422
+2	mdn-css	  pass[layout@page/lib.rs:7595] n	1.000
+2	mdn-css	  pass[layout@page/lib.rs:7595] cpu	0.251
+2	mdn-css	cascade	1.391
+2	mdn-css	layout	0.796
+2	mdn-css	parse (html)	0.018
+2	mdn-css	script (JS exec + script fetch/compile)	0.058
+2	mdn-css	stylesheet fetch+parse	0.004
+2	mdn-css	subframes	0.064
+2	mdn-css	images/masks/fetch (decode)	0.039
+2	mdn-css	  thread[cascade+layout+blocking scripts] manuk-session	0.786
+2	mdn-css	  thread[subframes (pre-load)] manuk-session	0.824
+2	mdn-css	  thread[initial images+masks] manuk-session	0.705
+2	mdn-css	a11y tree (+ observe serialisation under mcp)	0.118
+2	mdn-css	mcp shutdown	0.037
+2	mdn-css	navigate tail after last load phase (tree seed, snapshot, settle)	0.152
+2	mdn-css	TOTAL_rusage	2.718
+2	mdn-css	SUM_attributed	2.715
+2	rfc-editor	startup (before first trace event, incl. JS prewarm)	0.059
+2	rfc-editor	  pass[cascade@page/lib.rs:9952] n	1.000
+2	rfc-editor	  pass[cascade@page/lib.rs:9952] cpu	0.072
+2	rfc-editor	  pass[layout@page/lib.rs:9963] n	1.000
+2	rfc-editor	  pass[layout@page/lib.rs:9963] cpu	0.143
+2	rfc-editor	  pass[cascade@page/lib.rs:13015] n	1.000
+2	rfc-editor	  pass[cascade@page/lib.rs:13015] cpu	0.036
+2	rfc-editor	  pass[layout@page/lib.rs:13015] n	1.000
+2	rfc-editor	  pass[layout@page/lib.rs:13015] cpu	0.037
+2	rfc-editor	cascade	0.108
+2	rfc-editor	layout	0.180
+2	rfc-editor	parse (html)	0.014
+2	rfc-editor	script (JS exec + script fetch/compile)	0.097
+2	rfc-editor	stylesheet fetch+parse	0.017
+2	rfc-editor	subframes	0.008
+2	rfc-editor	images/masks/fetch (decode)	0.003
+2	rfc-editor	  thread[cascade+layout+blocking scripts] manuk-session	0.270
+2	rfc-editor	  thread[finish_loading: external CSS] manuk-session	0.092
+2	rfc-editor	a11y tree (+ observe serialisation under mcp)	0.074
+2	rfc-editor	mcp shutdown	0.009
+2	rfc-editor	navigate tail after last load phase (tree seed, snapshot, settle)	0.161
+2	rfc-editor	TOTAL_rusage	0.734
+2	rfc-editor	SUM_attributed	0.729

@@ -10147,9 +10147,15 @@ impl Page {
             // time, which is a Bar-0 shape (a page's analytics, its consent gate and its router all
             // booting twice) dressed as a one-line attribute change.
             inlined_scripts = external.clone();
+            // CPU.4.a: the tree's mutation counter before the scripts run — if they leave it where it was, the
+            // post-script restyle below would recompute the very styles the initial cascade just produced.
+            let seq_before_scripts = dom.mutation_seq();
             match manuk_js::load_document(&mut dom, final_url, &rects, &styles, external) {
                 Ok((ctx, n)) => {
-                    if n > 0 {
+                    if n > 0
+                        && (dom.mutation_seq() != seq_before_scripts
+                            || std::env::var_os("MANUK_NO_SKIP_CLEAN_RESTYLE").is_some())
+                    {
                         tracing::debug!(scripts = n, "executed page scripts");
                         let sheets2: Vec<Stylesheet> = MinimalCascade::collect_style_elements(&dom);
                         (styles, root_box) = restyle_and_layout(
@@ -11908,11 +11914,11 @@ impl Page {
         // another, so the count is unchanged while the new node has no style — it laid out as nothing
         // and the text vanished from every observation.
         let nodes = self.dom.descendants(self.dom.root()).count();
-        if self
+        let tree_grew = self
             .dom
             .descendants(self.dom.root())
-            .any(|n| !self.styles.contains_key(&n))
-        {
+            .any(|n| !self.styles.contains_key(&n));
+        if tree_grew {
             tracing::debug!(
                 nodes,
                 styled = self.styles.len(),
@@ -11992,6 +11998,10 @@ impl Page {
         self.set_root_box(root);
         self.content_height = self.root_box.content_bottom();
         self.dom.clear_all_dirty();
+        // CPU.4.a: the tree-grew restyle above IS the full restyle the next `apply_stylesheets` would run.
+        if tree_grew {
+            self.note_cascade_current(viewport_width);
+        }
         // Same line and fields as `restyle_and_layout`'s, so the per-caller accounting sees the
         // restyles that run between load phases (image sizing, stylesheet arrival), not only the
         // ones that go through that function.
