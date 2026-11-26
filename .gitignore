@@ -80,3 +80,12 @@ bench-queue/results/*/worker.log
 /wk-*.md
 /wk[0-9]*.md
 bench-queue/results/*/RUNNING*
+
+# Stray agent output at the root (page snapshots, `> 0` / `> {}` redirects). Snapshots belong in
+# a scratch dir, or under docs/ with a reason; the root holds only the files allowed below.
+/*.md
+!/README.md
+!/SECURITY.md
+!/STATUS.md
+/0
+/{}
