@@ -14,5 +14,8 @@ sed 's/^disk\tAXES.1.d\t.*/disk\t-\ttoo short/' docs/sprint/AXES-NODES.tsv > $T/
 DESC="short reason"; AXES_NODES=$T/n3.tsv red python3 $S check
 awk -F'\t' 'BEGIN{OFS="\t"} NR>1&&$3=="pw-shared"{$14=$14*9} {print}' docs/sprint/conc2/layer1-grid.tsv > $T/g.tsv
 DESC="doctored grid"; AXES_GRID=$T/g.tsv red python3 $S check
+# (e) a node that is DONE must not own an axis: close AXES.1.d in a copy of the graph
+sed 's/^\(AXES.1.d\t[^\t]*\t[^\t]*\t[^\t]*\t[^\t]*\t\)TODO/\1DONE/' docs/sprint/GRAPH.tsv > $T/g2.tsv
+DESC="owning node closed (DONE)"; AXES_GRAPH=$T/g2.tsv red python3 $S check
 [ $fail = 0 ] && echo PASS
 exit $fail

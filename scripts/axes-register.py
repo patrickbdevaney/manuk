@@ -174,7 +174,8 @@ def load_nodes():
     return d
 
 def graph_ids():
-    return {l.split('\t')[0] for l in open(GRAPH)}
+    # only nodes that can still be worked count: a DONE/BLOCKED node does not own a losing axis
+    return {c[0] for c in (l.rstrip('\n').split('\t') for l in open(GRAPH)) if len(c) > 5 and c[5] in ('TODO', 'IN_PROGRESS')}
 
 def check():
     ev = evaluate(); bad = []
@@ -187,7 +188,7 @@ def check():
         nd = nodes.get(e['id'])
         if not nd: bad.append(f"axis {e['id']} is {e['verdict']} with no node and no reason"); continue
         node, text = nd
-        if node != '-' and node not in ids: bad.append(f"axis {e['id']}: node {node} is not in GRAPH.tsv")
+        if node != '-' and node not in ids: bad.append(f"axis {e['id']}: node {node} is not an open (TODO/IN_PROGRESS) node in GRAPH.tsv")
         if node == '-' and len(text.strip()) < 40: bad.append(f"axis {e['id']}: reason too short to be a reason")
     for b in bad: print('FAIL:', b)
     if not bad: print(f'ok: {len(ev)} axes, every loss/unmeasured axis has a live node id or a written reason')
