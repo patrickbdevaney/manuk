@@ -49,7 +49,9 @@ claude mcp add manuk -- manuk-mcp
 ```
 
 The default backend drives the pinned Chrome for Testing (under `~/.local/chrome-cft/<pin>/`, or `MANUK_CHROME`) with
-its sandbox on. `--backend engine` opts in to the in-process engine (`--backend chrome` is still accepted); `initialize` reports the backend as `serverInfo.title`. Thin stdio clients:
+its sandbox on. On Ubuntu 24.04 (and 23.10+) AppArmor blocks the unprivileged user namespaces Chrome's sandbox needs
+(symptom: `No usable sandbox`); a one-time root step (a per-binary AppArmor profile, or the machine-wide sysctl
+`kernel.apparmor_restrict_unprivileged_userns=0`) is in [`docs/MCP-INSTALL.md`](docs/MCP-INSTALL.md). `--backend engine` opts in to the in-process engine (`--backend chrome` is still accepted); `initialize` reports the backend as `serverInfo.title`. Thin stdio clients:
 [`python/manuk_client.py`](python/manuk_client.py) (standard library) and [`ts/manuk.ts`](ts/manuk.ts) (Node
 built-ins). Tool-by-backend behaviour: [`docs/sprint/BACKENDS.md`](docs/sprint/BACKENDS.md). Security policy and SBOM:
 [`SECURITY.md`](SECURITY.md).
