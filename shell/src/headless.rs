@@ -140,8 +140,24 @@ pub fn run(
     }
 }
 
+/// The grant `agent-task` runs under. `assistant` (the default) is the panel's read-only scope;
+/// `all` grants every action kind and auto-runs sensitive ones, for eval harnesses on fixtures.
+///
+/// An A/B MUST pass `--grant all`: TaskRun enforces the grant, but the Hub driver does not consult
+/// capabilities at all (hub_run.rs reads only `max_steps`), so under the default an A/B compares a
+/// TaskRun that cannot click, type or submit against an unrestricted Hub. (W6.H1.b's first run did.)
+fn scope_for(grant: &str) -> Result<crate::panel::PanelScope> {
+    use crate::panel::PanelScope;
+    Ok(match grant {
+        "assistant" => PanelScope::assistant(),
+        "all" => PanelScope::custom(manuk_agent::capabilities::Capabilities::all_actions())
+            .allow_sensitive(true),
+        g => bail!("agent-task: --grant {g}: want assistant|all"),
+    })
+}
+
 /// `manuk agent-task <url> <task> [--driver taskrun|hub] [--script replies.json] [--max-steps N]
-/// [--timeout-s N]`. With `--script` the model is a JSON array of verbatim replies (no network);
+/// [--timeout-s N] [--grant assistant|all]`. With `--script` the model is a JSON array of verbatim replies (no network);
 /// otherwise the panel's backend (local llama-server, else Groq) is used.
 pub fn cmd(args: &[String]) -> Result<()> {
     let pos: Vec<&String> = {
@@ -171,7 +187,7 @@ pub fn cmd(args: &[String]) -> Result<()> {
             .and_then(|s| s.parse().ok())
             .unwrap_or(300),
     );
-    let mut config = crate::panel::PanelScope::assistant().agent_config();
+    let mut config = scope_for(flag("--grant").unwrap_or("assistant"))?.agent_config();
     config.max_steps = max_steps;
     let backend: Box<dyn InferenceBackend> = match flag("--script") {
         Some(f) => {
@@ -285,6 +301,31 @@ mod tests {
         );
         assert_eq!(h.answer(), Some("from the script"));
         assert!(h.transcript.iter().any(|l| l.starts_with("scroll ")));
+    }
+
+    /// The grant is real for TaskRun: under the default a click is refused before it runs, under
+    /// `--grant all` it is not. (Red if `scope_for("all")` falls back to the assistant scope.)
+    #[test]
+    fn grant_all_lets_taskrun_act_and_the_default_does_not() {
+        for (grant, refused) in [("assistant", true), ("all", false)] {
+            let mut cfg = scope_for(grant).unwrap().agent_config();
+            cfg.max_steps = 8;
+            let out = run(
+                Driver::TaskRun,
+                "what does the widget cost?",
+                handoff(),
+                cfg,
+                Box::new(ReplayBackend::new(vec![
+                    r#"{"action":"click_at","x":10,"y":10}"#.to_string(),
+                    r#"{"action":"finish","answer":"42 dollars"}"#.to_string(),
+                ])),
+                (1024, 768),
+                Duration::from_secs(60),
+            );
+            let j = out.transcript.join("\n");
+            assert_eq!(j.contains("was not granted"), refused, "--grant {grant}: {j}");
+        }
+        assert!(scope_for("everything").is_err());
     }
 
     #[test]

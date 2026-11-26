@@ -6,13 +6,23 @@
   python3 -I bench/agent-tasks/h1_ab.py self-test                                  # the act normaliser and the
                                                                                    # tally's diff check can go red
 
-Drivers: `manuk agent-task <url> <goal> --driver taskrun|hub` (shell/src/headless.rs). Both run the same engine page
+Drivers: `manuk agent-task <url> <goal> --driver taskrun|hub --grant all` (shell/src/headless.rs). `--grant all` is
+required for a fair A/B: TaskRun enforces its grant and the Hub ignores it, so under the default read-only grant the
+first W6.H1.b run (2026-11-25) compared a TaskRun that could not click, type or submit against an unrestricted Hub. Both run the same engine page
 loader and the same model backend (Groq, GROQ_MODEL); only the agent state machine differs. The judge is the suite's
 own deterministic verifier (verify.verify) applied to the ANSWER line of both drivers, so it is identical across arms.
 
-Infra failures (HTTP 429/5xx from the model, timeouts, connection errors) are retried once with the next key and
-recorded as attempts; a run still infra-failed after the retry is unscored (pass empty), never counted as a fail.
-Keys come from .env (GROQ_API_KEY_n), read in-process and passed through the environment only; never written out.
+The model is reached through groq_relay.py (MANUK_LLAMA_PORT -> a localhost relay): Groq's per-key tokens-per-minute
+cap becomes a WAIT inside the relay instead of a failed task, keys are used one at a time (next key only on a long
+wait or a refusal), and every call is logged to <out-dir>/<out-stem>.traces/<task>_<driver>_a<n>.jsonl together with
+the agent's stdout/stderr (.out/.err) and the fixture end state (.state.json). Those traces are what h1_attrib.py
+reads to decide whether a failure was the ENGINE's or the MODEL's.
+
+The time budget excludes relay waits: a run whose wall time minus its rate-limit waits exceeds BUDGET_S is a timeout;
+waiting in Groq's queue is not engine time. A run the relay still could not serve (waits > its cap, 5xx persisting)
+is infra and retried once; one whose single request exceeds the key's whole per-minute budget is CAPACITY. Infra and
+capacity runs are unscored (pass empty), never counted as fails. Keys are read in-process from .env (GROQ_API_KEY_n),
+handed to the relay only, never to the agent's environment and never written out; traces carry key NAMES.
 Every row carries chrome_ver=$MANUK_CHROME_PIN (the engine arms never touch Chrome; the column is kept for the join).
 """
 import csv, json, os, re, subprocess, sys, time, collections
@@ -22,17 +32,21 @@ ROOT = os.path.abspath(os.path.join(HERE, "../.."))
 sys.path.insert(0, HERE)
 import verify as V  # noqa: E402  (the suite's own verifier: the one judge for both arms)
 import fixtures  # noqa: E402
+import groq_relay  # noqa: E402
 
 BIN = os.path.join(ROOT, "target/release/manuk")
 MODEL = os.environ.get("GROQ_MODEL", "qwen/qwen3.8-27b")  # the crate default qwen/qwen3.6-27b is no longer served
-BUDGET_S, MAX_STEPS = 240, 40
-MAX_ATTEMPTS, RETRY_WAIT_S = 4, 65  # a 429 says "try again in ~3s" per request; the ITPM window is one minute
+BUDGET_S, MAX_STEPS = 240, 40     # BUDGET_S is ACTIVE time: wall minus the relay's rate-limit waits
+WAIT_ALLOWANCE_S = 1200            # extra wall the agent is given so relay waits cannot exhaust its own clock
+MAX_ATTEMPTS, RETRY_WAIT_S = 2, 65 # the relay already absorbs 429s; a whole-task retry is for a relay give-up only
 DRIVERS = ["taskrun", "hub"]
 # infra = the model endpoint refused or timed out (a failed/Error line), never page text: Groq's per-key tokens-per-minute
 # cap (7000 ITPM on qwen3.8-27b) is the expected case
-INFRA = re.compile(r"^(failed|Error).*(groq HTTP (429|5\d\d)|timed out|dns error|Connection refused)", re.M | re.I)
+INFRA = re.compile(r"^(failed|Error).*((groq|llama\.cpp) HTTP (429|5\d\d|502)|timed out|dns error|Connection refused)",
+                   re.M | re.I)
 COLS = ["task", "run", "pass", "judge_model", "arm", "driver", "attempt", "rc", "infra", "steps", "answer",
-        "reasons", "act_seq", "observe_n", "wall_s", "chrome_ver"]
+        "reasons", "act_seq", "observe_n", "wall_s", "chrome_ver", "outcome", "active_s", "relay_wait_s", "model_s",
+        "model_calls", "rate_limited", "prompt_tokens", "max_prompt_tokens", "completion_tokens", "keys_used", "trace"]
 
 
 def groq_keys():
@@ -42,7 +56,7 @@ def groq_keys():
             m = re.match(r"GROQ_API_KEY_(\d+)=(.*)$", line.strip())
             if m and m.group(2).strip().strip("'\""):
                 keys.append((int(m.group(1)), m.group(2).strip().strip("'\"")))
-    return [k for _, k in sorted(keys)]
+    return [("GROQ_API_KEY_%d" % n, k) for n, k in sorted(keys)]
 
 
 def normalise_act(line):
@@ -80,23 +94,37 @@ def parse_transcript(out):
     return answer, steps, acts, observe_n, tr
 
 
-def run_one(url, goal, driver, key):
-    env = dict(os.environ, GROQ_API_KEY=key, GROQ_MODEL=MODEL)
-    env.pop("MANUK_LLAMA_PORT", None)
+def run_one(url, goal, driver, relay, port, trace):
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GROQ_API_KEY")}
+    env.update(GROQ_MODEL=MODEL, MANUK_LLAMA_PORT=str(port))
+    relay.begin(trace + ".jsonl")
     t0 = time.time()
     try:
-        p = subprocess.run([BIN, "agent-task", url, goal, "--driver", driver, "--timeout-s", str(BUDGET_S),
-                            "--max-steps", str(MAX_STEPS)], capture_output=True, text=True, env=env,
-                           timeout=BUDGET_S + 90, cwd=ROOT)
+        p = subprocess.run([BIN, "agent-task", url, goal, "--driver", driver,
+                            "--timeout-s", str(BUDGET_S + WAIT_ALLOWANCE_S), "--max-steps", str(MAX_STEPS), "--grant", "all"],
+                           capture_output=True, text=True, env=env, timeout=BUDGET_S + WAIT_ALLOWANCE_S + 90, cwd=ROOT)
         rc, out, err = p.returncode, p.stdout, p.stderr
-    except subprocess.TimeoutExpired:
-        rc, out, err = 124, "", "timed out"
+    except subprocess.TimeoutExpired as e:
+        rc, out, err = 124, (e.stdout or b"").decode() if isinstance(e.stdout, bytes) else (e.stdout or ""), "timed out"
+    wall = time.time() - t0
+    st = relay.end()
+    with open(trace + ".out", "w") as f:
+        f.write(out)
+    with open(trace + ".err", "w") as f:
+        f.write(err)
     answer, steps, acts, observe_n, tr = parse_transcript(out)
-    infra = int(rc != 0 and bool(INFRA.search(out + "\n" + err)))
-    if rc == 124:
-        infra = 1
-    return dict(rc=rc, answer=answer, steps=steps, acts=acts, observe_n=observe_n, wall=time.time() - t0,
-                infra=infra, err=(err.strip().splitlines() or [""])[-1][:200])
+    active = wall - st["wait_s"]
+    if rc != 0 and st["oversize"]:
+        outcome = "capacity"
+    elif rc != 0 and (st["infra"] or INFRA.search(out + "\n" + err)):
+        outcome = "infra"
+    elif active > BUDGET_S or rc == 124:
+        outcome = "timeout"
+    else:
+        outcome = "ran"
+    return dict(rc=rc, answer=answer, steps=steps, acts=acts, observe_n=observe_n, wall=wall, active=active,
+                infra=int(outcome in ("infra", "capacity")), outcome=outcome, relay=st,
+                err=(err.strip().splitlines() or [""])[-1][:200])
 
 
 def run(out_path, only=None):
@@ -109,31 +137,41 @@ def run(out_path, only=None):
         tasks = [t for t in tasks if t["id"] in only]
     chrome = os.environ.get("MANUK_CHROME_PIN", "")
     srv, base = serve(0)
+    relay = groq_relay.Relay(keys, MODEL)
+    rsrv, rport = groq_relay.serve(relay)
+    tdir = os.path.splitext(os.path.abspath(out_path))[0] + ".traces"
+    os.makedirs(tdir, exist_ok=True)
     rows = []
     try:
         for i, t in enumerate(tasks):
             url = t["start_url"].replace("{BASE}", base)
             for d in DRIVERS:
                 attempts = []
-                for a in range(MAX_ATTEMPTS):  # infra retries rotate the key and wait out the per-minute cap
+                for a in range(MAX_ATTEMPTS):  # only a relay give-up (or a capacity-sized request) gets here twice
                     if a:
                         time.sleep(RETRY_WAIT_S)
                     fixtures.reset()
-                    r = run_one(url, t["goal"], d, keys[(i + a) % len(keys)])
+                    trace = os.path.join(tdir, f"{t['id']}_{d}_a{a + 1}")
+                    r = run_one(url, t["goal"], d, relay, rport, trace)
+                    r["trace"] = os.path.relpath(trace, ROOT)
                     attempts.append(r)
-                    if not r["infra"]:
+                    if not r["infra"] or r["outcome"] == "capacity":  # an oversize request is deterministic
                         break
                 last = attempts[-1]
                 if last["infra"]:
-                    reasons, passed = "infra: unscored after %d attempts" % len(attempts), ""
+                    reasons, passed = "%s: unscored after %d attempts" % (last["outcome"], len(attempts)), ""
                 else:
                     state = None
                     try:
                         state = json.load(urllib_open(base + "/__state")) if "{BASE}" in t["start_url"] else None
                     except Exception:
                         state = None
+                    with open(os.path.join(ROOT, last["trace"]) + ".state.json", "w") as f:
+                        json.dump(state, f)
                     v = V.verify(t, last["answer"] or "", state)
                     reasons, passed = "; ".join(v["reasons"]), int(v["pass"])
+                    if last["outcome"] == "timeout":
+                        reasons, passed = ("timeout: active %ds > %ds; " % (last["active"], BUDGET_S)) + reasons, 0
                 for n, r in enumerate(attempts, 1):
                     rows.append({"pass": (passed if n == len(attempts) else ""), "task": t["id"], "run": "1",
                                  "judge_model": "verify.py", "arm": d, "driver": d, "attempt": n, "rc": r["rc"],
@@ -141,7 +179,14 @@ def run(out_path, only=None):
                                  "answer": (r["answer"] or "").replace("\t", " ").replace("\n", " ")[:200],
                                  "reasons": (reasons if n == len(attempts) else "") or "",
                                  "act_seq": ">".join(r["acts"]), "observe_n": r["observe_n"],
-                                 "wall_s": round(r["wall"]), "chrome_ver": chrome})
+                                 "wall_s": round(r["wall"]), "chrome_ver": chrome, "outcome": r["outcome"],
+                                 "active_s": round(r["active"]), "relay_wait_s": r["relay"]["wait_s"],
+                                 "model_s": r["relay"]["model_s"], "model_calls": r["relay"]["calls"],
+                                 "rate_limited": r["relay"]["rate_limited"],
+                                 "prompt_tokens": r["relay"]["prompt_tokens"],
+                                 "max_prompt_tokens": r["relay"]["max_prompt_tokens"],
+                                 "completion_tokens": r["relay"]["completion_tokens"],
+                                 "keys_used": ",".join(r["relay"]["keys_used"]), "trace": r["trace"]})
                 print(f"{t['id']} {d}: pass={passed!s:>1} rc={last['rc']} infra={last['infra']} "
                       f"acts={'>'.join(last['acts'])[:120]}", flush=True)
                 # write as we go so an interrupted run leaves the rows it has
@@ -152,6 +197,7 @@ def run(out_path, only=None):
                     w.writerows(rows)
     finally:
         srv.shutdown()
+        rsrv.shutdown()
     print(f"wrote {len(rows)} rows -> {out_path}")
 
 
@@ -209,6 +255,8 @@ def self_test():
     check("a 429 from the model is infra", bool(INFRA.search("failed: model: groq HTTP 429: {}")))
     check("page text saying 'connection' is not infra", not INFRA.search("observe: connection refused by page"))
     check("a 404 model error is not infra (a real failure)", not INFRA.search("failed: model: groq HTTP 404: {}"))
+    check("a relay-passed 429 is infra", bool(INFRA.search("failed: model: llama.cpp HTTP 429: {}")))
+    check("the relay's own self-test is green", groq_relay.self_test() == 0)
     if fails:
         print("self-test RED:", fails)
         sys.exit(1)
