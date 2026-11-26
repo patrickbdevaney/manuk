@@ -23,7 +23,16 @@ through as an error and logged as `oversize`: the run is a CAPACITY outcome, nei
 import http.server, json, os, re, threading, time, urllib.error, urllib.request
 
 GROQ = "https://api.groq.com/openai/v1"
-PRESET = {"max_tokens": 2048, "temperature": 0.2}  # agent/src/local.rs OpenAiCompatBackend::groq + default temperature
+# temperature 0.2 = the Groq preset (agent/src/local.rs). max_tokens is NOT the preset's 2048: on 2026-11-26 Groq began
+# enforcing an output-tokens-per-minute cap of 1000 on qwen3.8-27b and refuses any request whose max_tokens exceeds it
+# ("Request too large ... OTPM: Limit 1000, Requested 2048"). Measured replies on this suite: 39 calls, completion
+# tokens median 25, max 32 (no reasoning output), so 256 is 8x headroom and changes no reply.
+PRESET = {"max_tokens": 256, "temperature": 0.2}
+ORG = re.compile(r"org_[A-Za-z0-9]+")  # Groq error text names the account's organisation id: redact it from traces
+
+
+def redact(text):
+    return ORG.sub("org_REDACTED", text)
 MAX_WAIT_PER_CALL_S = 300   # total waiting for one call before it is handed back to the agent as infra
 SWITCH_AFTER_S = 120        # a per-minute cap always clears within ~60 s, so a key is only left on a longer wait
                             # (a per-DAY cap) or a refusal: one key at a time, not rotation for throughput
@@ -147,7 +156,7 @@ class Relay:
             self._log(dict(call=self.stats["calls"], status=status, key=self._key_name(), attempts=attempts,
                            wait_s=round(waited, 1), model_s=round(dt, 2), usage=usage,
                            messages=body.get("messages"), reply=reply,
-                           error=None if status == 200 else data[:400].decode("utf-8", "replace")))
+                           error=None if status == 200 else redact(data[:400].decode("utf-8", "replace"))))
             return status, data
 
     def _next_key(self):
@@ -268,7 +277,7 @@ def self_test():
     check("a short 429 is waited out and retried on the same key", call() == 200 and slept == [3.5]
           and seen[-1][0] == "Bearer sk-one" and seen[-2][0] == "Bearer sk-one")
     check("the request is pinned to the Groq preset", seen[-1][1]["model"] == "qwen/test"
-          and seen[-1][1]["max_tokens"] == 2048 and seen[-1][1]["temperature"] == 0.2)
+          and seen[-1][1]["max_tokens"] == PRESET["max_tokens"] <= 1000 and seen[-1][1]["temperature"] == 0.2)
     script[:] = [(429, {"retry-after": "60"}), (200, {})]
     check("a per-minute 429 (60 s) is waited out on the SAME key", call() == 200 and seen[-1][0] == "Bearer sk-one")
     script[:] = [(429, {"retry-after": "3600"}), (200, {})]
@@ -287,6 +296,7 @@ def self_test():
     check("the trace holds what the model saw and said", '"hi"' in trace and '"reply": "ok"' in trace)
     check("models endpoint advertises the pinned model", json.load(urllib.request.urlopen(
         "http://127.0.0.1:%d/v1/models" % port))["data"][0]["id"] == "qwen/test")
+    check("org ids are redacted", redact("in organization `org_01abcXYZ` tier") == "in organization `org_REDACTED` tier")
     check("duration parser", parse_duration("1m2.5s") == 62.5 and parse_duration("450ms") == 0.45)
     srv.shutdown(); up.shutdown()
     print("self-test " + ("green" if not fails else "RED (%d)" % fails))

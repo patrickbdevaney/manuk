@@ -110,6 +110,7 @@ def run_one(url, goal, driver, relay, port, trace):
     st = relay.end()
     with open(trace + ".out", "w") as f:
         f.write(out)
+    out, err = groq_relay.redact(out), groq_relay.redact(err)
     with open(trace + ".err", "w") as f:
         f.write(err)
     answer, steps, acts, observe_n, tr = parse_transcript(out)
