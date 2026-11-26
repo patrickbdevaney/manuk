@@ -54,7 +54,9 @@ fi
 
 # Never commit anything git itself is told to ignore — including via `.git/info/exclude`, which is
 # where repo-specific local paths live. `git add -f` bypasses the ignore; it does not bypass this.
-for f in $(git diff --cached --name-only); do
+# DELETIONS are exempt: removing a stray file and ignoring its name in the same commit is cleanup,
+# not committing an ignored path (the old loop refused exactly that, and so forced a bypass).
+for f in $(git diff --cached --name-only --diff-filter=d); do
   if git check-ignore -q "$f" 2>/dev/null; then
     red "✗ HYGIENE: '$f' is an ignored path and must not be committed (even with 'git add -f')."
     exit 1
@@ -216,7 +218,15 @@ fi
 # failed to recognise `ENGINEERING.MD` (uppercase) as a doc, sent a docs-only commit down the
 # engine-code path, and forced a --no-verify bypass. A hook that misfires on its own exemption is
 # exactly what trains people to disable it.
-if ! echo "$STAGED" | grep -qvE '^(docs/|STATUS\.[Mm][Dd]$|.*\.[Mm][Dd]$|scripts/)'; then
+# Also gate-free: `.gitignore` (it changes what git sees, never what cargo builds), and the DELETION of
+# a ROOT-level file that is not build input (a stray snapshot or a `> 0` redirect typo). A deletion
+# anywhere else, or of Cargo.toml / Cargo.lock / rust-toolchain.toml / deny.toml, still needs a receipt:
+# removing a source file CAN break the build.
+GATED=$( { git diff --cached --name-only --diff-filter=d | grep -vE '^\.gitignore$';
+           git diff --cached --name-only --diff-filter=D | grep -E '/' ;
+           git diff --cached --name-only --diff-filter=D | grep -vE '/' \
+             | grep -E '^(Cargo\.toml|Cargo\.lock|rust-toolchain\.toml|deny\.toml)$'; } )
+if ! echo "$GATED" | grep -qvE '^(docs/|STATUS\.[Mm][Dd]$|.*\.[Mm][Dd]$|scripts/|$)'; then
   grn "✓ docs/scripts-only commit — gate receipt not required (journal check passed)"
   exit 0
 fi
