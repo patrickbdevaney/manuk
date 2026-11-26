@@ -421,7 +421,7 @@ row by row against our map:
 **WebMCP crossed from spec-thread to shipping surface**: W3C Draft CG Report published Feb 2026;
 Chrome 146 Canary behind a flag two weeks later; **public origin trial in Chrome 149 as of June
 2026**. Google/Microsoft/Mozilla/Apple are all in the CG; only Chrome ships. This is the exact API
-CONSTITUTION.MD **H2 scope item 2** names: *"Native WebMCP client — implement `navigator.modelContext`
+docs/foundation/CONSTITUTION.MD **H2 scope item 2** names: *"Native WebMCP client — implement `navigator.modelContext`
 as the first independent, non-Chrome implementation... converts the largest structural threat into
 Manuk's native tongue."* The threat/opportunity clock the constitution described is now RUNNING.
 
@@ -1088,7 +1088,7 @@ IntersectionObserver, getSelection, DataTransfer/DragEvent/Animation+TransitionE
 `naturalWidth` (image-lifecycle), CSSOM `.sheet` (~944 WPT), the servo-drop CSS-property class.
 
 ADDED as `unknown` (Baseline-2026, absent from the map): **`font-family: math`** (Mar-2026, MathML math-font
-selection) — doc-class, but MathML is below the ROI cut line (ENGINEERING.MD Domain D); recorded measured-absent-
+selection) — doc-class, but MathML is below the ROI cut line (docs/foundation/ENGINEERING.MD Domain D); recorded measured-absent-
 by-policy, not a build target.
 
 WHAT WE HAD BEEN WRONG ABOUT: `::details-content` — a map unknown since Audit #20 — is at least selector-recognized
@@ -5502,7 +5502,7 @@ receipts still refer to.
 
 - The map itself, queried rather than recalled: `awk -F'\t'` over `docs/loop/CONSTELLATION.tsv` for
   the three classes ticks 1119–1128 actually worked
-- `CONSTITUTION.MD` PART VI as amended by checks #105 and #106 — both added clauses this window, and
+- `docs/foundation/CONSTITUTION.MD` PART VI as amended by checks #105 and #106 — both added clauses this window, and
   neither had a map row to point at
 - The t1127 sweep's own root-cause output and the `MANUK_RO_PARTITION` runs behind check #106's steer
 
@@ -6974,7 +6974,7 @@ The next unknown-unknown will not come from Interop's list, because we have caug
 
 ### What we had been wrong about — a DEFERRAL whose fact moved
 
-`zstd` sits on `CONSTITUTION.MD`'s explicit SKIP-v1 list. **Baseline moved it to "newly available" in
+`zstd` sits on `docs/foundation/CONSTITUTION.MD`'s explicit SKIP-v1 list. **Baseline moved it to "newly available" in
 February 2026**, which is exactly the shape of *"an exclusion must carry a re-check or the reason
 outlives the fact"* (t1273). Re-checked from the tree rather than argued:
 

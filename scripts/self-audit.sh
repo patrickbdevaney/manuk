@@ -183,7 +183,7 @@ grep -q "^## Lessons" STATUS.md && ok "recurring lessons promoted out of the jou
 [ "$(git config core.hooksPath)" = "scripts/hooks" ] && ok "pre-commit hook wired (core.hooksPath)" || bad "pre-commit hook NOT wired — compliance is back to being a claim"
 [ -x scripts/hooks/pre-commit ] && ok "pre-commit hook executable" || bad "pre-commit hook missing/not executable"
 grep -q "manuk-verify-receipt" scripts/verify.sh && ok "verify.sh writes a gate receipt" || bad "verify.sh writes no receipt — the hook cannot tell WHICH tree was verified"
-grep -qs "STATUS.md" CLAUDE.MD CLAUDE.md && ok "CLAUDE.MD makes reading STATUS.md the first session action" || bad "CLAUDE.MD does not require the session-start STATUS.md read"
+grep -qs "STATUS.md" docs/foundation/CLAUDE.MD CLAUDE.md && ok "docs/foundation/CLAUDE.MD makes reading STATUS.md the first session action" || bad "docs/foundation/CLAUDE.MD does not require the session-start STATUS.md read"
 
 head_ "Journal (Part 7) — one entry per tick, no gaps"
 MISSING=""

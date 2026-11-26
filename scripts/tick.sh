@@ -101,7 +101,7 @@ ok "self-audit current (last: tick ${AUDIT})"
 ./scripts/surface-audit.sh check || die "surface audit overdue — run ./scripts/surface-audit.sh run"
 
 # The constitution check. surface-audit checks the MAP against the world; this checks the loop's DIRECTION
-# against the long horizon (CONSTITUTION.MD). It exists because tick 84 climbed the encoding tail — a real
+# against the long horizon (docs/foundation/CONSTITUTION.MD). It exists because tick 84 climbed the encoding tail — a real
 # +721k that was the wrong hill — and no instrument read the document that defines the frontier.
 ./scripts/constitution-check.sh check || die "constitution check overdue — run ./scripts/constitution-check.sh run"
 

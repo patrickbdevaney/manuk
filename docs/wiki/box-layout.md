@@ -5943,7 +5943,7 @@ The sixteen-row table battery found **five** divergences in **four** mechanisms.
                                     we render in source order
 ```
 
-The rowspan one is what `CONSTITUTION.MD` VI.2 has carried as *"t933 row-height distribution"* since
+The rowspan one is what `docs/foundation/CONSTITUTION.MD` VI.2 has carried as *"t933 row-height distribution"* since
 check #82 — and this is the first fixture to put a number on it.
 
 Gated by `G_TABLE_CELL_VALIGN`.
@@ -5952,7 +5952,7 @@ Gated by `G_TABLE_CELL_VALIGN`.
 
 A `rowspan` cell taller than the rows it covers has excess height to place. That excess was added
 entirely to the **last** spanned row — `row_h[last] += *bh - spanned`. Chrome shares it across every
-spanned row, **proportionally to their natural heights**. This is the defect `CONSTITUTION.MD` VI.2
+spanned row, **proportionally to their natural heights**. This is the defect `docs/foundation/CONSTITUTION.MD` VI.2
 has carried as *"t933 row-height distribution"* since check #82, and t989's table battery is the first
 fixture to put numbers on it.
 
@@ -10609,7 +10609,7 @@ handed leftovers to percentages would move `50% + 300px` (which must be `500 + 5
 
 ⚠ The `css/css-sizing` row in `WPT-AREAS.tsv` read **4290/5820** and is not comparable to either — a
 different tree AND a different subtest population. The mark was re-based on the measured pair rather
-than inherited, which is `CONSTITUTION.MD` PART VI's own rule: *a banked number's harness is the tree
+than inherited, which is `docs/foundation/CONSTITUTION.MD` PART VI's own rule: *a banked number's harness is the tree
 that produced it.*
 
 ## `column-count` is gated on BOX FRAGMENTATION, not on the column algorithm (t1325 probe, refused)

@@ -156,7 +156,7 @@ The unaccounted 83% is the **BUILD**, and two independent readings this session 
 
 **NOTHING WAS TRIMMED, and nothing should have been by this loop.** Every candidate the audit names
 (cargo-nextest to share test binaries, mold/lld, workspace-hack, narrower per-gate build scope) lives
-in `scripts/` and the build configuration, which CONSTITUTION.MD PART VII makes **observer-owned**.
+in `scripts/` and the build configuration, which docs/foundation/CONSTITUTION.MD PART VII makes **observer-owned**.
 This audit's product is therefore a hand-off, not an edit:
 
 > **For the observer:** the wall's cost is the BUILD, not the gate wall. Optimising gates cannot
@@ -2038,7 +2038,7 @@ different quantity from the cost it exists to control will keep reporting "lean"
 
 The lever is the **build graph** — a statically-linked JS engine in every gate binary, rebuilt per
 gate when a shared crate changes (`cargo-nextest` sharing one test binary, a workspace-hack, sccache).
-**That is harness territory (CONSTITUTION.MD PART VII)**, so it is recorded here for the observer and
+**That is harness territory (docs/foundation/CONSTITUTION.MD PART VII)**, so it is recorded here for the observer and
 not touched. The agent-side half is already being done and is the reason t1225 cost 115s: **keep
 docs/measurement ticks free of engine edits so they take the warm path.**
 

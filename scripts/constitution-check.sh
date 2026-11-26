@@ -4,7 +4,7 @@
 # **This is the anchor between the tick loop and the vision.**
 #
 # `orient.sh` picks the next tick from the tree. `surface-audit.sh` checks the *map* against the world.
-# Neither of them looks UP — at the governing document (`CONSTITUTION.MD`) that says what all of this is
+# Neither of them looks UP — at the governing document (`docs/foundation/CONSTITUTION.MD`) that says what all of this is
 # *for*: H0 Pareto parity → H1 hardening → H2 agentic surface → H3 appanages → H4 speciation, under eight
 # invariants. A loop that optimises the local gradient forever can climb a hill that is not the mountain —
 # tick 84 did exactly that, banking +721k encoding subtests that the constitution's Pareto discipline (I4)
@@ -27,7 +27,7 @@ cd "$(dirname "$0")/.."
 
 BLD=$'\033[1m'; RED=$'\033[31m'; GRN=$'\033[32m'; YEL=$'\033[33m'; CYA=$'\033[36m'; OFF=$'\033[0m'
 LOG=docs/loop/CONSTITUTION-CHECK.md
-DOC=CONSTITUTION.MD
+DOC=docs/foundation/CONSTITUTION.MD
 CADENCE=8
 
 TICK=$(grep -oP '^TICK:\s*\K[0-9]+' STATUS.md 2>/dev/null || echo 0)
@@ -37,7 +37,7 @@ DUE=$(( TICK - LAST ))
 case "${1:-check}" in
 check)
   if [ ! -f "$DOC" ]; then
-    printf '%s✗ CONSTITUTION.MD is missing — the loop has no long horizon to anchor to.%s\n' "$RED$BLD" "$OFF" >&2
+    printf '%s✗ docs/foundation/CONSTITUTION.MD is missing — the loop has no long horizon to anchor to.%s\n' "$RED$BLD" "$OFF" >&2
     exit 1
   fi
   if [ "$DUE" -ge "$CADENCE" ]; then
@@ -58,7 +58,7 @@ run)
 
   The tick loop climbs the local gradient. This is the step that makes sure the hill is the mountain.
 
-  1. RE-READ CONSTITUTION.MD — the WHOLE thing, not from memory. In particular:
+  1. RE-READ docs/foundation/CONSTITUTION.MD — the WHOLE thing, not from memory. In particular:
        · PART I  (invariants)      — is any recent tick about to violate one? (esp. I4 Pareto discipline,
                                       I2 never-patch-deps, I3 semantic model lands in lockstep)
        · PART II (progression tree) — which HORIZON are we in? What is its EXIT GATE (binary conditions)?

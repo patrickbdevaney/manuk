@@ -467,7 +467,7 @@ without a CDM does — is a separate, open question.)
 t640 measured shaka-player refusing to boot on a clause requiring the **EME interface objects**,
 which it reads as a proxy for *"is this a real browser"* and demands **even for unencrypted
 content**. The scope question was deliberately left open there; it is settled here, from
-`CONSTITUTION.MD` PART IV's own sentence:
+`docs/foundation/CONSTITUTION.MD` PART IV's own sentence:
 
 > *"**Widevine/EME HD streaming.** Permanent licensing wall. Documented, **degraded gracefully**,
 > never chased."*

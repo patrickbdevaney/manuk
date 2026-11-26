@@ -49,7 +49,7 @@ that **ebbs and flows with the context window instead of accumulating anywhere.*
 
 ## How this relates to the rest of the constellation
 
-- **The lesson-promotion mechanism** (recurring patterns → `CLAUDE.MD` / a gate) does a *different*
+- **The lesson-promotion mechanism** (recurring patterns → `docs/foundation/CLAUDE.MD` / a gate) does a *different*
   job: it is for the few things short enough and critical enough to load into **every** session's
   initial context. **This wiki is the full cumulative record**, organised for **lookup when working in
   a given area** — not for blanket loading.

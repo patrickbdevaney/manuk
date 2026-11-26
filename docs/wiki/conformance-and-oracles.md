@@ -1416,7 +1416,7 @@ performed the first**, because to them the capability is now obviously present.
 
 ## Ranked by area is not ranked by sites moved (constitution check #46, tick 639)
 
-`CONSTITUTION.MD` PART VII.1 ranks work by **"real sites moved per fix, verified against the oracle
+`docs/foundation/CONSTITUTION.MD` PART VII.1 ranks work by **"real sites moved per fix, verified against the oracle
 corpus."** Eight ticks satisfied that rule *in intent* and produced **no site measurement at all**.
 
 Three consecutive media capability ticks — WebM demux, AV1-in-WebM, `mediaCapabilities.decodingInfo`

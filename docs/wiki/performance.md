@@ -1069,7 +1069,7 @@ which is the whole point of writing it.
 
 ## The constitution's #1 item states a RATE, and nothing had ever measured it — 0.0005 to 0.0052, not 1.0 (t1324)
 
-`CONSTITUTION.MD` PART VI.2's H0.1 row calls incremental relayout *"the single highest-leverage
+`docs/foundation/CONSTITUTION.MD` PART VI.2's H0.1 row calls incremental relayout *"the single highest-leverage
 architectural decision in the renderer"*, and check #110 re-ranked it from deferred performance work to
 a **Bar 0** on the strength of one sentence:
 

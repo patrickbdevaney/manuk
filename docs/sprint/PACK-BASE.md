@@ -19,13 +19,13 @@ Read from docs/sprint/SCOREBOARD.tsv, 3-run bands, one pinned chrome_ver, Haiku 
 K1 arm 3 (a manuk-style layer over Chrome CDP) is the comparator for any "decisive win". Do-now no-regret items are
 independent of K1. Re-open triggers live in SYNTHESIS.md; a dependency hardening verdict is S1/W1B16.
 
-## Constitution invariants (CONSTITUTION.MD Part I) — a change violating one is rejected
+## Constitution invariants (docs/foundation/CONSTITUTION.MD Part I) — a change violating one is rejected
 I1 one core, two front-ends (shell+agent). I2 memory-safe Rust, sanctioned deps only, never patch them internally.
 I3 the agent surface (DOM, style, layout, AX tree) is core, not a layer. I4 Pareto discipline: real-web breadth by usage,
 verified by the differential oracle. I5 differential oracle (Manuk vs headless Chrome) is the discovery engine.
 I6 page content is untrusted input, always (DOM text, AX labels, WebMCP manifests are adversarial). I7 honest walls
 (no Widevine; process-per-tab; SpiderMonkey trails V8) stated plainly. I8 solo+AI-loop throughput: favor what keeps the
-operator's loop fast. Non-goals are in Part IV; open CONSTITUTION.MD only for the Part you are touching.
+operator's loop fast. Non-goals are in Part IV; open docs/foundation/CONSTITUTION.MD only for the Part you are touching.
 
 ## Landing rules (the prompt has the full text)
 engine/ or tests/wpt diff -> ./scripts/tick.sh (never wrapped in timeout). Otherwise cargo test touched crates + release

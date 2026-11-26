@@ -215,7 +215,7 @@ single all-or-nothing verification wall (`scripts/verify.sh`): build, WPT-derive
 performance floors. A capability counts only once a gate has been shown to fail without it, and any measured
 regression is reverted. Work is prioritized by a differential oracle that renders 265 real sites in Manuk and Chromium
 and clusters divergences by root cause. The method is documented in [`docs/loop/`](docs/loop/) and
-[`CONSTITUTION.MD`](CONSTITUTION.MD). Responsibility for every change rests with the repository owner.
+[`docs/foundation/CONSTITUTION.MD`](docs/foundation/CONSTITUTION.MD). Responsibility for every change rests with the repository owner.
 
 ## Contributing and security
 

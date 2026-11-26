@@ -180,7 +180,7 @@ head = f"""# manuk — STATUS
 TICK:              {tick}
 LAST_AUDIT_TICK:   {last_audit}          (self-audit due every 10 ticks — the hook BLOCKS commits past that)
 LAST_SURFACE_AUDIT: {surface}         (surface audit due every 10 ticks — from docs/loop/SURFACE-AUDIT.md)
-LAST_CONSTITUTION_CHECK: {const}     (constitution re-read due every 8 ticks — from docs/loop/CONSTITUTION-CHECK.md; anchors the loop to CONSTITUTION.MD)
+LAST_CONSTITUTION_CHECK: {const}     (constitution re-read due every 8 ticks — from docs/loop/CONSTITUTION-CHECK.md; anchors the loop to docs/foundation/CONSTITUTION.MD)
 LOOP_BUDGET:       {loop_rem} ticks remaining (target tick {loop_tgt}) — from docs/loop/AUTOLOOP; the loop STOPS and reports at 0
 LAST_WALL_AUDIT:   {wall_audit}         (wall-time audit due every 20 ticks — scripts/wall-audit.sh; hunts wall bloat without cutting a gate)
 CURRENT_TIER:      0                     (Part 21 — one Tier-0 item left: the SPA miner)

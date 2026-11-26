@@ -31,10 +31,10 @@ echo
 
 # ── 1. The entry point. A cold session must be TOLD where to start, in the file it is given.
 echo "Q1. Where do I start?"
-if grep -qs "STATUS.md" CLAUDE.MD CLAUDE.md 2>/dev/null; then
-  ok "CLAUDE.MD points at STATUS.md as the first session action"
+if grep -qs "STATUS.md" docs/foundation/CLAUDE.MD CLAUDE.md 2>/dev/null; then
+  ok "docs/foundation/CLAUDE.MD points at STATUS.md as the first session action"
 else
-  bad "CLAUDE.MD does not tell a cold session to read STATUS.md first"
+  bad "docs/foundation/CLAUDE.MD does not tell a cold session to read STATUS.md first"
 fi
 
 # ── 2. Where does the project stand? Every one of these is a number a cold session needs and
@@ -122,7 +122,7 @@ fi
 #       file here is amnesia, not an inconvenience.
 echo
 echo "Q6. Are the mechanisms still on disk?"
-for f in CLAUDE.MD STATUS.md docs/loop/JOURNAL.md docs/loop/PROCESS.md docs/loop/CAPABILITIES.md \
+for f in docs/foundation/CLAUDE.MD STATUS.md docs/loop/JOURNAL.md docs/loop/PROCESS.md docs/loop/CAPABILITIES.md \
          docs/loop/PROCESS-MODEL.md docs/loop/MEDIA.md scripts/verify.sh scripts/falsify.sh; do
   [ -f "$f" ] && ok "$f" || bad "MISSING: $f"
 done

@@ -1,6 +1,6 @@
 # v1 SCOPE — the finish line, and the test every tick must pass
 
-**Authoritative definition: CONSTITUTION.MD PART VII.** This is the operational one-pager. v1 is **exactly
+**Authoritative definition: docs/foundation/CONSTITUTION.MD PART VII.** This is the operational one-pager. v1 is **exactly
 these four components, and nothing else.** Rank and select every tick against them.
 
 ## THE TEST (apply before starting any tick)

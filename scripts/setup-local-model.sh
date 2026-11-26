@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# INFERENCE.MD §2 — bundle a local model, with zero decisions required.
+# docs/foundation/INFERENCE.MD §2 — bundle a local model, with zero decisions required.
 #
 #   ./scripts/setup-local-model.sh                  # autodetect, download ONE model, launch
 #   ./scripts/setup-local-model.sh --model qwen3.5-4b-q4km

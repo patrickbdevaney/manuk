@@ -6,7 +6,7 @@
 ## The one-sentence finding
 
 > **A "NAMED, MEASURED, NOT BUILT" entry is a claim about the present tense, and nothing re-runs
-> it** — three table defects sat in a gate's own header, and in `CONSTITUTION.MD` VI.2, for ~427
+> it** — three table defects sat in a gate's own header, and in `docs/foundation/CONSTITUTION.MD` VI.2, for ~427
 > ticks after they were fixed, while none of the three had a gate.
 
 ## What the ledger said
@@ -23,7 +23,7 @@ t933 measured a sixteen-row table battery, fixed one mechanism, and left three n
                                     FIRST; we render in source order (y=24, Chrome y=0)
 ```
 
-`CONSTITUTION.MD` VI.2 carries *"t933 row-height distribution"* among the box types that opt out of
+`docs/foundation/CONSTITUTION.MD` VI.2 carries *"t933 row-height distribution"* among the box types that opt out of
 ordinary block sizing, and `CONSTITUTION-CHECK.md` lists it as **UNMEASURED**.
 
 ## What re-measuring found

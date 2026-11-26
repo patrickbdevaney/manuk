@@ -5,7 +5,7 @@
 
 ## Why this exists
 
-`CONSTITUTION.MD` VI.2's H0.1 row is the loop's ranking instrument for *where the residual layout gap
+`docs/foundation/CONSTITUTION.MD` VI.2's H0.1 row is the loop's ranking instrument for *where the residual layout gap
 lives*. It names the box types that opt **out** of ordinary block sizing: tables, inline composition,
 floats and `clear`, out-of-flow boxes under a transformed containing block, and the intrinsic
 measurement pass. Check #129's STEER #2 was *"re-measure VI.2's remaining named residuals before

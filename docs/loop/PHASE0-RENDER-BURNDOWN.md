@@ -520,7 +520,7 @@ must not be worked as one.
 
 ### 11.4 ⚠ Two steers in this document's own governing files were STALE, and both were checked
 
-- **`CONSTITUTION.MD` PART VI.2 H0.1** cites `css/selectors/invalidation/has-complexity.html` as a
+- **`docs/foundation/CONSTITUTION.MD` PART VI.2 H0.1** cites `css/selectors/invalidation/has-complexity.html` as a
   reproducing Bar-0 `CRASH`. It is now **7/7 PASSING** — t1161's `:has()` anchor memo closed it. ⚠ It
   runs in **4,720ms against a 5,000ms script watchdog**, so it is one step from truncating instead, and
   the underlying mechanism (every mutation costs a full re-cascade) is untouched.

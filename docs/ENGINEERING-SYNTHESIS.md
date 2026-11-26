@@ -1,6 +1,6 @@
 # Engineering Synthesis — Integrating the Competitive Research into the 0–6 Roadmap
 
-**Source:** `ENGINEERING.MD` (decision-grade competitive research report).
+**Source:** `docs/foundation/ENGINEERING.MD` (decision-grade competitive research report).
 **Written:** tick 232. **Expanded to a complete placement ledger:** tick 234.
 **Status:** supersedes the phase table in `docs/PROJECT-STATE-AND-VISION.md` Part 3.
 
