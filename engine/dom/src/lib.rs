@@ -1268,6 +1268,14 @@ impl Dom {
         self.is_dirty(self.root()) || self.has_dirty_descendants(self.root())
     }
 
+    /// CPU.2.a: put the tree back to the clean state it had at `seq` (a [`mutation_seq`](Self::mutation_seq)
+    /// read while nothing was dirty), after a probe appended and removed a scratch node. The caller
+    /// guarantees the tree is observably what it was then; the cascade and the a11y cache key on these.
+    pub fn restore_clean(&mut self, seq: u64) {
+        self.clear_all_dirty();
+        self.mutation_seq = seq;
+    }
+
     pub fn clear_all_dirty(&mut self) {
         for n in &mut self.nodes {
             n.dirty = false;

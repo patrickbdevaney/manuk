@@ -998,21 +998,40 @@ impl AgentBrowser {
     /// the value travels out through a `#__manuk_eval` element the script writes and this reads.
     pub async fn eval_value(&mut self, js: &str) -> Result<String> {
         const ID: &str = "__manuk_eval";
+        // Step 1 runs the caller's script and parks its value in a page global, writing nothing to the
+        // DOM, so we can tell whether the script itself changed the document. Step 2 (below) writes the
+        // value into a scratch element we read back; that append+remove would leave <body> dirty and
+        // make the next read re-cascade and re-layout a page nothing changed (CPU.2.a).
+        let step1 = format!(
+            "window.__manukEvalR=(function(){{try{{return {{ok:1,r:({js})}}}}catch(e){{return {{ok:0,r:e}}}}}})()"
+        );
         let wrapped = format!(
             "(function(){{var o=document.getElementById('{ID}');if(o)o.remove();\
+             var x=window.__manukEvalR;delete window.__manukEvalR;\
              var w=function(k,v){{var e=document.createElement('div');e.id='{ID}';\
              e.setAttribute('data-k',k);e.textContent=v==null?'':String(v);\
              (document.body||document.documentElement).appendChild(e);}};\
-             try{{var r=({js});if(r&&typeof r.then==='function')\
+             try{{if(!x.ok)throw x.r;var r=x.r;if(r&&typeof r.then==='function')\
              r.then(function(v){{w('ok',v)}},function(e){{w('err',e&&e.message||e)}});\
              else w('ok',r);}}catch(e){{w('err',e&&e.message||e)}}}})()"
         );
+        // `Some(seq)`: the DOM was clean before and the caller's script left it clean.
+        let mut pristine: Option<u64> = None;
         let mut rounds = 0;
         loop {
             if rounds == 0 {
                 let Some(page) = self.page.as_mut() else {
                     bail!("no page loaded");
                 };
+                let was_clean = !page.dom().has_dirty();
+                let seq = page.dom().mutation_seq();
+                page.eval_for_test(&step1);
+                if was_clean
+                    && !page.dom().has_dirty()
+                    && std::env::var_os("MANUK_EVAL_DIRT_MUTATE").is_none()
+                {
+                    pristine = Some(seq);
+                }
                 page.eval_for_test(&wrapped);
             }
             if let Some(page) = self.page.as_mut() {
@@ -1027,6 +1046,9 @@ impl AgentBrowser {
                     page.eval_for_test(&format!(
                         "var o=document.getElementById('{ID}');if(o)o.remove();"
                     ));
+                    if let (Some(seq), 0) = (pristine, rounds) {
+                        page.dom_mut().restore_clean(seq);
+                    }
                     if err {
                         bail!("page script error: {text}");
                     }

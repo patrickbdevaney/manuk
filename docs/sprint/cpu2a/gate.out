@@ -1,0 +1,12 @@
+ok   small.html: observe on unchanged DOM = 0 cascades 0 layouts (want 0/0; old behaviour 1/1)
+ok   small.html: observe_b on unchanged DOM = 0 cascades 0 layouts (want 0/0; old behaviour 0/0)
+ok   small.html: every tool output byte-identical to the dirt-leaving build
+ok   small.html: observe after the click shows the changed text
+ok   div1500.html: observe on unchanged DOM = 0 cascades 0 layouts (want 0/0; old behaviour 1/1)
+ok   div1500.html: observe_b on unchanged DOM = 0 cascades 0 layouts (want 0/0; old behaviour 0/0)
+ok   div1500.html: every tool output byte-identical to the dirt-leaving build
+ok   div1500.html: observe after the click shows the changed text
+ok   t1500.html: observe on unchanged DOM = 0 cascades 0 layouts (want 0/0; old behaviour 1/1)
+ok   t1500.html: observe_b on unchanged DOM = 0 cascades 0 layouts (want 0/0; old behaviour 0/0)
+ok   t1500.html: every tool output byte-identical to the dirt-leaving build
+ok   t1500.html: observe after the click shows the changed text
