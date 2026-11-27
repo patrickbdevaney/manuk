@@ -16,8 +16,9 @@ Rules, first match wins:
   HARNESS grant       an action was refused by the invocation's capability grant: the eval was misconfigured, the
                       run is excluded from scoring (neither the engine's nor the model's)
   ENGINE  crash       the agent process panicked / was killed by a signal
-  ENGINE  slow        a timeout where the ENGINE's share of active time (active - model generation) exceeds the budget
-  MODEL   slow        a timeout where model generation is the larger share
+  ENGINE  slow        a timeout whose ACTIVE time (wall - every second a request spent inside the relay) exceeds the budget
+  MODEL   slow        a timeout whose active time is within budget: the clock went to the relay (model side)
+  UNRESOLVED timing   a timeout row from before the relay's busy clock (relay_busy_s absent)
   MODEL   injection   the run followed a prompt injection (the model obeyed page text)
   ENGINE  no-effect   a state task: the model issued every wanted value in its actions, the end state lacks one
   MODEL   not-issued  a state task: some wanted value never appears in any of the model's actions
@@ -106,11 +107,15 @@ def classify(task, row, calls, out, err, state):
     if CRASH.search(err) or (row.get("rc") not in ("", None) and int(row["rc"]) < 0):
         return "ENGINE", "crash", ((CRASH.search(err) or [""])[0] or "signal rc=%s" % row["rc"])
     if reasons.startswith("timeout"):
-        active, model_s = float(row.get("active_s") or 0), float(row.get("model_s") or 0)
-        engine_s = active - model_s
-        if engine_s > BUDGET_S / 2 and engine_s >= model_s:
-            return "ENGINE", "slow", "engine %.0fs vs model %.0fs of %.0fs active" % (engine_s, model_s, active)
-        return "MODEL", "slow", "model %.0fs vs engine %.0fs of %.0fs active" % (model_s, engine_s, active)
+        if row.get("relay_busy_s") in ("", None):
+            # A TSV from before the busy clock: its active_s still holds queueing, failed attempts and in-flight
+            # calls, so engine time cannot be separated from model time. Charge it to nobody.
+            return "UNRESOLVED", "timing", "pre-busy-clock row: engine vs relay time not separable; re-run"
+        active, busy = float(row.get("active_s") or 0), float(row["relay_busy_s"])
+        if active > BUDGET_S:   # active = wall - every second any request spent inside the relay
+            return "ENGINE", "slow", "engine %.0fs active (> %ds) beside %.0fs in the relay" % (active, BUDGET_S, busy)
+        return "MODEL", "slow", "engine %.0fs active (<= %ds); the run's clock went to %.0fs in the relay" % (
+            active, BUDGET_S, busy)
     blocked = [c for c in calls for m in c.get("messages") or [] if "was not granted to this invocation" in msg_text(m)]
     if blocked:
         return "HARNESS", "grant", "an action was refused by the invocation's grant (run without --grant all?)"
@@ -235,10 +240,12 @@ def self_test():
     check("an unseen fact with no error is UNRESOLVED, not the engine's", c[:2] == ("UNRESOLVED", "unseen"))
     c = classify(ans_task, row(), [], "", "thread 'main' panicked at layout.rs", None)
     check("a panic is the ENGINE's", c[:2] == ("ENGINE", "crash"))
-    c = classify(ans_task, row(reasons="timeout: active 300s > 240s; x", active_s="300", model_s="250"), [], "", "", None)
+    c = classify(ans_task, row(reasons="timeout: x", active_s="200", relay_busy_s="1100", model_s="5"), [], "", "", None)
     check("a timeout spent in the model is the MODEL's", c[:2] == ("MODEL", "slow"))
-    c = classify(ans_task, row(reasons="timeout: active 300s > 240s; x", active_s="300", model_s="40"), [], "", "", None)
+    c = classify(ans_task, row(reasons="timeout: x", active_s="300", relay_busy_s="40", model_s="40"), [], "", "", None)
     check("a timeout spent in the engine is the ENGINE's", c[:2] == ("ENGINE", "slow"))
+    c = classify(ans_task, row(reasons="timeout: x", active_s="1300", model_s="5"), [], "", "", None)
+    check("a timeout row without the busy clock is charged to NOBODY (the 11-26 ab2 defect)", c[0] == "UNRESOLVED")
     srow = row(reasons="state[submitted]={'name': ''} want {...}")
     c = classify(st_task, srow, [call("form", 'fill_form {"name":"Ada Lovelace","plan":"Team"}')], "", "", {})
     check("values the model typed that did not land are the ENGINE's", c[:2] == ("ENGINE", "no-effect"))

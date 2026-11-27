@@ -45,7 +45,7 @@ DRIVERS = ["taskrun", "hub"]
 INFRA = re.compile(r"^(failed|Error).*((groq|llama\.cpp) HTTP (429|5\d\d|502)|timed out|dns error|Connection refused)",
                    re.M | re.I)
 COLS = ["task", "run", "pass", "judge_model", "arm", "driver", "attempt", "rc", "infra", "steps", "answer",
-        "reasons", "act_seq", "observe_n", "wall_s", "chrome_ver", "outcome", "active_s", "relay_wait_s", "model_s",
+        "reasons", "act_seq", "observe_n", "wall_s", "chrome_ver", "outcome", "active_s", "relay_wait_s", "relay_busy_s", "model_s",
         "model_calls", "rate_limited", "prompt_tokens", "max_prompt_tokens", "completion_tokens", "keys_used", "trace"]
 
 
@@ -114,7 +114,7 @@ def run_one(url, goal, driver, relay, port, trace):
     with open(trace + ".err", "w") as f:
         f.write(err)
     answer, steps, acts, observe_n, tr = parse_transcript(out)
-    active = wall - st["wait_s"]
+    active = wall - st["busy_s"]   # everything the agent spent inside the relay is the model side's
     if rc != 0 and st["oversize"]:
         outcome = "capacity"
     elif rc != 0 and (st["infra"] or INFRA.search(out + "\n" + err)):
@@ -181,7 +181,7 @@ def run(out_path, only=None):
                                  "reasons": (reasons if n == len(attempts) else "") or "",
                                  "act_seq": ">".join(r["acts"]), "observe_n": r["observe_n"],
                                  "wall_s": round(r["wall"]), "chrome_ver": chrome, "outcome": r["outcome"],
-                                 "active_s": round(r["active"]), "relay_wait_s": r["relay"]["wait_s"],
+                                 "active_s": round(r["active"]), "relay_wait_s": r["relay"]["wait_s"], "relay_busy_s": r["relay"]["busy_s"],
                                  "model_s": r["relay"]["model_s"], "model_calls": r["relay"]["calls"],
                                  "rate_limited": r["relay"]["rate_limited"],
                                  "prompt_tokens": r["relay"]["prompt_tokens"],

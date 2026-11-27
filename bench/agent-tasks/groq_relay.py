@@ -64,18 +64,45 @@ class Relay:
         self.ready_at = 0.0        # monotonic time before which the current key should not be sent a large request
         self.remaining = None      # x-ratelimit-remaining-tokens from the last response
         self.trace, self.stats = None, {}
+        self.blk = threading.Lock()   # guards the busy clock only (self.lock is held for a whole call)
+        self.inflight, self.busy_since = 0, 0.0
         self.begin(None)
 
     # ---- per-run bookkeeping (runs are sequential in the harnesses) ----
     def begin(self, trace_path):
         self.trace = trace_path
         self.stats = dict(calls=0, wait_s=0.0, model_s=0.0, prompt_tokens=0, completion_tokens=0,
-                          max_prompt_tokens=0, rate_limited=0, oversize=0, infra=0, keys_used=[])
+                          max_prompt_tokens=0, rate_limited=0, oversize=0, infra=0, keys_used=[], busy_s=0.0)
+        with self.blk:
+            self.t_begin = time.monotonic()
+            if self.inflight:      # a handler left over from a killed run still holds the relay: it is not engine time
+                self.busy_since = self.t_begin
         if trace_path:
             os.makedirs(os.path.dirname(os.path.abspath(trace_path)), exist_ok=True)
             open(trace_path, "w").close()
 
+    # ---- the busy clock: the union of the intervals in which >= 1 agent request is inside the relay ----
+    # This is the agent's view of model time: generation, rate-limit sleeps, queueing behind another call on
+    # the lock, failed attempts, and a call still in flight when the run ends. Only what is left is the engine's.
+    def enter(self):
+        with self.blk:
+            if not self.inflight:
+                self.busy_since = time.monotonic()
+            self.inflight += 1
+
+    def exit(self):
+        with self.blk:
+            self.inflight -= 1
+            if not self.inflight:
+                self.stats["busy_s"] += time.monotonic() - self.busy_since
+
     def end(self):
+        with self.blk:
+            if self.inflight:      # count an unfinished call up to now, and restart its clock for the next run
+                now = time.monotonic()
+                self.stats["busy_s"] += now - self.busy_since
+                self.busy_since = now
+            self.stats["busy_s"] = round(self.stats["busy_s"], 1)
         s = dict(self.stats)
         s["wait_s"], s["model_s"] = round(s["wait_s"], 1), round(s["model_s"], 1)
         return s
@@ -97,7 +124,9 @@ class Relay:
 
     def complete(self, body):
         """body: the agent's chat/completions JSON. Returns (status, response_bytes)."""
+        t_in = time.monotonic()
         with self.lock:
+            queued = time.monotonic() - t_in
             body = dict(body, model=self.model, **PRESET)
             raw = json.dumps(body).encode()
             est = len(raw) // 3  # rough tokens; only used to decide whether to wait for the window first
@@ -154,6 +183,8 @@ class Relay:
             self.stats["completion_tokens"] += int(usage.get("completion_tokens") or 0)
             self.stats["max_prompt_tokens"] = max(self.stats["max_prompt_tokens"], pt)
             self._log(dict(call=self.stats["calls"], status=status, key=self._key_name(), attempts=attempts,
+                           t_in=round(t_in - self.t_begin, 1), queued_s=round(queued, 1),
+                           relay_s=round(time.monotonic() - t_in, 1),
                            wait_s=round(waited, 1), model_s=round(dt, 2), usage=usage,
                            messages=body.get("messages"), reply=reply,
                            error=None if status == 200 else redact(data[:400].decode("utf-8", "replace"))))
@@ -212,8 +243,12 @@ def serve(relay, port=0):
                 return self._send(400, b'{"error":"bad json"}')
             if not self.path.rstrip("/").endswith("/chat/completions"):
                 return self._send(404, b"{}")
-            status, data = relay.complete(body)
-            self._send(status, data)
+            relay.enter()
+            try:
+                status, data = relay.complete(body)
+                self._send(status, data)
+            finally:
+                relay.exit()
 
         def log_message(self, *a):
             pass
@@ -234,6 +269,9 @@ def self_test():
             body = json.loads(self.rfile.read(n))
             seen.append((self.headers.get("Authorization"), body))
             status, hdrs = script.pop(0)
+            if status == "hold":   # an in-flight call: answer only when the test releases it
+                hdrs.wait(5)
+                status, hdrs = 200, {}
             data = (json.dumps({"choices": [{"message": {"content": "ok"}}],
                                 "usage": {"prompt_tokens": 100, "completion_tokens": 5}}) if status == 200
                     else '{"error":{"message":"%s"}}' % ("Request too large" if status == 413 else "x")).encode()
@@ -290,6 +328,17 @@ def self_test():
     check("a 5xx is retried", call() == 200)
     st = relay.end()
     check("waits are counted for the run", st["wait_s"] >= 63.5 and st["rate_limited"] == 3)
+    relay.begin(None)
+    gate = threading.Event()
+    script[:] = [("hold", gate), (200, {})]
+    th = [threading.Thread(target=call) for _ in range(2)]
+    [t.start() for t in th]
+    time.sleep(1.0)
+    mid = relay.end()["busy_s"]
+    gate.set(); [t.join() for t in th]
+    st2 = relay.end()
+    check("an in-flight call counts as busy, not engine, time", mid >= 0.9)
+    check("a call queued behind another is busy time, counted once", 0.9 <= st2["busy_s"] < 3.0 and relay.inflight == 0)
     trace = open(os.path.join(d, "t.jsonl")).read()
     check("the trace names keys and never holds their values", "GROQ_API_KEY_2" in trace
           and "sk-one" not in trace and "sk-two" not in trace)
