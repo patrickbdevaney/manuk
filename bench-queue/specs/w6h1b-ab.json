@@ -1,6 +1,6 @@
 {
  "id": "w6h1b-ab",
- "note": "W6.H1.b re-run 2026-11-26 (after 8f7b2cd9): both drivers under --grant all, the model reached through groq_relay.py (429 -> wait, one key at a time, waits excluded from the 240s budget), every call traced. Output w6h1b-ab2.tsv (the 11-25 w6h1b-ab.tsv is kept as the CONFOUNDED run). Then h1_attrib.py splits every failure ENGINE/MODEL/HARNESS/UNRESOLVED -> w6h1b-ab2.attrib.md. W6.H1.b: TaskRun vs Hub A/B on suite-v1 (40 tasks, live+fixture), engine backend, 1 run per (task,driver), judge = suite verify.py on ANSWER, model=GROQ_MODEL (qwen/qwen3.8-27b, the default qwen/qwen3.6-27b is no longer served). Verdict is docs/sprint/w6/H1.md from `h1_ab.py tally`, NOT the band below (the band fields are a shape placeholder: 1 run per driver cannot be a 2-of-3 band).",
+ "note": "W6.H1.b re-run 2026-11-26 (after 8f7b2cd9): both drivers under --grant all, the model reached through groq_relay.py (429 -> wait, one key at a time, waits excluded from the 240s budget), every call traced. Output w6h1b-ab3.tsv (the 11-25 w6h1b-ab.tsv is kept as the CONFOUNDED run). Then h1_attrib.py splits every failure ENGINE/MODEL/HARNESS/UNRESOLVED -> w6h1b-ab3.attrib.md. W6.H1.b: TaskRun vs Hub A/B on suite-v1 (40 tasks, live+fixture), engine backend, 1 run per (task,driver), judge = suite verify.py on ANSWER, model=GROQ_MODEL (qwen/qwen3.8-27b, the default qwen/qwen3.6-27b is no longer served). Verdict is docs/sprint/w6/H1.md from `h1_ab.py tally`, NOT the band below (the band fields are a shape placeholder: 1 run per driver cannot be a 2-of-3 band).",
  "inputs": [
   "target/release/manuk",
   "bench/agent-tasks/h1_ab.py",
@@ -21,7 +21,7 @@
     "bench/agent-tasks/h1_ab.py",
     "run",
     "--out",
-    "bench-queue/out/w6h1b-ab2.tsv"
+    "bench-queue/out/w6h1b-ab3.tsv"
    ]
   },
   {
@@ -29,12 +29,12 @@
    "argv": [
     "sh",
     "-c",
-    "python3 -I bench/agent-tasks/h1_attrib.py bench-queue/out/w6h1b-ab2.tsv > bench-queue/out/w6h1b-ab2.attrib.md 2>&1"
+    "python3 -I bench/agent-tasks/h1_attrib.py bench-queue/out/w6h1b-ab3.tsv > bench-queue/out/w6h1b-ab3.attrib.md 2>&1"
    ]
   }
  ],
  "band": {
-  "tsv_glob": "bench-queue/out/w6h1b-ab2.tsv",
+  "tsv_glob": "bench-queue/out/w6h1b-ab3.tsv",
   "tasks": [
    "L01",
    "L02",
